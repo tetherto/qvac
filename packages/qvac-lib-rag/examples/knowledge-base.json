@@ -1,0 +1,41 @@
+[
+  {
+    "id": "livGolfUK2025_indiv",
+    "text": "Joaquin Niemann clinched his fifth LIV Golf League title of 2025 with a three-stroke victory at LIV Golf UK by JCB, held July 25–27, 2025 at JCB Golf & Country Club in Rocester, England, finishing at 18-under-par.",
+    "metadata": {
+      "event": "LIV Golf UK by JCB",
+      "type": "individual",
+      "winner": "Joaquin Niemann",
+      "score": "18-under-par",
+      "margin": "3 strokes",
+      "location": "Rocester, England",
+      "date": "2025-07-27",
+      "source": "Golf Monthly",
+      "category": "golf"
+    }
+  },
+  {
+    "id": "livGolfUK2025_team",
+    "text": "Legion XIII won the team title at LIV Golf UK by JCB, held July 25–27, 2025 at JCB Golf & Country Club in Rocester, England, finishing with a score of 35-under-par, eight strokes ahead of runner-up Torque GC.",
+    "metadata": {
+      "event": "LIV Golf UK by JCB",
+      "type": "team",
+      "winner": "Legion XIII",
+      "score": "-35",
+      "margin": "8 strokes",
+      "location": "Rocester, England",
+      "date": "2025-07-27",
+      "source": "LIV Golf official site",
+      "category": "golf"
+    }
+  },
+  {
+    "id": "seasonStandings2025",
+    "text": "As of August 5, 2025, Joaquin Niemann leads the season-long Individual Championship race with 206.80 points, Jon Rahm is second with 169.16 points, and Bryson DeChambeau third with 136.24 points.",
+    "metadata": {
+      "date": "2025-08-05",
+      "source": "Fox Sports",
+      "category": "golf standings"
+    }
+  }
+]

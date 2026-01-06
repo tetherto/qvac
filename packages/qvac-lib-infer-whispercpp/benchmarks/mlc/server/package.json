@@ -1,0 +1,29 @@
+{
+  "name": "@tetherto/qvac-lib-inference-addon-mlc-whisper-benchmark-server",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "start": "bare index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-mlc-whisper/issues",
+  "devDependencies": {
+    "standard": "^17.1.2"
+  },
+  "dependencies": {
+    "@tetherto/infer-base": "^2.3.2",
+    "bare-buffer": "^3.1.0",
+    "bare-fs": "^4.1.5",
+    "bare-http1": "^4.0.2",
+    "bare-stream": "^2.6.5",
+    "bare-subprocess": "^5.0.4",
+    "bare-url": "^2.1.6",
+    "zod": "^3.24.4"
+  }
+}

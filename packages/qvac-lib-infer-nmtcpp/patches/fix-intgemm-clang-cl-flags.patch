@@ -1,0 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -90,8 +90,12 @@ if(MSVC)
+   # Disable some warnings
+   add_definitions(/wd4310 /wd4324 /wd4702 /wd4100)
+   # Force to always compile with /W4 and /WX
+-  add_compile_options(/W4 /WX /MP /GL)
+-  add_link_options(/LTCG)
++  add_compile_options(/W4 /WX)
++  # Only add /MP and /GL for MSVC, not clang-cl
++  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
++    add_compile_options(/MP /GL)
++    add_link_options(/LTCG)
++  endif()
+ endif()
+
+ # Generate configure file

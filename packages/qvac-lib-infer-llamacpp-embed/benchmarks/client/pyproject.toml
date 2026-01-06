@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tetherto-qvac-lib-inference-embeddings-mlc-benchmark-client"
+version = "1.0.0"
+description = "Benchmark client for Embeddings addons"
+authors = ["Tether"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+pyyaml = ">=6.0.2,<7.0.0"
+pydantic = ">=2.11.4,<3.0.0"
+httpx = ">=0.28.1,<0.29.0"
+mteb = ">=1.38.30,<2.0.0"
+sentence-transformers = ">=4.1.0,<5.0.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.5"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

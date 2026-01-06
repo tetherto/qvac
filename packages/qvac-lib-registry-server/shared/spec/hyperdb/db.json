@@ -1,0 +1,74 @@
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "license",
+      "namespace": "qvac-main-registry",
+      "id": 0,
+      "type": 1,
+      "indexes": [],
+      "schema": "@qvac-main-registry/license",
+      "derived": false,
+      "key": [
+        "spdxId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "model",
+      "namespace": "qvac-main-registry",
+      "id": 1,
+      "type": 1,
+      "indexes": [
+        "@qvac-main-registry/models-by-engine",
+        "@qvac-main-registry/models-by-name",
+        "@qvac-main-registry/models-by-quantization"
+      ],
+      "schema": "@qvac-main-registry/model",
+      "derived": false,
+      "key": [
+        "path",
+        "source"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "models-by-engine",
+      "namespace": "qvac-main-registry",
+      "id": 2,
+      "type": 2,
+      "collection": "@qvac-main-registry/model",
+      "unique": false,
+      "deprecated": false,
+      "key": [
+        "engine"
+      ]
+    },
+    {
+      "name": "models-by-name",
+      "namespace": "qvac-main-registry",
+      "id": 3,
+      "type": 2,
+      "collection": "@qvac-main-registry/model",
+      "unique": false,
+      "deprecated": false,
+      "key": {
+        "type": "string",
+        "map": "mapPathToName"
+      }
+    },
+    {
+      "name": "models-by-quantization",
+      "namespace": "qvac-main-registry",
+      "id": 4,
+      "type": 2,
+      "collection": "@qvac-main-registry/model",
+      "unique": false,
+      "deprecated": false,
+      "key": [
+        "quantization"
+      ]
+    }
+  ]
+}

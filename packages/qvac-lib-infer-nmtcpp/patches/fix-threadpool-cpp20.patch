@@ -1,0 +1,24 @@
+diff --git a/src/3rd_party/threadpool.h b/src/3rd_party/threadpool.h
+--- a/src/3rd_party/threadpool.h
++++ b/src/3rd_party/threadpool.h
+@@ -48,7 +48,7 @@ class ThreadPool {
+ 
+     template<class F, class... Args>
+     auto enqueue(F&& f, Args&&... args)
+-        -> std::future<typename std::result_of<F(Args...)>::type>;
++        -> std::future<std::invoke_result_t<F, Args...>>;
+     ~ThreadPool();
+ 
+     size_t getNumTasks() const {
+@@ -138,9 +138,9 @@ inline void ThreadPool::reserve(size_t threads) {
+ // add new work item to the pool
+ template<class F, class... Args>
+ inline auto ThreadPool::enqueue(F&& f, Args&&... args)
+-    -> std::future<typename std::result_of<F(Args...)>::type>
++    -> std::future<std::invoke_result_t<F, Args...>>
+ {
+-  using return_type = typename std::result_of<F(Args...)>::type;
++  using return_type = std::invoke_result_t<F, Args...>;
+ 
+   auto inner_task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+   auto outer_task = [inner_task]() -> return_type {

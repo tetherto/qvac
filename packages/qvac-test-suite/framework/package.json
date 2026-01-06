@@ -1,0 +1,75 @@
+{
+  "name": "@tetherto/qvac-test-suite",
+  "version": "0.1.2",
+  "description": "Generic distributed testing framework for multi-platform execution",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "qvac-test": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint --fix src/",
+    "format": "prettier --write 'src/**/*.{ts,js,json}'",
+    "format:check": "prettier --check 'src/**/*.{ts,js,json}'"
+  },
+  "lint-staged": {
+    "*.{ts,js,json}": [
+      "prettier --write"
+    ]
+  },
+  "keywords": [
+    "testing",
+    "distributed",
+    "mqtt",
+    "multi-platform",
+    "qvac",
+    "sdk"
+  ],
+  "author": "Tether",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-test-suite.git",
+    "directory": "framework"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.27.0",
+    "mqtt": "^5.14.1",
+    "zod": "^3.22.4"
+  },
+  "peerDependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.7.1",
+    "typescript": "^5.3.3"
+  }
+}

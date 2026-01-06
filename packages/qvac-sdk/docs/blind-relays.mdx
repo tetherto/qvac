@@ -1,0 +1,20 @@
+---
+title: SDK — Blind relays
+description: Establish peer connections through NAT/firewalls by routing traffic via relay nodes.
+---
+
+# Blind relays
+
+Establish peer connections through NAT/firewalls by routing traffic via relay nodes.
+
+## Usage
+
+```ts file=../examples/download-with-blind-relays.ts
+
+```
+
+## Remarks
+
+The examples use mock relay keys. For real deployments, you **must** use your own relay servers or trusted public relays.
+
+You can reuse the same pattern for delegated inference by calling `setConfig({ swarmRelays: [...relayPublicKeys] })` before starting your provider/consumer.

@@ -1,0 +1,17 @@
+{
+  "name": "opencl",
+  "version": "2024.10.24",
+  "license": "Apache-2.0 AND (MIT OR WTFPL)",
+  "supports": "!(static & staticcrt)",
+  "dependencies": [
+    "opencl-headers",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

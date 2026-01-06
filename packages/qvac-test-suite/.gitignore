@@ -1,0 +1,17 @@
+node_modules/
+.npmrc
+.env
+.secrets
+bun.lock
+package-lock.json
+reports/
+*.log
+*.apk
+**/.DS_Store
+
+# Build outputs
+dist/
+build/
+
+# act artifact server
+.artifacts/

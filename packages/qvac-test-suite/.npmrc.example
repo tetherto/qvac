@@ -1,0 +1,37 @@
+# .npmrc.example
+# Copy this to .npmrc and set the appropriate environment variables
+
+# For GitHub Packages (@tetherto scope):
+@tetherto:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+
+# For npm registry (@qvac scope):
+@qvac:registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=${NPM_TOKEN}
+
+# ========================================
+# SWITCHING BETWEEN REGISTRIES
+# ========================================
+
+# Option 1: Use environment variables (RECOMMENDED)
+# Set in PowerShell:
+#   $env:GITHUB_TOKEN="ghp_YourGitHubToken"
+#   $env:NPM_TOKEN="npm_YourNpmToken"
+#
+# Or set as Windows environment variables permanently:
+#   System Properties → Environment Variables → User variables
+
+# Option 2: Use package-specific versions
+# For @tetherto/qvac-sdk (GitHub):
+#   Use version like "0.10.1" with GITHUB_TOKEN
+# For @qvac/sdk (npm):
+#   Use version like "0.2.3-dev.1760899404.f30d071" with NPM_TOKEN
+
+# ========================================
+# CURRENT SETUP
+# ========================================
+# Package: @tetherto/qvac-sdk@0.10.1
+# Registry: GitHub Packages
+# Token needed: GITHUB_TOKEN
+
+

@@ -1,0 +1,119 @@
+{
+  "documents": [
+    {
+      "content": "The 2024 Summer Olympics in Paris, France featured 32 sports and 329 events. New additions included breakdancing and surfing, while skateboarding and sport climbing returned after their Tokyo debut. The games marked a historic moment with perfect gender parity among athletes, demonstrating the Olympics' commitment to equality in sports."
+    },
+    {
+      "id": "sports_2024_02",
+      "content": "The Denver Nuggets secured their first NBA championship in 2024, defeating the Boston Celtics 4-2. MVP Nikola Jokić's exceptional performance, including multiple triple-doubles, led the team to victory. The championship marked a significant milestone for the franchise and solidified Jokić's status as one of the NBA's elite players."
+    },
+    {
+      "content": "Apple released its Vision Pro mixed reality headset in early 2024, marking the company's first major new product category since the Apple Watch. The device, priced at $3,499, introduced innovative features like eye tracking and external displays showing users' eyes. Despite the high price point, initial sales exceeded market expectations."
+    },
+    {
+      "id": "tech_2024_02",
+      "content": "OpenAI unveiled GPT-5 in 2024, showcasing unprecedented capabilities in language understanding and generation. The model demonstrated remarkable improvements in reasoning, creativity, and specialized knowledge domains. Notable features included enhanced memory capabilities and better handling of complex, multi-step tasks."
+    },
+    {
+      "id": "science_2024_01",
+      "content": "NASA's Artemis II mission successfully launched in 2024, sending four astronauts around the Moon. This marked humanity's return to lunar exploration after more than 50 years. The crew included Christina Koch, who became the first woman to orbit the Moon, and Victor Glover, the first person of color to participate in a lunar mission."
+    },
+    {
+      "id": "science_2024_02",
+      "content": "Scientists announced a breakthrough in fusion energy research in 2024, achieving sustained net energy gain at the National Ignition Facility. The experiment maintained fusion reactions for several minutes, marking a significant step toward practical fusion power. This advancement brought humanity closer to clean, unlimited energy production."
+    },
+    {
+      "id": "entertainment_2024_01",
+      "content": "Taylor Swift's 'The Tortured Poets Department' album, released in April 2024, broke multiple streaming records in its first week. The album featured collaborations with various artists and showcased a new sonic direction. It became the most streamed album in a single day across all platforms."
+    },
+    {
+      "id": "entertainment_2024_02",
+      "content": "The highly anticipated movie 'Dune: Part Two' released in 2024, continuing the adaptation of Frank Herbert's science fiction epic. Directed by Denis Villeneuve and starring Timothée Chalamet and Zendaya, the film garnered critical acclaim for its visual effects and storytelling. It grossed over $800 million worldwide."
+    },
+    {
+      "id": "world_2024_01",
+      "content": "The European Union implemented its comprehensive AI regulation framework in 2024, setting global standards for artificial intelligence development and deployment. The regulations addressed key areas including transparency, accountability, and ethical AI use, influencing similar legislation worldwide."
+    },
+    {
+      "id": "world_2024_02",
+      "content": "India successfully landed its second lunar mission, Chandrayaan-4, on the Moon's south pole in 2024. The mission discovered significant water ice deposits in permanently shadowed craters, potentially supporting future lunar bases. This achievement strengthened India's position in the global space race."
+    },
+    {
+      "id": "health_2024_01",
+      "content": "A revolutionary cancer treatment using CRISPR gene editing technology showed promising results in clinical trials during 2024. The therapy demonstrated over 90% success rate in treating certain types of blood cancers, marking a significant advancement in personalized medicine."
+    },
+    {
+      "id": "health_2024_02",
+      "content": "Global vaccination efforts in 2024 led to the World Health Organization declaring another infectious disease eradicated, following smallpox and wild poliovirus type 2. This achievement demonstrated the effectiveness of coordinated international public health initiatives."
+    },
+    {
+      "id": "climate_2024_01",
+      "content": "The Global Climate Summit 2024 in Singapore resulted in unprecedented commitments from major nations to reduce carbon emissions. China announced plans to peak emissions by 2025, five years earlier than previously planned, while the US pledged to double its renewable energy capacity by 2030."
+    },
+    {
+      "id": "climate_2024_02",
+      "content": "A major breakthrough in carbon capture technology was achieved in 2024, with a new method proving 300% more efficient than existing solutions. The innovation, developed by researchers in Switzerland, could remove CO2 from the atmosphere at a cost of just $100 per ton."
+    },
+    {
+      "id": "business_2024_01",
+      "content": "Tesla introduced its much-anticipated $25,000 electric vehicle in 2024, making electric cars more accessible to the mass market. The compact car featured new battery technology and achieved a range of 300 miles per charge, setting new standards for affordable EVs."
+    },
+    {
+      "id": "business_2024_02",
+      "content": "Amazon completed its acquisition of iRobot in 2024, marking a significant expansion into home robotics. The $1.7 billion deal faced initial regulatory scrutiny but was approved after Amazon made commitments regarding data privacy and market competition."
+    },
+    {
+      "id": "tech_2024_03",
+      "content": "Quantum computing reached a major milestone in 2024 when IBM's new quantum processor achieved quantum advantage in a practical application. The system solved a complex chemistry problem in hours that would take classical supercomputers centuries to complete."
+    },
+    {
+      "id": "sports_2024_03",
+      "content": "Tennis star Coco Gauff dominated the 2024 tennis season, winning three Grand Slam titles. At age 20, she became the youngest player to achieve this feat since Steffi Graf. Her victories included memorable performances at the Australian Open, Wimbledon, and US Open."
+    },
+    {
+      "id": "entertainment_2024_03",
+      "content": "The final season of 'Stranger Things' aired in 2024, breaking streaming records with its feature-length finale. The show concluded its run with critical acclaim, with the final episode becoming the most-watched streaming event in history."
+    },
+    {
+      "id": "science_2024_03",
+      "content": "Archaeologists made a groundbreaking discovery in Egypt's Valley of the Kings in 2024, uncovering an untouched tomb containing artifacts from the Middle Kingdom period. The find included well-preserved texts that provided new insights into ancient Egyptian religious practices."
+    },
+    "Microsoft released its next-generation Xbox in late 2024, featuring revolutionary cloud gaming integration and 8K gaming capabilities. The console introduced new haptic feedback technology and achieved photorealistic graphics through advanced ray tracing.",
+    {
+      "id": "health_2024_03",
+      "content": "A new Alzheimer's treatment showing significant cognitive improvement in early-stage patients received FDA approval in 2024. The drug, which targets the root causes of the disease, demonstrated a 65% reduction in cognitive decline during clinical trials."
+    },
+    {
+      "id": "business_2024_03",
+      "content": "SpaceX achieved regular commercial flights to its lunar space station in 2024, marking the beginning of space tourism beyond Earth orbit. The first civilian lunar mission included six passengers who paid $50 million each for the week-long experience."
+    },
+    {
+      "id": "world_2024_03",
+      "content": "The world's first commercial nuclear fusion power plant began operations in the UK in 2024, generating enough electricity to power 20,000 homes. The facility demonstrated the viability of fusion as a practical energy source."
+    },
+    {
+      "id": "climate_2024_03",
+      "content": "Australia completed the world's largest solar farm in 2024, capable of powering over 1.5 million homes. The project included advanced energy storage solutions and marked a significant step in the country's transition to renewable energy."
+    },
+    {
+      "id": "entertainment_2024_04",
+      "content": "The gaming industry was revolutionized in 2024 with the release of the first fully immersive VR MMORPG using neural interface technology. The game, developed by a collaboration between major tech companies, created unprecedented levels of sensory feedback and immersion."
+    },
+    {
+      "id": "science_2024_04",
+      "content": "Researchers successfully created the first complete simulation of a human brain at the cellular level in 2024, using the world's most powerful supercomputer. This breakthrough enabled new insights into neurological disorders and consciousness."
+    },
+    {
+      "id": "tech_2024_05",
+      "content": "The first commercial quantum internet network was established in 2024, connecting major research institutions across three continents. The network demonstrated unhackable communication capabilities using quantum entanglement."
+    },
+    {
+      "id": "business_2024_04",
+      "content": "A consortium of African nations launched the Pan-African Digital Currency in 2024, the world's first multi-nation digital currency. The initiative aimed to boost regional trade and reduce dependency on foreign currencies."
+    },
+    {
+      "id": "world_2024_04",
+      "content": "The United Nations adopted the Global Ocean Protection Treaty in 2024, establishing protected marine areas covering 30% of international waters. The agreement included strict measures against deep-sea mining and plastic pollution."
+    }
+  ]
+}

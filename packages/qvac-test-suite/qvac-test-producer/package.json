@@ -1,0 +1,38 @@
+{
+	"name": "qvac-test-scheduler",
+	"module": "batch-orchestrator.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"env:set-local": "bun run scripts/manage-local-env.ts",
+		"env:unset-local": "bun run scripts/manage-local-env.ts unset",
+		"batch": "bun run batch-orchestrator.ts",
+		"batch:transcription": "bun run batch-orchestrator.ts --section=transcription",
+		"batch:completion": "bun run batch-orchestrator.ts --section=completion",
+		"batch:embedding": "bun run batch-orchestrator.ts --section=embedding",
+		"batch:rag": "bun run batch-orchestrator.ts --section=rag",
+		"batch:model": "bun run batch-orchestrator.ts --section=model",
+		"batch:sharded": "bun run batch-orchestrator.ts --test-filter=sharded-model",
+		"batch:translation": "bun run batch-orchestrator.ts --section=translation",
+		"batch:tools": "bun run batch-orchestrator.ts --section=tools",
+		"batch:cache": "bun run batch-orchestrator.ts --section=cache",
+		"batch:errors": "bun run batch-orchestrator.ts --section=error",
+		"batch:tts": "bun run batch-orchestrator.ts --section=tts",
+		"batch:nmt": "bun run batch-orchestrator.ts --section=nmt",
+		"batch:config-reload": "bun run batch-orchestrator.ts --section=config-reload",
+		"batch:addon-logging": "bun run batch-orchestrator.ts --section=addon-logging"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@types/node": "^24.5.2",
+		"nodemon": "^3.1.10",
+		"tsc-watch": "^7.1.1"
+	},
+	"peerDependencies": {
+		"typescript": "^5.9.2"
+	},
+	"dependencies": {
+		"mqtt": "^5.14.1",
+		"zod": "^4.0.0"
+	}
+}

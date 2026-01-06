@@ -1,0 +1,24 @@
+{
+  "dependencies": [
+    "onnxruntime",
+    "qvac-lib-inference-addon-cpp",
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    }
+  ],
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

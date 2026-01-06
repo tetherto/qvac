@@ -1,0 +1,18 @@
+# OCR Benchmarking Framework Dependencies
+
+# Core
+click>=8.0.0
+tqdm>=4.65.0
+
+# Metrics computation
+numpy>=1.20.0
+
+# EasyOCR backend
+easyocr>=1.7.0
+torch>=2.0.0
+
+# Image handling (optional, for preprocessing)
+pillow>=9.0.0
+
+# Optional: faster Levenshtein distance
+# python-Levenshtein>=0.20.0

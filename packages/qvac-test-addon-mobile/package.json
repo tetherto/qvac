@@ -1,0 +1,62 @@
+{
+  "private": true,
+  "name": "qvac-test-addon-mobile",
+  "description": "Mobile testing template for QVAC native addons on iOS and Android",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "bundle": "scripts/bundle.sh",
+    "build": "node scripts/build-test-app.js",
+    "android": "npm run bundle && expo run:android",
+    "ios": "npm run bundle && expo run:ios --device",
+    "barelog": "adb logcat '*:S bare:*'",
+    "start": "expo start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-addon-mobile-tester.git"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/tetherto/qvac-addon-mobile-tester/issues"
+  },
+  "homepage": "https://github.com/tetherto/qvac-addon-mobile-tester#readme",
+  "dependencies": {
+    "@qvac/dl-filesystem": "^0.1.2",
+    "@qvac/dl-hyperdrive": "^0.1.1",
+    "@speechmatics/expo-two-way-audio": "^0.1.2",
+    "b4a": "^1.6.7",
+    "bare-fetch": "^2.5.0",
+    "bare-process": "^4.2.2",
+    "bare-rpc": "^0.2.13",
+    "brittle": "^3.19.1",
+    "corestore": "^7.7.0",
+    "expo": "54.0.22",
+    "expo-asset": "^12.0.9",
+    "expo-av": "~16.0.7",
+    "expo-build-properties": "^1.0.9",
+    "expo-constants": "~18.0.10",
+    "expo-linking": "^8.0.8",
+    "expo-router": "^6.0.8",
+    "expo-system-ui": "~6.0.8",
+    "hyperswarm": "^4.14.2",
+    "process": "npm:bare-process@^4.2.1",
+    "quickbit-native": "^2.2.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-b4a": "^0.0.4",
+    "react-native-bare-kit": "^0.9.3",
+    "react-native-safe-area-context": "^5.4.0",
+    "react-native-screens": "^4.18.0",
+    "simdle-native": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "bare-pack": "^1.4.7",
+    "prettier": "^3.3.3",
+    "prettier-config-standard": "^7.0.0",
+    "typescript": "^5.3.3"
+  }
+}

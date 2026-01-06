@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@qvac-main-registry/put-model",
+      "requestType": "@qvac-main-registry/model",
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@qvac-main-registry/put-license",
+      "requestType": "@qvac-main-registry/license",
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@qvac-main-registry/add-indexer",
+      "requestType": "@qvac-main-registry/writer",
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@qvac-main-registry/remove-indexer",
+      "requestType": "@qvac-main-registry/writer",
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@qvac-main-registry/delete-model",
+      "requestType": "@qvac-main-registry/model-key",
+      "version": 1
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  // All paths relative to this config file
+  "plugin": ["typedoc-plugin-markdown", "typedoc-plugin-frontmatter"],
+  "entryPoints": ["../index.ts"],
+  "name": "@qvac/sdk — API",
+  "includeVersion": true,
+  "readme": "none",
+  "out": "../.docs-build/api",
+  "router": "member",
+  "cleanOutputDir": false,
+  "fileExtension": ".mdx",
+  "entryFileName": "index",
+  "hidePageHeader": true,
+  "useCodeBlocks": true,
+  "parametersFormat": "htmlTable",
+  "frontmatterGlobals": {
+    "title": "QVAC SDK — API reference",
+    "description": "QVAC SDK — API reference",
+  },
+}

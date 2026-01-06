@@ -1,0 +1,151 @@
+diff --git a/cmake/onnxruntime.cmake b/cmake/onnxruntime.cmake
+index 6c1d448..e09389c 100644
+--- a/cmake/onnxruntime.cmake
++++ b/cmake/onnxruntime.cmake
+@@ -80,12 +80,22 @@ if(WIN32)
+     "${ONNXRUNTIME_ROOT}/core/dll/delay_load_hook.cc"
+     "${ONNXRUNTIME_ROOT}/core/dll/onnxruntime.rc"
+   )
++  onnxruntime_add_static_library(onnxruntime_static
++    ${SYMBOL_FILE}
++    "${ONNXRUNTIME_ROOT}/core/dll/dllmain.cc"
++    "${ONNXRUNTIME_ROOT}/core/dll/delay_load_hook.cc"
++    "${ONNXRUNTIME_ROOT}/core/dll/onnxruntime.rc"
++  )
+ elseif(onnxruntime_BUILD_APPLE_FRAMEWORK)
+   # apple framework requires the header file be part of the library
+   onnxruntime_add_shared_library(onnxruntime
+     ${ONNXRUNTIME_PUBLIC_HEADERS}
+     "${CMAKE_CURRENT_BINARY_DIR}/generated_source.c"
+   )
++  onnxruntime_add_static_library(onnxruntime_static
++    ${ONNXRUNTIME_PUBLIC_HEADERS}
++    "${CMAKE_CURRENT_BINARY_DIR}/generated_source.c"
++  )
+ 
+   # create Info.plist for the framework and podspec for CocoaPods (optional)
+   set(MACOSX_FRAMEWORK_NAME "onnxruntime")
+@@ -120,8 +130,10 @@ elseif(onnxruntime_BUILD_APPLE_FRAMEWORK)
+ else()
+   if(CMAKE_SYSTEM_NAME MATCHES "AIX")
+     onnxruntime_add_shared_library(onnxruntime ${ONNXRUNTIME_ROOT}/core/session/onnxruntime_c_api.cc)
++    onnxruntime_add_static_library(onnxruntime_static ${ONNXRUNTIME_ROOT}/core/session/onnxruntime_c_api.cc)
+   else()
+     onnxruntime_add_shared_library(onnxruntime ${CMAKE_CURRENT_BINARY_DIR}/generated_source.c )
++    onnxruntime_add_static_library(onnxruntime_static ${CMAKE_CURRENT_BINARY_DIR}/generated_source.c )
+   endif()
+   if(NOT APPLE)
+     include(CheckLinkerFlag)
+@@ -134,11 +146,13 @@ endif()
+ 
+ if(CMAKE_SYSTEM_NAME MATCHES "AIX")
+   add_dependencies(onnxruntime ${onnxruntime_EXTERNAL_DEPENDENCIES})
++  add_dependencies(onnxruntime_static ${onnxruntime_EXTERNAL_DEPENDENCIES})
+ else()
+   add_dependencies(onnxruntime onnxruntime_generate_def ${onnxruntime_EXTERNAL_DEPENDENCIES})
++  add_dependencies(onnxruntime_static onnxruntime_generate_def ${onnxruntime_EXTERNAL_DEPENDENCIES})
+ endif()
+ target_include_directories(onnxruntime PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime>")
+-
++target_include_directories(onnxruntime_static PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime>")
+ 
+ target_compile_definitions(onnxruntime PRIVATE FILE_NAME=\"onnxruntime.dll\")
+ 
+@@ -175,7 +189,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Android" AND onnxruntime_MINIMAL_BUILD)
+   # creating the DSO, our dummy __cxa_demangle always comes before libc++abi.a so the
+   # __cxa_demangle in libc++abi.a is discarded, thus, huge binary size reduction.
+   target_sources(onnxruntime PRIVATE "${ONNXRUNTIME_ROOT}/core/platform/android/cxa_demangle.cc")
++  target_sources(onnxruntime_static PRIVATE "${ONNXRUNTIME_ROOT}/core/platform/android/cxa_demangle.cc")
+   target_compile_definitions(onnxruntime PRIVATE USE_DUMMY_EXA_DEMANGLE=1)
++  target_compile_definitions(onnxruntime_static PRIVATE USE_DUMMY_EXA_DEMANGLE=1)
+ endif()
+ 
+ # strip binary on Android, or for a minimal build on Unix
+@@ -255,6 +271,10 @@ target_link_libraries(onnxruntime PRIVATE
+     ${onnxruntime_INTERNAL_LIBRARIES}
+     ${onnxruntime_EXTERNAL_LIBRARIES}
+ )
++target_link_libraries(onnxruntime_static PRIVATE
++    ${onnxruntime_INTERNAL_LIBRARIES}
++    ${onnxruntime_EXTERNAL_LIBRARIES}
++)
+ 
+ if(WIN32)
+   target_link_options(onnxruntime PRIVATE ${onnxruntime_DELAYLOAD_FLAGS})
+@@ -267,6 +287,10 @@ if(NOT APPLE AND NOT WIN32)
+       VERSION ${ORT_VERSION}
+       SOVERSION 1
+       FOLDER "ONNXRuntime")
++    set_target_properties(onnxruntime_static PROPERTIES
++      PUBLIC_HEADER "${ONNXRUNTIME_PUBLIC_HEADERS}"
++      VERSION ${ORT_VERSION}
++      FOLDER "ONNXRuntime")
+   else()
+     set_target_properties(onnxruntime PROPERTIES
+       PUBLIC_HEADER "${ONNXRUNTIME_PUBLIC_HEADERS}"
+@@ -274,6 +298,11 @@ if(NOT APPLE AND NOT WIN32)
+       VERSION ${ORT_VERSION}
+       SOVERSION 1
+       FOLDER "ONNXRuntime")
++    set_target_properties(onnxruntime_static PROPERTIES
++      PUBLIC_HEADER "${ONNXRUNTIME_PUBLIC_HEADERS}"
++      LINK_DEPENDS ${SYMBOL_FILE}
++      VERSION ${ORT_VERSION}
++      FOLDER "ONNXRuntime")
+   endif()
+ else()
+   # Omit the SOVERSION setting in Windows/macOS/iOS/.. build
+@@ -282,6 +311,11 @@ else()
+     LINK_DEPENDS ${SYMBOL_FILE}
+     VERSION ${ORT_VERSION}
+     FOLDER "ONNXRuntime")
++  set_target_properties(onnxruntime_static PROPERTIES
++    PUBLIC_HEADER "${ONNXRUNTIME_PUBLIC_HEADERS}"
++    LINK_DEPENDS ${SYMBOL_FILE}
++    VERSION ${ORT_VERSION}
++    FOLDER "ONNXRuntime")
+ endif()
+ install(TARGETS onnxruntime
+         EXPORT ${PROJECT_NAME}Targets
+@@ -290,7 +324,13 @@ install(TARGETS onnxruntime
+         LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
+         RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
+         FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR})
+-
++install(TARGETS onnxruntime_static onnxruntime_session onnxruntime_optimizer onnxruntime_providers onnxruntime_lora onnxruntime_framework onnxruntime_graph onnxruntime_util onnxruntime_mlas onnxruntime_common onnxruntime_flatbuffers safeint_interface
++        EXPORT ${PROJECT_NAME}Targets
++        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime
++        ARCHIVE   DESTINATION ${CMAKE_INSTALL_LIBDIR}
++        LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
++        RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
++        FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR})
+ 
+ if (WIN32 AND NOT CMAKE_CXX_STANDARD_LIBRARIES MATCHES kernel32.lib)
+   # Workaround STL bug https://github.com/microsoft/STL/issues/434#issuecomment-921321254
+diff --git a/cmake/onnxruntime_framework.cmake b/cmake/onnxruntime_framework.cmake
+index 9c9a25f..eed020e 100644
+--- a/cmake/onnxruntime_framework.cmake
++++ b/cmake/onnxruntime_framework.cmake
+@@ -66,9 +66,20 @@ endif()
+ if(onnxruntime_USE_TENSORRT OR onnxruntime_USE_NCCL)
+ # TODO: for now, core framework depends on CUDA. It should be moved to TensorRT EP
+ # TODO: provider_bridge_ort.cc should not include nccl.h
+-target_include_directories(onnxruntime_framework PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
++target_include_directories(onnxruntime_framework
++  PRIVATE
++    ${ONNXRUNTIME_ROOT}
++  PUBLIC
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
++    $<INSTALL_INTERFACE:.>
++    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+ else()
+-target_include_directories(onnxruntime_framework PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
++target_include_directories(onnxruntime_framework
++  PRIVATE
++    ${ONNXRUNTIME_ROOT}
++  PUBLIC
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
++    $<INSTALL_INTERFACE:.>)
+ endif()
+ # Needed for the provider interface, as it includes training headers when training is enabled
+ if (onnxruntime_ENABLE_TRAINING_OPS)

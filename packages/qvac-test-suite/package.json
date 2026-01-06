@@ -1,0 +1,29 @@
+{
+  "name": "qvac-sdk-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "broker": "node mqtt-websocket-broker.cjs",
+    "prepare": "husky || true"
+  },
+  "dependencies": {
+    "aedes": "^0.51.3",
+    "canvas": "^3.2.0",
+    "mqtt": "^5.14.1",
+    "websocket-stream": "^5.5.2"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.1"
+  },
+  "lint-staged": {
+    "framework/src/**/*.{ts,js,json}": [
+      "prettier --write"
+    ],
+    "framework-validation/**/*.{js,json}": [
+      "prettier --write"
+    ]
+  }
+}

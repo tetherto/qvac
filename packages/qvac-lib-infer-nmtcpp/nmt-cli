@@ -1,0 +1,792 @@
+#!/usr/bin/env bare
+'use strict'
+
+// QVAC NMT CLI - Neural Machine Translation Command-Line Tool
+//
+// IMPORTANT: This tool is used by the quality evaluation framework
+// (benchmarks/quality_eval/translators/qvac.py). Please maintain backward
+// compatibility when making changes.
+//
+// Usage: bare nmt-cli [OPTIONS] <source_lang> <target_lang>
+// Reads text from stdin (one sentence per line) and outputs translations to stdout
+
+const process = require('bare-process')
+const TranslationNmtcpp = require('./index.js')
+const { TranslationInterface } = require('./marian.js')
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+
+const VERSION = '0.1.3'
+const fs = require('bare-fs')
+const path = require('bare-path')
+const os = require('bare-os')
+
+// Hyperdrive keys for different language pairs (from model registry)
+const MODEL_KEYS = {
+  'en-it': 'ac16424b000d6bde2ab717b0aea96b7ec5ae0abd5117ee768cc436d02bb7f298',
+  'en-de': '7b1d16235cd4dd9cc2c58d1fc1c41d65159aa4d2337169c6243a5bc8bf49689b',
+  'en-es': '8aa823831cc55f5c1cba2c046e98b53a0d32376267ca73d653294b8b114459a2',
+  'de-en': 'b4d1ab62f885d9814acfddc565761b607bf86a307c38430ec1dabfe1a92532af',
+  'de-es': 'f432152db25ebd86fa0e48cd12f27e67e5c052c9af99c7662939dc1d84792c3e',
+  'de-it': '06d26bdc965d548c156885ed105f8150618aaa11712579158e81f1d49735aaf6',
+  'es-de': 'ff6a02096c3e2f4e1aa7e4a75cb37aa851bc924c9d4af2b30b26431f1cb9d156',
+  'es-en': 'b96cf6c79119578b9f9a2206b19ce9686e95f31949ce62b24aef83fbdf4b0b08',
+  'es-it': 'b04ba8638fea5adff061aba9ccc671936ab8f7459346461f6c2010d4c7413254',
+  'it-de': '438cbda449f1ac258a2fdea55cfd1f9f83dfb0ea20103c1e5113906081eec4f5',
+  'it-en': '68778c8375fbb1e7f5c20b4e6087131206e9ddba1872655e20931b7e08fe3954',
+  'it-es': '1b78d8309f80fcda61d0291ed5dc755e10e46b39d7e7484083a3c6d20b86c679',
+  // Portuguese pairs
+  'en-pt': '098cc786de52e61b8b543f0e0c2e16e054ff19b9f9aef41ec931191c939f8e12',
+  'pt-en': '821af2699a40bbec2f2fce6276f59c714285f13780cacae3f023cb44c6c6cad1',
+  // French pairs (download from S3, no hyperdrive keys yet)
+  'en-fr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fr-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fr-de': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fr-es': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fr-it': '0000000000000000000000000000000000000000000000000000000000000000',
+  'de-fr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'es-fr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'it-fr': '0000000000000000000000000000000000000000000000000000000000000000',
+  // Additional language pairs (use with --model flag for local models)
+  'en-zh': '0000000000000000000000000000000000000000000000000000000000000000',
+  'zh-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ar': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ar-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ja': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ja-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ko': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ko-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ru': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ru-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-hi': '0000000000000000000000000000000000000000000000000000000000000000',
+  'hi-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-tr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'tr-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-vi': '0000000000000000000000000000000000000000000000000000000000000000',
+  'vi-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-fa': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fa-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-th': '0000000000000000000000000000000000000000000000000000000000000000',
+  'th-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-pl': '0000000000000000000000000000000000000000000000000000000000000000',
+  'pl-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-uk': '0000000000000000000000000000000000000000000000000000000000000000',
+  'uk-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-nl': '0000000000000000000000000000000000000000000000000000000000000000',
+  'nl-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ro': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ro-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-id': '0000000000000000000000000000000000000000000000000000000000000000',
+  'id-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-bn': '0000000000000000000000000000000000000000000000000000000000000000',
+  'bn-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ur': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ur-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-el': '0000000000000000000000000000000000000000000000000000000000000000',
+  'el-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-cs': '0000000000000000000000000000000000000000000000000000000000000000',
+  'cs-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-sv': '0000000000000000000000000000000000000000000000000000000000000000',
+  'sv-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-hu': '0000000000000000000000000000000000000000000000000000000000000000',
+  'hu-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-he': '0000000000000000000000000000000000000000000000000000000000000000',
+  'he-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-fi': '0000000000000000000000000000000000000000000000000000000000000000',
+  'fi-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-no': '0000000000000000000000000000000000000000000000000000000000000000',
+  'no-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-da': '0000000000000000000000000000000000000000000000000000000000000000',
+  'da-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-bg': '0000000000000000000000000000000000000000000000000000000000000000',
+  'bg-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-sk': '0000000000000000000000000000000000000000000000000000000000000000',
+  'sk-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-lt': '0000000000000000000000000000000000000000000000000000000000000000',
+  'lt-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-lv': '0000000000000000000000000000000000000000000000000000000000000000',
+  'lv-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-sl': '0000000000000000000000000000000000000000000000000000000000000000',
+  'sl-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-et': '0000000000000000000000000000000000000000000000000000000000000000',
+  'et-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-hr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'hr-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-sr': '0000000000000000000000000000000000000000000000000000000000000000',
+  'sr-en': '0000000000000000000000000000000000000000000000000000000000000000',
+  'en-ca': '0000000000000000000000000000000000000000000000000000000000000000',
+  'ca-en': '0000000000000000000000000000000000000000000000000000000000000000'
+}
+
+function showHelp () {
+  console.log(`
+QVAC NMT CLI v${VERSION} - Neural Machine Translation Command-Line Tool
+
+USAGE:
+  bare nmt-cli [OPTIONS] <source_lang> <target_lang>
+
+DESCRIPTION:
+  Translates text from stdin using QVAC NMT models. Reads one sentence per line
+  from stdin and outputs translations to stdout. By default, downloads models from
+  Hyperdrive. Use --model or QVAC_MODEL_PATH to use local GGML model files.
+
+OPTIONS:
+  -h, --help              Show this help message and exit
+  -v, --version           Show version information and exit
+  -m, --model PATH        Path to local GGML model file (overrides QVAC_MODEL_PATH)
+  --cpu                   Use CPU instead of GPU for translation (default: GPU)
+  --bergamot              Use Bergamot model format (Firefox translations models)
+  --batch                 Use batch translation API (Bergamot only, faster for multiple texts)
+  --model-dir PATH        Directory containing Bergamot models (default: ~/.local/share/bergamot/models/firefox)
+
+HYPERPARAMETERS:
+  --beamsize NUM          Beam size for translation (1=greedy, 4=default)
+  --lengthpenalty NUM     Length penalty (0.0-2.0, default: 1.0)
+  --repetitionpenalty NUM Repetition penalty (1.0-2.0, default: 1.0)
+  --norepeatngramsize NUM No-repeat N-gram size (0-10, default: 0)
+  --temperature NUM       Sampling temperature (0.0-2.0, default: 1.0)
+  --topk NUM              Top-K sampling (0=disabled, default: 0)
+  --topp NUM              Top-P nucleus sampling (0.0-1.0, default: 1.0)
+  --maxlength NUM         Maximum output length (default: 512)
+
+ARGUMENTS:
+  <source_lang>           Source language code (e.g., en, de, es, it)
+  <target_lang>           Target language code (e.g., en, de, es, it)
+
+SUPPORTED LANGUAGE PAIRS:
+  ${Object.keys(MODEL_KEYS).join(', ')}
+
+ENVIRONMENT VARIABLES:
+  QVAC_MODEL_PATH         Path to local GGML model file (alternative to --model)
+  FIREFOX_MODELS_DIR      Directory for Bergamot models (alternative to --model-dir)
+
+EXAMPLES:
+  # Translate from English to Italian using Hyperdrive models
+  echo "Hello world" | bare nmt-cli en it
+
+  # Translate using a local model file
+  echo "Hello world" | bare nmt-cli --model ./models/en-it.bin en it
+
+  # Translate using Bergamot/Firefox model format
+  echo "Hello world" | bare nmt-cli --bergamot --cpu en it
+
+  # Translate with custom Bergamot model directory
+  echo "Hello world" | bare nmt-cli --bergamot --model-dir ./firefox-models --cpu en it
+
+  # Batch translation with Bergamot (faster for multiple texts)
+  cat input.txt | bare nmt-cli --bergamot --batch --cpu en it > output.txt
+
+  # Batch translation from file
+  cat input.txt | bare nmt-cli en de > output.txt
+
+  # Using environment variable for model path
+  export QVAC_MODEL_PATH=/path/to/model.bin
+  echo "Hello world" | bare nmt-cli en it
+
+NOTES:
+  - This tool is used by benchmarks/quality_eval for BLEU score evaluation
+  - Model configuration uses beam search (size=4) without sampling for deterministic output
+  - Run this script from the qvac-lib-infer-nmtcpp repository root directory
+  - Bergamot models require .intgemm.alphas.bin model files and .spm vocabulary files
+`)
+}
+
+function showVersion () {
+  console.log(`nmt-cli version ${VERSION}`)
+  console.log('QVAC Neural Machine Translation CLI Tool')
+}
+
+function parseArgs () {
+  const args = process.argv.slice(2)
+  const options = {
+    help: false,
+    version: false,
+    model: null,
+    modelDir: null,
+    bergamot: false,
+    batch: false,
+    cpu: false,
+    srcLang: null,
+    dstLang: null,
+    // Hyperparameters with defaults
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    repetitionpenalty: 1.0,
+    norepeatngramsize: 0,
+    temperature: 1.0,
+    topk: 0,
+    topp: 1.0,
+    maxlength: 512
+  }
+
+  let i = 0
+  while (i < args.length) {
+    const arg = args[i]
+
+    if (arg === '-h' || arg === '--help') {
+      options.help = true
+      i++
+    } else if (arg === '-v' || arg === '--version') {
+      options.version = true
+      i++
+    } else if (arg === '-m' || arg === '--model') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --model requires a path argument')
+        process.exit(1)
+      }
+      options.model = args[i + 1]
+      i += 2
+    } else if (arg === '--cpu') {
+      options.cpu = true
+      i++
+    } else if (arg === '--bergamot') {
+      options.bergamot = true
+      i++
+    } else if (arg === '--batch') {
+      options.batch = true
+      i++
+    } else if (arg === '--model-dir') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --model-dir requires a path argument')
+        process.exit(1)
+      }
+      options.modelDir = args[i + 1]
+      i += 2
+    } else if (arg === '--beamsize') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --beamsize requires a numeric argument')
+        process.exit(1)
+      }
+      options.beamsize = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--lengthpenalty') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --lengthpenalty requires a numeric argument')
+        process.exit(1)
+      }
+      options.lengthpenalty = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--repetitionpenalty') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --repetitionpenalty requires a numeric argument')
+        process.exit(1)
+      }
+      options.repetitionpenalty = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--norepeatngramsize') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --norepeatngramsize requires a numeric argument')
+        process.exit(1)
+      }
+      options.norepeatngramsize = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--temperature') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --temperature requires a numeric argument')
+        process.exit(1)
+      }
+      options.temperature = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--topk') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --topk requires a numeric argument')
+        process.exit(1)
+      }
+      options.topk = parseInt(args[i + 1])
+      i += 2
+    } else if (arg === '--topp') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --topp requires a numeric argument')
+        process.exit(1)
+      }
+      options.topp = parseFloat(args[i + 1])
+      i += 2
+    } else if (arg === '--maxlength') {
+      if (i + 1 >= args.length) {
+        console.error('Error: --maxlength requires a numeric argument')
+        process.exit(1)
+      }
+      options.maxlength = parseInt(args[i + 1])
+      i += 2
+    } else if (!arg.startsWith('-')) {
+      // Positional arguments (language codes)
+      if (!options.srcLang) {
+        options.srcLang = arg
+      } else if (!options.dstLang) {
+        options.dstLang = arg
+      } else {
+        console.error(`Error: Unexpected argument '${arg}'`)
+        process.exit(1)
+      }
+      i++
+    } else {
+      console.error(`Error: Unknown option '${arg}'`)
+      console.error('Run with --help for usage information')
+      process.exit(1)
+    }
+  }
+
+  return options
+}
+
+/**
+ * Find Bergamot model files for a language pair
+ * Searches in Firefox translations model directory structure
+ * @param {string} modelsDir - Base models directory
+ * @param {string} srcLang - Source language code
+ * @param {string} dstLang - Target language code
+ * @returns {Object|null} - Object with model, srcVocab, dstVocab paths or null if not found
+ */
+function findBergamotModel (modelsDir, srcLang, dstLang) {
+  const pairCode = `${srcLang}${dstLang}`
+
+  // Try base-memory first, then fall back to tiny
+  for (const variant of ['base-memory', 'tiny']) {
+    const candidateDir = path.join(modelsDir, variant, pairCode)
+
+    try {
+      if (!fs.statSync(candidateDir).isDirectory()) {
+        continue
+      }
+    } catch {
+      continue
+    }
+
+    // Check for required Firefox model files
+    const modelFile = path.join(candidateDir, `model.${pairCode}.intgemm.alphas.bin`)
+    const lexFile = path.join(candidateDir, `lex.50.50.${pairCode}.s2t.bin`)
+
+    // Check for vocab files - some pairs have single vocab, others have src/trg vocabs
+    const sharedVocab = path.join(candidateDir, `vocab.${pairCode}.spm`)
+    const srcVocab = path.join(candidateDir, `srcvocab.${pairCode}.spm`)
+    const dstVocab = path.join(candidateDir, `trgvocab.${pairCode}.spm`)
+
+    // Check model file exists
+    try {
+      fs.statSync(modelFile)
+    } catch {
+      continue
+    }
+
+    // Check vocab files
+    let srcVocabPath, dstVocabPath
+    try {
+      fs.statSync(sharedVocab)
+      srcVocabPath = sharedVocab
+      dstVocabPath = sharedVocab
+      console.error(`[BERGAMOT] Using shared vocabulary: ${sharedVocab}`)
+    } catch {
+      try {
+        fs.statSync(srcVocab)
+        fs.statSync(dstVocab)
+        srcVocabPath = srcVocab
+        dstVocabPath = dstVocab
+        console.error(`[BERGAMOT] Using separate vocabularies: ${srcVocab}, ${dstVocab}`)
+      } catch {
+        continue
+      }
+    }
+
+    console.error(`[BERGAMOT] Found Firefox model in ${variant}: ${pairCode}`)
+    return {
+      modelPath: modelFile,
+      srcVocabPath,
+      dstVocabPath,
+      variant
+    }
+  }
+
+  return null
+}
+
+async function main () {
+  const options = parseArgs()
+
+  // Handle help and version flags
+  if (options.help) {
+    showHelp()
+    process.exit(0)
+  }
+
+  if (options.version) {
+    showVersion()
+    process.exit(0)
+  }
+
+  // Validate required arguments
+  if (!options.srcLang || !options.dstLang) {
+    console.error('Error: Both source and target language codes are required')
+    console.error('Run with --help for usage information')
+    process.exit(1)
+  }
+
+  // Validate --batch requires --bergamot
+  if (options.batch && !options.bergamot) {
+    console.error('Error: --batch flag requires --bergamot flag (batch API is Bergamot-only)')
+    process.exit(1)
+  }
+
+  const srcLang = options.srcLang
+  const dstLang = options.dstLang
+  const pairKey = `${srcLang}-${dstLang}`
+
+  // Check if language pair is supported (skip for Bergamot mode which has its own model discovery)
+  if (!options.bergamot && !MODEL_KEYS[pairKey]) {
+    console.error(`Error: Language pair '${pairKey}' is not supported`)
+    console.error('Supported pairs:', Object.keys(MODEL_KEYS).join(', '))
+    process.exit(1)
+  }
+
+  const hyperdriveKey = MODEL_KEYS[pairKey] || null
+
+  // Read all input from stdin
+  let inputText = ''
+
+  // Read stdin in chunks
+  for await (const chunk of process.stdin) {
+    inputText += chunk.toString()
+  }
+
+  // Split into lines and filter empty
+  const inputLines = inputText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+
+  if (inputLines.length === 0) {
+    console.error('Error: No input provided on stdin')
+    process.exit(1)
+  }
+
+  // Model configuration - use values from CLI options
+  const config = {
+    beamsize: options.beamsize,
+    lengthpenalty: options.lengthpenalty,
+    maxlength: options.maxlength,
+    repetitionpenalty: options.repetitionpenalty,
+    norepeatngramsize: options.norepeatngramsize,
+    temperature: options.temperature,
+    topk: options.topk,
+    topp: options.topp
+  }
+
+  // Handle Bergamot model mode
+  if (options.bergamot) {
+    // Determine models directory: CLI option > env var > default
+    const defaultModelsDir = path.join(os.homedir(), '.local/share/bergamot/models/firefox')
+    const modelsDir = options.modelDir || process.env.FIREFOX_MODELS_DIR || defaultModelsDir
+
+    console.error(`[BERGAMOT] Looking for models in: ${modelsDir}`)
+
+    // Find Bergamot model files
+    const bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+
+    if (!bergamotModel) {
+      console.error(`Error: Bergamot model not found for ${pairKey}`)
+      console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
+      console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
+      process.exit(1)
+    }
+
+    console.error(`[BERGAMOT] Model: ${bergamotModel.modelPath}`)
+    console.error(`[BERGAMOT] Source vocab: ${bergamotModel.srcVocabPath}`)
+    console.error(`[BERGAMOT] Target vocab: ${bergamotModel.dstVocabPath}`)
+
+    // Logger - output to stderr for debugging
+    const logger = {
+      error: (msg) => console.error(`[C++ ERROR] ${msg}`),
+      warn: (msg) => console.error(`[C++ WARN] ${msg}`),
+      info: (msg) => console.error(`[C++ INFO] ${msg}`),
+      debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
+    }
+
+    // Set up event handling for translation jobs
+    const jobResults = new Map()
+
+    // Create Bergamot model configuration
+    const bergamotConfig = {
+      path: bergamotModel.modelPath,
+      config: {
+        ...config,
+        src_vocab: bergamotModel.srcVocabPath,
+        dst_vocab: bergamotModel.dstVocabPath
+      },
+      use_gpu: !options.cpu,
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot
+    }
+
+    const addon = new TranslationInterface(
+      bergamotConfig,
+      (addon, event, jobId, output, error) => {
+        if (event === 'Output') {
+          if (jobResults.has(jobId)) {
+            jobResults.get(jobId).buffer += output
+          }
+        } else if (event === 'JobEnded') {
+          if (jobResults.has(jobId)) {
+            const job = jobResults.get(jobId)
+            job.resolve(job.buffer.trim())
+            jobResults.delete(jobId)
+          }
+        } else if (event === 'Error') {
+          if (jobResults.has(jobId)) {
+            const job = jobResults.get(jobId)
+            job.reject(new Error(error))
+            jobResults.delete(jobId)
+          }
+        }
+      },
+      logger
+    )
+
+    try {
+      const activateStart = Date.now()
+      console.error(`[${Date.now()}] Activating Bergamot addon...`)
+      await addon.activate()
+      console.error(`[${Date.now()}] Bergamot addon activated in ${Date.now() - activateStart}ms`)
+
+      if (options.batch) {
+        // Use batch translation API (faster for multiple texts)
+        // Bergamot handles internal batching via mini-batch config
+        const batchStart = Date.now()
+        console.error(`[${Date.now()}] Starting batch translation of ${inputLines.length} texts...`)
+
+        try {
+          const translations = await addon.processBatch(inputLines)
+
+          for (const translation of translations) {
+            console.log(translation)
+          }
+          console.error(`[${Date.now()}] Batch translation completed in ${Date.now() - batchStart}ms`)
+        } catch (err) {
+          console.error(`[${Date.now()}] Batch translation failed: ${err.message}`)
+          // Output empty lines for all inputs on batch failure
+          for (let i = 0; i < inputLines.length; i++) {
+            console.log('')
+          }
+        }
+      } else {
+        // Translate each line sequentially
+        for (let i = 0; i < inputLines.length; i++) {
+          const line = inputLines[i]
+          const lineStart = Date.now()
+          console.error(`[${Date.now()}] Starting Bergamot translation ${i + 1}/${inputLines.length}`)
+
+          try {
+            const translationPromise = new Promise(async (resolve, reject) => {
+              const placeholderId = `pending-${i}`
+              jobResults.set(placeholderId, { buffer: '', resolve, reject })
+
+              try {
+                const jobId = await addon.append({ type: 'text', input: line, priority: 60 })
+                console.error(`[${Date.now()}] Got jobId ${jobId}`)
+
+                const placeholder = jobResults.get(placeholderId)
+                jobResults.delete(placeholderId)
+                if (placeholder) {
+                  jobResults.set(jobId, placeholder)
+                }
+
+                await addon.append({ type: 'end of job' })
+              } catch (err) {
+                console.error(`[${Date.now()}] Error in append: ${err.message}`)
+                reject(err)
+              }
+            })
+
+            const translation = await translationPromise
+            console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
+            console.log(translation)
+          } catch (err) {
+            console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
+            console.log('')
+          }
+        }
+      }
+
+      console.error(`[${Date.now()}] Destroying Bergamot addon...`)
+      addon.destroy()
+      console.error(`[${Date.now()}] Done`)
+    } catch (err) {
+      console.error('Error: Failed to load or run Bergamot translation model')
+      console.error(err)
+      process.exit(1)
+    }
+
+    return
+  }
+
+  // Determine model path: CLI option > env var > Hyperdrive
+  const localModelPath = options.model || process.env.QVAC_MODEL_PATH
+
+  if (localModelPath) {
+    // Load from local file using TranslationInterface
+
+    // Logger - output to stderr for debugging
+    const logger = {
+      error: (msg) => console.error(`[C++ ERROR] ${msg}`),
+      warn: (msg) => console.error(`[C++ WARN] ${msg}`),
+      info: (msg) => console.error(`[C++ INFO] ${msg}`),
+      debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
+    }
+
+    // Set up event handling for translation jobs
+    const jobResults = new Map() // jobId -> { buffer, resolve, reject }
+
+    const addon = new TranslationInterface(
+      { path: localModelPath, config, use_gpu: !options.cpu },
+      (addon, event, jobId, output, error) => {
+        // Event handler - process all translation events
+        if (event === 'Output') {
+          // Accumulate output
+          if (jobResults.has(jobId)) {
+            jobResults.get(jobId).buffer += output
+          }
+        } else if (event === 'JobEnded') {
+          // Job completed - resolve the promise
+          if (jobResults.has(jobId)) {
+            const job = jobResults.get(jobId)
+            job.resolve(job.buffer.trim())
+            jobResults.delete(jobId)
+          }
+        } else if (event === 'Error') {
+          // Job error - reject the promise
+          if (jobResults.has(jobId)) {
+            const job = jobResults.get(jobId)
+            job.reject(new Error(error))
+            jobResults.delete(jobId)
+          }
+        }
+      },
+      logger
+    )
+
+    try {
+      const activateStart = Date.now()
+      console.error(`[${Date.now()}] Activating addon...`)
+      await addon.activate()
+      console.error(`[${Date.now()}] Addon activated in ${Date.now() - activateStart}ms`)
+
+      // Translate each line sequentially to avoid race conditions
+      for (let i = 0; i < inputLines.length; i++) {
+        let line = inputLines[i]
+
+        // Add language prefix for Portuguese (en-roa model)
+        if (srcLang === 'en' && dstLang === 'pt') {
+          line = `>>por<< ${line}`
+        }
+
+        const lineStart = Date.now()
+        console.error(`[${Date.now()}] Starting translation ${i + 1}/${inputLines.length}`)
+
+        try {
+          // Create promise for this translation with unique placeholder ID
+          const translationPromise = new Promise(async (resolve, reject) => {
+            // Use unique placeholder ID to avoid race conditions
+            const placeholderId = `pending-${i}`
+            jobResults.set(placeholderId, { buffer: '', resolve, reject })
+
+            // Append text and wait for jobId
+            try {
+              const appendStart = Date.now()
+              const jobId = await addon.append({ type: 'text', input: line, priority: 60 })
+              console.error(`[${Date.now()}] Got jobId ${jobId} in ${Date.now() - appendStart}ms`)
+
+              // Move from placeholder to actual jobId
+              const placeholder = jobResults.get(placeholderId)
+              jobResults.delete(placeholderId)
+              if (placeholder) {
+                jobResults.set(jobId, placeholder)
+              }
+
+              // Now append end-of-job marker
+              const eojStart = Date.now()
+              await addon.append({ type: 'end of job' })
+              console.error(`[${Date.now()}] Sent end-of-job in ${Date.now() - eojStart}ms`)
+            } catch (err) {
+              console.error(`[${Date.now()}] Error in append: ${err.message}`)
+              reject(err)
+            }
+          })
+
+          let translation = await translationPromise
+
+          // Strip language prefix from output if present
+          if (srcLang === 'en' && dstLang === 'pt') {
+            translation = translation.replace(/^>>[a-z]+\s*<<\s*/i, '')
+          }
+
+          console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
+          console.log(translation)
+        } catch (err) {
+          console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
+          console.log('') // Output empty line on error
+        }
+      }
+
+      console.error(`[${Date.now()}] Destroying addon...`)
+      addon.destroy()
+      console.error(`[${Date.now()}] Done`)
+    } catch (err) {
+      console.error('Error: Failed to load or run translation model')
+      console.error(err)
+      process.exit(1)
+    }
+  } else {
+    // Load from Hyperdrive (default behavior)
+
+    // Initialize Hyperdrive DataLoader
+    const hdDL = new HyperDriveDL({
+      key: `hd://${hyperdriveKey}`
+    })
+
+    // Create model arguments
+    const modelArgs = {
+      loader: hdDL,
+      params: {
+        mode: 'full',
+        srcLang,
+        dstLang
+      },
+      diskPath: './qvac_models',
+      modelName: 'model.bin'
+    }
+
+    try {
+      // Translate each line with fresh model instance to prevent state accumulation
+      for (let i = 0; i < inputLines.length; i++) {
+        const line = inputLines[i]
+
+        try {
+          // Create fresh model instance for each sentence
+          const model = new TranslationNmtcpp(modelArgs, config)
+          await model.load()
+
+          const response = await model.run(line)
+          let translation = ''
+
+          await response
+            .onUpdate(chunk => {
+              translation += chunk
+            })
+            .await()
+
+          // Output translation (one line per input)
+          console.log(translation.trim())
+
+          // Clean up this model instance
+          await model.unload()
+        } catch (err) {
+          console.log('') // Output empty line on error
+        }
+      }
+    } finally {
+      // Clean up Hyperdrive loader
+      await hdDL.close()
+    }
+  }
+}
+
+main().catch(err => {
+  console.error('Fatal error:', err.message)
+  process.exit(1)
+})

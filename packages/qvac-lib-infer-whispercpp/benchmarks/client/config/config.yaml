@@ -1,0 +1,27 @@
+server:
+  url: "http://localhost:8080/run"
+  timeout: 40
+  batch_size: 10
+  lib: "@qvac/transcription-whispercpp"
+  version: "0.3.2"
+dataset:
+  dataset_type: "librispeech" # librispeech or fleurs
+  speaker_group: "clean" # clean, other, all, only releavant for english with librispeech
+  language: "english" # english, french, german, spanish, italian, portuguese, mandarin_chinese, arabic, russian, japanese, czech
+  max_samples: 0
+wer:
+  enabled: true
+cer:
+  enabled: true
+aradiawer:
+  enabled: true  # Auto-applied when language is Arabic
+  min_score_threshold: 0.5  # Minimum threshold for semantic/syntactic scores
+model:
+  path: "../../examples/models/ggml-tiny.bin"
+  sample_rate: 16000
+  audio_format: "f32le"
+  vad: false
+  vad_model_path: ""
+  language: "en" # en, fr, de, es, it, pt, zh, ar, ru, ja, cs
+  streaming: false
+  streaming_chunk_size: 64000

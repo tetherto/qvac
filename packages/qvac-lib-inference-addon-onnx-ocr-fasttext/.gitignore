@@ -1,0 +1,16 @@
+.vs/
+build/
+prebuilds/
+node_modules/
+test/unit/all.js
+test/integration/all.js
+.npmrc
+package-lock.json
+.idea/
+
+.npmrc
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

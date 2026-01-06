@@ -1,0 +1,37 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -239,16 +239,28 @@
+   set(INTRINSICS ${MSVC_BUILD_ARCH})
+   # set(INTRINSICS "/arch:AVX512")
+ 
++  # Check if using clang-cl (Clang's MSVC-compatible driver)
++  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
++    set(IS_CLANG_CL TRUE)
++  else()
++    set(IS_CLANG_CL FALSE)
++  endif()
++
+   set(CMAKE_CXX_FLAGS                  "/EHsc /DWIN32 /D_WINDOWS /DUNICODE /D_UNICODE /D_CRT_NONSTDC_NO_WARNINGS /D_CRT_SECURE_NO_WARNINGS ${DISABLE_GLOBALLY}")
+-  set(CMAKE_CXX_FLAGS_RELEASE          "${CMAKE_CXX_FLAGS} /MT /O2 ${INTRINSICS} /MP /GL /DNDEBUG")
++  if(IS_CLANG_CL)
++    set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS} /MT /O2 ${INTRINSICS} /DNDEBUG")
++  else()
++    set(CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS} /MT /O2 ${INTRINSICS} /MP /GL /DNDEBUG")
++  endif()
+   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO   "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+   set(CMAKE_CXX_FLAGS_DEBUG            "${CMAKE_CXX_FLAGS} /MTd /Od /Ob0 ${INTRINSICS} /RTC1 /Zi /D_DEBUG /bigobj")
+ 
+   # ignores warning LNK4049: locally defined symbol free imported - this comes from zlib
+-  set(CMAKE_EXE_LINKER_FLAGS         "${CMAKE_EXE_LINKER_FLAGS} /DEBUG /LTCG:incremental /INCREMENTAL:NO /ignore:4049")
++  set(CMAKE_EXE_LINKER_FLAGS         "${CMAKE_EXE_LINKER_FLAGS} /DEBUG /INCREMENTAL:NO /ignore:4049")
+   set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRT")
+   set(CMAKE_EXE_LINKER_FLAGS_DEBUG   "${CMAKE_EXE_LINKER_FLAGS} /NODEFAULTLIB:MSVCRTD")
+-  set(CMAKE_STATIC_LINKER_FLAGS      "${CMAKE_STATIC_LINKER_FLAGS} /LTCG:incremental")
++  if(NOT IS_CLANG_CL)
++    set(CMAKE_EXE_LINKER_FLAGS       "${CMAKE_EXE_LINKER_FLAGS} /LTCG:incremental")
++    set(CMAKE_STATIC_LINKER_FLAGS    "${CMAKE_STATIC_LINKER_FLAGS} /LTCG:incremental")
++  endif()
+ 
+   find_library(SHLWAPI Shlwapi.lib)
+   set(EXT_LIBS ${EXT_LIBS} SHLWAPI)

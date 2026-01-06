@@ -1,0 +1,20 @@
+diff --git a/cmake/onnxruntime_providers_nnapi.cmake b/cmake/onnxruntime_providers_nnapi.cmake
+index b718a97..f2b6bb2 100644
+--- a/cmake/onnxruntime_providers_nnapi.cmake
++++ b/cmake/onnxruntime_providers_nnapi.cmake
+@@ -75,8 +75,15 @@
+ 
+   if (NOT onnxruntime_BUILD_SHARED_LIB)
+     install(TARGETS onnxruntime_providers_nnapi
++            EXPORT onnxruntimeTargets
+             ARCHIVE   DESTINATION ${CMAKE_INSTALL_LIBDIR}
+             LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
+             RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
+             FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR})
+   endif()
++    install(TARGETS onnxruntime_providers_nnapi
++            EXPORT onnxruntimeTargets
++            ARCHIVE   DESTINATION ${CMAKE_INSTALL_LIBDIR}
++            LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
++            RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
++            FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR})

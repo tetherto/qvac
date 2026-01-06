@@ -1,0 +1,72 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f604314..25eee33 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -69,26 +69,31 @@ target_compile_features(piper_phonemize PUBLIC cxx_std_17)
+ 
+ # ---- Declare executable ----
+ 
+-add_executable(piper_phonemize_exe src/main.cpp src/phoneme_ids.cpp)
+-
+-if(NOT WIN32)
+-    set_property(TARGET piper_phonemize_exe PROPERTY OUTPUT_NAME piper_phonemize)
+-endif()
+-
+-target_compile_features(piper_phonemize_exe PUBLIC cxx_std_17)
+-
+-target_include_directories(
+-    piper_phonemize_exe PUBLIC
+-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>"
+-)
+-
+-target_link_libraries(piper_phonemize_exe PUBLIC
+-    piper_phonemize
+-)
+-
+-# Fix Windows static linking with espeak-ng
+-if(WIN32)
+-    target_compile_definitions(piper_phonemize_exe PRIVATE LIBESPEAK_NG_EXPORT)
++if(NOT IOS)
++    add_executable(piper_phonemize_exe src/main.cpp src/phoneme_ids.cpp)
++
++    if(NOT WIN32)
++        set_property(TARGET piper_phonemize_exe PROPERTY OUTPUT_NAME piper_phonemize)
++    endif()
++
++    target_compile_features(piper_phonemize_exe PUBLIC cxx_std_17)
++
++    target_include_directories(
++        piper_phonemize_exe PUBLIC
++        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>"
++    )
++
++    target_link_libraries(piper_phonemize_exe PUBLIC
++        piper_phonemize
++    )
++
++    # Fix Windows static linking with espeak-ng
++    if(WIN32)
++        target_compile_definitions(piper_phonemize_exe PRIVATE LIBESPEAK_NG_EXPORT)
++    endif()
++else()
++    # For iOS builds, we don't build the executable since it can't run on iOS
++    message(STATUS "iOS build detected: Skipping piper_phonemize_exe executable build")
+ endif()
+ 
+ # ---- Declare test ----
+@@ -132,9 +137,12 @@ install(
+     PATTERN "*.h"
+     PATTERN "*.hpp")
+ 
+-install(
+-    TARGETS piper_phonemize_exe
+-    ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR})
++if(NOT IOS)
++    install(
++        TARGETS piper_phonemize_exe
++        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
++        BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR})
++endif()
+ 
+ install(
+     FILES ${CMAKE_SOURCE_DIR}/etc/libtashkeel_model.ort

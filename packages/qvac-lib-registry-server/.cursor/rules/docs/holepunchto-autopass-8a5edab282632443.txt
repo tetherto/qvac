@@ -1,0 +1,2659 @@
+Directory structure:
+└── holepunchto-autopass/
+    ├── README.md
+    ├── example.mjs
+    ├── index.js
+    ├── schema.js
+    ├── test.js
+    └── spec/
+        ├── db/
+        │   ├── db.json
+        │   ├── index.js
+        │   └── messages.js
+        ├── hyperdispatch/
+        │   ├── dispatch.json
+        │   ├── index.js
+        │   └── messages.js
+        └── schema/
+            ├── index.js
+            └── schema.json
+
+================================================
+FILE: README.md
+================================================
+# autopass
+
+Distributed notes/password manager
+
+```sh
+npm install autopass
+```
+
+> [!NOTE]
+> Autopass needs Corestore 7, our latest major version that is backed by RocksDB for storage and atomicity.
+
+## Usage
+
+First choose if you wanna pair or make a new instance.
+
+```js
+import Autopass from 'autopass'
+import Corestore from 'corestore'
+
+const pass = new Autopass(new Corestore('./pass'))
+
+const inv = await pass.createInvite()
+console.log('share to add', inv)
+```
+
+Then invite another instance
+
+```js
+const pair = Autopass.pair(new Corestore('./another-pass'), inv)
+
+const anotherPass = await pair.finished()
+await anotherPass.ready()
+```
+
+When paired you can simply start the instance again with the normal constructor.
+
+```js
+await pass.add('a-note', 'hello this is a note')
+```
+
+Then on the other node you get it out with
+
+```js
+const note = await pass.get('a-note')
+console.log({ note })
+```
+
+## API
+
+#### `pass = new Autopass(new Corestore(path))`
+
+Make a new pass instance.
+
+#### `pass.on('update', fn)`
+
+Triggered when it updates, ie something added/removed an entry
+
+#### `value = await pass.get(key)`
+
+Get an entry.
+
+#### `stream = pass.list()`
+
+Get all entries.
+
+#### `await pass.add(key, value, file)`
+
+Add new entry
+
+#### `await pass.remove(key)`
+
+Remove an entry.
+
+#### `await pass.removeWriter(writerKey)`
+
+Remove a writer explictly.
+
+#### `await pass.addWriter(writerKey)`
+
+Add a writer explictly.
+
+#### `pass.writerKey`
+
+Get the local writer key.
+
+#### `inv = await pass.createInvite()`
+
+Get invite to add a writer.
+
+#### `await deleteInvite()`
+
+Delete the current invite.
+
+#### `await pass.ready()`
+
+Wait for the pass to load fully
+
+#### `pair = Autopass.pair(new Corestore(path), invite)`
+
+Pair with another instance.
+
+#### `pass = await pair.finished()`
+
+Wait for the pair to finish.
+
+#### `await pass.addMirror(key)`
+
+Add a blind mirror.
+
+#### `await getMirror()`
+
+Returns an array of blind mirrors
+
+#### `await removeMirror(key)`
+
+Remove a blind mirror
+
+#### `await pair.close()`
+
+Force close the pair instance. Only need to call this if you dont wait for it to finish.get
+
+#### `await pass.close()`
+
+Fully close the pass instance.
+
+#### `await pass.suspend()`
+
+Suspend the swarm and discovery
+
+#### `await pass.resume`
+
+Resume the swarm is suspended
+
+## Contributors
+
+Written with big contributions from [@supersu](https://github.com/supersuryaansh)
+
+
+
+================================================
+FILE: example.mjs
+================================================
+import Autopass from './index.js'
+import Corestore from 'corestore'
+import process from 'process'
+const store = new Corestore('example/' + process.argv[2])
+
+let pass = null
+
+if (process.argv[3]) {
+  const pair = Autopass.pair(store, process.argv[3])
+  pass = await pair.finished()
+} else {
+  pass = new Autopass(store)
+  await pass.ready()
+}
+
+if (pass.base.writable) {
+  const inv = await pass.createInvite()
+  console.log('invite', inv)
+}
+onupdate()
+pass.on('update', onupdate)
+
+function onupdate() {
+  console.log('db changed, all entries:')
+  pass.list().on('data', console.log)
+}
+
+
+
+================================================
+FILE: index.js
+================================================
+// the js module powering the mobile and desktop app
+
+const Autobase = require('autobase')
+const BlindPairing = require('blind-pairing')
+const HyperDB = require('hyperdb')
+const Hyperswarm = require('hyperswarm')
+const Wakeup = require('protomux-wakeup')
+const ReadyResource = require('ready-resource')
+const z32 = require('z32')
+const b4a = require('b4a')
+const { Router, encode, decode } = require('./spec/hyperdispatch')
+const BlindPeering = require('blind-peering')
+const db = require('./spec/db/index.js')
+const enc = require('hypercore-id-encoding')
+
+class AutopassPairer extends ReadyResource {
+  constructor(store, invite, opts = {}) {
+    super()
+    this.store = store
+    this.invite = invite
+    this.swarm = null
+    this.wakeup = null
+    this.pairing = null
+    this.peering = null
+    this.candidate = null
+    this.bootstrap = opts.bootstrap || null
+    this.onresolve = null
+    this.onreject = null
+    this.pass = null
+    this.relayThrough = opts.relayThrough || null
+
+    this.ready().catch(noop)
+  }
+
+  async _open() {
+    await this.store.ready()
+    this.swarm = new Hyperswarm({
+      keyPair: await this.store.createKeyPair('hyperswarm'),
+      bootstrap: this.bootstrap,
+      relayThrough: this.relayThrough
+    })
+
+    this.wakeup = new Wakeup()
+
+    const store = this.store
+    this.swarm.on('connection', (connection, peerInfo) => {
+      store.replicate(connection)
+      this.wakeup.addStream(connection)
+    })
+
+    this.pairing = new BlindPairing(this.swarm)
+    const core = Autobase.getLocalCore(this.store)
+    await core.ready()
+    const key = core.key
+    await core.close()
+    this.candidate = this.pairing.addCandidate({
+      invite: z32.decode(this.invite),
+      userData: key,
+      onadd: async (result) => {
+        if (this.pass === null) {
+          this.pass = new Autopass(this.store, {
+            swarm: this.swarm,
+            key: result.key,
+            wakeup: this.wakeup,
+            encryptionKey: result.encryptionKey,
+            bootstrap: this.bootstrap
+          })
+
+          await this.pass.deleteInvite()
+        }
+        this.swarm = null
+        this.store = null
+        if (this.onresolve) this._whenWritable()
+        this.candidate.close().catch(noop)
+      }
+    })
+  }
+
+  _whenWritable() {
+    if (this.pass.base.writable) return
+    const check = () => {
+      if (this.pass.base.writable) {
+        this.pass.base.off('update', check)
+        this.onresolve(this.pass)
+      }
+    }
+    this.pass.base.on('update', check)
+  }
+
+  async _close() {
+    if (this.candidate !== null) {
+      await this.candidate.close()
+    }
+
+    if (this.wakeup !== null) {
+      this.wakeup.destroy()
+    }
+
+    if (this.swarm !== null) {
+      await this.swarm.destroy()
+    }
+
+    if (this.store !== null) {
+      await this.store.close()
+    }
+
+    if (this.onreject) {
+      this.onreject(new Error('Pairing closed'))
+    } else if (this.base) {
+      await this.base.close()
+    }
+  }
+
+  finished() {
+    return new Promise((resolve, reject) => {
+      this.onresolve = resolve
+      this.onreject = reject
+    })
+  }
+}
+
+class Autopass extends ReadyResource {
+  constructor(corestore, opts = {}) {
+    super()
+    this.router = new Router()
+    this.store = corestore
+    this.swarm = opts.swarm || null
+    this.base = null
+    this.bootstrap = opts.bootstrap || null
+    this.member = null
+    this.pairing = null
+    this.replicate = opts.replicate !== false
+    this.debug = !!opts.key
+    // Register handlers for commands
+    this.router.add('@autopass/remove-writer', async (data, context) => {
+      await context.base.removeWriter(data.key)
+    })
+
+    this.router.add('@autopass/add-writer', async (data, context) => {
+      await context.base.addWriter(data.key)
+    })
+
+    this.router.add('@autopass/put', async (data, context) => {
+      await context.view.insert('@autopass/records', data)
+    })
+
+    this.router.add('@autopass/add-mirror', async (data, context) => {
+      await context.view.insert('@autopass/mirrors', data)
+    })
+
+    this.router.add('@autopass/del', async (data, context) => {
+      await context.view.delete('@autopass/records', { key: data.key })
+    })
+
+    this.router.add('@autopass/del-mirror', async (data, context) => {
+      await context.view.delete('@autopass/mirrors', { key: data.key })
+    })
+
+    this.router.add('@autopass/add-invite', async (data, context) => {
+      await context.view.insert('@autopass/invite', data)
+    })
+
+    this.router.add('@autopass/del-invite', async (data, context) => {
+      await context.view.delete('@autopass/invite', { id: data.id })
+    })
+
+    this._boot(opts)
+    this.ready().catch(noop)
+  }
+
+  // Initialize autobase
+  _boot(opts = {}) {
+    const { encryptionKey, key, wakeup } = opts
+
+    this.base = new Autobase(this.store, key, {
+      wakeup,
+      encrypt: true,
+      encryptionKey,
+      open(store) {
+        return HyperDB.bee(store.get('view'), db, {
+          extension: false,
+          autoUpdate: true
+        })
+      },
+      // New data blocks will be added using the apply function
+      apply: this._apply.bind(this)
+    })
+
+    this.base.on('update', () => {
+      if (!this.base._interrupting) this.emit('update')
+    })
+  }
+
+  async _apply(nodes, view, base) {
+    for (const node of nodes) {
+      await this.router.dispatch(node.value, { view, base })
+    }
+    await view.flush()
+  }
+
+  async _open() {
+    await this.base.ready()
+    if (this.replicate) await this._replicate()
+  }
+
+  async _close() {
+    if (this.swarm) {
+      await this.member.close()
+      await this.pairing.close()
+      await this.swarm.destroy()
+    }
+    await this.base.close()
+  }
+
+  get writerKey() {
+    return this.base.local.key
+  }
+
+  get key() {
+    return this.base.key
+  }
+
+  get discoveryKey() {
+    return this.base.discoveryKey
+  }
+
+  get encryptionKey() {
+    return this.base.encryptionKey
+  }
+
+  static pair(store, invite, opts) {
+    return new AutopassPairer(store, invite, opts)
+  }
+
+  async createInvite(opts) {
+    if (this.opened === false) await this.ready()
+    const existing = await this.base.view.findOne('@autopass/invite', {})
+    if (existing) {
+      return z32.encode(existing.invite)
+    }
+    const { id, invite, publicKey, expires } = BlindPairing.createInvite(
+      this.base.key
+    )
+
+    const record = { id, invite, publicKey, expires }
+    await this.base.append(encode('@autopass/add-invite', record))
+    return z32.encode(record.invite)
+  }
+
+  async deleteInvite() {
+    if (this.opened === false) await this.ready()
+    const existing = await this.base.view.findOne('@autopass/invite', {})
+    if (existing) {
+      await this.base.append(encode('@autopass/del-invite', existing))
+    }
+  }
+
+  list(opts) {
+    return this.base.view.find('@autopass/records', {})
+  }
+
+  async get(key) {
+    const data = await this.base.view.get('@autopass/records', { key })
+    if (data === null) {
+      return null
+    }
+    return { value: data.value, file: data.file }
+  }
+
+  async addWriter(key) {
+    await this.base.append(
+      encode('@autopass/add-writer', {
+        key: b4a.isBuffer(key) ? key : b4a.from(key)
+      })
+    )
+    return true
+  }
+
+  async removeWriter(key) {
+    await this.base.append(
+      encode('@autopass/remove-writer', {
+        key: b4a.isBuffer(key) ? key : b4a.from(key)
+      })
+    )
+  }
+
+  get writable() {
+    return this.base.writable
+  }
+
+  async _replicate() {
+    await this.base.ready()
+    if (this.swarm === null) {
+      this.swarm = new Hyperswarm({
+        keyPair: await this.store.createKeyPair('hyperswarm'),
+        bootstrap: this.bootstrap
+      })
+      this.swarm.on('connection', (connection, peerInfo) => {
+        this.base.replicate(connection)
+      })
+    }
+    this.pairing = new BlindPairing(this.swarm)
+    this.member = this.pairing.addMember({
+      discoveryKey: this.base.discoveryKey,
+      onadd: async (candidate) => {
+        const id = candidate.inviteId
+        const inv = await this.base.view.findOne('@autopass/invite', {})
+        if (inv === null || !b4a.equals(inv.id, id)) {
+          return
+        }
+        candidate.open(inv.publicKey)
+        await this.addWriter(candidate.userData)
+        candidate.confirm({
+          key: this.base.key,
+          encryptionKey: this.base.encryptionKey
+        })
+        await this.deleteInvite()
+      }
+    })
+    this.swarm.join(this.base.discoveryKey)
+
+    const mirrorList = await this.getMirror()
+    const mirrors = mirrorList.map((item) => item.key)
+    this.peering = new BlindPeering(this.swarm, this.store, {
+      wakeup: this.base.wakeupProtocol,
+      autobaseMirrors: mirrors
+    })
+    this.peering.addAutobaseBackground(this.base)
+  }
+
+  async add(key, value, file) {
+    if (file && file.byteLength > 6 * 1024 * 1024) {
+      throw new Error('File length should be less than 6 MB')
+    }
+    await this.base.append(encode('@autopass/put', { key, value, file }))
+  }
+
+  async remove(key) {
+    await this.base.append(encode('@autopass/del', { key }))
+  }
+
+  async addMirror(key) {
+    const keyBuffer = enc.decode(enc.normalize(key))
+    await this.base.append(encode('@autopass/add-mirror', { key: keyBuffer }))
+  }
+
+  async getMirror() {
+    const queryStream = this.base.view.find('@autopass/mirrors', {})
+    const results = await queryStream.toArray()
+    return results.map((r) => ({
+      ...r,
+      key: enc.encode(r.key)
+    }))
+  }
+
+  async removeMirror(key) {
+    const keyBuffer = enc.decode(enc.normalize(key))
+    await this.base.append(encode('@autopass/del-mirror', { key: keyBuffer }))
+  }
+
+  async suspend() {
+    if (this.swarm) {
+      await this.pairing.suspend()
+      await this.swarm.suspend()
+      await this.store.suspend()
+    }
+  }
+
+  async resume() {
+    if (this.swarm) {
+      await this.store.resume()
+      await this.swarm.resume()
+      await this.pairing.resume()
+    }
+  }
+} // end class
+
+function noop() {}
+
+module.exports = Autopass
+
+
+
+================================================
+FILE: schema.js
+================================================
+const Hyperschema = require('hyperschema')
+const HyperdbBuilder = require('hyperdb/builder')
+const Hyperdispatch = require('hyperdispatch')
+
+// SCHEMA CREATION START //
+const autopass = Hyperschema.from('./spec/schema')
+const template = autopass.namespace('autopass')
+// You can find a list of supported data types here: https://github.com/holepunchto/compact-encoding
+template.register({
+  name: 'records',
+  compact: false,
+  fields: [
+    {
+      name: 'key',
+      type: 'string',
+      required: true
+    },
+    {
+      name: 'value',
+      type: 'string',
+      required: false
+    },
+    {
+      name: 'file',
+      type: 'buffer',
+      required: false
+    }
+  ]
+})
+template.register({
+  name: 'mirrors',
+  compact: false,
+  fields: [
+    {
+      name: 'key',
+      type: 'fixed32',
+      required: true
+    }
+  ]
+})
+template.register({
+  name: 'writer',
+  compact: false,
+  fields: [
+    {
+      name: 'key',
+      type: 'buffer',
+      required: true
+    }
+  ]
+})
+
+template.register({
+  name: 'delete',
+  compact: false,
+  fields: [
+    {
+      name: 'key',
+      type: 'string',
+      required: true
+    }
+  ]
+})
+
+template.register({
+  name: 'invite',
+  compact: false,
+  fields: [
+    {
+      name: 'id',
+      type: 'buffer',
+      required: true
+    },
+    {
+      name: 'invite',
+      type: 'buffer',
+      required: true
+    },
+    {
+      name: 'publicKey',
+      type: 'buffer',
+      required: true
+    },
+    {
+      name: 'expires',
+      type: 'int',
+      required: true
+    }
+  ]
+})
+
+template.register({
+  name: 'del-invite',
+  compact: false,
+  fields: [
+    {
+      name: 'id',
+      type: 'buffer',
+      required: true
+    }
+  ]
+})
+template.register({
+  name: 'del-mirror',
+  compact: false,
+  fields: [
+    {
+      name: 'key',
+      type: 'fixed32',
+      required: true
+    }
+  ]
+})
+Hyperschema.toDisk(autopass)
+
+const dbTemplate = HyperdbBuilder.from('./spec/schema', './spec/db')
+const blobs = dbTemplate.namespace('autopass')
+blobs.collections.register({
+  name: 'records',
+  schema: '@autopass/records',
+  key: ['key']
+})
+blobs.collections.register({
+  name: 'invite',
+  schema: '@autopass/invite',
+  key: ['id']
+})
+blobs.collections.register({
+  name: 'mirrors',
+  schema: '@autopass/mirrors',
+  key: ['key']
+})
+blobs.collections.register({
+  name: 'writer',
+  schema: '@autopass/writer',
+  key: ['key']
+})
+
+blobs.collections.register({
+  name: 'delete',
+  schema: '@autopass/delete',
+  key: ['key']
+})
+
+blobs.collections.register({
+  name: 'del-invite',
+  schema: '@autopass/del-invite',
+  key: ['id']
+})
+blobs.collections.register({
+  name: 'del-invite',
+  schema: '@autopass/del-invite',
+  key: ['id']
+})
+blobs.collections.register({
+  name: 'del-mirror',
+  schema: '@autopass/del-mirror',
+  key: ['key']
+})
+HyperdbBuilder.toDisk(dbTemplate)
+
+const hyperdispatch = Hyperdispatch.from(
+  './spec/schema',
+  './spec/hyperdispatch'
+)
+const namespace = hyperdispatch.namespace('autopass')
+namespace.register({
+  name: 'remove-writer',
+  requestType: '@autopass/writer'
+})
+namespace.register({
+  name: 'add-writer',
+  requestType: '@autopass/writer'
+})
+namespace.register({
+  name: 'put',
+  requestType: '@autopass/records'
+})
+namespace.register({
+  name: 'add-mirror',
+  requestType: '@autopass/mirrors'
+})
+namespace.register({
+  name: 'del-mirror',
+  requestType: '@autopass/del-mirror'
+})
+namespace.register({
+  name: 'del',
+  requestType: '@autopass/delete'
+})
+namespace.register({
+  name: 'add-invite',
+  requestType: '@autopass/invite'
+})
+namespace.register({
+  name: 'del-invite',
+  requestType: '@autopass/del-invite'
+})
+Hyperdispatch.toDisk(hyperdispatch)
+
+
+
+================================================
+FILE: test.js
+================================================
+const test = require('brittle')
+const Autopass = require('./')
+const Corestore = require('corestore')
+const testnet = require('hyperdht/testnet')
+const tmp = require('test-tmp')
+
+test('basic', async function (t) {
+  const a = await create(t, { replicate: false })
+
+  await a.add('hello', 'world')
+
+  t.ok(a.base.encryptionKey)
+  t.is((await a.get('hello')).value, 'world')
+
+  await a.close()
+})
+
+test('invites', async function (t) {
+  t.plan(2)
+
+  const tn = await testnet(10, t)
+
+  const a = await create(t, { bootstrap: tn.bootstrap })
+  t.teardown(() => {
+    a.close()
+  })
+
+  const onUpdate = function () {
+    if (a.base.system.members === 2) {
+      t.pass('a has two members')
+      a.removeListener('update', onUpdate)
+    }
+  }
+
+  a.on('update', onUpdate)
+
+  const inv = await a.createInvite()
+
+  const p = await pair(t, inv, { bootstrap: tn.bootstrap })
+
+  const b = await p.finished()
+  await b.ready()
+
+  t.teardown(() => b.close())
+  b.on('update', function () {
+    if (b.base.system.members === 2) t.pass('b has two members')
+  })
+})
+
+test('invites', async function (t) {
+  t.plan(2)
+
+  const tn = await testnet(10, t)
+
+  const a = await create(t, { bootstrap: tn.bootstrap })
+  t.teardown(() => {
+    a.close()
+  })
+
+  const updateListener = function () {
+    if (a.base.system.members === 2) {
+      t.pass('a has two members')
+      a.removeListener('update', updateListener) // Remove the listener in teardown
+    }
+  }
+
+  a.on('update', updateListener)
+
+  const inv = await a.createInvite()
+
+  const p = await pair(t, inv, { bootstrap: tn.bootstrap })
+
+  const b = await p.finished()
+  await b.ready()
+
+  t.teardown(() => b.close())
+  b.on('update', function () {
+    if (b.base.system.members === 2) t.pass('b has two members')
+  })
+})
+
+test('suspend and resume', async function (t) {
+  t.plan(3)
+
+  const tn = await testnet(2, t)
+
+  const a = await create(t, { bootstrap: tn.bootstrap })
+  const inv = await a.createInvite()
+  t.teardown(() => a.close())
+
+  const p = await pair(t, inv, { bootstrap: tn.bootstrap })
+  const b = await p.finished()
+  await b.ready()
+  t.teardown(() => b.close())
+
+  await new Promise((resolve) => {
+    const check = () => {
+      if (a.swarm.peers.size > 0 && b.swarm.peers.size > 0) {
+        resolve()
+      } else {
+        setTimeout(check, 100)
+      }
+    }
+    check()
+  })
+
+  t.ok(a.swarm.peers.size > 0, 'a has peers before suspend')
+
+  await a.suspend()
+
+  t.is(a.swarm.peers.size, 0, 'a has 0 peers after suspend')
+
+  await a.resume()
+
+  await new Promise((resolve) => {
+    const check = () => {
+      if (a.swarm.peers.size > 0) {
+        resolve()
+      } else {
+        setTimeout(check, 100)
+      }
+    }
+    check()
+  })
+
+  t.ok(a.swarm.peers.size > 0, 'a has peers after resume')
+})
+
+async function create(t, opts) {
+  const dir = await tmp(t)
+  const a = new Autopass(new Corestore(dir), opts)
+  await a.ready()
+  return a
+}
+
+async function pair(t, inv, opts) {
+  const dir = await tmp(t)
+  const a = Autopass.pair(new Corestore(dir), inv, opts)
+  return a
+}
+
+
+
+================================================
+FILE: spec/db/db.json
+================================================
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "records",
+      "namespace": "autopass",
+      "id": 0,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/records",
+      "derived": false,
+      "key": ["key"],
+      "trigger": null
+    },
+    {
+      "name": "invite",
+      "namespace": "autopass",
+      "id": 1,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/invite",
+      "derived": false,
+      "key": ["id"],
+      "trigger": null
+    },
+    {
+      "name": "mirrors",
+      "namespace": "autopass",
+      "id": 2,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/mirrors",
+      "derived": false,
+      "key": ["key"],
+      "trigger": null
+    },
+    {
+      "name": "writer",
+      "namespace": "autopass",
+      "id": 3,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/writer",
+      "derived": false,
+      "key": ["key"],
+      "trigger": null
+    },
+    {
+      "name": "delete",
+      "namespace": "autopass",
+      "id": 4,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/delete",
+      "derived": false,
+      "key": ["key"],
+      "trigger": null
+    },
+    {
+      "name": "del-invite",
+      "namespace": "autopass",
+      "id": 5,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/del-invite",
+      "derived": false,
+      "key": ["id"],
+      "trigger": null
+    },
+    {
+      "name": "del-mirror",
+      "namespace": "autopass",
+      "id": 6,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autopass/del-mirror",
+      "derived": false,
+      "key": ["key"],
+      "trigger": null
+    }
+  ]
+}
+
+
+
+================================================
+FILE: spec/db/index.js
+================================================
+// This file is autogenerated by the hyperdb compiler
+/* eslint-disable camelcase */
+
+const { IndexEncoder, c } = require('hyperdb/runtime')
+const { version, getEncoding, setVersion } = require('./messages.js')
+
+// '@autopass/records' collection key
+const collection0_key = new IndexEncoder([IndexEncoder.STRING], { prefix: 0 })
+
+function collection0_indexify(record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/records' value encoding
+const collection0_enc = getEncoding('@autopass/records/hyperdb#0')
+
+// '@autopass/records' reconstruction function
+function collection0_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection0_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection0_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autopass/records' key reconstruction function
+function collection0_reconstruct_key(keyBuf) {
+  const key = collection0_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autopass/records'
+const collection0 = {
+  name: '@autopass/records',
+  id: 0,
+  encodeKey(record) {
+    const key = [record.key]
+    return collection0_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection0_key.encodeRange({
+      gt: gt ? collection0_indexify(gt) : null,
+      lt: lt ? collection0_indexify(lt) : null,
+      gte: gte ? collection0_indexify(gte) : null,
+      lte: lte ? collection0_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection0_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection0_reconstruct,
+  reconstructKey: collection0_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/invite' collection key
+const collection1_key = new IndexEncoder([IndexEncoder.BUFFER], { prefix: 1 })
+
+function collection1_indexify(record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/invite' value encoding
+const collection1_enc = getEncoding('@autopass/invite/hyperdb#1')
+
+// '@autopass/invite' reconstruction function
+function collection1_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection1_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection1_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autopass/invite' key reconstruction function
+function collection1_reconstruct_key(keyBuf) {
+  const key = collection1_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autopass/invite'
+const collection1 = {
+  name: '@autopass/invite',
+  id: 1,
+  encodeKey(record) {
+    const key = [record.id]
+    return collection1_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection1_key.encodeRange({
+      gt: gt ? collection1_indexify(gt) : null,
+      lt: lt ? collection1_indexify(lt) : null,
+      gte: gte ? collection1_indexify(gte) : null,
+      lte: lte ? collection1_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection1_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection1_reconstruct,
+  reconstructKey: collection1_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/mirrors' collection key
+const collection2_key = new IndexEncoder([IndexEncoder.BUFFER], { prefix: 2 })
+
+function collection2_indexify(record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/mirrors' value encoding
+const collection2_enc = getEncoding('@autopass/mirrors/hyperdb#2')
+
+// '@autopass/mirrors' reconstruction function
+function collection2_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection2_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection2_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autopass/mirrors' key reconstruction function
+function collection2_reconstruct_key(keyBuf) {
+  const key = collection2_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autopass/mirrors'
+const collection2 = {
+  name: '@autopass/mirrors',
+  id: 2,
+  encodeKey(record) {
+    const key = [record.key]
+    return collection2_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection2_key.encodeRange({
+      gt: gt ? collection2_indexify(gt) : null,
+      lt: lt ? collection2_indexify(lt) : null,
+      gte: gte ? collection2_indexify(gte) : null,
+      lte: lte ? collection2_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection2_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection2_reconstruct,
+  reconstructKey: collection2_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/writer' collection key
+const collection3_key = new IndexEncoder([IndexEncoder.BUFFER], { prefix: 3 })
+
+function collection3_indexify(record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/writer' value encoding
+const collection3_enc = getEncoding('@autopass/writer/hyperdb#3')
+
+// '@autopass/writer' reconstruction function
+function collection3_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection3_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection3_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autopass/writer' key reconstruction function
+function collection3_reconstruct_key(keyBuf) {
+  const key = collection3_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autopass/writer'
+const collection3 = {
+  name: '@autopass/writer',
+  id: 3,
+  encodeKey(record) {
+    const key = [record.key]
+    return collection3_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection3_key.encodeRange({
+      gt: gt ? collection3_indexify(gt) : null,
+      lt: lt ? collection3_indexify(lt) : null,
+      gte: gte ? collection3_indexify(gte) : null,
+      lte: lte ? collection3_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection3_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection3_reconstruct,
+  reconstructKey: collection3_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/delete' collection key
+const collection4_key = new IndexEncoder([IndexEncoder.STRING], { prefix: 4 })
+
+function collection4_indexify(record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/delete' value encoding
+const collection4_enc = getEncoding('@autopass/delete/hyperdb#4')
+
+// '@autopass/delete' reconstruction function
+function collection4_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection4_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection4_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autopass/delete' key reconstruction function
+function collection4_reconstruct_key(keyBuf) {
+  const key = collection4_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autopass/delete'
+const collection4 = {
+  name: '@autopass/delete',
+  id: 4,
+  encodeKey(record) {
+    const key = [record.key]
+    return collection4_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection4_key.encodeRange({
+      gt: gt ? collection4_indexify(gt) : null,
+      lt: lt ? collection4_indexify(lt) : null,
+      gte: gte ? collection4_indexify(gte) : null,
+      lte: lte ? collection4_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection4_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection4_reconstruct,
+  reconstructKey: collection4_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/del-invite' collection key
+const collection5_key = new IndexEncoder([IndexEncoder.BUFFER], { prefix: 5 })
+
+function collection5_indexify(record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/del-invite' value encoding
+const collection5_enc = getEncoding('@autopass/del-invite/hyperdb#5')
+
+// '@autopass/del-invite' reconstruction function
+function collection5_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection5_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection5_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autopass/del-invite' key reconstruction function
+function collection5_reconstruct_key(keyBuf) {
+  const key = collection5_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autopass/del-invite'
+const collection5 = {
+  name: '@autopass/del-invite',
+  id: 5,
+  encodeKey(record) {
+    const key = [record.id]
+    return collection5_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection5_key.encodeRange({
+      gt: gt ? collection5_indexify(gt) : null,
+      lt: lt ? collection5_indexify(lt) : null,
+      gte: gte ? collection5_indexify(gte) : null,
+      lte: lte ? collection5_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection5_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection5_reconstruct,
+  reconstructKey: collection5_reconstruct_key,
+  indexes: []
+}
+
+// '@autopass/del-mirror' collection key
+const collection6_key = new IndexEncoder([IndexEncoder.BUFFER], { prefix: 6 })
+
+function collection6_indexify(record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autopass/del-mirror' value encoding
+const collection6_enc = getEncoding('@autopass/del-mirror/hyperdb#6')
+
+// '@autopass/del-mirror' reconstruction function
+function collection6_reconstruct(version, keyBuf, valueBuf) {
+  const key = collection6_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection6_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autopass/del-mirror' key reconstruction function
+function collection6_reconstruct_key(keyBuf) {
+  const key = collection6_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autopass/del-mirror'
+const collection6 = {
+  name: '@autopass/del-mirror',
+  id: 6,
+  encodeKey(record) {
+    const key = [record.key]
+    return collection6_key.encode(key)
+  },
+  encodeKeyRange({ gt, lt, gte, lte } = {}) {
+    return collection6_key.encodeRange({
+      gt: gt ? collection6_indexify(gt) : null,
+      lt: lt ? collection6_indexify(lt) : null,
+      gte: gte ? collection6_indexify(gte) : null,
+      lte: lte ? collection6_indexify(lte) : null
+    })
+  },
+  encodeValue(version, record) {
+    setVersion(version)
+    return c.encode(collection6_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection6_reconstruct,
+  reconstructKey: collection6_reconstruct_key,
+  indexes: []
+}
+
+const collections = [
+  collection0,
+  collection1,
+  collection2,
+  collection3,
+  collection4,
+  collection5,
+  collection6
+]
+
+const indexes = []
+
+module.exports = {
+  version,
+  collections,
+  indexes,
+  resolveCollection,
+  resolveIndex
+}
+
+function resolveCollection(name) {
+  switch (name) {
+    case '@autopass/records':
+      return collection0
+    case '@autopass/invite':
+      return collection1
+    case '@autopass/mirrors':
+      return collection2
+    case '@autopass/writer':
+      return collection3
+    case '@autopass/delete':
+      return collection4
+    case '@autopass/del-invite':
+      return collection5
+    case '@autopass/del-mirror':
+      return collection6
+    default:
+      return null
+  }
+}
+
+function resolveIndex(name) {
+  switch (name) {
+    default:
+      return null
+  }
+}
+
+
+
+================================================
+FILE: spec/db/messages.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @autopass/records
+const encoding0 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.value) c.string.preencode(state, m.value)
+    if (m.file) c.buffer.preencode(state, m.file)
+  },
+  encode(state, m) {
+    const flags = (m.value ? 1 : 0) | (m.file ? 2 : 0)
+
+    c.string.encode(state, m.key)
+    c.uint.encode(state, flags)
+
+    if (m.value) c.string.encode(state, m.value)
+    if (m.file) c.buffer.encode(state, m.file)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      key: r0,
+      value: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      file: (flags & 2) !== 0 ? c.buffer.decode(state) : null
+    }
+  }
+}
+
+// @autopass/mirrors
+const encoding1 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/writer
+const encoding2 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/delete
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/invite
+const encoding4 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @autopass/del-invite
+const encoding5 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      id: r0
+    }
+  }
+}
+
+// @autopass/del-mirror
+const encoding6 = encoding1
+
+// @autopass/records/hyperdb#0
+const encoding7 = {
+  preencode(state, m) {
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.value) c.string.preencode(state, m.value)
+    if (m.file) c.buffer.preencode(state, m.file)
+  },
+  encode(state, m) {
+    const flags = (m.value ? 1 : 0) | (m.file ? 2 : 0)
+
+    c.uint.encode(state, flags)
+
+    if (m.value) c.string.encode(state, m.value)
+    if (m.file) c.buffer.encode(state, m.file)
+  },
+  decode(state) {
+    const flags = c.uint.decode(state)
+
+    return {
+      key: null,
+      value: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      file: (flags & 2) !== 0 ? c.buffer.decode(state) : null
+    }
+  }
+}
+
+// @autopass/invite/hyperdb#1
+const encoding8 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: null,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @autopass/mirrors/hyperdb#2
+const encoding9 = {
+  preencode(state, m) {},
+  encode(state, m) {},
+  decode(state) {
+    return {
+      key: null
+    }
+  }
+}
+
+// @autopass/writer/hyperdb#3
+const encoding10 = encoding9
+
+// @autopass/delete/hyperdb#4
+const encoding11 = encoding9
+
+// @autopass/del-invite/hyperdb#5
+const encoding12 = {
+  preencode(state, m) {},
+  encode(state, m) {},
+  decode(state) {
+    return {
+      id: null
+    }
+  }
+}
+
+// @autopass/del-mirror/hyperdb#6
+const encoding13 = encoding9
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@autopass/records':
+      return encoding0
+    case '@autopass/mirrors':
+      return encoding1
+    case '@autopass/writer':
+      return encoding2
+    case '@autopass/delete':
+      return encoding3
+    case '@autopass/invite':
+      return encoding4
+    case '@autopass/del-invite':
+      return encoding5
+    case '@autopass/del-mirror':
+      return encoding6
+    case '@autopass/records/hyperdb#0':
+      return encoding7
+    case '@autopass/invite/hyperdb#1':
+      return encoding8
+    case '@autopass/mirrors/hyperdb#2':
+      return encoding9
+    case '@autopass/writer/hyperdb#3':
+      return encoding10
+    case '@autopass/delete/hyperdb#4':
+      return encoding11
+    case '@autopass/del-invite/hyperdb#5':
+      return encoding12
+    case '@autopass/del-mirror/hyperdb#6':
+      return encoding13
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: spec/hyperdispatch/dispatch.json
+================================================
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@autopass/remove-writer",
+      "requestType": "@autopass/writer",
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@autopass/add-writer",
+      "requestType": "@autopass/writer",
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@autopass/put",
+      "requestType": "@autopass/records",
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@autopass/add-mirror",
+      "requestType": "@autopass/mirrors",
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@autopass/del-mirror",
+      "requestType": "@autopass/del-mirror",
+      "version": 1
+    },
+    {
+      "id": 5,
+      "name": "@autopass/del",
+      "requestType": "@autopass/delete",
+      "version": 1
+    },
+    {
+      "id": 6,
+      "name": "@autopass/add-invite",
+      "requestType": "@autopass/invite",
+      "version": 1
+    },
+    {
+      "id": 7,
+      "name": "@autopass/del-invite",
+      "requestType": "@autopass/del-invite",
+      "version": 1
+    }
+  ]
+}
+
+
+
+================================================
+FILE: spec/hyperdispatch/index.js
+================================================
+// This file is autogenerated by the hyperdispatch compiler
+/* eslint-disable camelcase */
+
+const { c, b4a, assert } = require('hyperdispatch/runtime')
+const { version, getEncoding, setVersion } = require('./messages.js')
+
+const defaultVersion = version
+
+class Router {
+  constructor() {
+    this._handler0 = null
+    this._handler1 = null
+    this._handler2 = null
+    this._handler3 = null
+    this._handler4 = null
+    this._handler5 = null
+    this._handler6 = null
+    this._handler7 = null
+
+    this._missing = 8
+  }
+
+  add(name, handler) {
+    switch (name) {
+      case '@autopass/remove-writer':
+        this._handler0 = handler
+        break
+      case '@autopass/add-writer':
+        this._handler1 = handler
+        break
+      case '@autopass/put':
+        this._handler2 = handler
+        break
+      case '@autopass/add-mirror':
+        this._handler3 = handler
+        break
+      case '@autopass/del-mirror':
+        this._handler4 = handler
+        break
+      case '@autopass/del':
+        this._handler5 = handler
+        break
+      case '@autopass/add-invite':
+        this._handler6 = handler
+        break
+      case '@autopass/del-invite':
+        this._handler7 = handler
+        break
+      default:
+        throw new Error(
+          'Cannot register a handler for a nonexistent route: ' + name
+        )
+    }
+    this._missing--
+  }
+
+  _checkAll() {
+    assert(
+      this._handler0 !== null,
+      'Missing handler for "@autopass/remove-writer"'
+    )
+    assert(
+      this._handler1 !== null,
+      'Missing handler for "@autopass/add-writer"'
+    )
+    assert(this._handler2 !== null, 'Missing handler for "@autopass/put"')
+    assert(
+      this._handler3 !== null,
+      'Missing handler for "@autopass/add-mirror"'
+    )
+    assert(
+      this._handler4 !== null,
+      'Missing handler for "@autopass/del-mirror"'
+    )
+    assert(this._handler5 !== null, 'Missing handler for "@autopass/del"')
+    assert(
+      this._handler6 !== null,
+      'Missing handler for "@autopass/add-invite"'
+    )
+    assert(
+      this._handler7 !== null,
+      'Missing handler for "@autopass/del-invite"'
+    )
+  }
+
+  async dispatch(message, context) {
+    if (this._missing > 0) {
+      this._checkAll()
+    }
+
+    setVersion(defaultVersion)
+
+    const op = b4a.isBuffer(message) ? decode(message) : message
+
+    switch (op.id) {
+      case 0:
+        return this._handler0(op.value, context)
+      case 1:
+        return this._handler1(op.value, context)
+      case 2:
+        return this._handler2(op.value, context)
+      case 3:
+        return this._handler3(op.value, context)
+      case 4:
+        return this._handler4(op.value, context)
+      case 5:
+        return this._handler5(op.value, context)
+      case 6:
+        return this._handler6(op.value, context)
+      case 7:
+        return this._handler7(op.value, context)
+      default:
+        throw new Error('Handler not found for ID:' + op.id)
+    }
+  }
+}
+
+function encode(name, message, { version = defaultVersion } = {}) {
+  const state = { buffer: null, start: 0, end: 0 }
+
+  const route = getRouteByName(name)
+  setVersion(version)
+
+  c.uint.preencode(state, route.id)
+  route.enc.preencode(state, message)
+
+  state.buffer = b4a.allocUnsafe(state.end)
+  c.uint.encode(state, route.id)
+  route.enc.encode(state, message)
+
+  return state.buffer
+}
+
+function decode(buffer, { version = defaultVersion } = {}) {
+  const state = { buffer, start: 0, end: buffer.length }
+
+  const id = c.uint.decode(state)
+  const route = getRouteById(id)
+  setVersion(version)
+
+  const value = route.enc.decode(state)
+  return { id, name: route.name, value }
+}
+
+const route0 = {
+  name: '@autopass/remove-writer',
+  id: 0,
+  enc: getEncoding('@autopass/writer')
+}
+
+const route1 = {
+  name: '@autopass/add-writer',
+  id: 1,
+  enc: getEncoding('@autopass/writer')
+}
+
+const route2 = {
+  name: '@autopass/put',
+  id: 2,
+  enc: getEncoding('@autopass/records')
+}
+
+const route3 = {
+  name: '@autopass/add-mirror',
+  id: 3,
+  enc: getEncoding('@autopass/mirrors')
+}
+
+const route4 = {
+  name: '@autopass/del-mirror',
+  id: 4,
+  enc: getEncoding('@autopass/del-mirror')
+}
+
+const route5 = {
+  name: '@autopass/del',
+  id: 5,
+  enc: getEncoding('@autopass/delete')
+}
+
+const route6 = {
+  name: '@autopass/add-invite',
+  id: 6,
+  enc: getEncoding('@autopass/invite')
+}
+
+const route7 = {
+  name: '@autopass/del-invite',
+  id: 7,
+  enc: getEncoding('@autopass/del-invite')
+}
+
+function getRouteByName(name) {
+  switch (name) {
+    case '@autopass/remove-writer':
+      return route0
+    case '@autopass/add-writer':
+      return route1
+    case '@autopass/put':
+      return route2
+    case '@autopass/add-mirror':
+      return route3
+    case '@autopass/del-mirror':
+      return route4
+    case '@autopass/del':
+      return route5
+    case '@autopass/add-invite':
+      return route6
+    case '@autopass/del-invite':
+      return route7
+    default:
+      throw new Error('Handler not found for name: ' + name)
+  }
+}
+
+function getRouteById(id) {
+  switch (id) {
+    case 0:
+      return route0
+    case 1:
+      return route1
+    case 2:
+      return route2
+    case 3:
+      return route3
+    case 4:
+      return route4
+    case 5:
+      return route5
+    case 6:
+      return route6
+    case 7:
+      return route7
+    default:
+      throw new Error('Handler not found for ID: ' + id)
+  }
+}
+
+module.exports = {
+  version,
+  encode,
+  decode,
+  Router
+}
+
+
+
+================================================
+FILE: spec/hyperdispatch/messages.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @autopass/records
+const encoding0 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.value) c.string.preencode(state, m.value)
+    if (m.file) c.buffer.preencode(state, m.file)
+  },
+  encode(state, m) {
+    const flags = (m.value ? 1 : 0) | (m.file ? 2 : 0)
+
+    c.string.encode(state, m.key)
+    c.uint.encode(state, flags)
+
+    if (m.value) c.string.encode(state, m.value)
+    if (m.file) c.buffer.encode(state, m.file)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      key: r0,
+      value: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      file: (flags & 2) !== 0 ? c.buffer.decode(state) : null
+    }
+  }
+}
+
+// @autopass/mirrors
+const encoding1 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/writer
+const encoding2 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/delete
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/invite
+const encoding4 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @autopass/del-invite
+const encoding5 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      id: r0
+    }
+  }
+}
+
+// @autopass/del-mirror
+const encoding6 = encoding1
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@autopass/records':
+      return encoding0
+    case '@autopass/mirrors':
+      return encoding1
+    case '@autopass/writer':
+      return encoding2
+    case '@autopass/delete':
+      return encoding3
+    case '@autopass/invite':
+      return encoding4
+    case '@autopass/del-invite':
+      return encoding5
+    case '@autopass/del-mirror':
+      return encoding6
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: spec/schema/index.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @autopass/records
+const encoding0 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+    state.end++ // max flag is 2 so always one byte
+
+    if (m.value) c.string.preencode(state, m.value)
+    if (m.file) c.buffer.preencode(state, m.file)
+  },
+  encode(state, m) {
+    const flags = (m.value ? 1 : 0) | (m.file ? 2 : 0)
+
+    c.string.encode(state, m.key)
+    c.uint.encode(state, flags)
+
+    if (m.value) c.string.encode(state, m.value)
+    if (m.file) c.buffer.encode(state, m.file)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      key: r0,
+      value: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      file: (flags & 2) !== 0 ? c.buffer.decode(state) : null
+    }
+  }
+}
+
+// @autopass/mirrors
+const encoding1 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/writer
+const encoding2 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/delete
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.string.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @autopass/invite
+const encoding4 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @autopass/del-invite
+const encoding5 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      id: r0
+    }
+  }
+}
+
+// @autopass/del-mirror
+const encoding6 = encoding1
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@autopass/records':
+      return encoding0
+    case '@autopass/mirrors':
+      return encoding1
+    case '@autopass/writer':
+      return encoding2
+    case '@autopass/delete':
+      return encoding3
+    case '@autopass/invite':
+      return encoding4
+    case '@autopass/del-invite':
+      return encoding5
+    case '@autopass/del-mirror':
+      return encoding6
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: spec/schema/schema.json
+================================================
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "records",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "value",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "file",
+          "required": false,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mirrors",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "writer",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "delete",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "invite",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "invite",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "publicKey",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "expires",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "del-invite",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "del-mirror",
+      "namespace": "autopass",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}
+
+

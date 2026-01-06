@@ -1,0 +1,28 @@
+{
+  "dependencies": [
+    "qvac-lib-inference-addon-cpp",
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    },
+    "whisper-cpp",
+    "gtest"
+  ],
+  "features": {
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "whisper-cpp",
+          "features": ["vulkan"]
+        }
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "whisper-cpp",
+      "version": "1.7.5.1"
+    }
+  ]
+}

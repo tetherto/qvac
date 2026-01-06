@@ -1,0 +1,30 @@
+.vs/
+build/
+node_modules/
+config.cmake
+.idea/
+prebuilds/
+package-lock.json
+.npmrc
+model/
+
+# Unit test models (download from S3)
+models/unit-test/*.bin
+
+.cache
+test/unit/all.js
+test/integration/all.js
+.idea
+.vscode
+
+__pycache__/
+.pytest_cache/
+poetry.lock
+.vscode
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp
+
+# Benchmarks and test data

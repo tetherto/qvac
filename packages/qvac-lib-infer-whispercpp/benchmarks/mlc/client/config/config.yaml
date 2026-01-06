@@ -1,0 +1,15 @@
+server:
+  url: "http://localhost:8080/run"
+  batch_size: 100
+  lib: "@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32"
+  version: "1.3.3"
+dataset:
+  speaker_group: "clean"
+wer:
+  enabled: true
+cer:
+  enabled: true
+vad:
+  enabled: true
+  lib: "@tetherto/qvac-lib-inference-addon-onnx-silerovad"
+  version: "0.4.3"

@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "qvac-transcription-whispercpp-benchmark-client"
+version = "0.0.1"
+description = "Benchmark client for Whisper transcription addons"
+authors = ["Tether"]
+license = "Apache-2.0"
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12.0"
+pyyaml = ">=6.0.2,<7.0.0"
+pydantic = ">=2.11.4,<3.0.0"
+httpx = ">=0.28.1,<0.29.0"
+datasets = ">=3.6.0,<4.0.0"
+huggingface-hub = {extras = ["hf-xet"], version = ">=0.32.0,<0.33.0"}
+soundfile = ">=0.13.1,<0.14.0"
+librosa = ">=0.11.0,<0.12.0"
+evaluate = ">=0.4.3,<0.5.0"
+jiwer = ">=3.1.0,<4.0.0"
+transformers = ">=4.52.4,<5.0.0"
+fugashi = "^1.5.2"
+unidic-lite = "^1.0.8"
+jieba = "^0.42.1"
+datacollective = "^0.1.0"
+boto3 = "^1.28.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

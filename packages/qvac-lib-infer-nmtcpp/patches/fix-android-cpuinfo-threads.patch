@@ -1,0 +1,22 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e2d7d53..3437b0e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -187,7 +187,16 @@ IF(CPUINFO_SUPPORTED_PLATFORM)
+   IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android")
+     SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+     SET(THREADS_PREFER_PTHREAD_FLAG TRUE)
+-    FIND_PACKAGE(Threads REQUIRED)
++    # Android has pthread built into Bionic libc, set variables manually
++    IF(ANDROID)
++      SET(CMAKE_THREAD_LIBS_INIT "")
++      SET(CMAKE_HAVE_THREADS_LIBRARY 1)
++      SET(CMAKE_USE_WIN32_THREADS_INIT 0)
++      SET(CMAKE_USE_PTHREADS_INIT 1)
++      SET(THREADS_FOUND TRUE)
++    ELSE()
++      FIND_PACKAGE(Threads REQUIRED)
++    ENDIF()
+   ENDIF()
+ ENDIF()
+ 

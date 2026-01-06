@@ -1,0 +1,73 @@
+diff --git a/cmake/onnxruntime_mlas.cmake b/cmake/onnxruntime_mlas.cmake
+index 15864a0198..5d28516d56 100644
+--- a/cmake/onnxruntime_mlas.cmake
++++ b/cmake/onnxruntime_mlas.cmake
+@@ -612,13 +612,27 @@ else()
+ message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
+ message(STATUS "CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
+ 
++# Set base flags for AVX2 files
++set(AVX2_BASE_FLAGS "-mavx2 -mfma -mf16c")
+ if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "11")
+           message(STATUS "Using -mavx2 -mfma -mavxvnni flags")
+-          set_source_files_properties(${mlas_platform_srcs_avx2} PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c -mavxvnni")
++          set(AVX2_FLAGS "${AVX2_BASE_FLAGS} -mavxvnni")
+ else()
+           message(STATUS "Using -mavx2 -mfma flags")
+-          set_source_files_properties(${mlas_platform_srcs_avx2} PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c")
++          set(AVX2_FLAGS "${AVX2_BASE_FLAGS}")
+ endif()
++
++# Add iOS specific flags to suppress array bounds warnings (needed for simulator builds)
++message(STATUS "CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}")
++message(STATUS "IOS variable: ${IOS}")
++message(STATUS "CMAKE_OSX_SYSROOT: ${CMAKE_OSX_SYSROOT}")
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++  set(AVX2_FLAGS "${AVX2_FLAGS} -Wno-array-bounds")
++  message(STATUS "iOS build detected: Adding -Wno-array-bounds to AVX2 flags")
++  message(STATUS "Final AVX2_FLAGS: ${AVX2_FLAGS}")
++endif()
++
++set_source_files_properties(${mlas_platform_srcs_avx2} PROPERTIES COMPILE_FLAGS "${AVX2_FLAGS}")
+         set(mlas_platform_srcs_avx512f
+           ${MLAS_SRC_DIR}/x86_64/DgemmKernelAvx512F.S
+           ${MLAS_SRC_DIR}/x86_64/SgemmKernelAvx512F.S
+@@ -637,12 +651,22 @@ endif()
+           ${MLAS_SRC_DIR}/x86_64/ConvSymKernelAvx512Core.S
+           ${MLAS_SRC_DIR}/sqnbitgemm_kernel_avx512.cpp
+         )
+-        set_source_files_properties(${mlas_platform_srcs_avx512core} PROPERTIES COMPILE_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl")
++# Set AVX512 core flags with iOS array bounds fix
++set(AVX512_CORE_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl")
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++  set(AVX512_CORE_FLAGS "${AVX512_CORE_FLAGS} -Wno-array-bounds")
++endif()
++set_source_files_properties(${mlas_platform_srcs_avx512core} PROPERTIES COMPILE_FLAGS "${AVX512_CORE_FLAGS}")
+ 
+         set(mlas_platform_srcs_avx512vnni
+           ${MLAS_SRC_DIR}/sqnbitgemm_kernel_avx512vnni.cpp
+         )
+-        set_source_files_properties(${mlas_platform_srcs_avx512vnni} PROPERTIES COMPILE_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl -mavx512f")
++# Set AVX512 VNNI flags with iOS array bounds fix  
++set(AVX512_VNNI_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl -mavx512f")
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++  set(AVX512_VNNI_FLAGS "${AVX512_VNNI_FLAGS} -Wno-array-bounds")
++endif()
++set_source_files_properties(${mlas_platform_srcs_avx512vnni} PROPERTIES COMPILE_FLAGS "${AVX512_VNNI_FLAGS}")
+ 
+         set(mlas_platform_srcs
+           ${MLAS_SRC_DIR}/activate_fp16.cpp
+@@ -663,7 +687,12 @@ endif()
+             ${mlas_platform_srcs}
+             ${MLAS_SRC_DIR}/q4gemm_avx512.cpp
+           )
+-          set_source_files_properties(${MLAS_SRC_DIR}/q4gemm_avx512.cpp PROPERTIES COMPILE_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl -mavx512f")
++# Set q4gemm_avx512 flags with iOS array bounds fix
++          set(Q4GEMM_AVX512_FLAGS "-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl -mavx512f")
++          if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++            set(Q4GEMM_AVX512_FLAGS "${Q4GEMM_AVX512_FLAGS} -Wno-array-bounds")
++          endif()
++          set_source_files_properties(${MLAS_SRC_DIR}/q4gemm_avx512.cpp PROPERTIES COMPILE_FLAGS "${Q4GEMM_AVX512_FLAGS}")
+         endif()
+         if(NOT APPLE)
+           set(mlas_platform_srcs

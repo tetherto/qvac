@@ -1,0 +1,643 @@
+import { QvacErrorBase } from "@qvac/error";
+import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
+import { createErrorOptions } from "./errors-base";
+
+// ============== Model Registry Errors ==============
+
+export class ModelAlreadyRegisteredError extends QvacErrorBase {
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_ALREADY_REGISTERED,
+        [modelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelNotFoundError extends QvacErrorBase {
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND,
+        [modelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelNotLoadedError extends QvacErrorBase {
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_NOT_LOADED,
+        [modelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelIsDelegatedError extends QvacErrorBase {
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED,
+        [modelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class UnknownModelTypeError extends QvacErrorBase {
+  constructor(modelType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE,
+        [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Model Loading Errors ==============
+
+export class ModelLoadFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelFileNotFoundError extends QvacErrorBase {
+  constructor(modelPath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_FILE_NOT_FOUND,
+        [modelPath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelFileNotFoundInDirError extends QvacErrorBase {
+  constructor(
+    modelFile: string,
+    modelDir: string,
+    modelType: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_FILE_NOT_FOUND_IN_DIR,
+        [modelFile, modelDir, modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelFileLocateFailedError extends QvacErrorBase {
+  constructor(modelType: string, modelPath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_FILE_LOCATE_FAILED,
+        [modelType, modelPath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ProjectionModelRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PROJECTION_MODEL_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class VADModelRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.VAD_MODEL_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TTSConfigModelRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TTS_CONFIG_MODEL_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ESpeakDataPathRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ESPEAK_DATA_PATH_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Model Unloading Errors ==============
+
+export class ModelUnloadFailedError extends QvacErrorBase {
+  constructor(modelId?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED,
+        modelId ? [modelId] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Model Operation Errors ==============
+
+export class EmbedFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.EMBED_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class EmbedNoEmbeddingsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.EMBED_NO_EMBEDDINGS,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TranscriptionFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TRANSCRIPTION_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class AudioFileNotFoundError extends QvacErrorBase {
+  constructor(filePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.AUDIO_FILE_NOT_FOUND,
+        [filePath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class TranslationFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TRANSLATION_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class CompletionFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.COMPLETION_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class AttachmentNotFoundError extends QvacErrorBase {
+  constructor(path: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ATTACHMENT_NOT_FOUND,
+        [path],
+        cause,
+      ),
+    );
+  }
+}
+
+export class CancelFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CANCEL_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TextToSpeechFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ConfigReloadNotSupportedError extends QvacErrorBase {
+  constructor(modelId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CONFIG_RELOAD_NOT_SUPPORTED,
+        [modelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelTypeMismatchError extends QvacErrorBase {
+  constructor(expectedType: string, providedType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_TYPE_MISMATCH,
+        [expectedType, providedType],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== RAG Operation Errors ==============
+
+export class RAGSaveFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGSearchFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_SEARCH_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGDeleteFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_DELETE_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGUnknownOperationError extends QvacErrorBase {
+  constructor(operation: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_UNKNOWN_OPERATION,
+        [operation],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGHyperDBFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_HYPERDB_FAILED,
+        [details],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Download/Resource Errors ==============
+
+export class FileNotFoundError extends QvacErrorBase {
+  constructor(path: string, cause?: unknown) {
+    super(
+      createErrorOptions(SDK_SERVER_ERROR_CODES.FILE_NOT_FOUND, [path], cause),
+    );
+  }
+}
+
+export class DownloadCancelledError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DOWNLOAD_CANCELLED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ChecksumValidationFailedError extends QvacErrorBase {
+  constructor(fileName: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CHECKSUM_VALIDATION_FAILED,
+        [fileName],
+        cause,
+      ),
+    );
+  }
+}
+
+export class HTTPError extends QvacErrorBase {
+  constructor(status: number, statusText: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.HTTP_ERROR,
+        [status, statusText],
+        cause,
+      ),
+    );
+  }
+}
+
+export class NoResponseBodyError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.NO_RESPONSE_BODY,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ResponseBodyNotReadableError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RESPONSE_BODY_NOT_READABLE,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class NoBlobFoundError extends QvacErrorBase {
+  constructor(fileName: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.NO_BLOB_FOUND,
+        [fileName],
+        cause,
+      ),
+    );
+  }
+}
+
+export class DownloadAssetFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DOWNLOAD_ASSET_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class SeedingNotSupportedError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.SEEDING_NOT_SUPPORTED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class HyperdriveDownloadFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.HYPERDRIVE_DOWNLOAD_FAILED,
+        [details],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Cache Operation Errors ==============
+
+export class DeleteCacheFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DELETE_CACHE_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class InvalidDeleteCacheParamsError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INVALID_DELETE_CACHE_PARAMS,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class CacheDirNotAbsoluteError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CACHE_DIR_NOT_ABSOLUTE,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class CacheDirNotWritableError extends QvacErrorBase {
+  constructor(cacheDir: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CACHE_DIR_NOT_WRITABLE,
+        details ? [cacheDir, details] : [cacheDir],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Config Operations Errors ==============
+
+export class ConfigAlreadySetError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.CONFIG_ALREADY_SET,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== System/Runtime Errors ==============
+
+export class FFmpegNotAvailableError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.FFMPEG_NOT_AVAILABLE,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class AudioPlayerFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.AUDIO_PLAYER_FAILED,
+        [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class InvalidAudioChunkError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== RAG Workspace Errors ==============
+
+export class RAGWorkspaceModelMismatchError extends QvacErrorBase {
+  constructor(
+    workspace: string,
+    existingModelId: string,
+    newModelId: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH,
+        [workspace, existingModelId, newModelId],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== RPC/Delegation Errors (Server-side) ==============
+
+export class DelegateNoFinalResponseError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class DelegateConnectionFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DELEGATE_CONNECTION_FAILED,
+        [details],
+        cause,
+      ),
+    );
+  }
+}

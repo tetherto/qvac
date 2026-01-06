@@ -1,0 +1,146 @@
+{
+  "name": "@qvac/sdk",
+  "version": "0.5.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./package": "./package.json",
+    "./dist/server/worker.js": {
+      "import": "./dist/server/worker.js",
+      "require": "./dist/server/worker.js"
+    },
+    "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js"
+  },
+  "expo": {
+    "plugins": [
+      "./dist/expo/plugins/index.js"
+    ]
+  },
+  "files": [
+    "dist/**/*",
+    "!dist/**/*.map",
+    "!**/package-lock.json",
+    "!**/yarn.lock",
+    "!**/pnpm-lock.yaml",
+    "!**/bun.lock"
+  ],
+  "scripts": {
+    "lint": "eslint . --max-warnings=0 && bun run typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
+    "build": "rm -rf dist && bun run lint && tsc --project tsconfig.json && bun run postcompile:aliases",
+    "build:pack": "bun run build && bun pm pack --destination dist/",
+    "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
+    "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
+    "bare:ensureprebuilds:whispercpp": "cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-x64",
+    "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
+    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
+    "prepare:husky": "bun run husky",
+    "bare:example": "./scripts/run-with-bare.sh",
+    "docs_api:website": "typedoc --out ./docs/api/website --entryPoints index.ts --entryPointStrategy expand --readme none",
+    "docs_api:markdown": "typedoc --plugin typedoc-plugin-markdown --out ./docs/api/markdown --entryPoints index.ts --entryPointStrategy expand --readme none && sed -i '1,4d' ./docs/api/markdown/README.md",
+    "docs_api": "bun run docs_api:website && bun run docs_api:markdown",
+    "check-models": "node ./scripts/update-models.js --check",
+    "check-models:hook": "node ./scripts/update-models.js --check --non-blocking",
+    "update-models": "node ./scripts/update-models.js",
+    "changelog:generate": "node ./scripts/changelog-generate.cjs && prettier --write changelog",
+    "docs:gen-pages": "remark \"docs/*.mdx\" --output .docs-build",
+    "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
+  },
+  "dependencies": {
+    "@qvac/decoder-audio": "^0.3.0",
+    "@qvac/dl-filesystem": "^0.1.2",
+    "@qvac/embed-llamacpp": "^0.7.5",
+    "@qvac/error": "^0.1.0",
+    "@qvac/langdetect-text": "^0.1.0",
+    "@qvac/llm-llamacpp": "^0.5.6",
+    "@qvac/logging": "^0.1.0",
+    "@qvac/rag": "^0.2.1",
+    "@qvac/transcription-whispercpp": "^0.3.8",
+    "@qvac/translation-nmtcpp": "^0.1.13",
+    "@qvac/tts-onnx": "^0.2.8",
+    "fast-safe-stringify": "2.1.1",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@expo/config-plugins": "^54.0.1",
+    "@lancedb/lancedb": "^0.21.3",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
+    "@types/node": "^24.2.1",
+    "bare-pack": "^1.5.1",
+    "bare-readline": "^1.2.0",
+    "chromadb": "^3.0.14",
+    "eslint": "^9.33.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.30.0",
+    "eslint-plugin-react": "^7.37.5",
+    "expo": "^54.0.0",
+    "expo-file-system": "^19.0.15",
+    "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "hyperdb": "^4.16.1",
+    "prettier": "^3.6.2",
+    "react-native-bare-kit": "^0.11.4",
+    "remark-cli": "^12.0.1",
+    "remark-code-import": "^1.2.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-mdx": "^3.1.1",
+    "typedoc": "^0.28.11",
+    "typedoc-plugin-frontmatter": "^1.3.1",
+    "typedoc-plugin-markdown": "^4.8.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "bare-abort-controller": "^1.0.0",
+    "bare-buffer": "^3.4.2",
+    "bare-crypto": "^1.11.2",
+    "bare-dns": "^2.1.4",
+    "bare-fetch": "^2.5.1",
+    "bare-fs": "^4.5.2",
+    "bare-http1": "^4.1.6",
+    "bare-https": "^2.1.1",
+    "bare-link": "^2.1.10",
+    "bare-net": "^2.2.0",
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-rpc": "^1.0.0",
+    "bare-runtime": "^1.24.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^5.2.1",
+    "corestore": "^7.4.5",
+    "events": "^3.3.0",
+    "expo-file-system": "^19.0.15",
+    "hyperdb": "^4.19.0",
+    "hyperdrive": "^13.0.1",
+    "hyperswarm": "^4.12.1",
+    "llm-splitter": "~0.2.0",
+    "react-native-bare-kit": "^0.11.4"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "expo-file-system": {
+      "optional": true
+    },
+    "react-native-bare-kit": {
+      "optional": true
+    }
+  },
+  "patchedDependencies": {}
+}

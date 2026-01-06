@@ -1,0 +1,8 @@
+This software includes components ported from sacremoses
+(https://github.com/hplt-project/sacremoses) which is licensed
+under the MIT License. See ./third-party/indic-processor-deps/sacremoses/SACREMOSES_LICENCE for details.
+
+This software includes components ported from indic_nlp_library
+(https://github.com/anoopkunchukuttan/indic_nlp_library) which is licensed
+under the MIT License. See ./third-party/indic-processor-deps/indicnlp/INDIC_NLP_LICENCE for details.
+

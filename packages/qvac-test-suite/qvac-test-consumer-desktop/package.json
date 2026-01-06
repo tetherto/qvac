@@ -1,0 +1,25 @@
+{
+	"name": "qvac-test-consumer-desktop",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"batch": "bun run batch-consumer.ts"
+	},
+	"dependencies": {
+		"@tetherto/sdk-dev": "0.4.1-tmp.runid-20128362801",
+		"bare-abort-controller": "^1.0.0",
+		"bare-events": "^2.8.1",
+		"bare-fetch": "^2.5.0",
+		"bare-net": "^2.2.0",
+		"bare-rpc": "^0.2.13",
+		"bare-runtime": "^1.23.6",
+		"hyperdb": "^4.19.1",
+		"llm-splitter": "~0.2.0",
+		"mqtt": "^5.14.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.2.4",
+		"@types/bun": "latest"
+	},
+	"overrides": {}
+}

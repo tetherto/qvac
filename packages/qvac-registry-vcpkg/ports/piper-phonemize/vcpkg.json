@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "piper-phonemize",
+  "version": "1.2.0",
+  "port-version": 1,
+  "description": "Phonemization library for Piper text to speech system",
+  "homepage": "https://github.com/rhasspy/piper-phonemize",
+  "license": "MIT",
+  "dependencies": [
+    "espeak-ng",
+    "onnxruntime",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

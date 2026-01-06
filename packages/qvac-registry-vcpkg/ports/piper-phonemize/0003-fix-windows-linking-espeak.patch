@@ -1,0 +1,40 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6d09bb0..f604314 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -60,6 +60,11 @@ target_link_libraries(
+     onnxruntime::onnxruntime_static
+ )
+ 
++# Fix Windows static linking with espeak-ng
++if(WIN32)
++    target_compile_definitions(piper_phonemize PRIVATE LIBESPEAK_NG_EXPORT)
++endif()
++
+ target_compile_features(piper_phonemize PUBLIC cxx_std_17)
+ 
+ # ---- Declare executable ----
+@@ -81,6 +86,11 @@ target_link_libraries(piper_phonemize_exe PUBLIC
+     piper_phonemize
+ )
+ 
++# Fix Windows static linking with espeak-ng
++if(WIN32)
++    target_compile_definitions(piper_phonemize_exe PRIVATE LIBESPEAK_NG_EXPORT)
++endif()
++
+ # ---- Declare test ----
+ 
+ include(CTest)
+@@ -102,6 +112,11 @@ target_link_libraries(test_piper_phonemize PUBLIC
+     piper_phonemize
+ )
+ 
++# Fix Windows static linking with espeak-ng
++if(WIN32)
++    target_compile_definitions(test_piper_phonemize PRIVATE LIBESPEAK_NG_EXPORT)
++endif()
++
+ # ---- Declare install targets ----
+ 
+ include(GNUInstallDirs)

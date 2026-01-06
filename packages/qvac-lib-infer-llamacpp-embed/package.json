@@ -1,0 +1,87 @@
+{
+  "name": "@qvac/embed-llamacpp",
+  "version": "0.7.7",
+  "description": "bert addon for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:unit": "bare test/unit/addon.test.js",
+    "test:integration": "bare test/integration/addon.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
+    "coverage:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:summary": "cd build/test/unit && llvm-cov-19 report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
+    "test:all": "npm run test:integration && npm run test:cpp",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "model:init": "qvac-dev model init",
+    "model:new": "qvac-dev model new",
+    "model:generate": "qvac-dev model generate",
+    "test:dts": "tsc index.d.ts --noEmit"
+  },
+  "standard": {
+    "ignore": [
+      "addon/lib/"
+    ]
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "addon.js",
+    "addonLogging.js",
+    "utils",
+    "prebuilds",
+    "index.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-lib-infer-llamacpp-embed.git"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/issues",
+  "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-embed#readme",
+  "devDependencies": {
+    "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-filesystem": "^0.1.2",
+    "bare-buffer": "^3.4.2",
+    "bare-fs": "^4.5.1",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.4.0",
+    "cmake-bare": "^1.7.1",
+    "cmake-vcpkg": "^1.1.0",
+    "os": "npm:bare-os@^3.6.2",
+    "process": "npm:bare-process@^4.0.1",
+    "sinon": "^21.0.0",
+    "standard": "^17.0.0",
+    "tty": "npm:bare-tty@^5.0.3",
+    "util": "npm:bare-utils@^1.5.1"
+  },
+  "dependencies": {
+    "@qvac/embed-llamacpp": "^0.7.6",
+    "@qvac/infer-base": "^0.2.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-path": "^3.0.0"
+  },
+  "peerDependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./addonLogging": "./addonLogging.js",
+    "./addonLogging.js": "./addonLogging.js"
+  },
+  "main": "index.js",
+  "types": "index.d.ts"
+}

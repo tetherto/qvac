@@ -1,0 +1,2083 @@
+Directory structure:
+└── holepunchto-bare-rpc/
+    ├── README.md
+    ├── index.d.ts
+    ├── index.js
+    ├── LICENSE
+    ├── NOTICE
+    ├── package.json
+    ├── test.js
+    ├── .prettierrc
+    ├── lib/
+    │   ├── command-router.js
+    │   ├── constants.js
+    │   ├── errors.d.ts
+    │   ├── errors.js
+    │   ├── incoming-request.js
+    │   ├── incoming-stream.js
+    │   ├── messages.js
+    │   ├── outgoing-request.js
+    │   └── outgoing-stream.js
+    └── .github/
+        └── workflows/
+            └── test.yml
+
+================================================
+FILE: README.md
+================================================
+# bare-rpc
+
+<https://github.com/holepunchto/librpc> ABI compatible RPC for Bare.
+
+```
+npm i bare-rpc
+```
+
+## Usage
+
+```js
+import RPC from 'bare-rpc'
+
+// On one end
+const rpc = new RPC(stream, (req) => {
+  if (req.command === 42) {
+    console.log(req.data.toString()) // ping
+    req.reply('pong')
+  }
+})
+
+// On the other end
+const req = rpc.request(42)
+req.send('ping')
+
+const replyBuffer = await req.reply()
+console.log(replyBuffer.toString()) // pong
+```
+
+## API
+
+### `RPC`
+
+#### `const rpc = new RPC(stream[, onrequest])`
+
+Create an RPC instance using a duplex `stream`. `onrequest` is an optional callback run when a remote request is received. This is where processing and responding to an RPC request happens. `onrequest` receives a `RPCIncomingRequest` as an argument, for example:
+
+```js
+const rpc = new RPC(stream, (req) => {
+  if (req.command === 42) {
+    req.reply('pong')
+  }
+})
+```
+
+See [`RPCIncomingRequest`](#rpcincomingrequest) for properties and methods for processing the request.
+
+`onrequest` can also be a [`RPCCommandRouter`](#rpccommandrouter).
+
+#### `const req = rpc.request(command)`
+
+Create a request for `command`. `command` is a unique number that should be used to differentiate different requests on the remote end. Returns a `RPCOutgoingRequest`.
+
+### `RPCOutgoingRequest`
+
+#### `req.command`
+
+The command that the request was created with. A command is a unique number.
+
+#### `req.sent`
+
+A boolean for whether the request has been sent.
+
+#### `req.received`
+
+A boolean for whether the request has received a reply.
+
+#### `req.send([data[, encoding]])`
+
+Send the request with the provided `data`. `data` can be a buffer or a string which will be encoded using `encoding`.
+
+`.send()` can only be called once per request.
+
+#### `const data = await req.reply([encoding])`
+
+Await the reply from the remote end to the request. `encoding` can be defined for decoding the response `data` buffer back into a string.
+
+#### `const stream = req.createRequestStream([options])`
+
+Create a [`Writable`](https://github.com/mafintosh/streamx#writable-stream) stream for sending data with the request.
+
+#### `const stream = req.createResponseStream([options])`
+
+Create a [`Readable`](https://github.com/mafintosh/streamx#readable-stream) stream for receiving data in reply to the request.
+
+### `RPCIncomingRequest`
+
+#### `req.command`
+
+The command that the request was sent as. A command is a unique number.
+
+#### `req.data`
+
+The data buffer sent with the request.
+
+#### `req.sent`
+
+A boolean for whether a reply has been sent.
+
+#### `req.received`
+
+A boolean for whether the request has been received as a stream. See [`req.createRequestStream()`](#const-stream--reqcreaterequeststream) for receiving requests as a stream.
+
+#### `req.reply([data, [encoding]])`
+
+Reply to the request with the provided `data`. `data` can be a buffer or a string which will be encoded using `encoding`.
+
+#### `const stream = req.createRequestStream([options])`
+
+Create a `Readable` stream for receiving data from the request.
+
+#### `const stream = req.createResponseStream([options])`
+
+Create a `Writable` stream for sending data in reply to the request.
+
+### `RPCCommandRouter`
+
+An alternative way to define commands and handlers for receiving them.
+
+#### `const router = new RPC.CommandRouter()`
+
+Create a new command router. This router can then be used when creating an `rpc`. For example:
+
+```js
+const router = new RPC.CommandRouter()
+
+router.respond(42, (req, data) => {
+  console.log(data.toString()) // ping
+
+  return Buffer.from('pong')
+})
+
+const rpc = new RPC(stream, router)
+const req = rpc.request(42)
+req.send('ping')
+```
+
+#### `router.respond(command[, options], async (req, data) => {})`
+
+Define a command and the handler for it. The callback for a command receives both the request (`req`) and the `data` buffer and can return a value to respond. If the request is responded to in the callback, the return value is ignored.
+
+Options include:
+
+```js
+options = {
+  // Encoding for incoming request
+  requestEncoding: c.raw,
+  // Encoding for outgoing response
+  responseEncoding: c.raw
+}
+```
+
+## License
+
+Apache-2.0
+
+
+
+================================================
+FILE: index.d.ts
+================================================
+import Buffer, { BufferEncoding } from 'bare-buffer'
+import {
+  Readable,
+  ReadableOptions,
+  Writable,
+  WritableOptions,
+  Duplex
+} from 'bare-stream'
+
+declare const constants: {
+  type: { REQUEST: 1; RESPONSE: 2; STREAM: 3 }
+  stream: {
+    OPEN: number
+    CLOSE: number
+    PAUSE: number
+    RESUME: number
+    DATA: number
+    END: number
+    DESTROY: number
+    ERROR: number
+    REQUEST: number
+    RESPONSE: number
+  }
+}
+
+interface RPCIncomingRequest {
+  readonly rpc: RPC
+  readonly id: number
+  readonly command: number
+  readonly data: Buffer | null
+  readonly sent: boolean
+  readonly received: boolean
+
+  reply(data?: Buffer | string | null, encoding?: BufferEncoding): void
+
+  createResponseStream(opts?: WritableOptions): RPCOutgoingStream
+  createRequestStream(opts?: ReadableOptions): RPCIncomingStream
+}
+
+declare class RPCIncomingRequest {
+  constructor(rpc: RPC, id: number, command: number, data: Buffer)
+}
+
+interface RPCOutgoingRequest {
+  readonly rpc: RPC
+  readonly id: number
+  readonly command: number
+  readonly sent: boolean
+  readonly received: boolean
+
+  send(data?: Buffer | string | null, encoding?: BufferEncoding): void
+
+  reply(encoding?: BufferEncoding): Promise<Buffer | string | null>
+
+  createRequestStream(opts?: WritableOptions): RPCOutgoingStream
+  createResponseStream(opts?: ReadableOptions): RPCIncomingStream
+}
+
+declare class RPCOutgoingRequest {
+  constructor(rpc: RPC, command: number)
+}
+
+declare class RPCIncomingStream extends Readable {
+  constructor(
+    rpc: RPC,
+    request: RPCIncomingRequest | RPCOutgoingRequest,
+    type: typeof constants.type.REQUEST | typeof constants.type.RESPONSE,
+    opts?: ReadableOptions
+  )
+}
+
+declare class RPCOutgoingStream extends Writable {
+  constructor(
+    rpc: RPC,
+    request: RPCIncomingRequest | RPCOutgoingRequest,
+    type: typeof constants.type.REQUEST | typeof constants.type.RESPONSE,
+    opts?: WritableOptions
+  )
+}
+
+interface RPC {
+  request(command: number): RPCOutgoingRequest
+}
+
+declare class RPC {
+  constructor(
+    stream: Duplex,
+    onrequest: (req: RPCIncomingRequest) => void | Promise<void>
+  )
+}
+
+declare namespace RPC {
+  export {
+    type RPCIncomingRequest as IncomingRequest,
+    type RPCOutgoingRequest as OutgoingRequest,
+    type RPCIncomingStream as IncomingStream,
+    type RPCOutgoingStream as OutgoingStream
+  }
+}
+
+export = RPC
+
+
+
+================================================
+FILE: index.js
+================================================
+const safetyCatch = require('safety-catch')
+const b4a = require('b4a')
+const c = require('compact-encoding')
+const m = require('./lib/messages')
+const { type: t, stream: s } = require('./lib/constants')
+const IncomingRequest = require('./lib/incoming-request')
+const IncomingStream = require('./lib/incoming-stream')
+const OutgoingRequest = require('./lib/outgoing-request')
+const OutgoingStream = require('./lib/outgoing-stream')
+const CommandRouter = require('./lib/command-router')
+
+module.exports = exports = class RPC {
+  constructor(stream, onrequest = noop) {
+    this._stream = stream
+    this._id = 0
+
+    this._outgoingRequests = new Map()
+    this._outgoingResponses = new Map()
+    this._incomingRequests = new Map()
+    this._incomingResponses = new Map()
+    this._pendingRequests = new Set()
+    this._pendingResponses = new Set()
+
+    this._buffer = []
+    this._buffered = 0
+    this._frame = -1
+    this._draining = []
+
+    if (typeof onrequest === 'function') {
+      onrequest = onrequest.bind(this)
+    } else {
+      onrequest = onrequest._onrequest.bind(onrequest)
+    }
+
+    this._onrequest = onrequest
+    this._ondata = this._ondata.bind(this)
+    this._ondrain = this._ondrain.bind(this)
+
+    this._stream
+      .on('error', this._onerror)
+      .on('data', this._ondata)
+      .on('drain', this._ondrain)
+  }
+
+  request(command) {
+    return new OutgoingRequest(this, ++this._id, command)
+  }
+
+  _sendMessage(message, cb) {
+    const header = c.encode(m.header, message)
+
+    let flushed = this._stream.write(header)
+
+    if (message.data) flushed = this._stream.write(message.data)
+
+    if (cb) {
+      if (flushed) cb(null)
+      else this._draining.push(cb)
+    }
+  }
+
+  _sendRequest(request, data = null) {
+    this._outgoingRequests.set(request.id, request)
+
+    this._sendMessage({
+      type: t.REQUEST,
+      id: request.id,
+      command: request.command,
+      stream: 0,
+      data
+    })
+  }
+
+  _createRequestStream(request, isInitiator, opts) {
+    if (isInitiator) {
+      this._outgoingRequests.set(request.id, request)
+
+      request._requestStream = new OutgoingStream(
+        this,
+        request,
+        t.REQUEST,
+        opts
+      )
+    } else {
+      this._incomingRequests.set(request.id, request)
+
+      request._requestStream = new IncomingStream(
+        this,
+        request,
+        t.REQUEST,
+        opts
+      )
+
+      request._requestStream.on('close', () =>
+        this._incomingRequests.delete(request.id)
+      )
+    }
+  }
+
+  _sendResponse(request, data) {
+    this._sendMessage({
+      type: t.RESPONSE,
+      id: request.id,
+      stream: 0,
+      error: null,
+      data
+    })
+  }
+
+  _createResponseStream(request, isInitiator, opts) {
+    if (isInitiator) {
+      this._outgoingResponses.set(request.id, request)
+
+      request._responseStream = new OutgoingStream(
+        this,
+        request,
+        t.RESPONSE,
+        opts
+      )
+    } else {
+      this._incomingResponses.set(request.id, request)
+
+      request._responseStream = new IncomingStream(
+        this,
+        request,
+        t.RESPONSE,
+        opts
+      )
+
+      request._responseStream.on('close', () =>
+        this._incomingResponses.delete(request.id)
+      )
+    }
+  }
+
+  _sendError(request, err) {
+    this._sendMessage({
+      type: t.RESPONSE,
+      id: request.id,
+      stream: 0,
+      error: err,
+      data: null
+    })
+  }
+
+  _onerror(err) {
+    this._ondrain(err)
+
+    // TODO Destroy pending requests and responses
+  }
+
+  _ondata(data) {
+    this._buffer.push(data)
+    this._buffered += data.byteLength
+
+    if (this._frame === -1) {
+      this._onbeforeframe()
+    } else {
+      this._onafterframe()
+    }
+  }
+
+  _onbeforeframe() {
+    if (this._buffered < 4) return
+
+    const buffer =
+      this._buffer.length === 1 ? this._buffer[0] : b4a.concat(this._buffer)
+
+    this._buffer = [buffer]
+    this._frame = 4 + c.uint32.decode(c.state(0, 4, buffer))
+
+    this._onafterframe()
+  }
+
+  _onafterframe() {
+    if (this._buffered < this._frame) return
+
+    const buffer =
+      this._buffer.length === 1 ? this._buffer[0] : b4a.concat(this._buffer)
+
+    const frame = this._frame
+
+    this._buffered -= frame
+    this._buffer = this._buffered > 0 ? [buffer.subarray(frame)] : []
+    this._frame = -1
+
+    this._onmessage(buffer.subarray(0, frame))
+    this._onbeforeframe()
+  }
+
+  async _onmessage(buffer) {
+    let message
+    try {
+      message = m.message.decode(c.state(0, buffer.length, buffer))
+    } catch (err) {
+      safetyCatch(err)
+
+      return this._stream.destroy(err)
+    }
+
+    switch (message.type) {
+      case t.REQUEST:
+        const request = new IncomingRequest(
+          this,
+          message.id,
+          message.command,
+          message.data
+        )
+
+        try {
+          await this._onrequest(request)
+        } catch (err) {
+          safetyCatch(err)
+
+          this._sendError(request, err)
+        }
+        break
+      case t.RESPONSE:
+        try {
+          this._onresponse(message)
+        } catch (err) {
+          safetyCatch(err)
+        }
+        break
+      case t.STREAM:
+        try {
+          this._onstream(message)
+        } catch (err) {
+          safetyCatch(err)
+        }
+    }
+  }
+
+  _onresponse(message) {
+    if (message.id === 0) return
+
+    const request = this._outgoingRequests.get(message.id)
+    if (request === undefined) return
+
+    if (message.error) {
+      request._reject(message.error)
+    } else if (message.stream === 0) {
+      request._resolve(message.data)
+    }
+  }
+
+  _onstream(message) {
+    if (message.id === 0) return
+
+    if (message.stream & s.OPEN) this._onstreamopen(message)
+    else if (message.stream & s.CLOSE) this._onstreamclose(message)
+    else if (message.stream & s.PAUSE) this._onstreampause(message)
+    else if (message.stream & s.RESUME) this._onstreamresume(message)
+    else if (message.stream & s.DATA) this._onstreamdata(message)
+    else if (message.stream & s.END) this._onstreamend(message)
+    else if (message.stream & s.DESTROY) this._onstreamdestroy(message)
+  }
+
+  _onstreamopen(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._outgoingRequests.get(message.id)
+      if (request === undefined) {
+        this._pendingRequests.add(message.id)
+        return
+      }
+
+      stream = request._requestStream
+
+      if (stream._pendingOpen === null) {
+        this._pendingRequests.add(message.id)
+        return
+      }
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._outgoingResponses.get(message.id)
+      if (request === undefined) {
+        this._pendingResponses.add(message.id)
+        return
+      }
+
+      stream = request._responseStream
+
+      if (stream._pendingOpen === null) {
+        this._pendingResponses.add(message.id)
+        return
+      }
+    } else {
+      return
+    }
+
+    stream._continueOpen()
+  }
+
+  _onstreamclose(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._incomingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._incomingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    if (message.error) stream.destroy(message.error)
+    else stream.push(null)
+  }
+
+  _onstreampause(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._outgoingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._outgoingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    stream.cork()
+  }
+
+  _onstreamresume(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._outgoingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._outgoingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    stream.uncork()
+  }
+
+  _onstreamdata(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._incomingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._incomingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    if (stream.push(message.data) === false) {
+      this._sendMessage({
+        type: t.STREAM,
+        id: stream._request.id,
+        stream: stream._mask | s.PAUSE,
+        error: null,
+        data: null
+      })
+    }
+  }
+
+  _onstreamend(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._incomingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._incomingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    stream.push(null)
+  }
+
+  _onstreamdestroy(message) {
+    let stream
+
+    if (message.stream & s.REQUEST) {
+      const request = this._outgoingRequests.get(message.id)
+      if (request === undefined) return
+
+      stream = request._requestStream
+    } else if (message.stream & s.RESPONSE) {
+      const request = this._outgoingResponses.get(message.id)
+      if (request === undefined) return
+
+      stream = request._responseStream
+    } else {
+      return
+    }
+
+    stream.destroy(message.error)
+  }
+
+  _ondrain(err = null) {
+    const draining = this._draining
+
+    this._draining = []
+
+    for (const cb of draining) cb(err)
+  }
+}
+
+exports.CommandRouter = CommandRouter
+
+function noop() {}
+
+
+
+================================================
+FILE: LICENSE
+================================================
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+
+================================================
+FILE: NOTICE
+================================================
+Copyright 2024 Holepunch Inc
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+
+================================================
+FILE: package.json
+================================================
+{
+  "name": "bare-rpc",
+  "version": "0.2.11",
+  "description": "librpc ABI compatible RPC for Bare",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./package": "./package.json",
+    "./errors": {
+      "types": "./lib/errors.d.ts",
+      "default": "./lib/errors.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "lib"
+  ],
+  "scripts": {
+    "test": "prettier . --check && bare test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holepunchto/bare-rpc.git"
+  },
+  "author": "Holepunch",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/bare-rpc/issues"
+  },
+  "homepage": "https://github.com/holepunchto/bare-rpc#readme",
+  "dependencies": {
+    "b4a": "^1.6.6",
+    "bare-stream": "^2.1.3",
+    "compact-encoding": "^2.15.0",
+    "safety-catch": "^1.0.2"
+  },
+  "devDependencies": {
+    "bare-buffer": "^3.0.1",
+    "bare-ipc": "^1.1.0",
+    "brittle": "^3.2.1",
+    "prettier": "^3.4.2",
+    "prettier-config-standard": "^7.0.0"
+  },
+  "peerDependencies": {
+    "bare-buffer": "*"
+  },
+  "peerDependenciesMeta": {
+    "bare-buffer": {
+      "optional": true
+    }
+  }
+}
+
+
+
+================================================
+FILE: test.js
+================================================
+const test = require('brittle')
+const c = require('compact-encoding')
+const { PassThrough } = require('bare-stream')
+const IPC = require('bare-ipc')
+const RPC = require('.')
+
+test('basic', async (t) => {
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('ping'))
+
+    req.reply('pong')
+  })
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  t.alike(await req.reply(), Buffer.from('pong'))
+})
+
+test('string encoding', async (t) => {
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('ping'))
+
+    req.reply('pong')
+  })
+
+  const req = rpc.request(42)
+  req.send('cGluZw==', 'base64')
+
+  t.alike(await req.reply('utf8'), 'pong')
+})
+
+test('empty request', async (t) => {
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.is(req.data, null)
+
+    req.reply('pong')
+  })
+
+  const req = rpc.request(42)
+  req.send()
+
+  t.alike(await req.reply(), Buffer.from('pong'))
+})
+
+test('empty response', async (t) => {
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('ping'))
+
+    req.reply()
+  })
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  t.alike(await req.reply(), null)
+})
+
+test('compact encoding', async (t) => {
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(c.decode(c.any, req.data), { hello: 'world' })
+
+    req.reply(['hello', 'world'], c.any)
+  })
+
+  const req = rpc.request(42)
+  req.send({ hello: 'world' }, c.any)
+
+  t.alike(await req.reply(c.any), ['hello', 'world'])
+})
+
+test('request stream', async (t) => {
+  t.plan(4)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+
+    const stream = req.createRequestStream()
+    stream
+      .on('data', (data) => t.alike(data, Buffer.from('foo')))
+      .on('end', () => {
+        t.pass('stream ended')
+
+        req.reply('bar')
+      })
+  })
+
+  const req = rpc.request(42)
+
+  const stream = req.createRequestStream()
+  stream.end('foo')
+
+  t.alike(await req.reply(), Buffer.from('bar'))
+})
+
+test('request stream, force destroy by initiator', async (t) => {
+  t.plan(3)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+
+    const stream = req.createRequestStream()
+    stream.on('close', () => {
+      t.pass('stream closed')
+
+      req.reply('foo')
+    })
+  })
+
+  const req = rpc.request(42)
+
+  const stream = req.createRequestStream()
+
+  setImmediate(() => stream.destroy())
+
+  t.alike(await req.reply(), Buffer.from('foo'))
+})
+
+test('request stream, force destroy by initiatee', async (t) => {
+  t.plan(3)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+
+    const stream = req.createRequestStream()
+
+    setImmediate(() => stream.destroy())
+
+    req.reply('foo')
+  })
+
+  const req = rpc.request(42)
+
+  const stream = req.createRequestStream()
+  stream.on('close', () => t.pass('stream closed'))
+
+  t.alike(await req.reply(), Buffer.from('foo'))
+})
+
+test('response stream', async (t) => {
+  t.plan(4)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('foo'))
+
+    const reply = req.createResponseStream()
+    reply.end('bar')
+  })
+
+  const req = rpc.request(42)
+  req.send('foo')
+
+  const reply = req.createResponseStream()
+  reply
+    .on('data', (data) => t.alike(data, Buffer.from('bar')))
+    .on('end', () => t.pass('stream ended'))
+})
+
+test('response stream, force destroy by initiator', async (t) => {
+  t.plan(3)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('foo'))
+
+    const reply = req.createResponseStream()
+
+    setImmediate(() => reply.destroy())
+  })
+
+  const req = rpc.request(42)
+  req.send('foo')
+
+  const reply = req.createResponseStream()
+  reply.on('close', () => t.pass('stream closed'))
+})
+
+test('response stream, force destroy by initiatee', async (t) => {
+  t.plan(3)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('foo'))
+
+    const reply = req.createResponseStream()
+
+    reply.on('close', () => t.pass('stream closed'))
+  })
+
+  const req = rpc.request(42)
+  req.send('foo')
+
+  const reply = req.createResponseStream()
+
+  setImmediate(() => reply.destroy())
+})
+
+test('request and response stream', async (t) => {
+  t.plan(4)
+
+  const rpc = new RPC(new PassThrough(), (req) => {
+    const reply = req.createResponseStream()
+    const stream = req.createRequestStream()
+
+    stream
+      .on('data', (data) => {
+        t.alike(data, Buffer.from('foo'))
+        reply.end('bar')
+      })
+      .on('close', () => t.pass('request stream closed'))
+  })
+
+  const req = rpc.request(42)
+
+  const reply = req.createResponseStream()
+  const stream = req.createRequestStream()
+
+  stream.end('foo')
+
+  reply
+    .on('data', (data) => {
+      t.alike(data, Buffer.from('bar'))
+    })
+    .on('close', () => t.pass('response stream closed'))
+})
+
+test('command router', async (t) => {
+  t.plan(2)
+
+  const router = new RPC.CommandRouter()
+
+  router.respond(42, (req, data) => {
+    t.alike(data, Buffer.from('ping'))
+
+    return Buffer.from('pong')
+  })
+
+  const rpc = new RPC(new PassThrough(), router)
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  t.alike(await req.reply(), Buffer.from('pong'))
+})
+
+test('throw in request handler', async (t) => {
+  const rpc = new RPC(new PassThrough(), () => {
+    throw new Error('Nope')
+  })
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  await t.exception(req.reply(), /Nope/)
+})
+
+test('throw in async request handler', async (t) => {
+  const rpc = new RPC(new PassThrough(), async () => {
+    throw new Error('Nope')
+  })
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  await t.exception(req.reply(), /Nope/)
+})
+
+test('request and reply, ipc', async (t) => {
+  const ports = IPC.open()
+
+  const a = ports[0].connect()
+  t.teardown(() => a.destroy())
+
+  const b = ports[1].connect()
+  t.teardown(() => b.destroy())
+
+  new RPC(a, async (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('ping'))
+
+    req.reply('pong')
+  })
+
+  const rpc = new RPC(b, () => {})
+
+  const req = rpc.request(42)
+  req.send('ping')
+
+  t.alike(await req.reply(), Buffer.from('pong'))
+})
+
+test('request stream, ipc', async (t) => {
+  t.plan(4)
+
+  const ports = IPC.open()
+
+  const a = ports[0].connect()
+  a.id = 'a'
+  t.teardown(() => a.destroy())
+
+  const b = ports[1].connect()
+  b.id = 'b'
+  t.teardown(() => b.destroy())
+
+  new RPC(a, (req) => {
+    t.is(req.command, 42)
+
+    const stream = req.createRequestStream()
+    stream
+      .on('data', (data) => t.alike(data, Buffer.from('foo')))
+      .on('end', () => {
+        t.pass('stream ended')
+
+        req.reply('bar')
+      })
+  })
+
+  const rpc = new RPC(b, () => {})
+
+  const req = rpc.request(42)
+
+  const stream = req.createRequestStream()
+  stream.end('foo')
+
+  t.alike(await req.reply(), Buffer.from('bar'))
+})
+
+test('response stream, ipc', async (t) => {
+  t.plan(4)
+
+  const ports = IPC.open()
+
+  const a = ports[0].connect()
+  a.id = 'a'
+  t.teardown(() => a.destroy())
+
+  const b = ports[1].connect()
+  b.id = 'b'
+  t.teardown(() => b.destroy())
+
+  new RPC(a, async (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.from('foo'))
+
+    const reply = req.createResponseStream()
+    reply.end('bar')
+  })
+
+  const rpc = new RPC(b, () => {})
+
+  const req = rpc.request(42)
+  req.send('foo')
+
+  const reply = req.createResponseStream()
+  reply
+    .on('data', (data) => t.alike(data, Buffer.from('bar')))
+    .on('end', () => t.pass('stream ended'))
+})
+
+test('large request and reply, ipc', async (t) => {
+  const ports = IPC.open()
+
+  const a = ports[0].connect()
+  t.teardown(() => a.destroy())
+
+  const b = ports[1].connect()
+  t.teardown(() => b.destroy())
+
+  new RPC(a, async (req) => {
+    t.is(req.command, 42)
+    t.alike(req.data, Buffer.alloc(4 * 1024 * 1024, 'ping'))
+
+    req.reply(Buffer.alloc(4 * 1024 * 1024, 'pong'))
+  })
+
+  const rpc = new RPC(b, () => {})
+
+  const req = rpc.request(42)
+  req.send(Buffer.alloc(4 * 1024 * 1024, 'ping'))
+
+  t.alike(await req.reply(), Buffer.alloc(4 * 1024 * 1024, 'pong'))
+})
+
+
+
+================================================
+FILE: .prettierrc
+================================================
+"prettier-config-standard"
+
+
+
+================================================
+FILE: lib/command-router.js
+================================================
+const c = require('compact-encoding')
+
+module.exports = class RPCCommandRouter {
+  constructor(opts = {}) {
+    const { valueEncoding = c.raw } = opts
+
+    this._responders = new Map()
+    this._defaultValueEncoding = valueEncoding
+  }
+
+  respond(command, opts = {}, onrequest) {
+    if (typeof opts === 'function') {
+      onrequest = opts
+      opts = {}
+    }
+
+    const {
+      valueEncoding = this._defaultValueEncoding,
+      requestEncoding = valueEncoding,
+      responseEncoding = valueEncoding
+    } = opts
+
+    this._responders.set(command, {
+      onrequest,
+      requestEncoding,
+      responseEncoding
+    })
+  }
+
+  async _onrequest(req) {
+    const responder = this._responders.get(req.command)
+
+    if (responder === undefined) return
+
+    const { onrequest, requestEncoding, responseEncoding } = responder
+
+    let data = req.data
+
+    if (requestEncoding) data = c.decode(requestEncoding, data)
+
+    data = await onrequest(req, data)
+
+    if (req.sent) return
+
+    if (responseEncoding) data = c.encode(responseEncoding, data)
+
+    req.reply(data)
+  }
+}
+
+
+
+================================================
+FILE: lib/constants.js
+================================================
+module.exports = {
+  type: {
+    REQUEST: 1,
+    RESPONSE: 2,
+    STREAM: 3
+  },
+  stream: {
+    OPEN: 0x1,
+    CLOSE: 0x2,
+    PAUSE: 0x4,
+    RESUME: 0x8,
+    DATA: 0x10,
+    END: 0x20,
+    DESTROY: 0x40,
+    ERROR: 0x80,
+    REQUEST: 0x100,
+    RESPONSE: 0x200
+  }
+}
+
+
+
+================================================
+FILE: lib/errors.d.ts
+================================================
+declare class RPCError extends Error {
+  static UNKNOWN_MESSAGE(msg: string): RPCError
+  static ALREADY_SENT(msg: string): RPCError
+}
+
+export = RPCError
+
+
+
+================================================
+FILE: lib/errors.js
+================================================
+module.exports = class RPCError extends Error {
+  constructor(msg, code, fn = RPCError) {
+    super(`${code}: ${msg}`)
+    this.code = code
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, fn)
+    }
+  }
+
+  get name() {
+    return 'RPCError'
+  }
+
+  static UNKNOWN_MESSAGE(msg) {
+    return new RPCError(msg, 'UNKNOWN_MESSAGE', RPCError.UNKNOWN_MESSAGE)
+  }
+
+  static ALREADY_SENT(msg) {
+    return new RPCError(msg, 'ALREADY_SENT', RPCError.ALREADY_SENT)
+  }
+
+  static ALREADY_RECEIVED(msg) {
+    return new RPCError(msg, 'ALREADY_RECEIVED', RPCError.ALREADY_RECEIVED)
+  }
+}
+
+
+
+================================================
+FILE: lib/incoming-request.js
+================================================
+const c = require('compact-encoding')
+const errors = require('./errors')
+
+module.exports = class RPCIncomingRequest {
+  constructor(rpc, id, command, data) {
+    this.rpc = rpc
+    this.id = id
+    this.command = command
+    this.data = data
+    this.sent = false
+    this.received = false
+
+    this._requestStream = null
+    this._responseStream = null
+  }
+
+  reply(data, encoding) {
+    if (this.sent) {
+      throw errors.ALREADY_SENT('Response has already been sent')
+    }
+
+    encoding =
+      encoding && encoding !== 'buffer'
+        ? c.from(encoding)
+        : typeof data === 'string'
+          ? c.raw.utf8
+          : null
+
+    this.sent = true
+
+    this.rpc._sendResponse(this, encoding ? c.encode(encoding, data) : data)
+  }
+
+  createResponseStream(opts = {}) {
+    if (this.sent) {
+      throw errors.ALREADY_SENT('Response has already been sent')
+    }
+
+    this.sent = true
+
+    this.rpc._createResponseStream(this, true, opts)
+
+    return this._responseStream
+  }
+
+  createRequestStream(opts = {}) {
+    if (this.received) {
+      throw errors.ALREADY_RECEIVED('Request has already been received')
+    }
+
+    this.received = true
+
+    this.rpc._createRequestStream(this, false, opts)
+
+    return this._requestStream
+  }
+}
+
+
+
+================================================
+FILE: lib/incoming-stream.js
+================================================
+const { Readable } = require('bare-stream')
+const { type: t, stream: s } = require('./constants')
+
+module.exports = class RPCIncomingStream extends Readable {
+  constructor(rpc, request, type, opts) {
+    super({ ...opts, eagerOpen: true })
+
+    this._rpc = rpc
+    this._request = request
+    this._type = type
+    this._mask = type === t.REQUEST ? s.REQUEST : s.RESPONSE
+  }
+
+  _open(cb) {
+    this._rpc._sendMessage(
+      {
+        type: t.STREAM,
+        id: this._request.id,
+        stream: this._mask | s.OPEN,
+        error: null,
+        data: null
+      },
+      cb
+    )
+  }
+
+  _read() {
+    this._rpc._sendMessage({
+      type: t.STREAM,
+      id: this._request.id,
+      stream: this._mask | s.RESUME,
+      error: null,
+      data: null
+    })
+  }
+
+  _destroy(err, cb) {
+    if (err) {
+      this._rpc._sendMessage(
+        {
+          type: t.STREAM,
+          id: this._request.id,
+          stream: this._mask | s.DESTROY | s.ERROR,
+          error: err,
+          data: null
+        },
+        cb
+      )
+    } else {
+      this._rpc._sendMessage(
+        {
+          type: t.STREAM,
+          id: this._request.id,
+          stream: this._mask | s.DESTROY,
+          error: null,
+          data: null
+        },
+        cb
+      )
+    }
+  }
+}
+
+
+
+================================================
+FILE: lib/messages.js
+================================================
+const c = require('compact-encoding')
+const { type: t, stream: s } = require('./constants')
+const errors = require('./errors')
+
+const error = {
+  preencode(state, m) {
+    c.utf8.preencode(state, m.message)
+    c.utf8.preencode(state, m.code || '')
+    c.int.preencode(state, m.errno || 0)
+  },
+  encode(state, m) {
+    c.utf8.encode(state, m.message)
+    c.utf8.encode(state, m.code || '')
+    c.int.encode(state, m.errno || 0)
+  },
+  decode(state) {
+    const err = new Error(`${c.utf8.decode(state)}`)
+    err.code = c.utf8.decode(state)
+    err.errno = c.int.decode(state)
+    return err
+  }
+}
+
+exports.header = {
+  preencode(state, m) {
+    c.uint32.preencode(state, 0) // Frame
+    c.uint.preencode(state, m.type)
+    c.uint.preencode(state, m.id)
+
+    let hasData = false
+
+    switch (m.type) {
+      case t.REQUEST:
+        c.uint.preencode(state, m.command)
+        c.uint.preencode(state, m.stream)
+        if (m.stream === 0) hasData = true
+        break
+
+      case t.RESPONSE:
+        c.bool.preencode(state, !!m.error)
+        c.uint.preencode(state, m.stream)
+
+        if (m.error) error.preencode(state, m.error)
+        else if (m.stream === 0) hasData = true
+        break
+
+      case t.STREAM:
+        c.uint.preencode(state, m.stream)
+
+        if (m.stream & s.ERROR) error.preencode(state, m.error)
+        else if (m.stream & s.DATA) hasData = true
+        break
+    }
+
+    if (hasData) c.uint.preencode(state, m.data ? m.data.byteLength : 0)
+  },
+  encode(state, m) {
+    const frame = state.start
+
+    c.uint32.encode(state, 0) // Frame
+
+    const start = state.start
+
+    c.uint.encode(state, m.type)
+    c.uint.encode(state, m.id)
+
+    let hasData = false
+
+    switch (m.type) {
+      case t.REQUEST:
+        c.uint.encode(state, m.command)
+        c.uint.encode(state, m.stream)
+        if (m.stream === 0) hasData = true
+        break
+
+      case t.RESPONSE:
+        c.bool.encode(state, !!m.error)
+        c.uint.encode(state, m.stream)
+
+        if (m.error) error.encode(state, m.error)
+        else if (m.stream === 0) hasData = true
+        break
+
+      case t.STREAM:
+        c.uint.encode(state, m.stream)
+
+        if (m.stream & s.ERROR) error.encode(state, m.error)
+        else if (m.stream & s.DATA) hasData = true
+        break
+    }
+
+    if (hasData) c.uint.encode(state, m.data ? m.data.byteLength : 0)
+
+    const end = state.start
+
+    state.start = frame
+
+    c.uint32.encode(
+      state,
+      end - start + (hasData && m.data ? m.data.byteLength : 0)
+    )
+
+    state.start = end
+  }
+}
+
+exports.message = {
+  decode(state) {
+    const frame = c.uint32.decode(state)
+
+    if (state.end - state.start < frame) throw new RangeError('Out of bounds')
+
+    const type = c.uint.decode(state)
+    const id = c.uint.decode(state)
+
+    switch (type) {
+      case t.REQUEST: {
+        const command = c.uint.decode(state)
+        const stream = c.uint.decode(state)
+        const data = stream === 0 ? c.buffer.decode(state) : null
+
+        return { type, id, command, stream, data }
+      }
+
+      case t.RESPONSE: {
+        const err = c.bool.decode(state)
+        const stream = c.uint.decode(state)
+
+        if (err) {
+          return { type, id, stream, error: error.decode(state), data: null }
+        }
+
+        if (stream === 0) {
+          return { type, id, stream, error: null, data: c.buffer.decode(state) }
+        }
+
+        return { type, id, stream, error: null, data: null }
+      }
+
+      case t.STREAM:
+        const stream = c.uint.decode(state)
+
+        if (stream & s.ERROR) {
+          return { type, id, stream, error: error.decode(state), data: null }
+        }
+
+        if (stream & s.DATA) {
+          return { type, id, stream, error: null, data: c.buffer.decode(state) }
+        }
+
+        return { type, id, stream, error: null, data: null }
+
+      default:
+        throw errors.UNKNOWN_MESSAGE(`Unknown message '${type}'`)
+    }
+  }
+}
+
+
+
+================================================
+FILE: lib/outgoing-request.js
+================================================
+const c = require('compact-encoding')
+const errors = require('./errors')
+
+module.exports = class RPCOutgoingRequest {
+  constructor(rpc, id, command) {
+    this.rpc = rpc
+    this.id = id
+    this.command = command
+    this.sent = false
+    this.received = false
+
+    this._promise = new Promise((resolve, reject) => {
+      this._resolve = resolve
+      this._reject = reject
+    })
+
+    this._requestStream = null
+    this._responseStream = null
+  }
+
+  send(data, encoding) {
+    if (this.sent) {
+      throw errors.ALREADY_SENT('Request has already been sent')
+    }
+
+    encoding =
+      encoding && encoding !== 'buffer'
+        ? c.from(encoding)
+        : typeof data === 'string'
+          ? c.raw.utf8
+          : null
+
+    this.sent = true
+
+    this.rpc._sendRequest(this, encoding ? c.encode(encoding, data) : data)
+  }
+
+  reply(encoding) {
+    if (this.received) {
+      throw errors.ALREADY_RECEIVED('Response is already being received')
+    }
+
+    encoding = encoding && encoding !== 'buffer' ? c.from(encoding) : null
+
+    this.received = true
+
+    return encoding
+      ? this._promise.then((data) => c.decode(encoding, data))
+      : this._promise
+  }
+
+  createRequestStream(opts = {}) {
+    if (this.sent) {
+      throw errors.ALREADY_SENT('Request has already been sent')
+    }
+
+    this.sent = true
+
+    this.rpc._createRequestStream(this, true, opts)
+
+    return this._requestStream
+  }
+
+  createResponseStream(opts = {}) {
+    if (this.received) {
+      throw errors.ALREADY_RECEIVED('Response has already been received')
+    }
+
+    this.received = true
+
+    this.rpc._createResponseStream(this, false, opts)
+
+    return this._responseStream
+  }
+}
+
+
+
+================================================
+FILE: lib/outgoing-stream.js
+================================================
+const { Writable } = require('bare-stream')
+const { type: t, stream: s } = require('./constants')
+
+module.exports = class RPCOutgoingStream extends Writable {
+  constructor(rpc, request, type, opts) {
+    super({ ...opts, eagerOpen: true })
+
+    this._rpc = rpc
+    this._request = request
+    this._type = type
+    this._mask = type === t.REQUEST ? s.REQUEST : s.RESPONSE
+
+    this._pendingOpen = null
+  }
+
+  _open(cb) {
+    let pending
+
+    const onflushed = () => {
+      if (pending.has(this._request.id)) {
+        pending.delete(this._request.id)
+
+        cb(null)
+      } else {
+        this._pendingOpen = cb
+      }
+    }
+
+    switch (this._type) {
+      case t.REQUEST:
+        pending = this._rpc._pendingRequests
+
+        this._rpc._sendMessage(
+          {
+            type: t.REQUEST,
+            id: this._request.id,
+            command: this._request.command,
+            stream: s.OPEN,
+            data: null
+          },
+          onflushed
+        )
+        break
+
+      case t.RESPONSE:
+        pending = this._rpc._pendingResponses
+
+        this._rpc._sendMessage(
+          {
+            type: t.RESPONSE,
+            id: this._request.id,
+            error: false,
+            stream: s.OPEN,
+            data: null
+          },
+          onflushed
+        )
+        break
+    }
+  }
+
+  _continueOpen() {
+    if (this._pendingOpen === null) return
+    const cb = this._pendingOpen
+    this._pendingOpen = null
+    cb()
+  }
+
+  _write(data, encoding, cb) {
+    this._rpc._sendMessage(
+      {
+        type: t.STREAM,
+        id: this._request.id,
+        stream: this._mask | s.DATA,
+        error: null,
+        data
+      },
+      cb
+    )
+  }
+
+  _final(cb) {
+    this._rpc._sendMessage(
+      {
+        type: t.STREAM,
+        id: this._request.id,
+        stream: this._mask | s.END,
+        error: null,
+        data: null
+      },
+      cb
+    )
+  }
+
+  _destroy(err, cb) {
+    if (err) {
+      this._rpc._sendMessage(
+        {
+          type: t.STREAM,
+          id: this._request.id,
+          stream: this._mask | s.CLOSE | s.ERROR,
+          error: err,
+          data: null
+        },
+        cb
+      )
+    } else {
+      this._rpc._sendMessage(
+        {
+          type: t.STREAM,
+          id: this._request.id,
+          stream: this._mask | s.CLOSE,
+          error: null,
+          data: null
+        },
+        cb
+      )
+    }
+  }
+}
+
+
+
+================================================
+FILE: .github/workflows/test.yml
+================================================
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  test:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: npm install -g bare-runtime
+      - run: npm install
+      - run: npm test
+
+

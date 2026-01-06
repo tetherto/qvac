@@ -1,0 +1,131 @@
+---
+alwaysApply: true
+---
+# QVAC Test Suite Framework - Project Context
+
+## Current State
+
+**Goal**: Transform monolithic test suite into `@tetherto/qvac-test-suite` library
+
+**CRITICAL - Do NOT modify these directories** (old structure, kept as reference):
+- qvac-test-producer/
+- qvac-test-consumer-desktop/
+- qvac-test-consumer-mobile/
+- shared-consumer/
+- shared-test-executor/
+
+## Repo Structure
+
+```
+qvac-test-suite/
+├── framework/                   # @tetherto/qvac-test-suite package (being developed)
+├── sdk-tests/                   # Dogfooding structure (will be created)
+├── docs/                        # PRDs and plans
+│   ├── PRD.md                   # Full PRD
+│   ├── PRD-EXECUTIVE.md         # Executive summary
+│   ├── IMPLEMENTATION-PLAN.md   # Step-by-step plan
+│   └── BRANCHING-STRATEGY.md    # Git workflow
+├── qvac-test-producer/          # OLD: to be deleted after migration
+├── qvac-test-consumer-desktop/  # OLD: to be deleted after migration
+└── qvac-test-consumer-mobile/   # OLD: to be deleted after migration
+```
+
+## Key Architecture Decisions
+
+### Runtime Compatibility
+
+**Build tooling** (Node.js):
+- CLI commands (build, run:producer)
+- Bundlers (esbuild, Metro)
+- Uses node:fs, node:path, node:child_process
+
+**Desktop consumers** (Node.js):
+- Built by framework, run on Node.js
+- Uses standard Node.js APIs
+
+**Mobile consumers** (Hermes/React Native):
+- Built with Expo, run in React Native
+- Framework wraps with React Native components
+- Bare packages are SDK dependencies (not framework concern)
+
+### Consumer Packaging
+- Bundle CURRENT source code (./src) + tests together
+- Use relative imports (../../../src/api) - no module aliases in MVP
+- Dependencies installed at build time (dependencies: 'auto' from package.json)
+- Desktop: esbuild bundle + node_modules/
+- Mobile: Expo build (Metro bundler)
+
+### Test API
+- Handler-based executors (pattern matching: /^api-/ routes to ApiExecutor)
+- ValidationHelpers for common expectations
+- Generic design - not SDK-specific (works for API, DB, SDK testing)
+
+### Producer/Consumer Flow
+- Per-platform runId: repo-branch-commit-timestamp-PLATFORM
+- Consumer starts in background
+- Producer is main process (blocks, generates reports)
+- Persistent MQTT broker on AWS
+
+## Critical Constraints
+
+**SDK testing must work at every commit**. Never break existing test capability during migration.
+
+## Implementation Rules
+
+**NEVER RUN** (user will run these):
+- mosquitto (broker)
+- Any `run:producer` command
+- Any `run:consumer:*` command
+- npm publish
+- Android/iOS builds (expo build, eas build)
+- Device Farm operations
+- ANY command that stays running/blocks waiting for input
+
+**SAFE TO RUN** (short-running, exits immediately):
+- npm install (if user has confirmed package to be installed, or changes to package.json)
+- npm run build / tsc
+- npm run format / npm run lint
+- File operations (read, write, delete)
+- Git operations (except push)
+- `build:consumer:*` commands (they exit after bundling)
+- Simple test scripts that just check outputs and exit
+
+**Code Quality Rules**:
+- **NEVER use `any` type** - use `unknown` or specific types
+- **Use Zod schemas at API boundaries** (MQTT messages, config files, external data)
+  - Parse incoming data: `const message = messageSchema.parse(rawData)`
+  - Store schemas in `src/schemas/` directory
+  - Infer TypeScript types: `type Message = z.infer<typeof messageSchema>`
+  - **Use Zod for defaults and transformations** - don't manually handle fallbacks
+  - **Use Zod transforms** for env var resolution, computed values, etc.
+- **Use inferred TypeScript types internally** - once validated, pass typed data
+- Don't re-validate already validated data
+- Use generics for dynamic types
+
+**Anti-patterns to avoid**:
+- Manual fallback chains: `value || fallback1 || fallback2` (use Zod defaults)
+- Manual type casting everywhere: `as string`, `as number` (use Zod transforms)
+- Duplicated validation logic (validate once with Zod, use typed data after)
+
+**Workflow**:
+- Complete each step
+- Run format + lint after changes
+- Show validation commands for user to run
+- Wait for user confirmation before next step
+
+## Features to Add Later (Post-MVP)
+
+- Wildcard consumer support (allowWildcardConsumers flag/config)
+- Module aliases for cleaner imports
+- Auto-discovery from testDir
+- Inline execution logic in test definitions
+
+## Migration Strategy
+
+1. Create framework/ + sdk-tests/ alongside old structure
+2. Validate with sample tests (E2E by Step 3)
+3. Once verified, migrate ALL tests (Step 6)
+4. Delete old structure (Step 7)
+5. No long dual-maintenance period
+
+Git is safety net for rollback if needed.

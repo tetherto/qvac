@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "QVAC Test Consumer Mobile",
+    "slug": "qvac-test-consumer-mobile",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "scheme": "qvac-test-consumer-mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.tether.qvac-test-consumer-mobile",
+      "appleTeamId": "MLH5T4W793",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to let you take photos.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for recording audio.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "io.tether.qvac_test_consumer_mobile",
+      "versionCode": 7,
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "minSdkVersion": 31,
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "@tetherto/sdk-dev/expo-plugin",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 31,
+            "ndkVersion": "29.0.14206865",
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
+          }
+        }
+      ],
+      ["./plugins/withAndroidNdkVersion.js", "29.0.14206865"]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c2b7aa9b-abba-4af5-9133-6fde57f9d59a"
+      }
+    },
+    "owner": "boonet"
+  }
+}

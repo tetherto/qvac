@@ -1,0 +1,36 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 8d4a34f..d28aec0 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -75,6 +75,8 @@ elseif (SPM_PROTOBUF_PROVIDER STREQUAL "package")
+   protobuf_generate_cpp(SPM_PROTO_SRCS SPM_PROTO_HDRS sentencepiece.proto)
+   protobuf_generate_cpp(SPM_MODEL_PROTO_SRCS SPM_MODEL_PROTO_HDRS sentencepiece_model.proto)
+   set(PROTOBUF_LITE_SRCS "")
++  # Don't link protobuf-lite when using external protobuf - let parent project handle protobuf linking
++  set(PROTOBUF_LITE_LIBRARY "")
+   include_directories(${PROTOBUF_INCLUDE_DIR})
+   if (MSVC)
+     add_definitions("/D_USE_EXTERNAL_PROTOBUF")
+@@ -180,7 +182,21 @@ set(SPM_TEST_SRCS
+   word_model_trainer_test.cc
+   pretokenizer_for_training_test.cc)
+ 
+-find_package(Threads REQUIRED)
++# Android has pthread built into Bionic libc, set variables manually
++IF(ANDROID)
++  SET(CMAKE_THREAD_LIBS_INIT "")
++  SET(CMAKE_HAVE_THREADS_LIBRARY 1)
++  SET(CMAKE_USE_WIN32_THREADS_INIT 0)
++  SET(CMAKE_USE_PTHREADS_INIT 1)
++  SET(THREADS_FOUND TRUE)
++  # Create Threads::Threads target manually for Android
++  IF(NOT TARGET Threads::Threads)
++    ADD_LIBRARY(Threads::Threads INTERFACE IMPORTED)
++    SET_PROPERTY(TARGET Threads::Threads PROPERTY INTERFACE_COMPILE_OPTIONS "")
++  ENDIF()
++ELSE()
++  find_package(Threads REQUIRED)
++ENDIF()
+ 
+ list(APPEND SPM_LIBS ${PROTOBUF_LITE_LIBRARY} Threads::Threads)
+ 

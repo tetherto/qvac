@@ -1,0 +1,16 @@
+diff --git a/cmake/CMakeLists.txt b/cmake/CMakeLists.txt
+index 2714e6f59d..badd50decc 100644
+--- a/cmake/CMakeLists.txt
++++ b/cmake/CMakeLists.txt
+@@ -43,6 +43,11 @@ if (MSVC)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:__cplusplus")
+ endif()
+ 
++# Fix binary size issue in Android build
++if (${CMAKE_SYSTEM_NAME} STREQUAL "Android")
++  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g0")
++endif()
++
+ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+ # NOTE: POSITION INDEPENDENT CODE hurts performance, and it only make sense on POSIX systems
+ set(CMAKE_POSITION_INDEPENDENT_CODE ON)

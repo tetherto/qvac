@@ -1,0 +1,30 @@
+[
+  {
+    "spdxId": "Apache-2.0",
+    "name": "Apache License 2.0",
+    "url": "https://opensource.org/licenses/Apache-2.0"
+  },
+  {
+    "spdxId": "MIT",
+    "name": "MIT License",
+    "url": "https://opensource.org/licenses/MIT"
+  },
+  {
+    "spdxId": "Llama-3.2",
+    "name": "Llama 3.2 Community License",
+    "url": "https://llama.meta.com/llama3_2/license/"
+  },
+  {
+    "spdxId": "Qwen",
+    "name": "Qwen License",
+    "url": "https://huggingface.co/Qwen/Qwen2.5-72B-Instruct/blob/main/LICENSE"
+  },
+  {
+    "spdxId": "GPL-3.0",
+    "name": "GNU General Public License v3.0",
+    "url": "https://www.gnu.org/licenses/gpl-3.0.html"
+  }
+]
+
+
+

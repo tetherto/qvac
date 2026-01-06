@@ -1,0 +1,33 @@
+{
+  "name": "@tetherto/qvac-lib-inference-addon-onnx-silerovad-benchmark-server",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "start": "bare index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-onnx-silerovad/issues",
+  "devDependencies": {
+    "standard": "^17.1.2"
+  },
+  "dependencies": {
+    "bare-buffer": "^3.1.0",
+    "bare-fs": "^4.1.5",
+    "bare-http1": "^4.0.2",
+    "bare-os": "^3.6.1",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.1",
+    "bare-subprocess": "^5.0.4",
+    "bare-url": "^2.1.6",
+    "process": "npm:bare-node-process",
+    "os": "npm:bare-node-os",
+    "path": "npm:bare-node-path",
+    "zod": "^3.24.4"
+  }
+}

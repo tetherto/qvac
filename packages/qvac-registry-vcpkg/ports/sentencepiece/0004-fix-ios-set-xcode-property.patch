@@ -1,0 +1,16 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 8d4a34f..4591d6c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -353,6 +353,11 @@ if (SPM_COVERAGE)
+   add_dependencies(coverage spm_test)
+ endif()
+ 
++function(set_xcode_property TARGET XCODE_PROPERTY XCODE_VALUE XCODE_VARIANT)
++    set_property(TARGET ${TARGET} PROPERTY
++        XCODE_ATTRIBUTE_${XCODE_PROPERTY} ${XCODE_VALUE})
++endfunction()
++
+ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+   set_xcode_property(spm_encode PRODUCT_BUNDLE_IDENTIFIER "SentencePiece" All)
+   set_xcode_property(spm_decode PRODUCT_BUNDLE_IDENTIFIER "SentencePiece" All)

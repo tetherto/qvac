@@ -1,0 +1,14 @@
+dist
+.DS_Store
+node_modules
+*.gguf
+.rag-*
+docs/api/
+.npmrc
+package-lock.json
+.docs-build
+tests-qvac/reports/*
+!tests-qvac/reports/.gitkeep
+.env
+.secrets
+.artifacts

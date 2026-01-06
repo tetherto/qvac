@@ -1,0 +1,116 @@
+---
+description: Commit message and PR title format requirements
+alwaysApply: true
+---
+
+# Commit Message and PR Title Format
+
+## When suggesting or creating commits
+
+**ALWAYS use this format:**
+```
+prefix[tags]?: subject
+```
+
+**Allowed prefixes:**
+- `feat` - New features or capabilities
+- `fix` - Bug fixes
+- `doc` - Documentation changes
+- `test` - Test additions or modifications
+- `mod` - Model-related changes
+- `chore` - Maintenance tasks
+- `infra` - CI/CD, tooling, infrastructure
+
+**Allowed tags (optional, cannot be combined):**
+- `[api]` - API changes (non-breaking)
+- `[bc]` - Breaking changes (including breaking API changes)
+
+**Examples:**
+- `feat: add RAG support for LanceDB`
+- `fix[api]: fix completion stream error handling`
+- `doc: update installation instructions`
+- `feat[bc]: redesign loadModel signature`
+- `chore: update dependencies`
+- `infra: add PR validation workflow`
+
+## When suggesting or creating PRs
+
+**ALWAYS use this format for PR titles:**
+```
+TICKET prefix[tags]: subject
+```
+
+Where TICKET follows the pattern: `PROJECT-123` (e.g., `QVAC-123`, `SDK-456`)
+
+**Examples:**
+- `QVAC-123 feat: add RAG support for LanceDB`
+- `QVAC-456 fix[api]: fix completion stream error handling`
+- `QVAC-789 doc: update installation instructions`
+- `QVAC-101 feat[bc]: redesign loadModel signature`
+
+## Required PR Body Content
+
+**When using `[bc]` tag:**
+- MUST include BEFORE/AFTER code examples in the PR body
+- Use either format:
+  1. Explicit markers:
+     ```
+     **BEFORE:**
+     ```typescript
+     // old code
+     ```
+     
+     **AFTER:**
+     ```typescript
+     // new code
+     ```
+     ```
+  2. Inline comments:
+     ````
+     ```typescript
+     // old
+     const model = await loadModel("model-path");
+     
+     // new
+     const modelId = await loadModel("model-path", { modelType: "llm" });
+     ```
+     ````
+
+**When using `[api]` tag (non-breaking):**
+- MUST include at least one fenced code block showing the new API usage
+- Example:
+  ````
+  ## New API
+  
+  ```typescript
+  // New completion API with streaming support
+  for await (const token of completion({
+    modelId,
+    history: [{ role: "user", content: "Hello!" }],
+  }).tokenStream) {
+    process.stdout.write(token);
+  }
+  ```
+  ````
+
+## Validation
+
+- Commit messages are validated via Husky commit-msg hook
+- PR titles and bodies are validated via GitHub Actions
+- Invalid formats will be rejected with error messages
+- **Auto-skipped commits:** The following Git-generated commits bypass validation:
+  - Merge commits (e.g., `Merge pull request #123`)
+  - Version bumps (e.g., `1.0.0`, `v1.0.0`)
+  - Revert commits (e.g., `Revert "feat: add feature"`)
+  - Squash commits (e.g., `squash! fix: bug fix`)
+- You can test validation locally: `node scripts/validator.cjs --type=commit --msg="your message"`
+
+## Important Notes
+
+- **NEVER** suggest commit messages that don't follow this format
+- **ALWAYS** include the colon (`:`) after the prefix and tags
+- **ALWAYS** use lowercase for prefix
+- **ALWAYS** use lowercase for subject (sentence case, not title case)
+- Tags must be in square brackets: `[bc]` or `[api]` (cannot be combined)
+- PR titles MUST start with a ticket number in format: `PROJECT-123`
+- When creating PRs with `[bc]` or `[api]` tags, ALWAYS remind the user about required code examples in the PR body

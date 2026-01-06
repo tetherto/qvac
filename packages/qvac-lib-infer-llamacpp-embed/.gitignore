@@ -1,0 +1,20 @@
+.vs/
+build/
+model/
+store/
+models/
+node_modules/
+prebuilds/
+package-lock.json
+.cache/
+.npmrc
+
+__pycache__/
+.pytest_cache/
+poetry.lock
+.idea/
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

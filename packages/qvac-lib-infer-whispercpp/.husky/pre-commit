@@ -1,0 +1,9 @@
+echo "🔍 Running pre-commit checks..."
+
+echo "🧹 Running linter..."
+if ! npm run lint; then
+  echo "❌ Linting failed!"
+  exit 1
+fi
+
+echo "✅ All checks passed!"

@@ -1,0 +1,38 @@
+# Valgrind suppression file for C++ projects
+# Prevents false positives from standard library allocations, exceptions, and system startup
+
+{
+   Memcheck:Leak
+   # C++ operator new/delete
+   fun:_Znwm
+   fun:_Znam
+   fun:_ZdlPv
+   fun:_ZdaPv
+}
+
+{
+   Memcheck:Leak
+   # C++ exception allocation
+   fun:__cxa_allocate_exception
+}
+
+{
+   Memcheck:Leak
+   # libstdc++ internal allocations (e.g. locales)
+   obj:/usr/lib*/libstdc++*  # adjust path as needed
+}
+
+{
+   Memcheck:Leak
+   # pthread TLS destructor races on some platforms
+   fun:__pthread_key_create
+   fun:__pthread_once_internal
+}
+
+{
+   Memcheck:Leak
+   # Suppress leftover data from static variables in C++ runtime
+   obj:*/usr/lib*/libgcc_s.so* 
+   obj:*/usr/lib*/libstdc++.so*
+}
+

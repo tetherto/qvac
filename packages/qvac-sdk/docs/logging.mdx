@@ -1,0 +1,34 @@
+---
+title: SDK — Logging
+description: Built-in log propagation that streams model logs from the worker process to your client application in real-time. This gives you visibility into what's happening inside your models during loading, inference, and other operations.
+---
+
+# Logging
+
+Built-in log propagation that streams model logs from the worker process to your client application in real-time. This gives you visibility into what's happening inside your models during loading, inference, and other operations.
+
+## Flow
+
+1. Pass a logger when loading your model.
+2. When logging is enabled, you'll see real-time logs from the underlying model libraries:
+
+```
+[DEBUG] llamacpp:llm: Loading model weights...
+[INFO] llamacpp:llm: Model loaded successfully, vocab_size=32000
+[DEBUG] llamacpp:llm: Starting inference...
+[DEBUG] llamacpp:llm: Inference completed, tokens=12
+```
+
+## Features
+
+- **Streaming API (`loggingStream`)** — Consume real-time logs from your models programmatically. Console output disabled by default—you control formatting, storage (file/database), analytics, etc.
+
+- **Logger API (`getLogger`)** — Create loggers for your application code with custom transports. Console output enabled by default; set `enableConsole: false` to use only custom transports.
+
+It works for all model types (LLM, Whisper, NMT, Embeddings) and provides valuable insight into model performance and behavior.
+
+## Usage
+
+```ts file=../examples/logging-streaming.ts
+
+```

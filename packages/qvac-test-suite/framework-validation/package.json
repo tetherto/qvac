@@ -1,0 +1,11 @@
+{
+  "name": "framework-validation-test-repo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mock target repo for framework validation",
+  "dependencies": {
+    "mqtt": "^5.14.1"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,17 @@
+diff --git a/cmake/whisper-config.cmake.in b/cmake/whisper-config.cmake.in
+index 9fe65884..a8b5f9c8 100644
+--- a/cmake/whisper-config.cmake.in
++++ b/cmake/whisper-config.cmake.in
+@@ -14,7 +14,10 @@ set(GGML_ACCELERATE @GGML_ACCELERATE@)
+ include(CMakeFindDependencyMacro)
+ 
+ # Ensure transient dependencies satisfied
+-find_dependency(Threads REQUIRED)
++# Only find pthreads on non-Windows platforms
++if(NOT WIN32)
++    find_dependency(Threads REQUIRED)
++endif()
+ 
+ if (APPLE AND GGML_ACCELERATE)
+     find_library(ACCELERATE_FRAMEWORK Accelerate REQUIRED)
+

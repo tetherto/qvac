@@ -1,0 +1,115 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b3ac06eb..fefd99e5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -11,7 +11,7 @@ include(CTest)
+ include(cmake/deps.cmake)
+ include(cmake/config.cmake)
+ add_subdirectory(src)
+-include(cmake/data.cmake)
++# include(cmake/data.cmake)  # Removed: Skip data generation - use pre-built artifacts instead
+ include(cmake/docs.cmake)
+ 
+ include(cmake/package.cmake)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 03b4a7d9..ba1eebac 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -5,32 +5,8 @@ add_subdirectory(ucd-tools)
+ add_subdirectory(speechPlayer)
+ add_subdirectory(libespeak-ng)
+ 
+-add_executable(espeak-ng-bin espeak-ng.c)
+-set_target_properties(espeak-ng-bin PROPERTIES OUTPUT_NAME espeak-ng)
+-target_link_libraries(
+-  espeak-ng-bin PRIVATE espeak-ng espeak-ng-config
+-)
+-if (MINGW)
+-  target_link_options(espeak-ng-bin PRIVATE "-static-libstdc++" "-static")
+-endif()
+-if (MSVC)
+-  target_sources(espeak-ng-bin PRIVATE compat/getopt.c)
+-endif()
+-if (NOT WIN32)
+-  add_custom_target(
+-    speak-ng ALL
+-    COMMAND ${CMAKE_COMMAND} -E create_symlink espeak-ng ${CMAKE_CURRENT_BINARY_DIR}/speak-ng
+-    COMMAND ${CMAKE_COMMAND} -E create_symlink espeak-ng ${CMAKE_CURRENT_BINARY_DIR}/espeak
+-    COMMAND ${CMAKE_COMMAND} -E create_symlink espeak-ng ${CMAKE_CURRENT_BINARY_DIR}/speak
+-    COMMENT "Link espeak-ng to compat names"
+-    DEPENDS espeak-ng-bin
+-  )
+-endif()
+-install(TARGETS espeak-ng-bin)
+-install(DIRECTORY include/espeak include/espeak-ng TYPE INCLUDE)
++# espeak-ng-bin executable removed - not needed when using pre-built data artifacts
++# Libraries (libespeak-ng, libucd, libspeechPlayer) are still built for linking
+ 
+-if (ESPEAK_COMPAT AND NOT WIN32)
+-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/speak-ng DESTINATION bin)
+-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/espeak DESTINATION bin)
+-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/speak DESTINATION bin)
+-endif()
+\ No newline at end of file
++# Install headers for library usage
++install(DIRECTORY include/espeak include/espeak-ng TYPE INCLUDE)
+\ No newline at end of file
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index baa96ba8..ee136979 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -1,34 +1,7 @@
+ include(CTest)
+ 
+-list(APPEND _binary_tests)
+-
+-macro(compiled_test _test_name)
+-  add_executable(test_${_test_name}
+-    $<TARGET_OBJECTS:espeak-ng>
+-    ${_test_name}.c
+-  )
+-  target_link_libraries(test_${_test_name} PRIVATE
+-    $<TARGET_PROPERTY:espeak-ng,LINK_LIBRARIES>
+-  )
+-  target_compile_definitions(test_${_test_name} PRIVATE LIBESPEAK_NG_EXPORT=1)
+-  target_include_directories(
+-    test_${_test_name} PRIVATE
+-    $<TARGET_PROPERTY:espeak-ng,SOURCE_DIR>
+-    $<TARGET_PROPERTY:espeak-ng,SOURCE_DIR>/include/compat
+-    $<TARGET_PROPERTY:espeak-ng,INTERFACE_INCLUDE_DIRECTORIES>
+-    $<TARGET_PROPERTY:espeak-ng-config,INTERFACE_INCLUDE_DIRECTORIES>
+-  )
+-  if (MINGW)
+-    target_link_options(test_${_test_name} PUBLIC "-static" "-static-libstdc++")
+-  endif()
+-  add_dependencies(test_${_test_name} data)
+-  add_test(
+-    NAME ${_test_name}
+-    COMMAND ${ESPEAK_RUN_ENV} $<TARGET_FILE:test_${_test_name}>
+-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/..
+-  )
+-  list(APPEND _binary_tests test_${_test_name})
+-endmacro(compiled_test)
++# Compiled tests removed - they depend on data target which we no longer build
++# Only keep shell tests that can work with external data
+ 
+ find_program(SHELL bash)
+ 
+@@ -48,11 +21,6 @@ macro(shell_test _test_name)
+   endif()
+ endmacro(shell_test)
+ 
+-compiled_test(api)
+-compiled_test(encoding)
+-compiled_test(ieee80)
+-compiled_test(readclause)
+-
+ if (SHELL AND UNIX)
+ 
+ shell_test(bom)
+@@ -81,5 +49,3 @@ if (USE_MBROLA)
+ endif()
+ 
+ endif()
+-
+-add_custom_target(tests DEPENDS ${_binary_tests})

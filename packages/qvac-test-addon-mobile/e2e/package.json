@@ -1,0 +1,30 @@
+{
+    "name": "qvac-addon-mobile-tester-runner",
+    "version": "0.0.1",
+    "description": "Qvac Addon Mobile Test Runner",
+    "scripts": {
+        "test:android": "wdio run tests/wdio.config.android.js",
+        "test:ios": "wdio run tests/wdio.config.ios.js"
+    },
+    "files": [
+        "tests/*"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@wdio/appium-service": "^9.13.0",
+        "@wdio/cli": "^9.13.0",
+        "@wdio/globals": "^9.13.0",
+        "@wdio/local-runner": "^9.13.0",
+        "@wdio/mocha-framework": "^9.13.0",
+        "@wdio/spec-reporter": "^9.13.0",
+        "appium": "^2.18.0",
+        "appium-uiautomator2-driver": "^4.2.3",
+        "appium-xcuitest-driver": "^9.2.4",
+        "jest": "^29.7.0"
+    },
+    "dependencies": {
+        "fs": "^0.0.1-security",
+        "path": "^0.12.7"
+    }
+}

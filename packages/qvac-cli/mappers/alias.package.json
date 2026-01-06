@@ -1,0 +1,67 @@
+{
+    "@tetherto/mlc-llama": {
+        "git": "tetherto/qvac-lib-inference-addon-mlc-llama",
+        "bootstrap": {
+            "main": "quickstart.js",
+            "files": [
+                "examples/quickstart.js",
+                "examples/example.config.json"
+            ]
+        }
+    },
+    "@tetherto/mlc-whisper": {
+        "git": "tetherto/qvac-lib-inference-addon-mlc-whisper",
+        "bootstrap": {
+            "main": "quickstart.js",
+            "files": [
+                "example/quickstart.js",
+                "example/decodedFile.raw",
+                "example/config.example.json"
+            ]
+        }
+    },
+    "@tetherto/mlc-marian": {
+        "git": "tetherto/qvac-lib-inference-addon-mlc-marian",
+        "bootstrap": {
+            "main": "quickstart.js",
+            "files": [
+                "examples/quickstart.js"
+            ]
+        }
+    },
+    "@tetherto/onnx-silerovad": {
+        "git": "tetherto/qvac-lib-inference-addon-onnx-silerovad",
+        "bootstrap": {
+            "main": "example.js",
+            "files": [
+                "example/example.js",
+                "example/sample.bin"
+            ]
+        }
+    },
+    "@tetherto/onnx-ocr-fasttext": {
+        "git": "tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext",
+        "bootstrap": {
+            "main": "example.fs.js",
+            "args": [
+                ".",
+                "./node_modules/@tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/models/ocr/detector_craft.onnx",
+                "./node_modules/@tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/models/ocr/recognizer_latin.onnx"
+            ],
+            "files": [
+                "examples/example.fs.js",
+                "test/images/basic_test.bmp"
+            ]
+        }
+    },
+    "@tetherto/decoder-audio": {
+        "git": "tetherto/qvac-lib-decoder-audio",
+        "bootstrap": {
+            "main": "example.fs.js",
+            "files": [
+                "example/example.fs.js",
+                "example/sample.ogg"
+            ]
+        }
+    }
+}

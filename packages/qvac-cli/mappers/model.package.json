@@ -1,0 +1,18 @@
+{
+    "generation:llama:instruct:3.1:8B:q4f16_1:1.0.0": "@tetherto/qvac-lib-inference-addon-mlc-llama-3_1_8b-q4f16_1",
+    "generation:llama:instruct:3.2:1B:q4f16_1:1.0.0": "@tetherto/qvac-lib-inference-addon-mlc-llama-3_2_1b-q4f16_1",
+    "generation:llama:instruct:3.2:3B:q4f16_1:1.0.0": "@tetherto/qvac-lib-inference-addon-mlc-llama-3_2_3b-q4f16_1",
+    "transcription:whisper:tiny:::q0f32:1.0.0": "@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32",
+    "translation:marian:opus:::q4f16_1:1.0.0:de-en": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:de-es": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:de-it": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:en-de": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:en-es": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:en-it": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:es-de": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:es-en": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:es-it": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:it-de": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:it-en": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16",
+    "translation:marian:opus:::q4f16_1:1.0.0:it-es": "@tetherto/qvac-lib-inference-addon-mlc-marian-opus-q4f16"
+}

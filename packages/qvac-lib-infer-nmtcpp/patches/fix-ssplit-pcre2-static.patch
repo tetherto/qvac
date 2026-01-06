@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9ad8a39..d5a8adb 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -41,6 +41,10 @@ include(FindPCRE2)
+ if(PCRE2_FOUND)
+   include_directories(${PCRE2_INCLUDE_DIRS})
+   set(EXT_LIBS ${EXT_LIBS} ${PCRE2_LIBRARIES})
++  # Define PCRE2_STATIC when using static library (required on Windows)
++  if(WIN32 AND SSPLIT_USE_INTERNAL_PCRE2)
++    add_compile_definitions(PCRE2_STATIC)
++  endif()
+   message("   Using these libraries: ${EXT_LIBS}")
+ else(PCRE2_FOUND)
+   message(SEND_ERROR "Cannot find pcre2 libraries. Terminating.")
+

@@ -1,0 +1,12 @@
+diff --git a/src/3rd_party/zlib/zutil.h b/src/3rd_party/zlib/zutil.h
+--- a/src/3rd_party/zlib/zutil.h
++++ b/src/3rd_party/zlib/zutil.h
+@@ -130,7 +130,7 @@ extern z_const char * const z_errmsg[10]; /* indexed by 2-zlib_error */
+ #  endif
+ #endif
+ 
+-#if defined(MACOS) || defined(TARGET_OS_MAC)
++#if (defined(MACOS) || defined(TARGET_OS_MAC)) && !defined(__APPLE__)
+ #  define OS_CODE  7
+ #  ifndef Z_SOLO
+ #    if defined(__MWERKS__) && __dest_os != __be_os && __dest_os != __win32_os

@@ -1,0 +1,58 @@
+diff --git a/cmake/FindPCRE2.cmake b/cmake/FindPCRE2.cmake
+index 8ea55cb..e54f769 100644
+--- a/cmake/FindPCRE2.cmake
++++ b/cmake/FindPCRE2.cmake
+@@ -48,20 +48,28 @@ if(SSPLIT_USE_INTERNAL_PCRE2)
+     -DCMAKE_BUILD_TYPE=Release
+     -DCMAKE_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
+     ${PCRE2_JIT_OPTION}
+-    -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} # Necessary for proper MacOS compilation
+-    -DCMAKE_CROSSCOMPILING_EMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR_WITH_SEMICOLON} # Necessary for proper MacOS compilation
+     -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=true # Added for pybind11
+     )
+ 
+-  # Android platform needs to be explicitly passed given this is an external project.
+-  # If not supplied armv8-a switches into armv7-a, making the compiled library
+-  # incompatible with an upstream bergamot-translator.
+-  if(ANDROID)
+-    LIST(APPEND PCRE2_CONFIGURE_OPTIONS 
+-      -DANDROID_PLATFORM=${ANDROID_PLATFORM} 
+-      -DANDROID_ABI=${ANDROID_ABI}
++  # For cross-compilation, we must pass the toolchain file which will set up all compiler variables correctly
++  # When using vcpkg, VCPKG_CMAKE_TOOLCHAIN_FILE contains the actual platform toolchain (e.g., Android)
++  # while CMAKE_TOOLCHAIN_FILE is the vcpkg wrapper. We need to pass the platform toolchain to PCRE2.
++  if(VCPKG_CMAKE_TOOLCHAIN_FILE)
++    LIST(APPEND PCRE2_CONFIGURE_OPTIONS
++      -DCMAKE_TOOLCHAIN_FILE=${VCPKG_CMAKE_TOOLCHAIN_FILE}
+     )
+-  endif(ANDROID)
++  elseif(CMAKE_TOOLCHAIN_FILE)
++    LIST(APPEND PCRE2_CONFIGURE_OPTIONS
++      -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
++    )
++  endif()
++
++  # Pass cross-compiling emulator if set
++  if(CMAKE_CROSSCOMPILING_EMULATOR)
++    LIST(APPEND PCRE2_CONFIGURE_OPTIONS
++      -DCMAKE_CROSSCOMPILING_EMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR_WITH_SEMICOLON}
++    )
++  endif()
+ 
+ 
+   # set include dirs and libraries for PCRE2
+@@ -70,12 +78,13 @@ if(SSPLIT_USE_INTERNAL_PCRE2)
+   set(PCRE2_FOUND TRUE CACHE BOOL "Found PCRE2 libraries" FORCE)
+   
+   # download, configure, compile
++  # Use CMAKE_ARGS instead of CONFIGURE_COMMAND to properly pass toolchain file
+   ExternalProject_Add(pcre2
+     PREFIX ${CMAKE_BINARY_DIR}/pcre2
+     URL ${PCRE2_URL}
+     DOWNLOAD_DIR ${PCRE2_SRC_DIR}
+     SOURCE_DIR ${PCRE2_SRC_DIR}
+-    CONFIGURE_COMMAND ${CMAKE_COMMAND} ${PCRE2_SRC_DIR} ${PCRE2_CONFIGURE_OPTIONS}
++    CMAKE_ARGS ${PCRE2_CONFIGURE_OPTIONS}
+     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR>
+     INSTALL_DIR ${CMAKE_BINARY_DIR}
+     BUILD_BYPRODUCTS ${PCRE2_LIBRARIES})

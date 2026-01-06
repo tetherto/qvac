@@ -1,0 +1,31 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d72dc86..5917a56 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -75,7 +75,10 @@ target_include_directories(piper PRIVATE
+ if((NOT MSVC) AND (NOT APPLE))
+   # Linux flags
+   target_link_libraries(piper -static-libgcc -static-libstdc++)
+-  set(PIPER_EXTRA_LIBRARIES "pthread")
++  # Don't link pthread on Android as it's included in the C library
++  if(NOT ANDROID)
++    set(PIPER_EXTRA_LIBRARIES "pthread")
++  endif()
+ endif()
+ 
+ target_link_libraries(piper
+@@ -86,9 +89,13 @@ target_link_libraries(piper
+   ${SPEECHPLAYER_LIB}
+   ${PIPER_PHONEMIZE_LIB}
+   onnxruntime::onnxruntime_static
+-  ${PIPER_EXTRA_LIBRARIES}
+ )
+ 
++# Link pthread only if defined (not on Android)
++if(DEFINED PIPER_EXTRA_LIBRARIES)
++  target_link_libraries(piper ${PIPER_EXTRA_LIBRARIES})
++endif()
++
+ target_compile_definitions(piper PUBLIC _PIPER_VERSION=${piper_version})
+ 
+ # ---- Declare test ----

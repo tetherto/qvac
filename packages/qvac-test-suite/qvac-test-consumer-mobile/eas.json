@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 13.2.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "NPM_TOKEN": "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"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "NPM_TOKEN": "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"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "NPM_TOKEN": "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"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+

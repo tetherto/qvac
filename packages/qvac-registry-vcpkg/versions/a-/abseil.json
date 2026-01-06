@@ -1,0 +1,9 @@
+{
+  "versions": [
+    {
+      "git-tree": "81d5bd07950ae3d66deedb246a8a56b7d8de3f26",
+      "version-string": "onnxruntime",
+      "port-version": 0
+    }
+  ]
+}

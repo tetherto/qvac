@@ -1,0 +1,26 @@
+diff --git a/cmake/onnxruntime.cmake b/cmake/onnxruntime.cmake
+index a1ad224..b895119 100644
+--- a/cmake/onnxruntime.cmake
++++ b/cmake/onnxruntime.cmake
+@@ -340,6 +340,21 @@ if (WIN32 AND NOT CMAKE_CXX_STANDARD_LIBRARIES MATCHES kernel32.lib)
+   # when you're not using imports directly, even though the import exists in the STL and the DLL would have been linked without DELAYLOAD
+   target_link_options(onnxruntime PRIVATE /DELAYLOAD:api-ms-win-core-heapl2-1-0.dll /ignore:4199)
+ endif()
++# --- Begin vcpkg overlay fix: strip build-dir includes from coreml_proto ---
++if(onnxruntime_USE_COREML AND TARGET coreml_proto)
++  message(STATUS "[vcpkg overlay] Cleaning INTERFACE_INCLUDE_DIRECTORIES for coreml_proto")
++  get_target_property(_coreml_proto_includes coreml_proto INTERFACE_INCLUDE_DIRECTORIES)
++  if(_coreml_proto_includes)
++    list(FILTER _coreml_proto_includes EXCLUDE REGEX "buildtrees/onnxruntime")
++    list(FILTER _coreml_proto_includes EXCLUDE REGEX "^${CMAKE_BINARY_DIR}")
++    list(FILTER _coreml_proto_includes EXCLUDE REGEX "^${CMAKE_CURRENT_BINARY_DIR}")
++    set_target_properties(coreml_proto PROPERTIES
++      INTERFACE_INCLUDE_DIRECTORIES "${_coreml_proto_includes}"
++    )
++  endif()
++endif()
++# --- End vcpkg overlay fix ---
++
+ 
+ if (winml_is_inbox)
+   # Apply linking flags required by inbox static analysis tools

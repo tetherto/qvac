@@ -1,0 +1,31 @@
+diff --git a/cmake/CMakeLists.txt b/cmake/CMakeLists.txt
+index 207abbaced..1968651e40 100644
+--- a/cmake/CMakeLists.txt
++++ b/cmake/CMakeLists.txt
+@@ -1943,6 +1943,26 @@ if(TARGET onnxruntime)
+   include(GNUInstallDirs)
+   include(CMakePackageConfigHelpers)
+   set(PROJECT_CONFIG_CONTENT "@PACKAGE_INIT@\n")
++
++  string(APPEND PROJECT_CONFIG_CONTENT
++    "include(CMakeFindDependencyMacro)\n"
++    "find_dependency(nlohmann_json CONFIG REQUIRED)\n"
++    "find_dependency(ONNX CONFIG REQUIRED)\n"
++    "find_dependency(Microsoft.GSL CONFIG REQUIRED)\n"
++    "find_dependency(re2 CONFIG REQUIRED)\n"
++    "find_dependency(absl CONFIG REQUIRED)\n"
++    "find_dependency(Boost CONFIG REQUIRED)\n"
++    "find_dependency(date CONFIG REQUIRED)\n"
++    "find_dependency(flatbuffers CONFIG REQUIRED)\n"
++    "find_dependency(Eigen3 CONFIG REQUIRED)\n"
++    "find_dependency(cpuinfo CONFIG REQUIRED)\n"
++    "if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL \"Android\")\n"
++    "  find_dependency(Iconv REQUIRED)\n"
++    "endif()\n"
++    "if(WIN32)\n"
++    "  find_dependency(WIL CONFIG REQUIRED)\n"
++    "endif()\n")
++
+   string(APPEND PROJECT_CONFIG_CONTENT
+         "include(\"\${CMAKE_CURRENT_LIST_DIR}/${PROJECT_NAME}Targets.cmake\")")
+   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/PROJECT_CONFIG_FILE" ${PROJECT_CONFIG_CONTENT})

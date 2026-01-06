@@ -1,0 +1,57 @@
+---
+title: SDK — How it works
+description: What happens under the hood when you use QVAC SDK in your application.
+---
+
+# How it works
+
+What happens under the hood when you add QVAC SDK to your application.
+
+## Overview
+
+QVAC SDK supports multiple JS runtimes, but QVAC modules run only on Bare. When the SDK runs in a runtime other than Bare, it spawns a Bare worker where all AI operations will take place.
+
+## Part 1: Model loading
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant SDK as QVAC SDK
+    participant RPC as RPC Client (singleton)
+    participant Worker as Bare Worker (singleton)
+
+    User->>SDK: Call loadModel("llama-3", options)
+    SDK->>RPC: Create runtime-specific RPC client
+    RPC->>Worker: Spawn worker (if needed) and send loadModel request
+    Worker->>Worker: Download and load model into memory
+    Worker->>RPC: Return success response
+    RPC->>SDK: Model loaded successfully
+    SDK->>User: loadModel() resolves with modelId
+```
+
+The first time you call `loadModel()`, QVAC SDK performs a complete initialization sequence. _This is the only time a Bare worker process is ever spawned_ — subsequent calls reuse the same worker instance.
+
+There is only a single RPC client and Bare worker per application, not per model — i.e., singleton pattern. The AI model is downloaded and loaded into memory, and registered with a unique ID. From that point on, it will be available for AI inference until you unload it — call `unloadModel()` to it.
+
+## Part 2: AI inference
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant SDK as QVAC SDK
+    participant RPC as RPC Client (singleton)
+    participant Worker as Bare Worker (singleton)
+
+    User->>SDK: Call completion("llama-3", history)
+    SDK->>RPC: Use existing RPC client (singleton)
+    RPC->>Worker: Send completion request via IPC
+    Worker->>Worker: Run inference with loaded model
+    Worker->>RPC: Stream tokens via IPC
+    RPC->>SDK: Stream tokens to user
+    SDK->>User: Stream AI response tokens
+    Worker->>RPC: Send final response with stats
+    RPC->>SDK: Return completion stats
+    SDK->>User: completion() resolves with full response
+```
+
+You can call `loadModel()` multiple times to make multiple models ready for use simultaneously. Additionally, you can perform AI inference multiple times with all of them. When you no longer need a model, call `unloadModel()` to free up resources.

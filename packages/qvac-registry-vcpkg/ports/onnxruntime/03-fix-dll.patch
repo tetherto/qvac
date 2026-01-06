@@ -1,0 +1,54 @@
+diff --git a/cmake/CMakeLists.txt b/cmake/CMakeLists.txt
+index badd50d..11de34d 100644
+--- a/cmake/CMakeLists.txt
++++ b/cmake/CMakeLists.txt
+@@ -1322,6 +1322,8 @@ function(onnxruntime_add_shared_library target_name)
+         target_compile_definitions(${target_name} PRIVATE VER_MAJOR=${VERSION_MAJOR_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_MINOR=${VERSION_MINOR_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_BUILD=${VERSION_BUILD_PART})
++        # Undefine VER_PRIVATE first, then redefine it
++        target_compile_options(${target_name} PRIVATE "/UVER_PRIVATE")
+         target_compile_definitions(${target_name} PRIVATE VER_PRIVATE=${VERSION_PRIVATE_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_STRING=\"${VERSION_STRING}\")
+   endif()
+@@ -1343,6 +1345,8 @@ function(onnxruntime_add_shared_library_module target_name)
+         target_compile_definitions(${target_name} PRIVATE VER_MAJOR=${VERSION_MAJOR_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_MINOR=${VERSION_MINOR_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_BUILD=${VERSION_BUILD_PART})
++        # Undefine VER_PRIVATE first, then redefine it
++        target_compile_options(${target_name} PRIVATE "/UVER_PRIVATE")
+         target_compile_definitions(${target_name} PRIVATE VER_PRIVATE=${VERSION_PRIVATE_PART})
+         target_compile_definitions(${target_name} PRIVATE VER_STRING=\"${VERSION_STRING}\")
+     endif()
+@@ -1755,7 +1759,17 @@ if(VERSION_MAJOR_PART STREQUAL "0" AND VERSION_MINOR_PART STREQUAL "0" AND VERSI
+     list(GET ORT_VERSION_STRING_LIST 0 VERSION_MAJOR_PART)
+     list(GET ORT_VERSION_STRING_LIST 1 VERSION_MINOR_PART)
+     list(GET ORT_VERSION_STRING_LIST 2 VERSION_BUILD_PART)
+-    set(VERSION_STRING ORT_VERSION)
++    set(VERSION_STRING ${ORT_VERSION})
++endif()
++
++if (WIN32)
++add_compile_definitions(VER_MAJOR=${VERSION_MAJOR_PART})
++add_compile_definitions(VER_MINOR=${VERSION_MINOR_PART})
++add_compile_definitions(VER_BUILD=${VERSION_BUILD_PART})
++# Undefine VER_PRIVATE first, then redefine it to avoid Windows SDK conflict
++add_compile_options("/UVER_PRIVATE")
++add_compile_definitions(VER_PRIVATE=${VERSION_PRIVATE_PART})
++add_compile_definitions(VER_STRING=\"${VERSION_STRING}\")
+ endif()
+ 
+ 
+diff --git a/onnxruntime/core/dll/onnxruntime.rc b/onnxruntime/core/dll/onnxruntime.rc
+index 4b08dfd..184195b 100644
+--- a/onnxruntime/core/dll/onnxruntime.rc
++++ b/onnxruntime/core/dll/onnxruntime.rc
+@@ -33,7 +33,7 @@ BEGIN
+             VALUE "FileVersion",      VER_STRING
+             VALUE "InternalName",     "ONNX Runtime"
+             VALUE "LegalCopyright",   "\251 Microsoft Corporation. All rights reserved."
+-            VALUE "OriginalFilename", FILE_NAME
++            VALUE "OriginalFilename", "onnxruntime.dll"
+             VALUE "ProductName",      "Microsoft\256 Windows\256 Operating System"
+             VALUE "ProductVersion",   VER_STRING
+         END

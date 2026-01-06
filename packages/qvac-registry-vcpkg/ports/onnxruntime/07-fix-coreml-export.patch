@@ -1,0 +1,36 @@
+diff --git a/cmake/onnxruntime.cmake b/cmake/onnxruntime.cmake
+index a1ad224..4c2ef51 100644
+--- a/cmake/onnxruntime.cmake
++++ b/cmake/onnxruntime.cmake
+@@ -331,6 +331,31 @@ install(TARGETS onnxruntime_static onnxruntime_session onnxruntime_optimizer onn
+         LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
+         RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
+         FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR})
++# --- Begin vcpkg overlay fix: ensure CoreML provider and proto are exported when used ---
++if(onnxruntime_USE_COREML)
++  if(TARGET onnxruntime_providers_coreml)
++    install(
++      TARGETS onnxruntime_providers_coreml
++      EXPORT ${PROJECT_NAME}Targets
++      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
++      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
++      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
++    )
++  endif()
++
++  if(TARGET coreml_proto)
++    install(
++      TARGETS coreml_proto
++      EXPORT ${PROJECT_NAME}Targets
++      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
++      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
++      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
++    )
++  endif()
++endif()
++# --- End vcpkg overlay fix ---
+ 
+ if (WIN32 AND NOT CMAKE_CXX_STANDARD_LIBRARIES MATCHES kernel32.lib)
+   # Workaround STL bug https://github.com/microsoft/STL/issues/434#issuecomment-921321254

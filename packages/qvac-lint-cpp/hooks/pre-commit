@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""
+Pre-commit: block commit if `git clang-format` would change STAGED hunks.
+- Works with `git commit -a`.
+- Uses your repo's .clang-format.
+- Works with `git commit -a` (checks HEAD <> index).
+- Robustly finds a git subcommand variant: `git clang-format`, `git clang-format-19`, etc.
+- If changes are needed, prints two commands:
+      git clang-format
+      git add -- <files>
+      git clang-format --staged
+      git add -- <files>
+"""
+
+from __future__ import annotations
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+from typing import List, Optional
+
+EXTS = "c,cc,cpp,cxx,h,hh,hpp,hxx"  # C/C++ only
+GIT_NOT_A_CMD_RE = re.compile(r"not a git command", re.IGNORECASE)
+DIFF_MARKERS_RE = re.compile(r"^(diff --git|\-\-\- |\+\+\+ |@@ )", re.MULTILINE)
+
+
+def run(cmd: List[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+    )
+
+
+def find_git_clang_format() -> Optional[List[str]]:
+    """
+    Prefer unversioned `git clang-format` if available,
+    otherwise try versioned subcommands like `git clang-format-19`.
+    We do NOT call the bare `git-clang-format` program directly (Windows .bat issues);
+    we always use `git <subcommand>`.
+    """
+    if shutil.which("git") is None:
+        sys.stderr.write("pre-commit: git not found in PATH\n")
+        return None
+
+    if _is_git_subcommand(["git", "clang-format"]):
+        return ["git", "clang-format"]
+
+    versioned = _scan_path_for_versioned_git_clang_format()
+    for suffix in versioned:
+        cand = ["git", f"clang-format-{suffix}"]
+        if _is_git_subcommand(cand):
+            return cand
+
+    return None
+
+
+def _is_git_subcommand(cmd: List[str]) -> bool:
+    try:
+        cp = run(cmd + ["--help"])
+        text = (cp.stdout or "") + (cp.stderr or "")
+        return not GIT_NOT_A_CMD_RE.search(text)
+    except Exception:
+        return False
+
+
+def _scan_path_for_versioned_git_clang_format() -> List[str]:
+    """
+    Return a list of discovered suffixes (e.g., ["19", "18"]) from PATH entries
+    named like 'git-clang-format-19', sorted by descending numeric version.
+    """
+    suffixes = set()
+    pat = re.compile(r"^git-clang-format-(\d+)(?:\..*)?$", re.IGNORECASE)
+    for d in filter(None, os.environ.get("PATH", "").split(os.pathsep)):
+        try:
+            for name in os.listdir(d):
+                m = pat.match(name)
+                if m:
+                    suffixes.add(m.group(1))
+        except Exception:
+            continue
+    return sorted(suffixes, key=lambda s: int(s), reverse=True)
+
+
+def staged_cc_files() -> List[str]:
+    cp = run(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACM"])
+    names = [p for p in cp.stdout.split("\x00") if p]
+    out: List[str] = []
+    for p in names:
+        lp = p.lower()
+        if lp.endswith((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx")):
+            out.append(p)
+    return out
+
+
+def has_diff_markers(s: str) -> bool:
+    return bool(DIFF_MARKERS_RE.search(s))
+
+
+def main() -> int:
+    gcf = find_git_clang_format()
+    if not gcf:
+        sys.stderr.write(
+            "pre-commit: could not find a suitable `git clang-format` subcommand "
+            "(tried unversioned and versioned variants).\n"
+        )
+        return 1
+
+    files = staged_cc_files()
+    if not files:
+        return 0
+
+    cp = run(gcf + ["--staged", "--extensions", EXTS, "--diff"])
+    patch = cp.stdout or cp.stderr or ""
+    if not has_diff_markers(patch):
+        return 0
+
+    sys.stdout.write(
+        "Commit aborted: git clang-format would modify the staged changes.\n\n"
+    )
+    sys.stdout.write(patch.rstrip() + "\n\n")
+
+    gcf_cmd = " ".join(shlex.quote(x) for x in gcf)
+    files_quoted = " ".join(shlex.quote(p) for p in files)
+
+    sys.stdout.write("Run if (commit -a):\n")
+    sys.stdout.write(f"  git add -- {files_quoted}\n")
+    sys.stdout.write(f"  {gcf_cmd} --staged --extensions {EXTS}\n")
+    sys.stdout.write(f"  git add -- {files_quoted}\n")
+
+    sys.stdout.write("Run if (git add ...; git commit):\n")
+    sys.stdout.write(f"  {gcf_cmd} --staged --extensions {EXTS}\n")
+    sys.stdout.write(f"  git add -- {files_quoted}\n")
+
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

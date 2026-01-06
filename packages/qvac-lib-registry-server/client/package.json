@@ -1,0 +1,53 @@
+{
+  "name": "@tetherto/qvac-lib-registry-client",
+  "version": "0.1.3",
+  "description": "QVAC Registry client library for read-only queries via Hyperswarm",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./types": "./index.d.ts"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "lib/",
+    "utils/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test:unit": "brittle tests/unit/*.test.js",
+    "test:unit:bare": "brittle-bare tests/unit/*.test.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "typecheck": "npx tsc --noEmit"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@tetherto/qvac-registry-schema": "^0.1.0",
+    "b4a": "^1.6.7",
+    "bare-fs": "^2.1.5",
+    "bare-os": "^2.2.0",
+    "bare-process": "^1.3.0",
+    "corestore": "^6.18.4",
+    "fs": "npm:bare-node-fs",
+    "hyperblobs": "^2.8.0",
+    "hypercore-id-encoding": "^1.3.0",
+    "hyperdb": "^4.16.1",
+    "hyperswarm": "^4.14.0",
+    "os": "npm:bare-node-os",
+    "path": "npm:bare-node-path",
+    "process": "npm:bare-node-process",
+    "ready-resource": "^1.0.1"
+  },
+  "devDependencies": {
+    "brittle": "^3.4.0",
+    "dotenv": "^17.2.3",
+    "standard": "^17.1.0",
+    "test-tmp": "^1.4.0",
+    "typescript": "^5.9.3"
+  }
+}
