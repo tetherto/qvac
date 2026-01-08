@@ -75,7 +75,7 @@ runs:
     - name: Run lint & unit tests
       id: run_tests
       continue-on-error: true
-      uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.1
+      uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@v1.1.1
       with:
         gpr-token: ${{ inputs.secret-token }}
         pat-token: ${{ inputs.pat-token }}

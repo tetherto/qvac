@@ -80,7 +80,7 @@ jobs:
 #            exit 1
 #          fi
       - name: Enable Socket Firewall Guard
-        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        uses: tetherto/qvac/.github/actions/sfw-guard@main
         with:
           firewall-mode: firewall-free
           clear-caches: "false"
@@ -89,7 +89,7 @@ jobs:
       - name: Run unit tests
         id: run_unit_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@main
+        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@main
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -135,7 +135,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Enable Socket Firewall Guard
-        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        uses: tetherto/qvac/.github/actions/sfw-guard@main
         with:
           firewall-mode: firewall-free
           clear-caches: "false"
@@ -143,7 +143,7 @@ jobs:
 
       - name: Call Publish GPR Action
         id: publish-pr
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        uses: tetherto/qvac/.github/actions/publish-library-to-gpr@main
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -156,7 +156,7 @@ jobs:
    
 #  lint-and-integration:
 #    if: contains(github.event.pull_request.labels.*.name, 'verify')
-#    uses: tetherto/qvac-devops/.github/workflows/run-lint-and-integration.yaml@main
+#    uses: tetherto/qvac/.github/workflows/run-lint-and-integration.yaml@main
 #    secrets: inherit
 #    with:
 #      registry-type: gpr
@@ -176,7 +176,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Enable Socket Firewall Guard
-        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        uses: tetherto/qvac/.github/actions/sfw-guard@main
         with:
           firewall-mode: firewall-free
           clear-caches: "false"
@@ -184,7 +184,7 @@ jobs:
   
       - name: Publish to GPR
         id: publish-push
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        uses: tetherto/qvac/.github/actions/publish-library-to-gpr@main
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
