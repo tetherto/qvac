@@ -44,7 +44,7 @@ jobs:
       pull-requests: write
       statuses: write
       issues: write
-    uses: tetherto/qvac-devops/.github/reusable/approval-check-worker.yml@main
+    uses: tetherto/qvac-devops/.github/workflows/reusable-approval-check-worker.yml@main
     secrets: inherit
     with:
       pr_number: ${{ fromJSON(needs.run-when-command.outputs.number) }}
