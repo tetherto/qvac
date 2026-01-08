@@ -194,13 +194,13 @@ jobs:
           echo "Published version from push: ${{ steps.publish-push.outputs.npm_published_version }}"
 
   debug-print:
-    uses: ./.github/reusable/debugger-reusable.yml
+    uses: ./.github/workflows/reusable-debugger-reusable.yml
     secrets:
       pat_token: ${{ secrets.PAT_TOKEN }}
 
   notify-reviewers:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-    uses: ./.github/reusable/automatically-add-reviewers.yaml
+    uses: ./.github/workflows/reusable-automatically-add-reviewers.yml
     with:
       reviewers: 'ignaciolarranaga'
     secrets: inherit

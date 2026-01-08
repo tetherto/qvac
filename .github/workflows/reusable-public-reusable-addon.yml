@@ -17,14 +17,14 @@ on:
 
 jobs:
   debug-print:
-    uses: ./.github/workflows/debugger-reusable.yml
+    uses: ./.github/workflows/reusable-debugger-reusable.yml
     secrets:
       pat_token: ${{ secrets.PAT_TOKEN  }}
 
   #Update needed after tests
   notify-reviewers:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-    uses: ./.github/reusable/automatically-add-reviewers.yaml
+    uses: ./.github/workflows/reusable-automatically-add-reviewers.yml
     with:
       reviewers: 'chetasr,yuranich,olyasir,vigan-abd,u011,hakaari,natachikhinashvili,andretetherio,ignaciolarranaga'
     secrets: inherit

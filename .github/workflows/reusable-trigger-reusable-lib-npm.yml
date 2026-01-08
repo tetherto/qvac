@@ -23,5 +23,5 @@ on:
 
 jobs:
   call-devops-lib:
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@main
+    uses: tetherto/qvac-devops/.github/workflows/reusable-public-reusable-npm.yml@main
     secrets: inherit

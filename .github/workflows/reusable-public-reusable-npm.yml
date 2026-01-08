@@ -105,6 +105,6 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
 
   debug-print:
-    uses: ./.github/workflows/debugger-reusable.yml
+    uses: ./.github/workflows/reusable-debugger-reusable.yml
     secrets:
       pat_token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
