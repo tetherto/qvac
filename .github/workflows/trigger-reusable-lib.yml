@@ -4,8 +4,7 @@ name: General CI/CD
 permissions:
   contents: write
   packages: write
-
-name: General CI/CD (monorepo)
+  pull-requests: read
 
 on:
   # push:
@@ -26,10 +25,7 @@ on:
         description: "Optional: force a single package workdir"
         required: false
         type: string
-
-permissions:
-  contents: read
-  pull-requests: read  
+    
 
 jobs:
   detect:
