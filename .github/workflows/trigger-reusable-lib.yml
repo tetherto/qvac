@@ -7,17 +7,17 @@ permissions:
   pull-requests: read
 
 on:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "packages/**"
-  #     - ".github/trigger-reusable-lib.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - ".github/trigger-reusable-lib.yml"
 
-  # pull_request_target:
-  #   types: [opened, reopened, synchronize, labeled]
-  #   paths:
-  #     - "packages/**"
-  #     - ".github/**"
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled]
+    paths:
+      - "packages/**"
+      - ".github/trigger-reusable-lib.yml"
 
   workflow_dispatch:
     inputs:
