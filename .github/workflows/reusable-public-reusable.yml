@@ -195,7 +195,7 @@ jobs:
 
   notify-reviewers:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-    uses: ./.github/workflows/reusable-automatically-add-reviewers.yaml
+    uses: ./.github/workflows/reusable-automatically-add-reviewers.yml
     with:
       reviewers: "ignaciolarranaga"
     secrets: inherit
