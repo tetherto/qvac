@@ -8,9 +8,10 @@ on:
         required: false
         type: boolean
         default: false # DEBUG MODE ENABLED
-      workdir: 
-         default: "."
-         type: string
+      workdir:
+        required: false
+        type: string
+        default: "."
     secrets:
       pat_token:
         required: false
@@ -18,7 +19,7 @@ on:
 jobs:
   pull-request-event:
     runs-on: ubuntu-latest
-    if:  github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
     permissions:
       contents: read
       packages: write
@@ -30,6 +31,7 @@ jobs:
           echo "PR Title: ${{ github.event.pull_request.title }}"
           echo "repository: ${{ github.event.pull_request.head.repo.full_name }}"
           echo "ref: ${{ github.event.pull_request.head.ref }}"
+          echo "workdir: ${{ inputs.workdir }}"
 
       - uses: actions/checkout@v4
         with:
@@ -43,6 +45,7 @@ jobs:
           firewall-mode: firewall-free
           clear-caches: "false"
           managers: npm,pip,pip3,uv,cargo
+          workdir: ${{ inputs.workdir }}
 
       - name: Run lint and unit tests
         uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@main
@@ -50,6 +53,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+          workdir: ${{ inputs.workdir }}
 
       - name: Run integration tests if labeled
         if: contains(github.event.pull_request.labels.*.name, 'verify')
@@ -58,8 +62,10 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+          workdir: ${{ inputs.workdir }}
 
       - name: Check for disallowed dependencies
+        working-directory: ${{ inputs.workdir }}
         run: |
           deps=$(jq -r '[.dependencies // {}, .devDependencies // {}] | add | to_entries[] | .value' package.json)
           if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
@@ -68,6 +74,7 @@ jobs:
           fi
 
       - name: Check for @qvac/ prefix in package name
+        working-directory: ${{ inputs.workdir }}
         run: |
           if ! grep -q '"name": "@qvac/' package.json; then
             echo "::error title=Invalid package name::Package name in package.json must start with @qvac/"
@@ -80,6 +87,7 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "dev"
+          workdir: ${{ inputs.workdir }}
 
   push-event:
     runs-on: ubuntu-latest
@@ -97,12 +105,14 @@ jobs:
           firewall-mode: firewall-free
           clear-caches: "false"
           managers: npm,pip,pip3,uv,cargo
-          
+          workdir: ${{ inputs.workdir }}
+
       - name: Publish to NPM
-        if: ${{ github.event.pull_request.head.repo.full_name != 'tetherto/qvac' }}
+        if: ${{ github.repository != 'tetherto/qvac' }}
         uses: tetherto/qvac/.github/actions/publish-library-to-npm@main
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
+          workdir: ${{ inputs.workdir }}
 
   debug-print:
     uses: ./.github/workflows/reusable-debugger-reusable.yml
