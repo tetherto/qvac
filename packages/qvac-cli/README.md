@@ -323,5 +323,3 @@ The CLI can be configured using environment variables:
 ## License
 
 This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.
-
-testing qvac-cli
