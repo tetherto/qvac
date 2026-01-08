@@ -1,0 +1,7 @@
+qvac-cli:
+  - "packages/qvac-cli/**"
+qvac-sdk:
+  - "packages/qvac-sdk/**"
+qvac-lib-rag:
+  - "packages/qvac-lib-rag/**"
+# ...repeat for the rest

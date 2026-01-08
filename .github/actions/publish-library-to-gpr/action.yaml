@@ -44,10 +44,37 @@ runs:
         node-version: lts/*
         registry-url: "https://npm.pkg.github.com/"
         scope: "@tetherto"
+    
+    - name: Resolve publish directory
+      id: resolve_dir
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        dir="${{ inputs.path }}"
+        if [[ -z "$dir" ]]; then
+          dir="${{ inputs.workdir }}"
+        fi
+
+        dir="${dir%/}"
+        [[ -z "$dir" ]] && dir="."
+
+        # Safety rails
+        if [[ "$dir" == /* || "$dir" == *".."* ]]; then
+          echo "ERROR: invalid dir: $dir" >&2
+          exit 1
+        fi
+        if [[ ! -d "$dir" ]]; then
+          echo "ERROR: dir not found: $dir" >&2
+          exit 1
+        fi
+
+        echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
 
     - name: Determine Tag
       id: determine_tag
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
       run: |
         TAG="${{ inputs.tag }}"
@@ -72,7 +99,7 @@ runs:
 
     - name: Determine Version
       id: determine_version
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
       run: |
         SHORT_SHA=$(git rev-parse --short HEAD)
@@ -96,7 +123,7 @@ runs:
 
     - name: Maybe Update Package Version
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.determine_version.outputs.version != steps.determine_version.outputs.package_version
       run: |
         echo "Updating version to ${{ steps.determine_version.outputs.version }}"
@@ -105,7 +132,7 @@ runs:
     - name: Check Version Exists in Registry
       continue-on-error: true
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       env:
         NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
       run: |
@@ -119,7 +146,7 @@ runs:
     - name: Check Publish Conditions
       id: check_publish
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       env:
         REPO_NAME: ${{ github.repository }}
         EVENT_NAME: ${{ github.event_name }}
@@ -201,7 +228,7 @@ runs:
 
     - name: Fix package scope if it's @qvac
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       run: |
         PACKAGE_NAME=$(node -p "require('./package.json').name")
         echo "Detected package name: $PACKAGE_NAME"
@@ -222,7 +249,7 @@ runs:
     - name: Publish to NPM
       id: npm_publish
       if: steps.check_publish.outputs.should_publish == 'true'
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
@@ -248,7 +275,7 @@ runs:
 
     - name: Create Git Tag
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.check_publish.outputs.should_publish == 'true' && steps.npm_publish.outputs.publish_status == '0' && steps.determine_tag.outputs.tag == 'latest'
       run: |
         git tag "v${{ steps.determine_version.outputs.version }}"
@@ -264,7 +291,7 @@ runs:
 
     - name: Publish Status
       shell: bash
-      working-directory: ${{ inputs.path }}
+      working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.check_publish.outputs.should_publish == 'true'
       run: |
         if [ "${{ steps.npm_publish.outputs.publish_status }}" -eq 0 ]; then

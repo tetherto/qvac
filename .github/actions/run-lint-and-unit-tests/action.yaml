@@ -32,7 +32,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/.npm
-        key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/package.json') }}
+        key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
         restore-keys: |
           npm-${{ runner.os }}-
 
@@ -57,15 +57,21 @@ runs:
           git config --global url."https://${{ inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
         fi
       shell: bash
+      working-directory: ${{ inputs.workdir }}
     - name: Install dependencies
       shell: bash
       run: npm install
+      working-directory: ${{ inputs.workdir }}
     - name: Run linting
       shell: bash
       run: npm run lint
+      working-directory: ${{ inputs.workdir }}
     - name: Install bare
       shell: bash
       run: npm install -g bare
+      working-directory: ${{ inputs.workdir }}
     - name: Run tests
       shell: bash
       run: npm run test:unit --if-present
+      working-directory: ${{ inputs.workdir }}
+
