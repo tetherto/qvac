@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          token: ${{ env.PAT_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
 
@@ -52,7 +52,7 @@ jobs:
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ env.PAT_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
           workdir: ${{ inputs.workdir }}
 
       - name: Run integration tests if labeled
@@ -61,7 +61,7 @@ jobs:
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ env.PAT_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
           workdir: ${{ inputs.workdir }}
 
       - name: Check for disallowed dependencies
