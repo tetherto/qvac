@@ -49,7 +49,7 @@ runs:
         INPUTS_CONTEXT: ${{ toJSON(inputs) }}
         GIT_PUSH_TOKEN: ${{ inputs.git-token }}
         CREATE_TAG: ${{ inputs.create-tag }}
-        run: |
+      run: |
           echo "publishing to npm"
       # run: |
       #   set -x
