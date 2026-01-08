@@ -35,9 +35,10 @@ on:
         type: boolean
         description: "Status of tests and PR checks"
         default: true
-      workdir: 
-         default: "."
-         type: string
+      workdir:
+        required: false
+        type: string
+        default: "."
 
 jobs:
   validate-pr: # to do checks after other workflows have run
@@ -51,7 +52,9 @@ jobs:
           SECRETS_CONTEXT: ${{ toJSON(secrets) }}
           GITHUB_CONTEXT: ${{ toJSON(github) }}
           INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+          WORKDIR: ${{ inputs.workdir }}
         run: |
+          echo "workdir: $WORKDIR"
           echo "Inputs Context: $INPUTS_CONTEXT"
           echo "Secrets Context: $SECRETS_CONTEXT"
           echo "Full GitHub Context: $GITHUB_CONTEXT"
