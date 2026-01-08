@@ -1,0 +1,131 @@
+name: Trigger E2E Tests (Example Apps)
+
+on:
+  workflow_call:
+    inputs:
+      addon_version:
+        description: 'Addon npm package version to test'
+        required: true
+        type: string
+      addon_model:
+        description: 'Model to test'
+        required: false
+        type: string
+      pr_number:
+        description: 'PR number from addon repository'
+        required: false
+        default: '0'
+        type: string
+      e2e_app_name:
+        description: 'E2E app name to test'
+        required: true
+        type: string
+      workdir: 
+         default: "."
+         type: string
+
+jobs:
+  trigger-e2e-tests:
+    name: Trigger E2E Tests (Example Apps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 
+
+    steps:
+      - name: Log Workflow Contexts
+        env:
+          SECRETS_CONTEXT: ${{ toJSON(secrets) }}
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: |
+          echo "=== E2E App Test INPUTS ==="
+          echo "Addon Version: ${{ inputs.addon_version }}"
+          echo "Addon Model: ${{ inputs.addon_model }}"
+          echo "PR Number: ${{ inputs.pr_number }}"
+          echo "E2E App Name: ${{ inputs.e2e_app_name }}"
+          echo "==========================="
+          echo "GitHub Ref: ${{ github.ref }}"
+          echo "GitHub SHA: ${{ github.sha }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "============================"
+          echo "Secrets Context: $SECRETS_CONTEXT"
+          echo "Full GitHub Context: $GITHUB_CONTEXT"
+        
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Get package name from package.json
+        id: package_name
+        run: |
+          package_name=$(jq -r '.name' package.json)
+          echo "package_name=$package_name" >> $GITHUB_OUTPUT
+
+      - name: Trigger E2E tests
+        uses: actions/github-script@v7
+        env:
+          TARGET_REPO: qvac-examples
+          E2E_APP_TEST_YAML: e2e-app-test.yaml
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            console.log('Triggering E2E tests with model package...');
+
+            const { owner } = context.repo;
+            // Get package_name from previous step
+            // To support different repo and published package name
+            const package_name = '${{ steps.package_name.outputs.package_name }}';
+
+            const addonVersion = '${{ inputs.addon_version }}';
+            const addonModel = '${{ inputs.addon_model }}';
+            const prNumber = '${{ inputs.pr_number }}';
+            const e2eAppName = '${{ inputs.e2e_app_name }}';
+
+            if (!addonVersion) {
+              throw new Error('Addon version is not set');
+            }
+
+            if (!e2eAppName) {
+              throw new Error('E2E app name is not set');
+            }
+
+            let addonJsonVer = ''
+            if (addonModel) {
+              addonJsonVer = JSON.stringify({
+                [package_name + '-' + addonModel]: addonVersion
+              });
+            } else {
+              addonJsonVer = JSON.stringify({
+                [package_name]: addonVersion
+              });
+            }
+
+            console.log('--------------Dispatch e2e workflow params--------------');
+            console.log('Addon version:', addonVersion);
+            console.log('Addon model:', addonModel);
+            console.log('Addon json version:', addonJsonVer);
+            console.log('E2E app name:', e2eAppName);
+            console.log('PR number:', prNumber);
+            console.log('Repo owner:', owner);
+            console.log('Package name:', package_name);
+            console.log('--------------------------------------------------------');
+
+            const response = await github.rest.actions.createWorkflowDispatch({
+                owner,
+                repo: '${{ env.TARGET_REPO }}',
+                workflow_id: '${{ env.E2E_APP_TEST_YAML }}',
+                ref: 'main',
+                inputs: {
+                    package_versions: addonJsonVer,
+                    e2e_app_name: e2eAppName,
+                    model_name: addonModel,
+                    upstream_repo: package_name,
+                    upstream_pr_number: prNumber
+                }
+            });
+
+            console.log('Response:', response);

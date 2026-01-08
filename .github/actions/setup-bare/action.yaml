@@ -1,0 +1,9 @@
+name: Setup bare
+description: Setup bare
+
+runs:
+  using: composite
+  steps:
+    - name: Install Bare
+      shell: bash
+      run: npm install -g bare-runtime bare-make

@@ -1,0 +1,41 @@
+name: Autoformat yaml files
+description: Fail and print diff if yaml files are not formatted correctly
+
+runs:
+  using: composite
+  steps:
+    - name: Make sure tree is clean
+      shell: bash
+      run: |
+        if git diff --quiet; then
+          exit 0
+        fi
+        echo "Error: working tree is not clean"
+        exit 1
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '>=1.22'
+
+    - name: install yamlfmt
+      shell: bash
+      run: go install github.com/google/yamlfmt/cmd/yamlfmt@v0.17.0
+
+    - name: yamlfmt
+      shell: bash
+      run: yamlfmt -formatter retain_line_breaks_single=true .
+
+    - name: Check for diffs
+      shell: bash
+      run: |
+        if git diff --quiet; then
+          exit 0
+        fi
+        echo "Some yaml files are not formatted correctly. Run yamlfmt"
+        echo "or apply the following diff manually:"
+        echo
+        git diff | cat
+        # Clean tree for subsequent steps
+        git checkout -- .
+        exit 1

@@ -1,0 +1,112 @@
+# File: .github/actions/sanity-checks/action.yaml
+name: Sanity checks
+description: "Run sanity checks"
+
+inputs:
+  secret-token:
+    description: "Secret token"
+    required: true
+  npm-token:
+    description: "NPM token for registry.npmjs.org"
+    required: false
+  pat-token:
+    description: "PAT token"
+    required: false
+  run-integration:
+    description: "Whether to run integration tests"
+    required: false
+    default: "false"
+  workdir: 
+    default: "."
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout PR head and target
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ inputs.pat-token }}
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.event.pull_request.head.ref }}
+
+    - name: Fetch PR head and target branch
+      shell: bash
+      id: fetch_pr
+      if: |
+        github.event_name == 'pull_request_target' ||
+        github.event_name == 'pull_request'
+      continue-on-error: true
+      run: |
+        git remote set-url origin https://github.com/${{ github.repository }}.git
+        git fetch origin +refs/heads/*:refs/remotes/origin/*
+        git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+        PR_FORK_URL=${{ github.event.pull_request.head.repo.clone_url }}
+        PR_HEAD_REF=${{ github.event.pull_request.head.ref }}
+        git fetch origin $PR_HEAD_REF:refs/pr/head || git fetch $PR_FORK_URL $PR_HEAD_REF:refs/pr/head
+
+    - name: Check PR status vs. target branch
+      shell: bash
+      id: target_branch_checks
+      if: |
+        github.event_name == 'pull_request_target' ||
+        github.event_name == 'pull_request'
+      continue-on-error: true
+      run: |
+        TARGET_SHA=${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+        if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+          echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+          echo "ℹ️  Suggestion: Consider rebasing or merging the latest changes from the target branch"
+        fi
+
+    - name: Check for disallowed dependencies
+      shell: bash
+      id: check_dependencies
+      continue-on-error: true
+      run: |
+        deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
+        if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+          echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+          exit 1
+        fi
+
+    - name: Run lint & unit tests
+      id: run_tests
+      continue-on-error: true
+      uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.1
+      with:
+        gpr-token: ${{ inputs.secret-token }}
+        pat-token: ${{ inputs.pat-token }}
+        npm-token: ${{ inputs.npm-token }}
+        registry-type: gpr
+
+    - name: Check for errors
+      shell: bash
+      run: |
+        count=0
+        if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
+          echo "::error::Step - Lint or unit tests failed"
+          count=$((count + 1))
+        fi
+        if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+          echo "::error::Step - Check for disallowed dependencies failed"
+          count=$((count + 1))
+        fi
+        if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+          echo "::error::Step - Check PR Status with Target Branch failed"
+          count=$((count + 1))
+        fi
+        if [ "${{ steps.int-tests.outcome }}" = "failure" ]; then
+          echo "::error::Step - Run integration tests failed"
+          count=$((count + 1))
+        fi
+        if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+          echo "::error::Step - Fetch PR head and target branch failed"
+          count=$((count + 1))
+        fi
+        if [ $count -gt 0 ]; then
+          echo "::error::There were $count failed checks"
+          exit 1
+        fi

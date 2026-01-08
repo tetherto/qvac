@@ -1,0 +1,287 @@
+name: NPM Publish
+description: "Publish a package to NPM"
+
+inputs:
+  secret-token:
+    description: "Secret token"
+    required: true
+  pat-token:
+    description: "PAT token"
+    required: false
+  release:
+    description: "Use tag. Release stream, temporary here for compatibility with old workflows"
+    required: false
+  tag:
+    description: "Release Stream (npm tag)"
+    required: false
+  path:
+    description: "Path to artifact to publish"
+    required: false
+  workdir: 
+    default: "."
+    type: string
+
+outputs:
+  npm_published_version:
+    description: "The version that was published to npm"
+    value: ${{ steps.npm_publish.outputs.npm_published_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Print job context for debugging
+      continue-on-error: true
+      shell: bash
+      env:
+        INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+      run: |
+        echo "Input context: $INPUTS_CONTEXT"
+        ls -l ${{ inputs.path }}
+        tree ${{ inputs.path }}
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        registry-url: "https://npm.pkg.github.com/"
+        scope: "@tetherto"
+
+    - name: Determine Tag
+      id: determine_tag
+      working-directory: ${{ inputs.path }}
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+        RELEASE="${{ inputs.release }}"
+
+        if [ -z "$RELEASE" ]; then
+          RELEASE="tmp"
+        fi
+        if [ -z "$TAG" ]; then
+          TAG=$RELEASE
+        fi
+
+        echo "Base branch: ${{ github.ref }}"
+        echo "Event name: ${{ github.event_name }}"
+
+        if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "PR was merged to main, setting tag to latest"
+          TAG="latest"
+        fi
+
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Determine Version
+      id: determine_version
+      working-directory: ${{ inputs.path }}
+      shell: bash
+      run: |
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        TAG="${{ steps.determine_tag.outputs.tag }}"
+        PR_NUM=""
+        if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; then
+          PR_NUM="${{ github.event.pull_request.number }}"
+        fi
+
+        if [ "$TAG" = "latest" ]; then
+          VERSION="${PACKAGE_VERSION}"
+        elif [ -n "$PR_NUM" ]; then
+          VERSION="${PACKAGE_VERSION}-tmp.pr-${PR_NUM}.runid-${GITHUB_RUN_ID}"
+        else
+          VERSION="${PACKAGE_VERSION}-tmp.runid-${GITHUB_RUN_ID}"
+        fi
+
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "package_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Maybe Update Package Version
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      if: steps.determine_version.outputs.version != steps.determine_version.outputs.package_version
+      run: |
+        echo "Updating version to ${{ steps.determine_version.outputs.version }}"
+        npm version ${{ steps.determine_version.outputs.version }} --no-git-tag-version --allow-same-version
+
+    - name: Check Version Exists in Registry
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
+      run: |
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        VERSION="${{ steps.determine_version.outputs.version }}"
+
+        if npm view "${PACKAGE_NAME}@${VERSION}" version > /dev/null 2>&1; then
+          echo "::error::Version ${VERSION} of ${PACKAGE_NAME} already exists in the registry"
+        fi
+
+    - name: Check Publish Conditions
+      id: check_publish
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        REPO_NAME: ${{ github.repository }}
+        EVENT_NAME: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        REF_NAME: ${{ github.ref_name }}
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        SHOULD_PUBLISH=false
+
+        REPO_SHORT_NAME="${REPO_NAME#*/}"
+
+        # normalize branch name across events
+        BRANCH_NAME="$REF_NAME"
+        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+          BRANCH_NAME="$HEAD_REF"
+        fi
+
+        echo "🔎 debug: event=$EVENT_NAME repo=$REPO_SHORT_NAME branch=$BRANCH_NAME"
+
+         # Check if it's a merge event to main
+        if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/main" ]]; then
+          echo "✅ Publishing: push to main"
+          SHOULD_PUBLISH=true
+        fi
+
+        # manual dispatch
+        if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          echo "✅ Publishing: manual workflow_dispatch"
+          SHOULD_PUBLISH=true
+        fi
+
+        # PR label "publish"
+        if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+          if [[ "${{ toJSON(github.event.pull_request.labels.*.name) }}" =~ "publish" ]]; then
+            echo "✅ Publishing: PR has publish label"
+            SHOULD_PUBLISH=true
+          fi
+        fi
+
+        # Check if repo is in always-publish list
+        ALWAYS_PUBLISH_REPOS=(
+          qvac-devops
+          qvac-util-transcription
+          qvac-examples
+          qvac-ext-lib-mlc
+          qvac-ext-lib-tokenizers-cpp
+          qvac-lib-decoder-audio
+          qvac-lib-inference-addon-mlc-ecog
+          qvac-lib-infer-llamacpp-llm
+          qvac-lib-infer-nmtcpp
+          qvac-lib-infer-whispercpp
+          qvac-lib-infer-onnx-vad
+          qvac-lib-infer-llamacpp-embed
+          qvac-lib-infer-onnx-tts
+          qvac-lib-inference-addon-onnx-ocr-fasttext
+        )
+
+        if printf '%s\n' "${ALWAYS_PUBLISH_REPOS[@]}" | grep -qx "$REPO_SHORT_NAME"; then
+          echo "✅ Publishing: repo is in always-publish list"
+          SHOULD_PUBLISH=true
+        fi
+
+        # check if repo is qvac-sdk and branch is dev, fix-* or feature-*
+        if [[ "$REPO_SHORT_NAME" == "qvac-sdk" ]]; then
+          case "$BRANCH_NAME" in
+            dev|fix-*|feature-*)
+              echo "✅ Publishing: qvac-sdk + allowed branch ($BRANCH_NAME)"
+              SHOULD_PUBLISH=true
+              ;;
+          esac
+        fi
+
+        if [[ "$SHOULD_PUBLISH" == "false" ]]; then
+          echo "❌ Skipping publish: no publish conditions met"
+        fi
+
+        echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
+
+
+    - name: Fix package scope if it's @qvac
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: |
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        echo "Detected package name: $PACKAGE_NAME"
+        
+        if [[ "$PACKAGE_NAME" == @qvac/* ]]; then
+          NEW_NAME=$(echo "$PACKAGE_NAME" | sed 's/@qvac/@tetherto/')
+          echo "⚙️ Rewriting package name from $PACKAGE_NAME to $NEW_NAME for publishing"
+          
+          # Update package.json in place
+          tmpfile=$(mktemp)
+          jq --arg new_name "$NEW_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
+          
+          echo "✅ Package name updated to $(node -p "require('./package.json').name")"
+        else
+          echo
+        fi
+
+    - name: Publish to NPM
+      id: npm_publish
+      if: steps.check_publish.outputs.should_publish == 'true'
+      working-directory: ${{ inputs.path }}
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
+      run: |
+        echo "Publishing with tag: ${{ steps.determine_tag.outputs.tag }}"
+        echo "Publishing version: ${{ steps.determine_version.outputs.version }}"
+
+        if npm publish --tag ${{ steps.determine_tag.outputs.tag }}; then
+          PUBLISH_STATUS=0
+          echo "✅ npm publish successful"
+          echo "Published version: ${{ steps.npm_publish.outputs.npm_published_version }}"
+          echo "NPM: published version: ${{ steps.npm_publish.outputs.npm_published_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=NPM Published::v${{ steps.determine_version.outputs.version }}"
+        else
+          PUBLISH_STATUS=1
+          echo "❌ npm publish failed"
+          echo "NPM: publish failed" >> $GITHUB_STEP_SUMMARY
+          echo "::error title=NPM Publish Failed::v${{ steps.determine_version.outputs.version }}"
+        fi
+
+        echo "publish_status=$PUBLISH_STATUS" >> $GITHUB_OUTPUT
+        echo "npm_published_version=${{ steps.determine_version.outputs.version }}" >> $GITHUB_OUTPUT
+
+    - name: Create Git Tag
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      if: steps.check_publish.outputs.should_publish == 'true' && steps.npm_publish.outputs.publish_status == '0' && steps.determine_tag.outputs.tag == 'latest'
+      run: |
+        git tag "v${{ steps.determine_version.outputs.version }}"
+        if git push origin "v${{ steps.determine_version.outputs.version }}"; then
+          echo "✅ Tagged and pushed v${{ steps.determine_version.outputs.version }}"
+          echo "Git: pushed tag v${{ steps.determine_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "::notice title=Git Tag Pushed::v${{ steps.determine_version.outputs.version }}"
+        else
+          echo "⚠️ Tag created but push failed for v${{ steps.determine_version.outputs.version }}"
+          echo "Git: tag created but push failed for v${{ steps.determine_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "::error title=Git Tag Push Failed::v${{ steps.determine_version.outputs.version }}"
+        fi
+
+    - name: Publish Status
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      if: steps.check_publish.outputs.should_publish == 'true'
+      run: |
+        if [ "${{ steps.npm_publish.outputs.publish_status }}" -eq 0 ]; then
+          echo "✅ npm publish successful"
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          echo "## Installation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install from the command line:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install ${PACKAGE_NAME}@${{ steps.npm_publish.outputs.npm_published_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install via package.json:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          echo "\"${PACKAGE_NAME}\": \"${{ steps.npm_publish.outputs.npm_published_version }}\"" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ npm publish failed"
+          exit ${{ steps.npm_publish.outputs.publish_status }}
+        fi

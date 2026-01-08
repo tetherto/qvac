@@ -1,0 +1,206 @@
+name: General Library CI/CD Workflow
+# Shared by multiple projects
+
+on:
+  workflow_call:
+    inputs:
+      debug_mode:
+        required: false
+        type: boolean
+        default: false # DEBUG MODE DISABLED
+      workdir: 
+         default: "."
+         type: string 
+    outputs:
+      published_version:
+        description: "The version that was published to npm"
+        value: ${{ jobs.pull-request-event.outputs.published_version }}
+
+jobs:
+  pull-request-event-checks:
+    runs-on: ubuntu-latest
+    if:  github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Echo Step
+        run: |
+          echo "Processing ${{ github.event_name }} event"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "repository: ${{ github.event.pull_request.head.repo.full_name }}"
+          echo "ref: ${{ github.event.pull_request.head.ref }}"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for accurate ancestry checks
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Fetch PR head and target branch
+        id: fetch_pr
+        continue-on-error: true
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+
+      - name: Check PR Status with Target Branch
+        continue-on-error: true
+        id: target_branch_checks
+        run: |
+          TARGET_SHA=${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+            exit 1
+          fi
+
+      - name: Check for disallowed dependencies
+        id: check_dependencies
+        continue-on-error: true
+        run: |
+          if ! jq -e '.dependencies and ( .dependencies | length > 0 )' package.json > /dev/null; then
+            echo "↩︎ No runtime dependencies found in package.json. Skipping."
+            exit 0
+          fi
+          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+            exit 1
+          fi
+
+#      - name: Check for @tetherto/ prefix in package name
+#        id: check_package_name
+#        continue-on-error: true
+#        run: |
+#          if ! grep -q '"name": "@tetherto/' package.json; then
+#            echo "::error title=Invalid package name::Package name in package.json must start with @tetherto/"
+#            exit 1
+#          fi
+      - name: Enable Socket Firewall Guard
+        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        with:
+          firewall-mode: firewall-free
+          clear-caches: "false"
+          managers: npm,pip,pip3,uv,cargo
+
+      - name: Run unit tests
+        id: run_unit_tests
+        continue-on-error: true
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@main
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Check for errors
+        run: |
+          failed=0
+          if ${{ steps.run_unit_tests.outcome == 'failure' }}; then
+            echo "Step - Lint or unit tests failed"
+            failed=1
+          fi
+          if ${{ steps.check_dependencies.outcome == 'failure' }}; then
+            echo "Step - Check for disallowed dependencies failed"
+            failed=1
+          fi
+          if ${{ steps.target_branch_checks.outcome == 'failure' }}; then
+            echo "Step - Check PR Status with Target Branch failed"
+            failed=1
+          fi
+          if ${{ steps.check_package_name.outcome == 'failure' }}; then
+            echo "Step - Check for @tetherto/ prefix in package name failed"
+            failed=1
+          fi
+          if [ $failed -eq 1 ]; then
+            exit 1
+          fi
+
+  pull-request-event:
+    needs: pull-request-event-checks
+    runs-on: ubuntu-latest
+    if:  github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      published_version: ${{ steps.publish-pr.outputs.npm_published_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Enable Socket Firewall Guard
+        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        with:
+          firewall-mode: firewall-free
+          clear-caches: "false"
+          managers: npm,pip,pip3,uv,cargo
+
+      - name: Call Publish GPR Action
+        id: publish-pr
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: 'dev'
+
+      - name: Echo published version from PR
+        run: |
+          echo "Published version from PR: ${{ steps.publish-pr.outputs.npm_published_version }}"
+   
+#  lint-and-integration:
+#    if: contains(github.event.pull_request.labels.*.name, 'verify')
+#    uses: tetherto/qvac-devops/.github/workflows/run-lint-and-integration.yaml@main
+#    secrets: inherit
+#    with:
+#      registry-type: gpr
+#    needs: pull-request-event
+
+  push-event:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || inputs.debug_mode
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Enable Socket Firewall Guard
+        uses: tetherto/qvac-devops/.github/actions/sfw-guard@main
+        with:
+          firewall-mode: firewall-free
+          clear-caches: "false"
+          managers: npm,pip,pip3,uv,cargo
+  
+      - name: Publish to GPR
+        id: publish-push
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+  
+      - name: Echo published version from push
+        run: |
+          echo "Published version from push: ${{ steps.publish-push.outputs.npm_published_version }}"
+
+  debug-print:
+    uses: ./.github/reusable/debugger-reusable.yml
+    secrets:
+      pat_token: ${{ secrets.PAT_TOKEN }}
+
+  notify-reviewers:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    uses: ./.github/reusable/automatically-add-reviewers.yaml
+    with:
+      reviewers: 'ignaciolarranaga'
+    secrets: inherit

@@ -1,0 +1,67 @@
+name: Run lint & integration tests
+description: "Run linting and integration tests when verify label is present"
+
+inputs:
+  npm-token:
+    description: "Auth token for registry.npmjs.org (for @qvac/*)"
+    required: false
+  gpr-token:
+    description: "Auth token for GitHub Packages (for @tetherto/*) — can be the GitHub Actions GITHUB_TOKEN"
+    required: true
+  pat-token:
+    description: "Optional PAT for fetching GitHub deps via HTTPS (git dependencies)"
+    required: false
+  workdir: 
+    default: "."
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18.x"
+
+    - name: Restore npm cache
+      id: cache-npm
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+        restore-keys: |
+          npm-${{ runner.os }}-
+
+    - name: Configure .npmrc for both npmjs and GitHub Packages
+      shell: bash
+      run: |
+        # Clean slate .npmrc in workspace
+        : > .npmrc
+
+        # Default public registry
+        echo "registry=https://registry.npmjs.org/" >> .npmrc
+
+        # @qvac/* from npmjs.org
+        echo "@qvac:registry=https://registry.npmjs.org" >> .npmrc
+        echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token }}" >> .npmrc
+
+        # @tetherto/* from GitHub Packages
+        echo "@tetherto:registry=https://npm.pkg.github.com" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${{ inputs.pat-token }}" >> .npmrc
+
+        # If you use git+https deps, rewrite to include a PAT for private repos
+        if [ -n "${{ inputs.pat-token }}" ]; then
+          git config --global url."https://${{ inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
+        fi
+    - name: Install dependencies
+      shell: bash
+      run: npm install
+    - name: Run linting
+      shell: bash
+      run: npm run lint
+    - name: Install bare globally
+      shell: bash
+      run: npm install -g bare
+    - name: Run integration tests
+      shell: bash
+      run: npm run test:integration --if-present

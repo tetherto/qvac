@@ -1,0 +1,76 @@
+name: Notify External Reviewers via Comment
+
+on:
+  workflow_call:
+    inputs:
+      reviewers:
+        description: 'List of reviewers to notify'
+        required: true
+        type: string
+        default: 'natachikhinashvili,u011,haakari'
+      workdir: 
+         default: "."
+         type: string
+
+jobs:
+  notify-reviewers:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Check for existing comment
+        id: check-comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const reviewers = '${{ inputs.reviewers }}'.split(',');
+            const expectedCommentText = `Requesting review from: ${reviewers.map(user => `@${user}`).join(', ')} [auto_pr_review_request]`;
+            
+            console.log('All comments:', JSON.stringify(comments.data, null, 2));
+            console.log('Looking for comment containing:', '[auto_pr_review_request]');
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.login === 'github-actions[bot]' && 
+              comment.body.includes('[auto_pr_review_request]')
+            );
+            
+            console.log('Found matching comment:', botComment ? 'yes' : 'no');
+            if (botComment) {
+              console.log('Matching comment body:', botComment.body);
+            }
+            
+            return botComment ? 1 : 0;
+
+      - name: Debug check result
+        run: |
+          echo "Check result: ${{ steps.check-comment.outputs.result }}"
+          echo 
+          echo "PR number: ${{ github.event.pull_request.number }}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Is draft: ${{ github.event.pull_request.draft }}"
+
+      - name: Comment to notify potential reviewers
+        if: steps.check-comment.outputs.result == 0
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const reviewers = '${{ inputs.reviewers }}'.split(',');
+            const commentBody = `Requesting review from: ${reviewers.map(user => `@${user}`).join(', ')} [auto_pr_review_request]`;
+
+            console.log('Creating new comment with body:', commentBody);
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: commentBody
+            });
+
+            console.log('Notified external reviewers via PR comment.');

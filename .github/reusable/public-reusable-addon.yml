@@ -1,0 +1,30 @@
+name: General Library CI/CD Workflow
+# Shared by multiple projects
+
+on:
+  workflow_call:
+    inputs:
+      debug_mode:
+        required: false
+        type: boolean
+        default: false # DEBUG MODE ENABLED
+      workdir: 
+         default: "."
+         type: string
+    secrets:
+      pat_token:
+        required: false
+
+jobs:
+  debug-print:
+    uses: ./.github/workflows/debugger-reusable.yml
+    secrets:
+      pat_token: ${{ secrets.PAT_TOKEN  }}
+
+  #Update needed after tests
+  notify-reviewers:
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    uses: ./.github/reusable/automatically-add-reviewers.yaml
+    with:
+      reviewers: 'chetasr,yuranich,olyasir,vigan-abd,u011,hakaari,natachikhinashvili,andretetherio,ignaciolarranaga'
+    secrets: inherit
