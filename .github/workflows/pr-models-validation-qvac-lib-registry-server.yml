@@ -31,9 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # FIX: checkout PR head SHA when PR event; otherwise checkout the manual-run SHA
-          ref: ${{ github.event.pull_request.head.sha || github.sha }} # uses || operator 
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
 
       - name: Detect file changes
         id: filter
@@ -47,42 +47,50 @@ jobs:
         run: |
           set -euo pipefail
 
-          # FIX: PR events have base/head SHAs; workflow_dispatch does not
+          EVENT_NAME="${{ github.event_name }}"
+
+          # Pick SHAs based on event type (PR vs push vs manual)
           if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
-            BASE_SHA="$PR_BASE_SHA"
-            HEAD_SHA="$PR_HEAD_SHA"
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
           else
-            HEAD_SHA="${GITHUB_SHA}"
+            # workflow_dispatch (and anything else): diff current commit against its parent
+            HEAD_SHA="${{ github.sha }}"
             BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
           fi
 
-          # Safety: initial commit / no parent => treat as "no diff"
-          if [[ -z "${BASE_SHA:-}" ]]; then
-            echo "No BASE_SHA available; using HEAD_SHA as BASE_SHA (manual run / initial commit)."
+          # Safety rails: never allow empty SHAs
+          if [[ -z "${HEAD_SHA:-}" ]]; then
+            echo "::error::HEAD_SHA is empty (event=$EVENT_NAME)"
+            exit 1
+          fi
+          if [[ -z "${BASE_SHA:-}" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$HEAD_SHA"
           fi
 
-          echo "BASE_SHA=$BASE_SHA"
-          echo "HEAD_SHA=$HEAD_SHA"
+          echo "event=$EVENT_NAME"
+          echo "base=$BASE_SHA"
+          echo "head=$HEAD_SHA"
 
-          # Make sure both SHAs are present locally (harmless if already there)
-          git fetch --no-tags --prune --depth=1 origin "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || true
+          PKG_DIR="${{ env.PKG_DIR }}"
+          MODELS_FILE="${{ env.MODELS_FILE }}"
 
-          echo "Changed files:"
-          git diff --name-only "$BASE_SHA" "$HEAD_SHA"
+          echo "Changed files (scoped to $PKG_DIR):"
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$PKG_DIR/" || true)"
+          echo "$CHANGED_FILES"
 
-          # models.prod.json changed?
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$MODELS_FILE" | grep -q .; then
+          # models_changed?
+          if echo "$CHANGED_FILES" | grep -qxF "$MODELS_FILE"; then
             echo "models=true" >> "$GITHUB_OUTPUT"
           else
             echo "models=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # other files changed inside package dir (excluding models + markdown)?
-          OTHER_CHANGES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$PKG_DIR/" | \
-            grep -v -F "$MODELS_FILE" | \
-            grep -v -E '\.md$' || true)"
-
+          # other_changed? (inside this package; excluding models file + markdown)
+          OTHER_CHANGES="$(echo "$CHANGED_FILES" | grep -v -x -F "$MODELS_FILE" | grep -v -E '\.md$' || true)"
           if [[ -n "$OTHER_CHANGES" ]]; then
             echo "other=true" >> "$GITHUB_OUTPUT"
           else
