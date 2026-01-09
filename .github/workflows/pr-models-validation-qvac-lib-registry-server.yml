@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # FIX: PR events have base/head SHAs; workflow_dispatch does not :contentReference[oaicite:4]{index=4}
+          # FIX: PR events have base/head SHAs; workflow_dispatch does not
           if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
             BASE_SHA="$PR_BASE_SHA"
             HEAD_SHA="$PR_HEAD_SHA"
