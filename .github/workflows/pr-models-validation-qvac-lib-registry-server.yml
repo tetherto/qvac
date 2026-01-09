@@ -1,0 +1,259 @@
+# PR Validation and Staging Sync
+#
+# Validates models.prod.json changes and syncs to staging registry.
+# Runs tests only if non-model files are changed.
+#
+# TODO: Add production sync workflow (.github/workflows/prod-sync.yml) when ready
+# - Trigger: push to main with paths: ['data/models.prod.json']
+# - Secrets: QVAC_AUTOBASE_KEY_PROD, QVAC_REGISTRY_CORE_KEY_PROD, separate writer keys
+
+name: PR Validation and Staging Sync (Qvac-lib-registry-server)
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'packages/qvac-lib-registry-server/**'
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-registry-server
+  MODELS_FILE: packages/qvac-lib-registry-server/data/models.prod.json
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      models_changed: ${{ steps.filter.outputs.models }}
+      models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
+      other_changed: ${{ steps.filter.outputs.other }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Detect file changes
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # PR context
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          echo "Changed files:"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA"
+
+          # Check if models.prod.json changed
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "${{ env.MODELS_FILE }}" | grep -q .; then
+            echo "models=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "models=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Check if other files changed (inside this package only; exclude models, .github, *.md)
+          OTHER_CHANGES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "${{ env.PKG_DIR }}/" | \
+            grep -v "^${{ env.MODELS_FILE }}$" | \
+            grep -v '^\.github/' | \
+            grep -v '\.md$' || true)
+
+          if [ -n "$OTHER_CHANGES" ]; then
+            echo "other=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "other=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate-json:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.models_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
+
+      - name: Validate models.prod.json
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: node scripts/validate-models-json.js --file=./data/models.prod.json
+
+  test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.other_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            ${{ env.PKG_DIR }}/package-lock.json
+            ${{ env.PKG_DIR }}/client/package-lock.json # if present :contentReference[oaicite:4]{index=4}
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
+
+      - name: Lint
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run lint
+
+      - name: Run unit tests
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run test:unit
+
+      - name: Run integration tests
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm run test:integration
+
+      - name: Configure npm for private packages
+        shell: bash
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Lint and test client
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm install && npm run lint && npm run test:unit
+
+  sync-staging:
+    needs: [detect-changes, validate-json, test]
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'staging') &&
+      always() &&
+      needs.detect-changes.outputs.models_changed == 'true' &&
+      needs.validate-json.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      QVAC_AUTOBASE_KEY: ${{ secrets.QVAC_AUTOBASE_KEY }}
+      QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
+      QVAC_WRITER_PUBLIC_KEY: ${{ secrets.QVAC_WRITER_PUBLIC_KEY }}
+      QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=""
+          [ -z "$QVAC_AUTOBASE_KEY" ] && missing="$missing QVAC_AUTOBASE_KEY"
+          [ -z "$QVAC_REGISTRY_CORE_KEY" ] && missing="$missing QVAC_REGISTRY_CORE_KEY"
+          [ -z "$QVAC_WRITER_PUBLIC_KEY" ] && missing="$missing QVAC_WRITER_PUBLIC_KEY"
+          [ -z "$QVAC_WRITER_SECRET_KEY" ] && missing="$missing QVAC_WRITER_SECRET_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+          echo "✓ All required secrets are set"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json :contentReference[oaicite:5]{index=5}
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
+
+      - name: Configure npm for private packages
+        shell: bash
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Install client dependencies
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm install
+
+      - name: Sync to staging
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: node scripts/sync-models.js --file=./data/models.prod.json
+        timeout-minutes: 30
+
+  smoke-test:
+    needs: sync-staging
+    if: needs.sync-staging.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          if [ -z "$QVAC_REGISTRY_CORE_KEY" ]; then
+            echo "::error::Missing required secret: QVAC_REGISTRY_CORE_KEY"
+            exit 1
+          fi
+          echo "✓ All required secrets are set"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json :contentReference[oaicite:6]{index=6}
+
+      - name: Install server dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
+
+      - name: Configure npm for private packages
+        shell: bash
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Install client dependencies
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm install
+
+      - name: Smoke test registry
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: node scripts/smoke-test-client.js --file=./data/models.prod.json
+        timeout-minutes: 5

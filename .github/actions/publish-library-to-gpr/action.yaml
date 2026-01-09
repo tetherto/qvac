@@ -71,7 +71,6 @@ runs:
 
         echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
-
     - name: Determine Tag
       id: determine_tag
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
