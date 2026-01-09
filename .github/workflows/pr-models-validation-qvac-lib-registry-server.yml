@@ -31,36 +31,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          # FIX: checkout PR head SHA when PR event; otherwise checkout the manual-run SHA
+          ref: ${{ github.event.pull_request.head.sha || github.sha }} # uses || operator 
           fetch-depth: 0
 
       - name: Detect file changes
         id: filter
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PKG_DIR: ${{ env.PKG_DIR }}
+          MODELS_FILE: ${{ env.MODELS_FILE }}
         run: |
           set -euo pipefail
 
-          # PR context
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          # FIX: PR events have base/head SHAs; workflow_dispatch does not :contentReference[oaicite:4]{index=4}
+          if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "pull_request_target" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            HEAD_SHA="$PR_HEAD_SHA"
+          else
+            HEAD_SHA="${GITHUB_SHA}"
+            BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
+          fi
+
+          # Safety: initial commit / no parent => treat as "no diff"
+          if [[ -z "${BASE_SHA:-}" ]]; then
+            echo "No BASE_SHA available; using HEAD_SHA as BASE_SHA (manual run / initial commit)."
+            BASE_SHA="$HEAD_SHA"
+          fi
+
+          echo "BASE_SHA=$BASE_SHA"
+          echo "HEAD_SHA=$HEAD_SHA"
+
+          # Make sure both SHAs are present locally (harmless if already there)
+          git fetch --no-tags --prune --depth=1 origin "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || true
 
           echo "Changed files:"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA"
 
-          # Check if models.prod.json changed
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "${{ env.MODELS_FILE }}" | grep -q .; then
+          # models.prod.json changed?
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$MODELS_FILE" | grep -q .; then
             echo "models=true" >> "$GITHUB_OUTPUT"
           else
             echo "models=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # Check if other files changed (inside this package only; exclude models, .github, *.md)
-          OTHER_CHANGES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "${{ env.PKG_DIR }}/" | \
-            grep -v "^${{ env.MODELS_FILE }}$" | \
-            grep -v '^\.github/' | \
-            grep -v '\.md$' || true)
+          # other files changed inside package dir (excluding models + markdown)?
+          OTHER_CHANGES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$PKG_DIR/" | \
+            grep -v -F "$MODELS_FILE" | \
+            grep -v -E '\.md$' || true)"
 
-          if [ -n "$OTHER_CHANGES" ]; then
+          if [[ -n "$OTHER_CHANGES" ]]; then
             echo "other=true" >> "$GITHUB_OUTPUT"
           else
             echo "other=false" >> "$GITHUB_OUTPUT"
@@ -73,7 +96,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -99,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -108,7 +131,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             ${{ env.PKG_DIR }}/package-lock.json
-            ${{ env.PKG_DIR }}/client/package-lock.json # if present :contentReference[oaicite:4]{index=4}
+            ${{ env.PKG_DIR }}/client/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -160,7 +183,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate required secrets
         shell: bash
@@ -181,7 +204,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json :contentReference[oaicite:5]{index=5}
+          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -216,7 +239,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate required secrets
         shell: bash
@@ -232,7 +255,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json :contentReference[oaicite:6]{index=6}
+          cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Install server dependencies
         working-directory: ${{ env.PKG_DIR }}
