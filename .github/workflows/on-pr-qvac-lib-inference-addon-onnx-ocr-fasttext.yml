@@ -150,12 +150,11 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
-    uses: ./.github/workflows/integration-test.yaml
+    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      workdir: ${{ env.PKG_DIR }}
 
   merge-guard:
     needs: [changes, sanity-checks, prebuild, run-integration-tests]
