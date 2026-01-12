@@ -257,6 +257,7 @@ runs:
         jq --arg new_name "$PACKAGE_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
 
         echo "✅ Final publish name: $(node -p "require('./package.json').name")"
+        echo "published_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
 
 
     - name: Publish to NPM
@@ -285,22 +286,34 @@ runs:
 
         echo "publish_status=$PUBLISH_STATUS" >> $GITHUB_OUTPUT
         echo "npm_published_version=${{ steps.determine_version.outputs.version }}" >> $GITHUB_OUTPUT
+        
+
 
     - name: Create Git Tag
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.check_publish.outputs.should_publish == 'true' && steps.npm_publish.outputs.publish_status == '0' && steps.determine_tag.outputs.tag == 'latest'
+      env:
+        PAT_TOKEN: ${{ inputs.pat-token }}
       run: |
-        git tag "v${{ steps.determine_version.outputs.version }}"
-        if git push origin "v${{ steps.determine_version.outputs.version }}"; then
-          echo "✅ Tagged and pushed v${{ steps.determine_version.outputs.version }}"
-          echo "Git: pushed tag v${{ steps.determine_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "::notice title=Git Tag Pushed::v${{ steps.determine_version.outputs.version }}"
+        set -euo pipefail
+
+        VERSION="${{ steps.determine_version.outputs.version }}"
+        TAG="v${VERSION}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git tag "$TAG"
+
+        if [[ -n "${PAT_TOKEN:-}" ]]; then
+          echo "Using PAT token to push tag"
+          git push "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG" || true
         else
-          echo "⚠️ Tag created but push failed for v${{ steps.determine_version.outputs.version }}"
-          echo "Git: tag created but push failed for v${{ steps.determine_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "::error title=Git Tag Push Failed::v${{ steps.determine_version.outputs.version }}"
+          echo "Using origin to push tag (backwards-compatible default)"
+          git push origin "$TAG" || true
         fi
+
 
     - name: Publish Status
       shell: bash
@@ -309,18 +322,26 @@ runs:
       run: |
         if [ "${{ steps.npm_publish.outputs.publish_status }}" -eq 0 ]; then
           echo "✅ npm publish successful"
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          echo "## Installation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Install from the command line:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "npm install ${PACKAGE_NAME}@${{ steps.npm_publish.outputs.npm_published_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Install via package.json:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
-          echo "\"${PACKAGE_NAME}\": \"${{ steps.npm_publish.outputs.npm_published_version }}\"" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+          # Prefer the known published name from the normalize step; fallback to package.json
+          PACKAGE_NAME="${{ steps.normalize_name.outputs.published_name }}"
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME=$(node -p "require('./package.json').name")
+          fi
+
+          VERSION="${{ steps.npm_publish.outputs.npm_published_version }}"
+
+          echo "## Installation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Install from the command line:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+          echo "npm install ${PACKAGE_NAME}@${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Install via package.json:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`json" >> "$GITHUB_STEP_SUMMARY"
+          echo "\"${PACKAGE_NAME}\": \"${VERSION}\"" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
         else
           echo "❌ npm publish failed"
           exit ${{ steps.npm_publish.outputs.publish_status }}
