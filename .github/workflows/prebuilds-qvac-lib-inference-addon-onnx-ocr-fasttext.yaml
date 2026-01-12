@@ -100,7 +100,7 @@ jobs:
     env:
       # monorepo: keep cache under the package dir to avoid cross-package collisions
       PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
     steps:
