@@ -1,4 +1,4 @@
-name: General CI/CD
+name: General CI/CD (Qvac-lib-logging)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
