@@ -1,0 +1,52 @@
+name: General CI/CD
+# This workflow is used to call the reusable workflows in the qvac-devops repository
+# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/qvac-lib-logging/**"
+      - ".github/workflows/trigger-reusable-qvac-lib-logging.yml"
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled]
+  workflow_dispatch:
+    inputs:
+      custom_input_1:
+        required: false
+        type: string
+      custom_input_2:
+        required: false
+        type: string
+      custom_input_3:
+        required: false
+        type: string
+
+jobs:
+  call-devops-npm:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-public-reusable.yml
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-logging
+
+  call-devops-gpr:
+    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+    uses: ./.github/workflows/reusable-public-reusable.yml
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-logging
+
+  merge-guard:
+    needs: [call-devops-npm, call-devops-gpr]
+    if: always() && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
+    uses: ./.github/workflows/reusable-public-pr.yml
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-logging
