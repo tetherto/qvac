@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-infer-base)
+name: General CI/CD (Qvac-lib-dl-filesystem)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -11,9 +11,9 @@ permissions:
 on:
   push:
     branches: [main]
-    paths:
-      - "packages/qvac-lib-infer-base/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-infer-base.yml"
+     paths:
+      - "packages/qvac-lib-dl-filesystem/**"
+      - ".github/workflows/trigger-reusable-qvac-lib-dl-filesystem.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
   workflow_dispatch:
