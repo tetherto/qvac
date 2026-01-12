@@ -22,7 +22,6 @@ jobs:
     secrets: inherit
     with:
       publish_target: "npm"
-      workdir: ${{ env.PKG_DIR }}
 
   run-integration-tests:
     needs: prebuild
