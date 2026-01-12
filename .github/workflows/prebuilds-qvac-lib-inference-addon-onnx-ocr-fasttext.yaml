@@ -246,7 +246,9 @@ jobs:
         name: Remove Homebrew LLVM
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: ./ci/remove-brew-llvm.sh
+        run: |
+           chmod +x ./ci/remove-brew-llvm.sh
+           ./ci/remove-brew-llvm.sh
 
       - if: ${{ matrix.os == 'macos-15' }}
         name: Install vcpkg in macos
