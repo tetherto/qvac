@@ -2,6 +2,12 @@ name: General CI/CD (Qvac-lib-infer-base)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write
+  
 on:
   push:
     branches: [main]
