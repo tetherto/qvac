@@ -52,8 +52,6 @@ on:
         description: "Target registry to publish to (npm or gpr)"
         value: ${{ inputs.publish_target }}
 
-env:
-  PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
 
 jobs:
   prebuild:
@@ -101,6 +99,7 @@ jobs:
 
     env:
       # monorepo: keep cache under the package dir to avoid cross-package collisions
+      PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
 
