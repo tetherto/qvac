@@ -1,11 +1,14 @@
 #include "Pipeline.hpp"
 
 #include <chrono>
+#include <string>
 #include <iostream>
 #include <string_view>
 #include <vector>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "AndroidLog.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -45,10 +48,29 @@ Pipeline::Pipeline(
       stepBoundingBox_(std::make_unique<StepBoundingBox>()),
       stepRecognition_(std::make_unique<StepRecognizeText>(
           pathRecognizer, langList, useGPU,
-          StepRecognizeText::Config{config.defaultRotationAngles, config.contrastRetry, config.lowConfidenceThreshold})),
+          StepRecognizeText::Config{config.defaultRotationAngles, config.contrastRetry, config.lowConfidenceThreshold, config.recognizerBatchSize})),
       timeout_(timeout) {
-  std::printf("[Pipeline] Sequential pipeline created (no threading)\n");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] Sequential pipeline created (no threading)");
+  ALOG_INFO(std::string("[Pipeline] Sequential pipeline created (no threading)"));
+
+  // Log all config parameters
+  std::string configMsg = "[Pipeline] Config: useGPU=" + std::string(useGPU ? "true" : "false") +
+      ", timeout=" + std::to_string(timeout) +
+      ", magRatio=" + std::to_string(config.magRatio) +
+      ", contrastRetry=" + std::string(config.contrastRetry ? "true" : "false") +
+      ", lowConfidenceThreshold=" + std::to_string(config.lowConfidenceThreshold) +
+      ", recognizerBatchSize=" + std::to_string(config.recognizerBatchSize);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, configMsg);
+  ALOG_INFO(configMsg);
+
+  std::string anglesMsg = "[Pipeline] defaultRotationAngles=[";
+  for (size_t i = 0; i < config.defaultRotationAngles.size(); i++) {
+    anglesMsg += std::to_string(config.defaultRotationAngles[i]);
+    if (i < config.defaultRotationAngles.size() - 1) anglesMsg += ",";
+  }
+  anglesMsg += "]";
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, anglesMsg);
+  ALOG_INFO(anglesMsg);
 }
 
 Pipeline::Output Pipeline::process(
@@ -70,8 +92,8 @@ bool Pipeline::isLoaded() {
 }
 
 Pipeline::Output Pipeline::process(Pipeline::Input input) {
-  std::printf("[Pipeline] Sequential process() starting\n");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Sequential process() starting");
+  ALOG_DEBUG(std::string("[Pipeline] Sequential process() starting"));
   auto timeStart = std::chrono::high_resolution_clock::now();
   static constexpr double NANOSECONDS_TO_SECONDS = 1e9;
 
@@ -88,27 +110,29 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     }
 
     // Step 1: Detection
-    std::printf("[Pipeline] Step 1: Running detection...\n");
-    std::fflush(stdout);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Running detection...");
+    ALOG_INFO(std::string("[Pipeline] Step 1: Running detection..."));
     StepDetectionInference::Input detectionInput{image, input.paragraph, input.rotationAngles, input.boxMarginMultiplier};
     StepDetectionInference::Output detectionOutput = stepDetection_->process(std::move(detectionInput));
-    std::printf("[Pipeline] Step 1: Detection complete\n");
-    std::fflush(stdout);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete");
+    ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
     // Step 2: Bounding Box extraction
-    std::printf("[Pipeline] Step 2: Running bounding box extraction...\n");
-    std::fflush(stdout);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 2: Running bounding box extraction...");
+    ALOG_INFO(std::string("[Pipeline] Step 2: Running bounding box extraction..."));
     StepBoundingBox::Output boundingBoxOutput = stepBoundingBox_->process(std::move(detectionOutput));
-    std::printf("[Pipeline] Step 2: Bounding box complete (%zu aligned, %zu unaligned boxes)\n",
-                boundingBoxOutput.alignedBoxes.size(), boundingBoxOutput.unalignedBoxes.size());
-    std::fflush(stdout);
+    std::string step2Msg = "[Pipeline] Step 2: Bounding box complete (" + std::to_string(boundingBoxOutput.alignedBoxes.size()) +
+         " aligned, " + std::to_string(boundingBoxOutput.unalignedBoxes.size()) + " unaligned boxes)";
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step2Msg);
+    ALOG_INFO(step2Msg);
 
     // Step 3: Text recognition
-    std::printf("[Pipeline] Step 3: Running text recognition...\n");
-    std::fflush(stdout);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 3: Running text recognition...");
+    ALOG_INFO(std::string("[Pipeline] Step 3: Running text recognition..."));
     StepRecognizeText::Output recognitionOutput = stepRecognition_->process(std::move(boundingBoxOutput));
-    std::printf("[Pipeline] Step 3: Recognition complete (%zu text regions)\n", recognitionOutput.size());
-    std::fflush(stdout);
+    std::string step3Msg = "[Pipeline] Step 3: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions)";
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step3Msg);
+    ALOG_INFO(step3Msg);
 
     // Record processing time
     auto timeEnd = std::chrono::high_resolution_clock::now();
@@ -117,14 +141,16 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       std::scoped_lock scopedLock(processingTimeMtx_);
       processingTime_.push(processingTimeSec);
     }
-    std::printf("[Pipeline] Complete in %.2f seconds\n", processingTimeSec);
-    std::fflush(stdout);
+    std::string completeMsg = "[Pipeline] Complete in " + std::to_string(processingTimeSec) + " seconds";
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, completeMsg);
+    ALOG_INFO(completeMsg);
 
     return recognitionOutput;
 
   } catch (const std::exception& e) {
-    std::printf("[Pipeline] Error: %s\n", e.what());
-    std::fflush(stdout);
+    std::string errorMsg = std::string("[Pipeline] Error: ") + e.what();
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR, errorMsg);
+    ALOG_ERROR(errorMsg);
 
     auto timeEnd = std::chrono::high_resolution_clock::now();
     {

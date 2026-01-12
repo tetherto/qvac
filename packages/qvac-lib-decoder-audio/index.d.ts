@@ -33,6 +33,17 @@ interface DecoderStatus {
   paused: boolean
 }
 
+interface RuntimeStats {
+  decodeTimeMs: number
+  inputBytes: number
+  outputBytes: number
+  samplesDecoded: number
+  codecName: string | null
+  inputSampleRate: number
+  outputSampleRate: number
+  audioFormat: 's16le' | 'f32le'
+}
+
 declare class FFmpegDecoder extends BaseInference {
   SUPPORTED_AUDIO_FORMATS: SupportedAudioFormats
   OUTPUT_CHANNEL_LAYOUT: number | null
@@ -46,6 +57,8 @@ declare class FFmpegDecoder extends BaseInference {
   unpause(): Promise<void>
   stop(): Promise<void>
   status(): DecoderStatus
+  
+  runtimeStats(): RuntimeStats
 }
 
-export { FFmpegDecoder }
+export { FFmpegDecoder, RuntimeStats }

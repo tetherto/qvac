@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <string>
 #include <iostream>
 #include <sstream>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <dml_provider_factory.h>
@@ -25,8 +27,8 @@ std::string InferredText::toString() const {
 };
 
 Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
-  std::printf("[ORT] getOrtSessionOptions called with useGPU=%s\n", useGPU ? "true" : "false");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[ORT] getOrtSessionOptions called with useGPU=" + std::to_string(useGPU));
   Ort::SessionOptions sessionOptions;
   sessionOptions.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
@@ -35,8 +37,7 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
     // Enable multi-threading for CPU-only execution on desktop
     sessionOptions.SetIntraOpNumThreads(0);  // 0 = use all available cores
     sessionOptions.SetInterOpNumThreads(0);
-    std::printf("[ORT] CPU-only mode configured\n");
-    std::fflush(stdout);
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[ORT] CPU-only mode configured");
     return sessionOptions;
   }
 
@@ -55,7 +56,8 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
           sessionOptions, nnapiFlags));
     }
   } catch (const std::exception& e) {
-    std::printf("Error setting up NNAPI provider: %s\n", e.what());
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+         std::string("Error setting up NNAPI provider: ") + e.what());
   }
 
 #elif defined(__APPLE__)
@@ -65,13 +67,15 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
             providers.begin(), providers.end(), "CoreMLExecutionProvider") !=
         providers.end();
 
-    std::printf("[ORT] CoreML available: %s\n", coremlAvailable ? "yes" : "no");
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+         std::string("[ORT] CoreML available: ") + (coremlAvailable ? "yes" : "no"));
     if (coremlAvailable) {
       sessionOptions.AppendExecutionProvider("CoreML");
-      std::printf("[ORT] CoreML execution provider added\n");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[ORT] CoreML execution provider added");
     }
   } catch (const std::exception& e) {
-    std::printf("Error setting up CoreML provider: %s\n", e.what());
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+         std::string("Error setting up CoreML provider: ") + e.what());
   }
 
 #elif defined(_WIN32) || defined(_WIN64)
@@ -85,10 +89,11 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
       sessionOptions.DisableMemPattern();
       Ort::ThrowOnError(
           OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
-      std::printf("Using DirectML execution provider\n");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "Using DirectML execution provider");
     }
   } catch (const std::exception& e) {
-    std::printf("Error setting up DirectML provider: %s\n", e.what());
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+         std::string("Error setting up DirectML provider: ") + e.what());
   }
 
 #endif

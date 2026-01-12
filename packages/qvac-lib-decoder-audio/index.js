@@ -59,6 +59,33 @@ class FFmpegDecoder extends BaseInference {
     // Encoder delay handling
     this.samplesSkipped = 0
     this.totalSkipSamples = 0
+
+    // Runtime stats
+    this._resetStats()
+  }
+
+  /**
+   * Resets the runtime stats
+   */
+  _resetStats () {
+    this._runtimeStats = {
+      decodeTimeMs: 0,
+      inputBytes: 0,
+      outputBytes: 0,
+      samplesDecoded: 0,
+      codecName: null,
+      inputSampleRate: 0,
+      outputSampleRate: this.config.sampleRate,
+      audioFormat: this.config.audioFormat
+    }
+  }
+
+  /**
+   * Get the current runtime stats
+   * @returns {Object} Current runtime stats
+   */
+  runtimeStats () {
+    return { ...this._runtimeStats }
   }
 
   /**
@@ -172,10 +199,18 @@ class FFmpegDecoder extends BaseInference {
         const length = OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels
         const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length))
         job.response.updateOutput({ outputArray: chunk })
+
+        // Track stats for partial frame
+        this._runtimeStats.samplesDecoded += (count - samplesToSkip)
+        this._runtimeStats.outputBytes += length
       } else {
         const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels
         const chunk = Buffer.from(samples.data.subarray(0, length))
         job.response.updateOutput({ outputArray: chunk })
+
+        // Track stats
+        this._runtimeStats.samplesDecoded += count
+        this._runtimeStats.outputBytes += length
       }
     }
   }
@@ -194,6 +229,10 @@ class FFmpegDecoder extends BaseInference {
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate
 
     this.logger.debug('[FFmpegDecoder] Stream codec:', stream.codec, stream.codecParameters)
+
+    // Track codec info in stats
+    this._runtimeStats.codecName = stream.codec.name
+    this._runtimeStats.inputSampleRate = stream.codecParameters.sampleRate
 
     const packet = new ffmpeg.Packet()
     const raw = new ffmpeg.Frame()
@@ -248,6 +287,10 @@ class FFmpegDecoder extends BaseInference {
       const actualLength = OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels
       const chunk = Buffer.from(samples.data.subarray(0, actualLength))
       job.response.updateOutput({ outputArray: chunk })
+
+      // Track stats for flushed samples
+      this._runtimeStats.samplesDecoded += flushCount
+      this._runtimeStats.outputBytes += actualLength
     }
 
     decoder.destroy()
@@ -282,12 +325,19 @@ class FFmpegDecoder extends BaseInference {
       return
     }
 
+    // Reset and start tracking stats
+    this._resetStats()
+    const startTime = Date.now()
+
     try {
       this.logger.info('[FFmpegDecoder] Starting stream processing')
 
       // Collect all audio data from stream
       const audioBuffer = await this._collectStreamData(audioStream, job)
       this.logger.info(`[FFmpegDecoder] Collected ${audioBuffer.length} bytes of audio data`)
+
+      // Track input bytes
+      this._runtimeStats.inputBytes = audioBuffer.length
 
       if (!job.isActive) {
         this.logger.info('[FFmpegDecoder] Job cancelled after data collection')
@@ -353,10 +403,21 @@ class FFmpegDecoder extends BaseInference {
       // Process the stream and generate decoded output
       this._processFFmpegStream(format, format.streams[streamIndex], job)
 
+      // Calculate final decode time
+      this._runtimeStats.decodeTimeMs = Date.now() - startTime
+
+      // Update stats on response before ending
+      job.response.updateStats(this.runtimeStats())
+
       // Mark as complete
       job.response.ended()
       this.logger.info('[FFmpegDecoder] Stream processing completed successfully')
+      this.logger.info(`[FFmpegDecoder] Runtime stats: ${JSON.stringify(this._runtimeStats)}`)
     } catch (err) {
+      // Still capture stats even on error
+      this._runtimeStats.decodeTimeMs = Date.now() - startTime
+      job.response.updateStats(this.runtimeStats())
+
       this.logger.error('Error processing audio stream:', err)
       job.response.failed(err)
     }

@@ -8,9 +8,9 @@ server:
 comparison:
   enabled: true # Run against both servers
   run_addon: true
-  run_python: true
+  run_python: false
   round_trip_test: true # Use Whisper to transcribe audio back to text
-  whisper_model: "base" # Whisper model size: tiny, base, small, medium, large
+  whisper_model: "medium" # Whisper model size: tiny, base, small, medium, large
   seed: 42 # Random seed for reproducibility
   num_runs: 1 # Number of times to synthesize each text (for determinism testing)
 
@@ -26,7 +26,7 @@ model:
   eSpeakDataPath: "shared-data/espeak-ng-data"
   language: "en-us" # Language code: en-us (English), es (Spanish), de (German), it (Italian)
   sampleRate: 22050
-  useGPU: true # Enable GPU acceleration for inference
+  useGPU: false # Enable GPU acceleration for inference
 
 hyperdrive:
   # HyperDrive keys for downloading data files

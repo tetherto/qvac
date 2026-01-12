@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 #include <stdexcept>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 // Specializations of Addon methods
 namespace qvac_lib_inference_addon_cpp {
@@ -215,7 +216,7 @@ void qvac_lib_inference_addon_onnx_ocr_fasttext::Addon::jsOutputCallback(uv_asyn
     js_value_t* error = nullptr;
     js_get_and_clear_last_exception(addon.env_, &error);
   }
-  std::cout << "jsOutputCallback : failed\n";
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR, "jsOutputCallback : failed");
 }
 
 template<> 

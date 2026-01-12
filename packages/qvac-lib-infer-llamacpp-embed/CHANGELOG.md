@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.1] - 2025-01-12
+### Changed
+- remove unnecessary package dependency from package.json
+
+## [0.9.0] - 2025-01-08
+### Added
+- Linux ARM 64 platform support - added ubuntu-24.04-arm build target to prebuild and integration test workflows
+
+## [0.8.0] - 2025-01-07
+### Added
+- TypeScript type declarations (`index.d.ts`) - migrated from `@qvac/sdk` and aligned with runtime API
+- CI job for type declaration validation (`ts-checks`)
+- `test:dts` script for type checking
+
 ## [0.7.7] - 2025-12-19
 ### Changed
 - Upgrade llm fabric to 7248

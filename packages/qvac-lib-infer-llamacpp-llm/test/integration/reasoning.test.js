@@ -8,6 +8,8 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const useCpu = isLinuxArm64
 
 const MODEL = {
   name: 'Qwen3-0.6B-Q8_0.gguf',
@@ -29,8 +31,8 @@ async function setupReasoningModel (t, toolsEnabled) {
     gpu_layers: '999',
     temp: '0.8',
     top_p: '0.9',
-    device: 'gpu',
-    verbosity: '1', // WARNING level to see replacement logs
+    device: useCpu ? 'cpu' : 'gpu',
+    verbosity: '2',
     tools: toolsEnabled ? 'true' : 'false'
   }
 

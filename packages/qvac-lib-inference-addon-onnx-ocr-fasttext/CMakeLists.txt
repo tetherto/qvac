@@ -47,16 +47,16 @@ if(APPLE)
   if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(CMAKE_OSX_SYSROOT ${IOS_SDK})
     set(CMAKE_SYSTEM_PROCESSOR arm64)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3")
   elseif(CMAKE_SYSTEM_NAME STREQUAL "iOSSimulator")
     set(CMAKE_OSX_SYSROOT ${SIM_SDK})
     set(CMAKE_SYSTEM_PROCESSOR ${APPLE_ARCH})
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3")
   else() # Darwin/macOS host
     set(CMAKE_OSX_SYSROOT ${MACOS_SDK})
     set(CMAKE_SYSTEM_NAME Darwin)
     set(CMAKE_SYSTEM_PROCESSOR ${APPLE_ARCH})
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3")
   endif()
 endif()
 
@@ -97,6 +97,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Note: We use a linker version script (symbols.map) to hide internal symbols
+# instead of visibility presets, so that bare_* symbols remain exportable.
+
 
 
 
@@ -133,6 +136,31 @@ target_link_libraries(
     onnxruntime::onnxruntime_static
 )
 
+# Use version script to hide internal symbols (including ONNX runtime)
+# This prevents symbol conflicts when multiple ONNX-based addons are loaded
+# Note: We target the _module shared library, not the object library
+if(UNIX AND NOT APPLE)
+  target_link_options(
+    ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
+    PRIVATE
+      -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
+  )
+elseif(APPLE)
+  # macOS uses -exported_symbols_list instead of version script
+  target_link_options(
+    ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
+    PRIVATE
+      -Wl,-exported_symbol,_bare_get_module_name_v0
+      -Wl,-exported_symbol,_bare_register_module_v0
+  )
+endif()
+
+target_compile_definitions(
+  ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+  PRIVATE
+    JS_LOGGER
+)
+
 function(strip_libraries LIB_DIR LIB_NAMES)
   foreach(LIB_NAME IN LISTS LIB_NAMES)
     set(LIB_PATH "${LIB_DIR}/${LIB_NAME}")
@@ -147,7 +175,7 @@ endfunction()
 
 if(ANDROID)
   find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE ${Vulkan_LIBRARY})
+  target_link_libraries(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE ${Vulkan_LIBRARY} log)
   
   # Strip vcpkg installed binaries for Android builds
   find_program(LLVM_STRIP llvm-strip)

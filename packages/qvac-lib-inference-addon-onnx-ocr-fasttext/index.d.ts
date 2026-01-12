@@ -9,7 +9,12 @@ declare interface ONNXOcrArgs {
     langList: string[]
     useGPU?: boolean
     timeout?: number
-  } 
+    magRatio?: number
+    defaultRotationAngles?: number[]
+    contrastRetry?: boolean
+    lowConfidenceThreshold?: number
+    recognizerBatchSize?: number
+  }
 }
 
 /**

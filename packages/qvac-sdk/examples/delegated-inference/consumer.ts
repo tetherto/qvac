@@ -48,6 +48,7 @@ try {
       providerPublicKey,
       timeout: 5_000, // Optional: 5 second timeout for delegated requests
       fallbackToLocal: true, // Optional: Fall back to local inference if delegation fails
+      // forceNewConnection: true, // Optional: Force a new connection instead of reusing cached one
     },
     onProgress: (progress) => {
       console.log(

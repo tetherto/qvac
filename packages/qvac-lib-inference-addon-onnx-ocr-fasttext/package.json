@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-onnx",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "description": "OCR addon for qvac",
   "addon": true,
   "engines": {
@@ -23,6 +23,7 @@
     "ocr-fasttext.js",
     "supportedLanguages.js",
     "binding.js",
+    "addonLogging.js",
     "prebuilds",
     "models",
     "lib"
@@ -65,7 +66,9 @@
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js"
+    ".": "./index.js",
+    "./addonLogging": "./addonLogging.js",
+    "./addonLogging.js": "./addonLogging.js"
   },
   "types": "index.d.ts"
 }

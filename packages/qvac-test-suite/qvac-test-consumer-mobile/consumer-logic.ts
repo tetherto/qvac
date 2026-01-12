@@ -13,6 +13,7 @@ import {
 	TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM,
 	TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG,
 	MARIAN_OPUS_DE_EN_Q0F32,
+	BERGAMOT_ENFR, // QVAC-10524: Bergamot translation engine
 } from "@tetherto/sdk-dev";
 
 export class MobileConsumer extends ConsumerBase {
@@ -104,10 +105,12 @@ export class MobileConsumer extends ConsumerBase {
 
 	protected async loadNmtModel(): Promise<string> {
 		// QVAC-9401: NMT model with generation parameters
+		// QVAC-10524: Added engine: "Opus" (required after QVAC-9526)
 		return await loadModel({
 			modelSrc: MARIAN_OPUS_DE_EN_Q0F32,
 			modelType: "nmt",
 			modelConfig: {
+				engine: "Opus",
 				from: "de",
 				to: "en",
 				// Generation parameters (QVAC-9401)
@@ -116,6 +119,19 @@ export class MobileConsumer extends ConsumerBase {
 				maxlength: 512,
 				temperature: 0.3,
 				norepeatngramsize: 3,
+			},
+		});
+	}
+
+	protected async loadBergamotModel(): Promise<string> {
+		// QVAC-10524: Bergamot translation engine support
+		return await loadModel({
+			modelSrc: BERGAMOT_ENFR,
+			modelType: "nmt",
+			modelConfig: {
+				engine: "Bergamot",
+				from: "en",
+				to: "fr",
 			},
 		});
 	}

@@ -11,6 +11,8 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isMobile = platform === 'ios' || platform === 'android'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const useCpu = isLinuxArm64
 
 const ALL_TOOL_MODEL_VARIANTS = [
   {
@@ -31,12 +33,12 @@ const TOOL_MODEL_VARIANTS = isMobile
   : ALL_TOOL_MODEL_VARIANTS
 
 const BASE_CONFIG = {
-  device: 'gpu',
+  device: useCpu ? 'cpu' : 'gpu',
   gpu_layers: '999',
   ctx_size: '8192',
   temp: '0.1',
   n_predict: '1024',
-  verbosity: '3',
+  verbosity: '2',
   tools: 'true'
 }
 

@@ -9,6 +9,8 @@ const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
@@ -23,13 +25,13 @@ const BASE_PROMPT = [
 ]
 
 const BASE_CONFIG = {
-  device: isDarwinX64 ? 'cpu' : 'gpu',
+  device: useCpu ? 'cpu' : 'gpu',
   gpu_layers: '999',
   ctx_size: '2048',
   n_predict: '256',
   temp: '0.7',
   seed: '1',
-  verbosity: '3'
+  verbosity: '2'
 }
 
 const FOLLOW_UP_MESSAGE = { role: 'user', content: 'Reference the cached conversation and confirm the color again.' }

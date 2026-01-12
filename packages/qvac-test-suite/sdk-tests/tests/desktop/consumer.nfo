@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot>Tortured by toxic beauty standards, thirteen-year-old Rein discovers an unconventional and disturbing way to lose weight. She thinks she’s found a fast track to perfection…but ends up biting off more than she can chew.</plot>
+  <lockdata>false</lockdata>
+  <dateadded>2026-01-06 10:09:14</dateadded>
+  <title>Consumer</title>
+  <originaltitle>Consumer</originaltitle>
+  <director>Stephanie Izsak</director>
+  <writer>Toby Marks</writer>
+  <writer>Stephanie Izsak</writer>
+  <credits>Toby Marks</credits>
+  <credits>Stephanie Izsak</credits>
+  <trailer>plugin://plugin.video.youtube/play/?video_id=-f2Xk6SWt8M</trailer>
+  <rating>0</rating>
+  <year>2022</year>
+  <imdbid>tt19178722</imdbid>
+  <tmdbid>1136492</tmdbid>
+  <premiered>2022-08-11</premiered>
+  <releasedate>2022-08-11</releasedate>
+  <tagline>Are you ever really satisfied?</tagline>
+  <country>Canada</country>
+  <genre>Horror</genre>
+  <studio>Crazy8s Film Society</studio>
+  <studio>Naltobel Productions</studio>
+  <studio>Triqele Productions</studio>
+  <tag>short film</tag>
+  <art />
+  <actor>
+    <name>Eden Summer Gilmore</name>
+    <role>Rein</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\E\Eden Summer Gilmore\folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Jill Morrison</name>
+    <role>Ysabel</role>
+    <type>Actor</type>
+    <sortorder>1</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\J\Jill Morrison\folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Jude Wilson</name>
+    <role>Max</role>
+    <type>Actor</type>
+    <sortorder>2</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\J\Jude Wilson\folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Princess Davis</name>
+    <role>Sianna Stone</role>
+    <type>Actor</type>
+    <sortorder>3</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\P\Princess Davis\folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Annika Ferronato</name>
+    <role>Senior Girl</role>
+    <type>Actor</type>
+    <sortorder>4</sortorder>
+  </actor>
+  <actor>
+    <name>Henry Mah</name>
+    <role>Mr. Cartwright</role>
+    <type>Actor</type>
+    <sortorder>5</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\H\Henry Mah\folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>Nic Altobelli</name>
+    <role>Fantasy Rider</role>
+    <type>Actor</type>
+    <sortorder>6</sortorder>
+  </actor>
+  <id>tt19178722</id>
+  <fileinfo>
+    <streamdetails />
+  </fileinfo>
+</movie>

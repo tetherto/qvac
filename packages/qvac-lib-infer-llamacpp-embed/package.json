@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.7.7",
+  "version": "0.9.1",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -27,7 +27,7 @@
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc index.d.ts --noEmit"
+    "test:dts": "tsc -p tsconfig.dts.json"
   },
   "standard": {
     "ignore": [
@@ -54,6 +54,7 @@
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",
+    "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.5.1",
     "bare-url": "^2.1.6",
@@ -65,10 +66,10 @@
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
     "tty": "npm:bare-tty@^5.0.3",
+    "typescript": "^5.9.2",
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {
-    "@qvac/embed-llamacpp": "^0.7.6",
     "@qvac/infer-base": "^0.2.0",
     "@qvac/logging": "^0.1.0",
     "bare-path": "^3.0.0"

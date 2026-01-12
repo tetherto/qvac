@@ -32,13 +32,10 @@ class ReseedTracker {
   async waitForComplete ({ progressTimeout = 30000, pollInterval = 2500 } = {}) {
     if (this._cores.length === 0) return
 
-    let checkCount = 0
-
     return new Promise((resolve, reject) => {
       const check = () => {
         const now = Date.now()
         let allDone = true
-        checkCount++
 
         for (const entry of this._cores) {
           const localLength = entry.core?.length || 0
@@ -56,18 +53,20 @@ class ReseedTracker {
             if (remoteContig >= localLength) fullyDownloadedCount++
           }
 
-          // Log progress periodically (every 4th check = ~10 seconds)
-          if (checkCount % 4 === 1) {
-            this.logger.info('ReseedTracker: waiting for replication', {
-              core: entry.id.substring(0, 16) + '...',
-              localLength,
-              connectedPeers: peers.length,
-              expectedPeers: this.expectedPeerCount,
-              fullyDownloaded: fullyDownloadedCount,
-              maxRemoteContiguous,
-              progress: localLength > 0 ? Math.round((maxRemoteContiguous / localLength) * 100) + '%' : 'N/A'
-            })
-          }
+          // Log progress on every check for debugging
+          this.logger.info('ReseedTracker: waiting for replication', {
+            core: entry.id.substring(0, 16) + '...',
+            localLength,
+            connectedPeers: peers.length,
+            expectedPeers: this.expectedPeerCount,
+            fullyDownloaded: fullyDownloadedCount,
+            maxRemoteContiguous,
+            progress: localLength > 0 ? Math.round((maxRemoteContiguous / localLength) * 100) + '%' : 'N/A',
+            peerDetails: peers.map(p => ({
+              remoteContiguous: p.remoteContiguousLength || 0,
+              remoteLength: p.remoteLength || 0
+            }))
+          })
 
           // Check if done
           if (fullyDownloadedCount >= this.expectedPeerCount) {

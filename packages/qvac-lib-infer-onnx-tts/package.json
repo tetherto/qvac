@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "TTS addon skeleton for qvac",
   "addon": true,
   "engines": {

@@ -11,6 +11,8 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isMobile = platform === 'ios' || platform === 'android'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const MODEL = {
   name: 'dolphin-mixtral-2x7b-dop-Q2_K.gguf',
@@ -18,10 +20,11 @@ const MODEL = {
 }
 
 const CONFIG = {
-  device: isDarwinX64 ? 'cpu' : 'gpu',
+  device: useCpu ? 'cpu' : 'gpu',
   gpu_layers: '99',
   ctx_size: '2048',
-  predict: '128'
+  predict: '128',
+  verbosity: '2'
 }
 
 const PROMPT = [

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -20,7 +20,7 @@
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc index.d.ts --noEmit",
+    "test:dts": "tsc -p tsconfig.dts.json",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -66,7 +66,9 @@
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0"
+    "standard": "^17.0.0",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.2.1"
   },
   "dependencies": {
     "@qvac/dl-hyperdrive": "^0.1.0",

@@ -93,42 +93,6 @@ message("Building qvac-lib-infer-llamacpp-embed with BACKENDS_SUBDIR='${BACKENDS
 
 target_compile_definitions(${qvac-lib-infer-llamacpp-embed} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
-# Option to build CLI
-option(BUILD_CLI "Build CLI example" FALSE)
-if(BUILD_CLI)
-  add_executable(
-          cli_bert
-          ${PROJECT_SOURCE_DIR}/addon/src/cli/example.cc
-          ${PROJECT_SOURCE_DIR}/addon/src/cli/uint8-buff-stream.cpp
-          ${MODEL_INTERFACE_SOURCES}
-  )
-
-  target_include_directories(
-          cli_bert
-          PRIVATE
-            ${PROJECT_SOURCE_DIR}/addon/src
-            ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-  )
-
-    target_link_libraries(
-            cli_bert 
-            PRIVATE
-              llama::llama llama::common
-    )
-
-  # Install ggml backends next to the CLI tool binary in build folder
-  if((ANDROID OR UNIX) AND NOT APPLE)
-    foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-      add_custom_command(TARGET cli_bert POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          $<TARGET_FILE:ggml::${_backend}>
-          ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Copying ggml backend ${_backend} to build directory"
-      )
-    endforeach()
-  endif()
-endif()
-
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)

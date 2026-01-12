@@ -10,6 +10,9 @@ const binding = require('../../binding')
 const os = require('bare-os')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
+const useCpu = isDarwinX64 || isLinuxArm64 || isMobile
 
 const MULTIMODAL_MODEL_CONFIG = {
   llmModel: {
@@ -23,7 +26,8 @@ const MULTIMODAL_MODEL_CONFIG = {
   config: {
     gpu_layers: '98',
     ctx_size: '2048',
-    device: isDarwinX64 ? 'cpu' : 'gpu'
+    device: useCpu ? 'cpu' : 'gpu',
+    verbosity: '2'
   }
 }
 
@@ -122,31 +126,53 @@ function checkKeywordsInText (text, keywords) {
   }
 }
 
-test('llama addon can recognize an elephant in an image', { timeout: 900_000 }, async t => {
-  const collector = makeOutputCollector(t)
-  const { onOutput } = collector
+const imageTestCases = [
+  {
+    name: 'elephant',
+    imageFile: 'elephant.jpg',
+    keywords: ['elephant', 'elephants'],
+    keywordType: 'elephant-related'
+  },
+  {
+    name: 'fruit plate',
+    imageFile: 'fruitPlate.png',
+    keywords: ['fruit', 'fruits', 'plate', 'apple', 'apples'],
+    keywordType: 'fruit-related'
+  },
+  {
+    name: 'high-res aurora',
+    imageFile: 'highRes3000x4000.jpg',
+    keywords: ['sky', 'light', 'lights', 'mountain', 'snow', 'aurora'],
+    keywordType: 'aurora-sky-related'
+  }
+]
 
-  const { addon } = await setupMultimodalAddon(t, onOutput)
+for (const testCase of imageTestCases) {
+  test(`llama addon can recognize ${testCase.name} in an image`, { timeout: 900_000 }, async t => {
+    const collector = makeOutputCollector(t)
+    const { onOutput } = collector
 
-  const imageFilePath = getMediaPath('elephant.jpg')
-  t.ok(fs.existsSync(imageFilePath), 'Elephant image file should exist')
+    const { addon } = await setupMultimodalAddon(t, onOutput)
 
-  const prompt = 'Describe the image briefly in one sentence.'
-  await describeImage(addon, imageFilePath, prompt)
+    const imageFilePath = getMediaPath(testCase.imageFile)
+    t.ok(fs.existsSync(imageFilePath), `${testCase.imageFile} image file should exist`)
 
-  await waitForJobCompletion(addon, collector)
+    const prompt = 'Describe the image briefly in one sentence.'
+    await describeImage(addon, imageFilePath, prompt)
 
-  t.comment(JSON.stringify(collector.outputText, null, 2))
-  t.comment('Generated text: ' + collector.generatedText)
+    await waitForJobCompletion(addon, collector)
 
-  t.ok(collector.jobCompleted, 'Job should complete')
-  t.ok(collector.generatedText.length > 0, 'Should generate some text output for the image')
+    t.comment(JSON.stringify(collector.outputText, null, 2))
+    t.comment('Generated text: ' + collector.generatedText)
 
-  const elephantKeywords = ['elephant', 'elephants']
-  const { foundKeywords, hasMatch } = checkKeywordsInText(collector.generatedText, elephantKeywords)
+    t.ok(collector.jobCompleted, 'Job should complete')
+    t.ok(collector.generatedText.length > 0, 'Should generate some text output for the image')
 
-  t.ok(hasMatch,
-    'Output should contain at least one elephant-related word as a whole word. ' +
-    `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
-    `Full output: "${collector.generatedText}"`)
-})
+    const { foundKeywords, hasMatch } = checkKeywordsInText(collector.generatedText, testCase.keywords)
+
+    t.ok(hasMatch,
+      `Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
+      `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
+      `Full output: "${collector.generatedText}"`)
+  })
+}

@@ -36,12 +36,13 @@ public:
 
   struct Config {
     std::vector<int> defaultRotationAngles;           // Default rotation angles to try
-    bool contrastRetry{true};                         // Retry low-confidence with contrast
+    bool contrastRetry{false};                        // Retry low-confidence with contrast (disabled by default for mobile memory)
     float lowConfidenceThreshold{0.4F};               // Threshold for contrast retry
+    int recognizerBatchSize{32};                      // Batch size for recognizer inference
 
     Config() : defaultRotationAngles{90, 270} {}
-    Config(std::vector<int> angles, bool retry, float threshold)
-        : defaultRotationAngles(std::move(angles)), contrastRetry(retry), lowConfidenceThreshold(threshold) {}
+    Config(std::vector<int> angles, bool retry, float threshold, int batchSize = 32)
+        : defaultRotationAngles(std::move(angles)), contrastRetry(retry), lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize) {}
   };
 
   StepRecognizeText(

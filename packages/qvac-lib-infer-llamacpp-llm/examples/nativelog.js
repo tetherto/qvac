@@ -2,17 +2,16 @@
 
 const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
-
-// 1. Import the LlmLlamacpp class
 const LlmLlamacpp = require('../index')
 const { setLogger, releaseLogger } = require('../addonLogging')
 
 const process = require('bare-process')
 
 async function main () {
-  console.log('=== C++ Logger Example ===')
+  console.log('Native Logging Example: Demonstrates C++ addon logging integration')
+  console.log('==================================================================')
 
-  // IMPORTANT: Set up the logger FIRST, before creating any addon instances
+  // 1. Setting up C++ logger - must be done before creating any addon instances
   console.log('Setting up C++ logger...')
 
   setLogger((priority, message) => {
@@ -33,39 +32,52 @@ async function main () {
   console.log('Logger setup complete. C++ logging is now active.')
   console.log('Now creating addon instances...\n')
 
+  // 2. Initializing data loader
   const store = new Corestore('./store')
+  const hdStore = store.namespace('hd')
 
-  // 2. Create a Hyperdrive Data Loader
+  const hdKey = 'afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3'
   const hdDL = new HyperDriveDL({
-    key: 'hd://b11388de0e9214d8c2181eae30e31bcd49c48b26d621b353ddc7f01972dddd76',
-    store
+    key: `hd://${hdKey}`,
+    store: hdStore
   })
 
-  // 3. Configure the `args` object
+  // 3. Configuring model settings
   const args = {
     loader: hdDL,
     opts: { stats: true },
     logger: console,
-    // saveWeightsToDisk: true, this is the default usage until we implement load method in addon.
-    diskPath: './models/',
-    modelName: 'medgemma-4b-it-Q4_1.gguf'
+    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
+    diskPath: './models'
   }
 
-  // 4. Create the `config` object
-  // an example of possible configuration
   const config = {
-    gpu_layers: '99', // number of model layers offloaded to GPU.
-    ctx_size: '1024', // context length
-    device: 'gpu' // must be specified: 'gpu' or 'cpu'
+    device: 'gpu',
+    gpu_layers: '99',
+    ctx_size: '1024',
+    verbosity: '2'
   }
 
-  // 5. Create Model instance
+  // 4. Loading model
+  await hdDL.ready()
   const model = new LlmLlamacpp(args, config)
-
-  // 6. Load Model
-  await model.load()
+  const closeLoader = true
+  let totalProgress = 0
+  const reportProgressCallback = (report) => {
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+      )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
+    }
+  }
+  await model.load(closeLoader, reportProgressCallback)
 
   try {
+    // 5. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -85,23 +97,23 @@ async function main () {
       }
     ]
 
-    // 7. Run Inference
     const response = await model.run(prompt)
-    const buffer = []
+    let fullResponse = ''
 
     await response
       .onUpdate(data => {
         process.stdout.write(data)
-        buffer.push(data)
+        fullResponse += data
       })
       .await()
 
     console.log('\n')
-    console.log('Full response:\n', buffer.join(''))
+    console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
-    // 8. Release Resources
+    // 6. Cleaning up resources
     await store.close()
+    await hdDL.close()
     await model.unload()
     releaseLogger()
   }

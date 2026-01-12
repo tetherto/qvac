@@ -39,6 +39,7 @@ export abstract class ConsumerBase {
 	protected embeddingModelId: string | null = null;
 	protected translationModelId: string | null = null;
 	protected nmtModelId: string | null = null;
+	protected bergamotModelId: string | null = null; // QVAC-10524: Bergamot engine
 	protected toolsModelId: string | null = null;
 	protected visionModelId: string | null = null;
 	protected ttsModelId: string | null = null;
@@ -120,9 +121,10 @@ export abstract class ConsumerBase {
 	protected abstract loadVisionModel(): Promise<string>;
 	protected abstract loadTtsModel(): Promise<string>;
 	protected abstract loadNmtModel(): Promise<string>;
+	protected abstract loadBergamotModel(): Promise<string>; // QVAC-10524
 
 	// Determine which model type a test needs
-	protected getRequiredModelType(testId: string): 'llm' | 'whisper' | 'embedding' | 'translation' | 'nmt' | 'tools' | 'vision' | 'tts' | null {
+	protected getRequiredModelType(testId: string): 'llm' | 'whisper' | 'embedding' | 'translation' | 'nmt' | 'bergamot' | 'tools' | 'vision' | 'tts' | null {
 		if (testId.startsWith("transcription") || testId.startsWith("config-reload")) {
 			// Config reload tests (QVAC-9409) require Whisper model
 			return 'whisper';
@@ -134,11 +136,15 @@ export abstract class ConsumerBase {
 			if (testId === "addon-logging-tts") return 'tts';
 			if (testId === "addon-logging-sdk-server") return 'llm'; // SDK logs need worker running
 			return 'llm'; // fallback
+		} else if (testId.startsWith("bergamot-")) {
+			// QVAC-10524: Bergamot translation tests
+			return 'bergamot';
 		} else if (testId.startsWith("nmt-")) {
 			return 'nmt';
 		} else if (testId.startsWith("translation")) {
 			return 'translation';
-		} else if (testId.startsWith("embed") || testId.startsWith("rag-")) {
+		} else if (testId.startsWith("embed") || testId.startsWith("rag-") || testId.startsWith("http-")) {
+			// http-sharded-embed and http-archive-embed tests load their own model from URL
 			return 'embedding';
 		} else if (testId.startsWith("tools-")) {
 			return 'tools';
@@ -224,6 +230,19 @@ export abstract class ConsumerBase {
 				}
 			}
 			return this.nmtModelId;
+		}
+
+		if (requiredModelType === 'bergamot') {
+			// QVAC-10524: Bergamot translation engine
+			if (!this.bergamotModelId) {
+				this.log(`   📦 Loading Bergamot model (EN→FR)...`);
+				this.bergamotModelId = await this.loadBergamotModel();
+				// Set the Bergamot model ID in the executor
+				if (this.executor.setBergamotModelId) {
+					this.executor.setBergamotModelId(this.bergamotModelId);
+				}
+			}
+			return this.bergamotModelId;
 		}
 
 		if (requiredModelType === 'tools') {
@@ -453,6 +472,7 @@ export abstract class ConsumerBase {
 				else if (modelType === 'whisper') this.whisperModelId = null;
 				else if (modelType === 'tools') this.toolsModelId = null;
 				else if (modelType === 'nmt') this.nmtModelId = null;
+				else if (modelType === 'bergamot') this.bergamotModelId = null;
 				else if (modelType === 'vision') this.visionModelId = null;
 				else if (modelType === 'tts') this.ttsModelId = null;
 				
@@ -574,12 +594,15 @@ export abstract class ConsumerBase {
 		const isToolsTest = testId.startsWith("tools-");
 		const isEmbeddingTest = testId.startsWith("embed-") || testId.startsWith("rag-");
 		const isTtsTest = testId.startsWith("tts-");
+		const isHttpDownloadTest = testId.startsWith("http-sharded-") || testId.startsWith("http-archive-");
 		
 		// Mobile devices need more time for heavy operations
 		const isMobile = this.platform === "mobile" || this.platform.includes("mobile");
 		const mobileMultiplier = isMobile ? 1.5 : 1.0; // 50% more time on mobile
 		
-		if (isDestructiveTest) {
+		if (isHttpDownloadTest) {
+			return Math.round(300000 * mobileMultiplier); // 300s desktop, 450s mobile
+		} else if (isDestructiveTest) {
 			return 10000; // 10s
 		} else if (isLargeRagTest) {
 			return Math.round(120000 * mobileMultiplier); // 120s desktop, 180s mobile

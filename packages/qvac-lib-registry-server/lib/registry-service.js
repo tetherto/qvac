@@ -15,6 +15,18 @@ const cenc = require('compact-encoding')
 const crypto = require('crypto')
 const IdEnc = require('hypercore-id-encoding')
 
+/**
+ * Derive a dedicated RPC discovery key from the autobase key.
+ * This creates a separate topic that only the server joins,
+ * preventing blind peers from receiving RPC connection attempts.
+ */
+function deriveRpcDiscoveryKey (autobaseKey) {
+  return crypto.createHash('sha256')
+    .update(autobaseKey)
+    .update('qvac-registry-rpc')
+    .digest()
+}
+
 const schema = require('@tetherto/qvac-registry-schema')
 const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
@@ -135,10 +147,16 @@ class RegistryService extends ReadyResource {
 
     this.swarm.join(this.base.discoveryKey, { server: true, client: true })
     this.swarm.join(this.view.discoveryKey, { server: true, client: true })
+
+    // Join dedicated RPC topic - only the server joins this, not blind peers
+    this._rpcDiscoveryKey = deriveRpcDiscoveryKey(this.base.key)
+    this.swarm.join(this._rpcDiscoveryKey, { server: true, client: false })
+
     await this.swarm.flush()
     this.logger.info('Swarm joined', {
       autobaseKey: IdEnc.normalize(this.base.discoveryKey),
-      viewKey: IdEnc.normalize(this.view.discoveryKey)
+      viewKey: IdEnc.normalize(this.view.discoveryKey),
+      rpcKey: IdEnc.normalize(this._rpcDiscoveryKey)
     })
 
     if (this.base.isIndexer) {
@@ -204,6 +222,11 @@ class RegistryService extends ReadyResource {
 
     if (viewDiscoveryKey) {
       this.swarm.leave(viewDiscoveryKey)
+    }
+
+    if (this._rpcDiscoveryKey) {
+      this.swarm.leave(this._rpcDiscoveryKey)
+      this._rpcDiscoveryKey = null
     }
 
     this.view = null
@@ -509,6 +532,16 @@ class RegistryService extends ReadyResource {
         return result
       }
     )
+
+    // Server identification endpoint - allows RPC clients to verify they connected
+    // to the actual server and not a blind peer (which won't have RPC responders)
+    rpc.respond('ping', async () => {
+      return {
+        role: 'registry-server',
+        isIndexer: this.base?.isIndexer ?? false,
+        timestamp: Date.now()
+      }
+    })
 
     this.logger.debug('RPC: responder setup on connection')
   }

@@ -8,9 +8,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <thread>
 #include <future>
 #include <mutex>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "AndroidLog.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -493,17 +496,16 @@ StepRecognizeText::StepRecognizeText(
       ortEnv_(ORT_LOGGING_LEVEL_WARNING, "OnnxInferenceRecognizer"),
       ortSession_(ortEnv_, pathRecognizer, getOrtSessionOptions(useGPU)),
       isLeftToRightScript_{true} {
-  std::printf("[Recognition] Constructor: ONNX session created, validating languages...\n");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
+  ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
   validateUnknownLanguages(langList);
   std::tie(utf32Characters_, ignoreChars_, isLeftToRightScript_) = getCharsInfoFromLangList(langList);
-  std::printf("[Recognition] Constructor: completed successfully\n");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: completed successfully");
+  ALOG_INFO(std::string("[Recognition] Constructor: completed successfully"));
 }
 
 StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input) {
-  std::printf("[Recognition] process() called - starting recognition\n");
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] process() called - starting recognition");
   populateImageList(input);
   expandImgListWithRotatedImgs(input.context.rotationAngles);
   std::vector<InferredText> inferenceResult = processImgList();
@@ -513,8 +515,8 @@ StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input in
     inferenceResult = getParagraph(inferenceResult, isLeftToRightScript_);
   }
 
-  std::printf("[Recognition] process() completed - returning %zu results\n", inferenceResult.size());
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] process() completed - returning " + std::to_string(inferenceResult.size()) + " results");
   return inferenceResult;
 }
 
@@ -526,15 +528,17 @@ void StepRecognizeText::populateImageList(const Input &input) {
   imgListOfLists_.clear();
   imgListOfLists_.reserve(input.unalignedBoxes.size() + input.alignedBoxes.size());
 
-  std::printf("[Recognition] populateImageList: processing %zu unaligned, %zu aligned boxes\n",
-              input.unalignedBoxes.size(), input.alignedBoxes.size());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] populateImageList: processing " + std::to_string(input.unalignedBoxes.size()) +
+       " unaligned, " + std::to_string(input.alignedBoxes.size()) + " aligned boxes");
 
   for (const auto &box : input.unalignedBoxes) {
     cv::Mat transformedImg = fourPointTransform(img, box.coords);
     float ratioLocal = calculateRatio(static_cast<float>(transformedImg.cols), static_cast<float>(transformedImg.rows));
     int newWidth = static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal);
     if (newWidth == 0) {
-      std::printf("[Recognition] Skipped unaligned box: newWidth=0 (ratio=%.4f)\n", ratioLocal);
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "[Recognition] Skipped unaligned box: newWidth=0 (ratio=" + std::to_string(ratioLocal) + ")");
       continue;
     }
 
@@ -550,8 +554,9 @@ void StepRecognizeText::populateImageList(const Input &input) {
     int yMin = std::max(0, static_cast<int>(box.coords[2]));
     int yMax = std::min(static_cast<int>(box.coords[3]), maximumY);
     if (xMax <= xMin || yMax <= yMin) {
-      std::printf("[Recognition] Skipped aligned box: invalid coords xMin=%d xMax=%d yMin=%d yMax=%d\n",
-                  xMin, xMax, yMin, yMax);
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "[Recognition] Skipped aligned box: invalid coords xMin=" + std::to_string(xMin) +
+           " xMax=" + std::to_string(xMax) + " yMin=" + std::to_string(yMin) + " yMax=" + std::to_string(yMax));
       continue;
     }
 
@@ -560,8 +565,9 @@ void StepRecognizeText::populateImageList(const Input &input) {
     float ratioLocal = calculateRatio(static_cast<float>(width), static_cast<float>(height));
     int newWidth = static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal);
     if (newWidth == 0) {
-      std::printf("[Recognition] Skipped aligned box: newWidth=0 (w=%d h=%d ratio=%.4f)\n",
-                  width, height, ratioLocal);
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "[Recognition] Skipped aligned box: newWidth=0 (w=" + std::to_string(width) +
+           " h=" + std::to_string(height) + " ratio=" + std::to_string(ratioLocal) + ")");
       continue;
     }
 
@@ -603,7 +609,8 @@ void StepRecognizeText::populateImageList(const Input &input) {
     return yCenterA < yCenterB;
   });
 
-  std::printf("[Recognition] populateImageList: result=%zu image lists\n", imgListOfLists_.size());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] populateImageList: result=" + std::to_string(imgListOfLists_.size()) + " image lists");
 }
 
 void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<int>> &rotationAngles) {
@@ -767,7 +774,8 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images)
   }
 
   const int batchSize = static_cast<int>(images.size());
-  std::printf("[Recognition] runBatchInference called with batch_size=%d\n", batchSize);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] runBatchInference called with batch_size=" + std::to_string(batchSize));
   const int height = RECOGNIZER_MODEL_HEIGHT;
   const int width = RECOGNIZER_MODEL_WIDTH;
   const int numChannels = 1;
@@ -816,7 +824,8 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images)
   cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-  std::printf("[Recognition] runBatchInference took %ld ms for batch_size=%d\n", static_cast<long>(batchMs), batchSize);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] runBatchInference took " + std::to_string(batchMs) + " ms for batch_size=" + std::to_string(batchSize));
   return preds.clone();
 }
 
@@ -842,83 +851,114 @@ void StepRecognizeText::processImg(SubImage &subImage) {
 }
 
 std::vector<InferredText> StepRecognizeText::processImgList() {
-  std::printf("[Recognition] processImgList: starting with %zu image lists\n", imgListOfLists_.size());
-  std::fflush(stdout);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[Recognition] processImgList: starting with " + std::to_string(imgListOfLists_.size()) + " image lists");
   auto t0 = std::chrono::high_resolution_clock::now();
   std::vector<InferredText> inferredTextList;
   inferredTextList.reserve(imgListOfLists_.size());
 
-  // Flatten all SubImages and prepare them for batch inference
-  struct BatchItem {
+  // Build index of all SubImages WITHOUT preparing images (to save memory)
+  struct BatchIndex {
     size_t listIdx;
     size_t imgIdx;
-    cv::Mat preparedImg;
   };
-  std::vector<BatchItem> batchItems;
+  std::vector<BatchIndex> allIndices;
 
   for (size_t listIdx = 0; listIdx < imgListOfLists_.size(); listIdx++) {
     auto &imgList = imgListOfLists_[listIdx];
     for (size_t imgIdx = 0; imgIdx < imgList.size(); imgIdx++) {
-      cv::Mat preparedImg = alignAndCollate(imgList[imgIdx], 0.0);
-      batchItems.push_back({listIdx, imgIdx, preparedImg});
+      allIndices.push_back({listIdx, imgIdx});
     }
   }
 
-  if (batchItems.empty()) {
-    std::printf("[Recognition] processImgList: batchItems empty, returning early\n");
+  if (allIndices.empty()) {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] processImgList: no images to process, returning early");
     return inferredTextList;
   }
 
-  // Run batch inference
-  std::vector<cv::Mat> preparedImages;
-  preparedImages.reserve(batchItems.size());
-  for (const auto &item : batchItems) {
-    preparedImages.push_back(item.preparedImg);
-  }
+  // Process in batches - prepare images ON-DEMAND to prevent OOM
+  const int batchSize = config_.recognizerBatchSize;
+  std::string batchInfoMsg = "[Recognition] Processing " + std::to_string(allIndices.size()) + " items in batches of " + std::to_string(batchSize) + " (on-demand preparation)";
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, batchInfoMsg);
+  ALOG_INFO(batchInfoMsg);
 
-  cv::Mat batchPreds = runBatchInference(preparedImages);
+  for (size_t batchStart = 0; batchStart < allIndices.size(); batchStart += batchSize) {
+    size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
+    size_t currentBatchSize = batchEnd - batchStart;
 
-  // Decode results and populate SubImages
-  for (size_t i = 0; i < batchItems.size(); i++) {
-    auto &item = batchItems[i];
-    auto &subImage = imgListOfLists_[item.listIdx][item.imgIdx];
-    std::tie(subImage.text, subImage.confidenceScore) =
-        getTextAndConfidenceFromPreds(batchPreds, static_cast<int>(i));
+    // Prepare images ONLY for this batch
+    std::vector<cv::Mat> preparedImages;
+    preparedImages.reserve(currentBatchSize);
+    for (size_t i = batchStart; i < batchEnd; i++) {
+      auto &idx = allIndices[i];
+      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      cv::Mat preparedImg = alignAndCollate(subImage, 0.0);
+      preparedImages.push_back(preparedImg);
+    }
+
+    cv::Mat batchPreds = runBatchInference(preparedImages);
+
+    // Decode results and populate SubImages for this batch
+    for (size_t i = 0; i < currentBatchSize; i++) {
+      auto &idx = allIndices[batchStart + i];
+      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      std::tie(subImage.text, subImage.confidenceScore) =
+          getTextAndConfidenceFromPreds(batchPreds, static_cast<int>(i));
+    }
+
+    // Clear prepared images to free memory before next batch
+    preparedImages.clear();
+    preparedImages.shrink_to_fit();
+
+    std::string batchProgressMsg = "[Recognition] Processed batch " + std::to_string(batchStart) + "-" + std::to_string(batchEnd) + " of " + std::to_string(allIndices.size());
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, batchProgressMsg);
+    ALOG_DEBUG(batchProgressMsg);
   }
 
   // Second pass: handle low confidence with contrast adjustment (if enabled)
   if (config_.contrastRetry) {
-    std::vector<size_t> lowConfidenceIndices;
-    for (size_t i = 0; i < batchItems.size(); i++) {
-      auto &item = batchItems[i];
-      auto &subImage = imgListOfLists_[item.listIdx][item.imgIdx];
+    std::vector<BatchIndex> lowConfidenceIndices;
+    for (size_t i = 0; i < allIndices.size(); i++) {
+      auto &idx = allIndices[i];
+      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
       if (subImage.confidenceScore < config_.lowConfidenceThreshold) {
-        lowConfidenceIndices.push_back(i);
+        lowConfidenceIndices.push_back(idx);
       }
     }
 
     if (!lowConfidenceIndices.empty()) {
-      std::vector<cv::Mat> contrastImages;
-      contrastImages.reserve(lowConfidenceIndices.size());
-      for (size_t idx : lowConfidenceIndices) {
-        auto &item = batchItems[idx];
-        auto &subImage = imgListOfLists_[item.listIdx][item.imgIdx];
-        cv::Mat contrastImg = alignAndCollate(subImage, TARGET_ADJUSTED_CONTRAST);
-        contrastImages.push_back(contrastImg);
-      }
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "[Recognition] Processing " + std::to_string(lowConfidenceIndices.size()) + " low-confidence items with contrast adjustment");
 
-      cv::Mat contrastPreds = runBatchInference(contrastImages);
+      // Process contrast retries in batches too
+      for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size(); batchStart += batchSize) {
+        size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
 
-      for (size_t j = 0; j < lowConfidenceIndices.size(); j++) {
-        size_t idx = lowConfidenceIndices[j];
-        auto &item = batchItems[idx];
-        auto &subImage = imgListOfLists_[item.listIdx][item.imgIdx];
-        auto [newText, newConfidenceScore] =
-            getTextAndConfidenceFromPreds(contrastPreds, static_cast<int>(j));
-        if (newConfidenceScore > subImage.confidenceScore) {
-          subImage.text = newText;
-          subImage.confidenceScore = newConfidenceScore;
+        std::vector<cv::Mat> contrastImages;
+        contrastImages.reserve(batchEnd - batchStart);
+        for (size_t j = batchStart; j < batchEnd; j++) {
+          auto &idx = lowConfidenceIndices[j];
+          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+          cv::Mat contrastImg = alignAndCollate(subImage, TARGET_ADJUSTED_CONTRAST);
+          contrastImages.push_back(contrastImg);
         }
+
+        cv::Mat contrastPreds = runBatchInference(contrastImages);
+
+        for (size_t j = 0; j < contrastImages.size(); j++) {
+          auto &idx = lowConfidenceIndices[batchStart + j];
+          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+          auto [newText, newConfidenceScore] =
+              getTextAndConfidenceFromPreds(contrastPreds, static_cast<int>(j));
+          if (newConfidenceScore > subImage.confidenceScore) {
+            subImage.text = newText;
+            subImage.confidenceScore = newConfidenceScore;
+          }
+        }
+
+        // Clear to free memory
+        contrastImages.clear();
+        contrastImages.shrink_to_fit();
       }
     }
   }
@@ -950,8 +990,9 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto recognitionMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-  std::printf("[Recognition] Total recognition time: %ld ms for %zu text regions\n",
-              static_cast<long>(recognitionMs), inferredTextList.size());
+  std::string timingMsg = "[Recognition] Total recognition time: " + std::to_string(recognitionMs) + " ms for " + std::to_string(inferredTextList.size()) + " text regions";
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, timingMsg);
+  ALOG_INFO(timingMsg);
 
   return inferredTextList;
 }

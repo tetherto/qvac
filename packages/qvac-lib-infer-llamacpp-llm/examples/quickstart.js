@@ -6,6 +6,10 @@ const LlmLlamacpp = require('../index')
 const process = require('bare-process')
 
 async function main () {
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
+
+  // 1. Initializing data loader
   const store = new Corestore('./store')
   const hdStore = store.namespace('hd')
 
@@ -15,6 +19,7 @@ async function main () {
     store: hdStore
   })
 
+  // 2. Configuring model settings
   const args = {
     loader: hdDL,
     opts: { stats: true },
@@ -25,24 +30,30 @@ async function main () {
 
   const config = {
     device: 'gpu',
-    // Force GPU: (very large number of gpu-layers)
     gpu_layers: '999',
     ctx_size: '1024'
   }
 
+  // 3. Loading model
   await hdDL.ready()
   const model = new LlmLlamacpp(args, config)
   const closeLoader = true
+  let totalProgress = 0
   const reportProgressCallback = (report) => {
-    if (typeof report === 'object') {
-      console.log(
-        `${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
       )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
     }
   }
   await model.load(closeLoader, reportProgressCallback)
 
   try {
+    // 4. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -76,7 +87,9 @@ async function main () {
     console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
+    // 5. Cleaning up resources
     await store.close()
+    await hdDL.close()
     await model.unload()
   }
 }

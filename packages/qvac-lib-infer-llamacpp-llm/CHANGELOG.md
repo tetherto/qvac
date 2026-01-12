@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.0] - 2025-01-07
+### Added
+- TypeScript type declarations (`index.d.ts`) - migrated from `@qvac/sdk` and aligned with runtime API
+- CI job for type declaration validation (`ts-checks`)
+- `test:dts` script for type checking
+
 ## [0.5.10] - 2025-01-05
 ### Changed
 - Enforce cache usage only when explicitly specified in prompt. Prompts without session messages now perform single-shot inference with cleared context.

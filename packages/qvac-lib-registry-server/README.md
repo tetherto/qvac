@@ -253,6 +253,3 @@ Regenerate specs with `npm run build:spec` and restart the service.
 ## License
 
 Apache-2.0
-
-
-

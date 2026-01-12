@@ -57,7 +57,6 @@ async function processDecoderResponse (response, audioFormat, sampleRate) {
   let outputArray = []
   let totalBytes = 0
   let chunksReceived = 0
-  let jobStats = null
 
   await response
     .onUpdate(data => {
@@ -67,21 +66,13 @@ async function processDecoderResponse (response, audioFormat, sampleRate) {
         totalBytes += bytes.length
         chunksReceived++
       }
-      if (data.event === 'JobEnded' || data.stats) {
-        jobStats = data.stats || data
-      }
     })
     .onFinish(() => {})
     .await()
 
-  if (!jobStats && response.stats) {
-    jobStats = response.stats
-  }
-
-  const bytesPerSample = getBytesPerSample(audioFormat)
-  const sampleCount = Math.floor(totalBytes / bytesPerSample)
-  const durationMs = jobStats?.audioDurationMs ||
-                     (sampleCount / sampleRate * 1000)
+  const jobStats = response.stats
+  const sampleCount = jobStats.samplesDecoded
+  const durationMs = (sampleCount / sampleRate) * 1000
 
   return {
     outputArray,
@@ -95,17 +86,16 @@ async function processDecoderResponse (response, audioFormat, sampleRate) {
 
 function buildResult (audioFilePath, outputArray, totalBytes, chunksReceived, jobStats, sampleCount, durationMs, errors, passed) {
   const stats = jobStats || null
-  const roundedStats = stats
-    ? {
-        audioDurationMs: stats.audioDurationMs,
-        totalSamples: stats.totalSamples,
-        totalBytes: stats.totalBytes
-      }
-    : null
 
-  const statsInfo = stats
-    ? `duration: ${durationMs.toFixed(0)}ms (from stats)`
-    : `duration: ${durationMs.toFixed(0)}ms (calculated)`
+  // Build stats info string based on available runtime stats
+  let statsInfo
+  if (stats && stats.decodeTimeMs !== undefined) {
+    statsInfo = `decoded in ${stats.decodeTimeMs}ms, codec: ${stats.codecName || 'unknown'}`
+  } else if (stats) {
+    statsInfo = `duration: ${durationMs.toFixed(0)}ms (from stats)`
+  } else {
+    statsInfo = `duration: ${durationMs.toFixed(0)}ms (calculated)`
+  }
 
   const fileName = path.basename(audioFilePath)
   const output = `Decoded ${sampleCount} samples (${totalBytes} bytes, ${statsInfo}) from file: "${fileName}"${errors.length > 0 ? ` - Errors: ${errors.join('; ')}` : ''}`
@@ -119,7 +109,7 @@ function buildResult (audioFilePath, outputArray, totalBytes, chunksReceived, jo
       totalBytes,
       durationMs,
       chunksReceived,
-      stats: roundedStats
+      stats
     }
   }
 }

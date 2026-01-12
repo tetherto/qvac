@@ -73,7 +73,7 @@ First, make sure you have the prerequisites installed as described in the [Insta
 #### System Requirements
 
 **Supported Platforms:**
-- **Linux** (x64)
+- **Linux** (x64, ARM64)
 - **macOS** (x64, ARM64)
 - **Windows** (x64)
 

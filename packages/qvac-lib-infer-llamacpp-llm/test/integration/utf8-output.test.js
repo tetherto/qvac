@@ -10,6 +10,8 @@ const os = require('bare-os')
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
@@ -47,7 +49,7 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
   }
 
   const config = {
-    device: isDarwinX64 ? 'cpu' : 'gpu',
+    device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '1024',
     temp: '0',
@@ -55,7 +57,7 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
     top_k: '30',
     n_predict: '8',
     seed: '42',
-    verbosity: '3'
+    verbosity: '2'
   }
 
   const model = new LlmLlamacpp({

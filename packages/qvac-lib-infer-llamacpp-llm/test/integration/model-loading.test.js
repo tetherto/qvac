@@ -15,6 +15,8 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isMobile = platform === 'ios' || platform === 'android'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
@@ -52,8 +54,9 @@ test('filesystem loader can run inference end-to-end', { timeout: 600_000, skip:
   const config = {
     gpu_layers: '999',
     ctx_size: '1024',
-    device: isDarwinX64 ? 'cpu' : 'gpu',
-    n_predict: '32'
+    device: useCpu ? 'cpu' : 'gpu',
+    n_predict: '32',
+    verbosity: '2'
   }
 
   const addon = new LlmLlamacpp({
@@ -89,8 +92,9 @@ test('model unload is clean and idempotent', { timeout: 600_000 }, async t => {
   const config = {
     gpu_layers: '512',
     ctx_size: '1024',
-    device: isDarwinX64 ? 'cpu' : 'gpu',
-    n_predict: '24'
+    device: useCpu ? 'cpu' : 'gpu',
+    n_predict: '24',
+    verbosity: '2'
   }
 
   const addon = new LlmLlamacpp({
@@ -129,7 +133,7 @@ const HYPERDRIVE_CONFIG = {
   gpu_layers: '999',
   ctx_size: '1024',
   n_predict: '48',
-  verbosity: '3'
+  verbosity: '2'
 }
 
 const HYPERDRIVE_MODEL = {

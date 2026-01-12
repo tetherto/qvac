@@ -30,6 +30,9 @@ constexpr int DEFAULT_PIPELINE_TIMEOUT_SECONDS = 120;
 constexpr float DEFAULT_MAG_RATIO = 1.5F;
 constexpr float DEFAULT_LOW_CONF_THRESHOLD = 0.4F;
 
+// Default batch size for recognizer inference (tuned for mobile memory constraints)
+constexpr int DEFAULT_RECOGNIZER_BATCH_SIZE = 32;
+
 /**
  * Configuration parameters for OCR pipeline
  * These are set at instance creation and apply to all images
@@ -37,8 +40,9 @@ constexpr float DEFAULT_LOW_CONF_THRESHOLD = 0.4F;
 struct PipelineConfig {
   float magRatio{DEFAULT_MAG_RATIO};                        // Detection magnification ratio (1.0-2.0)
   std::vector<int> defaultRotationAngles{90, 270};          // Default rotation angles to try
-  bool contrastRetry{true};                                 // Retry low-confidence with contrast adjustment
+  bool contrastRetry{false};                                // Retry low-confidence with contrast adjustment (disabled by default for mobile memory)
   float lowConfidenceThreshold{DEFAULT_LOW_CONF_THRESHOLD}; // Threshold for contrast retry
+  int recognizerBatchSize{DEFAULT_RECOGNIZER_BATCH_SIZE};   // Batch size for recognizer inference
 };
 
 struct PipelineInput {

@@ -10,8 +10,10 @@ const os = require('bare-os')
 const platform = os.platform()
 const arch = os.arch()
 
-const isDarwinX64 = platform && arch === 'x64'
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isMobile = platform === 'ios' || platform === 'android'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const BASE_PROMPT = [
   {
@@ -61,7 +63,7 @@ const scenarios = [
       n_predict: '12',
       repeat_penalty: '1.8',
       seed: '4321',
-      verbosity: '4'
+      verbosity: '2'
     },
     expectSuccess: true
   },
@@ -333,7 +335,7 @@ async function executeScenario (t, scenario) {
   const loader = new FilesystemDL({ dirPath })
 
   const baseConfig = {
-    device: isDarwinX64 ? 'cpu' : 'gpu',
+    device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '1024',
     n_predict: '32',
@@ -342,7 +344,7 @@ async function executeScenario (t, scenario) {
     top_k: '40',
     repeat_penalty: '1.1',
     seed: '1',
-    verbosity: '3'
+    verbosity: '2'
   }
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })

@@ -14,46 +14,46 @@ Tested 70 samples using Whisper transcription across 1 run(s):
 
 | Implementation | Average | Min | Max |
 |----------------|---------|-----|-----|
-| TTS Addon | 6.98% | 0.00% | 37.50% |
-| Python Native | 5.72% | 0.00% | 37.50% |
+| TTS Addon | 58.47% | 16.67% | 100.00% |
+| Python Native | 33.61% | 14.29% | 100.00% |
 
 **Character Error Rate (CER):**
 
 | Implementation | Average | Min | Max |
 |----------------|---------|-----|-----|
-| TTS Addon | 2.60% | 0.00% | 21.43% |
-| Python Native | 1.63% | 0.00% | 17.95% |
+| TTS Addon | 19.55% | 2.94% | 69.70% |
+| Python Native | 7.23% | 2.33% | 37.21% |
 
-✅ **Good audio quality** - both implementations produce clear speech (WER < 10%)
-✅ **Implementations produce similar quality audio** (WER difference < 2%)
+❌ **Audio quality issues** - high transcription error rates (WER > 20%)
+⚠️ **Python produces noticeably better audio quality** (WER difference 24.86%)
 
 ## Performance Comparison
 
 | Metric | TTS Addon | Python Native | Difference |
 |--------|-----------|---------------|------------|
-| Model Load Time | 370.90 ms | 388.22 ms | -4.5% ✅ |
-| Avg RTF | 12.9544 | 30.9694 | -58.2% ⚠️ |
-| Total Generation | 12730.21 ms | 4941.39 ms | +157.6% ⚠️ |
-| Real-time Speed | 12.95x | 30.97x | Addon is 0.39x slower |
+| Model Load Time | 426.89 ms | 510.04 ms | -16.3% ✅ |
+| Avg RTF | 16.5792 | 22.6658 | -26.9% ⚠️ |
+| Total Generation | 14881.82 ms | 12253.04 ms | +21.5% ⚠️ |
+| Real-time Speed | 16.58x | 22.67x | Addon is 0.82x slower |
 
 ## RTF Distribution
 
 | Percentile | Addon | Python | Difference |
 |------------|-------|--------|------------|
-| p50 (median) | 12.9573 | 31.0629 | -58.3% |
-| p90 | 13.8345 | 32.3989 | -57.3% |
-| p95 | 14.1130 | 32.7163 | -56.9% |
-| p99 | 14.7187 | 33.0915 | -55.5% |
+| p50 (median) | 16.5575 | 22.2928 | -25.7% |
+| p90 | 18.6053 | 25.0791 | -25.8% |
+| p95 | 18.7887 | 26.9517 | -30.3% |
+| p99 | 19.3740 | 27.8968 | -30.6% |
 
 ## Summary
 
-⚠️ **Addon is 2.58x slower** than Python native implementation
+⚠️ **Addon is 1.21x slower** than Python native implementation
 
 ### Key Findings:
 
-- Model loading: Addon is **4.5% faster**
-- Average RTF: Addon is **58.2% worse**
-- Total generation: Addon is **157.6% slower**
+- Model loading: Addon is **16.3% faster**
+- Average RTF: Addon is **26.9% worse**
+- Total generation: Addon is **21.5% slower**
 
 ## Interpretation
 

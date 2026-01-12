@@ -352,9 +352,13 @@ class QvacModelHandler:
         """Stop the server process"""
         if self.server_process is not None:
             try:
-                # Kill the entire process group
-                os.killpg(os.getpgid(self.server_process.pid), signal.SIGTERM)
-                self.server_process.wait(timeout=5)
+                return_code = self.server_process.poll()
+                if return_code is None:
+                    # Still running, kill the entire process group
+                    os.killpg(os.getpgid(self.server_process.pid), signal.SIGTERM)
+                    self.server_process.wait(timeout=5)
+                else:
+                    logger.info(f"Server process {self.server_process.pid} already exited")
             except Exception as e:
                 logger.error(f"Error stopping server: {e}")
                 # Force kill if graceful shutdown fails

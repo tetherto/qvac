@@ -41,6 +41,153 @@ function getModelNameForLanguage (language) {
     case 'fr':
       return 'fr_FR-siwis-medium'
 
+    case 'hi-in':
+    case 'hi':
+      return 'hi_IN-rohan-medium'
+
+    case 'ar-jo':
+    case 'ar':
+      return 'ar_JO-kareem-medium'
+
+    case 'bg-bg':
+    case 'bg':
+      return 'bg_BG-dimitar-medium'
+
+    case 'ca-es':
+    case 'ca':
+      return 'ca_ES-upc_ona-medium'
+
+    case 'cs-cz':
+    case 'cs':
+      return 'cs_CZ-jirka-medium'
+
+    case 'cy-gb':
+    case 'cy':
+      return 'cy_GB-gwryw_gogleddol-medium'
+
+    case 'da-dk':
+    case 'da':
+      return 'da_DK-talesyntese-medium'
+
+    case 'el-gr':
+    case 'el':
+      return 'el_GR-rapunzelina-medium'
+
+    case 'fa-ir':
+    case 'fa':
+      return 'fa_IR-reza_ibrahim-medium'
+
+    case 'fi-fi':
+    case 'fi':
+      return 'fi_FI-harri-medium'
+
+    case 'hu-hu':
+    case 'hu':
+      return 'hu_HU-imre-medium'
+
+    case 'id-id':
+    case 'id':
+      return 'id_ID-news_tts-medium'
+
+    case 'is-is':
+    case 'is':
+      return 'is_IS-ugla-medium'
+
+    case 'ka-ge':
+    case 'ka':
+      return 'ka_GE-natia-medium'
+
+    case 'kk-kz':
+    case 'kk':
+      return 'kk_KZ-issai-high'
+
+    case 'lb-lu':
+    case 'lb':
+      return 'lb_LU-marylux-medium'
+
+    case 'lv-lv':
+    case 'lv':
+      return 'lv_LV-aivars-medium'
+
+    case 'ml-in':
+    case 'ml':
+      return 'ml_IN-meera-medium'
+
+    case 'ne-np':
+    case 'ne':
+      return 'ne_NP-chitwan-medium'
+
+    case 'nl-be':
+      return 'nl_BE-nathalie-medium'
+
+    case 'nl-nl':
+    case 'nl':
+      return 'nl_NL-ronnie-medium'
+
+    case 'no-no':
+    case 'no':
+      return 'no_NO-talesyntese-medium'
+
+    case 'pl-pl':
+    case 'pl':
+      return 'pl_PL-gosia-medium'
+
+    case 'pt-br':
+    case 'pt':
+      return 'pt_BR-jeff-medium'
+
+    case 'pt-pt':
+    case 'pt':
+      return 'pt_PT-tugão-medium'
+
+    case 'ro-ro':
+    case 'ro':
+      return 'ro_RO-mihai-medium'
+
+    case 'ru-ru':
+    case 'ru':
+      return 'ru_RU-dmitri-medium'
+
+    case 'sk-sk':
+    case 'sk':
+      return 'sk_SK-lili-medium'
+
+    case 'sl-sl':
+    case 'sl':
+      return 'sl_SL-artur-medium'
+
+    case 'sr-rs':
+    case 'sr':
+      return 'sr_RS-serbski_institut-medium'
+
+    case 'sv-se':
+    case 'sv':
+      return 'sv_SE-lisa-medium'
+
+    case 'sw-cd':
+    case 'sw':
+      return 'sw_CD-lanfrica-medium'
+
+    case 'te-in':
+    case 'te':
+      return 'te_IN-padmavathi-medium'
+
+    case 'tr-tr':
+    case 'tr':
+      return 'tr_TR-dfki-medium'
+
+    case 'uk-ua':
+    case 'uk':
+      return 'uk_UA-ukrainian_tts-medium'
+
+    case 'vi-vn':
+    case 'vi':
+      return 'vi_VN-vais1000-medium'
+
+    case 'zh-cn':
+    case 'zh':
+      return 'zh_CN-huayan-medium'
+
     default:
       logger.warn(`Unknown language '${language}', defaulting to English model`)
       return 'en_US-lessac-medium'

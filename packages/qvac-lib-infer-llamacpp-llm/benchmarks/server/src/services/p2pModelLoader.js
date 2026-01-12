@@ -4,7 +4,7 @@ const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
 const logger = require('../utils/logger')
-const path = require('path')
+const path = require('bare-path')
 
 // --- Simplified P2P Infrastructure (based on quickstart.js) ---
 const storeDir = path.resolve(__dirname, '../../../store')

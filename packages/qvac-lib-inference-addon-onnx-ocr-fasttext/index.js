@@ -87,6 +87,9 @@ class ONNXOcr extends ONNXBase {
     if (this.params.lowConfidenceThreshold !== undefined) {
       onnxOcrParams.lowConfidenceThreshold = this.params.lowConfidenceThreshold
     }
+    if (this.params.recognizerBatchSize !== undefined) {
+      onnxOcrParams.recognizerBatchSize = this.params.recognizerBatchSize
+    }
 
     this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._outputCallback.bind(this), console.log)
     await this.addon.activate()

@@ -17,6 +17,19 @@ type ConnectionKey = string;
 // Map of active RPC instances by public key
 const activeRPCs = new Map<ConnectionKey, RPC>();
 
+// Map to store underlying connections for cleanup
+const activeConnections = new Map<ConnectionKey, Connection>();
+
+function closeConnection(publicKey: string) {
+  const existingConnection = activeConnections.get(publicKey);
+  if (existingConnection) {
+    logger.info(`🔌 Closing existing connection for peer: ${publicKey}`);
+    existingConnection.destroy();
+    activeConnections.delete(publicKey);
+    activeRPCs.delete(publicKey);
+  }
+}
+
 // Establish RPC connection to a peer if not already connected
 async function ensureRPCConnection(
   topic: string,
@@ -85,6 +98,11 @@ export async function getRPC(
 ): Promise<RPC> {
   const swarm = getSwarm();
 
+  // Close existing connection if forceNewConnection is true
+  if (options.forceNewConnection) {
+    closeConnection(publicKey);
+  }
+
   // Set up connection tracking
   swarm.on("connection", (conn: Connection) => {
     const peerPubkey = conn.remotePublicKey?.toString("hex");
@@ -97,17 +115,20 @@ export async function getRPC(
       // No-op handler since we're only sending requests, not receiving them
     });
 
-    // Store RPC instance by peer ID for lookup
+    // Store RPC instance and connection by peer ID for lookup
     activeRPCs.set(peerPubkey, rpc);
+    activeConnections.set(peerPubkey, conn);
 
     conn.on("close", () => {
       logger.debug(`Connection closed for peer: ${peerPubkey}`);
       activeRPCs.delete(peerPubkey);
+      activeConnections.delete(peerPubkey);
     });
 
     conn.on("error", (err) => {
       logger.error(`Connection error for peer ${peerPubkey}:`, err);
       activeRPCs.delete(peerPubkey);
+      activeConnections.delete(peerPubkey);
     });
   });
 

@@ -6,7 +6,7 @@
 		"batch": "bun run batch-consumer.ts"
 	},
 	"dependencies": {
-		"@tetherto/sdk-dev": "0.4.1-tmp.runid-20128362801",
+		"@tetherto/sdk-dev": "0.5.0-tmp.runid-20785095482",
 		"bare-abort-controller": "^1.0.0",
 		"bare-events": "^2.8.1",
 		"bare-fetch": "^2.5.0",

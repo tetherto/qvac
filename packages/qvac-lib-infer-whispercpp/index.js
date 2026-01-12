@@ -24,7 +24,8 @@ class TranscriptionWhispercpp extends BaseInference {
     { loader, logger = null, modelName, vadModelName, diskPath, exclusiveRun = true, ...args },
     config
   ) {
-    super({ logger, loader, exclusiveRun })
+    // Forward extra args (notably `opts`) to BaseInference so features like stats can be enabled.
+    super({ logger, loader, exclusiveRun, ...args })
 
     this._diskPath = diskPath || ''
     this._modelName = modelName

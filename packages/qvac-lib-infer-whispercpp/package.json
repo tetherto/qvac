@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.3.9",
+  "version": "0.3.11",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
@@ -33,7 +33,7 @@
     "test:dts": "tsc index.d.ts transcription-addon/index.d.ts --noEmit",
     "prepare:husky": "husky"
   },
-  "files": [
+  "files": [      
     "addonLogging.js",
     "binding.js",
     "configChecker.js",

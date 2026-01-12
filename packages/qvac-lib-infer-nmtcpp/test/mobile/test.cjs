@@ -175,7 +175,7 @@ async function _ensureModel (dirPath) {
  * Test 1: Download and initialize the NMT model
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testLoadModel (dirPath, getAssetPath) {
   try {
@@ -224,10 +224,10 @@ async function testLoadModel (dirPath, getAssetPath) {
     await translation.load()
     console.log('✅ Model weights loaded successfully')
 
-    return 'Model loaded successfully ✅'
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Model loaded successfully ✅' }
   } catch (error) {
     console.error('❌ Model loading failed:', error)
-    throw new Error(`Failed to load model: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Failed to load model: ${error.message}` }
   }
 }
 
@@ -235,7 +235,7 @@ async function testLoadModel (dirPath, getAssetPath) {
  * Test 2: Run translation inference
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message with translation details
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testTranslation (dirPath, getAssetPath) {
   try {
@@ -272,10 +272,10 @@ async function testTranslation (dirPath, getAssetPath) {
       throw new Error('Translation returned empty result')
     }
 
-    return `Translation completed in ${duration}s ✅`
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: `Translation completed in ${duration}s ✅` }
   } catch (error) {
     console.error('❌ Translation failed:', error)
-    throw new Error(`Translation failed: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Translation failed: ${error.message}` }
   }
 }
 
@@ -283,7 +283,7 @@ async function testTranslation (dirPath, getAssetPath) {
  * Test 3: Cleanup and unload resources
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testUnloadModel (dirPath, getAssetPath) {
   try {
@@ -293,7 +293,7 @@ async function testUnloadModel (dirPath, getAssetPath) {
 
     if (!translation && !loader) {
       console.log('⚠️  No resources to cleanup')
-      return 'No resources to cleanup ✅'
+      return { summary: { total: 1, passed: 1, failed: 0 }, message: 'No resources to cleanup ✅' }
     }
 
     console.log('🧹 Cleaning up resources...')
@@ -312,10 +312,10 @@ async function testUnloadModel (dirPath, getAssetPath) {
 
     console.log('✅ All resources released successfully')
 
-    return 'Resources cleaned up successfully ✅'
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Resources cleaned up successfully ✅' }
   } catch (error) {
     console.error('❌ Cleanup failed:', error)
-    throw new Error(`Cleanup failed: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Cleanup failed: ${error.message}` }
   }
 }
 
@@ -323,7 +323,7 @@ async function testUnloadModel (dirPath, getAssetPath) {
  * Test 4: Load Bergamot Model
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testLoadBergamotModel (dirPath, getAssetPath) {
   try {
@@ -338,7 +338,7 @@ async function testLoadBergamotModel (dirPath, getAssetPath) {
 
     if (!bergamotModel) {
       console.log('⚠️  Bergamot model not available - skipping test')
-      return 'Bergamot model not available - test skipped ⚠️'
+      return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Bergamot model not available - test skipped ⚠️' }
     }
 
     console.log('✅ Bergamot model ready:')
@@ -373,10 +373,10 @@ async function testLoadBergamotModel (dirPath, getAssetPath) {
     await bergamotTranslation.load()
     console.log('✅ Bergamot model loaded successfully')
 
-    return 'Bergamot model loaded successfully ✅'
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Bergamot model loaded successfully ✅' }
   } catch (error) {
     console.error('❌ Bergamot model loading failed:', error)
-    throw new Error(`Failed to load Bergamot model: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Failed to load Bergamot model: ${error.message}` }
   }
 }
 
@@ -384,7 +384,7 @@ async function testLoadBergamotModel (dirPath, getAssetPath) {
  * Test 5: Run Bergamot translation inference
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message with translation details
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testBergamotTranslation (dirPath, getAssetPath) {
   try {
@@ -394,7 +394,7 @@ async function testBergamotTranslation (dirPath, getAssetPath) {
 
     if (!bergamotTranslation) {
       console.log('⚠️  Bergamot model not loaded - skipping test')
-      return 'Bergamot model not loaded - test skipped ⚠️'
+      return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Bergamot model not loaded - test skipped ⚠️' }
     }
 
     console.log('🌐 Running Bergamot translation inference...')
@@ -422,10 +422,10 @@ async function testBergamotTranslation (dirPath, getAssetPath) {
       throw new Error('Bergamot translation returned empty result')
     }
 
-    return `Bergamot translation completed in ${duration}s ✅`
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: `Bergamot translation completed in ${duration}s ✅` }
   } catch (error) {
     console.error('❌ Bergamot translation failed:', error)
-    throw new Error(`Bergamot translation failed: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Bergamot translation failed: ${error.message}` }
   }
 }
 
@@ -433,7 +433,7 @@ async function testBergamotTranslation (dirPath, getAssetPath) {
  * Test 6: Unload Bergamot resources
  * @param {string} dirPath - Directory path for test assets
  * @param {Function} getAssetPath - Helper function to resolve asset paths
- * @returns {Promise<string>} Success message
+ * @returns {Promise<{summary: {total: number, passed: number, failed: number}, message: string}>} Test result with summary
  */
 async function testUnloadBergamotModel (dirPath, getAssetPath) {
   try {
@@ -443,7 +443,7 @@ async function testUnloadBergamotModel (dirPath, getAssetPath) {
 
     if (!bergamotTranslation) {
       console.log('⚠️  No Bergamot resources to cleanup')
-      return 'No Bergamot resources to cleanup ⚠️'
+      return { summary: { total: 1, passed: 1, failed: 0 }, message: 'No Bergamot resources to cleanup ⚠️' }
     }
 
     console.log('🧹 Cleaning up Bergamot resources...')
@@ -456,10 +456,10 @@ async function testUnloadBergamotModel (dirPath, getAssetPath) {
 
     console.log('✅ All Bergamot resources released successfully')
 
-    return 'Bergamot resources cleaned up successfully ✅'
+    return { summary: { total: 1, passed: 1, failed: 0 }, message: 'Bergamot resources cleaned up successfully ✅' }
   } catch (error) {
     console.error('❌ Bergamot cleanup failed:', error)
-    throw new Error(`Bergamot cleanup failed: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, message: `Bergamot cleanup failed: ${error.message}` }
   }
 }
 

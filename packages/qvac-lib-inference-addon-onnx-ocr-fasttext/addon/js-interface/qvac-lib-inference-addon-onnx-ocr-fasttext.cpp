@@ -112,6 +112,11 @@ template <> js_value_t *JsIfFasttext::createInstance(js_env_t *env, js_callback_
     config.lowConfidenceThreshold = static_cast<float>(optLowConfidenceThreshold->as<double>(env));
   }
 
+  auto optRecognizerBatchSize = args1.getOptionalProperty<js::Number>(env, "recognizerBatchSize");
+  if (optRecognizerBatchSize) {
+    config.recognizerBatchSize = static_cast<int>(optRecognizerBatchSize->as<double>(env));
+  }
+
   std::scoped_lock instancesLock{instancesMtx_};
   auto& handle = instances_.emplace_back(
       std::make_unique<qvac_lib_inference_addon_onnx_ocr_fasttext::Addon>(
@@ -196,6 +201,14 @@ js_value_t *cancel(js_env_t *env, js_callback_info_t *info) {
 
 js_value_t *destroyInstance(js_env_t *env, js_callback_info_t *info) {
   return JsIfFasttext::destroyInstance(env, info);
+}
+
+js_value_t *setLogger(js_env_t *env, js_callback_info_t *info) {
+  return JsIfFasttext::setLogger(env, info);
+}
+
+js_value_t *releaseLogger(js_env_t *env, js_callback_info_t *info) {
+  return JsIfFasttext::releaseLogger(env, info);
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

@@ -64,6 +64,12 @@ public:
   bool isCaptionModeEnabled() const;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats();
   void warmup();
+  void recordSegmentStats(int nTokens) {
+    totalSegments_ += 1;
+    if (nTokens > 0) {
+      totalTokens_ += static_cast<int64_t>(nTokens);
+    }
+  }
 
   static std::vector<float> preprocessAudioData(
       const std::vector<uint8_t>& audioData,
@@ -128,6 +134,18 @@ private:
   bool stream_ended_ = false;
   bool is_loaded_ = false;
   bool is_warmed_up_ = false;
+
+  // Runtime stats accumulated over a job (reset() clears these).
+  int64_t totalSamples_ = 0;
+  int64_t totalTokens_ = 0;
+  int64_t totalSegments_ = 0;
+  int64_t processCalls_ = 0;
+  double totalWallMs_ = 0.0;
+  double whisperSampleMs_ = 0.0;
+  double whisperEncodeMs_ = 0.0;
+  double whisperDecodeMs_ = 0.0;
+  double whisperBatchdMs_ = 0.0;
+  double whisperPromptMs_ = 0.0;
 };
 
 } // namespace qvac_lib_inference_addon_whisper

@@ -27,15 +27,24 @@ export async function handleLoadModelDelegated(
   }
 
   const { delegate } = request;
-  const { topic, providerPublicKey, timeout, fallbackToLocal } = delegate;
+  const {
+    topic,
+    providerPublicKey,
+    timeout,
+    fallbackToLocal,
+    forceNewConnection,
+  } = delegate;
 
   try {
     logger.info(
-      `📤 Sending delegated loadModel request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
+      `📤 Sending delegated loadModel request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}${forceNewConnection ? " (forcing new connection)" : ""}`,
     );
 
     // Create RPC instance for this HyperSwarm peer
-    const rpc = await getRPC(topic, providerPublicKey, { timeout });
+    const rpc = await getRPC(topic, providerPublicKey, {
+      timeout,
+      forceNewConnection,
+    });
 
     // Strip out the delegate field to avoid infinite delegation
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

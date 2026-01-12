@@ -294,6 +294,146 @@ export class TestBuilder {
 		};
 	}
 
+  // ========== HTTP PATTERN-BASED/ARCHIVE SHARDED TESTS ==========
+
+  buildHttpShardedEmbedLoadTest(): TestDefinition {
+    return {
+      testId: 'http-sharded-embed-load',
+      payload: JSON.stringify({
+        testId: 'http-sharded-embed-load',
+        params: {
+          modelType: 'embeddings',
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf',
+        },
+        expectation: {
+          type: 'model-loaded',
+          validation: 'returns-model-id',
+          isSharded: true,
+          isHttp: true,
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'none',
+      estimatedDurationMs: 300000, // 5 minutes for HTTP sharded download (~650MB)
+    };
+  }
+
+  buildHttpShardedEmbedProgressTest(): TestDefinition {
+    return {
+      testId: 'http-sharded-embed-progress',
+      payload: JSON.stringify({
+        testId: 'http-sharded-embed-progress',
+        params: {
+          modelType: 'embeddings',
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf',
+          trackProgress: true,
+        },
+        expectation: {
+          type: 'progress-tracked',
+          validation: 'shard-info-present',
+          requiresShardInfo: true,
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'none',
+      estimatedDurationMs: 120000,
+    };
+  }
+
+  buildHttpShardedEmbedInferenceTest(): TestDefinition {
+    return {
+      testId: 'http-sharded-embed-inference',
+      payload: JSON.stringify({
+        testId: 'http-sharded-embed-inference',
+        params: {
+          modelType: 'embeddings',
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded/resolve/main/gte-large_fp16-00003-of-00005.gguf',
+          text: 'This is a test sentence for embedding generation using an HTTP sharded model.',
+        },
+        expectation: {
+          type: 'embedding-success',
+          validation: 'has-embeddings',
+          minDimensions: 1024,
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'http-sharded-embed',
+      estimatedDurationMs: 300000,
+    };
+  }
+
+  buildHttpArchiveEmbedLoadTest(): TestDefinition {
+    return {
+      testId: 'http-archive-embed-load',
+      payload: JSON.stringify({
+        testId: 'http-archive-embed-load',
+        params: {
+          modelType: 'embeddings',
+          // GTE-Large FP16 embedding model as tar.gz archive from Hugging Face
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded-tgz/resolve/main/gte-large_fp16.tgz',
+        },
+        expectation: {
+          type: 'model-loaded',
+          validation: 'returns-model-id',
+          isArchive: true,
+          isHttp: true,
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'none',
+      estimatedDurationMs: 300000, // 5 minutes for HTTP archive download + extraction
+    };
+  }
+
+  buildHttpArchiveEmbedProgressTest(): TestDefinition {
+    return {
+      testId: 'http-archive-embed-progress',
+      payload: JSON.stringify({
+        testId: 'http-archive-embed-progress',
+        params: {
+          modelType: 'embeddings',
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded-tgz/resolve/main/gte-large_fp16.tgz',
+          trackProgress: true,
+        },
+        expectation: {
+          type: 'progress-tracked',
+          validation: 'archive-progress',
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'none',
+      estimatedDurationMs: 300000,
+    };
+  }
+
+  buildHttpArchiveEmbedInferenceTest(): TestDefinition {
+    return {
+      testId: 'http-archive-embed-inference',
+      payload: JSON.stringify({
+        testId: 'http-archive-embed-inference',
+        params: {
+          modelType: 'embeddings',
+          modelUrl:
+            'https://huggingface.co/opaninakuffo/gte-large-fp16-sharded-tgz/resolve/main/gte-large_fp16.tgz',
+          text: 'This is a test sentence for embedding generation using an HTTP archive model.',
+        },
+        expectation: {
+          type: 'embedding-success',
+          validation: 'has-embeddings',
+          minDimensions: 1024,
+        },
+        expectedOutcome: 'pass',
+      }),
+      dependency: 'http-archive-embed',
+      estimatedDurationMs: 300000,
+    };
+  }
+
 	// ========== STRUCTURED ERROR TESTS (PR #243) ==========
 
 	buildErrorInvalidModelIdTest(): TestDefinition {
@@ -1550,6 +1690,121 @@ export class TestBuilder {
 			}),
 			dependency: "nmt",
 			estimatedDurationMs: 20000,
+		};
+	}
+
+	// ========== QVAC-10524: BERGAMOT TRANSLATION ENGINE TESTS ==========
+
+	buildBergamotTranslationBasicTest(): TestDefinition {
+		// Basic Bergamot translation test (EN→FR)
+		return {
+			testId: "bergamot-translation-basic",
+			payload: JSON.stringify({
+				testId: "bergamot-translation-basic",
+				params: {
+					text: "Hello, how are you today?",
+				},
+				expectation: {
+					validation: "non-empty",
+					minLength: 10,
+					keywords: ["bonjour", "comment", "vous", "aujourd"],
+				},
+				expectedOutcome: "pass",
+			}),
+			dependency: "bergamot",
+			estimatedDurationMs: 15000,
+		};
+	}
+
+	buildBergamotTranslationLongTextTest(): TestDefinition {
+		// Bergamot with longer text input
+		return {
+			testId: "bergamot-translation-long-text",
+			payload: JSON.stringify({
+				testId: "bergamot-translation-long-text",
+				params: {
+					text: "The weather is beautiful today. I decided to go for a walk in the park. " +
+						"The birds are singing and the flowers are blooming. " +
+						"It's a perfect day to enjoy nature and relax.",
+				},
+				expectation: {
+					validation: "non-empty",
+					minLength: 80,
+				},
+				expectedOutcome: "pass",
+			}),
+			dependency: "bergamot",
+			estimatedDurationMs: 20000,
+		};
+	}
+
+	buildBergamotTranslationSpecialCharsTest(): TestDefinition {
+		// Bergamot with special characters and punctuation
+		return {
+			testId: "bergamot-translation-special-chars",
+			payload: JSON.stringify({
+				testId: "bergamot-translation-special-chars",
+				params: {
+					text: "What's your name? I'm John! Nice to meet you...",
+				},
+				expectation: {
+					validation: "non-empty",
+					minLength: 15,
+				},
+				expectedOutcome: "pass",
+			}),
+			dependency: "bergamot",
+			estimatedDurationMs: 15000,
+		};
+	}
+
+	// ========== QVAC-10524: BATCH TRANSLATION TESTS ==========
+
+	buildNmtBatchTranslationBasicTest(): TestDefinition {
+		// Basic batch translation with 2 texts
+		return {
+			testId: "nmt-batch-translation-basic",
+			payload: JSON.stringify({
+				testId: "nmt-batch-translation-basic",
+				params: {
+					texts: ["Guten Morgen", "Gute Nacht"],
+				},
+				expectation: {
+					validation: "batch-count",
+					expectedCount: 2,
+					minLength: 5,
+				},
+				expectedOutcome: "pass",
+			}),
+			dependency: "nmt",
+			estimatedDurationMs: 15000,
+		};
+	}
+
+	buildNmtBatchTranslationMultipleTest(): TestDefinition {
+		// Batch translation with multiple texts (5)
+		return {
+			testId: "nmt-batch-translation-multiple",
+			payload: JSON.stringify({
+				testId: "nmt-batch-translation-multiple",
+				params: {
+					texts: [
+						"Wie geht es dir?",
+						"Das Wetter ist schön.",
+						"Ich habe Hunger.",
+						"Auf Wiedersehen.",
+						"Vielen Dank.",
+					],
+				},
+				expectation: {
+					validation: "batch-count",
+					expectedCount: 5,
+					minLength: 3,
+				},
+				expectedOutcome: "pass",
+			}),
+			dependency: "nmt",
+			estimatedDurationMs: 25000,
 		};
 	}
 
@@ -3604,6 +3859,14 @@ export class TestBuilder {
 		// tests.push(this.buildEmbedJavaScriptCodeTest());
 		// tests.push(this.buildEmbedJsonDataTest());
 		// tests.push(this.buildEmbedHtmlContentTest());
+
+		// HTTP pattern-based sharded and archive embedding tests (PR #305)
+		tests.push(this.buildHttpShardedEmbedLoadTest());
+		tests.push(this.buildHttpShardedEmbedProgressTest());
+		tests.push(this.buildHttpShardedEmbedInferenceTest());
+		tests.push(this.buildHttpArchiveEmbedLoadTest());
+		tests.push(this.buildHttpArchiveEmbedProgressTest());
+		tests.push(this.buildHttpArchiveEmbedInferenceTest());
 	}
 
 	// Translation tests
@@ -3640,6 +3903,19 @@ export class TestBuilder {
 		tests.push(this.buildNmtTranslationQuestionTest());
 		tests.push(this.buildNmtTranslationMaxLengthTest());
 		console.log("   ✅ Added 12 NMT translation tests");
+
+		// QVAC-10524: Bergamot translation engine tests
+		console.log("\n🌍 Adding Bergamot Translation Tests (QVAC-10524)");
+		tests.push(this.buildBergamotTranslationBasicTest());
+		tests.push(this.buildBergamotTranslationLongTextTest());
+		tests.push(this.buildBergamotTranslationSpecialCharsTest());
+		console.log("   ✅ Added 3 Bergamot translation tests");
+
+		// QVAC-10524: Batch translation tests
+		console.log("\n📦 Adding Batch Translation Tests (QVAC-10524)");
+		tests.push(this.buildNmtBatchTranslationBasicTest());
+		tests.push(this.buildNmtBatchTranslationMultipleTest());
+		console.log("   ✅ Added 2 batch translation tests");
 	}
 
 	// Config Hot Reload tests (QVAC-9409)

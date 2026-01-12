@@ -119,6 +119,16 @@ void WhisperModel::reload() {
 void WhisperModel::reset() {
   output_.clear();
   stream_ended_ = false;
+  totalSamples_ = 0;
+  totalTokens_ = 0;
+  totalSegments_ = 0;
+  processCalls_ = 0;
+  totalWallMs_ = 0.0;
+  whisperSampleMs_ = 0.0;
+  whisperEncodeMs_ = 0.0;
+  whisperDecodeMs_ = 0.0;
+  whisperBatchdMs_ = 0.0;
+  whisperPromptMs_ = 0.0;
 }
 
 void WhisperModel::endOfStream() {
@@ -130,6 +140,37 @@ void WhisperModel::endOfStream() {
 
 qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
+
+  // Keep keys stable because integration tooling reads these.
+  // Times are in seconds (totalTime) or milliseconds (audioDurationMs).
+  const double audioDurationSec =
+      totalSamples_ > 0 ? (double)totalSamples_ / 16000.0 : 0.0;
+  const int64_t audioDurationMs =
+      static_cast<int64_t>(audioDurationSec * 1000.0);
+  const double totalTimeSec = totalWallMs_ / 1000.0;
+  const double rtf =
+      audioDurationSec > 0.0 ? (totalTimeSec / audioDurationSec) : 0.0;
+  const double tps =
+      totalTimeSec > 0.0 ? ((double)totalTokens_ / totalTimeSec) : 0.0;
+
+  stats.emplace_back("totalTime", totalTimeSec);
+  stats.emplace_back("realTimeFactor", rtf);
+  stats.emplace_back("tokensPerSecond", tps);
+  stats.emplace_back("audioDurationMs", audioDurationMs);
+  stats.emplace_back("totalSamples", totalSamples_);
+
+  // Additional useful counters
+  stats.emplace_back("totalTokens", totalTokens_);
+  stats.emplace_back("totalSegments", totalSegments_);
+  stats.emplace_back("processCalls", processCalls_);
+
+  // Whisper internal timings (ms) accumulated across process() calls
+  stats.emplace_back("whisperSampleMs", whisperSampleMs_);
+  stats.emplace_back("whisperEncodeMs", whisperEncodeMs_);
+  stats.emplace_back("whisperDecodeMs", whisperDecodeMs_);
+  stats.emplace_back("whisperBatchdMs", whisperBatchdMs_);
+  stats.emplace_back("whisperPromptMs", whisperPromptMs_);
+  stats.emplace_back("totalWallMs", totalWallMs_);
   return stats;
 }
 
@@ -168,6 +209,10 @@ static void onNewSegment(
     (*ud->callback)(transcript);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     ud->whisper->addTranscription(transcript);
+
+    // Stats: count tokens/segments as they are emitted
+    const int n_tokens = whisper_full_n_tokens_from_state(state, i);
+    ud->whisper->recordSegmentStats(n_tokens);
   }
 }
 
@@ -211,10 +256,15 @@ void WhisperModel::process(const Input& input) {
       "Processing audio input with " + std::to_string(input.size()) +
           " samples");
 
+  processCalls_ += 1;
+  totalSamples_ += static_cast<int64_t>(input.size());
+
   // Reset internal timings/state before processing to avoid memory issues
   if (ctx_ != nullptr) {
     whisper_reset_timings(ctx_.get());
   }
+
+  const auto t0 = std::chrono::steady_clock::now();
 
   whisper_full_params params{};
   try {
@@ -238,6 +288,21 @@ void WhisperModel::process(const Input& input) {
       params,
       input.data(),
       static_cast<int>(input.size()));
+
+  const auto t1 = std::chrono::steady_clock::now();
+  totalWallMs_ += std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  // Accumulate whisper internal timings for this call (they were reset at
+  // start).
+  if (ctx_ != nullptr) {
+    if (auto* wt = whisper_get_timings(ctx_.get()); wt != nullptr) {
+      whisperSampleMs_ += wt->sample_ms;
+      whisperEncodeMs_ += wt->encode_ms;
+      whisperDecodeMs_ += wt->decode_ms;
+      whisperBatchdMs_ += wt->batchd_ms;
+      whisperPromptMs_ += wt->prompt_ms;
+    }
+  }
 
   if (result != 0) {
     QLOG(

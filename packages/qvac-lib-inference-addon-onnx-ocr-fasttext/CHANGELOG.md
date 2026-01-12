@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-01-09
+
+### Added
+- Linker version script (`symbols.map`) to hide internal symbols including ONNX runtime
+- macOS support for symbol hiding via `-exported_symbol` linker flags
+- Export `addonLogging` module in package.json for SDK integration
+
+### Fixed
+- Symbol collision when loading multiple ONNX-based addons (e.g., OCR and TTS) in the same process
+
+## [0.0.6] - 2026-01-08
+
+### Added
+- Expose all optional parameters via JS/TypeScript interface: `magRatio`, `defaultRotationAngles`, `contrastRetry`, `lowConfidenceThreshold`, `recognizerBatchSize`
+- Android logcat support (ALOG macros) alongside QLOG for native Android logging
+- On-demand image preparation to prevent OOM on memory-constrained devices
+
+### Changed
+- Default `contrastRetry` changed to `false` to reduce memory usage on mobile devices
+- Default batch size reduced to 32 for better memory management
+- Images are now prepared per-batch instead of all upfront, significantly reducing peak memory usage
+
+### Fixed
+- OOM crash on Android when processing large numbers of text regions (e.g., 300+ boxes)
+- Memory spike from 1.7GB to 8GB during image preparation phase
+
 ## [0.0.5] - 2025-12-23
 
 ### Added

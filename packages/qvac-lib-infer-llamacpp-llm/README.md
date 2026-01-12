@@ -21,7 +21,6 @@ This library simplifies running Large Language Models (LLMs) within QVAC runtime
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
 - [Glossary](#glossary)
-- [Resources](#resources)
 - [License](#license)
 
 ## Installation
@@ -32,7 +31,7 @@ Install [Bare](#glossary) Runtime:
 ```bash
 npm install -g bare-runtime
 ```
-Note : Make sure the Bare version is `>= 1.17.3`. Check this using : 
+Note : Make sure the Bare version is `>= 1.19.0`. Check this using : 
 
 ```bash
 bare -v
@@ -63,7 +62,7 @@ npm install @qvac/llm-llamacpp@latest
 ```
 Or install a specific known stable version:
 ```bash
-npm install @qvac/llm-llamacpp@0.0.1-dev
+npm install @qvac/llm-llamacpp@0.6.0
 ```
 
 ## Building from Source
@@ -87,7 +86,7 @@ const store = new Corestore('./store')
 const hdStore = store.namespace('hd')
 
 const hdDL = new HyperDriveDL({
-  key: 'hd://b11388de0e9214d8c2181eae30e31bcd49c48b26d621b353ddc7f01972dddd76',
+  key: 'hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3',
   store: hdStore
 })
 ```
@@ -99,9 +98,9 @@ const args = {
   loader: hdDL,
   opts: { stats: true },
   logger: console,
-  diskPath: './models/',
-  modelName: 'medgemma-4b-it-Q4_1.gguf',
-  // projectionModel: 'mmproj-Qwen2.5-Omni-3B-Q8_0.gguf' // for multimodal support you need to pass the projection model name
+  diskPath: './models',
+  modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
+  // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
 }
 ```
 
@@ -116,7 +115,8 @@ The `args` obj contains the following properties:
 
 ### 4. Create the `config` obj
 
-The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.
+The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
+*All parameters must by strings.*
 
 ```js
 // an example of possible configuration
@@ -127,19 +127,17 @@ const config = {
 }
 ```
 
-| Parameter      | Range / Type                                   | Default                                                    |
-|----------------|------------------------------------------------|------------------------------------------------------------|
-| temp           | 0.00 – 2.00                                    | 0.8                                                        |
-| top_p          | 0 – 1                                          | 0.9                                                        |
-| top_k          | 0 – 128                                        | 40                                                         |
-| predict        | 1 – Infinity<br>(-1 = Infinity, -2 = until context filled) | -1                                             |
-| ctx_size       | 0 – model-dependent                            | 4096 (0 = loaded from model)                               |
-| system_prompt  | string                                         | "You are a helpful, respectful and honest assistant."      |
-| seed           | integer                                        | -1 = random                                                |
-| lora           | string                                         | Path to gguf adapter                                       |
-| gpu_layers     | integer                                        | 0                                                          |
-| no_mmap        | bool                                           | "" - to disable                                            |
-| device         | string                                         |                                                            |
+| Parameter      | Range / Type                                               | Default                                                    |
+|----------------|------------------------------------------------------------|------------------------------------------------------------|
+| temp           | 0.00 – 2.00                                                | 0.8                                                        |
+| top_p          | 0 – 1                                                      | 0.9                                                        |
+| top_k          | 0 – 128                                                    | 40                                                         |
+| predict        | 1 – Infinity<br>(-1 = Infinity) | -1                                                         |
+| ctx_size       | 0 – model-dependent                                        | 4096 (0 = loaded from model)                               |
+| seed           | integer                                                    | -1 = random                                                |
+| gpu_layers     | integer                                                    | 0                                                          |
+| device         | string                                                     | "gpu" or "cpu"                                             |
+| verbosity      | 0 – 3<br>(0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)             | 0                                                          |
 
 
 ### 5. Create Model Instance
@@ -251,10 +249,14 @@ npm install hyperswarm corestore @qvac/dl-hyperdrive @qvac/llm-llamacpp bare-pro
 
 const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const LlmLlamacpp = require('../index')
 const process = require('bare-process')
 
 async function main () {
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
+
+  // 1. Initializing data loader
   const store = new Corestore('./store')
   const hdStore = store.namespace('hd')
 
@@ -264,6 +266,7 @@ async function main () {
     store: hdStore
   })
 
+  // 2. Configuring model settings
   const args = {
     loader: hdDL,
     opts: { stats: true },
@@ -274,24 +277,30 @@ async function main () {
 
   const config = {
     device: 'gpu',
-    // Force GPU: (very large number of gpu-layers)
     gpu_layers: '999',
     ctx_size: '1024'
   }
 
+  // 3. Loading model
   await hdDL.ready()
   const model = new LlmLlamacpp(args, config)
   const closeLoader = true
+  let totalProgress = 0
   const reportProgressCallback = (report) => {
-    if (typeof report === 'object') {
-      console.log(
-        `${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
       )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
     }
   }
   await model.load(closeLoader, reportProgressCallback)
 
   try {
+    // 4. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -325,7 +334,9 @@ async function main () {
     console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
+    // 5. Cleaning up resources
     await store.close()
+    await hdDL.close()
     await model.unload()
   }
 }
@@ -351,24 +362,25 @@ bare index.js
 
 In the QVAC ecosystem, a model registry is simply a Hyperbee that stores Hyperdrive keys as its values. Each of these keys points to a Hyperdrive containing the `.gguf` files for a specific model. The Hyperbee key for the model registry is `7504626aaa534ac55d91b4b3067504774ae1457b03ddfbd86d817dd8cfbca8c8`.
 
-| Key (The key inside the hyperbee)                    | Value (Hyperdrive Key)                                           | `.gguf` File Name                                                  |
-| ---------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| generation\:llama-ggml\:instruct:3.2:1B\:q4\_0:1.0.0 | afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3 | Llama-3.2-1B-Instruct-Q4\_0.gguf                                   |
-| generation\:medgemma\:it::4B\:q4\_1:1.0.0            | b11388de0e9214d8c2181eae30e31bcd49c48b26d621b353ddc7f01972dddd76 | medgemma-4b-it-Q4\_1.gguf<br>medgemma-4b-it-Q8\_0.gguf             |
-| generation\:qwen2.5-omni\:multimodal::3B::1.0.0      | 583f04c31d151b29e02aaf98f80d16aff585714ef9e2806a5067651c0f64ae31 | Qwen2.5-Omni-3B-Q4\_K\_M.gguf<br>mmproj-Qwen2.5-Omni-3B-Q8\_0.gguf |
-| generation\:qwen3\:instruct::0.6B::1.0.0             | d331ed49c444f90b3b2a70aa5b820752685142bf2d769a0592ed666140477578 | Qwen3-0.6B-UD-IQ1\_S.gguf                                          |
-| generation\:qwen3\:instruct::4B\:q4:1.0.0            | 19ffb75463149955ee24d786dfddd84d41fc872ea813cd4465f5f7299d165adc | model.gguf                                                         |
-| generation\:qwen:instruct:3:1.7B:q4:1.0.0            | 05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9 | Qwen3-1.7B-Q4\_0.gguf                                              |
-| generation\:qwen:multimodal:2.5-omni:3B::1.0.0       | 583f04c31d151b29e02aaf98f80d16aff585714ef9e2806a5067651c0f64ae31 | Qwen2.5-Omni-3B-Q4\_K\_M.gguf<br>mmproj-Qwen2.5-Omni-3B-Q8\_0.gguf |
-| generation\:salamandrata\:instruct::2B\:q4:1.0.0     | 1610d81772a9e7c37660666dbdfdcef915b6b83c522ea1ad31c19cab0075811d | salamandrata\_2b\_inst\_q4.gguf                                    |
-| generation\:salamandrata\:instruct::2B\:q8:1.0.0     | 96860337b0bdffdbb8ef0df4c8b2c3ab5e78568f5f7e15815a0a6b392512c9b5 | salamandrata\_2b\_inst\_q8.gguf                                    |
+| Key (The key inside the hyperbee)                               | Value (Hyperdrive Key)                                           | `.gguf` File Name                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| generation:llama-ggml:instruct:3.2:1B:q4_0:1.0.0                | afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3 | Llama-3.2-1B-Instruct-Q4_0.gguf                                                      |
+| generation:qwen3:instruct::600M:q4:1.0.0                        | 211874c9885f6b88b9926904420e365f5e74e1b6ac47207b7536408539bef4b7 | Qwen3-0.6B-Q4_0.gguf                                                                 |
+| generation:qwen:instruct:3:1.7B:q4:1.0.0                        | 05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9 | Qwen3-1.7B-Q4_0.gguf                                                                 |
+| generation:smolVLM2:multimodal:2:500M:q8_0:1.0.0:video-instruct | 73b1bc01d01e25fa27be7d7f434337d14f054b0315e8463766ca31e778ac6576 | SmolVLM2-500M-Video-Instruct-Q8_0.gguf+mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf |
+| generation:salamandrata:instruct::2B:q4:1.0.0                   | 1610d81772a9e7c37660666dbdfdcef915b6b83c522ea1ad31c19cab0075811d | salamandrata_2b_inst_q4.gguf                                                         |
+| generation:medgemma:it::4B:q4_1:1.0.0:shard                     | 1839dcabe1df8fdf1c83cd3d7a306c6e01e3c67e8542b0dd1e78cdfc86e75e2d | medgemma-4b-it-Q4_1-00001-of-00005.gguf                                              |
 
 
 ## Other examples
 
--   [Salamandra](examples/salamandra.js) – Demonstrates how to use the Salamandra model.
--   [MultiModal](examples/multiModal.js) – Demonstrates how to run multimodal inference.
--   [MultiCacheDemo](examples/multiCacheDemo.js) – Demonstrates session handling and caching capabilities.
+-   [SalamandraTA](examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
+-   [Multimodal](examples/multiModal.js) – Demonstrates how to run multimodal inference.
+-   [Multi-Cache](examples/multiCache.js) – Demonstrates session handling and caching capabilities.
+-   [Native Logging](examples/nativeLog.js) – Demonstrates C++ addon logging integration.
+-   [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+-   [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
+-   [Tool Calling](examples/toolCalling.js) – Demonstrates tool calling capabilities.
 
 ## Benchmarking
 
@@ -406,20 +418,19 @@ npm run benchmarks -- \
 
 ## Tests
 
-[Bert Addon Test](test/addon_bert.test.js) showcases how to generate embeddings from text using a GTE large model, which can be useful for retrieval-augmented llama generation. Make sure to pass `-D BUILD_BERT_MODEL=ON` when calling `bare-make generate`, otherwise only the llama model will exist on the addon.
+Integration tests are located in [`test/integration/`](test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
+These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
+
+Unit tests are located in [`test/unit/`](test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary
 
-• **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
-• **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.  
+• **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).  
+• **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications. [Learn more](https://qvac.tether.io/).  
 • **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
 • **Hyperbee** – A decentralized B-tree built on top of Hypercores, and exposes a key-value API to store values. [Learn more](https://docs.pears.com/building-blocks/hyperbee).  
 • **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
-
-## Resources
-
-*   PoC Repo: [tetherto/qvac-llm-poc](https://github.com/tetherto/qvac-llm-poc)
-*   Pear app (Desktop): TBD
 
 ## License
 

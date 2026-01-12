@@ -5,6 +5,7 @@ This native C++ addon, built using the `Bare` Runtime, implements the BERT GTE-L
 ## Table of Contents
 
 - [Installation](#installation)
+- [Building from Source](#building-from-source)
 - [Usage](#usage)
   - [1. Import the Model Class](#1-import-the-model-class)
   - [2. Create a Data Loader](#2-create-a-data-loader)
@@ -16,9 +17,9 @@ This native C++ addon, built using the `Bare` Runtime, implements the BERT GTE-L
   - [8. Unload the model](#8-unload-the-model)
 - [Quickstart example](#quickstart-example)
 - [Benchmarking](#benchmarking)
-- [Additional Documents](#additional-documents)
+- [Tests](#tests)
 - [Glossary](#glossary)
-- [Resources](#resources)
+- [License](#license)
 
 ## Installation
 
@@ -51,6 +52,10 @@ This configuration ensures secure access to NPM Packages when installing scoped 
 npm install @qvac/embed-llamacpp@latest
 ```
 
+## Building from Source
+
+See [build.md](./build.md) for detailed instructions on how to build the addon from source.
+
 ## Usage
 
 ### 1. Import the Model Class
@@ -80,7 +85,7 @@ const args = {
   loader: hdDL,
   logger: console,
   opts: { stats: true },
-  diskPath: './models/',
+  diskPath: './models',
   modelName: 'gte-large_fp16.gguf'
 }
 ```
@@ -129,7 +134,7 @@ The model outputs a sequence of vectors, one for each token in the input sequenc
 ```js
 const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
 const response = await model.run(query)
-const embeddings = await resposne.await()
+const embeddings = await response.await()
 ```
 
 ### 8. Unload the model
@@ -147,51 +152,70 @@ await model.unload()
 
 const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
-
-// 1. Import the Model Class
-const GGMLBert = require('@qvac/embed-llamacpp')
+const GGMLBert = require('../index.js')
+const process = require('bare-process')
 
 async function main () {
-  const store = new Corestore('./store')
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
 
-  // 2. Create a Data Loader
+  // 1. Initializing data loader
+  const store = new Corestore('./store')
   const hdStore = store.namespace('hd')
+
+  const hdKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
   const hdDL = new HyperDriveDL({
-    key: 'hd://d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e',
+    key: `hd://${hdKey}`,
     store: hdStore
   })
 
-  // 3. Create the args obj
+  // 2. Configuring model settings
   const args = {
     loader: hdDL,
     logger: console,
     opts: { stats: true },
-    diskPath: './models/',
+    diskPath: './models',
     modelName: 'gte-large_fp16.gguf'
   }
-
-  // 4. Create config
   const config = '-ngl\t25'
 
-  // 5. Instanstiate the model
+  // 3. Loading model
+  await hdDL.ready()
   const model = new GGMLBert(args, config)
-
-  // 6. Load the model
-  await model.load()
+  const closeLoader = true
+  let totalProgress = 0
+  const reportProgressCallback = (report) => {
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+      )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
+    }
+  }
+  await model.load(closeLoader, reportProgressCallback)
 
   try {
-    const query =
-      'Hello, can you suggest a game I can play with my 1 year old daughter?'
+    // 4. Generating embeddings
+    const query = "Hello, can you suggest a game I can play with my 1 year old daughter?"
+    const response = await model.run(query)
+    const embeddings = await response.await()
 
-  // 7. Generate embeddings for input sequence
-  const response = await model.run(query)
-  const embeddings = await resposne.await()
-  console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
-  console.log('First few values of first embedding:')
-  console.log(embeddings[0].slice(0, 5))
-  
-  // 8. Unload the model
-  await model.unload()
+    console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
+    console.log('First few values of first embedding:')
+    console.log(embeddings[0].slice(0, 5))
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
+  } finally {
+    // 5. Cleaning up resources
+    await model.unload()
+    await hdDL.close()
+    await store.close()
+  }
 }
 
 main().catch(console.error)
@@ -216,27 +240,26 @@ The benchmarking covers:
 
 Results are continuously updated with new releases to ensure up-to-date performance insights.
 
-## Additional Documents
+## Tests
 
-* [Build BERT CLI](./build_cli.md)
-* [Generation of Mobile Addon](./build_mobile.md)
-* [Testing on Android with Termux](./testing_mobile_termux.md)
+Integration tests are located in [`test/integration/`](test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
+These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
+
+Unit tests are located in [`test/unit/`](test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary
 
-* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile.
-* **BERT GTE‑Large (355M)** - A BERT‑based general text embedding model with 1024‑dimensional embeddings (~355 M parameters).
-* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications.
-* **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing.
+* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview). 
+* **BERT GTE‑Large (355M)** - A BERT‑based general text embedding model with 1024‑dimensional embeddings (~355 M parameters). [See on HuggingFace](https://huggingface.co/thenlper/gte-large).
+* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
+* **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).
 * **DataLoader** - Provides a common interface for loading data from various sources.
-* **HyperdriveDataLoader** - A data loading library designed to load model weights and other resources from a `Hyperdrive` instance. 
-* **FileSystemDataLoader** - A data loading library designed to load model weights and other resources from a local filesystem. 
+* **HyperdriveDataLoader** - A data loading library designed to load model weights and other resources from a `Hyperdrive` instance. [See on Github](https://github.com/tetherto/qvac-lib-dl-hyperdrive).
+* **FileSystemDataLoader** - A data loading library designed to load model weights and other resources from a local filesystem.  [See on Github](https://github.com/tetherto/qvac-lib-dl-filesystem).
 
-## Resources
+## License
 
-* [Bare Runtime Reference](https://docs.pears.com/bare-reference/overview)
-* [BERT GTE‑Large](https://huggingface.co/thenlper/gte-large)
-* [Corestore Documentation](https://docs.pears.com/helpers/corestore)
-* [Hyperdrive Documentation](https://docs.pears.com/building-blocks/hyperdrive)
-* [HyperdriveDataLoader](https://github.com/tetherto/qvac-lib-dl-hyperdrive)
-* [FileSystemDataLoader](https://github.com/tetherto/qvac-lib-dl-filesystem)
+This project is licensed under the Apache-2.0 [License](./LICENSE) – see the LICENSE file for details.
+
+_For questions or issues, please open an issue on the GitHub repository._

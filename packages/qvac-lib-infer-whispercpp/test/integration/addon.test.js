@@ -261,6 +261,49 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   }
 })
 
+test('Runtime stats are populated when opts.stats=true', { timeout: 120000 }, async (t) => {
+  await ensureWhisperModel(modelPath)
+  generateTestAudio(audioPath)
+
+  const config = {
+    path: modelPath,
+    whisperConfig: {
+      language: 'en',
+      audio_format: 's16le',
+      temperature: 0.0
+    }
+  }
+
+  const constructorArgs = {
+    modelName: path.basename(modelPath),
+    diskPath: path.dirname(modelPath),
+    loader: new (require('../mocks/loader.fake.js'))({}),
+    opts: { stats: true }
+  }
+
+  const model = new (require('../../index'))(constructorArgs, config)
+
+  try {
+    await model._load()
+    const audioStream = require('./helpers.js').createAudioStream(audioPath)
+    const response = await model.run(audioStream)
+    await response.await()
+
+    t.ok(response.stats, 'Response should include stats')
+    t.ok(Object.keys(response.stats).length > 0, 'Response.stats should not be empty')
+
+    // Validate a few core metrics are present and numeric.
+    t.is(typeof response.stats.totalTime, 'number', 'totalTime should be a number')
+    t.ok(response.stats.totalTime >= 0, 'totalTime should be >= 0')
+    t.is(typeof response.stats.audioDurationMs, 'number', 'audioDurationMs should be a number')
+    t.ok(response.stats.audioDurationMs > 0, 'audioDurationMs should be > 0')
+    t.is(typeof response.stats.totalSamples, 'number', 'totalSamples should be a number')
+    t.ok(response.stats.totalSamples > 0, 'totalSamples should be > 0')
+  } finally {
+    try { await model.unload() } catch {}
+  }
+})
+
 test('Real addon with VAD enabled - advanced case', { timeout: 120000 }, async (t) => {
   console.log(' Testing VAD-enabled transcription (if VAD model available)')
 

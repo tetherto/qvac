@@ -131,9 +131,13 @@ if(USE_BERGAMOT)
   # Set BUILD_ARCH to a portable value instead of "native" to ensure compatibility
   # across different CI runners. x86-64-v2 provides SSE4.2 which is widely supported.
   # Using "native" can cause crashes if the build machine has AVX512 but runtime doesn't.
-  if(NOT ANDROID AND NOT APPLE)
+  # Only apply this to x86/x64 platforms, not ARM64.
+  if(NOT ANDROID AND NOT APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
     set(BUILD_ARCH "x86-64-v2" CACHE STRING "Compile for this CPU architecture" FORCE)
     message(STATUS "Setting BUILD_ARCH to x86-64-v2 for portability")
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    set(BUILD_ARCH "armv8-a" CACHE STRING "Compile for ARM64 architecture" FORCE)
+    message(STATUS "Setting BUILD_ARCH to armv8-a for ARM64")
   endif()
 
   # Configure bergamot-translator as a static library

@@ -715,27 +715,47 @@ async function loadBundledIntegrationModule(relativeModulePath, options = {}) {
   
   if (!runner) {
     // No brittle runner - module loaded but doesn't use brittle
-    return relativeModulePath
+    return { modulePath: relativeModulePath, summary: { total: 0, passed: 0, failed: 0 } }
   }
   
-  const initialTestCount = runner.tests.count
+  // Capture BOTH count and pass BEFORE running this module's tests
+  // (brittle runner is a singleton with cumulative counts across all modules)
+  const initialCount = runner.tests ? runner.tests.count : 0
+  const initialPass = runner.tests ? runner.tests.pass : 0
   
   // Wait for tests to be registered and start
   let waited = 0
   const maxWait = 5000 // 5 seconds max to wait for tests to start
-  while (runner.tests.count === initialTestCount && runner.next === null && waited < maxWait) {
+  while (runner.tests && runner.tests.count === initialCount && runner.next === null && waited < maxWait) {
     await new Promise(resolve => setTimeout(resolve, 50))
     waited += 50
   }
   
   // Now wait for all tests to complete
-  if (runner.next !== null || runner.tests.count > initialTestCount) {
+  if (runner.next !== null || (runner.tests && runner.tests.count > initialCount)) {
     while (runner.next !== null) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
   }
   
-  return relativeModulePath
+  const finalCount = runner.tests ? runner.tests.count : 0
+  const finalPass = runner.tests ? runner.tests.pass : 0
+  
+  // Calculate PER-MODULE results (delta from before/after this module ran)
+  // This is critical because brittle's runner accumulates counts globally
+  const moduleTotal = finalCount - initialCount
+  const modulePassed = finalPass - initialPass
+  const moduleFailed = moduleTotal - modulePassed
+  
+  // Return per-module summary (not cumulative global counts)
+  return { 
+    modulePath: relativeModulePath,
+    summary: {
+      total: moduleTotal,
+      passed: modulePassed,
+      failed: moduleFailed
+    }
+  }
 }
 
 global.runIntegrationModule = async function(relativeModulePath, options = {}) {
@@ -815,10 +835,15 @@ async function handleRunTest(req) {
             const result = await testFunctionMap[testName](dirPath, getAssetPath, processedPreTestData)
             const duration = Date.now() - startedAt
             logRun(testName, 'end', \`duration=\${duration}ms\`)
+            
+            // Handle result with summary
+            const { summary } = result
+            const allPassed = summary.failed === 0
+            
             req.reply(JSON.stringify({ 
-                success: true, 
+                success: allPassed,
                 testName,
-                result,
+                summary,
                 duration 
             }))
         } catch (error) {

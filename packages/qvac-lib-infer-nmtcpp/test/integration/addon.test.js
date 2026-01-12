@@ -255,7 +255,7 @@ async function testIndicTrans () {
         dstLang: 'hin_Deva'
       },
       diskPath: modelDir,
-      modelName: modelName,
+      modelName,
       logger
     }
 

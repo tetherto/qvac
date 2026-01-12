@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <string>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "AndroidLog.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -168,12 +171,15 @@ std::vector<Ort::Value> StepDetectionInference::runInference(cv::Mat inputBlob) 
 }
 
 StepDetectionInference::Output StepDetectionInference::process(const StepDetectionInference::Input &input) {
-  std::printf("[DetectionInference] Starting - origImg size=%dx%d, channels=%d, magRatio=%.2f\n",
-              input.origImg.cols, input.origImg.rows, input.origImg.channels(), magRatio_);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[DetectionInference] Starting - origImg size=" + std::to_string(input.origImg.cols) + "x" +
+       std::to_string(input.origImg.rows) + ", channels=" + std::to_string(input.origImg.channels()) +
+       ", magRatio=" + std::to_string(magRatio_));
 
   auto [imgResized, imgResizeRatio] = resizeAspectRatio(input.origImg, magRatio_);
-  std::printf("[DetectionInference] After resize - size=%dx%d, ratio=%.4f\n",
-              imgResized.cols, imgResized.rows, imgResizeRatio);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[DetectionInference] After resize - size=" + std::to_string(imgResized.cols) + "x" +
+       std::to_string(imgResized.rows) + ", ratio=" + std::to_string(imgResizeRatio));
 
   normalizeMeanVariance(imgResized);
 
@@ -191,16 +197,21 @@ StepDetectionInference::Output StepDetectionInference::process(const StepDetecti
 
   cv::Mat inputBlob = chwBlob.reshape(1, {1, numChannels, height, width});
 
-  std::printf("[DetectionInference] Running ONNX inference...\n");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[DetectionInference] Running ONNX inference...");
+  ALOG_DEBUG(std::string("[DetectionInference] Running ONNX inference..."));
   auto t0 = std::chrono::high_resolution_clock::now();
   std::vector<Ort::Value> outputTensors = runInference(inputBlob);
   auto t1 = std::chrono::high_resolution_clock::now();
   auto detectionMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-  std::printf("[DetectionInference] ONNX inference: %lld ms\n", detectionMs);
+  std::string inferenceMsg = "[DetectionInference] ONNX inference: " + std::to_string(detectionMs) + " ms";
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, inferenceMsg);
+  ALOG_DEBUG(inferenceMsg);
 
   auto [scoreText, scoreLink] = extractOutputFromOrtValue(outputTensors[0]);
-  std::printf("[DetectionInference] Output extracted - scoreText=%dx%d, scoreLink=%dx%d\n",
-              scoreText.cols, scoreText.rows, scoreLink.cols, scoreLink.rows);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[DetectionInference] Output extracted - scoreText=" + std::to_string(scoreText.cols) + "x" +
+       std::to_string(scoreText.rows) + ", scoreLink=" + std::to_string(scoreLink.cols) + "x" +
+       std::to_string(scoreLink.rows));
 
   return {input, scoreText, scoreLink, RATIO_DETECTOR_NET / imgResizeRatio};
 }

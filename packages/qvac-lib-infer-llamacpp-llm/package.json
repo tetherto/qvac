@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.5.10",
+  "version": "0.6.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -18,7 +18,7 @@
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc index.d.ts --noEmit",
+    "test:dts": "tsc -p tsconfig.dts.json",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/test/unit/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
@@ -61,11 +61,12 @@
     "@qvac/dl-filesystem": "^0.1.2",
     "@qvac/dl-hyperdrive": "^0.1.1",
     "@qvac/logging": "^0.1.0",
+    "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
-    "bare-url": "^2.1.6",
     "bare-process": "^4.2.2",
+    "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -76,6 +77,7 @@
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
     "tty": "npm:bare-tty@^5.0.3",
+    "typescript": "^5.9.2",
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {

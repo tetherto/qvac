@@ -4,11 +4,13 @@
 #include <opencv2/opencv.hpp>
 
 #include <algorithm>
+#include <string>
 #include <numeric>
 #include <limits>
 #include <iterator>
 
 #include <cmath>
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -134,9 +136,10 @@ void StepBoundingBox::loadConnectedComponents(const cv::Mat &textMap, const cv::
 StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
   loadConnectedComponents(input.textMap, input.linkMap);
 
-  std::printf("[BoundingBox] nLabels=%d, textMap size=%dx%d, linkMap size=%dx%d\n",
-              nLabels_, input.textMap.cols, input.textMap.rows,
-              input.linkMap.cols, input.linkMap.rows);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[BoundingBox] nLabels=" + std::to_string(nLabels_) + ", textMap size=" +
+       std::to_string(input.textMap.cols) + "x" + std::to_string(input.textMap.rows) +
+       ", linkMap size=" + std::to_string(input.linkMap.cols) + "x" + std::to_string(input.linkMap.rows));
 
   std::vector<std::array<cv::Point2f, 4>> listOfBoxes;
   for (int i = 1; i < nLabels_; i++) {
@@ -154,20 +157,25 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
     listOfBoxes.push_back(getBoxFromComponent(input, i));
   }
 
-  std::printf("[BoundingBox] Found %zu raw boxes from components\n", listOfBoxes.size());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[BoundingBox] Found " + std::to_string(listOfBoxes.size()) + " raw boxes from components");
 
   auto [alignedBoxes, unalignedBoxes] = turnPolysIntoBoxes(listOfBoxes, input.context.boxMarginMultiplier);
-  std::printf("[BoundingBox] After turnPolysIntoBoxes: %zu aligned, %zu unaligned\n",
-              alignedBoxes.size(), unalignedBoxes.size());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[BoundingBox] After turnPolysIntoBoxes: " + std::to_string(alignedBoxes.size()) +
+       " aligned, " + std::to_string(unalignedBoxes.size()) + " unaligned");
 
   std::vector<std::array<float, 4>> mergedAlignedBoxes = groupAndMergeAlignedBoxes(alignedBoxes, input.context.boxMarginMultiplier);
-  std::printf("[BoundingBox] After merge: %zu merged aligned boxes\n", mergedAlignedBoxes.size());
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[BoundingBox] After merge: " + std::to_string(mergedAlignedBoxes.size()) + " merged aligned boxes");
 
   std::vector<AlignedBox> outputAlignedBoxes = getOutputAlignedBoxes(input.imgResizeRatio, mergedAlignedBoxes);
   std::vector<UnalignedBox> outputUnalignedBoxes = getOutputUnalignedBoxes(input.imgResizeRatio, unalignedBoxes);
 
-  std::printf("[BoundingBox] Final output: %zu aligned, %zu unaligned (imgResizeRatio=%.4f)\n",
-              outputAlignedBoxes.size(), outputUnalignedBoxes.size(), input.imgResizeRatio);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[BoundingBox] Final output: " + std::to_string(outputAlignedBoxes.size()) + " aligned, " +
+       std::to_string(outputUnalignedBoxes.size()) + " unaligned (imgResizeRatio=" +
+       std::to_string(input.imgResizeRatio) + ")");
 
   return {input.context, outputAlignedBoxes, outputUnalignedBoxes};
 }
@@ -391,8 +399,10 @@ std::vector<AlignedBox> StepBoundingBox::getOutputAlignedBoxes(const float imgRe
   int skippedMinSize = 0;
   int skippedInvalidRoi = 0;
 
-  std::printf("[getOutputAlignedBoxes] Processing %zu boxes, linkMapBinary size=%dx%d\n",
-              mergedList.size(), linkMapBinary_.cols, linkMapBinary_.rows);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[getOutputAlignedBoxes] Processing " + std::to_string(mergedList.size()) +
+       " boxes, linkMapBinary size=" + std::to_string(linkMapBinary_.cols) + "x" +
+       std::to_string(linkMapBinary_.rows));
 
   for (const auto &box : mergedList) {
     float width = box[1] - box[0];
@@ -419,8 +429,10 @@ std::vector<AlignedBox> StepBoundingBox::getOutputAlignedBoxes(const float imgRe
       // Check if ROI is valid after clamping
       if (roiWidth <= 0 || roiHeight <= 0) {
         skippedInvalidRoi++;
-        std::printf("[getOutputAlignedBoxes] Skipped box: invalid ROI after clamp (roiX=%d, roiY=%d, roiW=%d, roiH=%d)\n",
-                    roiX, roiY, roiWidth, roiHeight);
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "[getOutputAlignedBoxes] Skipped box: invalid ROI after clamp (roiX=" + std::to_string(roiX) +
+             ", roiY=" + std::to_string(roiY) + ", roiW=" + std::to_string(roiWidth) +
+             ", roiH=" + std::to_string(roiHeight) + ")");
         continue;
       }
 
@@ -436,8 +448,9 @@ std::vector<AlignedBox> StepBoundingBox::getOutputAlignedBoxes(const float imgRe
     }
   }
 
-  std::printf("[getOutputAlignedBoxes] Result: %zu filtered, skipped %d (min size), %d (invalid ROI)\n",
-              filtered.size(), skippedMinSize, skippedInvalidRoi);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "[getOutputAlignedBoxes] Result: " + std::to_string(filtered.size()) + " filtered, skipped " +
+       std::to_string(skippedMinSize) + " (min size), " + std::to_string(skippedInvalidRoi) + " (invalid ROI)");
 
   return filtered;
 }

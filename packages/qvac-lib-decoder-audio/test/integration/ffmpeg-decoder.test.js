@@ -118,6 +118,36 @@ test('FFmpegDecoder - handles corrupted file', { skip: isMobile }, async (t) => 
   }
 })
 
+test('FFmpegDecoder - returns runtime stats', async (t) => {
+  const decoder = await loadDecoder({
+    audioFormat: 's16le',
+    sampleRate: 16000
+  })
+
+  try {
+    const sampleFile = isMobile
+      ? getAssetPath('sample_mp3.mp3')
+      : path.join(__dirname, '../../example/sample.mp3')
+
+    const audioStream = fs.createReadStream(sampleFile)
+    const response = await decoder.run(audioStream)
+
+    await response.onFinish(() => {}).await()
+
+    const stats = response.stats
+    t.ok(stats.decodeTimeMs > 0, 'decodeTimeMs recorded')
+    t.ok(stats.inputBytes > 0, 'inputBytes recorded')
+    t.ok(stats.outputBytes > 0, 'outputBytes recorded')
+    t.ok(stats.samplesDecoded > 0, 'samplesDecoded recorded')
+    t.ok(stats.codecName === 'mp3', 'codecName is mp3')
+    t.ok(stats.inputSampleRate > 0, 'inputSampleRate recorded')
+    t.is(stats.outputSampleRate, 16000, 'outputSampleRate matches config')
+    t.is(stats.audioFormat, 's16le', 'audioFormat matches config')
+  } finally {
+    await decoder.unload()
+  }
+})
+
 test('FFmpegDecoder - handles real corrupted mp3 file', async (t) => {
   const decoder = await loadDecoder({
     audioFormat: 's16le',

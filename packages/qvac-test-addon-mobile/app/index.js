@@ -6,7 +6,6 @@ import { INIT, RUN_TEST } from '../backend/api.cjs'
 import { loadAssetPaths } from './utils/assetLoader'
 import { TEST_FUNCTIONS, TEST_CONFIG } from './testConfig'
 import { playAudio } from './utils/audio'
-import { executePreTestStep } from './utils/preTestSteps'
 import { useExpoTwoWayAudioEventListener, toggleRecording } from '@speechmatics/expo-two-way-audio'
 import { Buffer } from 'buffer'
 
@@ -24,29 +23,29 @@ export default function App() {
     const [capturedData, setCapturedData] = useState({})
     const [recordingState, setRecordingState] = useState({}) // { testName: { isRecording: boolean, startTime: number } }
     const [isTestRunning, setIsTestRunning] = useState(false) // Track if any test is currently running
-    
+
     // Audio recording state for pre-test steps
     const audioChunksRef = useRef([])
     const isCollectingAudioRef = useRef(false)
-    
+
     // Set up audio event listener for pre-test microphone recording
     useExpoTwoWayAudioEventListener('onMicrophoneData', useCallback((event) => {
         if (isCollectingAudioRef.current && event.data) {
             audioChunksRef.current.push(event.data)
         }
     }, []))
-    
+
     // Function to start recording audio
     const startRecording = useCallback((testName, addMessage) => {
         try {
             // Clear previous chunks
             audioChunksRef.current = []
             isCollectingAudioRef.current = true
-            
+
             // Start recording
             toggleRecording(true)
             addMessage(`Recording started... (Tap "Stop Recording" when done)`)
-            
+
             // Update recording state
             setRecordingState(prev => ({
                 ...prev,
@@ -60,33 +59,33 @@ export default function App() {
             throw error
         }
     }, [])
-    
+
     // Function to stop recording audio
     const stopRecording = useCallback(async (testName, addMessage) => {
         try {
             // Stop recording
             toggleRecording(false)
             isCollectingAudioRef.current = false
-            
+
             const recordingInfo = recordingState[testName]
             const duration = recordingInfo ? (Date.now() - recordingInfo.startTime) / 1000 : 0
             addMessage(`Recording stopped (${duration.toFixed(1)}s recorded)`)
-            
+
             // Give it a moment to process final chunks
             await new Promise(resolve => setTimeout(resolve, 200))
-            
+
             // Combine all chunks into buffer
             const totalLength = audioChunksRef.current.reduce((sum, chunk) => sum + chunk.length, 0)
             const combinedBuffer = new Uint8Array(totalLength)
             let offset = 0
-            
+
             for (const chunk of audioChunksRef.current) {
                 combinedBuffer.set(new Uint8Array(chunk), offset)
                 offset += chunk.length
             }
-            
+
             const buffer = Buffer.from(combinedBuffer)
-            
+
             // Update recording state
             setRecordingState(prev => ({
                 ...prev,
@@ -95,9 +94,9 @@ export default function App() {
                     startTime: null
                 }
             }))
-            
+
             return buffer
-            
+
         } catch (error) {
             isCollectingAudioRef.current = false
             setRecordingState(prev => ({
@@ -149,14 +148,93 @@ export default function App() {
         }
         console.log('INITIALIZING', dirPath)
         console.log('Asset paths:', assetPaths)
-        
+
+        // Gather detailed device information
+        const deviceInfo = await getDeviceInfo()
+        console.log('Device Info:', deviceInfo)
+
         const request = rpc.request(INIT)
-        // Send asset paths along with dirPath as JSON
-        request.send(JSON.stringify({ dirPath, assetPaths }))
+        // Send device info along with dirPath and assetPaths
+        request.send(JSON.stringify({ dirPath, assetPaths, deviceInfo }))
         const response = await request.reply('utf8')
         addMessage(response.toString())
         setInitialized(true)
         addMessage('\nReady! Use buttons below to run tests.')
+    }
+
+    async function getDeviceInfo() {
+        try {
+            const DeviceInfo = require('react-native-device-info')
+            const { Platform } = require('react-native')
+            const Constants = require('expo-constants').default
+
+            const baseInfo = {
+                // Basic Platform Info
+                platform: Platform.OS,
+                platformVersion: Platform.Version,
+
+                // Device Identity
+                deviceName: await DeviceInfo.getDeviceName().catch(() => Constants.deviceName || 'Unknown'),
+                manufacturer: await DeviceInfo.getManufacturer().catch(() => 'Unknown'),
+                brand: DeviceInfo.getBrand(),
+                model: DeviceInfo.getModel(),
+                deviceId: DeviceInfo.getDeviceId(),
+
+                // System Info
+                systemName: DeviceInfo.getSystemName(),
+                systemVersion: DeviceInfo.getSystemVersion(),
+                buildId: await DeviceInfo.getBuildId().catch(() => 'Unknown'),
+
+                // CPU/Memory (cross-platform)
+                supportedAbis: await DeviceInfo.supportedAbis().catch(() => []),
+                totalMemory: await DeviceInfo.getTotalMemory().catch(() => 0),
+
+                // Expo Constants
+                isDevice: Constants.isDevice,
+                deviceYearClass: Constants.deviceYearClass,
+            }
+
+            // Add Android-specific info
+            if (Platform.OS === 'android') {
+                // Hardware Info
+                baseInfo.hardware = await DeviceInfo.getHardware().catch(() => 'Unknown')
+                baseInfo.product = await DeviceInfo.getProduct().catch(() => 'Unknown')
+                baseInfo.device = await DeviceInfo.getDevice().catch(() => 'Unknown')
+
+                // Other Android-specific
+                baseInfo.androidId = await DeviceInfo.getAndroidId().catch(() => 'Unknown')
+                baseInfo.apiLevel = DeviceInfo.getApiLevel()
+                baseInfo.bootloader = await DeviceInfo.getBootloader().catch(() => 'Unknown')
+                baseInfo.codename = await DeviceInfo.getCodename().catch(() => 'Unknown')
+                baseInfo.display = await DeviceInfo.getDisplay().catch(() => 'Unknown')
+                baseInfo.fingerprint = await DeviceInfo.getFingerprint().catch(() => 'Unknown')
+                baseInfo.host = await DeviceInfo.getHost().catch(() => 'Unknown')
+                baseInfo.tags = await DeviceInfo.getTags().catch(() => 'Unknown')
+                baseInfo.type = await DeviceInfo.getType().catch(() => 'Unknown')
+            }
+
+            // Add iOS-specific info
+            if (Platform.OS === 'ios') {
+                try {
+                    baseInfo.deviceType = await DeviceInfo.getDeviceType().catch(() => 'Unknown')
+                    // iOS chip info (A-series processors)
+                    const sysName = DeviceInfo.getSystemName() || 'iOS'
+                    const model = DeviceInfo.getModel() || 'Unknown'
+                    baseInfo.hardware = `${sysName} ${model}`
+                } catch (e) {
+                    baseInfo.hardware = 'iOS Device'
+                    console.warn('Could not get iOS hardware info:', e)
+                }
+            }
+
+            return baseInfo
+        } catch (error) {
+            console.error('Error getting device info:', error)
+            return {
+                platform: 'Unknown',
+                error: error.message
+            }
+        }
     }
 
     async function runAutomatedTests() {
@@ -164,16 +242,16 @@ export default function App() {
             addMessage('⚠️ Cannot run automated tests: A test is already running')
             return
         }
-        
+
         setIsTestRunning(true)
         try {
             console.log('Running automated tests:', automatedTests)
             addMessage(`\n=== Running ${automatedTests.length} Automated Test(s) ===`)
-            
+
             for (const testName of automatedTests) {
                 await runTest(testName)
             }
-            
+
             addMessage('\nAutomated tests completed!')
         } finally {
             setIsTestRunning(false)
@@ -185,7 +263,7 @@ export default function App() {
             addMessage('⚠️ Cannot start recording: A test is already running')
             return
         }
-        
+
         const testConfig = TEST_CONFIG[testName]
         if (!testConfig?.preTest) {
             addMessage(`${testName}: No pre-test configuration found`)
@@ -195,23 +273,23 @@ export default function App() {
         try {
             setIsTestRunning(true)
             addMessage(`\n=== Starting capture for ${testName} ===`)
-            
+
             // Check permissions first
-            const { 
-                initialize, 
+            const {
+                initialize,
                 requestMicrophonePermissionsAsync
             } = require('@speechmatics/expo-two-way-audio')
-            
+
             addMessage('Checking microphone permissions...')
-            
+
             const permission = await requestMicrophonePermissionsAsync()
-            
+
             if (!permission.granted) {
                 throw new Error('Microphone permission denied. Please enable microphone access in settings.')
             }
-            
+
             addMessage('Microphone permission granted')
-            
+
             // Initialize audio stream
             addMessage('Initializing audio stream...')
             try {
@@ -221,30 +299,30 @@ export default function App() {
                 console.log('Audio initialization warning:', error.message)
                 // Continue anyway, might already be initialized
             }
-            
+
             // Start recording
             startRecording(testName, addMessage)
-            
+
         } catch (error) {
             console.error(`Failed to start capture for ${testName}:`, error)
             addMessage(`${testName}: FAIL - Failed to start: ${error.message}`)
         }
     }
-    
+
     async function stopCaptureInputForTest(testName) {
         try {
             const data = await stopRecording(testName, addMessage)
-            
+
             if (!data || data.length === 0) {
                 throw new Error('No audio data collected. Make sure microphone is working.')
             }
-            
+
             // Store captured data
             setCapturedData(prev => ({
                 ...prev,
                 [testName]: data
             }))
-            
+
             addMessage(`${testName}: Input captured successfully (${data.length} bytes)`)
         } catch (error) {
             console.error(`Failed to stop capture for ${testName}:`, error)
@@ -259,9 +337,9 @@ export default function App() {
             addMessage('⚠️ Cannot run test: Another test is already running')
             return
         }
-        
+
         const preTestData = capturedData[testName]
-        
+
         if (!preTestData) {
             addMessage(`${testName}: Please capture input first`)
             return
@@ -270,20 +348,20 @@ export default function App() {
         setIsTestRunning(true)
         try {
             addMessage(`\n=== Running ${testName} ===`)
-            
+
             const request = rpc.request(RUN_TEST)
-            request.send(JSON.stringify({ 
+            request.send(JSON.stringify({
                 testName,
-                preTestData 
+                preTestData
             }))
             const response = await request.reply('utf8')
             const result = JSON.parse(response.toString())
-            
+
             // Handle post-test result data
             if (result.result) {
                 handleResultData(result.result)
             }
-            
+
             if (result.success) {
                 console.log(`✅ ${testName} passed`)
                 addMessage(`${testName}: PASS`)
@@ -304,30 +382,31 @@ export default function App() {
             addMessage(`${testName}: FAIL - RPC not ready`)
             return
         }
-        
+
         try {
             console.log(`Running test: ${testName}`)
-            
+
             // Send test request (automated tests don't have pre-test data)
             const request = rpc.request(RUN_TEST)
-            request.send(JSON.stringify({ 
+            request.send(JSON.stringify({
                 testName,
                 preTestData: null
             }))
             const response = await request.reply('utf8')
             const result = JSON.parse(response.toString())
-            
+
             // Handle post-test result data
             if (result.result) {
                 handleResultData(result.result)
             }
-            
-            if (result.success) {
-                console.log(`✅ ${testName} passed`)
-                addMessage(`${testName}: PASS`)
+// Display test result with pass/fail count
+            const { summary } = result
+            if (summary && result.success) {
+                console.log(`✅ ${testName} passed (${summary.passed}/${summary.total})`)
+                addMessage(`${testName}: PASS (${summary.passed}/${summary.total})`)
             } else {
-                console.log(`❌ ${testName} failed:`, result.error)
-                addMessage(`${testName}: FAIL - ${result.error}`)
+                console.log(`❌ ${testName} failed (${summary?.passed ?? 0}/${summary?.total ?? 0})`)
+                addMessage(`${testName}: FAIL (${summary?.passed ?? 0}/${summary?.total ?? 0} passed)`)
             }
         } catch (error) {
             console.error(`Error running test ${testName}:`, error)
@@ -359,20 +438,20 @@ export default function App() {
                 <Text style={styles.text} testID="text">
                     {messages.join('\n')}
                 </Text>
-                
+
                 {initialized && (
                     <View style={styles.controlsContainer}>
                         <Text style={styles.sectionTitle}>Controls</Text>
-                        
+
                         {/* Show status when tests are running */}
                         {isTestRunning && (
                             <View style={styles.statusContainer}>
                                 <Text style={styles.statusText}>🔄 Test in progress...</Text>
                             </View>
                         )}
-                        
+
                         {/* Automated Tests Button */}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={[
                                 styles.button,
                                 isTestRunning && styles.disabledButton
@@ -387,7 +466,7 @@ export default function App() {
                                 Run Automated Tests ({automatedTests.length})
                             </Text>
                         </TouchableOpacity>
-                        
+
                         {/* Manual Tests Section */}
                         {manualTests.length > 0 && (
                             <View style={styles.manualTestsSection}>
@@ -397,16 +476,16 @@ export default function App() {
                                     const hasCapturedData = !!capturedData[testName]
                                     const isThisTestActive = isRecording
                                     const canInteract = !isTestRunning || isThisTestActive
-                                    
+
                                     return (
                                         <View key={testName} style={styles.manualTestRow}>
                                             <Text style={styles.testName}>{testName}</Text>
                                             <View style={styles.buttonRow}>
                                                 {!isRecording ? (
                                                     <>
-                                                        <TouchableOpacity 
+                                                        <TouchableOpacity
                                                             style={[
-                                                                styles.button, 
+                                                                styles.button,
                                                                 styles.smallButton,
                                                                 !canInteract && styles.disabledButton
                                                             ]}
@@ -420,10 +499,10 @@ export default function App() {
                                                                 {hasCapturedData ? '🔴 Re-record' : '🔴 Start Recording'}
                                                             </Text>
                                                         </TouchableOpacity>
-                                                        
-                                                        <TouchableOpacity 
+
+                                                        <TouchableOpacity
                                                             style={[
-                                                                styles.button, 
+                                                                styles.button,
                                                                 styles.smallButton,
                                                                 (!hasCapturedData || !canInteract) && styles.disabledButton
                                                             ]}
@@ -439,7 +518,7 @@ export default function App() {
                                                         </TouchableOpacity>
                                                     </>
                                                 ) : (
-                                                    <TouchableOpacity 
+                                                    <TouchableOpacity
                                                         style={[styles.button, styles.recordingButton]}
                                                         onPress={() => stopCaptureInputForTest(testName)}
                                                     >

@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot>An actor provides professional services to help people in their lives</plot>
+  <lockdata>false</lockdata>
+  <dateadded>2026-01-06 10:09:14</dateadded>
+  <title>SCRIPTS</title>
+  <originaltitle>SCRIPTS</originaltitle>
+  <director>Jeannie Sui Wonders</director>
+  <writer>Jeannie Sui Wonders</writer>
+  <credits>Jeannie Sui Wonders</credits>
+  <rating>0</rating>
+  <year>2015</year>
+  <imdbid>tt12517594</imdbid>
+  <tmdbid>1014112</tmdbid>
+  <premiered>2015-05-22</premiered>
+  <releasedate>2015-05-22</releasedate>
+  <genre>Documentary</genre>
+  <art />
+  <actor>
+    <name>Alistair Debling</name>
+    <role>Actor</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+  </actor>
+  <actor>
+    <name>Chase Sui Wonders</name>
+    <role>Girl</role>
+    <type>Actor</type>
+    <sortorder>1</sortorder>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\C\Chase Sui Wonders\folder.jpg</thumb>
+  </actor>
+  <id>tt12517594</id>
+  <fileinfo>
+    <streamdetails />
+  </fileinfo>
+</movie>

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/infer-base",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {

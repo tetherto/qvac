@@ -26,6 +26,8 @@ js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(js_env_t *env, js_value_
   V("stop", qvac_lib_inference_addon_onnx_ocr_fasttext::stop)
   V("cancel", qvac_lib_inference_addon_onnx_ocr_fasttext::cancel)
   V("destroyInstance", qvac_lib_inference_addon_onnx_ocr_fasttext::destroyInstance)
+  V("setLogger", qvac_lib_inference_addon_onnx_ocr_fasttext::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_onnx_ocr_fasttext::releaseLogger)
 #undef V
 // NOLINTEND(cppcoreguidelines-macro-usage)
 

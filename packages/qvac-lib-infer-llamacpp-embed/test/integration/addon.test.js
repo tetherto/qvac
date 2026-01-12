@@ -17,12 +17,13 @@ const {
 const platform = os.platform()
 
 const isDarwinX64 = platform === 'darwin' && os.arch() === 'x64'
+const isLinuxArm64 = platform === 'linux' && os.arch() === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
 
 // Test constants
 const TEST_TIMEOUT = 600_000
 const DEFAULT_BATCH_SIZE = '1024'
-const DEVICES = isDarwinX64 ? ['cpu'] : ['cpu', 'gpu'] // Devices to test on
+const DEVICES = (isDarwinX64 || isLinuxArm64) ? ['cpu'] : ['cpu', 'gpu'] // Devices to test on
 const STRESS_BATCH_SIZE = '4096'
 const STRESS_NUM_SEQUENCES = isMobile ? 32 : 256
 

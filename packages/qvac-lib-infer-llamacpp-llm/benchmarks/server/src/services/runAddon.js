@@ -111,14 +111,12 @@ const runAddon = async (payload) => {
     for (const input of inputs) {
       const output = []
       const messages = [
-        { role: 'session', content: 'reset' },
         {
           role: 'system',
           content: effectiveSystemPrompt
         },
         { role: 'user', content: input }
       ]
-      // Convert messages array to JSON string as expected by MLC Llama addon
 
       try {
         logger.debug('Calling model.run()...')

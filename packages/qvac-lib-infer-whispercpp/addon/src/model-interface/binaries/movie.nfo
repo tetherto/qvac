@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot>Binary is a documentary composed of two stages: the nature and the city. It is a journey that represents the paradox of communication.</plot>
+  <lockdata>false</lockdata>
+  <dateadded>2026-01-06 10:08:16</dateadded>
+  <title>Binary</title>
+  <originaltitle>Binario</originaltitle>
+  <director>Andrés Hernández Covarrubias</director>
+  <writer>Andrés Hernández Covarrubias</writer>
+  <credits>Andrés Hernández Covarrubias</credits>
+  <rating>0</rating>
+  <year>2015</year>
+  <imdbid>tt5466936</imdbid>
+  <tmdbid>704691</tmdbid>
+  <premiered>2015-08-10</premiered>
+  <releasedate>2015-08-10</releasedate>
+  <country>Mexico</country>
+  <genre>Documentary</genre>
+  <studio>Escuela Veracruzana de Cine Luis Buñuel</studio>
+  <tag>social life</tag>
+  <tag>social network</tag>
+  <tag>documentary filmmaking</tag>
+  <art />
+  <actor>
+    <name>Jorge Sergio Covarrubias</name>
+    <role>Himself</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+  </actor>
+  <actor>
+    <name>Lourdes Covarrubias</name>
+    <role>Himself</role>
+    <type>Actor</type>
+    <sortorder>1</sortorder>
+  </actor>
+  <actor>
+    <name>Juan Carlos Alarcón Cázares</name>
+    <role>Himself</role>
+    <type>Actor</type>
+    <sortorder>2</sortorder>
+  </actor>
+  <actor>
+    <name>Leopoldo Gavito</name>
+    <role>Himself</role>
+    <type>Actor</type>
+    <sortorder>3</sortorder>
+  </actor>
+  <actor>
+    <name>Andrés Hernández Covarrubias</name>
+    <role>Producer</role>
+    <type>Producer</type>
+    <thumb>C:\ProgramData\Jellyfin\Server\metadata\People\A\Andrés Hernández Covarrubias\folder.jpg</thumb>
+  </actor>
+  <id>tt5466936</id>
+  <fileinfo>
+    <streamdetails />
+  </fileinfo>
+</movie>
