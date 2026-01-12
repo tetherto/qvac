@@ -1,4 +1,4 @@
-name: General CI/CD Qvac-CLI
+name: General CI/CD (Qvac-CLI)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # (ported into the monorepo)
 

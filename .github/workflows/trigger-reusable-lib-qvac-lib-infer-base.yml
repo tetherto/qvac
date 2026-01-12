@@ -1,26 +1,12 @@
-name: General CI/CD (Qvac-lib-dl-hyperdrive)
+name: General CI/CD (Qvac-lib-infer-base)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
-# (ported into the monorepo)
-
-permissions:
-  contents: write
-  packages: write
-  pull-requests: write
-  id-token: write
+# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
 on:
   push:
     branches: [main]
-    paths:
-      - "packages/qvac-lib-dl-hyperdrive/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-hyperdrive.yml"
-
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
-    paths:
-      - "packages/qvac-lib-dl-hyperdrive/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-hyperdrive.yml"
-
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -32,20 +18,21 @@ on:
       custom_input_3:
         required: false
         type: string
+
 jobs:
   call-devops-npm:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/reusable-public-reusable-npm.yml
+    uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-dl-hyperdrive
+      workdir: packages/qvac-lib-infer-base
 
   call-devops-gpr:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-dl-hyperdrive
+      workdir: packages/qvac-lib-infer-base
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
@@ -53,4 +40,4 @@ jobs:
     uses: ./.github/workflows/reusable-public-pr.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-dl-hyperdrive
+      workdir: packages/qvac-lib-infer-base
