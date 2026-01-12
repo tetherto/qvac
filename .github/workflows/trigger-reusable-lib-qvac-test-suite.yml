@@ -12,7 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/qvac-test-suite/**"
+      - "packages/qvac-test-suite/framework/**"
       - ".github/workflows/trigger-reusable-lib-qvac-test-suite.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
@@ -34,14 +34,14 @@ jobs:
     uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-test-suite
+      workdir: packages/qvac-test-suite/framework
 
   call-devops-gpr:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-test-suite
+      workdir: packages/qvac-test-suite/framework
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
@@ -49,4 +49,4 @@ jobs:
     uses: ./.github/workflows/reusable-public-pr.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-test-suite
+      workdir: packages/qvac-test-suite/framework
