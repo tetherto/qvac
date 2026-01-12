@@ -31,7 +31,7 @@ on:
 jobs:
   call-devops-npm:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/reusable-public-reusable.yml
+    uses: ./.github/workflows/reusable-public-reusable-npm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-filesystem
