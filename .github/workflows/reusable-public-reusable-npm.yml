@@ -106,7 +106,8 @@ jobs:
           clear-caches: "false"
           managers: npm,pip,pip3,uv,cargo
           workdir: ${{ inputs.workdir }}
-
+      
+      ##NPM publish to be reenabled after testing
       - name: Publish to NPM
         if: ${{ github.repository != 'tetherto/qvac' }}
         uses: tetherto/qvac/.github/actions/publish-library-to-npm@main
