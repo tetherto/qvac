@@ -44,7 +44,7 @@ jobs:
     permissions:
       contents: read
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
     steps:
       - uses: actions/checkout@v4
         with:
