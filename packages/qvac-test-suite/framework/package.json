@@ -1,6 +1,6 @@
 {
   "name": "@tetherto/qvac-test-suite",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Generic distributed testing framework for multi-platform execution",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm install && npm run build",
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src/",
