@@ -1,0 +1,32 @@
+name: On Merge to Main (qvac-lib-inference-addon-onnx-ocr-fasttext)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+      - ".github/workflows/on-merge-main-onnx-ocr-fasttext.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+env:
+  PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+
+jobs:
+  prebuild:
+    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+    with:
+      publish_target: "npm"
+      workdir: ${{ env.PKG_DIR }}
+
+  run-integration-tests:
+    needs: prebuild
+    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+    with:
+      workdir: ${{ env.PKG_DIR }}
