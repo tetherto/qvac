@@ -14,8 +14,13 @@ on:
     paths:
       - "packages/qvac-lib-infer-base/**"
       - ".github/workflows/trigger-reusable-qvac-lib-infer-base.yml"
+
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
+    paths:
+      - "packages/qvac-lib-infer-base/**"
+      - ".github/workflows/trigger-reusable-qvac-lib-infer-base.yml"
+
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -45,7 +50,7 @@ jobs:
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
-    if:  (github.event_name == 'pull_request') && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
+    if:  always() && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
     uses: ./.github/workflows/reusable-public-pr.yml
     secrets: inherit
     with:
