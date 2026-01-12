@@ -20,6 +20,10 @@ inputs:
   workdir: 
     default: "."
     type: string
+  name-suffix:
+    description: "Optional suffix to append to package name (e.g. -mono)"
+    required: false
+    default: ""
 
 outputs:
   npm_published_version:
@@ -225,25 +229,35 @@ runs:
         echo "should_publish=$SHOULD_PUBLISH" >> "$GITHUB_OUTPUT"
 
 
-    - name: Fix package scope if it's @qvac
+    - name: Normalize package name for publishing
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       run: |
+        set -euo pipefail
         PACKAGE_NAME=$(node -p "require('./package.json').name")
+        SUFFIX="${{ inputs.name-suffix }}"
+
         echo "Detected package name: $PACKAGE_NAME"
-        
+
+        # Normalize scope to @tetherto
         if [[ "$PACKAGE_NAME" == @qvac/* ]]; then
-          NEW_NAME=$(echo "$PACKAGE_NAME" | sed 's/@qvac/@tetherto/')
-          echo "⚙️ Rewriting package name from $PACKAGE_NAME to $NEW_NAME for publishing"
-          
-          # Update package.json in place
-          tmpfile=$(mktemp)
-          jq --arg new_name "$NEW_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
-          
-          echo "✅ Package name updated to $(node -p "require('./package.json').name")"
-        else
-          echo
+          PACKAGE_NAME="${PACKAGE_NAME/@qvac\//@tetherto/}"
+          echo "⚙️ Rewriting scope to: $PACKAGE_NAME"
         fi
+
+        # Append suffix to the *name* portion only (keep scope)
+        if [[ -n "$SUFFIX" ]]; then
+          SCOPE="${PACKAGE_NAME%%/*}"
+          NAME="${PACKAGE_NAME#*/}"
+          PACKAGE_NAME="${SCOPE}/${NAME}${SUFFIX}"
+          echo "🧪 Applying suffix, new name: $PACKAGE_NAME"
+        fi
+
+        tmpfile=$(mktemp)
+        jq --arg new_name "$PACKAGE_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
+
+        echo "✅ Final publish name: $(node -p "require('./package.json').name")"
+
 
     - name: Publish to NPM
       id: npm_publish

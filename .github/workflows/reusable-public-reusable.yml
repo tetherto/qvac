@@ -183,6 +183,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           workdir: ${{ env.WORKDIR }}
+          name-suffix: "-mono"
 
       - name: Echo published version from push
         run: |
