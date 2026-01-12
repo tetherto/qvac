@@ -34,14 +34,14 @@ jobs:
     uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-infer-base
+      workdir: packages/qvac-lib-dl-filesystem
 
   call-devops-gpr:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     uses: ./.github/workflows/reusable-public-reusable.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-infer-base
+      workdir: packages/qvac-lib-dl-filesystem
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
@@ -49,4 +49,4 @@ jobs:
     uses: ./.github/workflows/reusable-public-pr.yml
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-infer-base
+      workdir: packages/qvac-lib-dl-filesystem
