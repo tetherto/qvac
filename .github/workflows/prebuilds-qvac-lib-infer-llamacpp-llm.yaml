@@ -1,0 +1,467 @@
+name: "prebuilds (qvac-lib-infer-llamacpp-llm)"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yaml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with ('latest' by default)"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+      vk-profiling:
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      tag:
+        description: "Tag to publish"
+        type: string
+        required: false
+        default: "dev"
+      publish_target:
+        description: "Where to publish: 'npm' for main merges, 'gpr' for PRs"
+        type: string
+        required: false
+        default: ""
+    outputs:
+      published_version:
+        description: "The version that was published"
+        value: ${{ jobs.publish-npm.outputs.npm_published_version || jobs.publish-gpr.outputs.npm_published_version }}
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - os: macos-14
+            platform: ios
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
+
+    steps:
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+      - name: print env
+        run: |
+          printenv
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Echo workflow inputs
+        shell: bash
+        run: |
+          echo "Workflow inputs:"
+          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Matrix platform: ${{ matrix.platform }}"
+          echo "Matrix arch: ${{ matrix.arch }}"
+          echo "Matrix tags: ${{ matrix.tags }}"
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Install llvm-19
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref }}
+          repository: ${{ inputs.repository }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        run: npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        name: Rename win sdk folder to disable it
+        run: |
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15-intel' }}
+        name: Install vcpkg in macos
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator in windows
+        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Update apt sources
+        run: sudo apt-get update
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Install ccache on Linux
+        run: |
+          sudo apt-get install -y ccache
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Get ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+          save-always: true
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install required packages linux
+        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Install vulkan in linux
+        run: |
+          sudo apt install xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Setup vulkan sdk path in linux x64
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Setup vulkan sdk path in linux arm64
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          cd ~/vulkan
+          ./vulkansdk --maxjobs
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Export rest of vulkan sdk variables in linux
+        run: |
+          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install vulkan in windows
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        shell: bash
+        run: mkdir -p "${{ env.PKG_DIR }}/vcpkg/cache"
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR), format('{0}/vcpkg-configuration.json', env.PKG_DIR), format('{0}/vcpkg/ports/**', env.PKG_DIR)) }}
+          restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - if: ${{ inputs.vk-profiling }}
+        name: Enable vulkan profiling
+        run: |
+          echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
+
+      - name: Run bare-make generate
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $CFG_OPTS
+
+      - name: Run bare-make build
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          bare-make build
+
+      - name: Run bare-make install
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          bare-make install
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Remove .a files (Linux only)
+        shell: bash
+        run: |
+          rm -f ${{ env.PKG_DIR }}/prebuilds/linux-x64/qvac__llm-llamacpp/*.a
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Remove .a files (Linux arm64 only)
+        shell: bash
+        run: |
+          rm -f ${{ env.PKG_DIR }}/prebuilds/linux-arm64/qvac__llm-llamacpp/*.a
+
+      - name: Smoke check (temp-*) package name & prebuilds listing
+        if: ${{ startsWith(github.ref, 'refs/heads/temp-')
+                || startsWith(github.ref_name, 'temp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))) }}
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "package.json name (post-build): $(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).name)")"
+          echo "prebuilds directory:"
+          ls -la prebuilds || true
+          find prebuilds -maxdepth 1 -type d -print || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llm-llamacpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: prebuild
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-llm-llamacpp
+          path: prebuilds
+
+  publish-gpr:
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'gpr'
+            || (
+                 (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+                 && (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))))
+                 && (inputs.publish_target == '' || inputs.publish_target == null)
+               ) }}
+    continue-on-error: true
+    outputs:
+      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-llm-llamacpp
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Scope package as @tetherto for GPR
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@tetherto/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.0.1
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          workdir: ${{ env.PKG_DIR }}
+
+  publish-npm:
+    needs: [ prebuild, merge ]
+    if: ${{ (
+              inputs.publish_target == 'npm'
+              || github.event_name == 'push'
+              || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.publish_target == '' || inputs.publish_target == null))
+            )
+            && ! (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-')))) }}
+    continue-on-error: true
+    outputs:
+      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-llm-llamacpp
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Scope package as @qvac for npm
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.0.1
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: 'latest'
+          workdir: ${{ env.PKG_DIR }}

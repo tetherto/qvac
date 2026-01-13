@@ -1,0 +1,130 @@
+name: On PR Trigger (qvac-lib-infer-llamacpp-llm)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    paths:
+      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/*-qvac-lib-infer-llamacpp-llm.y*ml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+concurrency:
+  group: pr-llm-llamacpp-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+
+jobs:
+  sanity-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Sanity checks
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.0
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+
+  cpp-tests:
+    uses: ./.github/workflows/reusable-cpp-tests.yaml
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-infer-llamacpp-llm
+      artifact_prefix: llm-llamacpp
+      enable_coverage: true
+      models: |
+        [
+          {"uri": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf", "dest": "models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf"},
+          {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf"},
+          {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"}
+        ]
+
+  cpp-lint:
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.2
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-infer-llamacpp-llm
+
+  ts-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure npm auth
+        run: |
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run test:dts
+
+  prebuild:
+    needs: sanity-checks
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      publish_target: 'gpr'
+
+  run-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  merge-guard:
+    needs: [run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
+    if: always()
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.0
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+    secrets: inherit

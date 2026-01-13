@@ -1,0 +1,43 @@
+name: On Merge Trigger (qvac-lib-infer-llamacpp-llm)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/*-qvac-lib-infer-llamacpp-llm.y*ml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        default: "dev"
+        type: choice
+        options:
+          - latest
+          - dev
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        default: "dev"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yaml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag || 'latest' }}
+      publish_target: 'npm'
