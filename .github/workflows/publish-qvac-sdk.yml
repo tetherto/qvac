@@ -93,16 +93,6 @@ jobs:
           path: ${{ env.WORKDIR }}/dist/
           retention-days: 1
 
-      - name: Determine branch
-        id: branch
-        run: |
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "Branch: $BRANCH_NAME"
-
-    outputs:
-      branch: ${{ steps.branch.outputs.branch }}
-
   publish-npm:
     needs: build
     # DISABLED: NPM publishing disabled for testing - only GPR for now
@@ -139,14 +129,7 @@ jobs:
 
   publish-gpr:
     needs: build
-    if: |
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && needs.build.outputs.branch != 'main'
-      && (
-        needs.build.outputs.branch == 'dev' ||
-        startsWith(needs.build.outputs.branch, 'fix-') ||
-        startsWith(needs.build.outputs.branch, 'feature-')
-      )
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
