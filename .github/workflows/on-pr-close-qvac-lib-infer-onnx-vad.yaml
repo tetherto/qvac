@@ -1,0 +1,65 @@
+name: Unpublish GPR Package Versions (Qvac-lib-infer-onnx-vad)
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/qvac-lib-infer-onnx-vad/**"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space separated"
+        required: false
+        type: string
+        default: "qvac-lib-inference-addon-onnx-silerovad"
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        type: boolean
+        default: true
+
+run-name: >-
+  Delete NPM Versions
+  v=${{ inputs.version || '' }}
+  pr=${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
+  dry=${{ inputs['dry-run'] != false }}
+
+jobs:
+  print-context:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Print Inputs Context
+        env:
+          INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+        run: echo "Inputs Context: $INPUTS_CONTEXT"
+
+      - name: Print GitHub Context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: echo "GitHub Context: $GITHUB_CONTEXT"
+
+  delete-npm-versions-trigger:
+    permissions:
+      contents: read
+      packages: write
+    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.0
+    with:
+      version: ${{ inputs.version || '' }}
+      pr-number: ${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
+      pattern: ${{ inputs.pattern || '' }}
+      packages: ${{ inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
+      # Robust boolean: default true when unset, but respects explicit false.
+      dry-run: ${{ inputs['dry-run'] != false }}
+    secrets: inherit

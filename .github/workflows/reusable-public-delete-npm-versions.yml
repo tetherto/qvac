@@ -1,0 +1,152 @@
+name: Delete NPM Versions
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space-separated"
+        required: false
+        type: string
+      command:
+        description: "Variable field to distinguish triggers and intents"
+        required: false
+        type: string
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        required: false
+        type: boolean
+        default: true
+      workdir:
+        required: false
+        type: string
+        default: "."
+
+run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+
+jobs:
+  print-context-delete-npm-versions:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - run: |
+          echo "Inputs Context: $INPUTS_CONTEXT"
+        env:
+          INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+      - run: |
+          echo "GitHub Context: $GITHUB_CONTEXT"
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+
+  delete-npm-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: "https://npm.pkg.github.com/"
+          scope: "@tetherto"
+
+      - name: Configure npm registry
+        run: echo "@tetherto:registry=https://npm.pkg.github.com" >> .npmrc
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Process package versions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          if [ -n "${{ inputs.packages }}" ]; then
+            # Convert space-separated string to array
+            read -ra packages <<< "${{ inputs.packages }}"
+          else
+            # Use repository name if no packages specified
+            packages=("${GITHUB_REPOSITORY#*/}")
+          fi
+          echo "Packages: ${packages[@]}"
+
+          # Get PR number for pull_request event
+          if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
+            pr_number="${{ github.event.number }}"
+            target_version="pr-$pr_number"
+            echo "Target version: $target_version"
+          elif [ -n "${{ inputs.pr-number }}" ]; then
+            target_version="pr-${{ inputs.pr-number }}"
+            echo "Target version from input: $target_version"
+          fi
+
+          for pkg in "${packages[@]}"; do
+            echo "Processing package: $pkg"
+
+            echo "Listing versions before processing"
+            response=$(gh api --paginate -H "Accept: application/vnd.github+json" \
+              "orgs/tetherto/packages/npm/$pkg/versions" || echo "{}")
+            version_map=$(echo "$response" | jq -c 'reduce .[] as $item ({}; . + {($item.name): {id: $item.id}})')
+            echo "$version_map" | jq > "${pkg}_versions_before.json"
+
+            echo "Identifying versions to delete"
+            if [ -n "$target_version" ]; then
+              delete_versions=$(echo "$response" | jq -c --arg ver "$target_version" \
+                '[.[] | select(.name | contains($ver)) | {name: .name, id: .id}]')
+            elif [ -n "${{ inputs.version }}" ]; then
+              delete_versions=$(echo "$response" | jq -c --arg ver "${{ inputs.version }}" \
+                '[.[] | select(.name == $ver) | {name: .name, id: .id}]')
+            else
+              delete_versions=$(echo "$response" | jq -c \
+                '[.[] | select(.name | test("tmp"; "i")) | {name: .name, id: .id}]')
+            fi
+            echo "$delete_versions" | jq > "${pkg}_versions_to_delete.json"
+            if [ "$(echo "$delete_versions" | jq 'length')" -eq 0 ]; then
+              echo "No versions found to delete for $pkg"
+            else
+              echo "Versions to delete for $pkg:"
+              cat "${pkg}_versions_to_delete.json"
+            fi
+            package_ids=$(echo "$delete_versions" | jq -r '[.[].id] | join(",")')
+
+            echo "Checking package_ids: $package_ids"
+            echo "Checking dry-run: ${{ inputs.dry-run }}"
+            echo "Checking pr-number: ${{ inputs.pr-number }}"
+            echo "Checking ref: ${{ github.ref }}"
+              #  [ "${{ inputs.dry-run }}" != "true" ] && \
+            if [ -n "$package_ids" ] && \
+               ([ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]); then
+              echo "Deleting versions for $pkg: $package_ids"
+              for id in $(echo "$delete_versions" | jq -r '.[] | .id'); do
+                gh api --method DELETE -H "Accept: application/vnd.github+json" \
+                  "orgs/tetherto/packages/npm/$pkg/versions/$id"
+              done
+            fi
+
+            echo "Check versions after"
+            response=$(gh api --paginate -H "Accept: application/vnd.github+json" \
+              "orgs/tetherto/packages/npm/$pkg/versions" || echo "{}")
+            version_map=$(echo "$response" | jq -c 'reduce .[] as $item ({}; . + {($item.name): {id: $item.id}})')
+            echo "$version_map" | jq > "${pkg}_versions_after.json"
+          done
+
+      - name: Upload version artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-versions
+          path: |
+            *_versions_before.json
+            *_versions_to_delete.json
+            *_versions_after.json
