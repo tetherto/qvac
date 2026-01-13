@@ -6,16 +6,16 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: 'Working directory for tests'
+        description: "Working directory for tests"
         required: false
         type: string
-        default: '.'
+        default: "."
       platforms:
         description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "macos-latest-xlarge"])'
         required: true
         type: string
       consumer-timeout:
-        description: 'Timeout in seconds for consumer connection'
+        description: "Timeout in seconds for consumer connection"
         required: false
         type: number
         default: 30
@@ -59,7 +59,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Configure npm registries
         env:
@@ -204,7 +204,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Configure npm registries
         env:
@@ -340,4 +340,3 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
-
