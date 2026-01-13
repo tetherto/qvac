@@ -1,0 +1,40 @@
+name: PR Validation (QVAC SDK)
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+    paths:
+      - "packages/qvac-sdk/**"
+      - ".github/workflows/pr-validation-qvac-sdk.yml"
+    branches:
+      - dev
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/qvac-sdk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate PR title and description
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        shell: bash
+        run: |
+          echo "🔍 Validating PR..."
+          echo "Title: $PR_TITLE"
+          echo ""
+
+          # Run validator
+          node scripts/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
+
