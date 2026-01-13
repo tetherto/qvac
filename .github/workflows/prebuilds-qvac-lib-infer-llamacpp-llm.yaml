@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "prebuilds (qvac-lib-infer-llamacpp-llm)"
 
 on:
@@ -93,7 +94,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-llamacpp-llm/vcpkg/cache,readwrite"
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
