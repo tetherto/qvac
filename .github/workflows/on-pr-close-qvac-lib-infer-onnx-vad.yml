@@ -29,11 +29,7 @@ on:
         type: boolean
         default: true
 
-run-name: >-
-  Delete NPM Versions
-  v=${{ inputs.version || '' }}
-  pr=${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
-  dry=${{ inputs['dry-run'] != false }}
+run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
 jobs:
   print-context:
