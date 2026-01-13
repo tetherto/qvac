@@ -83,10 +83,10 @@ jobs:
       - name: Run tests
         id: run_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.0
+        uses: ./.github/actions/run-lint-and-unit-tests
         with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           workdir: ${{ env.PKG_DIR }}
 
@@ -146,7 +146,7 @@ jobs:
   cpp-lint:
     needs: [changes, sanity-checks]
     if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.4
+    uses: ./.github/workflows/reusable-cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
