@@ -1,5 +1,5 @@
 # QVAC SDK Desktop Tests
-# Uses reusable workflow from qvac-test-suite (now in monorepo)
+# Uses reusable workflow from qvac-test-suite
 # Originally from qvac-sdk/.github/workflows/qvac-tests.yml
 
 name: QVAC Tests (qvac-sdk)
@@ -24,7 +24,6 @@ jobs:
     uses: ./.github/workflows/reusable-test-desktop.yml
     with:
       working-directory: "packages/qvac-sdk/tests-qvac"
-      # GPU runners for SDK tests (Vulkan on Linux/Windows, Metal on macOS)
       platforms: '["ai-run-linux-gpu", "macos-latest-xlarge", "ai-run-windows-gpu"]'
       consumer-timeout: 60
     secrets:
@@ -36,4 +35,3 @@ jobs:
       MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-
