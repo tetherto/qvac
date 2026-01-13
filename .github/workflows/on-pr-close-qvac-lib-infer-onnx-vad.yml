@@ -46,17 +46,19 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: echo "GitHub Context: $GITHUB_CONTEXT"
 
-  delete-npm-versions-trigger:
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/reusable-public-delete-npm-versions.yml
-    with:
-      version: ${{ inputs.version || '' }}
-      pr-number: ${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
-      pattern: ${{ inputs.pattern || '' }}
-      packages: ${{ inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
-      # Robust boolean: default true when unset, but respects explicit false.
-      # dry-run: ${{ inputs['dry-run'] != false }}
-      dry-run: true
-    secrets: inherit
+    delete-npm-versions-trigger:
+      permissions:
+        contents: read
+        packages: write
+      uses: ./.github/workflows/reusable-public-delete-npm-versions.yml
+      with:
+        version: ${{ github.event.inputs.version || '' }}
+        pr-number: ${{ github.event.inputs['pr-number'] || (github.event_name == 'pull_request' && format('{0}', github.event.pull_request.number)) || '' }}
+        pattern: ${{ github.event.inputs.pattern || '' }}
+        packages: ${{ github.event.inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
+        # default true unless explicitly set to false in workflow_dispatch
+        dry-run: ${{ github.event.inputs['dry-run'] != 'false' }}
+        # # optional (recommended for monorepo clarity)
+        # workdir: packages/qvac-lib-infer-onnx-vad
+      secrets: inherit
+
