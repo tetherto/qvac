@@ -163,7 +163,31 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
           git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+      
+      - name: Configure npm for scoped packages
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}     
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}    
+        run: |
+          set -euo pipefail
 
+          cat > "$HOME/.npmrc" <<NPMRC
+          always-auth=true
+
+          # GitHub Packages for @tetherto/*
+          @tetherto:registry=https://npm.pkg.github.com
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+
+          # npmjs (optional; keep only if you need private npmjs deps)
+          registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          NPMRC
+
+          # sanity check (won't print tokens)
+          npm config get @tetherto:registry
+          npm config get registry
+          
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
         shell: bash
