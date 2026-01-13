@@ -29,11 +29,7 @@ on:
         type: boolean
         default: true
 
-run-name: >-
-  Delete NPM Versions
-  v=${{ inputs.version || '' }}
-  pr=${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
-  dry=${{ inputs['dry-run'] != false }}
+run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
 jobs:
   print-context:
@@ -54,12 +50,13 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.0
+    uses: ./.github/workflows/reusable-public-delete-npm-versions.yml
     with:
       version: ${{ inputs.version || '' }}
       pr-number: ${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
       pattern: ${{ inputs.pattern || '' }}
       packages: ${{ inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
       # Robust boolean: default true when unset, but respects explicit false.
-      dry-run: ${{ inputs['dry-run'] != false }}
+      # dry-run: ${{ inputs['dry-run'] != false }}
+      dry-run: true
     secrets: inherit
