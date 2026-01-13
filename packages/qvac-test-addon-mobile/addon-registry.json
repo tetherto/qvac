@@ -1,0 +1,45 @@
+{
+  "$schema": "./addon-registry.schema.json",
+  "description": "Registry of compatible addons to test against qvac-test-addon-mobile framework changes",
+  "version": "1.0.0",
+  "addons": [
+    {
+      "name": "@qvac/llm-llamacpp",
+      "repository": "tetherto/qvac-lib-infer-llamacpp-llm",
+      "branch": "main",
+      "testPath": "test/mobile",
+      "hasIntegrationTests": true,
+      "prebuildArtifactPrefix": "llama-cpp-",
+      "description": "LLM inference addon using llama.cpp",
+      "priority": "high",
+      "platforms": ["Android", "iOS"]
+    },
+    {
+      "name": "@qvac/transcription-whispercpp",
+      "repository": "tetherto/qvac-lib-infer-whispercpp",
+      "branch": "main",
+      "testPath": "test/mobile",
+      "hasIntegrationTests": true,
+      "prebuildArtifactPrefix": "whisper-cpp-",
+      "description": "Transcription addon using whisper.cpp",
+      "priority": "high",
+      "platforms": ["Android", "iOS"]
+    },
+    {
+      "name": "@qvac/tts-onnx",
+      "repository": "tetherto/qvac-lib-infer-onnx-tts",
+      "branch": "main",
+      "testPath": "test/mobile",
+      "hasIntegrationTests": true,
+      "prebuildArtifactPrefix": "onnx-tts-",
+      "description": "Text-to-speech addon using ONNX runtime",
+      "priority": "high",
+      "platforms": ["Android", "iOS"]
+    }
+  ],
+  "testSettings": {
+    "bundleId": "io.tether.test.qvac",
+    "timeoutMinutes": 120,
+    "deviceFarmRegion": "us-west-2"
+  }
+}

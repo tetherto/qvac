@@ -1,0 +1,388 @@
+name: Addon Compatibility Check (qvac-test-addon-mobile)
+
+# This workflow runs on PRs to the test framework to verify that
+# framework changes don't break existing addons
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "packages/qvac-test-addon-mobile/**"
+  workflow_dispatch:
+    inputs:
+      addon_filter:
+        description: "Specific addon to test (leave empty for all)"
+        type: string
+        required: false
+        default: ""
+
+env:
+  NODE_VERSION: "lts/*"
+  APP_BUNDLE_ID: "io.tether.test.qvac"
+  TF_DIR: packages/qvac-test-addon-mobile
+  REGISTRY_FILE: packages/qvac-test-addon-mobile/addon-registry.json
+
+jobs:
+  load-registry:
+    name: Load Addon Registry
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare-matrix.outputs.matrix }}
+      addon_count: ${{ steps.prepare-matrix.outputs.addon_count }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare test matrix from registry
+        id: prepare-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "📋 Reading addon registry..."
+
+          REGISTRY_FILE="${{ env.REGISTRY_FILE }}"
+          if [ ! -f "$REGISTRY_FILE" ]; then
+            echo "❌ Addon registry not found at $REGISTRY_FILE"
+            exit 1
+          fi
+
+          ADDONS=$(cat "$REGISTRY_FILE" | jq -c '.addons')
+          ADDON_COUNT=$(echo "$ADDONS" | jq 'length')
+
+          FILTER="${{ inputs.addon_filter }}"
+          if [ -n "$FILTER" ]; then
+            echo "🔍 Filtering for addon: $FILTER"
+            ADDONS=$(echo "$ADDONS" | jq -c --arg filter "$FILTER" '[.[] | select(.name == $filter or (.repository | contains($filter)))]')
+            ADDON_COUNT=$(echo "$ADDONS" | jq 'length')
+
+            if [ "$ADDON_COUNT" -eq 0 ]; then
+              echo "❌ No addons match filter: $FILTER"
+              exit 1
+            fi
+          fi
+
+          echo "📦 Found $ADDON_COUNT addon(s) to test"
+          echo "$ADDONS" | jq '.'
+
+          MATRIX_ITEMS='[]'
+
+          for i in $(seq 0 $((ADDON_COUNT - 1))); do
+            ADDON=$(echo "$ADDONS" | jq -c ".[$i]")
+            ADDON_NAME=$(echo "$ADDON" | jq -r '.name')
+            REPO=$(echo "$ADDON" | jq -r '.repository')
+            BRANCH=$(echo "$ADDON" | jq -r '.branch')
+            PLATFORMS=$(echo "$ADDON" | jq -c '.platforms')
+
+            for platform in $(echo "$PLATFORMS" | jq -r '.[]'); do
+              if [ "$platform" == "Android" ]; then
+                RUNNER="ubuntu-latest"
+              else
+                RUNNER="macos-14"
+              fi
+
+              ITEM=$(jq -n \
+                --arg name "$ADDON_NAME" \
+                --arg repo "$REPO" \
+                --arg branch "$BRANCH" \
+                --arg platform "$platform" \
+                --arg runner "$RUNNER" \
+                '{name: $name, repository: $repo, branch: $branch, platform: $platform, runner: $runner}')
+
+              MATRIX_ITEMS=$(echo "$MATRIX_ITEMS" | jq --argjson item "$ITEM" '. + [$item]')
+            done
+          done
+
+          echo "matrix=$(echo "$MATRIX_ITEMS" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
+          echo "addon_count=$ADDON_COUNT" >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "📊 Test Matrix:"
+          echo "$MATRIX_ITEMS" | jq '.'
+
+  build-validation:
+    name: Build ${{ matrix.name }} (${{ matrix.platform }})
+    needs: load-registry
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.load-registry.outputs.matrix) }}
+
+    steps:
+      - name: Free up disk space (Linux)
+        if: matrix.platform == 'Android'
+        shell: bash
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Checkout monorepo (PR branch)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Checkout addon repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          ref: ${{ matrix.branch }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure npm registries
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Addon .npmrc
+          cd addon
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Test framework .npmrc (monorepo path)
+          cd "../${{ env.TF_DIR }}"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+
+      - name: Verify addon has mobile tests
+        working-directory: ./addon
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🔍 Verifying mobile tests for ${{ matrix.name }}..."
+
+          if [ ! -d "test/mobile" ]; then
+            echo "❌ ERROR: test/mobile directory not found!"
+            exit 1
+          fi
+
+          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l | tr -d ' ')
+          if [ "$CJS_COUNT" -eq 0 ]; then
+            echo "❌ ERROR: No .cjs test files found in test/mobile!"
+            exit 1
+          fi
+
+          echo "✅ Found $CJS_COUNT test file(s)"
+          ls -la test/mobile/*.cjs
+
+      - name: Install addon dependencies
+        working-directory: ./addon
+        run: npm install
+
+      - name: Pack addon
+        working-directory: ./addon
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "📦 Packing addon..."
+          if npm run build:pack 2>/dev/null; then
+            echo "✅ Addon packed using build:pack script"
+          else
+            mkdir -p dist
+            npm pack --pack-destination dist
+          fi
+          ls -la dist/
+
+      - name: Setup test framework
+        working-directory: ./${{ env.TF_DIR }}
+        run: npm install
+
+      - name: Build test app with addon
+        id: build_app
+        working-directory: ./${{ env.TF_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "🏗️ Building test app for ${{ matrix.name }} on ${{ matrix.platform }}..."
+
+          ADDON_PATH="${GITHUB_WORKSPACE}/addon"
+
+          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+
+          # Verify generated files
+          test -f "backend/backend.cjs" || { echo "❌ backend/backend.cjs was not generated!"; exit 1; }
+          test -f "e2e/tests/app.test.js" || { echo "❌ e2e/tests/app.test.js was not generated!"; exit 1; }
+          test -f "backend/app.bundle" || { echo "❌ backend/app.bundle was not created!"; exit 1; }
+
+          echo "✅ Build completed successfully!"
+          echo ""
+          echo "📋 Extracted test functions:"
+          cat app/testConfig.js
+
+      - name: Generate native project (Android)
+        if: matrix.platform == 'Android'
+        working-directory: ./${{ env.TF_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @expo/cli@latest
+          npx expo prebuild --platform android --clean
+
+      - name: Generate native project (iOS)
+        if: matrix.platform == 'iOS'
+        working-directory: ./${{ env.TF_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @expo/cli@latest
+          brew install ninja
+          npx expo prebuild --platform ios --clean
+
+      - name: Set build result
+        id: build_result
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failure" >> "$GITHUB_OUTPUT"
+          fi
+
+  summary:
+    name: Compatibility Summary
+    needs: [load-registry, build-validation]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout for registry info
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Generate summary
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "📊 Generating compatibility summary..."
+
+          REGISTRY_FILE="${{ env.REGISTRY_FILE }}"
+          ADDON_COUNT="${{ needs.load-registry.outputs.addon_count }}"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 ADDON COMPATIBILITY SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Addons tested: $ADDON_COUNT"
+          echo "Build validation: ${{ needs.build-validation.result }}"
+          echo ""
+
+          if [ -f "$REGISTRY_FILE" ]; then
+            echo "Registered addons:"
+            cat "$REGISTRY_FILE" | jq -r '.addons[] | "  - \(.name): \(.description)"'
+          fi
+          echo ""
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const buildResult = '${{ needs.build-validation.result }}';
+            const addonCount = '${{ needs.load-registry.outputs.addon_count }}';
+            const prNumber = context.payload.pull_request.number;
+
+            const emoji = buildResult === 'success' ? '✅' : '❌';
+            const statusText = buildResult === 'success' ? 'PASSED' : 'FAILED';
+
+            const comment = `
+            ## ${emoji} Addon Compatibility Check
+
+            **Status**: ${statusText}
+            **PR**: #${prNumber}
+            **Commit**: ${context.sha.substring(0, 7)}
+
+            ### Summary
+
+            | Check | Result |
+            |-------|--------|
+            | Addon Registry | ${addonCount} addon(s) registered |
+            | Build Validation | ${buildResult === 'success' ? '✅ Passed' : '❌ Failed'} |
+
+            ### What was tested
+
+            This check validates that the changes in this PR:
+            1. ✅ Can successfully build test apps for all registered addons
+            2. ✅ Generate correct backend code from addon test files
+            3. ✅ Bundle the app without errors
+            4. ✅ Generate native project files (Expo prebuild)
+
+            ---
+            *To add more addons to this check, update \`${{ env.REGISTRY_FILE }}\`*
+            `;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('Addon Compatibility Check')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: comment
+              });
+            }
