@@ -22,8 +22,8 @@ env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
 
 jobs:
-  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
   changes:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
@@ -39,7 +39,7 @@ jobs:
 
   sanity-checks:
     needs: changes
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,7 +116,7 @@ jobs:
 
   ts-checks:
     needs: [changes, sanity-checks]
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -145,7 +145,7 @@ jobs:
 
   cpp-lint:
     needs: [changes, sanity-checks]
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-lint.yaml
     secrets: inherit
     with:
@@ -155,7 +155,7 @@ jobs:
 
   cpp-tests:
     needs: [changes, sanity-checks]
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yaml
     secrets: inherit
     with:
