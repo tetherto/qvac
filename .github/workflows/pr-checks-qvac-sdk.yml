@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   changes:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
@@ -37,7 +38,7 @@ jobs:
 
   sanity-checks:
     needs: changes
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     defaults:
       run:
