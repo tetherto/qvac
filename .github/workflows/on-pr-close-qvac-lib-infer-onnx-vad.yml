@@ -61,5 +61,6 @@ jobs:
       pattern: ${{ inputs.pattern || '' }}
       packages: ${{ inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
       # Robust boolean: default true when unset, but respects explicit false.
-      dry-run: ${{ inputs['dry-run'] != false }}
+      # dry-run: ${{ inputs['dry-run'] != false }}
+      dry-run: true
     secrets: inherit
