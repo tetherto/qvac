@@ -52,7 +52,9 @@ on:
         description: "Target registry to publish to (npm or gpr)"
         value: ${{ inputs.publish_target }}
 
-
+env:
+  PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+  
 jobs:
   prebuild:
     permissions:
