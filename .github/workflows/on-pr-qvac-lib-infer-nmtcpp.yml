@@ -162,21 +162,22 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
-  # TODO: Migrate prebuild workflow from qvac-lib-infer-nmtcpp/.github/workflows/prebuild.yaml
-  # prebuild:
-  #   if: |
-  #     (needs.changes.outputs.pkg == 'true') &&
-  #     (
-  #       github.event_name == 'workflow_dispatch' ||
-  #       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-  #     )
-  #   needs: [changes, cpp-lint]
-  #   uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yaml
-  #   secrets: inherit
-  #   with:
-  #     repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-  #     ref: ${{ github.event.pull_request.head.ref || github.ref }}
-  #     publish_target: "gpr"
+  prebuild:
+    needs: [changes, sanity-checks]
+    if: |
+      always() &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(github.event.pull_request.labels.*.name, 'verify')
+      )
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      tag: "dev"
+      publish_target: "gpr"
 
   # TODO: Migrate integration test workflow from qvac-lib-infer-nmtcpp/.github/workflows/integration-test.yaml
   # run-integration-tests:
@@ -194,11 +195,11 @@ jobs:
   #     ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
-    needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests]
+    needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
-      build-status: ${{ needs.sanity-checks.result == 'success' }} # Placeholder until prebuild is migrated
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       # integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}  # Enable after migration
     secrets: inherit
