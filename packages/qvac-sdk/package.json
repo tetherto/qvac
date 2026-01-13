@@ -38,7 +38,6 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
-    "prepublishOnly": "npm run build",
     "build": "rm -rf dist && bun run lint && tsc --project tsconfig.json && bun run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
