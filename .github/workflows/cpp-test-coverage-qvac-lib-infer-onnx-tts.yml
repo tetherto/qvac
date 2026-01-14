@@ -1,4 +1,4 @@
-name: C++ Tests & Coverage
+name: C++ Tests & Coverage (Qvac-lib-infer-onnx-tts)
 
 on:
   pull_request:
