@@ -1,4 +1,4 @@
-name: On Merge to Main
+name: On Merge to Main (Qvac-lib-infer-onnx-tts)
 
 on:
   push:
@@ -12,12 +12,12 @@ permissions:
 
 jobs:
   prebuild:
-    uses: ./.github/workflows/prebuilds.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
       publish_target: 'npm'
 
   run-integration-tests:
     needs: prebuild
-    uses: ./.github/workflows/integration-test.yaml
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit

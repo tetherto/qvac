@@ -56,7 +56,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/reusable-public-delete-npm-versions.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@monorepo_update
     with:
       version: ${{ inputs.version || '' }}
       pr-number: ${{ inputs['pr-number'] || github.event.pull_request.number || '' }}

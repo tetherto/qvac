@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
-        uses: tetherto/qvac-devops/.github/actions/sanity-checks@v1.1.0
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -38,7 +38,7 @@ jobs:
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
 
   cpp-tests:
-    uses: ./.github/workflows/reusable-cpp-tests.yaml
+    uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
@@ -52,7 +52,7 @@ jobs:
         ]
 
   cpp-lint:
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@v1.1.2
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -122,7 +122,7 @@ jobs:
   merge-guard:
     needs: [run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.0
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}

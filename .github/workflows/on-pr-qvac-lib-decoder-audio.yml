@@ -56,7 +56,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: ./.github/actions/run-lint-and-unit-tests.yml
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests.yml@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
@@ -89,7 +89,7 @@ jobs:
 
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-tests-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -99,7 +99,7 @@ jobs:
   merge-guard:
     needs: [sanity-checks, run-integration-tests]
     if: always()
-    uses: ./.github/workflows/reusable-public-pr.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

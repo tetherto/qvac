@@ -43,7 +43,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
+        with: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -81,7 +81,7 @@ jobs:
       - name: Run tests
         id: run_tests
         continue-on-error: true
-        uses: ./.github/actions/run-lint-and-unit-tests
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
@@ -144,7 +144,7 @@ jobs:
   cpp-lint:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-cpp-lint.yaml
+    uses: tetherto/qvac-devops/.github/actions/cpp-lint.yml@monorepo_update
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -195,7 +195,7 @@ jobs:
   merge-guard:
     needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-public-pr.yml
+    uses: tetherto/qvac-devops/.github/actions/public-pr@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}

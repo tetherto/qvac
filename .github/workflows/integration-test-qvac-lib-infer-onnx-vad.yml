@@ -19,7 +19,7 @@ on:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
-        default: "."
+        default: "packages/qvac-lib-infer-onnx-vad"
   workflow_dispatch:
     inputs:
       ref:
