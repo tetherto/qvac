@@ -1,8 +1,11 @@
 name: Unpublish GPR Package Versions (Qvac-lib-infer-onnx-vad)
-
+permissions:
+  contents: read
+  packages: write
 on:
   pull_request:
-    types: [closed]
+    types:
+      - closed
     paths:
       - "packages/qvac-lib-infer-onnx-vad/**"
   workflow_dispatch:
@@ -36,27 +39,21 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Print Inputs Context
+      - run: |
+          echo "Inputs Context: $INPUTS_CONTEXT"
         env:
           INPUTS_CONTEXT: ${{ toJSON(inputs) }}
-        run: echo "Inputs Context: $INPUTS_CONTEXT"
-
-      - name: Print GitHub Context
+      - run: |
+          echo "GitHub Context: $GITHUB_CONTEXT"
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
-        run: echo "GitHub Context: $GITHUB_CONTEXT"
 
   delete-npm-versions-trigger:
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/reusable-public-delete-npm-versions.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.0
     with:
-      version: ${{ inputs.version || '' }}
-      pr-number: ${{ inputs['pr-number'] || github.event.pull_request.number || '' }}
-      pattern: ${{ inputs.pattern || '' }}
-      packages: ${{ inputs.packages || 'qvac-lib-inference-addon-onnx-silerovad' }}
-      # Robust boolean: default true when unset, but respects explicit false.
-      # dry-run: ${{ inputs['dry-run'] != false }}
-      dry-run: true
+      version: ${{ inputs.version }}
+      pr-number: ${{ inputs.pr-number }}
+      pattern: ${{ inputs.pattern }}
+      packages: ${{ inputs.packages }}
+      dry-run: ${{ inputs.dry-run || true }}
     secrets: inherit
