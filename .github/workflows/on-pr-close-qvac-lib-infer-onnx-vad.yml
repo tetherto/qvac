@@ -1,5 +1,7 @@
 name: Unpublish GPR Package Versions (Qvac-lib-infer-onnx-vad)
-
+permissions:
+  contents: read
+  packages: write
 on:
   pull_request:
     types:
