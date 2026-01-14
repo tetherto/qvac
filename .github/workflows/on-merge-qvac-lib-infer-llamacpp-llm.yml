@@ -36,7 +36,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || 'latest' }}

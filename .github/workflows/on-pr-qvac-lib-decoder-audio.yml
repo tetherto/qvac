@@ -1,4 +1,4 @@
-name: On PR Trigger
+name: On PR Trigger (Qvac-lib-decoder-audio)
 
 on:
   pull_request_target:
@@ -7,6 +7,8 @@ on:
       - synchronize
       - reopened
       - labeled
+    paths:
+        - "packages/qvac-lib-decoder-audio/**"
   workflow_dispatch:
   workflow_call:
 
@@ -54,11 +56,12 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.3
+        uses: ./.github/actions/run-lint-and-unit-tests.yml
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+          workdir: "packages/qvac-lib-decoder-audio"
 
       - name: Check for errors
         run: |
@@ -86,16 +89,17 @@ jobs:
 
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-tests.yaml
+    uses: ./.github/workflows/integration-tests-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
 
   merge-guard:
     needs: [sanity-checks, run-integration-tests]
     if: always()
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.3
+    uses: ./.github/workflows/reusable-public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

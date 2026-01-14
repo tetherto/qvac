@@ -21,6 +21,8 @@ jobs:
   run-integration-tests:
     uses: ./.github/workflows/integration-tests-qvac-lib-decoder-audio.yml
     secrets: inherit
+    with:
+      workdir: "packages/qvac-lib-decoder-audio"
 
   publish-npm:
     needs: run-integration-tests
@@ -36,10 +38,11 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@v1.1.3
+        uses: ./.github/actions/publish-library-to-npm.yml
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ inputs.tag || 'latest' }}
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: 'true'
+          workdir: "packages/qvac-lib-decoder-audio"
 
