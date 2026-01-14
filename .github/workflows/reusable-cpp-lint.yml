@@ -181,6 +181,7 @@ jobs:
 
       - name: Generate build system
         id: bare_make_generate
+        working-directory: ${{ inputs.workdir }}
         run: bare-make generate
 
         # Please keep linting after bare-make generate so that the configuration
@@ -188,6 +189,7 @@ jobs:
       - name: Check C++ files format
         id: cpp_files_fmt
         continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
         run: |
           TARGET_SHA=${{ inputs.sha }}
           if ! git-clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff $TARGET_SHA; then
@@ -198,6 +200,7 @@ jobs:
       - name: Run C++ clang-tidy
         id: run_cpp_clang_tidy
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: |
           read -r -a tidy_cmd < <($(find build -name clang-tidy-helper.py) build/compile_commands.json --clang-tidy-cmd)
           echo "Running: ${tidy_cmd[*]}"
@@ -211,12 +214,14 @@ jobs:
         id: bare_make_build
         if: steps.bare_make_generate.outcome == 'success'
         continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
         run: bare-make build
 
       - name: Run C++ tests
         id: run_cpp_tests
         if: steps.bare_make_build.outcome == 'success'
         continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
         run: bare-make test
 
       - name: Check for errors
