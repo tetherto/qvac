@@ -1,4 +1,4 @@
-name: Run Integration Tests
+name: Run Integration Tests (Qvac-lib-decoder-audio)
 
 on:
   workflow_call:
@@ -8,6 +8,12 @@ on:
         type: string
       repository:
         type: string
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-decoder-audio"
+
 
 jobs:
   run-integration-tests:
