@@ -43,7 +43,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        with:
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -144,7 +144,7 @@ jobs:
   cpp-lint:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/actions/cpp-lint.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -154,7 +154,7 @@ jobs:
   cpp-tests:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yaml
+    uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -169,7 +169,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'verify')
       )
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -195,7 +195,7 @@ jobs:
   merge-guard:
     needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/actions/public-pr@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
