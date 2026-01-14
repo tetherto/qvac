@@ -1,3 +1,4 @@
 /.sync-repos
 sync-monorepo.sh
 /node_modules
+packages/**/.npmrc
