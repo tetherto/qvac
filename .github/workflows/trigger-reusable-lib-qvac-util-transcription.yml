@@ -1,6 +1,5 @@
 name: General CI/CD (Qvac-util-transcription)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
-# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
 permissions:
   contents: write
@@ -32,14 +31,14 @@ on:
 jobs:
   call-devops-npm:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/reusable-public-reusable.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
 
   call-devops-gpr:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
-    uses: ./.github/workflows/reusable-public-reusable.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
@@ -47,7 +46,7 @@ jobs:
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
     if: always() && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
-    uses: ./.github/workflows/reusable-public-pr.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription

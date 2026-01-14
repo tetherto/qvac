@@ -5,6 +5,7 @@ on:
     branches: ["main", "dev", "fix-*", "feature-*", "npm-patch-*"]
     paths:
       - "packages/qvac-sdk/**"
+      - ".github/workflows/publish-qvac-sdk.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
@@ -117,7 +118,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
@@ -149,7 +150,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-gpr
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}

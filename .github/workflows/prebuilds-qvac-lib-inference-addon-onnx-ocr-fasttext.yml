@@ -425,7 +425,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-gpr.yml
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
@@ -457,7 +457,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm.yaml
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"

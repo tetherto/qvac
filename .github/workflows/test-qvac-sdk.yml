@@ -2,17 +2,19 @@
 # Uses reusable workflow from qvac-test-suite
 # Originally from qvac-sdk/.github/workflows/qvac-tests.yml
 
-name: QVAC Tests (Qvac-sdk)
+name: QVAC Tests (qvac-sdk)
 
 on:
   push:
     branches: [main, dev]
     paths:
       - "packages/qvac-sdk/**"
+      - ".github/workflows/test-qvac-sdk.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-sdk/**"
+      - ".github/workflows/test-qvac-sdk.yml"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +23,7 @@ permissions:
 
 jobs:
   desktop-tests:
-    uses: ./.github/workflows/reusable-test-desktop.yml
+    uses: tetherto/qvac-devops/.github/workflows/test-desktop.yml@monorepo_update
     with:
       working-directory: "packages/qvac-sdk/tests-qvac"
       platforms: '["ai-run-linux-gpu", "macos-latest-xlarge", "ai-run-windows-gpu"]'
