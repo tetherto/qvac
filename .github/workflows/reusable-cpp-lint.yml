@@ -11,9 +11,9 @@ on:
         required: false
         description: "PR head SHA (optional)"
         type: string
-      workdir: 
-         default: "."
-         type: string
+      workdir:
+        default: "."
+        type: string
 
 env:
   LLVM_VERSION: "19"
@@ -123,6 +123,7 @@ jobs:
             npm-${{ runner.os }}-
 
       - name: Configure npm registries
+        working-directory: ${{ inputs.workdir }}
         run: |
           # @qvac/* from npmjs.org
           echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
@@ -137,6 +138,7 @@ jobs:
 
       - name: Install npm dependencies
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: npm install
 
       - name: Configure vcpkg
