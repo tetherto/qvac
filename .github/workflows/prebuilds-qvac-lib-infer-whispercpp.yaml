@@ -425,7 +425,7 @@ jobs:
   #         path: prebuilds
 
   publish-gpr:
-    needs: [prebuild, merge]
+    # needs: [prebuild, merge]
     if: ${{ inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
@@ -524,34 +524,34 @@ jobs:
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
 
-  publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
-    continue-on-error: true
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
+  # publish-npm:
+  #   # needs: [prebuild, merge]
+  #   if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
+  #   continue-on-error: true
+  #   outputs:
+  #     published_version: ${{ steps.publish.outputs.npm_published_version }}
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         token: ${{ secrets.PAT_TOKEN }}
+  #         ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+  #         repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts into package dir
-        uses: actions/download-artifact@v4
-        with:
-          name: prebuilds
-          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}/prebuilds
+  #     - name: Download prebuild artifacts into package dir
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: prebuilds
+  #         path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}/prebuilds
 
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
-        with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: 'latest'
-          workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+  #     - name: Publish to NPM Package Registry
+  #       id: publish
+  #       uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+  #       with:
+  #         secret-token: ${{ secrets.NPM_TOKEN }}
+  #         tag: 'latest'
+  #         workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
