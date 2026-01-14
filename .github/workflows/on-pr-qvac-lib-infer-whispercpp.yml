@@ -1,4 +1,4 @@
-name: "prebuilds (qvac-lib-infer-whispercpp)"
+name: "prebuilds (Qvac-lib-infer-whispercpp)"
 
 on:
   push:
