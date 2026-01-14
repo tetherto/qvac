@@ -1,0 +1,79 @@
+name: On PR Trigger (Qvac-lib-infer-onnx-tts)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-onnx-tts
+
+jobs:
+  sanity-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks.yml
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+
+  cpp-lint:
+    #needs: sanity-checks
+    uses: ./.github/workflows/cpp-lint.yml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+
+  prebuild:
+    # needs: cpp-lint
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/prebuilds.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      publish_target: 'gpr'
+
+  run-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-test.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-mobile-test.yaml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  merge-guard:
+    needs: [run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild]
+    if: always()
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@v1.1.0
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+    secrets: inherit
