@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Run Integration Tests (qvac-lib-infer-llamacpp-llm)
+name: Run Integration Tests (Qvac-lib-infer-llamacpp-llm)
 
 on:
   workflow_call:

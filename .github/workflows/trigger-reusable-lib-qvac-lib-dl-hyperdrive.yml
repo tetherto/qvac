@@ -13,13 +13,11 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-dl-hyperdrive/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-hyperdrive.yml"
 
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-lib-dl-hyperdrive/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-hyperdrive.yml"
 
   workflow_dispatch:
     inputs:

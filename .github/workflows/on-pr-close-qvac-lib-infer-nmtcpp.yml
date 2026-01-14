@@ -1,4 +1,4 @@
-name: Unpublish GPR Package Versions (QVAC Lib Infer NMTCpp)
+name: Unpublish GPR Package Versions (Qvac-lib-infer-nmtcpp)
 
 on:
   pull_request:

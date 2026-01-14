@@ -13,13 +13,11 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-dl-filesystem/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-filesystem.yml"
 
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-lib-dl-filesystem/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-dl-filesystem.yml"
   workflow_dispatch:
     inputs:
       custom_input_1:

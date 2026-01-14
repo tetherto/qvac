@@ -1,4 +1,4 @@
-name: Delete NPM Versions (qvac-lib-infer-llamacpp-llm)
+name: Delete NPM Versions (Qvac-lib-infer-llamacpp-llm)
 
 on:
   pull_request:
@@ -6,7 +6,6 @@ on:
       - closed
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
-      - ".github/workflows/*-qvac-lib-infer-llamacpp-llm.y*ml"
   workflow_dispatch:
     inputs:
       version:

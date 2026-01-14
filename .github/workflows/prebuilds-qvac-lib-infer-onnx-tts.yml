@@ -1,12 +1,11 @@
-name: "prebuilds (Qvac-lib-inference-addon-onnx-ocr-fasttext)"
+name: "Prebuilds (Qvac-lib-infer-onnx-tts)"
 
 on:
   push:
     branches:
       - main
     paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-
+      - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
     inputs:
       tag:
@@ -17,22 +16,34 @@ on:
         options:
           - latest
           - dev
+      publish_target:
+        description: "Target registry to publish to"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - npm
+          - gpr
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        required: false
+        default: "packages/qvac-lib-infer-onnx-tts"
+        type: string
 
   workflow_call:
     inputs:
       ref:
-        description: "ref"
+        description: 'ref'
         type: string
-        required: false
       repository:
         type: string
         required: false
-        # monorepo default
-        default: "tetherto/qvac"
+        default: "tetherto/qvac-lib-infer-onnx-tts"
       tar-run-id:
         type: string
         required: false
-        default: "on-onnx-ocr"
+        default: "on-onnx-tts"
       tag:
         description: "Tag to publish"
         type: string
@@ -43,6 +54,12 @@ on:
         type: string
         required: false
         default: ""
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-onnx-tts"
+
     outputs:
       published_version:
         description: "Version that was published"
@@ -51,15 +68,12 @@ on:
         description: "Target registry to publish to (npm or gpr)"
         value: ${{ inputs.publish_target }}
 
-env:
-  PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
-  
 jobs:
   prebuild:
     permissions:
       contents: write
       pull-requests: write
-
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -99,10 +113,9 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # monorepo: keep cache under the package dir to avoid cross-package collisions
-      PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
       VCPKG_BUILD_TYPE: release
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
@@ -112,7 +125,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Maximize build space
         run: |
           sudo docker image prune --all --force
@@ -127,18 +140,19 @@ jobs:
           echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
           echo "Ref: ${{ inputs.ref || github.ref }}"
           echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}"
           echo "Matrix platform: ${{ matrix.platform }}"
           echo "Matrix arch: ${{ matrix.arch }}"
           echo "Matrix tags: ${{ matrix.tags }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
@@ -160,11 +174,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-          save-always: true
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
@@ -188,17 +201,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-          save-always: true
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
+          repository: ${{ inputs.repository }}
+
+      - name: Initialize and update submodules
+        run: |
+          git submodule update --init --recursive
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -206,7 +222,6 @@ jobs:
           node-version: lts/*
 
       - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -225,10 +240,12 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
+          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
           fi
@@ -245,11 +262,9 @@ jobs:
 
       - if: ${{ matrix.os == 'macos-15' }}
         name: Remove Homebrew LLVM
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
+        run: ./ci/remove-brew-llvm.sh
         shell: bash
-        run: |
-           chmod +x ./ci/remove-brew-llvm.sh
-           ./ci/remove-brew-llvm.sh
 
       - if: ${{ matrix.os == 'macos-15' }}
         name: Install vcpkg in macos
@@ -277,7 +292,7 @@ jobs:
           echo "Simulator SDK: $SDK_SIM"
           ls $SDK_SIM/System/Library/Frameworks | grep UIKit || echo "UIKit.framework missing in simulator SDK!"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -291,12 +306,14 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Update apt sources
         run: sudo apt-get update
 
@@ -315,49 +332,49 @@ jobs:
           echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
 
       - name: Install npm dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         run: npm install
 
       - name: Create vcpkg cache location
-        working-directory: ${{ env.PKG_DIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Get vcpkg cache
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/ports/**', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-override-triplets/**') }}
+          path: vcpkg/cache
+          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
-          save-always: true
 
       - name: Generate
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
       - name: Run bare-make build
-        working-directory: ${{ env.PKG_DIR }}
-        run: bare-make build
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make build
 
       - name: Run bare-make install
-        working-directory: ${{ env.PKG_DIR }}
-        run: bare-make install
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make install
 
       - name: Show ccache stats
         run: ccache -s
 
       - uses: actions/upload-artifact@v4
         with:
-          name: onnx-ocr-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ env.PKG_DIR }}/prebuilds
+          name: onnx-tts-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
 
   merge:
     runs-on: ubuntu-latest
+    needs: prebuild
     permissions:
       contents: write
-    needs: prebuild
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -381,27 +398,9 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-      - name: Configure AWS CLI
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws configure set region us-east-1
-
-      - name: Download onnx model files
-        run: |
-          mkdir -p models/ocr
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
-
-      - name: Upload models artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: models
-          path: models
-
   publish-gpr:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'gpr' || github.event.inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && github.event.inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -414,14 +413,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts into package dir
+      - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.PKG_DIR }}/prebuilds
+          path: prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -429,36 +426,36 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir: ${{ env.PKG_DIR }}
+          workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
   publish-npm:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'npm' || github.event.inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts into package dir
+      - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ env.PKG_DIR }}/prebuilds
+          path: prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm.yaml
+        uses: ./.github/actions/publish-library-to-npm.yml
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          workdir: ${{ env.PKG_DIR }}
+          tag: 'latest'
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: 'true'
+          workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}

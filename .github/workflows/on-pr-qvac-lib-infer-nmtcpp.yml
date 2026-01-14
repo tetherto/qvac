@@ -1,4 +1,4 @@
-name: On PR Trigger (QVAC Lib Infer NMTCpp)
+name: On PR Trigger (Qvac-lib-infer-nmtcpp)
 
 on:
   pull_request_target:
@@ -9,7 +9,6 @@ on:
       - labeled
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
-      - ".github/workflows/on-pr-qvac-lib-infer-nmtcpp.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -35,7 +34,6 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
-              - ".github/workflows/on-pr-qvac-lib-infer-nmtcpp.yml"
 
   sanity-checks:
     needs: changes
@@ -146,7 +144,7 @@ jobs:
   cpp-lint:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-cpp-lint.yaml
+    uses: ./.github/workflows/reusable-cpp-lint.yml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -156,7 +154,7 @@ jobs:
   cpp-tests:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yaml
+    uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -171,7 +169,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(github.event.pull_request.labels.*.name, 'verify')
       )
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -179,27 +177,35 @@ jobs:
       tag: "dev"
       publish_target: "gpr"
 
-  # TODO: Migrate integration test workflow from qvac-lib-infer-nmtcpp/.github/workflows/integration-test.yaml
-  # run-integration-tests:
-  #   needs: [changes, prebuild]
-  #   if: |
-  #     (needs.changes.outputs.pkg == 'true') &&
-  #     (
-  #       github.event_name == 'workflow_dispatch' ||
-  #       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-  #     )
-  #   uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
-  #   secrets: inherit
-  #   with:
-  #     repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-  #     ref: ${{ github.event.pull_request.head.ref || github.ref }}
+  run-integration-tests:
+    needs: [changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+      )
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
-    needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild]
+    needs:
+      [
+        changes,
+        sanity-checks,
+        ts-checks,
+        cpp-lint,
+        cpp-tests,
+        prebuild,
+        run-integration-tests,
+      ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      # integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}  # Enable after migration
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
     secrets: inherit

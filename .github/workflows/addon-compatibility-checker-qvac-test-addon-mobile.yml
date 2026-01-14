@@ -1,4 +1,4 @@
-name: Addon Compatibility Check (qvac-test-addon-mobile)
+name: Addon Compatibility Check (Qvac-test-addon-mobile)
 
 # This workflow runs on PRs to the test framework to verify that
 # framework changes don't break existing addons

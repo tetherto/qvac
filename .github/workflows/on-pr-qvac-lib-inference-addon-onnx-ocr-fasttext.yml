@@ -1,4 +1,4 @@
-name: On PR Trigger (qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: On PR Trigger (Qvac-lib-inference-addon-onnx-ocr-fasttext)
 
 on:
   pull_request_target:
@@ -9,7 +9,6 @@ on:
       - labeled
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-      - ".github/workflows/on-pr-qvac-lib-inference-addon-onnx-ocr-fasttext.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -33,8 +32,7 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-              - ".github/workflows/on-pr-qvac-lib-inference-addon-onnx-ocr-fasttext.yml"
-
+              
   sanity-checks:
     needs: changes
     if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'

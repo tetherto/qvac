@@ -1,4 +1,4 @@
-name: "prebuilds (qvac-lib-infer-onnx-vad)"
+name: "prebuilds (Qvac-lib-infer-onnx-vad)"
 
 on:
   workflow_call:
@@ -28,7 +28,6 @@ on:
       - main
     paths:
       - "packages/qvac-lib-infer-onnx-vad/**"
-      - ".github/workflows/prebuilds-qvac-lib-infer-onnx-vad.yml"
 
 env:
   PKG_DIR: packages/qvac-lib-infer-onnx-vad

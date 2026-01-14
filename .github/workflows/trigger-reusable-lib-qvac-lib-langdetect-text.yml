@@ -13,13 +13,11 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-langdetect-text/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-langdetect-text.yml"
 
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-lib-langdetect-text/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-langdetect-text.yml"
 
   workflow_dispatch:
     inputs:

@@ -1,4 +1,4 @@
-name: PR Validation (QVAC SDK)
+name: PR Validation (Qvac-sdk)
 
 on:
   pull_request:
@@ -9,7 +9,6 @@ on:
       - reopened
     paths:
       - "packages/qvac-sdk/**"
-      - ".github/workflows/pr-validation-qvac-sdk.yml"
     branches:
       - dev
 
@@ -37,4 +36,3 @@ jobs:
 
           # Run validator
           node scripts/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
-

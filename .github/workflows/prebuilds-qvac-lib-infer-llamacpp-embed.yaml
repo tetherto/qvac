@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "prebuilds (qvac-lib-infer-llamacpp-embed)"
+name: "prebuilds (Qvac-lib-infer-llamacpp-embed)"
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
       - main
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
-      - ".github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yaml"
   workflow_dispatch:
     inputs:
       tag:

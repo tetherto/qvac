@@ -13,12 +13,10 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-rag/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-lib-rag.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-lib-rag/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-lib-rag.yml"
   workflow_dispatch:
     inputs:
       custom_input_1:
