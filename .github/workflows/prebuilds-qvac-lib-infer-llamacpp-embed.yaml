@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "prebuilds (Qvac-lib-infer-llamacpp-embed)"
 
 on:
@@ -18,7 +17,7 @@ on:
         required: false
         type: string
       workdir:
-        description: "Package directory"
+        description: "Monorepo package dir"
         required: false
         type: string
         default: "packages/qvac-lib-infer-llamacpp-embed"
@@ -27,29 +26,30 @@ on:
         required: true
         default: "latest"
         type: choice
-        options: [latest, dev]
-      publish_target:
-        description: "Where to publish: 'npm' or 'gpr' (blank = auto)"
-        required: false
-        type: string
-        default: ""
+        options:
+          - latest
+          - dev
       vk-profiling:
-        description: "Enable Vulkan profiling"
         type: boolean
         default: false
+      publish_target:
+        description: "Target registry for publishing (npm or gpr)"
+        type: string
+        required: false
+        default: ""
 
   workflow_call:
     inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
       repository:
         type: string
         required: false
         default: "tetherto/qvac"
-      ref:
-        description: "Git ref"
-        type: string
-        required: false
       workdir:
-        description: "Package directory"
+        description: "Monorepo package dir"
         type: string
         required: false
         default: "packages/qvac-lib-infer-llamacpp-embed"
@@ -59,77 +59,24 @@ on:
         required: false
         default: "dev"
       publish_target:
-        description: "Where to publish: 'npm' for main merges, 'gpr' for PRs"
+        description: "Target registry for publishing (npm or gpr)"
         type: string
         required: false
         default: ""
       vk-profiling:
-        description: "Enable Vulkan profiling"
         type: boolean
         required: false
         default: false
     outputs:
       published_version:
-        description: "The version that was published"
-        value: ${{ jobs['publish-npm'].outputs.npm_published_version || jobs['publish-gpr'].outputs.npm_published_version }}
+        description: "Version published to registry"
+        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 
 jobs:
-  context:
-    name: Resolve Context
-    runs-on: ubuntu-latest
-    outputs:
-      repository: ${{ steps.ctx.outputs.repository }}
-      ref: ${{ steps.ctx.outputs.ref }}
-      pkg_dir: ${{ steps.ctx.outputs.pkg_dir }}
-      tag: ${{ steps.ctx.outputs.tag }}
-      publish_target: ${{ steps.ctx.outputs.publish_target }}
-      vk_profiling: ${{ steps.ctx.outputs.vk_profiling }}
-      is_temp: ${{ steps.ctx.outputs.is_temp }}
-    steps:
-      - id: ctx
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          repo="${{ inputs.repository || github.event.inputs.repository || github.repository }}"
-          ref="${{ inputs.ref || github.event.inputs.ref || github.ref }}"
-          pkg_dir="${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}"
-          tag="${{ inputs.tag || github.event.inputs.tag || 'latest' }}"
-          publish_target="${{ inputs.publish_target || github.event.inputs.publish_target || '' }}"
-          vk_profiling="${{ inputs['vk-profiling'] || github.event.inputs['vk-profiling'] || 'false' }}"
-
-          # detect temp branches both styles: refs/heads/temp-* and temp-*
-          is_temp="false"
-          if [[ "$ref" == refs/heads/temp-* || "$ref" == temp-* ]]; then
-            is_temp="true"
-          fi
-
-          echo "repository=$repo" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "pkg_dir=$pkg_dir" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "publish_target=$publish_target" >> "$GITHUB_OUTPUT"
-          echo "vk_profiling=$vk_profiling" >> "$GITHUB_OUTPUT"
-          echo "is_temp=$is_temp" >> "$GITHUB_OUTPUT"
-
-          echo "Resolved:"
-          echo "  repo=$repo"
-          echo "  ref=$ref"
-          echo "  pkg_dir=$pkg_dir"
-          echo "  tag=$tag"
-          echo "  publish_target=$publish_target"
-          echo "  vk_profiling=$vk_profiling"
-          echo "  is_temp=$is_temp"
-
   prebuild:
-    name: Build ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-    needs: context
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
     permissions:
       contents: write
       pull-requests: write
-
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +84,9 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - os: ubuntu-24.04
             platform: android
             arch: arm64
@@ -160,33 +110,51 @@ jobs:
           - os: windows-2022
             platform: win32
             arch: x64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # OK to set env vars, but DON'T reference env.* inside expressions elsewhere
-      PKG_DIR: ${{ needs.context.outputs.pkg_dir }}
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ needs.context.outputs.pkg_dir }}/vcpkg/cache,readwrite"
+      # monorepo: keep cache under package dir
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir }}/vcpkg/cache,readwrite"
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
-        shell: bash
         run: |
           echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - name: print env
+        run: |
+          printenv
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
         name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Echo workflow inputs
         shell: bash
         run: |
-          sudo docker image prune --all --force || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /usr/share/dotnet || true
+          echo "Workflow inputs:"
+          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
+          echo "Ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}"
+          echo "Workdir: ${{ inputs.workdir || github.event.inputs.workdir }}"
+          echo "Matrix platform: ${{ matrix.platform }}"
+          echo "Matrix arch: ${{ matrix.arch }}"
+          echo "Matrix tags: ${{ matrix.tags }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19
-        shell: bash
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Update c++ tools
         run: |
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -194,7 +162,6 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
-        shell: bash
         run: |
           git config --system core.longpaths true
           choco upgrade llvm
@@ -203,53 +170,57 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ needs.context.outputs.ref }}
-          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
-      # IMPORTANT: write .npmrc inside the package directory AND pin npm to it
       - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
         env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          set -euo pipefail
-          echo "Writing .npmrc in $(pwd)…"
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
 
+          # monorepo: write it inside the package dir so npm install in workdir uses it
+          cd "${{ inputs.workdir || github.event.inputs.workdir }}"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          @qvac:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          # Force npm to use THIS config file (prevents runner/global overrides)
-          echo "NPM_CONFIG_USERCONFIG=$(pwd)/.npmrc" >> "$GITHUB_ENV"
-
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-
-          echo "npm config (sanity):"
-          npm config get registry
-          npm config get @qvac:registry
-          npm config get @tetherto:registry
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
 
       - name: Install global dependencies
-        shell: bash
         run: npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'macos-14' }}
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        name: Rename win sdk folder to disable it
+        run: |
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15-intel' }}
         name: Install vcpkg in macos
-        shell: bash
         run: |
           cd ..
           git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
@@ -258,52 +229,85 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
         name: Configure vcpkg in linux
-        shell: bash
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure vcpkg in windows
-        shell: pwsh
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure cmake generator in windows
-        shell: pwsh
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
-        shell: pwsh
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
         name: Update apt sources
-        shell: bash
         run: sudo apt-get update
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Install ccache on Linux
+        run: |
+          sudo apt-get install -y ccache
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Get ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+          save-always: true
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
-        shell: bash
-        run: sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
+        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
         name: Install vulkan in linux
-        shell: bash
         run: |
-          sudo apt-get install -y xz-utils
+          sudo apt install xz-utils
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
           cd ~
-          mkdir -p vulkan
+          mkdir vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Setup vulkan sdk vars in linux
-        shell: bash
+        name: Setup vulkan sdk path in linux x64
         run: |
           VULKAN_SDK=~/vulkan/x86_64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Setup vulkan sdk path in linux arm64
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          cd ~/vulkan
+          ./vulkansdk --maxjobs
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+        name: Export rest of vulkan sdk variables in linux
+        run: |
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
@@ -311,76 +315,81 @@ jobs:
 
       - if: ${{ matrix.platform == 'win32' }}
         name: Install vulkan in windows
-        shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
+      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
-        shell: bash
         run: |
           echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
           echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
 
+      - name: Install npm dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: npm install
+
       - name: Create vcpkg cache location
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: mkdir -p vcpkg/cache
 
       - name: Get vcpkg cache
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
-          path: ${{ needs.context.outputs.pkg_dir }}/vcpkg/cache
-          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', needs.context.outputs.pkg_dir), format('{0}/vcpkg-configuration.json', needs.context.outputs.pkg_dir), format('{0}/vcpkg/ports/**', needs.context.outputs.pkg_dir)) }}
-          restore-keys: |
-            ${{ matrix.platform }}-${{ matrix.arch }}-
-          save-always: true
+          path: ${{ inputs.workdir }}/vcpkg/cache
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
+          restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
-      - if: ${{ needs.context.outputs.vk_profiling == 'true' }}
+      - if: ${{ inputs['vk-profiling'] }}
         name: Enable vulkan profiling
-        shell: bash
-        run: echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
-
-      - name: Install npm dependencies
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        shell: bash
-        run: npm install
+        run: |
+          echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
 
       - name: Run bare-make generate
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        shell: bash
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $CFG_OPTS
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $CFG_OPTS
 
       - name: Run bare-make build
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        shell: bash
-        run: bare-make build
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          bare-make build
 
       - name: Run bare-make install
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        shell: bash
-        run: bare-make install
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          bare-make install
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Remove .a files (Linux only)
-        shell: bash
-        run: rm -f "${{ needs.context.outputs.pkg_dir }}/prebuilds/linux-x64/qvac__llamacpp-embed/"*.a || true
+        name: Remove .a files (Linux x64 only)
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          rm -f prebuilds/linux-x64/qvac__embed-llamacpp/*.a
+
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+        name: Remove .a files (Linux arm64 only)
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          rm -f prebuilds/linux-arm64/qvac__embed-llamacpp/*.a
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llamacpp-embed-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ needs.context.outputs.pkg_dir }}/prebuilds
+          name: llama-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ inputs.workdir }}/prebuilds
 
   merge:
-    name: Merge artifacts
     runs-on: ubuntu-latest
     needs: prebuild
     permissions:
       contents: write
+
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -391,16 +400,15 @@ jobs:
       - name: Upload merged artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: prebuilds-llamacpp-embed
+          name: prebuilds
           path: prebuilds
 
   publish-gpr:
-    name: Publish to GPR
-    needs: [context, prebuild, merge]
-    if: ${{ needs.context.outputs.publish_target == 'gpr' || (needs.context.outputs.publish_target == '' && needs.context.outputs.is_temp == 'true') }}
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -410,37 +418,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ needs.context.outputs.ref }}
-          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts
+      - name: Download prebuild artifacts into package dir
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds-llamacpp-embed
-          path: ${{ needs.context.outputs.pkg_dir }}/prebuilds
-
-      - name: Scope package as @tetherto for GPR
-        shell: bash
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@tetherto/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}";
+          name: prebuilds
+          path: ${{ inputs.workdir }}/prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.context.outputs.tag }}
-          workdir: ${{ needs.context.outputs.pkg_dir }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          workdir: ${{ inputs.workdir }}
 
   publish-npm:
-    name: Publish to npm
-    needs: [context, prebuild, merge]
-    if: ${{ (needs.context.outputs.publish_target == 'npm' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.context.outputs.publish_target == '')) && needs.context.outputs.is_temp != 'true' }}
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -450,26 +450,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ needs.context.outputs.ref }}
-          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts
+      - name: Download prebuild artifacts into package dir
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds-llamacpp-embed
-          path: ${{ needs.context.outputs.pkg_dir }}/prebuilds
-
-      - name: Scope package as @qvac for npm
-        shell: bash
-        working-directory: ${{ needs.context.outputs.pkg_dir }}
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}";
+          name: prebuilds
+          path: ${{ inputs.workdir }}/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          workdir: ${{ needs.context.outputs.pkg_dir }}
+          tag: 'latest'
+          workdir: ${{ inputs.workdir }}
