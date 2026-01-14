@@ -33,7 +33,7 @@ on:
 
 jobs:
   call-devops-lib:
-    uses: ./.github/workflows/reusable-public-reusable.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-cli

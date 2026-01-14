@@ -74,7 +74,7 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.1
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
@@ -153,7 +153,7 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Publish to GitHub Package Registry
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.1
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client

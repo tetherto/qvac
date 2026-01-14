@@ -36,3 +36,4 @@ jobs:
 
           # Run validator
           node scripts/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
+

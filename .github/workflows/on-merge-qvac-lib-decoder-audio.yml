@@ -38,7 +38,8 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm.yml
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        secrets: inherit
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ inputs.tag || 'latest' }}

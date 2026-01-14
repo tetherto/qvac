@@ -373,7 +373,7 @@ jobs:
           ls -la "${{ env.PKG_DIR }}/model"
 
       - name: Publish to GitHub Package Registry
-        uses: ./.github/actions/publish-library-to-gpr.yml
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}

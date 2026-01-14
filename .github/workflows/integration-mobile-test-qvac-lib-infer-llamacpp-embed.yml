@@ -1,6 +1,3 @@
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Run Mobile Integration Tests (Qvac-lib-infer-llamacpp-embed)
-
 on:
   workflow_call:
     inputs:
@@ -12,6 +9,12 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-llamacpp-embed"
+
   workflow_dispatch:
     inputs:
       ref:
@@ -24,6 +27,11 @@ on:
         type: string
         required: false
         default: '@qvac/llamacpp-embed@latest'
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-llamacpp-embed"
 
 env:
   NODE_VERSION: 'lts/*'
@@ -31,7 +39,7 @@ env:
   PREBUILD_ARTIFACT_PREFIX: 'llamacpp-embed-'
   TEST_FRAMEWORK_REF: 'main'
   APP_BUNDLE_ID: 'io.tether.test.qvac'
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-embed
+  PKG_DIR:  ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}
 
 jobs:
   build-and-test:

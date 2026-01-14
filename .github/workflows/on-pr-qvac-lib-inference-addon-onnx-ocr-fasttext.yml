@@ -71,7 +71,7 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac-devops/.github/actions/yamlfmt@v1.1.4
+        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -87,7 +87,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@v1.1.4
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
@@ -155,7 +155,7 @@ jobs:
   merge-guard:
     needs: [changes, sanity-checks, prebuild, run-integration-tests]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/reusable-public-pr.yml
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
