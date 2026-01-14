@@ -14,7 +14,6 @@ on:
         required: false
         default: "packages/qvac-lib-decoder-audio"
 
-
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.os }}
@@ -60,6 +59,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
@@ -82,11 +82,13 @@ jobs:
           fi
 
       - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
         run: |
           npm install
           npm install -g bare bare-make
 
       - name: Run integration test
+        working-directory: ${{ inputs.workdir }}
         timeout-minutes: 10
         run: npm run test:integration
         env:
