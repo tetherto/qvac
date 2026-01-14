@@ -1,4 +1,4 @@
-name: Build and Publish (qvac-sdk)
+name: Build and Publish (Qvac-sdk)
 
 on:
   push:
@@ -10,7 +10,6 @@ on:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-sdk/**"
-      - ".github/workflows/publish-qvac-sdk.yml"
   workflow_dispatch:
     inputs:
       tag:

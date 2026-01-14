@@ -1,4 +1,4 @@
-name: Build Prebuilds (QVAC Lib Infer NMTCpp)
+name: Build Prebuilds (Qvac-lib-infer-nmtcpp)
 
 on:
   workflow_call:

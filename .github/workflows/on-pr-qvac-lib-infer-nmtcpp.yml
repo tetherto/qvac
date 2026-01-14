@@ -1,4 +1,4 @@
-name: On PR Trigger (QVAC Lib Infer NMTCpp)
+name: On PR Trigger (Qvac-lib-infer-nmtcpp)
 
 on:
   pull_request_target:
@@ -9,7 +9,6 @@ on:
       - labeled
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
-      - ".github/workflows/on-pr-qvac-lib-infer-nmtcpp.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -35,7 +34,6 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
-              - ".github/workflows/on-pr-qvac-lib-infer-nmtcpp.yml"
 
   sanity-checks:
     needs: changes

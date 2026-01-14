@@ -13,13 +13,11 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-infer-base/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-infer-base.yml"
 
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-lib-infer-base/**"
-      - ".github/workflows/trigger-reusable-qvac-lib-infer-base.yml"
 
   workflow_dispatch:
     inputs:

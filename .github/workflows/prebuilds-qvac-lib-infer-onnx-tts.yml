@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
-      - ".github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yaml"
   workflow_dispatch:
     inputs:
       tag:

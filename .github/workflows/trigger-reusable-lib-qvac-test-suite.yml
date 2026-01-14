@@ -13,12 +13,10 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-test-suite/framework/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-test-suite.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-test-suite/framework/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-test-suite.yml"
   workflow_dispatch:
     inputs:
       custom_input_1:

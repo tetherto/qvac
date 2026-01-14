@@ -1,4 +1,4 @@
-name: PR Checks (QVAC SDK)
+name: PR Checks (Qvac-sdk)
 
 on:
   pull_request_target:
@@ -9,7 +9,6 @@ on:
       - labeled
     paths:
       - "packages/qvac-sdk/**"
-      - ".github/workflows/pr-checks-qvac-sdk.yml"
   workflow_dispatch:
 
 concurrency:
@@ -34,7 +33,6 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-sdk/**"
-              - ".github/workflows/pr-checks-qvac-sdk.yml"
 
   sanity-checks:
     needs: changes

@@ -13,13 +13,11 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-cli/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-cli.yml"
 
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-cli/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-cli.yml"
 
   workflow_dispatch:
     inputs:

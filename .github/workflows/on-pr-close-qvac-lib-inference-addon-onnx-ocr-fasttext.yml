@@ -1,8 +1,10 @@
-name: Unpublish GPR Package Versions
+name: Unpublish GPR Package Versions (Qvac-lib-inference-addon-onnx-ocr-fasttext)
 on:
   pull_request:
     types:
       - closed
+    paths:
+      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
   workflow_dispatch:
     inputs:
       version:

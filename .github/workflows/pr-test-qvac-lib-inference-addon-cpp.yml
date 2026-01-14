@@ -1,4 +1,4 @@
-name: Test pipeline for PRs (qvac-lib-inference-addon-cpp)
+name: Test pipeline for PRs (Qvac-lib-inference-addon-cpp)
 
 permissions:
   contents: read
@@ -8,7 +8,6 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "packages/qvac-lib-inference-addon-cpp/**"
-      - ".github/workflows/test-qvac-lib-inference-addon-cpp.yml"
   workflow_dispatch:
 
 env:

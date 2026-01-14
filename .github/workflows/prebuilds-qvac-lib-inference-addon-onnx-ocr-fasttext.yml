@@ -1,4 +1,4 @@
-name: "prebuilds (qvac-lib-inference-addon-onnx-ocr-fasttext)"
+name: "prebuilds (Qvac-lib-inference-addon-onnx-ocr-fasttext)"
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-      - ".github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml"
 
   workflow_dispatch:
     inputs:

@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Run Mobile Integration Tests (qvac-lib-infer-llamacpp-llm)
+name: Run Mobile Integration Tests (Qvac-lib-infer-llamacpp-embed)
 
 on:
   workflow_call:
@@ -20,18 +20,18 @@ on:
         required: false
         default: main
       package:
-        description: "Full NPM package spec to test (default: @qvac/llm-llamacpp@latest)"
+        description: "Full NPM package spec to test (default: @qvac/llamacpp-embed@latest)"
         type: string
         required: false
-        default: '@qvac/llm-llamacpp@latest'
+        default: '@qvac/llamacpp-embed@latest'
 
 env:
   NODE_VERSION: 'lts/*'
-  ADDON_NAME: '@qvac/llm-llamacpp'
-  PREBUILD_ARTIFACT_PREFIX: 'llm-llamacpp-'
+  ADDON_NAME: '@qvac/llamacpp-embed'
+  PREBUILD_ARTIFACT_PREFIX: 'llamacpp-embed-'
   TEST_FRAMEWORK_REF: 'main'
   APP_BUNDLE_ID: 'io.tether.test.qvac'
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+  PKG_DIR: packages/qvac-lib-infer-llamacpp-embed
 
 jobs:
   build-and-test:
@@ -760,6 +760,3 @@ jobs:
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
-
-      # Note: The rest of the workflow (test package upload, test spec creation, Device Farm run, monitoring)
-      # would continue here but is truncated for brevity. The pattern is identical to the original workflow.

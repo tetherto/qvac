@@ -13,12 +13,10 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-util-transcription/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-util-transcription.yml"
   pull_request_target:
     types: [opened, reopened, synchronize, labeled]
     paths:
       - "packages/qvac-util-transcription/**"
-      - ".github/workflows/trigger-reusable-lib-qvac-util-transcription.yml"
   workflow_dispatch:
     inputs:
       custom_input_1:
