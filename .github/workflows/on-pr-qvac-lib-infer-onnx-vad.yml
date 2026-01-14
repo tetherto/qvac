@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "packages/qvac-lib-infer-onnx-vad/**"
+
   workflow_dispatch:
     inputs:
       repository:
@@ -21,6 +22,12 @@ on:
         required: false
         type: boolean
         default: true
+      workdir:
+        description: "Package working directory in monorepo."
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-onnx-vad"
+
   workflow_call:
     inputs:
       repository:
@@ -33,8 +40,13 @@ on:
         required: false
         type: boolean
         default: true
+      workdir:
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-onnx-vad"
 
 env:
+  # Keep for steps that still like env, but do NOT reference env.* inside job-level `uses:`
   PKG_DIR: packages/qvac-lib-infer-onnx-vad
 
 jobs:
@@ -47,11 +59,20 @@ jobs:
       base_sha: ${{ steps.ctx.outputs.base_sha }}
       head_sha: ${{ steps.ctx.outputs.head_sha }}
       run_verify: ${{ steps.ctx.outputs.run_verify }}
+      workdir: ${{ steps.ctx.outputs.workdir }}
     steps:
       - id: ctx
         shell: bash
         run: |
           set -euo pipefail
+
+          # Resolve workdir from inputs if present; otherwise default.
+          # Note: pull_request_target has no inputs context, so we fall back to the known package path.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
+            workdir="${{ inputs.workdir || 'packages/qvac-lib-infer-onnx-vad' }}"
+          else
+            workdir="packages/qvac-lib-infer-onnx-vad"
+          fi
 
           if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
             repo="${{ github.event.pull_request.head.repo.full_name }}"
@@ -72,6 +93,7 @@ jobs:
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
+          echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
 
           echo "Resolved:"
           echo "  repo=$repo"
@@ -79,6 +101,7 @@ jobs:
           echo "  base_sha=$base_sha"
           echo "  head_sha=$head_sha"
           echo "  run_verify=$run_verify"
+          echo "  workdir=$workdir"
 
   sanity-checks:
     needs: context
@@ -90,7 +113,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
-          workdir: ${{ env.PKG_DIR }}
+          workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
     needs: [context, sanity-checks]
@@ -99,7 +122,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: ${{ env.PKG_DIR }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
     needs: [context, cpp-lint]
@@ -118,6 +141,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
     needs: [run-integration-tests, sanity-checks, prebuild]
