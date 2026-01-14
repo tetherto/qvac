@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
 
 permissions:
   contents: write
