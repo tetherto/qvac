@@ -9,7 +9,6 @@ on:
       - labeled
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
-      - ".github/workflows/*-qvac-lib-infer-llamacpp-embed.y*ml"
   workflow_dispatch:
   workflow_call:
 
