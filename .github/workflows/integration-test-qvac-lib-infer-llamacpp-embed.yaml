@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Run Integration Tests (qvac-lib-infer-llamacpp-llm)
+name: Run Integration Tests (qvac-lib-infer-llamacpp-embed)
 
 on:
   workflow_call:
@@ -20,12 +20,12 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
+        description: "NPM package containing prebuilds (e.g. @qvac/llamacpp-embed@1.0.0)"
         type: string
         required: true
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+  PKG_DIR: packages/qvac-lib-infer-llamacpp-embed
 
 jobs:
   run-integration-tests:
@@ -48,18 +48,10 @@ jobs:
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
-          - os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
             runner: macos-15-xlarge
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
-            runner: macos-15-large
           - os: windows-2022
             platform: win32
             arch: x64
@@ -155,7 +147,7 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds-llm-llamacpp
+          name: prebuilds-llamacpp-embed
           path: ${{ env.PKG_DIR }}/prebuilds
 
       - name: Download prebuilds from package (Linux/macOS)
