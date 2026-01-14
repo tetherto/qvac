@@ -3,28 +3,42 @@ name: "prebuilds (Qvac-lib-infer-llamacpp-embed)"
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
+
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA). Defaults to current ref."
+        required: false
+        type: string
+      repository:
+        description: "Repo to build (owner/name). Defaults to this repo."
+        required: false
+        type: string
       tag:
         description: "Tag to publish with ('latest' by default)"
         required: true
         default: "latest"
         type: choice
-        options:
-          - latest
-          - dev
+        options: [latest, dev]
       vk-profiling:
+        description: "Enable Vulkan profiling"
         type: boolean
         default: false
+      publish_target:
+        description: "Where to publish: 'npm' or 'gpr' (blank = auto)"
+        required: false
+        type: string
+        default: ""
+
   workflow_call:
     inputs:
       ref:
-        description: 'ref'
+        description: "ref"
         type: string
+        required: false
       repository:
         type: string
         required: false
@@ -39,6 +53,11 @@ on:
         type: string
         required: false
         default: ""
+      vk-profiling:
+        description: "Enable Vulkan profiling"
+        type: boolean
+        required: false
+        default: false
     outputs:
       published_version:
         description: "The version that was published"
@@ -87,7 +106,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-llamacpp-embed/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ env.PKG_DIR }}/vcpkg/cache,readwrite"
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
@@ -97,25 +116,22 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
-      - name: print env
-        run: |
-          printenv
-
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Maximize build space
         run: |
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
+          sudo docker image prune --all --force || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/share/dotnet || true
 
       - name: Echo workflow inputs
         shell: bash
         run: |
           echo "Workflow inputs:"
           echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}"
+          echo "Publish target: ${{ inputs.publish_target || github.event.inputs.publish_target }}"
           echo "Matrix platform: ${{ matrix.platform }}"
           echo "Matrix arch: ${{ matrix.arch }}"
           echo "Matrix tags: ${{ matrix.tags }}"
@@ -137,8 +153,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref }}
-          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -146,30 +162,32 @@ jobs:
           node-version: lts/*
 
       - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
+          set -euo pipefail
+          echo "Writing .npmrc in $(pwd)…"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
+          # make sure any git https fetches can auth
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+
+          echo "npm config (sanity):"
+          npm config get registry
+          npm config get @qvac:registry
+          npm config get @tetherto:registry
 
       - name: Install global dependencies
         run: npm install -g bare bare-make
@@ -205,15 +223,15 @@ jobs:
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
-        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
+        run: sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install vulkan in linux
         run: |
-          sudo apt install xz-utils
+          sudo apt-get install -y xz-utils
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
           cd ~
-          mkdir vulkan
+          mkdir -p vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
 
@@ -222,10 +240,6 @@ jobs:
         run: |
           VULKAN_SDK=~/vulkan/x86_64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Export rest of vulkan sdk variables in linux
-        run: |
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
@@ -245,26 +259,28 @@ jobs:
           echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
           echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
 
-      - name: Install npm dependencies
-        working-directory: ${{ env.PKG_DIR }}
-        run: npm install
-
       - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
         shell: bash
-        run: mkdir -p "${{ env.PKG_DIR }}/vcpkg/cache"
+        run: mkdir -p vcpkg/cache
 
       - name: Get vcpkg cache
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
-          path: packages/qvac-lib-infer-llamacpp-embed/vcpkg/cache
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-llamacpp-embed/vcpkg.json', 'packages/qvac-lib-infer-llamacpp-embed/vcpkg-configuration.json', 'packages/qvac-lib-infer-llamacpp-embed/vcpkg/ports/**') }}
           restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
-      - if: ${{ inputs.vk-profiling }}
+      - if: ${{ inputs['vk-profiling'] || github.event.inputs['vk-profiling'] }}
         name: Enable vulkan profiling
+        shell: bash
         run: |
           echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
 
       - name: Run bare-make generate
         working-directory: ${{ env.PKG_DIR }}
@@ -273,19 +289,17 @@ jobs:
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
-        run: |
-          bare-make build
+        run: bare-make build
 
       - name: Run bare-make install
         working-directory: ${{ env.PKG_DIR }}
-        run: |
-          bare-make install
+        run: bare-make install
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Remove .a files (Linux only)
         shell: bash
         run: |
-          rm -f ${{ env.PKG_DIR }}/prebuilds/linux-x64/qvac__llamacpp-embed/*.a
+          rm -f ${{ env.PKG_DIR }}/prebuilds/linux-x64/qvac__llamacpp-embed/*.a || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -311,7 +325,7 @@ jobs:
           path: prebuilds
 
   publish-gpr:
-    needs: [ prebuild, merge ]
+    needs: [prebuild, merge]
     if: ${{ inputs.publish_target == 'gpr'
             || (
                  (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
@@ -328,6 +342,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
@@ -340,8 +358,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@tetherto/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
-          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@tetherto/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}";
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -352,7 +369,7 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
 
   publish-npm:
-    needs: [ prebuild, merge ]
+    needs: [prebuild, merge]
     if: ${{ (
               inputs.publish_target == 'npm'
               || github.event_name == 'push'
@@ -369,6 +386,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
@@ -381,13 +402,12 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
-          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llamacpp-embed';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}";
 
       - name: Publish to NPM Package Registry
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: 'latest'
+          tag: "latest"
           workdir: ${{ env.PKG_DIR }}
