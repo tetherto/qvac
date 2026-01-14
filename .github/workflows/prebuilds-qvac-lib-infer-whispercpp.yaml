@@ -483,25 +483,25 @@ jobs:
         run: |
           npm install -g bare bare-make
 
-      - name: Rename prebuild files from qvac_ to tetherto_ prefix
-        shell: bash
-        working-directory: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
-        run: |
-          set -euo pipefail
+      # - name: Rename prebuild files from qvac_ to tetherto_ prefix
+      #   shell: bash
+      #   working-directory: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+      #   run: |
+      #     set -euo pipefail
 
-          # Rename prebuild files and directories from qvac_ prefix to tetherto_
-          find prebuilds -depth -name 'qvac_*' | while read -r file; do
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
-            mv "$file" "$dir/$newbase"
-          done
+      #     # Rename prebuild files and directories from qvac_ prefix to tetherto_
+      #     find prebuilds -depth -name 'qvac_*' | while read -r file; do
+      #       dir=$(dirname "$file")
+      #       base=$(basename "$file")
+      #       newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
+      #       mv "$file" "$dir/$newbase"
+      #     done
 
-          # Update module name in binding.js to match renamed prebuilds
-          if [ -f binding.js ]; then
-            sed -i.bak 's/qvac_/tetherto_/g' binding.js || true
-            rm -f binding.js.bak || true
-          fi
+      #     # Update module name in binding.js to match renamed prebuilds
+      #     if [ -f binding.js ]; then
+      #       sed -i.bak 's/qvac_/tetherto_/g' binding.js || true
+      #       rm -f binding.js.bak || true
+      #     fi
       
       - name: Debug npm auth + config source
         shell: bash
