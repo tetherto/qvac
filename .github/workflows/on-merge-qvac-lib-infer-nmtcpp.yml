@@ -30,11 +30,10 @@ jobs:
       tag: ${{ inputs.tag || 'latest' }}
       publish_target: "npm"
 
-  # TODO: Migrate model-conversion-test workflow
-  # model-conversion-test:
-  #   needs: [prebuild]
-  #   uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
-  #   secrets: inherit
+  model-conversion-test:
+    needs: [prebuild]
+    uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
 
   run-integration-tests:
     needs: [prebuild]

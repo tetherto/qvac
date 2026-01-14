@@ -1,4 +1,4 @@
-name: Dispatch on README (QVAC Lib Infer NMTCpp)
+name: Dispatch on README (Qvac-lib-infer-nmtcpp)
 
 on:
   pull_request:

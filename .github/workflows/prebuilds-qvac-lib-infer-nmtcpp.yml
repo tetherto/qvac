@@ -1,4 +1,4 @@
-name: Build Prebuilds (QVAC Lib Infer NMTCpp)
+name: Build Prebuilds (Qvac-lib-infer-nmtcpp)
 
 on:
   workflow_call:
@@ -747,11 +747,10 @@ jobs:
             echo "version=" >> $GITHUB_OUTPUT
           fi
 
-  # TODO: Migrate benchmark workflow
-  # run-automated-benchmarks:
-  #   needs: [check-version-change]
-  #   if: needs.check-version-change.outputs.version_changed == 'true'
-  #   uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
-  #   secrets: inherit
-  #   with:
-  #     version: ${{ needs.check-version-change.outputs.new_version }}
+  run-automated-benchmarks:
+    needs: [check-version-change]
+    if: needs.check-version-change.outputs.version_changed == 'true'
+    uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.check-version-change.outputs.new_version }}
