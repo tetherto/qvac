@@ -126,6 +126,9 @@ jobs:
 
   prebuild:
     needs: [context, cpp-lint]
+     permissions:
+      contents: write
+      packages: write
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-vad.yml
     secrets: inherit
