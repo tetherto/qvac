@@ -163,6 +163,7 @@ jobs:
 
       - name: Configure npm for private packages
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
@@ -194,6 +195,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate required secrets
+        working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: |
           missing=""
@@ -221,6 +223,7 @@ jobs:
 
       - name: Configure npm for private packages
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
@@ -251,6 +254,7 @@ jobs:
 
       - name: Validate required secrets
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           if [ -z "$QVAC_REGISTRY_CORE_KEY" ]; then
             echo "::error::Missing required secret: QVAC_REGISTRY_CORE_KEY"
@@ -272,6 +276,7 @@ jobs:
 
       - name: Configure npm for private packages
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
