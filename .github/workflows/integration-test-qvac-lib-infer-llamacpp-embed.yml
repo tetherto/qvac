@@ -80,6 +80,7 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.PKG_DIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -107,6 +108,7 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.PKG_DIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
