@@ -69,6 +69,7 @@ jobs:
 
       - name: Configure npm for GitHub Package Registry
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
@@ -93,6 +94,7 @@ jobs:
 
       - name: Configure npm for package registries
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
@@ -146,6 +148,7 @@ jobs:
 
       - name: Configure npm for package registries
         shell: bash
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
