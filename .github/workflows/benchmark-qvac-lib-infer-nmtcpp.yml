@@ -244,7 +244,7 @@ jobs:
             libprotobuf-dev protobuf-compiler \
             libboost-all-dev \
             ccache \
-            libunwind-dev \
+            libunwind-dev
 
       - name: Configure git
         run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
@@ -357,7 +357,7 @@ jobs:
             libprotobuf-dev protobuf-compiler \
             libboost-all-dev \
             ccache \
-            libunwind-dev \
+            libunwind-dev
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
