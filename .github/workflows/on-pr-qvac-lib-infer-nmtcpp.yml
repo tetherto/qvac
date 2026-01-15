@@ -10,7 +10,10 @@ on:
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
   workflow_dispatch:
-  workflow_call:
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -46,8 +49,8 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Fetch PR head and target branch
         id: fetch_pr
@@ -130,10 +133,12 @@ jobs:
 
       - name: Configure npm auth
         run: |
-          echo "always-auth=true" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
 
       - name: Install dependencies
         run: npm install
@@ -157,8 +162,8 @@ jobs:
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
 
   prebuild:
     needs: [changes, sanity-checks]
@@ -172,32 +177,57 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
       tag: "dev"
       publish_target: "gpr"
 
-  # TODO: Migrate integration test workflow from qvac-lib-infer-nmtcpp/.github/workflows/integration-test.yaml
-  # run-integration-tests:
-  #   needs: [changes, prebuild]
-  #   if: |
-  #     (needs.changes.outputs.pkg == 'true') &&
-  #     (
-  #       github.event_name == 'workflow_dispatch' ||
-  #       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
-  #     )
-  #   uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
-  #   secrets: inherit
-  #   with:
-  #     repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-  #     ref: ${{ github.event.pull_request.head.ref || github.ref }}
+  run-integration-tests:
+    needs: [changes, sanity-checks, prebuild]
+    if: |
+      always() &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(github.event.pull_request.labels.*.name, 'verify')
+      )
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    needs: [changes, sanity-checks, prebuild]
+    if: |
+      always() &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(github.event.pull_request.labels.*.name, 'verify')
+      )
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [changes, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild]
+    needs:
+      [
+        changes,
+        sanity-checks,
+        ts-checks,
+        cpp-lint,
+        cpp-tests,
+        prebuild,
+        run-integration-tests,
+        run-mobile-integration-tests,
+      ]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.cpp-tests.result == 'success' && needs.ts-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      # integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}  # Enable after migration
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
     secrets: inherit

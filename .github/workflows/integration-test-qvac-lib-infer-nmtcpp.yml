@@ -80,12 +80,14 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
-          echo "always-auth=true" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${GPR_TOKEN}" >> .npmrc
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
 
           # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then

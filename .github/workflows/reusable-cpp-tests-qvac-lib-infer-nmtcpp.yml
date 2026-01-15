@@ -54,12 +54,14 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         run: |
-          echo "always-auth=true" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          NPMRC
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 

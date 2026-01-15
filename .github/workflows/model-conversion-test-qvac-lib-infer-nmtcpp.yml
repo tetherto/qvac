@@ -4,53 +4,53 @@ on:
   workflow_call:
     inputs:
       items:
-        description: 'Comma-separated list of items'
+        description: "Comma-separated list of items"
         required: false
         type: string
-        default: 'en-it, tatoeba-en-ja'
+        default: "en-it, tatoeba-en-ja"
       quant_f32:
-        description: 'Enable f32 conversion'
+        description: "Enable f32 conversion"
         required: false
         type: boolean
         default: false
       quant_f16:
-        description: 'Enable f16 conversion'
+        description: "Enable f16 conversion"
         required: false
         type: boolean
         default: true
       quant_q4_0:
-        description: 'Enable q4_0 conversion'
+        description: "Enable q4_0 conversion"
         required: false
         type: boolean
         default: true
       upload_models:
-        description: 'Upload models artifacts'
+        description: "Upload models artifacts"
         required: false
         type: boolean
         default: false
   workflow_dispatch:
     inputs:
       items:
-        description: 'Comma-separated list of items'
+        description: "Comma-separated list of items"
         required: true
         type: string
       quant_f32:
-        description: 'Enable f32 conversion'
+        description: "Enable f32 conversion"
         required: false
         type: boolean
         default: false
       quant_f16:
-        description: 'Enable f16 conversion'
+        description: "Enable f16 conversion"
         required: false
         type: boolean
         default: true
       quant_q4_0:
-        description: 'Enable q4_0 conversion'
+        description: "Enable q4_0 conversion"
         required: false
         type: boolean
         default: true
       upload_models:
-        description: 'Upload models artifacts'
+        description: "Upload models artifacts"
         required: false
         type: boolean
         default: false
@@ -75,8 +75,8 @@ jobs:
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-          cache: 'pip'
+          python-version: "3.x"
+          cache: "pip"
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
 
       - name: Prepare models output
@@ -121,7 +121,7 @@ jobs:
             exit 1
           fi
 
-  build:
+  Build:
     needs: setup
     runs-on: macos-14
     steps:
@@ -133,7 +133,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -202,8 +202,8 @@ jobs:
             ${{ env.PKG_DIR }}/node_modules/
           retention-days: 1
 
-  model-conversion:
-    needs: [setup, build]
+  Model-conversion:
+    needs: [setup, Build]
     runs-on: macos-14
     strategy:
       fail-fast: false
@@ -220,8 +220,8 @@ jobs:
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
-          cache: 'pip'
+          python-version: "3.x"
+          cache: "pip"
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
 
       - name: Install bare-runtime
@@ -306,7 +306,7 @@ jobs:
 
   merge:
     if: ${{ inputs.upload_models || github.event.inputs.upload_models }}
-    needs: [setup, model-conversion]
+    needs: [setup, Model-conversion]
     runs-on: macos-14
     steps:
       - name: Download all artifacts
@@ -348,4 +348,3 @@ jobs:
           path: bundle/models
           if-no-files-found: error
           retention-days: 14
-

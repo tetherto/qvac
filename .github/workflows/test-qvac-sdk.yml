@@ -1,21 +1,19 @@
-# QVAC SDK Desktop Tests
-# Uses reusable workflow from qvac-test-suite
+# QVAC SDK Tests
+# Uses reusable workflow from qvac-devops
 # Originally from qvac-sdk/.github/workflows/qvac-tests.yml
 
-name: QVAC Tests (qvac-sdk)
+name: QVAC Tests (Qvac-sdk)
 
 on:
+  pull_request:
+    paths:
+      - "packages/qvac-sdk/**"
+      - ".github/workflows/test-qvac-sdk.yml"
   push:
     branches: [main, dev]
     paths:
       - "packages/qvac-sdk/**"
       - ".github/workflows/test-qvac-sdk.yml"
-  pull_request_target:
-    types: [opened, reopened, synchronize, labeled]
-    paths:
-      - "packages/qvac-sdk/**"
-      - ".github/workflows/test-qvac-sdk.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,5 +33,3 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

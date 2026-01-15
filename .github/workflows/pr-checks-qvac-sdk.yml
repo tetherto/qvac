@@ -6,13 +6,12 @@ on:
       - opened
       - synchronize
       - reopened
-      - labeled
     paths:
       - "packages/qvac-sdk/**"
   workflow_dispatch:
 
 concurrency:
-  group: pr-sdk-${{ github.event.pull_request.number || github.sha }}
+  group: pr-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -105,12 +104,14 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
-          echo "always-auth=true" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
+          NPMRC
 
           # Configure git for private dependencies
           if [ -n "${PAT_TOKEN:-}" ]; then
@@ -120,12 +121,14 @@ jobs:
           fi
 
           # Configure bunfig.toml for reading packages
-          echo '[install]' > bunfig.toml
-          echo 'registry = "https://registry.npmjs.org/"' >> bunfig.toml
-          echo '' >> bunfig.toml
-          echo '[install.scopes]' >> bunfig.toml
-          echo "\"@tetherto\" = { token = \"${PAT_TOKEN}\", url = \"https://npm.pkg.github.com\" }" >> bunfig.toml
-          echo "\"@qvac\" = { token = \"${NPM_TOKEN}\", url = \"https://registry.npmjs.org\" }" >> bunfig.toml
+          cat > bunfig.toml << EOF
+          [install]
+          registry = "https://registry.npmjs.org/"
+
+          [install.scopes]
+          "@tetherto" = { token = "${PAT_TOKEN}", url = "https://npm.pkg.github.com" }
+          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
+          EOF
 
       - name: Install dependencies
         run: bun install
