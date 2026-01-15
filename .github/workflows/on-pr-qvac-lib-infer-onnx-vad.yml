@@ -126,7 +126,7 @@ jobs:
 
   prebuild:
     needs: [context, cpp-lint]
-     permissions:
+    permissions:
       contents: write
       packages: write
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
