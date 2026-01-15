@@ -152,6 +152,7 @@ jobs:
           node-version: lts/*
 
       - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
