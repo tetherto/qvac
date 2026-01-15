@@ -23,65 +23,41 @@ on:
         description: "Full NPM package spec to test (default: @qvac/llm-llamacpp@latest)"
         type: string
         required: false
-        default: '@qvac/llm-llamacpp@latest'
-
+        default: "@qvac/llm-llamacpp@latest"
 
 env:
-  NODE_VERSION: 'lts/*'
-  ADDON_NAME: '@qvac/llm-llamacpp'
-  PREBUILD_ARTIFACT_PREFIX: 'llama-cpp-'  # Prefix for prebuild artifacts (empty string for generic patterns)
-  TEST_FRAMEWORK_REF: 'main'  # Branch/tag of qvac-test-addon-mobile framework
-  APP_BUNDLE_ID: 'io.tether.test.qvac'  # Bundle ID for the test app (same for all addons)
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+  NODE_VERSION: "lts/*"
+  ADDON_NAME: "@qvac/llm-llamacpp"
+  # IMPORTANT: this is only used for artifact download patterns. Ensure it matches your upload-artifact names.
+  PREBUILD_ARTIFACT_PREFIX: "llama-cpp-"
+  TEST_FRAMEWORK_REF: "main"
+  APP_BUNDLE_ID: "io.tether.test.qvac"
+
+  # Package path *inside the monorepo*.
+  # Because we checkout the monorepo into "addon/", the real path becomes: addon/${PKG_DIR}
+  PKG_DIR: "packages/qvac-lib-infer-llamacpp-llm"
 
 jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
-    continue-on-error: true  # Don't block PR merges if tests fail
+    continue-on-error: true
     permissions:
       contents: read
       packages: read
-      pull-requests: write  # Allow commenting on PRs
-    defaults:
-      run:
-        working-directory: ${{ env.PKG_DIR }}
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: Android
-            os: ubuntu-24.04
             runner: ai-run-linux
           - platform: iOS
-            os: macos-14
             runner: macos-14
 
     steps:
-      # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
-      - name: Free up disk space
-        if: matrix.platform == 'Android'
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          # Remove unnecessary software to free up disk space (|| true to handle self-hosted runners)
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/hostedtoolcache/go || true
-          sudo rm -rf /opt/hostedtoolcache/Python || true
-          sudo rm -rf /opt/hostedtoolcache/Ruby || true
-          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /usr/share/swift || true
-          sudo docker image prune --all --force || true
-          # Clean APT cache
-          sudo apt-get clean || true
-          echo "Disk space after cleanup:"
-          df -h
-
-      - name: Checkout addon repository
+      - name: Checkout addon repository (monorepo)
         uses: actions/checkout@v4
         with:
           path: addon
@@ -99,22 +75,64 @@ jobs:
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
 
+      - name: Sanity check paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          echo ""
+          echo "Top-level:"
+          ls -la
+          echo ""
+          echo "addon/:"
+          ls -la addon
+          echo ""
+          echo "addon/${{ env.PKG_DIR }}:"
+          ls -la "addon/${{ env.PKG_DIR }}"
+          echo ""
+          echo "test-framework/:"
+          ls -la test-framework
+
+      # Free up disk space on Ubuntu runner (only after checkout, and no default working-directory!)
+      - name: Free up disk space
+        if: matrix.platform == 'Android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Python || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /usr/share/swift || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "Disk space after cleanup:"
+          df -h
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Configure scoped registry for @qvac and @tetherto packages
+        shell: bash
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          
-          # Configure addon registry
-          cd addon
-          cat > .npmrc <<NPMRC
+          set -euo pipefail
+
+          echo "Configuring .npmrc for monorepo package and test-framework..."
+
+          # .npmrc for addon package (monorepo)
+          cat > "addon/${{ env.PKG_DIR }}/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -122,10 +140,9 @@ jobs:
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
-          
-          # Configure test-framework registry
-          cd ../test-framework
-          cat > .npmrc <<NPMRC
+
+          # .npmrc for test framework
+          cat > "test-framework/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -133,263 +150,233 @@ jobs:
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
-          
-          # Configure git for private repos
+
+          # Ensure git can fetch private deps via https
           git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
 
       - name: Install global dependencies
+        shell: bash
         run: |
-          echo "Installing global dependencies..."
+          set -euo pipefail
           npm install -g @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && !inputs.package
+        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
-          path: addon/prebuilds
+          path: addon/${{ env.PKG_DIR }}/prebuilds
           merge-multiple: true
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && !inputs.package
+        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v4
         with:
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
-          path: addon/prebuilds
+          path: addon/${{ env.PKG_DIR }}/prebuilds
           merge-multiple: true
         continue-on-error: true
 
-      - name: Download prebuilds from package
-        if: inputs.package
-        working-directory: ./addon
+      - name: Download prebuilds (from npm - workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
+          set -euo pipefail
+
           PACKAGE_SPEC="${{ inputs.package }}"
-          echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
-          
+          echo "📦 Downloading $PACKAGE_SPEC from npm..."
+
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
-          
+
           if ! npm pack "$PACKAGE_SPEC"; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
-            echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
+            echo "Check that it exists and that your token has access."
+            echo "Package name: $PACKAGE_NAME"
             exit 1
           fi
 
-          # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
-          # Validate prebuilds directory exists
           if [ ! -d "package/prebuilds" ]; then
-            echo "ERROR: No prebuilds directory found in package"
-            echo "The downloaded package may not contain prebuilt binaries"
+            echo "ERROR: No prebuilds directory found in the downloaded package"
             exit 1
           fi
 
-          # Move prebuilds to expected location
+          rm -rf prebuilds || true
           mv package/prebuilds ./prebuilds
 
-          # Cleanup
           rm -rf package *.tgz
 
-          echo "✅ Prebuilds downloaded from npm:"
+          echo "✅ Prebuilds downloaded:"
           ls -la prebuilds/
 
       - name: Verify and prepare prebuilds
-        working-directory: ./addon
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
+          set -euo pipefail
+
           echo "Checking for prebuilds..."
-          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
-            echo "✅ Prebuilds found from artifacts:"
+          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds 2>/dev/null || true)" ]; then
+            echo "✅ Prebuilds present:"
             ls -la prebuilds/
           else
-            echo "⚠️  No prebuilds from artifacts, checking source..."
-            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
-              echo "✅ Prebuilds found in source:"
-              ls -la prebuilds/
-            else
-              echo "❌ ERROR: No prebuilds found!"
-              echo "   This workflow requires prebuilds to be available."
-              echo "   Either:"
-              echo "   1. Run this workflow after prebuild job completes"
-              echo "   2. Or commit prebuilds to the repository"
-              exit 1
-            fi
+            echo "❌ ERROR: No prebuilds found."
+            echo "Expected: addon/${{ env.PKG_DIR }}/prebuilds"
+            exit 1
           fi
-          
-          # Copy mobile prebuilds if needed
+
           if npm run mobile:copy-prebuilds 2>/dev/null; then
-            echo "✅ Mobile prebuilds prepared"
+            echo "✅ Mobile prebuilds prepared (mobile:copy-prebuilds)"
           else
-            echo "⚠️  mobile:copy-prebuilds script not available or failed"
+            echo "ℹ️ mobile:copy-prebuilds not present or failed (continuing)"
           fi
 
       - name: Remove desktop prebuilds to save disk space
-        working-directory: ./addon
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
-          echo "Removing desktop prebuilds to save disk space (keeping Android + iOS)..."
+          set -euo pipefail
           echo "Before cleanup:"
           du -sh prebuilds/* 2>/dev/null || true
-          
-          # Remove desktop prebuilds only (not needed for mobile tests)
+
           rm -rf prebuilds/darwin-* prebuilds/win32-* prebuilds/linux-* 2>/dev/null || true
-          
-          echo "After cleanup (Android + iOS only):"
+
+          echo "After cleanup:"
           du -sh prebuilds/* 2>/dev/null || true
-          df -h
+          df -h || true
 
       - name: Verify test files exist
-        working-directory: ./addon
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
-          echo "Verifying addon has mobile tests..."
-          
+          set -euo pipefail
+
           if [ ! -d "test/mobile" ]; then
             echo "❌ ERROR: test/mobile directory not found!"
-            echo ""
-            echo "This workflow requires the addon to have mobile tests at:"
-            echo "  test/mobile/"
-            echo ""
-            echo "Please create this directory with your test files."
-            echo "See qvac-test-addon-mobile README for test file format."
             exit 1
           fi
-          
-          # Check for .cjs test files
-          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l)
+
+          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l | tr -d ' ')
           if [ "$CJS_COUNT" -eq 0 ]; then
             echo "❌ ERROR: No .cjs test files found in test/mobile!"
             exit 1
           fi
-          
-          echo "✅ Mobile test files found:"
+
+          echo "✅ Found test files:"
           ls -la test/mobile/*.cjs
-          
-          # Check if testAssets exists
+
           if [ -d "test/mobile/testAssets" ]; then
-            echo ""
-            echo "✅ Test assets found:"
+            echo "✅ Test assets:"
             ls -lah test/mobile/testAssets/
           else
-            echo ""
-            echo "ℹ️  No testAssets directory (this is optional)"
+            echo "ℹ️ No testAssets directory (optional)"
           fi
 
-      - name: Install Ninja build tool
+      - name: Install Ninja build tool (iOS only)
         if: matrix.platform == 'iOS'
+        shell: bash
         run: |
-          echo "📦 Installing Ninja build system..."
+          set -euo pipefail
           brew install ninja
           ninja --version
-          echo "✅ Ninja installed successfully"
 
       - name: Install addon dependencies
-        working-directory: ./addon
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
-          echo "Installing addon dependencies..."
+          set -euo pipefail
           npm install
 
       - name: Validate mobile tests are up-to-date
-        working-directory: ./addon
-        run: npm run test:mobile:validate
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
+        run: |
+          set -euo pipefail
+          npm run test:mobile:validate
 
       - name: Pack addon
-        working-directory: ./addon
+        shell: bash
+        working-directory: addon/${{ env.PKG_DIR }}
         run: |
+          set -euo pipefail
+
           echo "Packing addon..."
           if npm run build:pack 2>/dev/null; then
-            echo "✅ Addon packed using build:pack script"
+            echo "✅ Packed using build:pack"
           else
-            echo "📦 Using npm pack directly..."
+            echo "📦 build:pack not available; using npm pack"
+            rm -rf dist || true
             mkdir -p dist
             npm pack --pack-destination dist
           fi
-          
-          # Verify pack file exists
-          PACK_FILE=$(ls dist/*.tgz | head -1)
-          if [ -f "$PACK_FILE" ]; then
-            SIZE=$(du -h "$PACK_FILE" | cut -f1)
-            echo "✅ Pack file created: $PACK_FILE (Size: $SIZE)"
-          else
+
+          PACK_FILE="$(ls -1 dist/*.tgz 2>/dev/null | head -1 || true)"
+          if [ -z "$PACK_FILE" ] || [ ! -f "$PACK_FILE" ]; then
             echo "❌ Pack file not found in dist/"
             exit 1
           fi
 
+          echo "✅ Pack file: $PACK_FILE"
+          du -h "$PACK_FILE" || true
+
       - name: Setup test framework dependencies
-        working-directory: ./test-framework
+        shell: bash
+        working-directory: test-framework
         run: |
-          echo "Setting up mobile test framework..."
+          set -euo pipefail
           npm install
-          echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
-        working-directory: ./test-framework
+        shell: bash
+        working-directory: test-framework
         run: |
+          set -euo pipefail
+
           echo "Building test app with addon..."
-          echo "This will:"
-          echo "  1. Install the addon package"
-          echo "  2. Extract test code from addon's test/mobile/ directory"
-          echo "  3. Auto-detect and order test files by dependencies"
-          echo "  4. Generate backend.cjs with test functions"
-          echo "  5. Generate e2e tests for each test function"
-          echo "  6. Copy testAssets if available"
-          echo "  7. Bundle the app"
-          echo ""
-          
-          ADDON_PATH="${GITHUB_WORKSPACE}/addon"
-          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
-          
-          echo ""
-          echo "✅ Test app built successfully"
-          
-          # Verify critical files were generated
-          if [ ! -f "backend/backend.cjs" ]; then
-            echo "❌ ERROR: backend/backend.cjs was not generated!"
+
+          ADDON_PATH="${GITHUB_WORKSPACE}/addon/${{ env.PKG_DIR }}"
+          TESTS_PATH="${ADDON_PATH}/test/mobile"
+
+          echo "ADDON_PATH=$ADDON_PATH"
+          echo "TESTS_PATH=$TESTS_PATH"
+
+          if [ ! -d "$ADDON_PATH" ]; then
+            echo "❌ ADDON_PATH does not exist"
             exit 1
           fi
-          
-          if [ ! -f "e2e/tests/app.test.js" ]; then
-            echo "❌ ERROR: e2e/tests/app.test.js was not generated!"
+          if [ ! -d "$TESTS_PATH" ]; then
+            echo "❌ TESTS_PATH does not exist"
             exit 1
           fi
-          
-          if [ ! -f "backend/app.bundle" ]; then
-            echo "❌ ERROR: backend/app.bundle was not created!"
-            exit 1
-          fi
-          
-          echo "✅ All required files generated successfully"
-          
-          # Show what tests were extracted
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "EXTRACTED TEST FUNCTIONS:"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          if [ -f "app/testConfig.js" ]; then
-            cat app/testConfig.js
-          fi
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          npm run build "$ADDON_PATH" "$TESTS_PATH"
+
+          echo "✅ Build completed. Verifying outputs..."
+          test -f backend/backend.cjs
+          test -f e2e/tests/app.test.js
+          test -f backend/app.bundle
 
       - name: Display build summary
         if: always()
-        working-directory: ./test-framework
+        shell: bash
+        working-directory: test-framework
         run: |
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📊 BUILD SUMMARY"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
           echo "Platform: ${{ matrix.platform }}"
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "Package: ${{ inputs.package }}"
-          else
-            echo "Addon: ${{ env.ADDON_NAME }} (from PR artifacts)"
-          fi
+          echo "Addon: ${{ env.ADDON_NAME }}"
           echo ""
           echo "Generated Files:"
           echo "  backend/backend.cjs: $([ -f backend/backend.cjs ] && echo '✅' || echo '❌')"
           echo "  backend/app.bundle: $([ -f backend/app.bundle ] && echo '✅' || echo '❌')"
-          echo "  app/testConfig.js: $([ -f app/testConfig.js ] && echo '✅' || echo '❌')"
-          echo "  app/assetManifest.js: $([ -f app/assetManifest.js ] && echo '✅' || echo '❌')"
-          echo "  e2e/tests/app.test.js: $([ -f e2e/tests/app.test.js ] && echo '✅' || echo '❌')"
+          echo "  app/testConfig.js:   $([ -f app/testConfig.js ] && echo '✅' || echo '❌')"
+          echo "  app/assetManifest.js:$([ -f app/assetManifest.js ] && echo '✅' || echo '❌')"
+          echo "  e2e/tests/app.test.js:$([ -f e2e/tests/app.test.js ] && echo '✅' || echo '❌')"
           echo ""
           echo "Test Assets:"
           if [ -d "testAssets" ]; then
