@@ -148,6 +148,7 @@ jobs:
           retention-days: 1
 
       - name: Determine version and tag
+        working-directory: ${{ env.WORKDIR }}
         id: version
         run: |
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
@@ -239,6 +240,7 @@ jobs:
           path: ${{ env.WORKDIR }}/dist/
 
       - name: Modify package name for branch-based test publishing
+        working-directory: ${{ env.WORKDIR }}
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
