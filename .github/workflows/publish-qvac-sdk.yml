@@ -210,14 +210,15 @@ jobs:
 
   publish-gpr:
     needs: build
-    if:
-      ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && needs.build.outputs.branch != 'main'
-      && (
-      needs.build.outputs.branch == 'dev' ||
-      startsWith(needs.build.outputs.branch, 'fix-') ||
-      startsWith(needs.build.outputs.branch, 'feature-')
-      ) }}
+    if: true
+    # Original condition:
+      # ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      # && needs.build.outputs.branch != 'main'
+      # && (
+      # needs.build.outputs.branch == 'dev' ||
+      # startsWith(needs.build.outputs.branch, 'fix-') ||
+      # startsWith(needs.build.outputs.branch, 'feature-')
+      # ) }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
