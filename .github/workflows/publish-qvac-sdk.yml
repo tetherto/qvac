@@ -84,12 +84,95 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: bun run build
 
+      - name: Modify package name for branch-based builds
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          # Only modify package name for dev, fix-*, feature-* branches
+          case "$BRANCH_NAME" in
+            main)
+              echo "Main branch - keeping original package name"
+              exit 0
+              ;;
+            dev)
+              SUFFIX="dev"
+              ;;
+            fix-*|feature-*)
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              ;;
+            *)
+              echo "Branch $BRANCH_NAME not configured for modified package name"
+              exit 0
+              ;;
+          esac
+
+          echo "Modifying package for branch: $BRANCH_NAME"
+
+          # Change namespace from @qvac to @tetherto and add suffix
+          ORIGINAL_NAME=$(node -p "require('./package.json').name")
+          NEW_NAME="@tetherto/sdk-${SUFFIX}"
+
+          echo "Package name: $ORIGINAL_NAME → $NEW_NAME"
+
+          # Update package.json
+          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          MODIFIED_NAME=$(node -p "require('./package.json').name")
+          echo "✓ Modified package.json: $MODIFIED_NAME"
+
+          # Update references in withMobileBundle.ts
+          MOBILE_BUNDLE_FILE="expo/plugins/withMobileBundle.ts"
+          if [ -f "$MOBILE_BUNDLE_FILE" ]; then
+            echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
+            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
+            rm "${MOBILE_BUNDLE_FILE}.bak"
+            echo "✓ Updated $MOBILE_BUNDLE_FILE"
+          fi
+
+          # Update references in expo-rpc-client.ts
+          EXPO_RPC_CLIENT_FILE="client/rpc/expo-rpc-client.ts"
+          if [ -f "$EXPO_RPC_CLIENT_FILE" ]; then
+            echo "Updating @qvac/sdk references in $EXPO_RPC_CLIENT_FILE to $NEW_NAME"
+            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$EXPO_RPC_CLIENT_FILE"
+            rm "${EXPO_RPC_CLIENT_FILE}.bak"
+            echo "✓ Updated $EXPO_RPC_CLIENT_FILE"
+          fi
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
           retention-days: 1
+
+      - name: Determine version and tag
+        id: version
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BASE_VERSION=$(node -p "require('./package.json').version")
+
+          if [ "$BRANCH_NAME" = "main" ]; then
+            VERSION="$BASE_VERSION"
+            TAG="latest"
+            echo "Publishing main branch as @latest"
+          else
+            # Clean branch name for npm (replace invalid chars with -)
+            CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9.-]/-/g')
+            VERSION="${BASE_VERSION}-${CLEAN_BRANCH}.$(date +%s).${GITHUB_SHA:0:7}"
+            TAG="$CLEAN_BRANCH"
+            echo "Publishing branch '$BRANCH_NAME' as @$TAG"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      branch: ${{ steps.version.outputs.branch }}
 
   publish-npm:
     needs: build
@@ -127,7 +210,14 @@ jobs:
 
   publish-gpr:
     needs: build
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if:
+      ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && needs.build.outputs.branch != 'main'
+      && (
+      needs.build.outputs.branch == 'dev' ||
+      startsWith(needs.build.outputs.branch, 'fix-') ||
+      startsWith(needs.build.outputs.branch, 'feature-')
+      ) }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -146,6 +236,36 @@ jobs:
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
+
+      - name: Modify package name for branch-based test publishing
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          # Extract suffix from branch patterns
+          case "$BRANCH_NAME" in
+            dev)
+              SUFFIX="dev"
+              ;;
+            fix-*|feature-*)
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              ;;
+            *)
+              echo "Branch $BRANCH_NAME not configured for modified package name"
+              exit 0
+              ;;
+          esac
+
+          echo "Modifying package name for branch: $BRANCH_NAME → suffix: $SUFFIX"
+
+          # Modify package.json
+          ORIGINAL_NAME=$(node -p "require('./package.json').name")
+          NEW_NAME="${ORIGINAL_NAME}-${SUFFIX}"
+
+          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          MODIFIED_NAME=$(node -p "require('./package.json').name")
+          echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
 
       - name: Publish to GitHub Package Registry
         id: publish
