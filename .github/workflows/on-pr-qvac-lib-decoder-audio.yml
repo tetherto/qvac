@@ -8,7 +8,7 @@ on:
       - reopened
       - labeled
     paths:
-        - "packages/qvac-lib-decoder-audio/**"
+      - "packages/qvac-lib-decoder-audio/**"
   workflow_dispatch:
   workflow_call:
 
@@ -47,6 +47,7 @@ jobs:
       - name: Check for disallowed dependencies
         id: check_dependencies
         continue-on-error: true
+        working-directory: packages/qvac-lib-decoder-audio
         run: |
           deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
           if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
