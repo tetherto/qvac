@@ -106,10 +106,11 @@ jobs:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
+          set -euo pipefail
+          target_dir="$GITHUB_WORKSPACE/${WORKDIR}"
+          mkdir -p "$target_dir"
+
+          cat > "$target_dir/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
