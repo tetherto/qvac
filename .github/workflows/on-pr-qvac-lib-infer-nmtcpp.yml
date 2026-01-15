@@ -149,7 +149,7 @@ jobs:
   cpp-lint:
     needs: [changes, sanity-checks]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    uses: ./.github/workflows/cpp-lint-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
