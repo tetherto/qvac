@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Run Integration Tests (qvac-lib-infer-whispercpp)
+name: Run Integration Tests (Qvac-lib-infer-whispercpp)
 
 on:
   workflow_call:
@@ -79,6 +79,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
+        working-directory: ${{ env.PKG_DIR }}
         if: ${{ matrix.platform != 'win32' }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,6 +107,7 @@ jobs:
         shell: bash
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+        working-directory: ${{ env.PKG_DIR }}
         if: ${{ matrix.platform == 'win32' }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
