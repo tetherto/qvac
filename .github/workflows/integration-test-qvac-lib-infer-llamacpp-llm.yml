@@ -23,6 +23,7 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
         type: string
         required: true
+        default: "@qvac/llm-llamacpp@latest"
 
 env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
