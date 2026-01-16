@@ -42,6 +42,7 @@ env:
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+  TEST_FRAMEWORK_DIR: test-framework
 
 jobs:
   build-and-test:
@@ -130,7 +131,7 @@ jobs:
           NPMRC
 
           # Configure test-framework registry
-          cd ../test-framework
+          cd "${GITHUB_WORKSPACE}/${{ env.TEST_FRAMEWORK_DIR }}"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
