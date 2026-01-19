@@ -115,6 +115,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
+          workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
     needs: context
@@ -123,6 +124,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
     needs: [context, cpp-lint]
