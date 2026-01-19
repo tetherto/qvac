@@ -20,7 +20,7 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
+        description: "NPM package containing prebuilds (E.g. @qvac/llm-llamacpp@1.0.0)"
         type: string
         required: true
         default: "@qvac/llm-llamacpp@latest"
@@ -262,3 +262,4 @@ jobs:
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
