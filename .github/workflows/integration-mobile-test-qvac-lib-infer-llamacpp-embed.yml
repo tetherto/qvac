@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-infer-llamacpp-embed)
+name: Run Mobile Integration Tests (Qvac-lib-infer-llamacpp-embed)
 
 on:
   workflow_call:
@@ -770,3 +770,4 @@ jobs:
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
+
