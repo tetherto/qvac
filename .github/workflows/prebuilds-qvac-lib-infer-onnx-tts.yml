@@ -425,7 +425,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-gpr.yml
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
