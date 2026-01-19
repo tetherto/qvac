@@ -425,11 +425,11 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-gpr
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
   publish-npm:
     needs: [prebuild, merge]
@@ -461,4 +461,4 @@ jobs:
           tag: "latest"
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
-          workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
