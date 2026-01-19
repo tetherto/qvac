@@ -36,6 +36,8 @@ on:
       ref:
         description: "ref"
         type: string
+        required: false
+        default: ""
       repository:
         type: string
         required: false
@@ -209,8 +211,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref }}
-          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Initialize and update submodules
         run: |
