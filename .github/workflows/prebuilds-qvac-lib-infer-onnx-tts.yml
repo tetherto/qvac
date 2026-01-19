@@ -34,7 +34,7 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: 'ref'
+        description: "ref"
         type: string
       repository:
         type: string
@@ -264,7 +264,7 @@ jobs:
       - if: ${{ matrix.os == 'macos-15' }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.WORKDIR }}
-        run: ./ci/remove-brew-llvm.sh
+        run: bash ./ci/remove-brew-llvm.sh
         shell: bash
 
       - if: ${{ matrix.os == 'macos-15' }}
@@ -456,7 +456,7 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: 'latest'
+          tag: "latest"
           git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: 'true'
+          create-tag: "true"
           workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
