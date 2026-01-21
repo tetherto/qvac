@@ -104,7 +104,7 @@ jobs:
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.PAT_TOKEN }}" >> ~/.npmrc
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client
