@@ -46,7 +46,6 @@ jobs:
     with:
       workdir: packages/qvac-lib-dl-filesystem
       name-suffix: "-mono"
-      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
