@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot>Rayane, a Lebanese woman, talks with her one-night-stands and lovers about how, strangely, she has great memories of the 2006 Israeli-Lebanese war.</plot>
+  <lockdata>false</lockdata>
+  <dateadded>2026-01-14 08:38:03</dateadded>
+  <title>War, Explosion, Depression &amp; Other Types of Pillow Talks</title>
+  <originaltitle>War, Explosion, Depression &amp; Other Types of Pillow Talks</originaltitle>
+  <director>Pamela C. Saade</director>
+  <writer>Pamela C. Saade</writer>
+  <credits>Pamela C. Saade</credits>
+  <rating>0</rating>
+  <year>2020</year>
+  <imdbid>tt12907978</imdbid>
+  <tmdbid>1322092</tmdbid>
+  <tagline>“THE WAR OF 2006 WAS GREAT ! ”</tagline>
+  <genre>Drama</genre>
+  <genre>Comedy</genre>
+  <studio>Everybody on Deck</studio>
+  <tag>depression</tag>
+  <tag>one-night stand</tag>
+  <tag>explosion</tag>
+  <tag>pillow</tag>
+  <tag>war</tag>
+  <tag>lebanon</tag>
+  <tag>drama</tag>
+  <tag>comedy</tag>
+  <art>
+    <poster>C:\Users\oluse\Downloads\Tether\qvac\packages\qvac-test-suite\shared-consumer\types-poster.jpg</poster>
+    <fanart>C:\Users\oluse\Downloads\Tether\qvac\packages\qvac-test-suite\shared-consumer\types-backdrop.jpg</fanart>
+  </art>
+  <actor>
+    <name>Nour Hourani</name>
+    <role>Rayane</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+  </actor>
+  <actor>
+    <name>Andrea Poupard</name>
+    <role>Man n°1</role>
+    <type>Actor</type>
+    <sortorder>1</sortorder>
+  </actor>
+  <actor>
+    <name>John Chelhot</name>
+    <role>Man n°2</role>
+    <type>Actor</type>
+    <sortorder>2</sortorder>
+  </actor>
+  <actor>
+    <name>Augustin Vitart</name>
+    <role>Man n°3</role>
+    <type>Actor</type>
+    <sortorder>3</sortorder>
+  </actor>
+  <actor>
+    <name>Narjiss Jamoussi</name>
+    <role>Producer</role>
+    <type>Producer</type>
+  </actor>
+  <id>tt12907978</id>
+  <fileinfo>
+    <streamdetails />
+  </fileinfo>
+</movie>
