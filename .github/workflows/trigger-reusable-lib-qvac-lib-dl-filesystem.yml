@@ -37,6 +37,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-filesystem
+      
 
   call-devops-gpr:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
@@ -44,6 +45,8 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-filesystem
+      name-suffix: "-mono"
+      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]

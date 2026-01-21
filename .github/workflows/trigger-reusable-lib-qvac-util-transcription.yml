@@ -31,7 +31,7 @@ on:
 jobs:
   call-devops-npm:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
@@ -42,6 +42,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
+      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]

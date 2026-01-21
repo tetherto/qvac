@@ -37,3 +37,4 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-cli
+      name-suffix: "-mono"

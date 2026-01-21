@@ -44,6 +44,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-error-base
+      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]

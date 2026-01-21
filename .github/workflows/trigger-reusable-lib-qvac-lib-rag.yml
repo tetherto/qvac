@@ -43,6 +43,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-rag
+      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]

@@ -45,6 +45,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-langdetect-text
+      name-suffix: "-mono"
       
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]

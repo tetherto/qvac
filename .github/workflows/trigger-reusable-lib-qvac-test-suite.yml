@@ -43,6 +43,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-test-suite/framework
+      name-suffix: "-mono"
 
   merge-guard:
     needs: [call-devops-npm, call-devops-gpr]
