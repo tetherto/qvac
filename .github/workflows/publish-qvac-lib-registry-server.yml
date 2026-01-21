@@ -10,6 +10,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-registry-server
+  NAME_SUFFIX: "-mono"
 
 jobs:
   detect-changes:
@@ -80,11 +81,14 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
           tag: latest
-          name-suffix: "-mono"
+          name-suffix: ${{ env.NAME_SUFFIX }}
 
   lint-and-test:
     needs: detect-changes
     if: needs.detect-changes.outputs.client_changed == 'true'
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -162,4 +166,4 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client
           tag: latest
-          name-suffix: "-mono"
+          name-suffix: ${{ env.NAME_SUFFIX }}
