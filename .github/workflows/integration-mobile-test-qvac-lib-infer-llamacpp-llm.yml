@@ -12,6 +12,11 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-llamacpp-llm"
   workflow_dispatch:
     inputs:
       ref:
@@ -24,6 +29,11 @@ on:
         type: string
         required: false
         default: "@qvac/llm-llamacpp@latest"
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-llamacpp-llm"
 
 env:
   NODE_VERSION: "lts/*"
@@ -35,7 +45,7 @@ env:
 
   # Package path *inside the monorepo*.
   # Because we checkout the monorepo into "addon/", the real path becomes: addon/${PKG_DIR}
-  PKG_DIR: "packages/qvac-lib-infer-llamacpp-llm"
+  PKG_DIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-llm' }}
 
 jobs:
   build-and-test:
@@ -1094,7 +1104,7 @@ jobs:
           if [ "${{ matrix.platform }}" == "Android" ]; then
             POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
           else
-            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN  }}"
+            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
           fi
           
           # Set run name based on trigger
