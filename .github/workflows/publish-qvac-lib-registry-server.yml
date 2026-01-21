@@ -86,6 +86,9 @@ jobs:
   lint-and-test:
     needs: detect-changes
     if: needs.detect-changes.outputs.client_changed == 'true'
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
