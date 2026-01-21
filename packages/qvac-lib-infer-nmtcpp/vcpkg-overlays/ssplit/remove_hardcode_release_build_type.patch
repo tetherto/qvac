@@ -1,0 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9ad8a39..dee88ba 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,7 +2,6 @@
+ # and CMakeLists.txt from github.com/marian-nmt/marian-dev
+ cmake_minimum_required (VERSION 3.5.1)
+ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+-set(CMAKE_BUILD_TYPE "Release")
+ 
+ project (ssplit CXX)
+ 

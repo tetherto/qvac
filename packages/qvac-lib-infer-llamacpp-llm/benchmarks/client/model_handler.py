@@ -1,3 +1,4 @@
+from typing import Any
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from huggingface_hub import login, hf_hub_download, list_repo_files
@@ -9,7 +10,6 @@ import os
 import signal
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from typing import List, Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def download_gguf_from_huggingface(repo_id: str, quantization: Optional[str] = None, hf_token: Optional[str] = None) -> str:
+def download_gguf_from_huggingface(repo_id: str, quantization: str | None = None, hf_token: str | None = None) -> str:
     """
     Download a GGUF model from HuggingFace Hub
     
@@ -246,7 +246,7 @@ class ServerConfig:
             self.seed = str(cli_seed)
             print(f"CLI override: seed = {cli_seed}")
     
-    def get_enabled_datasets(self) -> List[str]:
+    def get_enabled_datasets(self) -> list[str]:
         """Get list of enabled datasets"""
         return self.benchmark_config.get('datasets', ['squad', 'arc', 'mmlu', 'gsm8k'])
     
@@ -254,7 +254,7 @@ class ServerConfig:
         """Get number of samples for benchmark"""
         return self.benchmark_config.get('num_samples', 10)
     
-    def get_model_config(self) -> Dict[str, str]:
+    def get_model_config(self) -> dict[str, str]:
         """
         Get model configuration as a dictionary suitable for sending to server
         
@@ -302,16 +302,20 @@ class QvacModelHandler:
         if self.server_process is not None:
             self.stop_server()
         
+        # Ensure log directory exists
+        os.makedirs(self.log_dir, exist_ok=True)
+        
+        # Create timestamp for log files
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stdout_log = os.path.join(self.log_dir, f"server_stdout_{timestamp}.log")
+        stderr_log = os.path.join(self.log_dir, f"server_stderr_{timestamp}.log")
+        
+        # Open log files - track for cleanup on failure
+        stdout_file = None
+        stderr_file = None
+        popen_succeeded = False
+        
         try:
-            # Ensure log directory exists
-            os.makedirs(self.log_dir, exist_ok=True)
-            
-            # Create timestamp for log files
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            stdout_log = os.path.join(self.log_dir, f"server_stdout_{timestamp}.log")
-            stderr_log = os.path.join(self.log_dir, f"server_stderr_{timestamp}.log")
-            
-            # Open log files (unbuffered)
             stdout_file = open(stdout_log, 'w', buffering=1)  # Line buffered
             stderr_file = open(stderr_log, 'w', buffering=1)  # Line buffered
             
@@ -331,10 +335,8 @@ class QvacModelHandler:
                 universal_newlines=True,  # Text mode
                 preexec_fn=os.setsid  # Create new process group
             )
+            popen_succeeded = True  # Popen now owns the file handles
             os.chdir("../../")  # Return to original directory
-            
-            # Wait for 2 seconds to allow server to initialize
-            #time.sleep(2)
             
             # Wait for server to start
             self._wait_for_server()
@@ -347,6 +349,13 @@ class QvacModelHandler:
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
             raise
+        finally:
+            # Only close files if Popen didn't take ownership
+            if not popen_succeeded:
+                if stdout_file is not None:
+                    stdout_file.close()
+                if stderr_file is not None:
+                    stderr_file.close()
 
     def stop_server(self):
         """Stop the server process"""
@@ -467,7 +476,7 @@ class QvacModelHandler:
         except:
             return False
 
-    def _make_request_with_timeout(self, json_req: Dict[str, Any]) -> str:
+    def _make_request_with_timeout(self, json_req: dict[str, Any]) -> str:
         """Make request with timeout using ThreadPoolExecutor"""
         try:
             future = self.executor.submit(
@@ -696,7 +705,7 @@ class ModelHandler:
         
         # Use the minimum of model's max and configured ctx_size (to avoid exceeding model capacity)
         if model_max_length:
-            max_length = max(model_max_length, config_ctx_size)
+            max_length = min(model_max_length, config_ctx_size)
         else:
             max_length = config_ctx_size
         
@@ -814,9 +823,9 @@ class ModelEvaluator:
         self.handler = handler
         self.model_name = model_name
     
-    def evaluate_dataset(self, dataset_name: str, prompts: List[str], 
-                        ground_truths: List[str], metric_fn, 
-                        system_prompt: str = None) -> Tuple[List[float], int]:
+    def evaluate_dataset(self, dataset_name: str, prompts: list[str], 
+                        ground_truths: list[str], metric_fn, 
+                        system_prompt: str = None) -> tuple[list[float], int]:
         """
         Generic dataset evaluation that works with any handler
         

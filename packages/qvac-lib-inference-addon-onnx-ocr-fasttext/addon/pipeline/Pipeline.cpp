@@ -109,10 +109,27 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       image = cv::Mat(input.imageHeight, input.imageWidth, CV_8UC3, input.data.data()).clone();
     }
 
+    // Resize image to max 1200px on longest side
+    constexpr int MAX_INPUT_SIZE = 1200;
+    float initialResizeRatio = 1.0F;
+    int maxDim = std::max(image.cols, image.rows);
+    if (maxDim > MAX_INPUT_SIZE) {
+      initialResizeRatio = static_cast<float>(MAX_INPUT_SIZE) / static_cast<float>(maxDim);
+      int newWidth = static_cast<int>(static_cast<float>(image.cols) * initialResizeRatio);
+      int newHeight = static_cast<int>(static_cast<float>(image.rows) * initialResizeRatio);
+      cv::Mat resized;
+      cv::resize(image, resized, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
+      image = resized;
+      std::string resizeMsg = "[Pipeline] Resized image from " + std::to_string(maxDim) + "px to " +
+          std::to_string(std::max(newWidth, newHeight)) + "px (ratio=" + std::to_string(initialResizeRatio) + ")";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, resizeMsg);
+      ALOG_INFO(resizeMsg);
+    }
+
     // Step 1: Detection
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Running detection...");
     ALOG_INFO(std::string("[Pipeline] Step 1: Running detection..."));
-    StepDetectionInference::Input detectionInput{image, input.paragraph, input.rotationAngles, input.boxMarginMultiplier};
+    StepDetectionInference::Input detectionInput{image, input.paragraph, input.rotationAngles, input.boxMarginMultiplier, initialResizeRatio};
     StepDetectionInference::Output detectionOutput = stepDetection_->process(std::move(detectionInput));
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete");
     ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));

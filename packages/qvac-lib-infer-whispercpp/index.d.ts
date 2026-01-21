@@ -1,12 +1,5 @@
-import QvacResponse from "@tetherto/qvac-lib-response";
-import BaseInference from "@tetherto/infer-base/WeightsProvider/BaseInference";
+import BaseInference, { Loader, QvacResponse } from "@qvac/infer-base";
 import { Readable } from "stream";
-
-declare interface Loader {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  getStream(path: string): Promise<Readable>;
-}
 
 declare interface VadParams {
   threshold?: number;
@@ -99,7 +92,6 @@ declare namespace TranscriptionWhispercpp {
   export {
     TranscriptionWhispercpp as default,
     TranscriptionWhispercpp,
-    Loader,
     VadParams,
     WhisperConfig,
     TranscriptionWhispercppArgs,

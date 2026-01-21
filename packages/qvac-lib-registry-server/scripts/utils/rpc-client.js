@@ -8,8 +8,6 @@ const IdEnc = require('hypercore-id-encoding')
 const cenc = require('compact-encoding')
 const { ENV_KEYS } = require('../../shared/constants')
 
-const PING_TIMEOUT_MS = 5000
-
 /**
  * Derive a dedicated RPC discovery key from the autobase key.
  * Must match the derivation in registry-service.js.
@@ -21,7 +19,7 @@ function deriveRpcDiscoveryKey (autobaseKey) {
     .digest()
 }
 
-async function connectToRegistry ({ config, logger = console, storage = './temp-client-storage', timeout = 30000, primaryKey = null }) {
+async function connectToRegistry ({ config, logger = console, storage = './temp-client-storage', timeout = 30000, primaryKey = null, targetPeer = null }) {
   const autobaseKeyEncoded = config.getAutobaseBootstrapKey()
   if (!autobaseKeyEncoded) {
     throw new Error('QVAC_AUTOBASE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.')
@@ -35,7 +33,6 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
   const keyPair = await getWriterKeyPair(store, logger)
   const swarm = new Hyperswarm({ keyPair })
   let resolved = false
-  const rejectedPeers = new Set()
 
   const cleanup = async () => {
     await Promise.allSettled([
@@ -46,7 +43,7 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
   const autobaseKey = IdEnc.decode(autobaseKeyEncoded)
 
-  // Use dedicated RPC topic instead of autobase topic to avoid blind peers
+  // Use dedicated RPC topic - only the server joins this topic, not blind peers
   const rpcDiscoveryKey = deriveRpcDiscoveryKey(autobaseKey)
 
   logger.info('RPC Client: Connecting via dedicated RPC topic', {
@@ -54,58 +51,38 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
     rpcDiscoveryKey: IdEnc.normalize(rpcDiscoveryKey)
   })
 
+  // Normalize targetPeer if provided
+  const targetPeerNormalized = targetPeer ? IdEnc.normalize(IdEnc.decode(targetPeer)) : null
+
   return await new Promise((resolve, reject) => {
     const timer = setTimeout(async () => {
       if (resolved) return
       resolved = true
       await cleanup()
-      const rejectedList = rejectedPeers.size > 0
-        ? ` (rejected ${rejectedPeers.size} peer(s) that failed ping)`
-        : ''
-      reject(new Error(`Timeout: Could not connect to registry server${rejectedList}`))
+      reject(new Error('Timeout: Could not connect to registry server'))
     }, timeout)
 
-    const onConnection = async (conn, peerInfo) => {
+    const onConnection = (conn, peerInfo) => {
       if (resolved) return
 
       const peerKey = IdEnc.normalize(peerInfo.publicKey)
 
-      // Skip peers we already rejected (e.g., blind peers that failed ping)
-      if (rejectedPeers.has(peerKey)) {
-        logger.debug('RPC Client: Ignoring reconnection from rejected peer', { peer: peerKey })
+      // If targeting a specific peer, skip others
+      if (targetPeerNormalized && peerKey !== targetPeerNormalized) {
+        logger.info('RPC Client: Skipping peer (waiting for target)', { peer: peerKey, target: targetPeerNormalized })
         return
       }
 
-      logger.info('RPC Client: Connected to peer, verifying...', { peer: peerKey })
+      resolved = true
+      clearTimeout(timer)
+
+      logger.info('RPC Client: Connected to server', { peer: peerKey })
 
       const rpc = new ProtomuxRPC(conn, {
         protocol: 'qvac-registry-rpc',
         valueEncoding: cenc.json
       })
       store.replicate(conn)
-
-      // Verify this is the actual server (not a blind peer) via ping
-      const isServer = await verifyServerConnection(rpc, peerKey, logger)
-
-      if (!isServer) {
-        rejectedPeers.add(peerKey)
-        logger.warn('RPC Client: Peer rejected (blind peer - no RPC protocol), waiting for server...', {
-          peer: peerKey,
-          rejectedCount: rejectedPeers.size
-        })
-        try {
-          conn.destroy()
-        } catch {
-          // Ignore destroy errors
-        }
-        return
-      }
-
-      if (resolved) return
-      resolved = true
-      clearTimeout(timer)
-
-      logger.info('RPC Client: Connection accepted', { peer: peerKey })
 
       const closeConnection = async () => {
         try {
@@ -148,58 +125,6 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
       }
     })()
   })
-}
-
-/**
- * Verify connection is to actual registry server (not a blind peer).
- * Blind peers replicate data but don't have RPC responders.
- *
- * Returns:
- * - true: Connection verified (ping responded or timed out - meaning RPC channel is functional)
- * - false: Connection rejected (CHANNEL_CLOSED - blind peer doesn't speak RPC protocol)
- */
-async function verifyServerConnection (rpc, peerKey, logger) {
-  try {
-    const pingPromise = rpc.request('ping', {})
-    const timeoutPromise = new Promise((_resolve, reject) => {
-      const err = new Error('Ping timeout')
-      err.code = 'PING_TIMEOUT'
-      setTimeout(() => reject(err), PING_TIMEOUT_MS)
-    })
-
-    const response = await Promise.race([pingPromise, timeoutPromise])
-
-    if (response?.role === 'registry-server') {
-      logger.debug('RPC Client: Ping response received', {
-        peer: peerKey,
-        isIndexer: response.isIndexer
-      })
-      return true
-    }
-
-    // Unexpected response but channel is functional - accept connection
-    logger.debug('RPC Client: Unexpected ping response, accepting anyway', { peer: peerKey, response })
-    return true
-  } catch (err) {
-    // CHANNEL_CLOSED means blind peer (no RPC protocol) - reject
-    if (err.code === 'CHANNEL_CLOSED') {
-      logger.debug('RPC Client: Channel closed (blind peer)', {
-        peer: peerKey,
-        error: err.message,
-        code: err.code
-      })
-      return false
-    }
-
-    // Timeout or other errors mean RPC channel exists but server doesn't have ping handler
-    // This is acceptable (backwards compatible with old servers)
-    logger.debug('RPC Client: Ping not supported, accepting connection (backwards compatible)', {
-      peer: peerKey,
-      error: err.message,
-      code: err.code
-    })
-    return true
-  }
 }
 
 function getKeyPairFromEnv () {

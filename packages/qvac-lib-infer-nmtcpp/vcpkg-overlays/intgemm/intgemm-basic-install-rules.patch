@@ -1,0 +1,71 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d1a8c81..4f0d0e8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -64,11 +64,13 @@ add_library(intgemm STATIC intgemm/intgemm.cc)
+ # Generate configure file
+ configure_file(intgemm/intgemm_config.h.in intgemm/intgemm_config.h)
+ #Ensure it is included by users.
+-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+-target_include_directories(intgemm PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+ 
+ # This isn't necessary since intgemm uses entirely relative paths but source code depending on it may want to #include <intgemm/intgemm.h>
+-target_include_directories(intgemm INTERFACE .)
++target_include_directories(intgemm PUBLIC
++  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
++  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
++  $<INSTALL_INTERFACE:include>
++)
+ 
+ option(USE_OPENMP "Use OpenMP" OFF)
+ if (USE_OPENMP)
+@@ -91,6 +93,49 @@ if (INTGEMM_CPUID_ENVIRONMENT)
+   target_compile_definitions(intgemm PRIVATE INTGEMM_CPUID_ENVIRONMENT)
+ endif()
+ 
++install(TARGETS intgemm
++    EXPORT intgemmTargets
++    ARCHIVE DESTINATION lib
++    LIBRARY DESTINATION lib
++    RUNTIME DESTINATION bin
++)
++
++install(DIRECTORY intgemm
++      DESTINATION include
++      PATTERN "*.h"
++      PATTERN "*/hpp"
++      PATTERN "*.hh"
++    )
++
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/intgemm/intgemm_config.h
++    DESTINATION include/intgemm)
++
++install(EXPORT intgemmTargets
++    FILE intgemmTargets.cmake
++    NAMESPACE intgemm::
++    DESTINATION share/intgemm)
++
++
++include(CMakePackageConfigHelpers)
++
++# Create a simple config file
++file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/intgemmConfig.cmake"
++"include(CMakeFindDependencyMacro)
++include(\"\${CMAKE_CURRENT_LIST_DIR}/intgemmTargets.cmake\")
++")
++
++write_basic_package_version_file(
++    "${CMAKE_CURRENT_BINARY_DIR}/intgemmConfigVersion.cmake"
++    VERSION 1.0.0
++    COMPATIBILITY SameMajorVersion
++)
++
++install(FILES
++    "${CMAKE_CURRENT_BINARY_DIR}/intgemmConfig.cmake"
++    "${CMAKE_CURRENT_BINARY_DIR}/intgemmConfigVersion.cmake"
++    DESTINATION share/intgemm
++)
++
+ if(INTGEMM_DONT_BUILD_TESTS)
+   return()
+ endif()

@@ -8,8 +8,8 @@ server:
 comparison:
   enabled: true # Run against both servers
   run_addon: true
-  run_python: false
-  round_trip_test: true # Use Whisper to transcribe audio back to text
+  run_python: true
+  round_trip_test: false # Use Whisper to transcribe audio back to text
   whisper_model: "medium" # Whisper model size: tiny, base, small, medium, large
   seed: 42 # Random seed for reproducibility
   num_runs: 1 # Number of times to synthesize each text (for determinism testing)

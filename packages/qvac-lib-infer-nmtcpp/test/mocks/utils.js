@@ -1,5 +1,17 @@
 'use strict'
 
+/**
+ * Test Mock Utilities
+ *
+ * Helper functions for mock objects and unit tests.
+ *
+ * Exports:
+ *   - transitionCb: Callback for logging state transitions
+ *   - wait: Promise-based delay helper for async tests
+ *
+ * Used by: test/mocks/*.js, test/unit/*.test.js
+ */
+
 const transitionCb = (instance, newState) => {
   console.log(`State transitioned to: ${newState}`)
 }

@@ -13,6 +13,6 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["index.d.ts"]
+  "include": ["index.d.ts", "addonLogging.d.ts"]
 }
 

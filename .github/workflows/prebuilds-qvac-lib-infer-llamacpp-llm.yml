@@ -425,6 +425,8 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ env.PKG_DIR }}
+          name-suffix: "-mono"
+          
 
   publish-npm:
     needs: [ prebuild, merge ]

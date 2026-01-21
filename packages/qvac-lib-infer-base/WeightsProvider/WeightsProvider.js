@@ -101,15 +101,22 @@ class WeightsProvider {
    * @param {string} fileName - Name of the file to download
    * @param {string} diskPath - Path on disk where file should be saved
    * @param {ProgressReport} progressReporter - Progress reporter instance to track download progress
-   * @returns {Promise<string>} Path where file was saved on disk
+   * @returns {Promise<void>}
    * @private
    */
   async _downloadFile (fileName, diskPath, progressReporter) {
     await this.loader.ready()
 
+    if (typeof this.loader.download !== 'function') {
+      throw new QvacInferenceBaseError({ code: ERR_CODES.LOAD_NOT_IMPLEMENTED, adds: 'download' })
+    }
+
     try {
       const response = await this.loader.download(fileName, { diskPath, progressReporter })
-      await response.await()
+      // response can be false if the file is already downloaded
+      if (response && typeof response.await === 'function') {
+        await response.await()
+      }
     } catch (error) {
       this.logger?.error(`Error downloading file ${fileName}: ${error}`)
       throw new QvacInferenceBaseError({ code: ERR_CODES.DOWNLOAD_FAILED, adds: error, cause: error })

@@ -13,7 +13,7 @@ from pathlib import Path
 
 # Configuration
 NUM_IMAGES = 100
-IMAGE_DIR = "/home/olya/Downloads"
+IMAGE_DIR = os.environ.get('BENCHMARK_IMAGE_DIR', './test/images')
 QVAC_DIR = Path(__file__).parent.parent.parent
 
 def find_images(directory, limit=100):

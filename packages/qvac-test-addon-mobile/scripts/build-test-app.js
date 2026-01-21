@@ -1370,15 +1370,15 @@ ${testFunctionNames.map(testName => `
         const passText = await getElementByText('${testName}: PASS')
         const failText = await getElementByText('${testName}: FAIL')
         
-        // Wait for either pass or fail with a generous timeout (10 minutes for ML model download/inference)
+        // Wait for either pass or fail with a generous timeout (20 minutes for ML model download/inference)
         await driver.waitUntil(async () => {
             const passDisplayed = await passText.isDisplayed().catch(() => false)
             const failDisplayed = await failText.isDisplayed().catch(() => false)
             return passDisplayed || failDisplayed
         }, {
-            timeout: 600000,
+            timeout: 1200000,
             interval: 2000,
-            timeoutMsg: 'Test ${testName} did not complete within 10 minutes'
+            timeoutMsg: 'Test ${testName} did not complete within 20 minutes'
         })
         
         // Check which one is displayed

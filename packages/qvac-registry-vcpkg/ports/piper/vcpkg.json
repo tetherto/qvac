@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "piper",
   "version": "1.2.0",
-  "port-version": 1,
+  "port-version": 2,
   "description": "A fast, local neural text to speech system that sounds great and is optimized for the Raspberry Pi 4",
   "homepage": "https://github.com/rhasspy/piper",
   "license": "MIT",

@@ -109,7 +109,11 @@ if(BUILD_TESTING)
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
 
-  target_compile_definitions(whisper-core PUBLIC JS_LOGGER)
+  # Only define JS_LOGGER for tests if coverage is not enabled
+  # (Coverage tests need pure C++ without JavaScript/libuv dependencies)
+  if(NOT ENABLE_COVERAGE)
+    target_compile_definitions(whisper-core PUBLIC JS_LOGGER)
+  endif()
 
   # Create test executable
   add_executable(test-whisper-core ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp)

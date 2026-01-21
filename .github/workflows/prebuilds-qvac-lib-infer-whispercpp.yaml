@@ -488,6 +488,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+          name-suffix: "-mono"
 
   publish-npm:
     needs: [prebuild, merge]

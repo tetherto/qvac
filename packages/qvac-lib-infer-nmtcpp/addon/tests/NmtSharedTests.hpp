@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -34,6 +35,15 @@ private:
 class NmtCppModelWrapperTest
     : public ::testing::TestWithParam<NmtParamProvider> {
 protected:
+  void SetUp() override {
+    // Skip test if model file doesn't exist
+    std::string modelPath = provider().getValidModelPath();
+    if (!std::filesystem::exists(modelPath)) {
+      GTEST_SKIP() << "Model not found: " << modelPath << "\n"
+                   << "See models/unit-test/README.md for setup instructions.";
+    }
+  }
+
   const NmtParamProvider& provider() const {
     return ::testing::TestWithParam<NmtParamProvider>::GetParam();
   }

@@ -63,7 +63,7 @@ async function main () {
   console.log('')
 
   // Initialize OCR with configurable parameters
-  // - magRatio: 1.0 (EasyOCR default) vs 1.5 (better for small text, slower)
+  // - magRatio: 1.5 (better quality) vs 1.0 (faster, EasyOCR default)
   // - defaultRotationAngles: [] (no rotation) vs [90, 270] (try rotations)
   // - contrastRetry: false (faster) vs true (retry low confidence with adjusted contrast)
   const onnxOcr = new ONNXOcr({
@@ -72,8 +72,8 @@ async function main () {
       pathRecognizer: 'models/ocr/recognizer_latin.onnx',
       langList: [language],
       useGPU: false,
-      // Performance tuning parameters (matching EasyOCR defaults)
-      magRatio: 1.0,                  // Detection magnification (1.0 = EasyOCR default)
+      // Performance tuning parameters
+      magRatio: 1.5,                  // Detection magnification (1.5 = better for small text)
       defaultRotationAngles: [],      // Empty = no rotation variants (EasyOCR default)
       contrastRetry: true             // Retry low confidence with adjusted contrast (EasyOCR default)
     },

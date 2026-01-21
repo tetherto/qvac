@@ -74,7 +74,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper tiny model with 8-bit quantization",
+    "description": "",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
@@ -88,7 +88,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper tiny model fine-tuned for English",
+    "description": "",
     "quantization": "q0f16",
     "params": "",
     "license": "MIT",
@@ -103,7 +103,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper tiny model fine-tuned for English with 8-bit quantization",
+    "description": "",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
@@ -118,7 +118,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper base model for multilingual transcription",
+    "description": "",
     "quantization": "q0f16",
     "params": "",
     "license": "MIT",
@@ -132,7 +132,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper base model with 8-bit quantization",
+    "description": "",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
@@ -146,7 +146,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper base model fine-tuned for English",
+    "description": "",
     "quantization": "q0f16",
     "params": "",
     "license": "MIT",
@@ -161,7 +161,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper base model fine-tuned for English with 8-bit quantization",
+    "description": "",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
@@ -176,7 +176,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper small model for multilingual transcription",
+    "description": "",
     "quantization": "q0f16",
     "params": "",
     "license": "MIT",
@@ -190,7 +190,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper small model with 8-bit quantization",
+    "description": "",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
@@ -204,7 +204,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "Whisper small model fine-tuned for English",
+    "description": "",
     "quantization": "q0f16",
     "params": "",
     "license": "MIT",
@@ -219,7 +219,7 @@
   {
     "source": "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v5.1.2.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "VAD model for Whisper",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -233,7 +233,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Multimodal 4B model, good for tool calls",
     "quantization": "q4",
     "params": "4B",
     "license": "Apache-2.0",
@@ -247,7 +247,7 @@
   {
     "source": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/blob/fa17ea2647ef236db91adfe1465a61ab6562cf2c/medgemma-4b-it-Q4_1.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q4_1",
     "params": "4B",
     "license": "Apache-2.0",
@@ -261,7 +261,7 @@
   {
     "source": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/fa17ea2647ef236db91adfe1465a61ab6562cf2c/medgemma-4b-it-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
@@ -303,7 +303,7 @@
   {
     "source": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF/blob/75f1b73b657a50f5092502799457ccb4a4a1f9df/Qwen2.5-Omni-3B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Multimodal for text, image, and audio",
     "quantization": "",
     "params": "3B",
     "license": "Qwen",
@@ -345,7 +345,7 @@
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Vision-language model for video understanding",
     "quantization": "q8_0",
     "params": "500M",
     "license": "Apache-2.0",
@@ -1151,7 +1151,7 @@
   {
     "source": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/448afcb8afc647d0c565071222fb8b0c7f9860b4/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "MoE model with DPO training",
     "quantization": "Q2_K",
     "params": "2x7B",
     "license": "Apache-2.0",
@@ -1346,7 +1346,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Norman voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1376,7 +1376,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Lessac voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1436,7 +1436,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Amy voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1466,7 +1466,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Sharvard voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1496,7 +1496,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Davefx voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1526,7 +1526,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Thorsten voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1556,7 +1556,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Paola voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1586,7 +1586,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Irina voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1616,7 +1616,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Gilles voice (low quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1676,7 +1676,7 @@
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx",
     "engine": "@qvac/tts",
-    "description": "",
+    "description": "Cadu voice (medium quality)",
     "quantization": "fp32",
     "params": "20M",
     "license": "MIT",
@@ -1900,7 +1900,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Fine-tuned for Norwegian",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -1915,7 +1915,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -1929,7 +1929,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -2138,7 +2138,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/recognizer_english.onnx",
     "engine": "@qvac/ocr-onnx",
-    "description": "",
+    "description": "Text recognizer",
     "quantization": "",
     "params": "",
     "license": "Apache-2.0",
@@ -2153,7 +2153,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx",
     "engine": "@qvac/ocr-onnx",
-    "description": "",
+    "description": "CRAFT text detector",
     "quantization": "",
     "params": "",
     "license": "Apache-2.0",
@@ -2393,7 +2393,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Fine-tuned for French",
     "quantization": "f16",
     "params": "",
     "license": "MIT",
@@ -2423,7 +2423,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Fine-tuned for German",
     "quantization": "f16",
     "params": "",
     "license": "MIT",

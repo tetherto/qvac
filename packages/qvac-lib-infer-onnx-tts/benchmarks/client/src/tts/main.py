@@ -19,6 +19,14 @@ from .dataset import load_dataset_texts
 from .utils import save_single_result, save_comparison_report, round_trip_quality_test, round_trip_single_implementation
 from .whisper_transcriber import WhisperTranscriber
 
+# Mapping for TTS language codes to Whisper language codes (where they differ)
+# Whisper uses "no" for Norwegian, but TTS uses "nb" for Norwegian Bokmål
+TTS_TO_WHISPER_LANG = {
+    "nb": "no",  # Norwegian Bokmål -> Norwegian
+    "cm": "zh",  # Chinese -> Chinese (Mandarin)
+    "cmn": "zh",  # Chinese -> Chinese (Mandarin)
+}
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -89,6 +97,7 @@ def main():
         logger.info("=" * 60)
         try:
             whisper_language = cfg.model.language[:2]  # Use first 2 characters (e.g., "en" from "en-us")
+            whisper_language = TTS_TO_WHISPER_LANG.get(whisper_language, whisper_language)  # Map to Whisper-compatible code
             whisper = WhisperTranscriber(model_size=cfg.comparison.whisper_model, language=whisper_language)
             whisper.load()
             logger.info("✅ Whisper model loaded successfully")
@@ -118,6 +127,7 @@ def main():
             
             # Log results for each run
             for run_idx, addon_results in enumerate(addon_runs, 1):
+                realtime_speed = (1 / addon_results.avg_rtf) if addon_results.avg_rtf > 0 else 0
                 logger.info(f"\nAddon Run {run_idx} Results:")
                 logger.info(f"  Implementation: {addon_results.implementation}")
                 logger.info(f"  Version: {addon_results.version}")
@@ -125,13 +135,12 @@ def main():
                 logger.info(f"  Total Generation: {addon_results.total_generation_ms:.2f} ms")
                 logger.info(f"  Total Audio: {addon_results.total_audio_duration:.2f} s")
                 logger.info(f"  Average RTF: {addon_results.avg_rtf:.4f}")
-                logger.info(f"  Speed: {addon_results.avg_rtf:.2f}x real-time")
+                logger.info(f"  Speed: {realtime_speed:.2f}x real-time")
             
-            # Save results (use first run for single result file)
-            save_single_result(cfg, addon_runs[0], "addon")
             addon_client.close()
             
             # Run round-trip quality test for addon if enabled
+            addon_round_trip = None
             if cfg.comparison.round_trip_test and whisper:
                 logger.info("\n" + "=" * 60)
                 logger.info("  Running Addon Round-Trip Quality Test")
@@ -151,6 +160,9 @@ def main():
                         logger.info(f"    Samples tested: {addon_round_trip['total_tested']}")
                 except Exception as e:
                     logger.error(f"Addon round-trip test failed: {e}", exc_info=True)
+            
+            # Save results (use first run for single result file, include round-trip metrics if available)
+            save_single_result(cfg, addon_runs[0], "addon", addon_round_trip)
             
         except Exception as e:
             logger.error(f"Addon benchmark failed: {e}", exc_info=True)
@@ -178,6 +190,7 @@ def main():
             
             # Log results for each run
             for run_idx, python_results in enumerate(python_runs, 1):
+                realtime_speed = (1 / python_results.avg_rtf) if python_results.avg_rtf > 0 else 0
                 logger.info(f"\nPython Native Run {run_idx} Results:")
                 logger.info(f"  Implementation: {python_results.implementation}")
                 logger.info(f"  Version: {python_results.version}")
@@ -185,13 +198,12 @@ def main():
                 logger.info(f"  Total Generation: {python_results.total_generation_ms:.2f} ms")
                 logger.info(f"  Total Audio: {python_results.total_audio_duration:.2f} s")
                 logger.info(f"  Average RTF: {python_results.avg_rtf:.4f}")
-                logger.info(f"  Speed: {python_results.avg_rtf:.2f}x real-time")
+                logger.info(f"  Speed: {realtime_speed:.2f}x real-time")
             
-            # Save results (use first run for single result file)
-            save_single_result(cfg, python_runs[0], "python-native")
             python_client.close()
             
             # Run round-trip quality test for python if enabled
+            python_round_trip = None
             if cfg.comparison.round_trip_test and whisper:
                 logger.info("\n" + "=" * 60)
                 logger.info("  Running Python Round-Trip Quality Test")
@@ -211,6 +223,9 @@ def main():
                         logger.info(f"    Samples tested: {python_round_trip['total_tested']}")
                 except Exception as e:
                     logger.error(f"Python round-trip test failed: {e}", exc_info=True)
+            
+            # Save results (use first run for single result file, include round-trip metrics if available)
+            save_single_result(cfg, python_runs[0], "python-native", python_round_trip)
             
         except Exception as e:
             logger.error(f"Python native benchmark failed: {e}", exc_info=True)

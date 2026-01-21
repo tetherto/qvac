@@ -126,6 +126,8 @@ function getModelNameForLanguage (language) {
 
     case 'no-no':
     case 'no':
+    case 'nb-no':
+    case 'nb':
       return 'no_NO-talesyntese-medium'
 
     case 'pl-pl':
@@ -152,9 +154,9 @@ function getModelNameForLanguage (language) {
     case 'sk':
       return 'sk_SK-lili-medium'
 
-    case 'sl-sl':
+    case 'sl-si':
     case 'sl':
-      return 'sl_SL-artur-medium'
+      return 'sl_SI-artur-medium'
 
     case 'sr-rs':
     case 'sr':
@@ -186,6 +188,7 @@ function getModelNameForLanguage (language) {
 
     case 'zh-cn':
     case 'zh':
+    case 'cmn':
       return 'zh_CN-huayan-medium'
 
     default:
@@ -301,12 +304,12 @@ async function runTTS (payload) {
     const sampleRate = config.sampleRate || 22050
     const sampleCount = buffer.length
     const durationSec = sampleCount / sampleRate
-    const rtf = durationSec / (textGenMs / 1000)
+    const rtf = (textGenMs / 1000) / durationSec
 
     logger.info(`  Text: "${text.substring(0, 50)}"`)
     logger.info(`  Samples: ${sampleCount}, Sample Rate: ${sampleRate}`)
     logger.info(`  Duration: ${durationSec.toFixed(2)}s, Generation: ${textGenMs.toFixed(2)}ms`)
-    logger.info(`  RTF: ${rtf.toFixed(4)} (${rtf.toFixed(1)}x faster than real-time)`)
+    logger.info(`  RTF: ${rtf.toFixed(4)} (${(1 / rtf).toFixed(1)}x real-time)`)
     logger.debug(`  First 10 samples: ${buffer.slice(0, 10).join(', ')}`)
 
     const output = {

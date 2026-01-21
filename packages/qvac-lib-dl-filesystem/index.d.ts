@@ -11,12 +11,12 @@ declare class FilesystemDL extends BaseDL {
   constructor(opts: FilesystemDLOptions)
 
   /**
-   * Private method to get a readable stream for a given file.
+   * Get a file as async iterable buffer stream.
    * @param {string} filePath - The relative path to the file.
-   * @returns {Promise<ReadableStream>} The readable stream for the file.
+   * @returns {Promise<AsyncIterable<Buffer>>} The file content as async iterable.
    * @throws {QvacErrorFilesystem} If the file is not found or there's a reading error.
    */
-  getStream(filePath: string): Promise<ReadableStream>
+  getStream(filePath: string): Promise<AsyncIterable<Buffer>>
 
   /**
    * List the files in the directory.

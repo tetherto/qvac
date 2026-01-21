@@ -95,6 +95,8 @@ async function main () {
     model = new ONNXOcr({
       params: {
         langList: [language],
+        pathDetector: './models/ocr/rec_512/detector_craft.onnx',
+        pathRecognizerPrefix: './models/ocr/rec_512/recognizer_',
         useGPU: false,
         // Match EasyOCR defaults for fair comparison
         magRatio: 1.0,

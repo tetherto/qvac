@@ -11,7 +11,6 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "../src/model-interface/TranslationModel.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
 
 namespace qvac_lib_inference_addon_nmt::test {
 
@@ -29,8 +28,10 @@ class NmtCppModelWrapperTest : public ::testing::Test {
 protected:
   void SetUp() override {
     if (!std::filesystem::exists(getValidModelPath())) {
-      GTEST_FAIL() << "Valid model file not found: "
-                   << std::filesystem::absolute(getValidModelPath()).string();
+      GTEST_SKIP()
+          << "Model not found: "
+          << std::filesystem::absolute(getValidModelPath()).string()
+          << "\nSee models/unit-test/README.md for setup instructions.";
     }
   }
 
@@ -438,6 +439,42 @@ TEST_F(NmtCppModelWrapperTest, DoubleReloadMaintainsStability) {
   EXPECT_TRUE(wrapper.isLoaded());
 }
 
+// Skip-capable equivalents of ModelApi tests
+TEST_F(NmtCppModelWrapperTest, ModelApi_InitializeLoadUnloadReloadReset) {
+  TranslationModel wrapper(getValidModelPath());
+
+  EXPECT_NO_THROW(wrapper.initializeBackend());
+  EXPECT_NO_THROW(wrapper.load());
+  EXPECT_TRUE(wrapper.isLoaded());
+
+  EXPECT_NO_THROW(wrapper.unload());
+  EXPECT_FALSE(wrapper.isLoaded());
+
+  EXPECT_NO_THROW(wrapper.reload());
+  EXPECT_TRUE(wrapper.isLoaded());
+
+  EXPECT_NO_THROW(wrapper.reset());
+}
+
+TEST_F(NmtCppModelWrapperTest, ModelApi_RuntimeStats_AfterProcess) {
+  TranslationModel wrapper(getValidModelPath());
+  wrapper.initializeBackend();
+  wrapper.load();
+
+  auto result = wrapper.process(make_valid_input());
+  EXPECT_FALSE(result.empty());
+
+  auto stats = wrapper.runtimeStats();
+  EXPECT_FALSE(stats.empty());
+}
+
+TEST_F(NmtCppModelWrapperTest, ModelApi_Process_EmptyInput_NoThrow) {
+  TranslationModel wrapper(getValidModelPath());
+  wrapper.initializeBackend();
+
+  EXPECT_NO_THROW(wrapper.process(make_empty_input()));
+}
+
 // ============================================================================
 // Generic Model API Tests
 // ============================================================================
@@ -460,8 +497,5 @@ TestModel make_invalid_model() { return TranslationModel(); }
 std::string make_valid_input() { return "Hello, my name is Bob."; }
 
 std::string make_empty_input() { return std::string(); }
-
-// Instantiate the generic API tests
-MODEL_API_INSTANTIATE_TESTS(TestModel)
 
 } // namespace qvac_lib_inference_addon_nmt::test

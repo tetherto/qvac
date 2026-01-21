@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+[Unreleased] - 2026-01-13
+- Improved the test coverage for C++ code
+- Showing C++ test results in the PR comments
+
+## [Unreleased] - 2026-01-12
+- add mobile integration tests for mobile
+
+## [0.3.13] - 2026-01-15
+
+### Fixed
+- Type declarations: `Loader` and `QvacResponse` now correctly imported from `@qvac/infer-base`
+- `test:dts` now passes
+
+## [0.3.12] - 2026-01-13
+
+### Added
+- TypeScript type declarations for `addonLogging` subpath export
+
+### Fixed
+- `test:dts` script now references `transcription-ffmpeg.d.ts` instead of deleted `transcription-addon/index.d.ts`
+
 ## [0.3.11] - 2026-01-07
 
 ### Added

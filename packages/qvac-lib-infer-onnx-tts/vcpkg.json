@@ -33,7 +33,10 @@
     "piper-phonemize",
     "fmt",
     "spdlog",
-    "piper"
+    {
+      "name": "piper",
+      "version>=": "1.2.0#2"
+    }
   ],
   "features": {
     "tests": {

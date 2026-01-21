@@ -50,13 +50,13 @@ export class HyperDriveDL extends BaseDL {
   close(): Promise<void>
 
   /**
-   * Returns a readable stream for a given file path from Hyperdrive.
+   * Get a file as async iterable buffer stream.
    * @param {string} path - The file path inside the Hyperdrive.
    * @param {Object} [opts] - Optional parameters.
-   * @returns {Promise<Readable>} A readable stream for the specified file.
+   * @returns {Promise<AsyncIterable<Buffer>>} The file content as async iterable.
    * @throws {QvacErrorHyperdrive} If the file is not found or the drive is not ready.
    */
-  getStream(path: string, opts?: Object): Promise<ReadableStream>
+  getStream(path: string, opts?: Object): Promise<AsyncIterable<Buffer>>
 
   /**
    * Get the size of a file in bytes.
@@ -83,6 +83,7 @@ export class HyperDriveDL extends BaseDL {
    * @throws {QvacErrorHyperdrive} If listing fails or the drive is not ready.
    */
   list(directoryPath?: string, opts?: Object): Promise<{key: string, cached?: boolean}[]>
+
   /**
    * Downloads file to local drive cache based on supplied path.
    * Can optionally save files directly to disk using the diskPath option.
@@ -93,7 +94,7 @@ export class HyperDriveDL extends BaseDL {
    * @param opts.progressCallback - Progress callback function, will initialize a progress report internally if provided.
    * @returns Download object with trackers, await function that returns download results, and cancel function.
    */
-  download(path?: string, opts?: Object | any): Promise<HyperDriveDownload>
+  download(path?: string, opts?: Object): Promise<HyperDriveDownload>
 
   /**
    * Deletes weights if present on local storage.

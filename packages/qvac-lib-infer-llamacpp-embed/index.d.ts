@@ -2,6 +2,8 @@ import BaseInference, {
   ReportProgressCallback
 } from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type { QvacResponse } from '@qvac/infer-base'
+
+export { ReportProgressCallback, QvacResponse }
 import type WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider'
 import type QvacLogger from '@qvac/logging'
 
@@ -37,6 +39,7 @@ export interface GGMLArgs {
   opts?: { stats?: boolean }
   diskPath?: string
   modelName: string
+  modelPath?: string
   exclusiveRun?: boolean
 }
 

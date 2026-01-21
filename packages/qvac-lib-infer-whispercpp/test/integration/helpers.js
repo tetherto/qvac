@@ -1,103 +1,128 @@
 'use strict'
 const fs = require('bare-fs')
 const path = require('bare-path')
-const process = require('process')
+const os = require('bare-os')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+
+const platform = os.platform()
+const arch = os.arch()
+const isMobile = platform === 'ios' || platform === 'android'
+
+const WHISPER_MODEL_HYPERDRIVE_KEY = 'hd://ebfb94b378276da139554668f1ff737644eadff529c2ea0f2662d7df61fd86ca'
+
+let FakeDL = null
+if (!isMobile) {
+  try {
+    FakeDL = require('../mocks/loader.fake.js')
+  } catch (e) {}
+}
 
 function detectPlatform () {
-  const platform = process.platform
-  const arch = process.arch
   return `${platform}-${arch}`
 }
 
-async function downloadRealModel (url, filepath, minSize = 1000000) {
-  if (fs.existsSync(filepath)) {
-    const stats = fs.statSync(filepath)
-    const actualMinSize = filepath.includes('vad') ? 500000 : minSize
-    if (stats.size >= actualMinSize) {
-      console.log(` ✓ Using cached model: ${path.basename(filepath)} (${stats.size} bytes)`)
-      return { success: true, path: filepath, isReal: true }
-    } else {
-      console.log(` Cached file too small (${stats.size} bytes), re-downloading...`)
-      fs.unlinkSync(filepath)
-    }
-  }
-
-  console.log(` Downloading model: ${path.basename(filepath)}...`)
-  try {
-    const { spawnSync } = require('bare-subprocess')
-    const result = spawnSync('curl', [
-      '-L', '-o', filepath, url,
-      '--fail', '--silent', '--show-error',
-      '--connect-timeout', '30',
-      '--max-time', '300'
-    ], { stdio: ['inherit', 'inherit', 'pipe'] })
-
-    if (result.status === 0 && fs.existsSync(filepath)) {
-      const stats = fs.statSync(filepath)
-      const actualMinSize = filepath.includes('vad') ? 500000 : minSize
-      if (stats.size >= actualMinSize) {
-        console.log(` ✓ Downloaded: ${path.basename(filepath)} (${stats.size} bytes)`)
-        return { success: true, path: filepath, isReal: true }
-      } else {
-        console.log(` Downloaded file too small: ${stats.size} bytes (expected >${actualMinSize})`)
-      }
-    } else {
-      console.log(` Download failed with exit code: ${result.status}`)
-    }
-  } catch (e) {
-    console.log(` Download error: ${e.message}`)
-  }
-
-  console.log(' Creating placeholder model for error testing')
-  fs.writeFileSync(filepath, Buffer.alloc(1024))
-  return { success: false, path: filepath, isReal: false }
-}
-
 async function ensureWhisperModel (modelPath) {
-  const whisperUrls = [
-    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
-    'https://github.com/ggerganov/whisper.cpp/releases/download/v1.4.2/ggml-small.bin'
-  ]
-  let whisperResult = { success: false, isReal: false }
-  if (!fs.existsSync(modelPath)) {
-    for (const url of whisperUrls) {
-      console.log(` Trying whisper model from: ${url}`)
-      whisperResult = await downloadRealModel(url, modelPath, 30000000)
-      if (whisperResult.success) break
-    }
-  } else {
-    whisperResult = { success: true, isReal: true }
+  const modelName = path.basename(modelPath)
+  const diskPath = path.dirname(modelPath)
+
+  if (!fs.existsSync(diskPath)) {
+    fs.mkdirSync(diskPath, { recursive: true })
   }
-  return whisperResult
+
+  if (fs.existsSync(modelPath)) {
+    const stats = fs.statSync(modelPath)
+    if (stats.size > 1000000) {
+      console.log(`✓ Using cached model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      return { success: true, path: modelPath, isReal: true }
+    }
+  }
+
+  console.log(`Downloading ${modelName} from HyperDrive...`)
+  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+
+  try {
+    await loader.ready()
+    const files = await loader.list()
+    console.log(`Found ${files.length} files in HyperDrive`)
+
+    for (const file of files) {
+      const fullPath = path.join(diskPath, file.key)
+      if (fs.existsSync(fullPath)) {
+        const stats = fs.statSync(fullPath)
+        if (stats.size > 1000000) {
+          console.log(`Skipping existing: ${file.key}`)
+          continue
+        }
+      }
+      const dirName = path.dirname(fullPath)
+      fs.mkdirSync(dirName, { recursive: true })
+      const response = await loader.download(file.key, { diskPath: dirName })
+      await response.await()
+      console.log(`Downloaded: ${file.key}`)
+    }
+
+    await loader.close()
+
+    if (fs.existsSync(modelPath)) {
+      const stats = fs.statSync(modelPath)
+      console.log(`✓ Model ready: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      return { success: true, path: modelPath, isReal: true }
+    } else {
+      console.log(`Model ${modelName} not found in HyperDrive`)
+      return { success: false, path: modelPath, isReal: false }
+    }
+  } catch (err) {
+    console.error('HyperDrive download error:', err)
+    if (loader) await loader.close().catch(() => {})
+    return { success: false, path: modelPath, isReal: false, error: err.message }
+  }
 }
 
-/**
- * Ensures VAD model exists, downloading if necessary
- * @param {string} vadModelPath - Path where VAD model should be stored
- * @returns {Promise<boolean>} True if VAD model is available (real or placeholder)
- */
 async function ensureVADModel (vadModelPath) {
-  const vadUrls = [
-    'https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin',
-    'https://github.com/snakers4/silero-vad/raw/master/files/silero_vad.onnx',
-    'https://models.silero.ai/models/vad/silero_vad.onnx',
-    'https://huggingface.co/rhasspy/silero-vad-onnx/resolve/main/silero_vad.onnx'
-  ]
-  let vadOk = fs.existsSync(vadModelPath)
-  if (!vadOk) {
-    for (const url of vadUrls) {
-      console.log(` Trying VAD model from: ${url}`)
-      const res = await downloadRealModel(url, vadModelPath, 500000)
-      if (res.success) {
-        vadOk = true
-        break
-      }
+  const modelName = path.basename(vadModelPath)
+  const diskPath = path.dirname(vadModelPath)
+
+  if (fs.existsSync(vadModelPath)) {
+    const stats = fs.statSync(vadModelPath)
+    if (stats.size > 500000) {
+      console.log(`✓ Using cached VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      return true
     }
   }
-  return vadOk
+
+  if (!fs.existsSync(diskPath)) {
+    fs.mkdirSync(diskPath, { recursive: true })
+  }
+
+  console.log(`Downloading ${modelName} from HyperDrive...`)
+  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+
+  try {
+    await loader.ready()
+    const files = await loader.list()
+
+    const vadFile = files.find(f => f.key.includes('silero') || f.key.includes('vad'))
+    if (vadFile) {
+      const response = await loader.download(vadFile.key, { diskPath })
+      await response.await()
+      console.log(`Downloaded: ${vadFile.key}`)
+    }
+
+    await loader.close()
+
+    if (fs.existsSync(vadModelPath)) {
+      const stats = fs.statSync(vadModelPath)
+      console.log(`✓ VAD model ready: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      return true
+    }
+    return false
+  } catch (err) {
+    console.error('HyperDrive VAD download error:', err)
+    if (loader) await loader.close().catch(() => {})
+    return false
+  }
 }
 
 async function waitUntilIdle (model, maxMs = 30000) {
@@ -283,13 +308,70 @@ function validateAccuracy (expected, actual, threshold = 0.3) {
 }
 
 /**
+ * Get path to a test asset file - works on both desktop and mobile
+ * On mobile, asset files must be in test/mobile/testAssets/
+ * On desktop, asset files are in examples/samples/ or test/mobile/testAssets/
+ *
+ * @param {string} filename - Name of the asset file (e.g., 'sample.raw')
+ * @param {object} options - Options
+ * @param {string} options.desktopDir - Directory to look in on desktop (default: 'examples/samples')
+ * @returns {string} - Full path to the asset file
+ */
+function getAssetPath (filename, options = {}) {
+  const { desktopDir = 'examples/samples' } = options
+
+  // Mobile environment - use asset loading from testAssets
+  if (isMobile && global.assetPaths) {
+    const projectPath = `../../testAssets/${filename}`
+
+    if (global.assetPaths[projectPath]) {
+      const resolvedPath = global.assetPaths[projectPath].replace('file://', '')
+      return resolvedPath
+    }
+    // Asset not found in manifest
+    throw new Error(`Asset not found in testAssets: ${filename}. Make sure ${filename} is in test/mobile/testAssets/ directory and rebuild the app.`)
+  }
+
+  // Desktop environment - check multiple locations
+  const possiblePaths = [
+    // First check testAssets (for test-specific files)
+    path.resolve(__dirname, '../mobile/testAssets', filename),
+    // Then check examples/samples directory
+    path.resolve(__dirname, `../../${desktopDir}`, filename)
+  ]
+
+  for (const testPath of possiblePaths) {
+    if (fs.existsSync(testPath)) {
+      return testPath
+    }
+  }
+
+  // Return the first path (will fail with appropriate error message)
+  return possiblePaths[0]
+}
+
+/**
  * Gets standard test paths for models and audio files
+ * Handles mobile vs desktop paths automatically
  * @param {string} [modelsDir] - Optional models directory (defaults to '../../examples/models')
  * @returns {Object} Object with modelsDir, samplesDir, modelPath, vadModelPath, and audioPath
  */
 function getTestPaths (modelsDir = null) {
-  const actualModelsDir = modelsDir || path.resolve(__dirname, '../../examples/models')
-  const samplesDir = path.resolve(__dirname, '../../examples/samples')
+  // On mobile, use global.testDir if available (set by mobile test framework)
+  const writableRoot = global.testDir || (isMobile ? os.tmpdir() : null)
+
+  let actualModelsDir, samplesDir
+
+  if (isMobile && writableRoot) {
+    // Mobile: use writable directory
+    actualModelsDir = modelsDir || path.join(writableRoot, 'models')
+    samplesDir = path.join(writableRoot, 'samples')
+  } else {
+    // Desktop: use relative paths
+    actualModelsDir = modelsDir || path.resolve(__dirname, '../../examples/models')
+    samplesDir = path.resolve(__dirname, '../../examples/samples')
+  }
+
   if (!fs.existsSync(actualModelsDir)) {
     fs.mkdirSync(actualModelsDir, { recursive: true })
   }
@@ -300,9 +382,10 @@ function getTestPaths (modelsDir = null) {
     testDir: actualModelsDir, // kept for backward compatibility
     modelsDir: actualModelsDir,
     samplesDir,
-    modelPath: path.join(actualModelsDir, 'ggml-small.bin'),
+    modelPath: path.join(actualModelsDir, 'ggml-tiny.bin'),
     vadModelPath: path.join(actualModelsDir, 'ggml-silero-v5.1.2.bin'),
-    audioPath: path.join(samplesDir, 'integration-test-sample.raw')
+    audioPath: path.join(samplesDir, 'integration-test-sample.raw'),
+    isMobile
   }
 }
 
@@ -577,7 +660,6 @@ async function runTranscription (params, expectation = {}) {
 
 module.exports = {
   detectPlatform,
-  downloadRealModel,
   ensureWhisperModel,
   ensureVADModel,
   waitUntilIdle,
@@ -588,6 +670,12 @@ module.exports = {
   makePcmNoise,
   setupJsLogger,
   getTestPaths,
+  getAssetPath,
   wordErrorRate,
-  validateAccuracy
+  validateAccuracy,
+  isMobile,
+  platform,
+  arch,
+  WHISPER_MODEL_HYPERDRIVE_KEY,
+  HyperDriveDL
 }

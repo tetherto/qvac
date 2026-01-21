@@ -378,3 +378,4 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}
           tag: ${{ github.event.inputs.tag || inputs.tag || 'dev' }}
+          name-suffix: "-mono"

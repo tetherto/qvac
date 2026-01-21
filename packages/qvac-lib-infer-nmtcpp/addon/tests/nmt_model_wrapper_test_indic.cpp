@@ -13,7 +13,6 @@
 
 #include "../src/model-interface/TranslationModel.hpp"
 #include "NmtSharedTests.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
 
 using qvac_lib_inference_addon_mlc_marian::TranslationModel;
 
@@ -56,9 +55,6 @@ TestModel make_invalid_model() { return TranslationModel(); }
 std::string make_valid_input() { return "Hello, my name is Bob."; }
 
 std::string make_empty_input() { return std::string(); }
-
-// Instantiate the generic API tests
-MODEL_API_INSTANTIATE_TESTS(TestModel)
 
 }; // namespace qvac_lib_inference_addon_nmt::test_indic
 

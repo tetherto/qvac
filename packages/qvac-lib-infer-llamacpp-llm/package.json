@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.6.0",
+  "version": "0.8.1",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -11,13 +11,9 @@
     "lint:fix": "standard --ignore \"addon/**\" --fix",
     "update:quickstart-section": "node ./scripts/quickstart-testing/update_readme.js",
     "test": "npm run test:integration",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit | tee test-output.log",
-    "test:unit": "bare test/unit/addon.test.js",
+    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "model:init": "qvac-dev model init",
-    "model:new": "qvac-dev model new",
-    "model:generate": "qvac-dev model generate",
     "test:dts": "tsc -p tsconfig.dts.json",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
@@ -34,7 +30,6 @@
   },
   "standard": {
     "ignore": [
-      "addon/lib/",
       "benchmarks/client/venv/"
     ]
   },
@@ -43,6 +38,7 @@
     "index.js",
     "addon.js",
     "addonLogging.js",
+    "addonLogging.d.ts",
     "prebuilds",
     "index.d.ts"
   ],
@@ -57,45 +53,41 @@
   "devDependencies": {
     "@babel/parser": "^7.28.0",
     "@babel/traverse": "^7.28.0",
-    "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",
     "@qvac/dl-hyperdrive": "^0.1.1",
-    "@qvac/logging": "^0.1.0",
     "@types/node": "^24.2.1",
     "bare-buffer": "^3.4.2",
-    "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
-    "bare-process": "^4.2.2",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "corestore": "^7.4.7",
-    "hyperswarm": "^4.14.0",
-    "os": "npm:bare-os@^3.6.2",
     "process": "npm:bare-node-process",
-    "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "tty": "npm:bare-tty@^5.0.3",
-    "typescript": "^5.9.2",
-    "util": "npm:bare-utils@^1.5.1"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.2.0",
     "bare-path": "^3.0.0",
-    "bare-process": "^4.2.2",
-    "require-asset": "^1.1.0"
+    "bare-process": "^4.2.2"
   },
   "engines": {
     "bare": ">=1.19.0"
   },
   "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
+    "@qvac/dl-hyperdrive": "^0.1.1"
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
-    "./addonLogging": "./addonLogging.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
     "./addonLogging.js": "./addonLogging.js",
     "./addon.js": "./addon.js",
     "./binding.js": "./binding.js"

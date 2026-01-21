@@ -16,10 +16,6 @@ const files = {
 }
 
 class FakeDL extends Base {
-  async start () { }
-
-  async stop () { }
-
   async list (path) {
     return Object.keys(files)
   }

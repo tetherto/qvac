@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "TTS addon skeleton for qvac",
   "addon": true,
   "engines": {
@@ -29,18 +29,29 @@
   },
   "files": [
     "addonLogging.js",
+    "addonLogging.d.ts",
     "binding.js",
     "index.js",
     "lib",
     "prebuilds",
     "index.d.ts",
     "tts.js",
-    "test/mobile"
+    "assets/tashkeel",
+    "test/mobile",
+    "test/integration",
+    "test/utils/runTTS.js",
+    "test/utils/downloadModel.js",
+    "test/utils/wav-helper.js",
+    "test/utils/loader.fake.js",
+    "test/utils/runWhisper.js"
   ],
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
-    "./addonLogging": "./addonLogging.js",
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
     "./addonLogging.js": "./addonLogging.js"
   },
   "license": "Apache-2.0",

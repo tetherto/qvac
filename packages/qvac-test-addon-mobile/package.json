@@ -10,7 +10,10 @@
     "android": "npm run bundle && expo run:android",
     "ios": "npm run bundle && expo run:ios --device",
     "barelog": "adb logcat '*:S bare:*'",
-    "start": "expo start"
+    "start": "expo start",
+    "validate": "node scripts/validate-addon-compatibility.js",
+    "validate:all": "node scripts/validate-addon-compatibility.js",
+    "validate:local": "node scripts/validate-addon-compatibility.js --local"
   },
   "repository": {
     "type": "git",

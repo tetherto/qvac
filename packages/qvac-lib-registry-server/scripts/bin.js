@@ -49,12 +49,6 @@ const runCmd = command('run',
     const dht = new DHT({ keyPair })
     const swarm = new Hyperswarm({ dht, keyPair })
 
-    swarm.on('connection', (conn, peerInfo) => {
-      const key = IdEnc.normalize(peerInfo.publicKey)
-      logger.info({ peer: key }, 'Swarm connection opened')
-      conn.on('close', () => logger.info({ peer: key }, 'Swarm connection closed'))
-    })
-
     const bootstrapHex = config.getAutobaseBootstrapKey(flags.bootstrap)
     const autobaseBootstrap = bootstrapHex ? IdEnc.decode(bootstrapHex) : null
 
@@ -174,9 +168,10 @@ function logServiceInfo (logger, service) {
   logger.info('Registry service ready')
   logger.info({ key: IdEnc.normalize(service.base.key) }, 'Autobase key')
   logger.info({ key: IdEnc.normalize(service.registryCoreKey) }, 'Registry view key')
-  logger.info({ key: IdEnc.normalize(service.registryDiscoveryKey) }, 'Registry discovery key')
+  logger.info({ key: IdEnc.normalize(service.registryDiscoveryKey) }, 'Registry discovery key (DHT topic)')
   logger.info({ key: IdEnc.normalize(service.serverPublicKey) }, 'RPC server public key')
   logger.info({ key: IdEnc.normalize(service.base.local.key) }, 'Writer local key')
+  logger.info({ length: service.view?.core?.length ?? 0 }, 'View core length')
 }
 
 function createLogger () {

@@ -12,7 +12,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 # Default configuration
-DEFAULT_DEVICE="auto"
+DEFAULT_DEVICE="gpu"
 VERBOSE=false
 
 # Parse command line arguments - only set if explicitly provided
@@ -40,19 +40,22 @@ print_help() {
     cat << EOF
 LlamaCpp Benchmark Runner
 
+Benchmarks the @qvac/llm-llamacpp addon using either:
+  - Locally built addon (default) - uses file:../../ to link the local workspace
+  - Published npm package - use --addon-version to install a specific version
+
 Usage: ./benchmarks/run-benchmarks.sh [options]
 
 Options:
-  --samples <number>     Number of samples per dataset (overrides config.yaml)
-  --datasets <list>      Comma-separated list of datasets or "all" (overrides config.yaml)
+  --samples <number>     Number of samples per dataset (default: 10)
+  --datasets <list>      Comma-separated list of datasets or "all" (default: all)
                          Available: gsm8k, mmlu, squad, arc
-  --device <type>        Device type: auto, cpu, gpu (default: $DEFAULT_DEVICE)
-                         Format: "owner/repo:quantization" (e.g., "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0")
-                         Can specify multiple: "repo1:q4_0,repo2:q4_k_m"
+  --device <type>        Device type: cpu, gpu (default: $DEFAULT_DEVICE)
   --skip-existing        Skip models that already have results for today
   --port <number>        Server port (default: 7357, useful for parallel runs)
-  --addon-version <ver>  Install specific @qvac/llm-llamacpp version (e.g., "0.3.2", "^0.3.0")
-                         Default: uses local development version (file:../../)
+  --addon-version <ver>  Install specific @qvac/llm-llamacpp version from npm
+                         Examples: "0.6.0", "^0.5.0", "latest"
+                         Default: uses locally built addon (file:../../)
   --compare              Run comparative evaluation (@qvac/llm-llamacpp addon vs transformers)
                          Compares native C++ addon implementation vs Python transformers
   --gguf-model <spec>    GGUF model for addon (required with --compare)
@@ -77,13 +80,14 @@ Options:
   --help                 Show this help message
 
 Examples:
-  # Test single model
+  # Test with locally built addon (default - for development)
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --samples 10
+  
+  # Test with published npm package (for CI/release verification)
+  ./benchmarks/run-benchmarks.sh --addon-version "0.6.0" --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --samples 10
   
   # Test specific datasets  
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --datasets "gsm8k,mmlu" --samples 5
-  
-  # Test multiple models sequentially
   
   # P2P hyperdrive model
   ./benchmarks/run-benchmarks.sh --gguf-model "hd://d4aca756436ff6429e3ecaa008b0a8023fa8ea568192149a09f212d5013af865/Llama-3.2-1B-Instruct-Q4_0.gguf" --samples 10
@@ -243,7 +247,17 @@ check_prerequisites() {
     
     # Check if python3 is available
     if ! command -v python3 &> /dev/null; then
-        echo "❌ Error: 'python3' not found. Please install Python 3."
+        echo "Error: 'python3' not found. Please install Python 3.10+."
+        exit 1
+    fi
+    
+    # Check Python version is 3.10+
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
+    if [[ "$PYTHON_MAJOR" -lt 3 ]] || [[ "$PYTHON_MAJOR" -eq 3 && "$PYTHON_MINOR" -lt 10 ]]; then
+        echo "Error: Python 3.10+ required, but found Python $PYTHON_VERSION"
+        echo "Please upgrade Python to version 3.10 or higher."
         exit 1
     fi
     
@@ -424,29 +438,27 @@ run_benchmarks() {
     # Add CLI parameter overrides using the centralized function
     PYTHON_CMD=$(add_parameter_overrides "$PYTHON_CMD")
         
-        # Log configuration (read from config.yaml + overrides)
-        log "Configuration:"
-        if [[ -n "$GGUF_MODEL" ]]; then
-            log "  Model: $GGUF_MODEL"
-        else
-            log "  Model: from config.yaml"
-        fi
+    # Log configuration
+    log "Configuration:"
+    if [[ -n "$GGUF_MODEL" ]]; then
+        log "  Model: $GGUF_MODEL"
+    else
+        log "  Model: not specified"
+    fi
     if [[ -n "$SAMPLES" ]]; then
         log "  Samples: $SAMPLES (CLI override)"
     else
-        log "  Samples: from config.yaml"
+        log "  Samples: 10 (default)"
     fi
     if [[ -n "$DATASETS" ]]; then
         log "  Datasets: $DATASETS (CLI override)"
     else
-        log "  Datasets: from config.yaml"
+        log "  Datasets: $AVAILABLE_DATASETS (default)"
     fi
     log "  Device: $DEVICE"
     
     if [[ "$VERBOSE" == "true" ]]; then
         log "Python command: $PYTHON_CMD" true
-        log "Config file contents:" true
-        cat config.yaml
     fi
     
     # Run the benchmark
@@ -570,24 +582,11 @@ add_parameter_overrides() {
 # Set up signal handlers for cleanup
 trap cleanup EXIT INT TERM
 
-# Function to get available datasets from config.yaml
+# Available benchmark datasets
+AVAILABLE_DATASETS="gsm8k,mmlu,squad,arc"
+
 get_available_datasets() {
-    if [[ ! -f "benchmarks/client/config.yaml" ]]; then
-        echo "Error: benchmarks/client/config.yaml not found"
-        exit 1
-    fi
-    
-    # Use the virtual environment python
-    cd benchmarks/client
-    source venv/bin/activate
-    python -c "
-import yaml
-config = yaml.safe_load(open('config.yaml'))
-datasets = config.get('benchmark', {}).get('datasets', ['gsm8k'])
-print(','.join(datasets))
-"
-    deactivate
-    cd ../..
+    echo "$AVAILABLE_DATASETS"
 }
 
 # Function to check if model has results for today
@@ -668,7 +667,6 @@ main() {
         if [[ -z "$GGUF_MODEL" ]]; then
             echo "❌ Error: --gguf-model is required when using --compare"
             echo "Examples:"
-            echo "  --gguf-model \"llama-3.2-1b\" (model ID from models_config.yaml)"
             echo "  --gguf-model \"bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0\" (HuggingFace repo)"
             echo "  --gguf-model \"hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf\" (Hyperdrive P2P)"
             exit 1
@@ -728,7 +726,7 @@ main() {
     # Process datasets argument
     if [[ -n "$DATASETS" ]]; then
         if [[ "$DATASETS" == "all" ]]; then
-            # Get all available datasets from config.yaml
+            # Get all available datasets
             DATASETS=$(get_available_datasets)
             log "📊 Using all available datasets: $DATASETS"
         else

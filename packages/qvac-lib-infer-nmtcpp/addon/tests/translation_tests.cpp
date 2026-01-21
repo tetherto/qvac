@@ -24,6 +24,14 @@ protected:
     } else {
       basePath = fs::path{"models/unit-test"};
     }
+
+    // Skip all tests if primary model (en→it) doesn't exist
+    auto primaryModel = basePath / getEnToItModelPath();
+    if (!fs::exists(primaryModel)) {
+      GTEST_SKIP() << "Model not found: " << primaryModel.string() << "\n"
+                   << "See models/unit-test/README.md for setup instructions.";
+    }
+
     testInput =
         "Down, down, down. Would the fall never come to an end? \"I wonder how "
         "many miles I've fallen by this time?\" she said aloud.";
@@ -69,6 +77,11 @@ TEST_F(TranslationModelTest, GPUTranslation) {
 }
 
 TEST_F(TranslationModelTest, ItalianToEnglishTranslation) {
+  // Skip if it→en model is not available
+  if (!fs::exists(basePath / getItToEnModelPath())) {
+    GTEST_SKIP() << "Skipping: it→en model not found: " << getItToEnModelPath();
+  }
+
   auto enItModel = createModel(getEnToItModelPath());
   ASSERT_NE(enItModel, nullptr);
 
@@ -87,6 +100,11 @@ TEST_F(TranslationModelTest, ItalianToEnglishTranslation) {
 }
 
 TEST_F(TranslationModelTest, MultipleModelsManagement) {
+  // Skip if it→en model is not available
+  if (!fs::exists(basePath / getItToEnModelPath())) {
+    GTEST_SKIP() << "Skipping: it→en model not found: " << getItToEnModelPath();
+  }
+
   std::vector<
       std::unique_ptr<qvac_lib_inference_addon_mlc_marian::TranslationModel>>
       models;

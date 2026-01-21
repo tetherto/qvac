@@ -44,14 +44,16 @@
     "smoke-test": "node scripts/smoke-test-client.js",
     "test:unit": "brittle-node tests/unit/*.test.js",
     "test:integration": "brittle-node tests/integration/*.test.js",
+    "test:gguf": "node scripts/test-gguf-extraction.js",
     "test": "npm run test:unit && npm run test:integration",
     "lint": "standard",
     "lint:fix": "standard --fix"
   },
   "dependencies": {
-    "@tetherto/qvac-registry-schema": "^0.1.0",
     "@aws-sdk/client-s3": "^3.864.0",
+    "@huggingface/gguf": "^0.3.2",
     "@huggingface/hub": "^2.4.1",
+    "@tetherto/qvac-registry-schema": "^0.1.0",
     "autobase": "^7.18.1",
     "b4a": "^1.6.7",
     "blind-peer": "^2.9.4",

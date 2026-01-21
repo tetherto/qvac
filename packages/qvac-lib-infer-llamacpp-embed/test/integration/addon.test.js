@@ -22,6 +22,32 @@ const isMobile = platform === 'ios' || platform === 'android'
 
 // Test constants
 const TEST_TIMEOUT = 600_000
+
+/**
+ * Computes the cosine similarity between two embedding vectors.
+ * Returns a value between -1 and 1, where 1 means identical, 0 means orthogonal.
+ * @param {number[]|Float32Array} a - First embedding vector
+ * @param {number[]|Float32Array} b - Second embedding vector
+ * @returns {number} Cosine similarity
+ */
+function cosineSimilarity (a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`)
+  }
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB)
+  const EPSILON = 1e-8
+  if (denominator < EPSILON) return 1.0 * Math.sign(dotProduct)
+  return dotProduct / denominator
+}
+
 const DEFAULT_BATCH_SIZE = '1024'
 const DEVICES = (isDarwinX64 || isLinuxArm64) ? ['cpu'] : ['cpu', 'gpu'] // Devices to test on
 const STRESS_BATCH_SIZE = '4096'
@@ -92,12 +118,9 @@ createDeviceModelTest('Model inference works correctly with array input', async 
     console.log(`Embedding ${i} shape:`, embeddings[0][i].length)
   }
 
-  // Verify embeddings are different for different sentences
   if (embeddings[0].length > 1) {
-    const firstValue = embeddings[0][0][0]
-    const secondValue = embeddings[0][1][0]
-    const areDifferent = firstValue !== secondValue || Math.abs(firstValue - secondValue) > 0.0001
-    t.ok(areDifferent, 'Different sentences should produce different embeddings')
+    const similarity = cosineSimilarity(embeddings[0][0], embeddings[0][1])
+    t.ok(similarity < 0.999, `Different sentences should produce different embeddings (cosine similarity: ${similarity.toFixed(6)})`)
   }
 
   t.teardown(async () => {
@@ -285,12 +308,9 @@ createDeviceModelTest('Model inference works correctly with batching - 5 sequenc
     )
   }
 
-  // Verify embeddings are different for different sequences
   if (embeddings[0].length > 1) {
-    const firstValue = embeddings[0][0][0]
-    const secondValue = embeddings[0][1][0]
-    const areDifferent = firstValue !== secondValue || Math.abs(firstValue - secondValue) > 0.0001
-    t.ok(areDifferent, 'Different sequences should produce different embeddings')
+    const similarity = cosineSimilarity(embeddings[0][0], embeddings[0][1])
+    t.ok(similarity < 0.999, `Different sequences should produce different embeddings (cosine similarity: ${similarity.toFixed(6)})`)
   }
 
   t.teardown(async () => {
@@ -382,6 +402,9 @@ createDeviceModelTest('Embeddings: deterministic output for same input', async (
     }
   }
   t.ok(allEqual, 'Same input should produce identical embeddings (deterministic behaviour)')
+
+  const similarity = cosineSimilarity(emb1, emb2)
+  t.ok(similarity > 0.999, `Same input should produce identical embeddings (cosine similarity: ${similarity.toFixed(6)})`)
 
   t.teardown(async () => {
     await cleanupResources(loader, inference)
@@ -476,10 +499,8 @@ createDeviceModelTest(`Stress: inference with many sequences (~${STRESS_NUM_SEQU
   }
 
   if (embeddings[0].length > 1) {
-    const firstValue = embeddings[0][0][0]
-    const secondValue = embeddings[0][1][0]
-    const areDifferent = firstValue !== secondValue || Math.abs(firstValue - secondValue) > 0.0001
-    t.ok(areDifferent, 'Different stress test sequences should produce different embeddings')
+    const similarity = cosineSimilarity(embeddings[0][0], embeddings[0][1])
+    t.ok(similarity < 0.999, `Different stress test sequences should produce different embeddings (cosine similarity: ${similarity.toFixed(6)})`)
   }
 
   t.teardown(async () => {

@@ -15,38 +15,48 @@
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
+const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
 
-function getModelPaths () {
-  // Try test/mobile/testAssets first (has tiny model)
-  const testAssetsDir = path.resolve(__dirname, '../mobile/testAssets')
-  const tinyModelPath = path.join(testAssetsDir, 'ggml-tiny.bin')
-  const vadModelPath = path.join(testAssetsDir, 'ggml-silero-v5.1.2.bin')
-  const audioPath = path.join(testAssetsDir, 'short_en.raw')
+// Create a HyperDrive loader
+function createLoader () {
+  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+}
 
-  if (fs.existsSync(tinyModelPath)) {
-    return {
-      modelPath: tinyModelPath,
-      vadModelPath: fs.existsSync(vadModelPath) ? vadModelPath : null,
-      audioPath,
-      modelsDir: testAssetsDir
-    }
+async function getModelPaths () {
+  // Use writable directory for models
+  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../examples/models')
+
+  if (!fs.existsSync(modelsDir)) {
+    fs.mkdirSync(modelsDir, { recursive: true })
   }
 
-  // Fallback to examples/models
-  const examplesDir = path.resolve(__dirname, '../../examples/models')
+  const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
+  const vadModelPath = path.join(modelsDir, 'ggml-silero-v5.1.2.bin')
+
+  // Ensure models are downloaded
+  await ensureWhisperModel(modelPath)
+  await ensureVADModel(vadModelPath)
+
+  // Get audio path using getAssetPath for mobile compatibility
+  let audioPath
+  try {
+    audioPath = getAssetPath('sample.raw')
+  } catch (e) {
+    // Fallback for desktop
+    audioPath = path.resolve(__dirname, '../../examples/samples/sample.raw')
+  }
+
   return {
-    modelPath: path.join(examplesDir, 'ggml-tiny.bin'),
-    vadModelPath: path.join(examplesDir, 'ggml-silero-v5.1.2.bin'),
-    audioPath: path.resolve(__dirname, '../../examples/samples/sample.raw'),
-    modelsDir: examplesDir
+    modelPath,
+    vadModelPath: fs.existsSync(vadModelPath) ? vadModelPath : null,
+    audioPath,
+    modelsDir
   }
 }
 
-/**
- * Run a single transcription and return timing info
- */
 /**
  * High-resolution timer using hrtime (works in Bare)
  */
@@ -54,8 +64,6 @@ function getTimeMs () {
   const [sec, nsec] = process.hrtime()
   return sec * 1000 + nsec / 1e6
 }
-
-const process = require('bare-process')
 
 /**
  * Run a single transcription and return timing info
@@ -88,8 +96,12 @@ async function runTimedTranscription (model, audioPath) {
   }
 }
 
-test('Cold start timing: measure first vs subsequent transcription times', { timeout: 120_000 }, async (t) => {
-  const paths = getModelPaths()
+// Works on both mobile and desktop - fewer runs on mobile
+test('Cold start timing: measure first vs subsequent transcription times', { timeout: 300000 }, async (t) => {
+  const paths = await getModelPaths()
+
+  const NUM_RUNS = 5
+  const ACCEPTABLE_PENALTY_THRESHOLD = 100 // 100% = 2x slower is acceptable
 
   console.log('\n' + '='.repeat(60))
   console.log('COLD START TIMING TEST')
@@ -97,6 +109,8 @@ test('Cold start timing: measure first vs subsequent transcription times', { tim
   console.log(`Model: ${path.basename(paths.modelPath)}`)
   console.log(`VAD Model: ${paths.vadModelPath ? path.basename(paths.vadModelPath) : 'none'}`)
   console.log(`Audio: ${path.basename(paths.audioPath)}`)
+  console.log(`Platform: ${isMobile ? 'mobile' : 'desktop'}`)
+  console.log(`Runs: ${NUM_RUNS}`)
   console.log('='.repeat(60) + '\n')
 
   // Verify files exist
@@ -111,7 +125,7 @@ test('Cold start timing: measure first vs subsequent transcription times', { tim
     return
   }
 
-  const loader = new FakeDL({})
+  const loader = createLoader()
   const modelName = path.basename(paths.modelPath)
 
   const config = {
@@ -134,104 +148,99 @@ test('Cold start timing: measure first vs subsequent transcription times', { tim
     }
   }
 
-  // Create model instance
-  console.log('📦 Creating model instance...')
-  const loadStartTime = getTimeMs()
+  let model
+  try {
+    // Create model instance
+    console.log('📦 Creating model instance...')
+    const loadStartTime = getTimeMs()
 
-  const model = new TranscriptionWhispercpp({
-    modelName,
-    loader,
-    diskPath: paths.modelsDir
-  }, config)
+    model = new TranscriptionWhispercpp({
+      modelName,
+      loader,
+      diskPath: paths.modelsDir
+    }, config)
 
-  // Load model (this should trigger warmup)
-  console.log('🔄 Loading model (with warmup)...')
-  await model._load()
+    // Load model (this should trigger warmup)
+    console.log('🔄 Loading model (with warmup)...')
+    await model._load()
 
-  const loadEndTime = getTimeMs()
-  console.log(`✅ Model loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms\n`)
+    const loadEndTime = getTimeMs()
+    console.log(`✅ Model loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms\n`)
 
-  // Run multiple transcriptions
-  const NUM_RUNS = 5
-  const results = []
+    // Run multiple transcriptions
+    const results = []
 
-  console.log(`🎤 Running ${NUM_RUNS} consecutive transcriptions...\n`)
+    console.log(`🎤 Running ${NUM_RUNS} consecutive transcriptions...\n`)
 
-  for (let i = 0; i < NUM_RUNS; i++) {
-    console.log(`--- Run ${i + 1}/${NUM_RUNS} ---`)
+    for (let i = 0; i < NUM_RUNS; i++) {
+      console.log(`--- Run ${i + 1}/${NUM_RUNS} ---`)
 
-    const result = await runTimedTranscription(model, paths.audioPath)
-    results.push(result)
+      const result = await runTimedTranscription(model, paths.audioPath)
+      results.push(result)
 
-    console.log(`  Total time: ${result.totalTime.toFixed(0)}ms`)
-    if (result.timeToFirstSegment) {
-      console.log(`  Time to first segment: ${result.timeToFirstSegment.toFixed(0)}ms`)
+      console.log(`  Total time: ${result.totalTime.toFixed(0)}ms`)
+      if (result.timeToFirstSegment) {
+        console.log(`  Time to first segment: ${result.timeToFirstSegment.toFixed(0)}ms`)
+      }
+      console.log(`  Segments: ${result.segmentCount}`)
+      console.log(`  Text preview: "${result.text.substring(0, 50)}${result.text.length > 50 ? '...' : ''}"\n`)
+
+      // Small delay on mobile to allow memory cleanup
+      if (isMobile) {
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
     }
-    console.log(`  Segments: ${result.segmentCount}`)
-    console.log(`  Text preview: "${result.text.substring(0, 50)}${result.text.length > 50 ? '...' : ''}"\n`)
-  }
 
-  // Calculate statistics
-  console.log('='.repeat(60))
-  console.log('📊 TIMING SUMMARY')
-  console.log('='.repeat(60))
+    // Calculate statistics
+    console.log('='.repeat(60))
+    console.log('📊 TIMING SUMMARY')
+    console.log('='.repeat(60))
 
-  const times = results.map(r => r.totalTime)
-  const firstRunTime = times[0]
-  const subsequentTimes = times.slice(1)
-  const avgSubsequent = subsequentTimes.reduce((a, b) => a + b, 0) / subsequentTimes.length
+    const times = results.map(r => r.totalTime)
+    const firstRunTime = times[0]
+    const subsequentTimes = times.slice(1)
+    const avgSubsequent = subsequentTimes.reduce((a, b) => a + b, 0) / subsequentTimes.length
 
-  console.log('\n  Run times:')
-  times.forEach((t, i) => {
-    const marker = i === 0 ? ' (FIRST)' : ''
-    console.log(`    Run ${i + 1}: ${t.toFixed(0)}ms${marker}`)
-  })
+    console.log('\n  Run times:')
+    times.forEach((time, i) => {
+      const marker = i === 0 ? ' (FIRST)' : ''
+      console.log(`    Run ${i + 1}: ${time.toFixed(0)}ms${marker}`)
+    })
 
-  console.log('\n  Statistics:')
-  console.log(`    First run: ${firstRunTime.toFixed(0)}ms`)
-  console.log(`    Average of runs 2-${NUM_RUNS}: ${avgSubsequent.toFixed(0)}ms`)
+    console.log('\n  Statistics:')
+    console.log(`    First run: ${firstRunTime.toFixed(0)}ms`)
+    console.log(`    Average of runs 2-${NUM_RUNS}: ${avgSubsequent.toFixed(0)}ms`)
 
-  const coldStartPenalty = ((firstRunTime - avgSubsequent) / avgSubsequent) * 100
-  console.log(`    Cold start penalty: ${coldStartPenalty.toFixed(1)}%`)
+    const coldStartPenalty = ((firstRunTime - avgSubsequent) / avgSubsequent) * 100
+    console.log(`    Cold start penalty: ${coldStartPenalty.toFixed(1)}%`)
 
-  if (results[0].timeToFirstSegment) {
-    const ttfsFirst = results[0].timeToFirstSegment
-    const ttfsSubsequent = results.slice(1)
-      .filter(r => r.timeToFirstSegment)
-      .map(r => r.timeToFirstSegment)
+    console.log('\n' + '='.repeat(60) + '\n')
 
-    if (ttfsSubsequent.length > 0) {
-      const avgTtfs = ttfsSubsequent.reduce((a, b) => a + b, 0) / ttfsSubsequent.length
-      const ttfsPenalty = ((ttfsFirst - avgTtfs) / avgTtfs) * 100
-      console.log('\n  Time to first segment:')
-      console.log(`    First run: ${ttfsFirst.toFixed(0)}ms`)
-      console.log(`    Average of runs 2-${NUM_RUNS}: ${avgTtfs.toFixed(0)}ms`)
-      console.log(`    Cold start TTFS penalty: ${ttfsPenalty.toFixed(1)}%`)
+    // Assertions
+    t.ok(results.length === NUM_RUNS, `Completed ${NUM_RUNS} transcription runs`)
+    t.ok(coldStartPenalty <= ACCEPTABLE_PENALTY_THRESHOLD, `Cold start penalty ${coldStartPenalty.toFixed(1)}% should be <= ${ACCEPTABLE_PENALTY_THRESHOLD}%`)
+  } finally {
+    // Cleanup
+    if (model) {
+      try {
+        await model.unload()
+      } catch (e) {
+        // ignore
+      }
     }
   }
-
-  console.log('\n' + '='.repeat(60) + '\n')
-
-  // Cleanup
-  await model.unload().catch(() => {})
-
-  // Assertions
-  // We expect some cold start penalty, but it should be reasonable (< 100%)
-  const ACCEPTABLE_PENALTY_THRESHOLD = 100 // 100% = 2x slower
-  if (coldStartPenalty > ACCEPTABLE_PENALTY_THRESHOLD) {
-    console.log(`⚠️ Cold start penalty (${coldStartPenalty.toFixed(1)}%) exceeds ${ACCEPTABLE_PENALTY_THRESHOLD}% threshold`)
-  }
-
-  t.ok(results.length === NUM_RUNS, `Completed ${NUM_RUNS} transcription runs`)
-  t.ok(coldStartPenalty >= 0 || coldStartPenalty < 0, `Cold start penalty measured: ${coldStartPenalty.toFixed(1)}%`)
 })
 
-test('Cold start: fresh model instance per transcription', { timeout: 180_000 }, async (t) => {
-  const paths = getModelPaths()
+// Fresh instance test - fewer runs on mobile
+test('Cold start: fresh model instance per transcription', { timeout: 300000 }, async (t) => {
+  const paths = await getModelPaths()
+
+  const NUM_RUNS = 3
 
   console.log('\n' + '='.repeat(60))
   console.log('FRESH INSTANCE TIMING TEST')
   console.log('This simulates app restarts - each run creates a new model')
+  console.log(`Platform: ${isMobile ? 'mobile' : 'desktop'}, Runs: ${NUM_RUNS}`)
   console.log('='.repeat(60) + '\n')
 
   if (!fs.existsSync(paths.modelPath) || !fs.existsSync(paths.audioPath)) {
@@ -239,13 +248,12 @@ test('Cold start: fresh model instance per transcription', { timeout: 180_000 },
     return
   }
 
-  const NUM_RUNS = 3
   const results = []
 
   for (let i = 0; i < NUM_RUNS; i++) {
     console.log(`--- Instance ${i + 1}/${NUM_RUNS} ---`)
 
-    const loader = new FakeDL({})
+    const loader = createLoader()
     const modelName = path.basename(paths.modelPath)
 
     const config = {
@@ -261,36 +269,50 @@ test('Cold start: fresh model instance per transcription', { timeout: 180_000 },
       config.whisperConfig.vad_model_path = paths.vadModelPath
     }
 
-    // Time includes model creation and loading
-    const instanceStartTime = getTimeMs()
+    let model
+    try {
+      // Time includes model creation and loading
+      const instanceStartTime = getTimeMs()
 
-    const model = new TranscriptionWhispercpp({
-      modelName,
-      loader,
-      diskPath: paths.modelsDir
-    }, config)
+      model = new TranscriptionWhispercpp({
+        modelName,
+        loader,
+        diskPath: paths.modelsDir
+      }, config)
 
-    await model._load()
+      await model._load()
 
-    const loadTime = getTimeMs() - instanceStartTime
+      const loadTime = getTimeMs() - instanceStartTime
 
-    // Run single transcription
-    const result = await runTimedTranscription(model, paths.audioPath)
+      // Run single transcription
+      const result = await runTimedTranscription(model, paths.audioPath)
 
-    const totalTime = getTimeMs() - instanceStartTime
+      const totalTime = getTimeMs() - instanceStartTime
 
-    console.log(`  Load time: ${loadTime.toFixed(0)}ms`)
-    console.log(`  Transcription time: ${result.totalTime.toFixed(0)}ms`)
-    console.log(`  Total (load + transcribe): ${totalTime.toFixed(0)}ms\n`)
+      console.log(`  Load time: ${loadTime.toFixed(0)}ms`)
+      console.log(`  Transcription time: ${result.totalTime.toFixed(0)}ms`)
+      console.log(`  Total (load + transcribe): ${totalTime.toFixed(0)}ms\n`)
 
-    results.push({
-      loadTime,
-      transcriptionTime: result.totalTime,
-      totalTime,
-      ...result
-    })
+      results.push({
+        loadTime,
+        transcriptionTime: result.totalTime,
+        totalTime,
+        ...result
+      })
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
 
-    await model.unload().catch(() => {})
+    // Delay between instances on mobile
+    if (isMobile) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
   }
 
   console.log('='.repeat(60))
@@ -304,13 +326,6 @@ test('Cold start: fresh model instance per transcription', { timeout: 180_000 },
     console.log(`    Total: ${r.totalTime.toFixed(0)}ms`)
   })
 
-  // With warmup in load(), all instances should have similar transcription times
-  const transcriptionTimes = results.map(r => r.transcriptionTime)
-  const avgTranscription = transcriptionTimes.reduce((a, b) => a + b, 0) / transcriptionTimes.length
-  const maxVariance = Math.max(...transcriptionTimes.map(t => Math.abs(t - avgTranscription)))
-  const variancePercent = (maxVariance / avgTranscription) * 100
-
-  console.log(`\n  Transcription time variance: ${variancePercent.toFixed(1)}%`)
   console.log('='.repeat(60) + '\n')
 
   t.ok(results.length === NUM_RUNS, `Created ${NUM_RUNS} fresh model instances`)

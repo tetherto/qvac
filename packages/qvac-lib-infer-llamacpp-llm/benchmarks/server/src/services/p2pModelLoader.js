@@ -30,7 +30,10 @@ const loadP2PModel = async (options) => {
     throw new Error(errMsg)
   }
 
-  const modelId = `${hyperdriveKey}-${modelName}`
+  const device = modelConfig?.device || 'cpu'
+  const gpuLayers = modelConfig?.gpu_layers || '0'
+  const ctxSize = modelConfig?.ctx_size || '8192'
+  const modelId = `${hyperdriveKey}-${modelName}:${device}:${gpuLayers}:${ctxSize}`
 
   logger.info('=== loadP2PModel called ===')
   logger.info(`Options: ${JSON.stringify(options, null, 2)}`)

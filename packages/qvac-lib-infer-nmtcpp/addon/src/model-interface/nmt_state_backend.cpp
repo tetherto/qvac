@@ -596,7 +596,6 @@ struct nmt_state* nmt_init_state(nmt_context* ctx) {
   bool ok = nmt_sched_graph_init(state->sched_decode, state->backends, [&]() {
     const auto& hparams = ctx->model.hparams;
 
-    // TODO: make sure this is the worst-case scenario
     const int n_tokens = hparams.n_decoder_ctx;
     const int n_past = 0;
     state->decoder_inputs.resize(512);

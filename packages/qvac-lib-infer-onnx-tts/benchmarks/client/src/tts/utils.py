@@ -34,8 +34,15 @@ def calculate_percentiles(values: List[float]) -> Dict[str, float]:
     }
 
 
-def save_single_result(cfg: Config, results: TTSResults, label: str):
-    """Save results for a single implementation"""
+def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_metrics: Optional[Dict] = None):
+    """Save results for a single implementation
+    
+    Args:
+        cfg: Configuration object
+        results: TTS benchmark results
+        label: Label for the implementation (e.g., "addon", "python-native")
+        round_trip_metrics: Optional round-trip quality metrics (WER/CER)
+    """
     results_root = _get_results_root()
     
     model_name = Path(cfg.model.modelPath).stem
@@ -53,6 +60,25 @@ def save_single_result(cfg: Config, results: TTSResults, label: str):
         f"**Dataset:** {cfg.dataset.name}",
         f"**Samples:** {len(results.results)}",
         "",
+    ]
+    
+    # Add round-trip quality metrics if available
+    if round_trip_metrics and round_trip_metrics.get('runs'):
+        rt = round_trip_metrics['runs'][0]  # Use first run metrics
+        lines.extend([
+            "## Quality Metrics (Round-Trip Test)",
+            "",
+            f"- **Average WER:** {rt['avg_wer']:.2%}",
+            f"- **Average CER:** {rt['avg_cer']:.2%}",
+            f"- **Min WER:** {rt['min_wer']:.2%}",
+            f"- **Max WER:** {rt['max_wer']:.2%}",
+            f"- **Min CER:** {rt['min_cer']:.2%}",
+            f"- **Max CER:** {rt['max_cer']:.2%}",
+            f"- **Samples Tested:** {round_trip_metrics.get('total_tested', len(results.results))}",
+            "",
+        ])
+    
+    lines.extend([
         "## Performance Metrics",
         "",
         f"- **Model Load Time:** {results.load_time_ms:.2f} ms",
@@ -67,16 +93,16 @@ def save_single_result(cfg: Config, results: TTSResults, label: str):
         f"- **p95:** {percentiles['p95']:.4f}",
         f"- **p99:** {percentiles['p99']:.4f}",
         "",
-    "## Interpretation",
-    "",
-    "**RTF (Real-Time Factor)** = audio_duration / generation_time",
-    "",
-    "- RTF > 1.0 means faster than real-time (good!)",
-    "- RTF < 1.0 means slower than real-time (bad)",
-    "- Higher RTF is better (more efficient)",
-    f"- This implementation runs at **{results.avg_rtf:.2f}x real-time speed**",
-    ""
-    ]
+        "## Interpretation",
+        "",
+        "**RTF (Real-Time Factor)** = generation_time / audio_duration",
+        "",
+        "- RTF < 1.0 means faster than real-time (good!)",
+        "- RTF > 1.0 means slower than real-time (bad)",
+        "- Lower RTF is better (more efficient)",
+        f"- This implementation runs at **{(1 / results.avg_rtf) if results.avg_rtf > 0 else 0:.2f}x real-time speed**",
+        ""
+    ])
     
     md_path.write_text("\n".join(lines), encoding="utf-8")
     logger.info(f"Saved results to {md_path}")
@@ -416,9 +442,12 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
     
     # Performance comparison table
     load_indicator = '✅' if load_time_diff_pct < 0 else '⚠️'
-    rtf_indicator = '✅' if rtf_diff_pct > 0 else '⚠️'  # Higher RTF is better
+    rtf_indicator = '✅' if rtf_diff_pct < 0 else '⚠️'  # Lower RTF is better
     gen_indicator = '✅' if gen_time_diff_pct < 0 else '⚠️'
     speed_word = 'faster' if speedup > 1 else 'slower'
+    
+    addon_realtime_speed = (1 / addon_results.avg_rtf) if addon_results.avg_rtf > 0 else 0
+    python_realtime_speed = (1 / python_results.avg_rtf) if python_results.avg_rtf > 0 else 0
     
     lines.extend([
         "## Performance Comparison",
@@ -428,7 +457,7 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
         f"| Model Load Time | {addon_results.load_time_ms:.2f} ms | {python_results.load_time_ms:.2f} ms | {load_time_diff_pct:+.1f}% {load_indicator} |",
         f"| Avg RTF | {addon_results.avg_rtf:.4f} | {python_results.avg_rtf:.4f} | {rtf_diff_pct:+.1f}% {rtf_indicator} |",
         f"| Total Generation | {addon_results.total_generation_ms:.2f} ms | {python_results.total_generation_ms:.2f} ms | {gen_time_diff_pct:+.1f}% {gen_indicator} |",
-        f"| Real-time Speed | {addon_results.avg_rtf:.2f}x | {python_results.avg_rtf:.2f}x | Addon is {speedup:.2f}x {speed_word} |",
+        f"| Real-time Speed | {addon_realtime_speed:.2f}x | {python_realtime_speed:.2f}x | Addon is {speedup:.2f}x {speed_word} |",
         "",
         "## RTF Distribution",
         "",
@@ -456,17 +485,17 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
         "### Key Findings:",
         "",
         f"- Model loading: Addon is **{abs(load_time_diff_pct):.1f}% {'faster' if load_time_diff_pct < 0 else 'slower'}**",
-        f"- Average RTF: Addon is **{abs(rtf_diff_pct):.1f}% {'better' if rtf_diff_pct > 0 else 'worse'}**",
+        f"- Average RTF: Addon is **{abs(rtf_diff_pct):.1f}% {'better' if rtf_diff_pct < 0 else 'worse'}**",
         f"- Total generation: Addon is **{abs(gen_time_diff_pct):.1f}% {'faster' if gen_time_diff_pct < 0 else 'slower'}**",
         "",
         "## Interpretation",
         "",
-        "**RTF (Real-Time Factor)** = audio_duration / generation_time",
+        "**RTF (Real-Time Factor)** = generation_time / audio_duration",
         "",
-        "- RTF > 1.0 means faster than real-time",
-        "- RTF < 1.0 means slower than real-time",
-        "- Higher RTF is better (more efficient)",
-        "- Positive percentage difference in RTF means addon is better",
+        "- RTF < 1.0 means faster than real-time",
+        "- RTF > 1.0 means slower than real-time",
+        "- Lower RTF is better (more efficient)",
+        "- Negative percentage difference in RTF means addon is better",
         ""
     ])
     

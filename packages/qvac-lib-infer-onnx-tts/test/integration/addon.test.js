@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const os = require('bare-os')
+const path = require('bare-path')
 const { loadTTS, runTTS } = require('../utils/runTTS')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { ensureTTSModelPair, ensureEspeakData, ensureWhisperModel } = require('../utils/downloadModel')
@@ -9,18 +10,34 @@ const { ensureTTSModelPair, ensureEspeakData, ensureWhisperModel } = require('..
 const platform = os.platform()
 const isLinux = platform === 'linux'
 const isMobile = platform === 'ios' || platform === 'android'
-const shouldRunWhisper = !isLinux && !isMobile
+const shouldRunWhisper = !isLinux
 
-test('English TTS synthesis and WER verification', { timeout: 300000, skip: isMobile }, async (t) => {
+// Returns base directory for models - uses global.testDir on mobile, current dir otherwise
+function getBaseDir () {
+  return isMobile && global.testDir ? global.testDir : '.'
+}
+
+// Helper to get model paths
+function getModelPaths () {
+  const baseDir = getBaseDir()
+  return {
+    ttsDir: path.join(baseDir, 'models', 'tts'),
+    whisperDir: path.join(baseDir, 'models', 'whisper')
+  }
+}
+
+test('English TTS synthesis and WER verification', { timeout: 1200000 }, async (t) => {
+  const { ttsDir, whisperDir } = getModelPaths()
+
   // Ensure espeak-ng-data is available
   console.log('\n=== Ensuring espeak-ng-data ===')
-  const espeakResult = await ensureEspeakData('./models/tts/espeak-ng-data')
+  const espeakResult = await ensureEspeakData(path.join(ttsDir, 'espeak-ng-data'))
   t.ok(espeakResult.success, 'espeak-ng-data should be available')
 
   // Ensure Whisper model if needed
   if (shouldRunWhisper) {
     console.log('\n=== Ensuring Whisper model ===')
-    await ensureWhisperModel('./models/whisper/ggml-small.bin')
+    await ensureWhisperModel(path.join(whisperDir, 'ggml-small.bin'))
   }
 
   // Ensure English TTS model
@@ -29,9 +46,9 @@ test('English TTS synthesis and WER verification', { timeout: 300000, skip: isMo
   t.ok(modelResult.success, 'English TTS model should be downloaded')
 
   const modelParams = {
-    mainModelUrl: './models/tts/en_US-lessac-medium.onnx',
-    configJsonPath: './models/tts/en_US-lessac-medium.onnx.json',
-    eSpeakDataPath: './models/tts/espeak-ng-data',
+    mainModelUrl: path.join(ttsDir, 'en_US-lessac-medium.onnx'),
+    configJsonPath: path.join(ttsDir, 'en_US-lessac-medium.onnx.json'),
+    eSpeakDataPath: path.join(ttsDir, 'espeak-ng-data'),
     language: 'en-us'
   }
 
@@ -84,7 +101,7 @@ test('English TTS synthesis and WER verification', { timeout: 300000, skip: isMo
     console.log('\n=== Loading Whisper model for WER verification ===')
     const whisperParams = {
       modelName: 'ggml-small.bin',
-      diskPath: './models/whisper',
+      diskPath: whisperDir,
       language: 'en',
       seed: 0
     }
@@ -122,16 +139,18 @@ test('English TTS synthesis and WER verification', { timeout: 300000, skip: isMo
   console.log('='.repeat(60))
 })
 
-test('Spanish TTS synthesis and WER verification', { timeout: 300000, skip: isMobile }, async (t) => {
+test('Spanish TTS synthesis and WER verification', { timeout: 1200000 }, async (t) => {
+  const { ttsDir, whisperDir } = getModelPaths()
+
   // Ensure espeak-ng-data is available
   console.log('\n=== Ensuring espeak-ng-data ===')
-  const espeakResult = await ensureEspeakData('./models/tts/espeak-ng-data')
+  const espeakResult = await ensureEspeakData(path.join(ttsDir, 'espeak-ng-data'))
   t.ok(espeakResult.success, 'espeak-ng-data should be available')
 
   // Ensure Whisper model if needed
   if (shouldRunWhisper) {
     console.log('\n=== Ensuring Whisper model ===')
-    await ensureWhisperModel('./models/whisper/ggml-small.bin')
+    await ensureWhisperModel(path.join(whisperDir, 'ggml-small.bin'))
   }
 
   // Ensure Spanish TTS model
@@ -140,9 +159,9 @@ test('Spanish TTS synthesis and WER verification', { timeout: 300000, skip: isMo
   t.ok(modelResult.success, 'Spanish TTS model should be downloaded')
 
   const modelParams = {
-    mainModelUrl: './models/tts/es_ES-davefx-medium.onnx',
-    configJsonPath: './models/tts/es_ES-davefx-medium.onnx.json',
-    eSpeakDataPath: './models/tts/espeak-ng-data',
+    mainModelUrl: path.join(ttsDir, 'es_ES-davefx-medium.onnx'),
+    configJsonPath: path.join(ttsDir, 'es_ES-davefx-medium.onnx.json'),
+    eSpeakDataPath: path.join(ttsDir, 'espeak-ng-data'),
     language: 'es'
   }
 
@@ -195,7 +214,7 @@ test('Spanish TTS synthesis and WER verification', { timeout: 300000, skip: isMo
     console.log('\n=== Loading Whisper model for WER verification ===')
     const whisperParams = {
       modelName: 'ggml-small.bin',
-      diskPath: './models/whisper',
+      diskPath: whisperDir,
       language: 'es',
       seed: 0
     }

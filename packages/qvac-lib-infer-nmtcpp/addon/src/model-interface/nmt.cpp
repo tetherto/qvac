@@ -151,7 +151,7 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   ctx->state->batch = nmt_batch_init(ctx->model.hparams.n_decoder_ctx, 1);
 
   const int beam_size = ctx->model.config.beam_size;
-  // TODO figure out max tokens
+  // Figure out max tokens
   int max_tokens = (ctx->model.type == MODEL_INDICTRANS) ? 50 : 512;
   max_tokens = ctx->model.config.max_length > 0 ? ctx->model.config.max_length
                                                 : max_tokens;

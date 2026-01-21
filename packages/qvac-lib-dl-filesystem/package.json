@@ -1,6 +1,6 @@
 {
   "name": "@qvac/dl-filesystem",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "",
   "main": "index.js",
   "types": "index.d.ts",
@@ -20,12 +20,13 @@
     "bare-fs": "^4.5.2",
     "bare-path": "^3.0.0",
     "@qvac/error": "^0.1.0",
-    "@qvac/dl-base": "^0.1.0"
+    "@qvac/dl-base": "^0.2.0"
   },
   "devDependencies": {
-    "@types/node": "22.5.4",
+    "@types/node": "^22.0.0",
     "brittle": "3.7.0",
-    "standard": "17.1.0"
+    "standard": "17.1.0",
+    "typescript": "^5.0.0"
   },
   "bugs": "https://github.com/tetherto/qvac-lib-dl-filesystem/issues",
   "files": [

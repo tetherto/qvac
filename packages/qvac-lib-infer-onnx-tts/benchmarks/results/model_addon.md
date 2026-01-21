@@ -8,17 +8,17 @@
 
 ## Performance Metrics
 
-- **Model Load Time:** 731.15 ms
-- **Total Generation Time:** 15441.10 ms
-- **Total Audio Duration:** 165.06 s
-- **Average RTF:** 10.7074
+- **Model Load Time:** 731.03 ms
+- **Total Generation Time:** 20216.00 ms
+- **Total Audio Duration:** 186.51 s
+- **Average RTF:** 9.3479
 
 ## RTF Distribution
 
-- **p50 (median):** 10.9308
-- **p90:** 11.3687
-- **p95:** 11.4592
-- **p99:** 11.5603
+- **p50 (median):** 9.4742
+- **p90:** 10.3626
+- **p95:** 10.5583
+- **p99:** 10.8532
 
 ## Interpretation
 
@@ -27,4 +27,4 @@
 - RTF > 1.0 means faster than real-time (good!)
 - RTF < 1.0 means slower than real-time (bad)
 - Higher RTF is better (more efficient)
-- This implementation runs at **10.71x real-time speed**
+- This implementation runs at **9.35x real-time speed**

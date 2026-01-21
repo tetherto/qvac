@@ -36,7 +36,7 @@ declare interface ProgressData {
 declare interface Loader {
   getStream: (path: string) => Promise<AsyncIterable<Buffer>>
   getFileSize?: (filepath: string) => Promise<number>
-  download?: (path: string, progressReport?: any) => Promise<void>
+  download?: (path: string, opts?: { diskPath?: string; progressReporter?: any; }) => Promise<{ await: () => Promise<any> } | false>
   deleteLocal?: () => Promise<void>
 }
 

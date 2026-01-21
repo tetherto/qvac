@@ -18,7 +18,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@qvac/dl-hyperdrive": "^0.1.0",
-    "@qvac/tts-onnx": "^0.1.0",
+    "@qvac/tts-onnx": "../../",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.1.5",
     "bare-http1": "^4.0.2",

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.10.0] - 2025-01-15
+### Changed 
+- Upgraded llm fabric to 7248.1.0, which containes new Vulkan implementation improvements (VMA, shaders).
+
+## [0.9.3] - 2025-01-14
+### Changed
+- Cleaned up package.json by removing unused packages and scripts
+
+## [0.9.2] - 2026-01-12
+### Added
+- TypeScript type declarations for `addonLogging` subpath export (`addonLogging.d.ts`)
+- Conditional `types` exports in `package.json` for both main and `./addonLogging` entries
+- `modelPath` property to `EmbedLlamacppArgs` interface
+- Re-export of `ReportProgressCallback` and `QvacResponse` types from `@qvac/infer-base`
+
+### Changed
+- Updated `tsconfig.dts.json` to validate both `index.d.ts` and `addonLogging.d.ts`
+
 ## [0.9.1] - 2025-01-12
 ### Changed
 - remove unnecessary package dependency from package.json

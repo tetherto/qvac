@@ -4,56 +4,33 @@
 **Dataset:** harvard
 **Samples:** 70
 
-## Round-Trip Quality Test (TTS → Whisper → Text)
-
-Tested 70 samples using Whisper transcription across 1 run(s):
-
-### Overall Quality Comparison (Run 1)
-
-**Word Error Rate (WER):**
-
-| Implementation | Average | Min | Max |
-|----------------|---------|-----|-----|
-| TTS Addon | 58.47% | 16.67% | 100.00% |
-| Python Native | 33.61% | 14.29% | 100.00% |
-
-**Character Error Rate (CER):**
-
-| Implementation | Average | Min | Max |
-|----------------|---------|-----|-----|
-| TTS Addon | 19.55% | 2.94% | 69.70% |
-| Python Native | 7.23% | 2.33% | 37.21% |
-
-❌ **Audio quality issues** - high transcription error rates (WER > 20%)
-⚠️ **Python produces noticeably better audio quality** (WER difference 24.86%)
-
 ## Performance Comparison
 
 | Metric | TTS Addon | Python Native | Difference |
 |--------|-----------|---------------|------------|
-| Model Load Time | 426.89 ms | 510.04 ms | -16.3% ✅ |
-| Avg RTF | 16.5792 | 22.6658 | -26.9% ⚠️ |
-| Total Generation | 14881.82 ms | 12253.04 ms | +21.5% ⚠️ |
-| Real-time Speed | 16.58x | 22.67x | Addon is 0.82x slower |
+| Model Load Time | 731.03 ms | 870.69 ms | -16.0% ✅ |
+| Avg RTF | 9.3479 | 20.3232 | -54.0% ⚠️ |
+| Total Generation | 20216.00 ms | 10904.01 ms | +85.4% ⚠️ |
+| Real-time Speed | 9.35x | 20.32x | Addon is 0.54x slower |
 
 ## RTF Distribution
 
 | Percentile | Addon | Python | Difference |
 |------------|-------|--------|------------|
-| p50 (median) | 16.5575 | 22.2928 | -25.7% |
-| p90 | 18.6053 | 25.0791 | -25.8% |
-| p95 | 18.7887 | 26.9517 | -30.3% |
-| p99 | 19.3740 | 27.8968 | -30.6% |
+| p50 (median) | 9.4742 | 19.8120 | -52.2% |
+| p90 | 10.3626 | 29.7919 | -65.2% |
+| p95 | 10.5583 | 30.4244 | -65.3% |
+| p99 | 10.8532 | 31.0378 | -65.0% |
 
 ## Summary
 
-⚠️ **Addon is 1.21x slower** than Python native implementation
+⚠️ **Addon is 1.85x slower** than Python native implementation
 
 ### Key Findings:
 
-- Model loading: Addon is **16.3% faster**
-- Average RTF: Addon is **26.9% worse**
-- Total generation: Addon is **21.5% slower**
+- Model loading: Addon is **16.0% faster**
+- Average RTF: Addon is **54.0% worse**
+- Total generation: Addon is **85.4% slower**
 
 ## Interpretation
 

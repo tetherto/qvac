@@ -24,6 +24,7 @@ struct PipelineContext {
   bool paragraph{false};
   std::optional<std::vector<int>> rotationAngles;
   float boxMarginMultiplier{};
+  float initialResizeRatio{1.0F};
 };
 
 struct StepDetectionInferenceOutput {

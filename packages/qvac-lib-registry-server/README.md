@@ -250,6 +250,20 @@ Ensure at least one writer is running and exposing the RPC server key printed at
 
 Regenerate specs with `npm run build:spec` and restart the service.
 
+### Diagnostic Scripts
+
+**`check-peers.js`**: Verifies DHT peer connectivity and sync status for a hypercore key. Reports remote/local lengths, contiguous gaps, and sync status.
+
+```bash
+node scripts/check-peers.js [--key <hypercore-key>]
+```
+
+**`ping-server.js`**: Pings a running registry server via RPC to check availability and retrieve server status (role, view key, lengths, connected peers).
+
+```bash
+node scripts/ping-server.js [--peer <peer-public-key>]
+```
+
 ## License
 
 Apache-2.0

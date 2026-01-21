@@ -356,7 +356,11 @@ void LlamaModel::CommonParamsParse(
 
     if (CHOSEN_BACKEND.first == BackendType::GPU) {
       params.mmproj_backend = CHOSEN_BACKEND.second;
+#ifdef __ANDROID__
+      params.mmproj_use_gpu = false;
+#else
       params.mmproj_use_gpu = true;
+#endif
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
     } else if (CHOSEN_BACKEND.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;

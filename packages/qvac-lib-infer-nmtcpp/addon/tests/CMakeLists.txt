@@ -23,7 +23,6 @@ set(TEST_SOURCES
 )
 
 # Add Bergamot validation tests if Bergamot is enabled
-# TODO: Re-enable when bergamot include conflicts with gtest are resolved
 if(USE_BERGAMOT)
    list(APPEND TEST_SOURCES
      bergamot_validation_tests.cpp
@@ -95,7 +94,6 @@ target_link_libraries(
 )
 
 # Link bergamot library if enabled
-# TODO: Re-enable when bergamot include conflicts with gtest are resolved
 if(USE_BERGAMOT)
   target_link_libraries(
     addon-test

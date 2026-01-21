@@ -4,6 +4,7 @@ const path = require('path')
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') })
 
 const { QVACRegistryClient } = require('../index')
+const IdEnc = require('hypercore-id-encoding')
 const os = require('os')
 
 async function example () {
@@ -14,9 +15,15 @@ async function example () {
   })
 
   console.log('Using temporary storage:', tmpStorage)
+  console.log('Registry view key:', process.env.QVAC_REGISTRY_CORE_KEY)
+
+  // Wait for client to be ready, then log connection info
+  await client.ready()
+  const viewCore = client.db.core
+  console.log('View core discovery key (DHT topic):', IdEnc.normalize(viewCore.discoveryKey))
+  console.log('View core length:', viewCore.length)
 
   const allModels = await client.findModels({})
-  console.log('All models in registry:', JSON.stringify(allModels, null, 2))
   console.log('Total models found:', allModels.length)
 
   if (allModels.length > 0) {

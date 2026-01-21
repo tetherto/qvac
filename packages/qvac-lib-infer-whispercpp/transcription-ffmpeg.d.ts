@@ -1,6 +1,6 @@
 import { Readable } from "stream";
-import { QvacResponse } from "@qvac/infer-base";
-import type { Loader, WhisperConfig } from ".";
+import { QvacResponse, Loader } from "@qvac/infer-base";
+import type { WhisperConfig } from ".";
 
 declare interface FFmpegDecoderConfig {
     streamIndex?: number;

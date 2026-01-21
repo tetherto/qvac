@@ -1,0 +1,161 @@
+diff --git a/.gitmodules b/.gitmodules
+index 0e03f4e..e69de29 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,6 +0,0 @@
+-[submodule "googletest"]
+-	path = third_party/googletest
+-	url = https://github.com/google/googletest
+-[submodule "cpuinfo"]
+-	path = third_party/cpuinfo
+-	url = https://github.com/pytorch/cpuinfo
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 98d480d..9c84b31 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -40,9 +40,11 @@ include(cmake/ruy_cc_library.cmake)
+ include(cmake/ruy_cc_binary.cmake)
+ include(cmake/ruy_cc_test.cmake)
+ 
++find_package(cpuinfo REQUIRED CONFIG)
++
+ # Skip cpuinfo if it was already generated, which can happen when ruy is
+ # a subdirectory in a wider project that already uses cpuinfo.
+-if (NOT TARGET cpuinfo)
++if (NOT TARGET cpuinfo::cpuinfo)
+   # Test if the third_party/cpuinfo submodule was checked out before
+   # adding that subdirectory, so we can do more helpful things below in the
+   # else() block when it's not.
+@@ -88,3 +90,45 @@ add_subdirectory("ruy")
+ if (NOT RUY_MINIMAL_BUILD)
+   add_subdirectory("example")
+ endif()
++# --- Begin vcpkg install additions ---
++# Provide minimal install rules so ruy can be consumed as a package.
++
++# Make sure the public interface does not expose source-tree include paths.
++if (TARGET ruy)
++  target_include_directories(ruy INTERFACE
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/ruy>
++    $<INSTALL_INTERFACE:include>)
++endif()
++
++# Install headers (public includes are under the 'ruy' directory).
++install(
++  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ruy/"
++  DESTINATION "include/ruy"
++  FILES_MATCHING
++    PATTERN "*.h"
++)
++
++# Collect all ruy-related targets so the export set is complete.
++set(ruy_export_targets "")
++get_property(_all_targets GLOBAL PROPERTY TARGETS)
++foreach(_t IN LISTS _all_targets)
++  if(_t MATCHES "^ruy")
++    list(APPEND ruy_export_targets "${_t}")
++  endif()
++endforeach()
++
++# Install and export all ruy targets.
++if(ruy_export_targets)
++  install(TARGETS ${ruy_export_targets}
++    EXPORT ruyTargets
++    ARCHIVE DESTINATION lib
++    LIBRARY DESTINATION lib
++    RUNTIME DESTINATION bin)
++endif()
++
++# Export all installed ruy targets (targets are added to this export from ruy_cc_library.cmake).
++install(EXPORT ruyTargets NAMESPACE ruy:: DESTINATION share/ruy)
++file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/ruyConfig.cmake"
++  "include(CMakeFindDependencyMacro)\nfind_dependency(cpuinfo CONFIG)\ninclude(\"\\${CMAKE_CURRENT_LIST_DIR}/ruyTargets.cmake\")\n")
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ruyConfig.cmake" DESTINATION share/ruy)
++# --- End vcpkg install additions ---
+diff --git a/cmake/ruy_cc_library.cmake b/cmake/ruy_cc_library.cmake
+index 38accc5..ec2d776 100644
+--- a/cmake/ruy_cc_library.cmake
++++ b/cmake/ruy_cc_library.cmake
+@@ -47,7 +47,8 @@ function(ruy_cc_library)
+     add_library(${_NAME} INTERFACE)
+     target_include_directories(${_NAME}
+       INTERFACE
+-        "${PROJECT_SOURCE_DIR}"
++        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
++        $<INSTALL_INTERFACE:include>
+     )
+     target_link_libraries(${_NAME}
+       INTERFACE
+@@ -58,6 +59,12 @@ function(ruy_cc_library)
+       INTERFACE
+         ${_RULE_DEFINES}
+     )
++    install(TARGETS ${_NAME}
++      EXPORT ruyTargets
++      ARCHIVE DESTINATION lib
++      LIBRARY DESTINATION lib
++      RUNTIME DESTINATION bin
++    )
+   else()
+     # Generating a static binary library.
+     add_library(${_NAME} STATIC "")
+@@ -81,5 +88,11 @@ function(ruy_cc_library)
+       PUBLIC
+         ${_RULE_DEFINES}
+     )
++    install(TARGETS ${_NAME}
++      EXPORT ruyTargets
++      ARCHIVE DESTINATION lib
++      LIBRARY DESTINATION lib
++      RUNTIME DESTINATION bin
++    )
+   endif()
+ endfunction()
+diff --git a/cmake/ruy_include_directories.cmake b/cmake/ruy_include_directories.cmake
+index e9b50a9..9d3cb1b 100644
+--- a/cmake/ruy_include_directories.cmake
++++ b/cmake/ruy_include_directories.cmake
+@@ -15,7 +15,8 @@
+ function(ruy_include_directories NAME DEPS)
+   target_include_directories(${NAME}
+       PUBLIC
+-      "${PROJECT_SOURCE_DIR}"
++      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
++      $<INSTALL_INTERFACE:include>
+   )
+   if (cpuinfo IN_LIST DEPS)
+     target_include_directories(${NAME}
+@@ -30,4 +31,4 @@ function(ruy_include_directories NAME DEPS)
+         "${PROJECT_SOURCE_DIR}/third_party/googletest/googletest"
+     )
+   endif()
+-endfunction()
+\ No newline at end of file
++endfunction()
+diff --git a/ruy/CMakeLists.txt b/ruy/CMakeLists.txt
+index 502ad8a..b4e8ab0 100644
+--- a/ruy/CMakeLists.txt
++++ b/ruy/CMakeLists.txt
+@@ -416,7 +416,7 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL s390 OR CMAKE_SYSTEM_PROCESSOR STREQUAL s
+ elseif(CMAKE_SYSTEM_NAME STREQUAL Fuchsia)
+   set(ruy_6_cpuinfo "")
+ else()
+-  set(ruy_6_cpuinfo "cpuinfo")
++  set(ruy_6_cpuinfo "cpuinfo::cpuinfo")
+ endif()
+ 
+ ruy_cc_library(
+diff --git a/third_party/cpuinfo b/third_party/cpuinfo
+deleted file mode 160000
+index 5916273..0000000
+--- a/third_party/cpuinfo
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 5916273f79a21551890fd3d56fc5375a78d1598d
+diff --git a/third_party/googletest b/third_party/googletest
+deleted file mode 160000
+index 6c58c11..0000000
+--- a/third_party/googletest
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 6c58c11d5497b6ee1df3cb400ce30deb72fc28c0

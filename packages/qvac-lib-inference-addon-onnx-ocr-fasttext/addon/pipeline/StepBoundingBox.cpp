@@ -25,10 +25,12 @@ constexpr float LINK_CLIP_VALUE = 0.4F;
 // text_threshold in python
 constexpr float MIN_TEXT_VALUE_REQUIRED_IN_COMPONENT = 0.7F;
 
-// min text area to be considered a valid text
-constexpr int MIN_TEXT_AREA = 10;
+// min text area to be considered a valid text during initial extraction
+// Set very low to allow small words like "or" to be extracted and merged
+// (ExecutorTorch approach: extract first, merge, then filter)
+constexpr int MIN_TEXT_AREA_EXTRACT = 5;
 
-// min_size in python
+// min_size in python - applied AFTER merging (like ExecutorTorch's removeSmallBoxesFromArray)
 constexpr int MIN_SIZE = 20;
 
 // slope_ths in python
@@ -57,6 +59,12 @@ constexpr float MAX_BOX_HEIGHT_DEVIATION = 0.5F;
 // width_ths in python
 // Maximum horizontal distance to merge boxes.
 constexpr float MAX_BOX_HORIZONTAL_MERGE_DISTANCE = 0.5F;  // Match EasyOCR default (was 1.0F)
+
+// Maximum width for merged boxes to prevent excessive compression in recognizer.
+// Based on recognizer input 512x64, with 15% margin like ExecutorTorch.
+// kMaxWidth = kLargeRecognizerWidth + (kLargeRecognizerWidth * 0.15) = 512 + 76.8 = 588
+constexpr float MAX_MERGED_BOX_WIDTH = 588.0F;
+
 
 
 /**
@@ -141,9 +149,13 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
        std::to_string(input.textMap.cols) + "x" + std::to_string(input.textMap.rows) +
        ", linkMap size=" + std::to_string(input.linkMap.cols) + "x" + std::to_string(input.linkMap.rows));
 
+  // ExecutorTorch approach: extract all components first (with low area threshold),
+  // merge them, then filter small boxes after merging.
+  // This allows small words like "or" to be merged with adjacent text before filtering.
   std::vector<std::array<cv::Point2f, 4>> listOfBoxes;
   for (int i = 1; i < nLabels_; i++) {
-    if (stats_.at<int>(i, cv::CC_STAT_AREA) < MIN_TEXT_AREA) {
+    // Use low area threshold to allow small components to be extracted and merged
+    if (stats_.at<int>(i, cv::CC_STAT_AREA) < MIN_TEXT_AREA_EXTRACT) {
       continue;
     }
 
@@ -338,7 +350,11 @@ std::vector<std::array<float, 4>> StepBoundingBox::groupAndMergeAlignedBoxes(con
           bool heightSimilar = (std::abs(meanGroupHeight - box[IDX_BOX_HEIGHT]) < MAX_BOX_HEIGHT_DEVIATION * meanGroupHeight);
           bool horizontallyClose = ((box[0] - currentXMax) < MAX_BOX_HORIZONTAL_MERGE_DISTANCE * (box[3] - box[2]));
 
-          if (heightSimilar && horizontallyClose) {
+          // Check if merged width would exceed max (ExecutorTorch approach)
+          float mergedWidth = box[1] - currentGroup[0][0];  // xMax of new box - xMin of first box
+          bool widthWithinLimit = (mergedWidth <= MAX_MERGED_BOX_WIDTH);
+
+          if (heightSimilar && horizontallyClose && widthWithinLimit) {
             currentGroup.push_back(box);
             sumGroupHeight += box[IDX_BOX_HEIGHT];
             groupCount++;

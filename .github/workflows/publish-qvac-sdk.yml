@@ -271,3 +271,4 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || needs.build.outputs.tag || 'dev' }}
           workdir: ${{ env.WORKDIR }}
+          name-suffix: "-mono"

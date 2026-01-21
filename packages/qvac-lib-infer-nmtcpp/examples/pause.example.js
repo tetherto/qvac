@@ -1,5 +1,15 @@
 'use strict'
 
+/**
+ * Pause/Continue Example
+ *
+ * This example demonstrates how to pause and resume translation mid-process.
+ * Useful for implementing user-controlled interruption of long translations.
+ *
+ * Usage:
+ *   bare examples/pause.example.js
+ */
+
 const TranslationNmtcpp = require('../index')
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 
@@ -16,18 +26,22 @@ async function main () {
     key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
   })
 
-  // 2. Create the `args` object
+  // Create the `args` object
   const args = {
     loader: hdDL,
-    params: { mode: 'full', dstLang: 'en', srcLang: 'it' },
+    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: './models',
-    modelName: 'ggml-opus-en-it.bin'
+    modelName: 'model.bin'
   }
   const model = new TranslationNmtcpp(args, { })
   await model.load()
   try {
     const response = await model.run(text)
+
+    // Pause the translation immediately after starting
     response.pause().catch(console.log)
+
+    // Resume the translation after 2 seconds
     setTimeout(() => response.continue().catch(console.log), 2000)
 
     await response

@@ -9,10 +9,10 @@ This module provides functionality to compare model performance between:
 The evaluator runs the same prompts through both implementations and compares results.
 """
 
+from typing import Any
 import logging
 import asyncio
 import os
-from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 from model_handler import ModelHandler, QvacModelHandler, ServerConfig, download_gguf_from_huggingface, ModelEvaluator
 from results_handler import ResultsHandler
@@ -33,7 +33,7 @@ class DatasetComparison:
     transformers_errors: int = 0
     metric_name: str = 'accuracy'  # Store which metric was actually calculated
     
-    def get_comparison_report(self) -> Dict[str, Any]:
+    def get_comparison_report(self) -> dict[str, Any]:
         """
         Get a formatted comparison report
         
@@ -79,11 +79,11 @@ class ComparativeEvaluator:
         self.results_handler = results_handler
         
         # Initialize model evaluators
-        self.addon_evaluator: Optional[ModelEvaluator] = None
-        self.transformers_evaluator: Optional[ModelEvaluator] = None
+        self.addon_evaluator: ModelEvaluator | None = None
+        self.transformers_evaluator: ModelEvaluator | None = None
         
         # Results storage
-        self.dataset_comparisons: Dict[str, DatasetComparison] = {}
+        self.dataset_comparisons: dict[str, DatasetComparison] = {}
         
     async def initialize_handlers(self):
         """Initialize both model handlers"""
@@ -165,8 +165,8 @@ class ComparativeEvaluator:
     
     async def evaluate_dataset(self, 
                               dataset_name: str, 
-                              prompts: List[str], 
-                              ground_truths: List[str],
+                              prompts: list[str], 
+                              ground_truths: list[str],
                               metric_fn,
                               metric_name: str = 'accuracy',
                               system_prompt: str = None) -> DatasetComparison:

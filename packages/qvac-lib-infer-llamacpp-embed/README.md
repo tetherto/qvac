@@ -225,6 +225,10 @@ main().catch(console.error)
 
 We conduct rigorous benchmarking of our embedding models to evaluate their retrieval effectiveness and computational efficiency across diverse tasks and datasets. Our evaluation framework incorporates standard information retrieval metrics and system performance indicators to provide a holistic view of model quality.
 
+### Running Benchmarks
+
+For instructions on running benchmarks yourself, see the [Benchmark Runner Documentation](./benchmarks/README.md).
+
 ### Benchmark Results
 
 For detailed benchmark results see our [Embedding Benchmark Results Summary](./benchmarks/results/results_summary.md).

@@ -12,10 +12,12 @@
     },
     "sentencepiece",
     "whisper-cpp",
+    "ssplit",
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.1"
-    }
+    },
+    "bergamot-translator"
   ],
   "features": {
     "tests": {

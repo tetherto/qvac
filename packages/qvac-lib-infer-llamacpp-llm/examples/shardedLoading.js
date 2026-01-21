@@ -92,6 +92,10 @@ async function main () {
     console.log('\n')
     console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
   } finally {
     // 5. Cleaning up resources
     await store.close()

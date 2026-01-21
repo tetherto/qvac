@@ -9,6 +9,7 @@ vcpkg_from_github(
         0002-add-piper-core.patch
         0003-fix-android-build.patch
         0004-skip-ios-executable.patch
+        0005-fix-macos-framework-linking.patch
 )
 
 vcpkg_cmake_configure(

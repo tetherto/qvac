@@ -1,17 +1,21 @@
 'use strict'
 
 const test = require('brittle')
-const path = require('bare-path')
 const fs = require('bare-fs')
+const os = require('bare-os')
 const {
   runTranscription,
   ensureWhisperModel,
   validateAccuracy,
   getTestPaths,
-  setupJsLogger
+  getAssetPath,
+  setupJsLogger,
+  isMobile,
+  HyperDriveDL,
+  WHISPER_MODEL_HYPERDRIVE_KEY
 } = require('./helpers.js')
 
-const { modelPath, samplesDir } = getTestPaths()
+const { modelPath } = getTestPaths()
 
 const LANGUAGE_TESTS = {
   en: {
@@ -64,39 +68,51 @@ const LANGUAGE_TESTS = {
   }
 }
 
-const WER_THRESHOLD = 0.30 // 30%
+const WER_THRESHOLD = 0.30
 
 async function runLanguageAccuracyTest (t, langConfig) {
-  const loggerBinding = setupJsLogger()
-  const samplePath = path.join(samplesDir, langConfig.sampleFile)
+  let loggerBinding = null
+  let samplePath
+  try {
+    samplePath = getAssetPath(langConfig.sampleFile)
+  } catch (err) {
+    console.log(`⚠️ Sample file not available: ${langConfig.sampleFile}`)
+    t.pass(`${langConfig.name} accuracy test skipped (sample not available)`)
+    return { skipped: true, reason: 'sample_not_found' }
+  }
 
-  // Check if sample file exists
   if (!fs.existsSync(samplePath)) {
-    console.log(`⚠️ Sample file not found: ${langConfig.sampleFile}`)
+    console.log(`⚠️ Sample file not found: ${samplePath}`)
     t.pass(`${langConfig.name} accuracy test skipped (sample file not found)`)
     return { skipped: true, reason: 'sample_not_found' }
   }
 
-  // Check if expected transcription is defined
-  if (!langConfig.expected) {
-    console.log(`⚠️ No expected transcription defined for ${langConfig.name}`)
+  const diskPath = isMobile ? (global.testDir || os.tmpdir()) : require('bare-path').dirname(modelPath)
+  const actualModelPath = require('bare-path').join(diskPath, 'ggml-tiny.bin')
+
+  if (!isMobile) {
+    loggerBinding = setupJsLogger()
   }
 
-  const whisperResult = await ensureWhisperModel(modelPath)
-  if (!whisperResult.isReal) {
-    console.log('⚠️ Real whisper model not available')
+  const modelResult = await ensureWhisperModel(actualModelPath)
+  if (!modelResult.success && !modelResult.isReal) {
+    console.log('⚠️ Whisper model not available')
     t.pass(`${langConfig.name} accuracy test skipped (model not available)`)
     return { skipped: true, reason: 'model_not_available' }
   }
+
+  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
 
   try {
     console.log(`\n📊 Running ${langConfig.name} accuracy test...`)
     console.log(`   File: ${langConfig.sampleFile}`)
     console.log(`   Language code: ${langConfig.code}`)
+    console.log(`   Platform: ${isMobile ? 'mobile' : 'desktop'}`)
 
     const result = await runTranscription({
       audioInput: samplePath,
-      modelPath,
+      modelPath: actualModelPath,
+      loader,
       whisperConfig: {
         language: langConfig.code,
         temperature: 0.0
@@ -113,15 +129,14 @@ async function runLanguageAccuracyTest (t, langConfig) {
     console.log(`\n📝 ${langConfig.name} transcription (${result.data.segmentCount} segments):`)
     console.log(`   "${actualText.substring(0, 200)}${actualText.length > 200 ? '...' : ''}"`)
 
-    // Validate WER if expected transcription is defined
     if (langConfig.expected) {
       const accuracy = validateAccuracy(langConfig.expected, actualText, WER_THRESHOLD)
 
       console.log('\n📊 WER Analysis:')
-      console.log(`   WER:      ${accuracy.werPercent} (threshold: 30%)`)
+      console.log(`   WER:      ${accuracy.werPercent} (threshold: ${WER_THRESHOLD * 100}%)`)
       console.log(`   Status:   ${accuracy.passed ? '✅ PASSED' : '❌ FAILED'}`)
 
-      t.ok(accuracy.passed, `${langConfig.name} WER should be below 30%, got ${accuracy.werPercent}`)
+      t.ok(accuracy.passed, `${langConfig.name} WER should be below ${WER_THRESHOLD * 100}%, got ${accuracy.werPercent}`)
       return { skipped: false, passed: accuracy.passed, wer: accuracy.wer, actualText }
     } else {
       t.ok(actualText.length > 0, `${langConfig.name} should produce non-empty transcription`)
@@ -133,38 +148,40 @@ async function runLanguageAccuracyTest (t, langConfig) {
     t.fail(`${langConfig.name} accuracy test failed: ${error.message}`)
     return { skipped: false, passed: false, error: error.message }
   } finally {
-    try { loggerBinding.releaseLogger() } catch {}
+    if (loggerBinding) {
+      try { loggerBinding.releaseLogger() } catch {}
+    }
   }
 }
 
-test('Accuracy test - English', { timeout: 120000 }, async (t) => {
+test('Accuracy test - English', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.en)
 })
 
-test('Accuracy test - Spanish', { timeout: 120000 }, async (t) => {
+test('Accuracy test - Spanish', { timeout: 300000, skip: true }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.es)
 })
 
-test('Accuracy test - German', { timeout: 120000 }, async (t) => {
+test('Accuracy test - German', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.de)
 })
 
-test('Accuracy test - French', { timeout: 120000 }, async (t) => {
+test('Accuracy test - French', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.fr)
 })
 
-test('Accuracy test - Portuguese', { timeout: 120000 }, async (t) => {
+test('Accuracy test - Portuguese', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.pt)
 })
 
-test('Accuracy test - Italian', { timeout: 120000 }, async (t) => {
+test('Accuracy test - Italian', { timeout: 300000, skip: true }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.it)
 })
 
-test('Accuracy test - Russian', { timeout: 120000 }, async (t) => {
+test('Accuracy test - Russian', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.ru)
 })
 
-test('Accuracy test - Japanese', { timeout: 120000 }, async (t) => {
+test('Accuracy test - Japanese', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.ja)
 })

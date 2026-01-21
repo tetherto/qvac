@@ -1,3 +1,12 @@
+'use strict'
+
+/**
+ * Tests for IndicProcessor
+ *
+ * These tests verify the preprocessing and postprocessing of text
+ * for various Indic languages (Malayalam, Oriya, Hindi, Bengali, etc.).
+ */
+
 const test = require('brittle')
 const { IndicProcessor } = require('../../third-party/indic-processor')
 

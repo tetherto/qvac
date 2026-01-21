@@ -454,7 +454,6 @@ struct ggml_cgraph* nmt_build_graph_decoder(
           KQ_soft_max = ggml_soft_max_ext(ctx0, KQ, nullptr, KQscale, 0.0F);
         }
 
-        // TODO INDICTRANS2 difference?
         struct ggml_tensor* V = ggml_view_3d(
             ctx0,
             kv_self.v,
@@ -520,7 +519,7 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       Qcur = ggml_add(ctx0, Qcur, layer.cross_attn_q_b);
 
       struct ggml_tensor* Q = ggml_permute(
-          ctx0, // TODO HARDCODED n_tokens to 1
+          ctx0, // n_tokens is set to 1
           ggml_reshape_3d(ctx0, Qcur, n_state_head, n_head, 1),
           0,
           2,
@@ -722,8 +721,7 @@ bool nmt_decode_internal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
 
   ggml_tensor* input_ids = ggml_graph_get_tensor(gf, "input_ids");
   if (input_ids != nullptr) {
-    // the bos_token_id is hardcoded for now, need to figure out how to query
-    // it from the vocab.
+    // Set bos_token_id from the batch token sequence
     ggml_backend_tensor_set(
         input_ids,
         batch.token + (batch.n_tokens - 1),
@@ -828,8 +826,6 @@ bool nmt_decode_internal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
       ctx.model.config.no_repeat_ngram_size);
 
   int next_token_id = -1;
-  // TODO Figure out a better to branch to sampling
-  //
   // Sampling (only if temperature != 1.0 or top_p != 1.0 or top_k > 0)
   // temperature=1.0 and top_p=1.0 are neutral values that should use greedy
   // decoding

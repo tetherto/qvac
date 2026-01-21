@@ -34,6 +34,7 @@ const ReseedTracker = require('./reseed-tracker')
 const { QVAC_MAIN_REGISTRY } = schema
 const { getFileMetadata } = require('../utils/file-metadata')
 const { parseCanonicalSource } = require('./source-helpers')
+const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
 
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
 const DISPATCH_PUT_LICENSE = `@${QVAC_MAIN_REGISTRY}/put-license`
@@ -120,6 +121,8 @@ class RegistryService extends ReadyResource {
     for (const node of nodes) {
       await this.applyRouter.dispatch(node.value, { view, base })
     }
+
+    await view.db.flush()
   }
 
   async _appendOperation (route, payload) {
@@ -140,10 +143,42 @@ class RegistryService extends ReadyResource {
       this.logger.error('RegistryService: Failed to log available models', err)
     })
 
-    this.swarm.on('connection', conn => {
+    this.swarm.on('connection', (conn, peerInfo) => {
+      const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : 'unknown'
+
+      this.logger.info({ peer: peerKey }, 'Swarm connection opened')
+      conn.on('close', () => this.logger.info({ peer: peerKey }, 'Swarm connection closed'))
+
       this._setupRpc(conn)
-      this.store.replicate(conn)
+
+      // Create a single replication stream for the store
+      const replicationStream = this.store.replicate(conn)
+
+      // Attach Autobase to the replication stream (writer cores, system core)
+      this.base.replicate(replicationStream)
+
+      // Also attach the view core to ensure read-only clients can sync
+      // Without this, the view core is not included in replication
+      if (this.view?.core) {
+        this.view.core.replicate(replicationStream)
+      }
     })
+
+    // Log if there's a significant contiguous gap for troubleshooting
+    // Small gaps (1-10 blocks) are normal while waiting for indexer acks
+    if (this.view?.core) {
+      const viewCore = this.view.core
+      const gap = viewCore.length - viewCore.contiguousLength
+
+      if (gap > 20) {
+        this.logger.warn({
+          length: viewCore.length,
+          contiguousLength: viewCore.contiguousLength,
+          signedLength: viewCore.signedLength,
+          gap
+        }, 'View core has large contiguous gap at startup (may indicate offline indexer)')
+      }
+    }
 
     this.swarm.join(this.base.discoveryKey, { server: true, client: true })
     this.swarm.join(this.view.discoveryKey, { server: true, client: true })
@@ -176,6 +211,11 @@ class RegistryService extends ReadyResource {
         throw new Error('Storage/bootstrap key mismatch - cannot initialize as indexer')
       }
     }
+
+    this.logger.info({
+      isIndexer: this.base.isIndexer,
+      localKey: this.base.localWriter ? IdEnc.normalize(this.base.localWriter.core.key) : null
+    }, 'RegistryService: indexer status at startup')
 
     this.base.on('is-indexer', () => {
       this.logger.info('RegistryService: is-indexer event - I have become an indexer')
@@ -397,13 +437,11 @@ class RegistryService extends ReadyResource {
   _setupRpc (conn) {
     const remoteKeyHex = this._getRemotePublicKeyHex(conn)
     const remoteKeyZ32 = remoteKeyHex ? IdEnc.normalize(conn.remotePublicKey) : null
-    const remoteHost = conn.rawStream?.remoteHost || 'unknown'
 
     const ensureWriterAccess = () => {
       if (this._isWriterAuthorized(remoteKeyHex)) return
 
       this.logger.warn('RPC: unauthorized writer request', {
-        remoteHost,
         remoteKey: remoteKeyZ32 || remoteKeyHex || 'unknown'
       })
 
@@ -500,9 +538,10 @@ class RegistryService extends ReadyResource {
 
         await this._appendOperation(DISPATCH_PUT_MODEL, updated)
 
-        this.logger.info('RPC: update-model-metadata completed', {
-          path: data.path
-        })
+        const viewLength = this.view?.core?.length ?? 0
+        const viewContiguous = this.view?.core?.contiguousLength ?? 0
+        const viewSigned = this.view?.core?.signedLength ?? 0
+        this.logger.info(`RPC: update-model-metadata completed path=${data.path} L=${viewLength} C=${viewContiguous} S=${viewSigned}`)
 
         return {
           success: true,
@@ -536,9 +575,18 @@ class RegistryService extends ReadyResource {
     // Server identification endpoint - allows RPC clients to verify they connected
     // to the actual server and not a blind peer (which won't have RPC responders)
     rpc.respond('ping', async () => {
+      const indexers = this.base?.linearizer?.indexers || []
       return {
         role: 'registry-server',
         isIndexer: this.base?.isIndexer ?? false,
+        localKey: this.base?.localWriter ? IdEnc.normalize(this.base.localWriter.core.key) : null,
+        autobaseKey: this.base?.key ? IdEnc.normalize(this.base.key) : null,
+        viewCoreKey: this.view?.publicKey ? IdEnc.normalize(this.view.publicKey) : null,
+        viewLength: this.view?.core?.length ?? 0,
+        viewContiguousLength: this.view?.core?.contiguousLength ?? 0,
+        viewSignedLength: this.view?.core?.signedLength ?? 0,
+        indexerCount: indexers.length,
+        connectedPeers: this.swarm?.connections?.size ?? 0,
         timestamp: Date.now()
       }
     })
@@ -614,12 +662,22 @@ class RegistryService extends ReadyResource {
     try {
       await this._downloadArtifact(sourceInfo, localPath)
       const metadata = await getFileMetadata(localPath)
+
+      let ggufMetadata = null
+      if (isGGUFSource(sourceInfo.canonicalUrl) && isFirstShard(sourceInfo.canonicalUrl)) {
+        ggufMetadata = await extractGGUFMetadata(localPath)
+      } else if (isGGUFSource(sourceInfo.canonicalUrl) && !isFirstShard(sourceInfo.canonicalUrl)) {
+        this.logger.info('Skipping GGUF metadata extraction for non-first shard', {
+          source: sourceInfo.canonicalUrl
+        })
+      }
+
       const { blobs, core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
 
       await this._mirrorBlobCore(core)
 
-      const modelData = this._buildModelEntry(modelEntry, sourceInfo, metadata, pointer, core.key)
+      const modelData = this._buildModelEntry(modelEntry, sourceInfo, metadata, pointer, core.key, ggufMetadata)
 
       await this._appendOperation(DISPATCH_PUT_MODEL, modelData)
 
@@ -887,7 +945,7 @@ class RegistryService extends ReadyResource {
     return writeStream.id
   }
 
-  _buildModelEntry (request, sourceInfo, metadata, pointer, blobsCoreKey) {
+  _buildModelEntry (request, sourceInfo, metadata, pointer, blobsCoreKey, ggufMetadata = null) {
     const tags = Array.isArray(request.tags) ? request.tags.filter(Boolean) : []
 
     const entry = {
@@ -908,6 +966,10 @@ class RegistryService extends ReadyResource {
         byteLength: pointer.byteLength,
         sha256: metadata.checksum
       }
+    }
+
+    if (ggufMetadata) {
+      entry.ggufMetadata = JSON.stringify(ggufMetadata)
     }
 
     if (request.deprecated !== undefined) {
@@ -1050,7 +1112,11 @@ class RegistryService extends ReadyResource {
         this.logger.info('RegistryService: No models in registry yet')
       } else {
         this.logger.info(`RegistryService: ${models.length} model(s) available:`)
-        for (const model of models) {
+        const modelsToLog = models.length > 5 ? models.slice(-5) : models
+        if (models.length > 5) {
+          this.logger.info(`  ... showing last 5 of ${models.length} models`)
+        }
+        for (const model of modelsToLog) {
           this.logger.info(`  - ${model.path} [${model.engine}]`)
         }
       }

@@ -2,15 +2,14 @@
 
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureWhisperModel, ensureVADModel } = require('./helpers.js')
+const { ensureWhisperModel, ensureVADModel, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
 
 // Download models once at the start and reuse across all tests
-const tmpDir = os.tmpdir()
-const testModelPath = path.join(tmpDir, 'qvac-test-ggml-tiny.bin')
-const testVadPath = path.join(tmpDir, 'qvac-test-ggml-silero-v5.1.2.bin')
+const tmpDir = isMobile ? (global.testDir || os.tmpdir()) : os.tmpdir()
+const testModelPath = path.join(tmpDir, 'qvac-test-models', 'ggml-tiny.bin')
+const testVadPath = path.join(tmpDir, 'qvac-test-models', 'ggml-silero-v5.1.2.bin')
 
 let modelsReady = false
 
@@ -22,16 +21,22 @@ async function ensureModelsDownloaded () {
   modelsReady = true
 }
 
+// Create a HyperDrive loader
+function createLoader () {
+  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+}
+
 /**
  * Test 1: If the model path is not provided, an exception should be thrown
+ * Works on both mobile and desktop - just tests constructor validation
  */
-test('Should throw error when model path is not provided', async (t) => {
+test('Should throw error when model path is not provided', { timeout: 60000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
   const args = {
     modelName: '', // Empty model name
-    loader: new FakeDL({})
+    loader: createLoader()
   }
   const config = {
     whisperConfig: {
@@ -55,14 +60,15 @@ test('Should throw error when model path is not provided', async (t) => {
 
 /**
  * Test 2: If the model path is provided but the file doesn't exist, an exception should be thrown
+ * Works on both mobile and desktop
  */
-test('Should throw error when model file does not exist', async (t) => {
+test('Should throw error when model file does not exist', { timeout: 60000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
   const args = {
     modelName: 'non-existent-model.bin',
-    loader: new FakeDL({})
+    loader: createLoader()
   }
   const config = {
     whisperConfig: {
@@ -87,8 +93,9 @@ test('Should throw error when model file does not exist', async (t) => {
 
 /**
  * Test 3: If the VAD model path is provided but the file doesn't exist, an exception should be thrown
+ * Works on both mobile and desktop
  */
-test('Should throw error when VAD model file does not exist', async (t) => {
+test('Should throw error when VAD model file does not exist', { timeout: 180000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
@@ -97,7 +104,7 @@ test('Should throw error when VAD model file does not exist', async (t) => {
 
   const args = {
     modelName: testModelPath,
-    loader: new FakeDL({})
+    loader: createLoader()
   }
   const config = {
     whisperConfig: {
@@ -123,8 +130,9 @@ test('Should throw error when VAD model file does not exist', async (t) => {
 
 /**
  * Test 4: If model path is valid and VAD path is not provided, no exception should be thrown
+ * Works on both mobile and desktop
  */
-test('Should not throw error when model file exists and VAD is not specified', async (t) => {
+test('Should not throw error when model file exists and VAD is not specified', { timeout: 180000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
@@ -133,7 +141,7 @@ test('Should not throw error when model file exists and VAD is not specified', a
 
   const args = {
     modelName: testModelPath,
-    loader: new FakeDL({})
+    loader: createLoader()
   }
   const config = {
     whisperConfig: {
@@ -159,8 +167,9 @@ test('Should not throw error when model file exists and VAD is not specified', a
 
 /**
  * Test 5: If both model path and VAD model path are valid, no exception should be thrown
+ * Works on both mobile and desktop
  */
-test('Should not throw error when both model and VAD model files exist', async (t) => {
+test('Should not throw error when both model and VAD model files exist', { timeout: 180000 }, async (t) => {
   // Restore any stubs from other tests
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
@@ -170,7 +179,7 @@ test('Should not throw error when both model and VAD model files exist', async (
   const args = {
     modelName: testModelPath,
     vadModelName: testVadPath,
-    loader: new FakeDL({})
+    loader: createLoader()
   }
   const config = {
     whisperConfig: {

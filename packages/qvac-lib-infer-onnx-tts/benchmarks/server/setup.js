@@ -1,6 +1,5 @@
 'use strict'
 
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const { spawnSync } = require('bare-subprocess')
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -23,8 +22,8 @@ try {
   process.exit(1)
 }
 
-// HyperDrive keys from config
-const ESPEAK_HD_KEY = config.hyperdrive?.espeak_key || 'hd://c00ea8bc3d250968943ecab83e39b22828c2ad7995b159d8aedcb0f3fef81894'
+// Google Drive file ID for eSpeak-ng data
+const ESPEAK_GDRIVE_FILE_ID = '1lJgTw4_TO1BvRpZvmzTXzISCiZpL6wLo'
 
 // Determine model name based on language
 function getModelNameForLanguage (language) {
@@ -136,6 +135,8 @@ function getModelNameForLanguage (language) {
 
     case 'no-no':
     case 'no':
+    case 'nb-no':
+    case 'nb':
       return 'no_NO-talesyntese-medium'
 
     case 'pl-pl':
@@ -160,9 +161,9 @@ function getModelNameForLanguage (language) {
     case 'sk':
       return 'sk_SK-lili-medium'
 
-    case 'sl-sl':
+    case 'sl-si':
     case 'sl':
-      return 'sl_SL-artur-medium'
+      return 'sl_SI-artur-medium'
 
     case 'sr-rs':
     case 'sr':
@@ -194,6 +195,7 @@ function getModelNameForLanguage (language) {
 
     case 'zh-cn':
     case 'zh':
+    case 'cmn':
       return 'zh_CN-huayan-medium'
 
     default:
@@ -349,46 +351,70 @@ async function downloadTTSModel (modelName, destPath) {
 }
 
 /**
- * Download files from HyperDrive to local directory
+ * Download and unzip file from Google Drive
  */
-async function downloadFromHyperdrive (hdKey, destPath, label) {
-  console.log(`\n>>> Downloading ${label}...`)
+async function downloadAndUnzipFromGoogleDrive (fileId, destPath, label) {
+  console.log(`\n>>> Downloading ${label} from Google Drive...`)
 
-  const loader = new HyperDriveDL({ key: hdKey })
-  try {
-    await loader.ready()
-    console.log(`>>> [${label}] Hyperdrive ready`)
-
-    const files = await loader.list()
-    const keys = files.map(f => f.key)
-    console.log(`>>> [${label}] Found ${keys.length} files to download.`)
-
-    let downloaded = 0
-    let skipped = 0
-
-    for (const key of keys) {
-      const fullPath = path.join(destPath, key)
-      if (fs.existsSync(fullPath)) {
-        skipped++
-        continue
-      }
-
-      const dirName = path.dirname(fullPath)
-      fs.mkdirSync(dirName, { recursive: true })
-
-      console.log(`>>> [${label}] Downloading: ${key}`)
-      const response = await loader.download(key, { diskPath: dirName })
-      await response.await()
-      downloaded++
+  // Check if destination already has content
+  if (fs.existsSync(destPath)) {
+    const contents = fs.readdirSync(destPath)
+    if (contents.length > 0) {
+      console.log(`>>> [${label}] Using cached data (${contents.length} items found)`)
+      return
     }
-
-    console.log(`>>> [${label}] Complete: ${downloaded} downloaded, ${skipped} skipped`)
-  } catch (err) {
-    console.error(`>>> [${label}] Error during download:`, err)
-    throw err
-  } finally {
-    await loader.close()
   }
+
+  // Create destination directory
+  fs.mkdirSync(destPath, { recursive: true })
+
+  const zipPath = path.join(destPath, '..', `${label.replace(/\s+/g, '-').toLowerCase()}.zip`)
+  const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`
+
+  console.log(`>>> [${label}] Downloading zip file...`)
+
+  // Download the zip file using curl
+  // For large files, Google Drive may require confirmation - use confirm parameter
+  const result = spawnSync('curl', [
+    '-L',
+    '-o', zipPath,
+    `${downloadUrl}&confirm=t`,
+    '--fail',
+    '--show-error',
+    '--connect-timeout', '30',
+    '--max-time', '600'
+  ], { stdio: ['inherit', 'inherit', 'pipe'] })
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to download ${label} from Google Drive. Exit code: ${result.status}`)
+  }
+
+  if (!fs.existsSync(zipPath)) {
+    throw new Error(`Download failed - zip file not found at ${zipPath}`)
+  }
+
+  const zipStats = fs.statSync(zipPath)
+  console.log(`>>> [${label}] Downloaded zip file (${zipStats.size} bytes)`)
+
+  // Unzip the file
+  console.log(`>>> [${label}] Extracting zip file...`)
+  const unzipResult = spawnSync('unzip', [
+    '-o',
+    '-q',
+    zipPath,
+    '-d', destPath
+  ], { stdio: ['inherit', 'inherit', 'pipe'] })
+
+  if (unzipResult.status !== 0) {
+    throw new Error(`Failed to extract ${label}. Exit code: ${unzipResult.status}`)
+  }
+
+  // Clean up the zip file
+  console.log(`>>> [${label}] Cleaning up zip file...`)
+  fs.unlinkSync(zipPath)
+
+  const extractedContents = fs.readdirSync(destPath)
+  console.log(`>>> [${label}] Complete: ${extractedContents.length} items extracted`)
 }
 
 /**
@@ -409,8 +435,8 @@ async function setup () {
   fs.mkdirSync(MODELS_PATH, { recursive: true })
   console.log('✓ Directories created')
 
-  // Download eSpeak-ng data (using HyperDrive)
-  await downloadFromHyperdrive(ESPEAK_HD_KEY, ESPEAK_DATA_PATH, 'eSpeak-ng Data')
+  // Download eSpeak-ng data (from Google Drive)
+  await downloadAndUnzipFromGoogleDrive(ESPEAK_GDRIVE_FILE_ID, ESPEAK_DATA_PATH, 'eSpeak-ng Data')
 
   // Download TTS models (from Hugging Face)
   await downloadTTSModel(MODEL_NAME, MODELS_PATH)

@@ -80,6 +80,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
           tag: latest
+          name-suffix: "-mono"
 
   lint-and-test:
     needs: detect-changes
@@ -161,3 +162,4 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client
           tag: latest
+          name-suffix: "-mono"

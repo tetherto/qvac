@@ -18,15 +18,23 @@ class ONNXTTS extends InferBase {
     this._eSpeakDataPath = eSpeakDataPath
     this._config = config
     this._logger = logger
+
+    // Tashkeel model is bundled with the addon
+    this._tashkeelModelDir = path.join(__dirname, 'assets', 'tashkeel')
   }
 
   async _load (closeLoader = false, reportProgressCallback) {
     await this._downloadWeights(reportProgressCallback, { closeLoader })
 
+    const tashkeelPath = this._getTashkeelModelDir(this._tashkeelModelDir)
+    console.log('[TTS] Tashkeel model dir:', tashkeelPath)
+    console.log('[TTS] Language:', this._config?.language || 'en')
+
     const ttsParams = {
       modelPath: this._getMainModelUrl(this._mainModelUrl),
       configJsonPath: this._getConfigPath(this._configJsonPath),
       eSpeakDataPath: this._getESpeakDataPath(this._eSpeakDataPath),
+      tashkeelModelDir: tashkeelPath,
       language: this._config?.language || 'en',
       useGPU: this._config?.useGPU || false
     }
@@ -73,6 +81,16 @@ class ONNXTTS extends InferBase {
     }
 
     return path.resolve(eSpeakDataPath)
+  }
+
+  _getTashkeelModelDir (tashkeelModelDir) {
+    if (!tashkeelModelDir) {
+      return ''
+    }
+    if (platform() === 'win32') {
+      return '\\\\?\\' + path.resolve(tashkeelModelDir)
+    }
+    return path.resolve(tashkeelModelDir)
   }
 
   async _downloadWeights (reportProgressCallback, { closeLoader }) {
@@ -153,6 +171,7 @@ class ONNXTTS extends InferBase {
       modelPath: this._getMainModelUrl(this._mainModelUrl),
       configJsonPath: this._getConfigPath(this._configJsonPath),
       eSpeakDataPath: this._getESpeakDataPath(this._eSpeakDataPath),
+      tashkeelModelDir: this._getTashkeelModelDir(this._tashkeelModelDir),
       language: this._config?.language || 'en',
       useGPU: this._config?.useGPU || false
     }

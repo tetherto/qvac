@@ -306,6 +306,10 @@ async function main () {
 
     // Print all tool calls together at the end
     printToolCallSummary(toolCallResults)
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
   } finally {
     // 6. Cleaning up resources
     await store.close()

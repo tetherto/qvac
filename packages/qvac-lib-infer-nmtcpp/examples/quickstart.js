@@ -1,6 +1,17 @@
 'use strict'
 
-// Note: This import will depend on the addon package installed
+/**
+ * Quickstart Example
+ *
+ * This example demonstrates both translation backends:
+ * 1. GGML backend - Downloads model via HyperdriveDL (English to Italian)
+ * 2. Bergamot backend - Uses local model files (requires BERGAMOT_MODEL_PATH)
+ *
+ * Usage:
+ *   bare examples/quickstart.js
+ *   BERGAMOT_MODEL_PATH=/path/to/bergamot/model bare examples/quickstart.js
+ */
+
 const TranslationNmtcpp = require('..')
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const fs = require('bare-fs')
@@ -20,13 +31,13 @@ async function testGGML () {
     debug: (msg) => console.log('[DEBUG]', msg)
   }
 
-  // 1. Create `DataLoader`
+  // Create `DataLoader`
   const hdDL = new HyperdriveDL({
     // The hyperdrive key for en-it translation model weights and config
     key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
   })
 
-  // 2. Create the `args` object
+  // Create the `args` object
   const args = {
     loader: hdDL,
     params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
@@ -35,14 +46,14 @@ async function testGGML () {
     logger // Pass the logger
   }
 
-  // 4. Create Model Instance
+  // Create Model Instance
   const model = new TranslationNmtcpp(args, { })
 
-  // 5. Load model
+  // Load model
   await model.load()
 
   try {
-    // 6. Run the Model
+    // Run the Model
     const response = await model.run(text)
 
     await response
@@ -53,7 +64,7 @@ async function testGGML () {
 
     console.log('GGML translation finished!')
   } finally {
-    // 7. Unload the model
+    // Unload the model
     await model.unload()
 
     // Close the DataLoader

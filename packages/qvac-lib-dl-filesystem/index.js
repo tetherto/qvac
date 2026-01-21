@@ -36,9 +36,9 @@ class FilesystemDL extends BaseDL {
   }
 
   /**
-   * Private method to get a readable stream for a given file.
+   * Get a file as async iterable buffer stream.
    * @param {string} filePath - The relative path to the file.
-   * @returns {Promise<ReadableStream>} The readable stream for the file.
+   * @returns {Promise<AsyncIterable<Buffer>>} The file content as async iterable.
    */
   async getStream (filePath) {
     this.logger.debug('getStream called', { filePath })

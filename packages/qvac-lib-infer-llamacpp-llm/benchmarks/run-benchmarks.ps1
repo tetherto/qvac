@@ -4,7 +4,7 @@
 param(
     [int]$samples,
     [string]$datasets,
-    [string]$device = "auto",
+    [string]$device = "gpu",
     [switch]$skipExisting,
     [int]$port,
     [string]$addonVersion,
@@ -36,7 +36,7 @@ Options:
   -samples <number>            Number of samples per dataset
   -datasets <list>             Comma-separated list of datasets or "all"
                               Available: gsm8k, mmlu, squad, arc
-  -device <type>               Device type: auto, cpu, gpu (default: auto)
+  -device <type>               Device type: cpu, gpu (default: gpu)
   -models <list>               Comma-separated list of HuggingFace GGUF model specs
                               Format: "owner/repo:quantization"
   -skipExisting                Skip models that already have results for today
@@ -132,12 +132,27 @@ Set-Location $projectRoot
 Write-Host "`nSetting up Python virtual environment..." -ForegroundColor Yellow
 Set-Location "benchmarks/client"
 
+# Check Python version is 3.10+
+$pythonVersion = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+if (-not $pythonVersion) {
+    Write-Error "Python not found! Please install Python 3.10+."
+    exit 1
+}
+$versionParts = $pythonVersion.Split('.')
+$major = [int]$versionParts[0]
+$minor = [int]$versionParts[1]
+if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
+    Write-Error "Python 3.10+ required, but found Python $pythonVersion. Please upgrade."
+    exit 1
+}
+Write-Host "Python version: $pythonVersion" -ForegroundColor Green
+
 # Check if venv module is available
 python -m venv --help > $null 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Error @"
 Python venv module not found!
-Please ensure Python 3.8+ is installed with venv support.
+Please ensure Python 3.10+ is installed with venv support.
 Install from: https://www.python.org/downloads/
 "@
     exit 1

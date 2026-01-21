@@ -1,5 +1,9 @@
 # qvac-lib-inference-addon-onnx-ocr-fasttext
 
+[![Build Status](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/actions/workflows/on-pr.yaml/badge.svg)](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/actions/workflows/on-pr.yaml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![npm version](https://img.shields.io/npm/v/@qvac/ocr-onnx.svg)](https://www.npmjs.com/package/@qvac/ocr-onnx)
+
 This library provides Optical Character Recognition (OCR) capabilities for QVAC runtime applications, leveraging the ONNX Runtime for efficient inference. It implements the [QVAC Inference Addon ONNX base class](https://github.com/tetherto/qvac-lib-infer-onnx-base).
 
 The OCR process uses two models:
@@ -9,6 +13,8 @@ The OCR process uses two models:
 ## Table of Contents
 
 *   [Installation](#installation)
+*   [Building from Source](#building-from-source)
+*   [Obtaining Models](#obtaining-models)
 *   [Usage](#usage)
     *   [1. Configure Parameters](#1-configure-parameters)
     *   [2. Create Model Instance](#2-create-model-instance)
@@ -16,13 +22,15 @@ The OCR process uses two models:
     *   [4. Run OCR](#4-run-ocr)
     *   [5. Process Output](#5-process-output)
     *   [6. Release Resources](#6-release-resources)
-*   [Usage Example](#usage-example)
+*   [Quickstart Example](#quickstart-example)
 *   [Output Format](#output-format)
 *   [Glossary](#glossary)
 *   [Resources](#resources)
 *   [Supported Languages](#supported-languages)
+*   [Error Codes](#error-code)
 *   [Contributing](#contributing)
 *   [License](#license)
+*   [Support](#support)
 
 ## Installation
 
@@ -130,6 +138,43 @@ npm run test:integration  # Requires model files
 
 **Note**: Integration tests require model files to be present in the `models/` directory. See the [CI integration test script](ci/integration-test.sh) for details on model requirements.
 
+## Obtaining Models
+
+OCR models are **not included** in the repository due to their size. You need to download them before running the examples.
+
+### Option 1: Download via Hyperdrive (Recommended)
+
+Run the Hyperdrive example to automatically download and cache models:
+
+```bash
+bare examples/example.hd.js
+```
+
+This downloads models to `models/hd/`. To use them with other examples, copy to the expected location:
+
+```bash
+cp models/hd/*.onnx models/ocr/
+```
+
+### Option 2: Manual Download
+
+Download the models manually using the Hyperdrive key:
+
+```
+hd://03d712abb026bc390cfe803fb851a1b4a581c31c5b9335ef6294333bbeb60043
+```
+
+Required files:
+- `detector_craft.onnx` - Text detection model
+- `recognizer_latin.onnx` - Text recognition model (Latin languages)
+
+Place the downloaded files in `models/ocr/` directory:
+
+```bash
+mkdir -p models/ocr
+# Copy your downloaded models here
+```
+
 ## Usage
 
 The library provides a straightforward workflow for image-based text recognition:
@@ -140,30 +185,50 @@ Define the arguments for the OCR instance, including paths to the ONNX models an
 
 ```javascript
 const args = {
-  // Required: Paths to models and language list
   params: {
-    langList: ['en'], // List of expected language codes (ISO 639-1)
+    // Required parameters
+    langList: ['en'],                              // Language codes (ISO 639-1)
     pathDetector: './models/ocr/detector_craft.onnx',
-    // Option 1: Provide a prefix, and the library appends the language suffix
-    pathRecognizerPrefix: './models/ocr/recognizer_',
-    // Option 2: Provide an explicit recognizer path
-    // pathRecognizer: './models/ocr/recognizer_latin.onnx',
-    useGPU: false, // Optional: defaults to true, falls back to CPU if GPU unavailable
-    timeout: 120 // Optional: inference timeout in seconds, defaults to 120
-  },
+    pathRecognizer: './models/ocr/recognizer_latin.onnx',
+    // Or use prefix: pathRecognizerPrefix: './models/ocr/recognizer_',
 
-  // Optional: Additional configuration
+    // Optional parameters
+    useGPU: true,                    // Enable GPU acceleration (default: true)
+    timeout: 120,                    // Inference timeout in seconds (default: 120)
+
+    // Performance tuning (optional)
+    magRatio: 1.5,                   // Detection magnification ratio (default: 1.5)
+    defaultRotationAngles: [90, 270], // Rotation angles to try (default: [90, 270])
+    contrastRetry: false,            // Retry low-confidence with contrast adjustment (default: false)
+    lowConfidenceThreshold: 0.4,     // Threshold for contrast retry (default: 0.4)
+    recognizerBatchSize: 32          // Batch size for recognizer inference (default: 32)
+  },
   opts: {
-    stats: true // Enable performance statistics logging
+    stats: true                      // Enable performance statistics logging
   }
 }
 ```
 
-*   The `langList` The first supported language on the list will be assigned the corresponding recognizer, the rest will have best effort recognizer (limited accuracy). This field also helps select the appropriate recognizer model when using `pathRecognizerPrefix`.
-*   Use `pathRecognizerPrefix` to let the library automatically append the language suffix (e.g., `recognizer_latin.onnx` for Latin-based languages).
-*   Use `pathRecognizer` to explicitly specify a recognizer model path.
-*   The `useGPU` optional param enables GPU/NPU/TPU acceleration when available; defaults to `true` and falls back to CPU if unavailable.
-*   The `timeout` optional param sets the maximum time (in seconds) allowed for an inference operation before it times out; defaults to `120` seconds. This is relevant in some language models (such as thai) on Darwin devices which can exceed the default inference operation.
+#### Required Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `langList` | `string[]` | List of language codes (ISO 639-1). The first supported language determines the recognizer model. See [Supported Languages](#supported-languages). |
+| `pathDetector` | `string` | Path to the detector ONNX model file. |
+| `pathRecognizer` | `string` | Path to the recognizer ONNX model file. **Required if `pathRecognizerPrefix` is not provided.** |
+| `pathRecognizerPrefix` | `string` | Prefix path for recognizer model. The library appends the language suffix automatically (e.g., `recognizer_latin.onnx`). **Required if `pathRecognizer` is not provided.** |
+
+#### Optional Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `useGPU` | `boolean` | `true` | Enable GPU/NPU/TPU acceleration. Falls back to CPU if unavailable. |
+| `timeout` | `number` | `120` | Maximum inference time in seconds. Increase for complex images or slower devices. |
+| `magRatio` | `number` | `1.5` | Detection magnification ratio (1.0-2.0). Higher values improve detection of small text but increase processing time. |
+| `defaultRotationAngles` | `number[]` | `[90, 270]` | Rotation angles to try for text detection. Use `[]` to disable rotation variants. |
+| `contrastRetry` | `boolean` | `false` | Re-process low-confidence regions with adjusted contrast. Improves accuracy but increases memory usage. |
+| `lowConfidenceThreshold` | `number` | `0.4` | Confidence threshold (0-1) below which contrast retry is triggered (when `contrastRetry` is enabled). |
+| `recognizerBatchSize` | `number` | `32` | Number of text regions processed per batch. Lower values reduce memory usage on mobile devices. |
 
 ### 2. Create Model Instance
 
@@ -190,21 +255,33 @@ try {
 
 ### 4. Run OCR
 
-Pass the path to the input image file (currently requires BMP format) to the `run` method. Optionally include `options`.
+Pass the path to the input image file to the `run` method. Supported formats: **BMP**, **JPEG**, and **PNG**.
 
 ```javascript
-const imagePath = 'path/to/your/image.bmp'
+const imagePath = 'path/to/your/image.jpg'
 
 try {
   const response = await model.run({
      path: imagePath,
-     options: { paragraph: true } // Optional: Attempt to group results into paragraphs
+     options: {
+       paragraph: true,           // Group results into paragraphs (default: false)
+       rotationAngles: [90, 270], // Override default rotation angles for this run
+       boxMarginMultiplier: 1.0   // Adjust bounding box margins
+     }
   })
   // ... process the response (see step 5)
 } catch (error) {
   console.error('OCR failed:', error)
 }
 ```
+
+#### Runtime Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `paragraph` | `boolean` | `false` | Group detected text regions into paragraphs based on proximity. |
+| `rotationAngles` | `number[]` | Uses `defaultRotationAngles` | Override default rotation angles for this specific run. |
+| `boxMarginMultiplier` | `number` | `1.0` | Multiplier for bounding box margins around detected text. |
 
 ### 5. Process Output
 
@@ -375,6 +452,55 @@ const args = {
 
 *(See [`examples/example.fs.js`](examples/example.fs.js) and [`examples/exampleGPU.fs.js`](examples/exampleGPU.fs.js) for the full examples.)*
 
+#### Hyperdrive Example
+
+To load models from [Hyperdrive](https://github.com/holepunchto/hyperdrive) (peer-to-peer distributed storage), use `example.hd.js`:
+
+```bash
+bare examples/example.hd.js
+bare examples/example.hd.js /path/to/image.jpg
+```
+
+This example demonstrates:
+- Downloading OCR models from Hyperdrive using a content-addressed key
+- Caching models locally for subsequent runs
+- Running OCR with the downloaded models
+
+```javascript
+const HyperdriveDL = require('@qvac/dl-hyperdrive')
+const { ONNXOcr } = require('@qvac/ocr-onnx')
+
+// Model configuration
+const MODEL_KEY = 'hd://03d712abb026bc390cfe803fb851a1b4a581c31c5b9335ef6294333bbeb60043'
+
+// Initialize Hyperdrive loader
+const hdDL = new HyperdriveDL({ key: MODEL_KEY })
+await hdDL.ready()
+
+// Download models
+const detectorDownload = await hdDL.download('detector_craft.onnx', { diskPath: './models/hd' })
+await detectorDownload.await()
+
+const recognizerDownload = await hdDL.download('recognizer_latin.onnx', { diskPath: './models/hd' })
+await recognizerDownload.await()
+
+// Initialize OCR with downloaded model paths
+const model = new ONNXOcr({
+  params: {
+    langList: ['en'],
+    pathDetector: './models/hd/detector_craft.onnx',
+    pathRecognizer: './models/hd/recognizer_latin.onnx',
+    useGPU: false
+  }
+})
+
+await model.load()
+// ... run OCR
+await hdDL.close()
+```
+
+*(See [`examples/example.hd.js`](examples/example.hd.js) for the full example.)*
+
 ## Output Format
 
 The output is typically received via the `onUpdate` callback of the `QvacResponse` object. It's a JSON array where each element represents a detected text block.
@@ -493,7 +619,9 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the Apache-2.0 License - see the LICENSE file for details.
+This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.
 
-For any questions or issues, please open an issue on the GitHub repository.
+## Support
+
+For questions, bug reports, or feature requests, please [open an issue](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/issues) on GitHub.
 

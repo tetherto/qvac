@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -14,14 +14,16 @@
     "lint:fix": "standard --fix",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
-    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:integration": "npm run test:integration:generate && bare test/integration/all.js",
+    "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test": "npm run lint && npm run test:unit && npm run test:integration",
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
     "test:dts": "tsc -p tsconfig.dts.json",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test && bare-make install",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D USE_BERGAMOT=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
@@ -33,6 +35,7 @@
   },
   "files": [
     "addonLogging.js",
+    "addonLogging.d.ts",
     "binding.js",
     "index.js",
     "marian.js",
@@ -40,7 +43,8 @@
     "third-party",
     "lib",
     "index.d.ts",
-    "test/mobile"
+    "test/mobile",
+    "test/integration"
   ],
   "repository": {
     "type": "git",
@@ -58,6 +62,7 @@
   "homepage": "https://github.com/tetherto/qvac-lib-infer-nmtcpp#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-filesystem": "^0.1.0",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-process": "^4.2.2",
@@ -79,7 +84,10 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
-    "./addonLogging": "./addonLogging.js",
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
     "./addonLogging.js": "./addonLogging.js"
   },
   "types": "index.d.ts",

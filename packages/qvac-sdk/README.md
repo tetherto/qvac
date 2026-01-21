@@ -450,4 +450,3 @@ npm i path/to/qvac-sdk-0.3.0.tgz
 
 - [Comprehensive documentation of this SDK](https://qvac.tether.dev/docs/sdk)
 - [Package at NPM](https://www.npmjs.com/package/@qvac/sdk)
-# Test

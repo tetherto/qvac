@@ -17,7 +17,7 @@
       "port-version": 2
     },
     "llama-cpp": {
-      "baseline": "7248.0.0",
+      "baseline": "7248.1.0",
       "port-version": 0
     },
     "onnx": {
@@ -38,7 +38,7 @@
     },
     "piper": {
       "baseline": "1.2.0",
-      "port-version": 1
+      "port-version": 2
     },
     "piper-phonemize": {
       "baseline": "1.2.0",

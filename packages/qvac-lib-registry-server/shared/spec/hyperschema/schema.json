@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "schema": [
     {
       "name": "model-blob-binding",
@@ -167,6 +167,12 @@
           "required": false,
           "type": "string",
           "version": 1
+        },
+        {
+          "name": "ggufMetadata",
+          "required": false,
+          "type": "string",
+          "version": 2
         }
       ]
     },

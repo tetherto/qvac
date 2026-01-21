@@ -141,6 +141,10 @@ async function main () {
     console.log('Full response:\n', fullResponse3)
     console.log(`Inference stats: ${JSON.stringify(response3.stats)}`)
     console.log('\n')
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
   } finally {
     // 7. Cleaning up resources
     await store.close()

@@ -2,15 +2,7 @@
 
 import type ProgressReport from '../src/utils/progressReport';
 import type { QvacLogger } from '@qvac/logging';
-
-interface Loader {
-  /** Must be called before any stream or file-size operations */
-  ready(): Promise<void>;
-  /** Returns a Node.js Readable stream for the given remote path */
-  getStream(path: string): Promise<NodeJS.ReadableStream>;
-  /** Optional: returns the size in bytes of the given remote file */
-  getFileSize?(path: string): Promise<number>;
-}
+import type { Loader } from '../index';
 
 
 
@@ -87,14 +79,14 @@ declare class WeightsProvider {
    * @param fileName Name of the file to download
    * @param diskPath Path on disk where file should be saved
    * @param progressReporter Progress reporter instance to track download progress
-   * @returns Path where file was saved on disk
+   * @returns {Promise<void>}
    * @private
    */
   private _downloadFile(
     fileName: string,
     diskPath: string,
     progressReporter: ProgressReport | null
-  ): Promise<string>;
+  ): Promise<void>;
 
   /**
    * @param {string} baseShardFilepath - Path to one of the sharded files, for example `path/SmolLM2-135M-Instruct-IQ3_XS-00001-of-00002.gguf`.

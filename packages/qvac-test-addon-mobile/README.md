@@ -584,6 +584,50 @@ import { RUN_TEST } from '../backend/api.cjs'
 />
 ```
 
+## Addon Compatibility Testing
+
+Since this repository is the base for mobile testing across all QVAC addons, we have automated compatibility checks to ensure PRs don't break existing addons.
+
+### How It Works
+
+1. **Addon Registry**: All compatible addons are registered in `.github/addon-registry.json`
+2. **PR Checks**: When a PR is opened, the `addon-compatibility-check.yml` workflow:
+   - Builds test apps for each registered addon
+   - Verifies all generated files are created correctly
+   - Generates native projects (expo prebuild)
+   - Reports results on the PR
+
+### Local Validation
+
+Before submitting a PR, validate compatibility locally:
+
+```bash
+# Test all registered addons
+npm run validate
+
+# Test specific addon
+npm run validate -- --addon @qvac/llm-llamacpp
+
+# Test local addon directory
+npm run validate:local ../path/to/addon
+```
+
+### Adding Addons to Registry
+
+To register a new addon for compatibility testing, edit `.github/addon-registry.json`:
+
+```json
+{
+  "name": "@qvac/your-addon",
+  "repository": "tetherto/your-addon-repo",
+  "branch": "main",
+  "testPath": "test/mobile",
+  "platforms": ["Android", "iOS"]
+}
+```
+
+See [docs/ADDON_COMPATIBILITY.md](docs/ADDON_COMPATIBILITY.md) for full documentation.
+
 ## Contributing
 
 We welcome contributions to improve this mobile testing template! 
@@ -593,9 +637,10 @@ We welcome contributions to improve this mobile testing template!
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Make your changes
-4. Commit your changes: `git commit -m "Add some feature"`
-5. Push to the branch: `git push origin feature/your-feature`
-6. Open a Pull Request
+4. **Run compatibility validation**: `npm run validate`
+5. Commit your changes: `git commit -m "Add some feature"`
+6. Push to the branch: `git push origin feature/your-feature`
+7. Open a Pull Request
 
 ### For Adding Addon Support
 

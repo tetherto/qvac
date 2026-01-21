@@ -135,8 +135,7 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       publish_target: "gpr"
-      # If your prebuild workflow supports it, uncomment:
-      # workdir: ${{ needs.context.outputs.workdir }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
     needs: [context, prebuild]

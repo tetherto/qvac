@@ -3,8 +3,12 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream } = require('./helpers.js')
+const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+
+// Create a HyperDrive loader
+function createLoader () {
+  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+}
 
 async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioCtx) {
   await model.reload({
@@ -32,16 +36,17 @@ async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioC
 
 const { modelsDir, modelPath } = getTestPaths()
 
-test('Audio context chunking - 10 minute audio file with 30s chunks', async (t) => {
+// Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
+test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: isMobile }, async (t) => {
   // Increase timeout as we process ~30 chunks from disk with model reloads
   t.timeout(180000)
   console.log('\n=== Audio Context Chunking Integration Test ===\n')
 
-  // Ensure whisper model is available
+  // Ensure whisper model is available (uses HyperDrive)
   const whisperResult = await ensureWhisperModel(modelPath)
 
-  if (!whisperResult.isReal) {
-    console.log('Real whisper model not available - skipping audio chunking test')
+  if (!whisperResult.success && !whisperResult.isReal) {
+    console.log('Whisper model not available - skipping audio chunking test')
     t.pass('Audio chunking test skipped (model not available)')
     return
   }
@@ -73,7 +78,7 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', async (t) 
 
   const constructorArgs = {
     modelName: path.basename(modelPath),
-    loader: new FakeDL({}),
+    loader: createLoader(),
     diskPath: modelsDir
   }
 
@@ -158,7 +163,7 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', async (t) 
     // Build full transcription
     const fullTranscription = allResults
       .map(s => s.text.trim())
-      .filter(t => t.length > 0)
+      .filter(text => text.length > 0)
       .join(' ')
 
     console.log(`\nTranscription length: ${fullTranscription.length} characters`)

@@ -44,7 +44,15 @@ static std::unordered_map<std::string, std::string> getTTSConfigMap(js_env_t* en
   if (useGPUOpt.has_value()) {
     configMap["useGPU"] = useGPUOpt.value().as<bool>(env) ? "true" : "false";
   }
-  
+
+  auto tashkeelModelDirOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "tashkeelModelDir");
+  if (tashkeelModelDirOpt.has_value()) {
+    configMap["tashkeelModelDir"] =
+        tashkeelModelDirOpt.value().as<std::string>(env);
+  }
+
   return configMap;
 }
 

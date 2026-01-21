@@ -1,5 +1,21 @@
 'use strict'
 
+/**
+ * Mock MLCMarian Translation Model
+ *
+ * Simulates the MLCMarian translation model for testing without native code.
+ * Uses MockAddon internally to simulate addon behavior.
+ *
+ * Methods:
+ *   - load(): Initialize and activate the mock addon
+ *   - run(input): Process input text and return QvacResponse
+ *   - pause()/unpause(): Pause/resume processing
+ *   - stop(): Stop processing
+ *   - status(): Get current addon state
+ *
+ * Used by: test/unit/addon.inference.test.js
+ */
+
 const AddonInterface = require('./MockAddon')
 const { QvacResponse } = require('@qvac/infer-base')
 const { transitionCb } = require('./utils.js')

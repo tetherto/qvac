@@ -33,17 +33,19 @@ qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::
   updateConfig("language", config.language);
   updateConfig("eSpeakDataPath", config.eSpeakDataPath);
   updateConfig("configJsonPath", config.configJsonPath);
-  
+  updateConfig("tashkeelModelDir", config.tashkeelModelDir);
+
   auto useGPUIt = configMap.find("useGPU");
   if (useGPUIt != configMap.end()) {
     config.useGPU = (useGPUIt->second == "true");
   }
 
   std::stringstream ss;
-  ss << "Config values: modelPath='" << config.modelPath 
-     << "' language='" << config.language << "'"
+  ss << "Config values: modelPath='" << config.modelPath << "' language='"
+     << config.language << "'"
      << "' eSpeakDataPath='" << config.eSpeakDataPath << "'"
      << "' configJsonPath='" << config.configJsonPath << "'"
+     << "' tashkeelModelDir='" << config.tashkeelModelDir << "'"
      << "' useGPU=" << (config.useGPU ? "true" : "false") << "'";
   QLOG(Priority::INFO, ss.str());
 

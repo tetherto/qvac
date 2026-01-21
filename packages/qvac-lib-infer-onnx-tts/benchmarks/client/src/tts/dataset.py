@@ -71,6 +71,8 @@ SUPPORTED_LANGUAGES = {
     "nl-be": "nl-be.json",
     "no": "no.json",
     "no-no": "no.json",
+    "nb-no": "no.json",
+    "nb": "no.json",
     "pl": "pl.json",
     "pl-pl": "pl.json",
     "pt": "pt.json",
@@ -83,7 +85,7 @@ SUPPORTED_LANGUAGES = {
     "sk": "sk.json",
     "sk-sk": "sk.json",
     "sl": "sl.json",
-    "sl-sl": "sl.json",
+    "sl-si": "sl.json",
     "sr": "sr.json",
     "sr-rs": "sr.json",
     "sv": "sv.json",
@@ -100,6 +102,7 @@ SUPPORTED_LANGUAGES = {
     "vi-vn": "vi.json",
     "zh": "zh.json",
     "zh-cn": "zh.json",
+    "cmn": "zh.json",
 }
 
 

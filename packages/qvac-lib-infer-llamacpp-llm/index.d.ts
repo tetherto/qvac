@@ -41,6 +41,14 @@ export interface LlamaConfig {
   predict?: NumericLike
   seed?: NumericLike
   no_mmap?: boolean | ''
+  reverse_prompt?: string
+  repeat_penalty?: NumericLike
+  presence_penalty?: NumericLike
+  frequency_penalty?: NumericLike
+  tools?: boolean | string
+  verbosity?: NumericLike
+  n_discarded?: NumericLike
+  'main-gpu'?: NumericLike | string
   [key: string]: string | number | boolean | string[] | undefined
 }
 
@@ -51,10 +59,12 @@ export interface LlmLlamacppArgs {
   diskPath?: string
   modelName: string
   projectionModel?: string
+  modelPath?: string
+  modelConfig?: Record<string, string>
 }
 
 export interface UserTextMessage {
-  role: 'system' | 'assistant' | 'user' | 'tool' | string
+  role: 'system' | 'assistant' | 'user' | 'tool' | 'session' | string
   content: string
   type?: undefined
   [key: string]: any
@@ -116,11 +126,24 @@ export default class LlmLlamacpp extends BaseInference {
   _runInternal(prompt: Message[]): Promise<QvacResponse>
 
   run(prompt: Message[]): Promise<QvacResponse>
+
+  unload(): Promise<void>
+
+  pause(): Promise<void>
+
+  unpause(): Promise<void>
+
+  stop(): Promise<void>
+
+  cancel(jobId?: string): Promise<void>
+
+  status(): Promise<any>
+
+  destroy(): Promise<void>
+
+  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+
+  getApiDefinition(): string
 }
 
-export { LlmLlamacpp }
-export interface AddonLogging {
-  setLogger(callback: (priority: number, message: string) => void): void
-  releaseLogger(): void
-}
-export const addonLogging: AddonLogging
+export { ReportProgressCallback, QvacResponse }

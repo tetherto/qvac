@@ -134,8 +134,81 @@ function getMediaPath (filename) {
   return path.resolve(__dirname, '../../media', filename)
 }
 
+/**
+ * Factory to create a shared onOutput handler and expose collected state.
+ * Used in tests to capture and track LLM output events.
+ *
+ * @param {object} t - Test instance
+ * @param {object} [logger=console] - Logger instance with a `log` method
+ * @returns {{
+ *   onOutput: (addon: object, event: string, jobId: string, output: string, error: string) => void,
+ *   outputText: Object<string, string>,
+ *   generatedText: string,
+ *   jobCompleted: boolean,
+ *   timeToFirstToken: number | null,
+ *   stats: object | null,
+ *   setStartTime: (time: number) => void
+ * }} An object containing:
+ *   - `onOutput` - Callback to handle addon output events ('Output', 'Error', 'JobEnded')
+ *   - `outputText` - Map of jobId to accumulated output text
+ *   - `generatedText` - All generated text concatenated
+ *   - `jobCompleted` - Flag indicating if the job has finished
+ *   - `timeToFirstToken` - Time to first token in milliseconds
+ *   - `stats` - Stats object from the job
+ *   - `setStartTime` - Function to set the start time for timeToFirstToken calculation
+ *
+ * @example
+ * const collector = makeOutputCollector(t)
+ * addon.setOnOutputCb(collector.onOutput)
+ * // ... run inference ...
+ * console.log(collector.generatedText)
+ */
+function makeOutputCollector (t, logger = console) {
+  const outputText = {}
+  let jobCompleted = false
+  let generatedText = ''
+  let timeToFirstToken = null
+  let startTime = null
+  let stats = null
+
+  function onOutput (addon, event, jobId, output, error) {
+    if (event === 'Output') {
+      if (!outputText[jobId]) {
+        outputText[jobId] = ''
+        // Record time to first token (manual fallback)
+        if (startTime && timeToFirstToken === null) {
+          timeToFirstToken = Date.now() - startTime
+        }
+      }
+      outputText[jobId] += output
+      generatedText += output
+    } else if (event === 'Error') {
+      t.fail(`Job ${jobId} error: ${error}`)
+    } else if (event === 'JobEnded') {
+      // Capture stats from the data parameter (output is actually the data/stats object in JobEnded)
+      stats = output
+      logger.log(`Job ${jobId} completed. Output: "${outputText[jobId]}"`)
+      if (stats) {
+        logger.log(`Job ${jobId} stats: ${JSON.stringify(stats)}`)
+      }
+      jobCompleted = true
+    }
+  }
+
+  return {
+    onOutput,
+    outputText,
+    get generatedText () { return generatedText },
+    get jobCompleted () { return jobCompleted },
+    get timeToFirstToken () { return timeToFirstToken },
+    get stats () { return stats },
+    setStartTime (time) { startTime = time }
+  }
+}
+
 module.exports = {
   ensureModel,
   ensureModelPath,
-  getMediaPath
+  getMediaPath,
+  makeOutputCollector
 }

@@ -1,170 +1,152 @@
 'use strict'
 
 const { InferenceArgsSchema } = require('../validation')
-const { spawn } = require('bare-subprocess')
+const { setLogger, releaseLogger } = require('@qvac/embed-llamacpp/addonLogging')
+const { loadP2PModel } = require('./p2pModelLoader')
+const { modelManager } = require('./modelManager')
 const logger = require('../utils/logger')
-const process = require('bare-process')
-const path = require('bare-path')
 const fs = require('bare-fs')
-const { Readable } = require('bare-stream')
-
-class LocalLoader {
-  constructor (modelDir) {
-    this.modelDir = modelDir
-  }
-
-  async ready () {}
-  async close () {}
-  async getStream (filepath) {
-    const fullPath = path.join(this.modelDir, filepath)
-    return new Promise((resolve, reject) => {
-      fs.readFile(fullPath, (err, buffer) => {
-        if (err) {
-          reject(new Error(`Failed to read file ${filepath}: ${err.message}`))
-        } else {
-          resolve(Readable.from([buffer]))
-        }
-      })
-    })
-  }
-}
-
-const loadedModels = new Map()
-
-/**
- * Get package version from package.json
- * @param {string} lib - Package name
- * @returns {string|null} Package version or null if not found
- */
-const getPackageVersion = (lib) => {
-  try {
-    const packagePath = require.resolve(`${lib}/package`)
-    const pkg = require(packagePath)
-    return pkg.version
-  } catch (error) {
-    return null
-  }
-}
-
-/**
- * Ensure that `lib@version` is installed.
- * @param {string} lib - Package name
- * @param {string} requestedVersion - Requested version
- * @returns {Promise<string>} Installed version
- */
-const ensurePackage = async (lib, requestedVersion) => {
-  const installed = getPackageVersion(lib)
-  if (installed && (!requestedVersion || installed === requestedVersion)) {
-    return installed
-  }
-  const versionSpec = requestedVersion ? `@${requestedVersion}` : ''
-  logger.info(`Installing ${lib}${versionSpec}...`)
-  await new Promise((resolve, reject) => {
-    const npm = spawn('npm', ['install', `${lib}${versionSpec}`], { stdio: 'inherit' })
-    npm
-      .on('exit', code => code === 0 ? resolve() : reject(new Error(`npm install ${lib}${versionSpec} failed (${code})`)))
-      .on('error', reject)
-  })
-  const newVersion = getPackageVersion(lib)
-  if (!newVersion) {
-    throw new Error(`Failed to verify installation of ${lib}${versionSpec}`)
-  }
-  return newVersion
-}
+const path = require('bare-path')
+const process = require('bare-process')
 
 /**
  * Runs an addon with the given payload.
- * @param {Object} payload - The payload containing the input, library, link, params, opts, and config.
- * @returns {Promise<{ outputs: any[]; version: string; timings: { loadModelMs: number; runMs: number } }>} - A promise that resolves to the output, version, and timings.
+ * @param {Object} payload - The payload containing inputs and config.
+ * @returns {Promise<{ outputs: any[]; time: { loadModelMs: number; runMs: number } }>}
  */
 const runAddon = async (payload) => {
-  const { inputs, lib, link, version: requestedVersion, params, opts, config } = InferenceArgsSchema.parse(payload)
-  const version = await ensurePackage(lib, requestedVersion)
-  const MLCBert = require(lib)
-  logger.info(`Running addon with ${inputs.length} inputs`, {
-    link: link || 'none',
-    hasOpts: !!opts,
-    hasParams: !!params
+  // Set up C++ logger (only log errors and warnings)
+  setLogger((priority, message) => {
+    const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'OFF']
+    // Only log errors and warnings from C++
+    if (priority <= 1) { // ERROR or WARN
+      process.stderr.write(`[C++ ${levels[priority]}] ${message}\n`)
+    }
   })
 
-  // -----------------------------
-  // Benchmark loadModel
-  // -----------------------------
-  let modelRef = loadedModels.get(lib)
-  let loadModelMs = 0
-  const addonConfig = config?.addonConfig || '-ngl\t25\n--ctx-size\t512\n--batch-size\t512'
+  try {
+    logger.debug('runAddon called')
+    logger.debug(`Payload keys: ${Object.keys(payload).join(', ')}`)
 
-  if (!modelRef) {
-    const loadStart = process.hrtime()
+    const { inputs, config } = InferenceArgsSchema.parse(payload)
+    logger.debug(`Running addon with ${inputs.length} inputs`)
 
-    const defaultModelPath = path.join(__dirname, '../../../models/gte-large_fp16.gguf')
-    const modelPath = config?.modelFilePath ? path.resolve(config.modelFilePath) : defaultModelPath
+    // Check if this is a P2P model request (hyperdriveKey present)
+    const hyperdriveKey = config?.hyperdriveKey
+    const modelName = config?.modelName
+    const isP2PModel = hyperdriveKey && modelName
 
-    logger.info(`Model path: ${modelPath}`)
-    logger.info(`Addon config: ${addonConfig}`)
+    let model
+    let loadModelMs = 0
 
-    const loader = new LocalLoader(path.dirname(modelPath))
-    const args = {
-      loader,
-      diskPath: path.dirname(modelPath),
-      modelName: path.basename(modelPath)
+    if (isP2PModel) {
+      logger.info('Loading P2P model using hyperdrive')
+      logger.info(`Hyperdrive key: ${hyperdriveKey}`)
+      logger.info(`Model name: ${modelName}`)
+
+      // Start timer just before actual model loading
+      const loadStart = process.hrtime()
+
+      model = await loadP2PModel({
+        hyperdriveKey,
+        modelName,
+        modelConfig: config || {}
+      })
+
+      const [loadSec, loadNano] = process.hrtime(loadStart)
+      loadModelMs = loadSec * 1e3 + loadNano / 1e6
+
+      logger.info(`P2P model loaded successfully in ${loadModelMs.toFixed(2)}ms`)
+    } else {
+      // Direct local model approach
+      logger.info('Loading model directly with EmbedLlamacpp')
+
+      const localModelName = config?.modelName
+      const diskPath = config?.diskPath || './models/'
+
+      if (!localModelName) {
+        throw new Error('modelName is required in config for local GGUF models')
+      }
+
+      const modelPath = path.join(diskPath, localModelName)
+
+      if (!fs.existsSync(modelPath)) {
+        throw new Error(`Local model not found: ${modelPath}`)
+      }
+
+      logger.info(`Loading model: ${localModelName}`)
+
+      try {
+        // Start timer just before actual model loading
+        const loadStart = process.hrtime()
+
+        model = await modelManager.getModel(modelPath, diskPath, localModelName, config)
+
+        const [loadSec, loadNano] = process.hrtime(loadStart)
+        loadModelMs = loadSec * 1e3 + loadNano / 1e6
+
+        logger.info(`Model ready for inference (loaded in ${loadModelMs.toFixed(2)}ms)`)
+      } catch (error) {
+        logger.error(`Error loading model ${localModelName}:`, {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          code: error.code,
+          toString: String(error)
+        })
+        throw error
+      }
     }
+
+    // -----------------------------
+    // Benchmark run - batch all inputs in a single call
+    // -----------------------------
+    const runStart = process.hrtime()
 
     try {
-      modelRef = new MLCBert(args, addonConfig)
-      await modelRef.load()
+      logger.debug(`Processing ${inputs.length} inputs as batch`)
+
+      // Pass ALL inputs as array - addon handles batching internally (much faster!)
+      const response = await model.run(inputs)
+      const embeddings = await response.await()
+
+      if (!embeddings || !Array.isArray(embeddings) || !embeddings[0]) {
+        throw new Error('Invalid embeddings structure returned from model')
+      }
+
+      // Extract embeddings array - structure is embeddings[0] = array of embeddings
+      const batchEmbeddings = embeddings[0]
+      const outputs = batchEmbeddings.map(emb => Array.from(emb))
+
+      logger.debug(`Generated ${outputs.length} embeddings with ${outputs[0]?.length || 0} dimensions`)
+
+      const [runSec, runNano] = process.hrtime(runStart)
+      const runMs = runSec * 1e3 + runNano / 1e6
+      const throughput = runMs > 0 ? (inputs.length / (runMs / 1000)).toFixed(1) : '0'
+
+      logger.info(`Processed ${inputs.length} inputs in ${runMs.toFixed(2)}ms (${throughput} sent/s)`)
+
+      return {
+        outputs,
+        time: {
+          loadModelMs,
+          runMs
+        }
+      }
     } catch (error) {
-      logger.error('Failed to load model', { error, stack: error.stack, modelPath, addonConfig })
-      throw new Error(`Model loading failed: ${error.message}`)
+      logger.error('Error during model inference:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        toString: String(error)
+      })
+      throw error
     }
-
-    const [loadSec, loadNano] = process.hrtime(loadStart)
-    loadModelMs = loadSec * 1e3 + loadNano / 1e6
-    loadedModels.set(lib, modelRef)
-    logger.info(`Loaded new model for ${lib}`)
-  }
-
-  // -----------------------------
-  // Benchmark run
-  // -----------------------------
-  const outputs = []
-  const runStart = process.hrtime()
-
-  const contextMatch = addonConfig.match(/-c\t(\d+)/) || addonConfig.match(/--ctx-size\t(\d+)/)
-  const maxContextTokens = contextMatch ? parseInt(contextMatch[1]) : 512
-  const maxChars = Math.floor(maxContextTokens * 0.3 * 3)
-
-  logger.info(`Using max context: ${maxContextTokens} tokens (${maxChars} chars)`)
-
-  for (const input of inputs) {
-    let processedInput = input
-    if (input.length > maxChars) {
-      processedInput = input.substring(0, maxChars)
-      logger.info(`Truncated input from ${input.length} to ${processedInput.length} characters`)
-    }
-
-    const response = await modelRef.run(processedInput)
-    const embeddings = await response.await()
-
-    if (!embeddings || !Array.isArray(embeddings) || !embeddings[0] || !embeddings[0][0]) {
-      throw new Error('Invalid embeddings structure returned from model')
-    }
-
-    const actualEmbeddings = embeddings[0][0]
-    const embeddingArray = Array.from(actualEmbeddings)
-    outputs.push(embeddingArray)
-  }
-
-  const [runSec, runNano] = process.hrtime(runStart)
-  const runMs = runSec * 1e3 + runNano / 1e6
-
-  return {
-    outputs,
-    version,
-    time: {
-      loadModelMs,
-      runMs
-    }
+  } finally {
+    // Always release C++ logger, even if there's an error
+    releaseLogger()
+    logger.debug('C++ logger released')
   }
 }
 

@@ -173,9 +173,9 @@ class HyperDriveDL extends BaseDL {
   }
 
   /**
-   * Get a readable stream for a given file path from Hyperdrive.
+   * Get a file as async iterable buffer stream.
    * @param {string} filePath - The file path inside the Hyperdrive.
-   * @returns {Promise<ReadableStream>} A readable stream for the specified file.
+   * @returns {Promise<AsyncIterable<Buffer>>} The file content as async iterable.
    */
   async getStream (filePath, opts = {}) {
     try {

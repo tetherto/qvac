@@ -1,5 +1,17 @@
 'use strict'
 
+/**
+ * HyperdriveDL Example
+ *
+ * This example demonstrates translation using the GGML backend with model
+ * downloaded via HyperdriveDL from the distributed network.
+ *
+ * Translates a long English text (Alice in Wonderland excerpt) to Italian.
+ *
+ * Usage:
+ *   bare examples/example.hd.js
+ */
+
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
 
@@ -18,7 +30,7 @@ async function main () {
 
   const args = {
     loader: hdDL,
-    params: { mode: 'full', dstLang: 'en', srcLang: 'it' },
+    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: './models',
     modelName: 'model.bin'
   }

@@ -2,15 +2,24 @@
 
 const path = require('bare-path')
 const fs = require('bare-fs')
+const os = require('bare-os')
 const ONNXTTS = require('../..')
 const { createWavBuffer } = require('./wav-helper')
 
+const platform = os.platform()
+const isMobile = platform === 'ios' || platform === 'android'
+
+// Returns base directory for models - uses global.testDir on mobile, current dir otherwise
+function getBaseDir () {
+  return isMobile && global.testDir ? global.testDir : '.'
+}
+
 async function loadTTS (params = {}) {
   // Set default paths if not provided
-  const defaultPath = './models/tts/'
-  const mainModelUrl = params.mainModelUrl || `${defaultPath}/en_US-amy-low.onnx`
-  const eSpeakDataPath = params.eSpeakDataPath || `${defaultPath}/espeak-ng-data`
-  const configJsonPath = params.configJsonPath || `${defaultPath}/en_US-amy-low.onnx.json`
+  const defaultPath = path.join(getBaseDir(), 'models', 'tts')
+  const mainModelUrl = params.mainModelUrl || path.join(defaultPath, 'en_US-amy-low.onnx')
+  const eSpeakDataPath = params.eSpeakDataPath || path.join(defaultPath, 'espeak-ng-data')
+  const configJsonPath = params.configJsonPath || path.join(defaultPath, 'en_US-amy-low.onnx.json')
 
   const args = {
     mainModelUrl,

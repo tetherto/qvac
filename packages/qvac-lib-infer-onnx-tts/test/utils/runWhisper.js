@@ -1,9 +1,19 @@
 const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 const { Readable } = require('bare-stream')
+const path = require('bare-path')
+const os = require('bare-os')
 const FakeDL = require('./loader.fake')
 
+const platform = os.platform()
+const isMobile = platform === 'ios' || platform === 'android'
+
+// Returns base directory for models - uses global.testDir on mobile, current dir otherwise
+function getBaseDir () {
+  return isMobile && global.testDir ? global.testDir : '.'
+}
+
 async function loadWhisper (params = {}) {
-  const defaultPath = './models/whisper'
+  const defaultPath = path.join(getBaseDir(), 'models', 'whisper')
   const modelName = params.modelName || 'ggml-tiny.bin'
   const diskPath = params.diskPath || defaultPath
   console.log('>>> [WHISPER] Loading model from:', diskPath)

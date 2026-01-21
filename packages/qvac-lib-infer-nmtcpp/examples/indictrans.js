@@ -1,14 +1,25 @@
 'use strict'
 
-// Note: This import will depend on the addon package installed
+/**
+ * IndicTrans Example
+ *
+ * This example demonstrates translation using the IndicTrans2 model
+ * for English to Hindi translation (eng_Latn → hin_Deva).
+ *
+ * The model is downloaded via HyperdriveDL from the distributed network.
+ *
+ * Usage:
+ *   bare examples/indictrans.js
+ */
+
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
 
-const text = 'Hello World!'
+const text = 'How are you'
 
 async function main () {
   const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
+    // The hyperdrive key for en-hi translation model weights and config
     key: 'hd://268c2e9b2a3420632e4b6649e32822f42d5dfbda4c7e96daec5b629ed20f99f7'
   })
 

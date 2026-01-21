@@ -94,6 +94,8 @@ def get_model_name_for_language(language: str) -> str:
         "nl": "nl_NL-ronnie-medium",
         "no-no": "no_NO-talesyntese-medium",
         "no": "no_NO-talesyntese-medium",
+        "nb-no": "no_NO-talesyntese-medium",
+        "nb": "no_NO-talesyntese-medium",
         "pl-pl": "pl_PL-gosia-medium",
         "pl": "pl_PL-gosia-medium",
         "pt-br": "pt_BR-jeff-medium",
@@ -106,8 +108,8 @@ def get_model_name_for_language(language: str) -> str:
         "ru": "ru_RU-dmitri-medium",
         "sk-sk": "sk_SK-lili-medium",
         "sk": "sk_SK-lili-medium",
-        "sl-sl": "sl_SL-artur-medium",
-        "sl": "sl_SL-artur-medium",
+        "sl-si": "sl_SI-artur-medium",
+        "sl": "sl_SI-artur-medium",
         "sr-rs": "sr_RS-serbski_institut-medium",
         "sr": "sr_RS-serbski_institut-medium",
         "sv-se": "sv_SE-lisa-medium",
@@ -124,6 +126,7 @@ def get_model_name_for_language(language: str) -> str:
         "vi": "vi_VN-vais1000-medium",
         "zh-cn": "zh_CN-huayan-medium",
         "zh": "zh_CN-huayan-medium",
+        "cmn": "zh_CN-huayan-medium",
     }
     
     if lang in model_map:
@@ -255,12 +258,12 @@ class PythonTTSRunner:
             # Use the model's actual sample rate, not the passed parameter
             actual_sample_rate = self.voice.config.sample_rate
             duration_sec = sample_count / actual_sample_rate
-            rtf = duration_sec / (text_gen_ms / 1000) if text_gen_ms > 0 else 0
+            rtf = (text_gen_ms / 1000) / duration_sec if duration_sec > 0 else 0
             
             logger.info(f"  Text: \"{text[:50]}\"")
             logger.info(f"  Samples: {sample_count}, Sample Rate: {actual_sample_rate}")
             logger.info(f"  Duration: {duration_sec:.2f}s, Generation: {text_gen_ms:.2f}ms")
-            logger.info(f"  RTF: {rtf:.4f} ({rtf:.1f}x faster than real-time)")
+            logger.info(f"  RTF: {rtf:.4f} ({(1 / rtf) if rtf > 0 else 0:.1f}x real-time)")
             logger.debug(f"  First 10 samples: {samples[:10].tolist()}")
             
             output = {

@@ -42,6 +42,8 @@ async function main () {
     const model = new ONNXOcr({
       params: {
         langList: [language],
+        pathDetector: './models/ocr/rec_512/detector_craft.onnx',
+        pathRecognizerPrefix: './models/ocr/rec_512/recognizer_',
         useGPU: false
       },
       opts: {

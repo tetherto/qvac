@@ -108,6 +108,8 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 if(APPLE)
   message("VCPKG_OVERLAY_TRIPLETS will be override from this path for Apple vcpkg-override-triplets/triplets")
   SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
+  message("VCPKG_OVERLAY_PORTS will be override from this path for Apple vcpkg-overlay-ports")
+  SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 endif()
 
 project(qvac-lib-inference-tts C CXX)
@@ -141,6 +143,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/PiperEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TashkeelDiacritizer.cpp
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")

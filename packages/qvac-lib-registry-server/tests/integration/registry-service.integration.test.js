@@ -130,6 +130,17 @@ test('Multiple writers replicate through Autobase', async (t) => {
     t.is(models2.length, 1, 'writer2 sees model via replication')
     t.is(models3.length, 1, 'writer3 sees model via replication')
     t.is(models1[0].engine, '@test/tinyllamas', 'model has correct engine')
+
+    // Verify GGUF metadata extraction and replication
+    const model = await writer2.service.getModelByKey({
+      path: models1[0].path,
+      source: models1[0].source
+    })
+    t.ok(model, 'model retrieved')
+    t.ok(model.ggufMetadata, 'GGUF metadata extracted')
+    const metadata = JSON.parse(model.ggufMetadata)
+    t.is(metadata['general.architecture'], 'llama', 'architecture detected')
+    t.ok(metadata['llama.context_length'], 'context length present')
   } finally {
     await cleanupService(writer1)
     await cleanupService(writer2)
@@ -541,6 +552,57 @@ test('undeprecating model clears deprecation fields', async (t) => {
     t.absent(afterUndeprecate.deprecatedAt, 'deprecatedAt cleared')
     t.absent(afterUndeprecate.replacedBy, 'replacedBy cleared')
     t.absent(afterUndeprecate.deprecationReason, 'deprecationReason cleared')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('addModel extracts GGUF metadata for .gguf files', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    // Test GGUF file
+    const ggufModel = await ctx.service.addModel({
+      source: TEST_MODEL_URL,
+      engine: '@test/tinyllamas',
+      licenseId: 'MIT'
+    })
+    await flushAutobases(ctx.service.base)
+
+    t.ok(ggufModel.ggufMetadata, 'GGUF metadata extracted')
+    const metadata = JSON.parse(ggufModel.ggufMetadata)
+    t.is(typeof metadata, 'object', 'metadata is object')
+    t.ok(metadata['general.architecture'], 'has architecture field')
+    t.ok(Object.keys(metadata).length > 10, 'has multiple metadata fields')
+
+    // Test non-GGUF file
+    const tempDir = await createTempStorage(t)
+    const artifactPath = path.join(tempDir, 'model.bin')
+    await fs.writeFile(artifactPath, Buffer.from('test-payload'))
+
+    ctx.service._downloadArtifact = async (sourceInfo, localPath) => {
+      await fs.copyFile(artifactPath, localPath)
+    }
+
+    const binModel = await ctx.service.addModel({
+      source: 's3://test-bucket/model.bin',
+      engine: '@test/engine',
+      licenseId: 'MIT'
+    })
+    await flushAutobases(ctx.service.base)
+
+    t.absent(binModel.ggufMetadata, 'no metadata for non-GGUF file')
+
+    // Verify metadata replicates
+    const retrieved = await ctx.service.getModelByKey({
+      path: ggufModel.path,
+      source: ggufModel.source
+    })
+    t.alike(retrieved.ggufMetadata, ggufModel.ggufMetadata, 'metadata persisted')
   } finally {
     await cleanupService(ctx)
   }

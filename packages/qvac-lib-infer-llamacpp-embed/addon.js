@@ -1,6 +1,5 @@
 const path = require('bare-path')
 
-// TODO(jesusmb1995): Bind to summarized word embeddings and utilities.
 /// An interface between Bare addon in C++ and JS runtime.
 class BertInterface {
   /**

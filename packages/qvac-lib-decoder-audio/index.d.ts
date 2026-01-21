@@ -33,6 +33,10 @@ interface DecoderStatus {
   paused: boolean
 }
 
+export interface DecoderOutput {
+  outputArray: ArrayBuffer
+}
+
 interface RuntimeStats {
   decodeTimeMs: number
   inputBytes: number
@@ -52,7 +56,7 @@ declare class FFmpegDecoder extends BaseInference {
 
   load(): Promise<void>
   unload(): Promise<void>
-  run(audioStream: AsyncIterable<Buffer>): Promise<QvacResponse>
+  run(audioStream: AsyncIterable<Buffer>): Promise<QvacResponse<DecoderOutput>>
   pause(): Promise<void>
   unpause(): Promise<void>
   stop(): Promise<void>
@@ -61,4 +65,4 @@ declare class FFmpegDecoder extends BaseInference {
   runtimeStats(): RuntimeStats
 }
 
-export { FFmpegDecoder, RuntimeStats }
+export { FFmpegDecoder, RuntimeStats, DecoderOutput }

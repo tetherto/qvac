@@ -1,6 +1,38 @@
 'use strict'
 
 /**
+ * @typedef {Object} ErrorDefinition
+ * @property {string} name - Error name identifier
+ * @property {string | ((...args: any[]) => string)} message - Error message or message factory
+ */
+
+/**
+ * @typedef {{ [code: number]: ErrorDefinition }} ErrorCodesMap
+ */
+
+/**
+ * @typedef {Object} QvacErrorOptions
+ * @property {number} [code] - The error code
+ * @property {any[] | string} [adds] - Additional arguments to format the message
+ * @property {Error} [cause] - The original error that caused this one
+ */
+
+/**
+ * @typedef {Object} SerializedError
+ * @property {string} name
+ * @property {number} code
+ * @property {string} message
+ * @property {string} [stack]
+ * @property {Error} [cause]
+ */
+
+/**
+ * @typedef {Object} PackageInfo
+ * @property {string} name - Package name (e.g., '@tetherto/qvac-lib-inference-addon-mlc-base')
+ * @property {string} version - Package version (semantic version)
+ */
+
+/**
  * Reserved internal error codes
  * @private
  */
@@ -79,17 +111,23 @@ function compareVersions (version1, version2) {
  * Extends the standard Error class with QVAC-specific functionality
  */
 class QvacErrorBase extends Error {
+  /** @type {number} */
+  code
+  /** @type {string} */
+  name
+  /** @type {Error | undefined} */
+  cause
+
   /**
    * Creates a new QVAC error
-   * @param {Object} [options] - Error options
-   * @param {number} [options.code] - The error code
-   * @param {Array|string} [options.adds] - Additional arguments to format the message
-   * @param {Error} [options.cause] - The original error that caused this one
+   * @param {QvacErrorOptions} [options] - Error options
    */
   constructor (options = {}) {
     const { code, adds, cause } = options
     let msgContent = ''
+    /** @type {number} */
     let errorCode = ERR_CODES.UNKNOWN_ERROR_CODE
+    /** @type {string} */
     let errorName = new.target.name
 
     const unknownError = codeToContent[ERR_CODES.UNKNOWN_ERROR_CODE]
@@ -129,7 +167,7 @@ class QvacErrorBase extends Error {
 
   /**
    * Serializes the error to a plain object
-   * @returns {Object} Serialized error
+   * @returns {SerializedError}
    */
   toJSON () {
     return {
@@ -144,10 +182,8 @@ class QvacErrorBase extends Error {
 
 /**
  * Registers new error codes with optional package information for collision avoidance
- * @param {Object} codes - Map of error codes to their definitions
- * @param {Object} [packageInfo] - Optional package information for collision management
- * @param {string} packageInfo.name - Package name (e.g., '@tetherto/qvac-lib-inference-addon-mlc-base')
- * @param {string} packageInfo.version - Package version (semantic version)
+ * @param {ErrorCodesMap} codes - Map of error codes to their definitions
+ * @param {PackageInfo} [packageInfo] - Optional package information for collision management
  * @throws {QvacErrorBase} If there are conflicts or invalid definitions
  */
 function addCodes (codes, packageInfo) {
@@ -234,7 +270,7 @@ function addCodes (codes, packageInfo) {
 
 /**
  * Gets all registered error codes and their definitions
- * @returns {Object} Map of all registered error codes
+ * @returns {ErrorCodesMap}
  */
 function getRegisteredCodes () {
   return JSON.parse(JSON.stringify(codeToContent))

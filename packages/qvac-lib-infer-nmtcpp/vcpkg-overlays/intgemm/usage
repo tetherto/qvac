@@ -1,0 +1,4 @@
+intgemm provides CMake targets:
+
+find_package(intgemm CONFIG REQUIRED)
+target_link_libraries(main PRIVATE intgemm::intgemm)

@@ -1,5 +1,22 @@
 'use strict'
 
+/**
+ * Mock Addon Interface
+ *
+ * Simulates the C++ addon behavior for testing without native code.
+ * Implements the state machine: LOADING → LISTENING → PROCESSING → IDLE/PAUSED/STOPPED
+ *
+ * State Transitions:
+ *   - LOADING: Initial state after construction
+ *   - LISTENING: Waiting for input (after activate())
+ *   - PROCESSING: Processing input data
+ *   - PAUSED: Processing paused, can resume
+ *   - STOPPED: Processing stopped, next job on activate()
+ *   - IDLE: Waiting for next job
+ *
+ * Used by: test/mocks/MockMLCMarian.js, test/unit/*.test.js
+ */
+
 const state = Object.freeze({
   LOADING: 'loading',
   LISTENING: 'listening',

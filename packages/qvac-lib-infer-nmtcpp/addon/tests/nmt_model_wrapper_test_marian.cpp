@@ -12,7 +12,6 @@
 
 #include "../src/model-interface/TranslationModel.hpp"
 #include "NmtSharedTests.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
 
 using qvac_lib_inference_addon_mlc_marian::TranslationModel;
 
@@ -55,9 +54,6 @@ TestModel make_invalid_model() { return TranslationModel(); }
 std::string make_valid_input() { return "Hello, my name is Bob."; }
 
 std::string make_empty_input() { return std::string(); }
-
-// Instantiate the generic API tests
-MODEL_API_INSTANTIATE_TESTS(TestModel)
 
 }; // namespace qvac_lib_inference_addon_nmt::test
 
@@ -471,4 +467,49 @@ TEST_P(NmtCppModelWrapperTest, DoubleReloadMaintainsStability) {
 
   EXPECT_NO_THROW(wrapper.reload());
   EXPECT_TRUE(wrapper.isLoaded());
+}
+
+// Skip-capable equivalents of ModelApi tests (InitializeLoadUnloadReloadReset)
+TEST_P(NmtCppModelWrapperTest, ModelApi_InitializeLoadUnloadReloadReset) {
+  TranslationModel wrapper(getValidModelPath());
+
+  // Initialize and load
+  EXPECT_NO_THROW(wrapper.initializeBackend());
+  EXPECT_NO_THROW(wrapper.load());
+  EXPECT_TRUE(wrapper.isLoaded());
+
+  // Unload
+  EXPECT_NO_THROW(wrapper.unload());
+  EXPECT_FALSE(wrapper.isLoaded());
+
+  // Reload
+  EXPECT_NO_THROW(wrapper.reload());
+  EXPECT_TRUE(wrapper.isLoaded());
+
+  // Reset
+  EXPECT_NO_THROW(wrapper.reset());
+}
+
+// Skip-capable equivalents of ModelApi tests (RuntimeStats_AfterProcess)
+TEST_P(NmtCppModelWrapperTest, ModelApi_RuntimeStats_AfterProcess) {
+  TranslationModel wrapper(getValidModelPath());
+  wrapper.initializeBackend();
+  wrapper.load();
+
+  // Process some input
+  auto result = wrapper.process(make_valid_input());
+  EXPECT_FALSE(result.empty());
+
+  // Check runtime stats exist
+  auto stats = wrapper.runtimeStats();
+  EXPECT_FALSE(stats.empty());
+}
+
+// Skip-capable equivalents of ModelApi tests (Process_EmptyInput_NoThrow)
+TEST_P(NmtCppModelWrapperTest, ModelApi_Process_EmptyInput_NoThrow) {
+  TranslationModel wrapper(getValidModelPath());
+  wrapper.initializeBackend();
+
+  // Empty input should not throw
+  EXPECT_NO_THROW(wrapper.process(make_empty_input()));
 }

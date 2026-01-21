@@ -1,5 +1,12 @@
 'use strict'
 
+/**
+ * Tests for Addon Inference
+ *
+ * These tests verify the inference process, model state transitions,
+ * error handling, and the AddonInterface operations.
+ */
+
 const test = require('brittle')
 const MLCMarian = require('../mocks/MockMLCMarian.js')
 const FakeDL = require('../mocks/loader.fake.js')
@@ -84,7 +91,7 @@ test('Model state transitions are handled correctly', async (t) => {
  * The test verifies that calling pause, activate, and cancel from the response object
  * causes the model to report the correct state.
  */
-test('Model state transitions are handled correctly', async (t) => {
+test('Response object state transitions are handled correctly', async (t) => {
   const fakeDL = new FakeDL({})
   const args = {
     loader: fakeDL,

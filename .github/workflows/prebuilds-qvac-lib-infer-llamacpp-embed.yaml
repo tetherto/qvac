@@ -434,6 +434,8 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ inputs.workdir }}
+          name-suffix: "-mono"
+
 
   publish-npm:
     needs: [ prebuild, merge ]

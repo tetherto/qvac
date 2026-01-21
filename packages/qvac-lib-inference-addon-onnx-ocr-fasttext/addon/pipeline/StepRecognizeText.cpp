@@ -27,7 +27,7 @@ constexpr int RECOGNIZER_MODEL_HEIGHT = 64;
 
 // not present in python
 // specific per recognizer model. Had to be fixed since ONNX does not support exporting dynamic image width
-constexpr int RECOGNIZER_MODEL_WIDTH = 2560;
+constexpr int RECOGNIZER_MODEL_WIDTH = 512;
 constexpr int ANGLE_90 = 90;
 constexpr int ANGLE_180 = 180;
 constexpr int ANGLE_270 = 270;
@@ -232,23 +232,32 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
 
   imgFloat = (imgFloat - HALF) / HALF;
   cv::Mat padImg(height, maxWidth, CV_MAKETYPE(CV_32F, channels), cv::Scalar(0));
-  int imgW = imgFloat.cols;
-  if (imgW > maxWidth) {
-    imgW = maxWidth;
-  }
 
-  cv::Mat roi = padImg(cv::Rect(0, 0, imgW, imgFloat.rows));
-  imgFloat.copyTo(roi);
+  int imgW = std::min(imgFloat.cols, maxWidth);
+  int imgH = std::min(imgFloat.rows, height);
 
-  // For any remaining columns, replicate the last column.
+  // Copy the image to top-left of padImg
+  cv::Mat roi = padImg(cv::Rect(0, 0, imgW, imgH));
+  imgFloat(cv::Rect(0, 0, imgW, imgH)).copyTo(roi);
+
+  // Replicate the last column for width padding
   if (imgW < maxWidth) {
-    cv::Mat lastCol = imgFloat.col(imgW - 1);
     for (int col = imgW; col < maxWidth; col++) {
-      for (int row = 0; row < padImg.rows; row++) {
-        padImg.at<float>(row, col) = lastCol.at<float>(row, 0);
+      for (int row = 0; row < imgH; row++) {
+        padImg.at<float>(row, col) = padImg.at<float>(row, imgW - 1);
       }
     }
   }
+
+  // Replicate the last row for height padding
+  if (imgH < height) {
+    for (int row = imgH; row < height; row++) {
+      for (int col = 0; col < maxWidth; col++) {
+        padImg.at<float>(row, col) = padImg.at<float>(imgH - 1, col);
+      }
+    }
+  }
+
   return padImg;
 }
 
@@ -275,15 +284,25 @@ cv::Mat alignAndCollate(const SubImage &subImage, double adjustContrast = 0.0) {
     }
     image = adjustContrastGrey(image, adjustContrast);
   }
-  double ratioLocal = static_cast<double>(width) / static_cast<double>(height);
-  int resizedW = 0;
-  if (std::ceil(RECOGNIZER_MODEL_HEIGHT * ratioLocal) > RECOGNIZER_MODEL_WIDTH) {
-    resizedW = RECOGNIZER_MODEL_WIDTH;
-  } else {
-    resizedW = static_cast<int>(std::ceil(RECOGNIZER_MODEL_HEIGHT * ratioLocal));
-  }
+
+  // Aspect-preserving resize (ExecutorTorch approach)
+  // Scale both dimensions by the same ratio to fit within RECOGNIZER_MODEL_WIDTH x RECOGNIZER_MODEL_HEIGHT
+  float heightRatio = static_cast<float>(RECOGNIZER_MODEL_HEIGHT) / static_cast<float>(height);
+  float widthRatio = static_cast<float>(RECOGNIZER_MODEL_WIDTH) / static_cast<float>(width);
+  float resizeRatio = std::min(heightRatio, widthRatio);
+
+  int resizedW = static_cast<int>(std::round(static_cast<float>(width) * resizeRatio));
+  int resizedH = static_cast<int>(std::round(static_cast<float>(height) * resizeRatio));
+
+  // Clamp to model dimensions
+  resizedW = std::min(resizedW, RECOGNIZER_MODEL_WIDTH);
+  resizedH = std::min(resizedH, RECOGNIZER_MODEL_HEIGHT);
+
+  // Use INTER_AREA for downscaling, INTER_CUBIC for upscaling
+  int interpolation = (resizeRatio < 1.0F) ? cv::INTER_AREA : cv::INTER_CUBIC;
+
   cv::Mat resizedImage;
-  cv::resize(image, resizedImage, cv::Size(resizedW, RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_CUBIC);
+  cv::resize(image, resizedImage, cv::Size(resizedW, resizedH), 0, 0, interpolation);
   return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, RECOGNIZER_MODEL_WIDTH);
 }
 
@@ -513,6 +532,19 @@ StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input in
 
   if (input.context.paragraph) {
     inferenceResult = getParagraph(inferenceResult, isLeftToRightScript_);
+  }
+
+  // Scale coordinates back to original image space
+  if (input.context.initialResizeRatio != 1.0F) {
+    float scaleBack = 1.0F / input.context.initialResizeRatio;
+    for (auto& result : inferenceResult) {
+      for (auto& point : result.boxCoordinates) {
+        point.x *= scaleBack;
+        point.y *= scaleBack;
+      }
+    }
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+         "[Recognition] Scaled coordinates back by factor " + std::to_string(scaleBack));
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,

@@ -44,7 +44,8 @@ module.exports = function generateQVACRegistrySchema (schema) {
       { name: 'deprecated', type: 'bool', required: false },
       { name: 'deprecatedAt', type: 'string', required: false },
       { name: 'replacedBy', type: 'string', required: false },
-      { name: 'deprecationReason', type: 'string', required: false }
+      { name: 'deprecationReason', type: 'string', required: false },
+      { name: 'ggufMetadata', type: 'string', required: false }
     ]
   })
 

@@ -1,4 +1,0 @@
-[submodule "third-party/bergamot-translator"]
-	path = third-party/bergamot-translator
-	url = https://github.com/tetherto/qvac-ext-bergamot-translator.git
-	branch = main

@@ -6,8 +6,12 @@ const test = require('brittle')
 const { Readable } = require('streamx')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream } = require('./helpers.js')
+const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+
+// Create a HyperDrive loader
+function createLoader () {
+  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+}
 
 // Create a pushable Readable to simulate a live input source.
 function createLiveReadable () {
@@ -36,7 +40,8 @@ async function feedStreamLive ({ readable, filePath, chunkBytes, bytesPerSecond 
   return { chunksProcessed: idx, totalBytes: total }
 }
 
-test('Live stream simulation using pushable Readable with model.run()', { timeout: 180000 }, async (t) => {
+// Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
+test('Live stream simulation using pushable Readable with model.run()', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
   const { modelsDir, modelPath } = getTestPaths()
   // Use the 10-minute s16le sample from examples (provided by repo)
@@ -53,7 +58,7 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
 
   const constructorArgs = {
     modelName: path.basename(modelPath),
-    loader: new FakeDL({}),
+    loader: createLoader(),
     diskPath: modelsDir
   }
 
@@ -76,7 +81,7 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
 
     const liveReadable = createLiveReadable()
 
-    // Start model run first with an “empty” stream that will be fed
+    // Start model run first with an "empty" stream that will be fed
     const response = await model.run(liveReadable)
     const segments = []
     let firstUpdateAt = null
@@ -135,7 +140,8 @@ test('Live stream simulation using pushable Readable with model.run()', { timeou
   }
 })
 
-test('Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)', { timeout: 180000 }, async (t) => {
+// Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
+test('Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)', { timeout: 180000, skip: isMobile }, async (t) => {
   // Use standardized test paths from helpers
   const { modelsDir, modelPath } = getTestPaths()
   const audioPath = path.resolve(__dirname, '../../examples/samples/10min-16k-s16le.raw')
@@ -150,7 +156,7 @@ test('Live segmented loop: repeated model.run per 3s chunk (no model teardown un
 
   const constructorArgs = {
     modelName: path.basename(modelPath),
-    loader: new FakeDL({}),
+    loader: createLoader(),
     diskPath: modelsDir
   }
 

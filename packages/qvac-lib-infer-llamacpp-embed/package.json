@@ -1,17 +1,17 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "standard",
     "lint:fix": "standard --fix",
-    "test:unit": "bare test/unit/addon.test.js",
     "test:integration": "bare test/integration/addon.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
@@ -24,14 +24,13 @@
     "test:all": "npm run test:integration && npm run test:cpp",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "model:init": "qvac-dev model init",
-    "model:new": "qvac-dev model new",
-    "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc -p tsconfig.dts.json"
+    "test:dts": "tsc -p tsconfig.dts.json",
+    "benchmarks": "./benchmarks/run-benchmarks.sh",
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
   },
   "standard": {
     "ignore": [
-      "addon/lib/"
+      "benchmarks/client/venv/"
     ]
   },
   "files": [
@@ -39,7 +38,7 @@
     "index.js",
     "addon.js",
     "addonLogging.js",
-    "utils",
+    "addonLogging.d.ts",
     "prebuilds",
     "index.d.ts"
   ],
@@ -52,22 +51,14 @@
   "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/issues",
   "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-embed#readme",
   "devDependencies": {
-    "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.2",
     "@types/node": "^24.2.1",
-    "bare-buffer": "^3.4.2",
     "bare-fs": "^4.5.1",
-    "bare-url": "^2.1.6",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",
-    "os": "npm:bare-os@^3.6.2",
-    "process": "npm:bare-process@^4.0.1",
-    "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "tty": "npm:bare-tty@^5.0.3",
-    "typescript": "^5.9.2",
-    "util": "npm:bare-utils@^1.5.1"
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.2.0",
@@ -79,8 +70,14 @@
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
-    "./addonLogging": "./addonLogging.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
     "./addonLogging.js": "./addonLogging.js"
   },
   "main": "index.js",

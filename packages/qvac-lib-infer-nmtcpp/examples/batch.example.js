@@ -7,8 +7,11 @@
  * multiple texts in a single batch operation, which is more efficient than
  * translating texts one at a time.
  *
+ * Note: Source language is fixed to English (en). Target language depends on model (e.g., it, de, fr).
+ *
  * Usage:
  *   bare examples/batch.example.js
+ *   BERGAMOT_MODEL_PATH=/path/to/bergamot/enit bare examples/batch.example.js
  *
  * Environment Variables:
  *   BERGAMOT_MODEL_PATH - Path to Bergamot model directory (default: ./model/bergamot/enit)
@@ -19,7 +22,8 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 
-// Sample texts to translate (English to Italian)
+// Sample texts to translate (English to target language based on model)
+// Note: Source language is fixed to English (en). Target depends on model (e.g., it, de, fr).
 const textsToTranslate = [
   'Hello world!',
   'How are you today?',
@@ -48,11 +52,42 @@ async function testBatchTranslation () {
   if (!fs.existsSync(bergamotPath)) {
     console.log('Bergamot model directory not found!')
     console.log('Set BERGAMOT_MODEL_PATH env var or place model in ./model/bergamot/enit')
-    console.log('\nExpected files:')
-    console.log('  - model.enit.intgemm.alphas.bin')
-    console.log('  - vocab.enit.spm')
+    console.log('\nNote: Source language is fixed to English (en). Target language depends on model (e.g., it, es, de, fr).')
+    console.log('\nExpected files (auto-detected):')
+    console.log('  - model.*.intgemm.*.bin (model weights)')
+    console.log('  - vocab.*.spm or srcvocab.*.spm (source vocabulary)')
+    console.log('  - trgvocab.*.spm (optional, target vocabulary if different from source)')
+    console.log('\nExample:')
+    console.log('  BERGAMOT_MODEL_PATH=/path/to/bergamot/enes bare examples/batch.example.js')
     return
   }
+
+  // Auto-detect model and vocab files in the directory
+  const files = fs.readdirSync(bergamotPath)
+  const modelFile = files.find(f => f.includes('.intgemm.') && f.endsWith('.bin'))
+
+  // Try to find vocab files: srcvocab/trgvocab (separate) or vocab (shared)
+  let srcVocabFile = files.find(f => f.startsWith('srcvocab.') && f.endsWith('.spm'))
+  let dstVocabFile = files.find(f => (f.startsWith('trgvocab.') || f.startsWith('dstvocab.')) && f.endsWith('.spm'))
+
+  // Fallback to shared vocab file if separate ones not found
+  if (!srcVocabFile) {
+    srcVocabFile = files.find(f => f.startsWith('vocab.') && f.endsWith('.spm'))
+  }
+  if (!dstVocabFile) {
+    dstVocabFile = srcVocabFile // Use same vocab for both if no separate dst vocab
+  }
+
+  if (!modelFile || !srcVocabFile) {
+    console.log('Could not find required model files!')
+    console.log('Found files:', files.join(', '))
+    console.log('\nExpected: *.intgemm.*.bin and (srcvocab.*.spm or vocab.*.spm) files')
+    return
+  }
+
+  console.log('Detected model file:', modelFile)
+  console.log('Detected src vocab file:', srcVocabFile)
+  console.log('Detected dst vocab file:', dstVocabFile)
 
   // Create a local file loader
   const localLoader = {
@@ -74,14 +109,14 @@ async function testBatchTranslation () {
     loader: localLoader,
     params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: bergamotPath,
-    modelName: 'model.enit.intgemm.alphas.bin',
+    modelName: modelFile,
     logger
   }
 
   // Config for Bergamot model
   const config = {
-    srcVocabName: 'vocab.enit.spm',
-    dstVocabName: 'vocab.enit.spm',
+    srcVocabName: srcVocabFile,
+    dstVocabName: dstVocabFile,
     modelType: TranslationNmtcpp.ModelTypes.Bergamot
   }
 

@@ -127,17 +127,27 @@ const config = {
 }
 ```
 
-| Parameter      | Range / Type                                               | Default                                                    |
-|----------------|------------------------------------------------------------|------------------------------------------------------------|
-| temp           | 0.00 – 2.00                                                | 0.8                                                        |
-| top_p          | 0 – 1                                                      | 0.9                                                        |
-| top_k          | 0 – 128                                                    | 40                                                         |
-| predict        | 1 – Infinity<br>(-1 = Infinity) | -1                                                         |
-| ctx_size       | 0 – model-dependent                                        | 4096 (0 = loaded from model)                               |
-| seed           | integer                                                    | -1 = random                                                |
-| gpu_layers     | integer                                                    | 0                                                          |
-| device         | string                                                     | "gpu" or "cpu"                                             |
-| verbosity      | 0 – 3<br>(0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)             | 0                                                          |
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| system_prompt     | string                                      | —                            | System prompt to prepend to conversations             |
+| lora              | string                                      | —                            | Path to LoRA adapter file                             |
+| temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
+| top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |
+| top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
+| predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
+| seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
+| no_mmap           | "" (passing empty string sets the flag)     | —                            | Disable memory mapping for model loading              |
+| reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
+| repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
+| presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
+| frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
+| tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 
 
 ### 5. Create Model Instance

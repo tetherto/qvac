@@ -1,5 +1,14 @@
 'use strict'
 
+/**
+ * Fake Download Loader (Mock)
+ *
+ * Simulates a file download loader for testing without network/disk access.
+ * Returns predefined fake files: conf.json, 1.bin, 2.bin
+ *
+ * Used by: test/unit/*.test.js
+ */
+
 const Base = require('@qvac/dl-base')
 const path = require('bare-path')
 const { Readable } = require('bare-stream')

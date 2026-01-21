@@ -1,6 +1,6 @@
 {
   "name": "@qvac/dl-hyperdrive",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "",
   "main": "index.js",
   "types": "index.d.ts",
@@ -19,7 +19,7 @@
   "author": "tetherto",
   "license": "Apache-2.0",
   "dependencies": {
-    "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-base": "^0.2.0",
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.1.0",
     "corestore": "^7.1.0",
@@ -30,7 +30,7 @@
     "z32": "1.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.5.4",
+    "@types/node": "^22.0.0",
     "b4a": "^1.6.7",
     "bare-fs": "^4.0.2",
     "bare-path": "^3.0.0",
@@ -39,7 +39,8 @@
     "debounceify": "1.1.0",
     "istanbul": "^0.4.5",
     "localdrive": "^2.1.0",
-    "standard": "^17.1.0"
+    "standard": "^17.1.0",
+    "typescript": "^5.0.0"
   },
   "bugs": "https://github.com/tetherto/qvac-lib-dl-hyperdrive/issues",
   "files": [

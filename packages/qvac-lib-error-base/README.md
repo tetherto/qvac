@@ -110,6 +110,10 @@ Reserved internal error codes:
 - `ERROR_CODE_ALREADY_EXISTS`: 2
 - `MISSING_ERROR_DEFINITION`: 3
 
+## Development
+
+After cloning, run `npm install`. If npm lifecycle scripts are disabled, also run `npm run prepare` to initialize git hooks.
+
 ## Best Practices
 
 1. Create a dedicated errors file/module in each library
