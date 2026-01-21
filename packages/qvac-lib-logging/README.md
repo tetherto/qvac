@@ -120,4 +120,3 @@ Run unit tests with:
 ```bash
 npm test
 ```
-
