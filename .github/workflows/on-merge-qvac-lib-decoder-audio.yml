@@ -19,7 +19,7 @@ on:
 
 jobs:
   run-integration-tests:
-    uses: ./.github/workflows/integration-tests-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
       workdir: "packages/qvac-lib-decoder-audio"
