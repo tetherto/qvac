@@ -10,6 +10,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-registry-server
+  NAME_SUFFIX: "-mono"
 
 jobs:
   detect-changes:
@@ -80,7 +81,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
           tag: latest
-          name-suffix: "-mono"
+          name-suffix: ${{ env.NAME_SUFFIX }}
 
   lint-and-test:
     needs: detect-changes
@@ -162,4 +163,4 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client
           tag: latest
-          name-suffix: "-mono"
+          name-suffix: ${{ env.NAME_SUFFIX }}
