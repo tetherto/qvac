@@ -385,5 +385,3 @@ Proprietary - Tether/QVAC
 ## Contact
 
 For issues or questions, contact the QVAC SDK development team.
-
-

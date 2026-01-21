@@ -250,4 +250,3 @@ This repository includes a script that allows you to serve files from a specifie
 
 - All test files must be named with the `.test.js` suffix and placed in the appropriate `test/unit` or `test/integration` directories.
 - Coverage is collected using `brittle-bare --coverage` and HTML reports are generated using Istanbul.
-
