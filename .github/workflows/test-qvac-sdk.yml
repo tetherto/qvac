@@ -8,12 +8,10 @@ on:
   pull_request:
     paths:
       - "packages/qvac-sdk/**"
-      - ".github/workflows/test-qvac-sdk.yml"
   push:
     branches: [main, dev]
     paths:
       - "packages/qvac-sdk/**"
-      - ".github/workflows/test-qvac-sdk.yml"
 
 permissions:
   contents: read
