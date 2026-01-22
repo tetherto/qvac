@@ -92,7 +92,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -102,7 +102,7 @@ jobs:
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yaml
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-embed.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
