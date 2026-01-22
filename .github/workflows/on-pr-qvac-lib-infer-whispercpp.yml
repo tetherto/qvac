@@ -35,13 +35,13 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
-          workdir: ${{ env.PKG_DIR }}
+          workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests:
     uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
     secrets: inherit
     with:
-      workdir: ${{ env.PKG_DIR }}
+      workdir: packages/qvac-lib-infer-whispercpp
       artifact_prefix: whispercpp
       enable_coverage: true
       models: |
@@ -55,8 +55,8 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: ${{ env.PKG_DIR }}
-
+      workdir: packages/qvac-lib-infer-whispercpp
+      
   ts-checks:
     runs-on: ubuntu-latest
     steps:
@@ -69,7 +69,7 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: packages/qvac-lib-infer-whispercpp
         run: |
           cat > .npmrc <<NPMRC
           always-auth=true
@@ -79,11 +79,11 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: packages/qvac-lib-infer-whispercpp
         run: npm install
 
       - name: Type declaration check
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: packages/qvac-lib-infer-whispercpp
         run: npm run test:dts
 
   prebuild:
