@@ -35,6 +35,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: ${{ env.PKG_DIR }}
 
   cpp-tests:
     uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
