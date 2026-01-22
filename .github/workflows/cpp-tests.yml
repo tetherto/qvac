@@ -1,0 +1,497 @@
+name: Reusable C++ Tests
+
+on:
+  workflow_call:
+    inputs:
+      workdir:
+        description: "Package directory (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        required: true
+        type: string
+      artifact_prefix:
+        description: "Prefix for artifact names (e.g., 'llm', 'embed', 'nmtcpp')"
+        required: true
+        type: string
+      enable_coverage:
+        description: "Enable coverage reporting on Linux"
+        required: false
+        type: boolean
+        default: true
+      models:
+        description: "JSON array of S3 model configs [{uri: 's3://...', dest: 'models/file.gguf'}]"
+        required: false
+        type: string
+        default: "[]"
+
+      # Optional overrides (safe defaults; callers can ignore)
+      qvac_registry:
+        description: "Registry for @qvac scope (default: npmjs). If @qvac is in GitHub Packages, set to https://npm.pkg.github.com/"
+        required: false
+        type: string
+        default: "https://registry.npmjs.org/"
+      tetherto_registry:
+        description: "Registry for @tetherto scope"
+        required: false
+        type: string
+        default: "https://npm.pkg.github.com/"
+      node_version:
+        description: "Node version"
+        required: false
+        type: string
+        default: "lts/*"
+
+      allow_fork_pr:
+        description: "Allow running on fork PRs (dangerous with secrets)."
+        required: false
+        type: boolean
+        default: false
+
+    secrets:
+      PAT_TOKEN:
+        required: false
+      NPM_TOKEN:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-cpp:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: windows
+
+    runs-on: ${{ matrix.os }}
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+
+    # Only needed for PR comments; rest can stay read-only.
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      GIT_TERMINAL_PROMPT: "0"
+      # Keep cache under the package directory so each package is isolated in monorepo.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir }}/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Guardrail (block fork PRs on pull_request_target unless explicitly allowed)
+        if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.fork && !inputs.allow_fork_pr }}
+        shell: bash
+        run: |
+          echo "Refusing to run on fork PR under pull_request_target (secrets + untrusted code)."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Prefer PAT if provided (needed for private sub-deps); fallback to GITHUB_TOKEN.
+          token: ${{ secrets.PAT_TOKEN || github.token }}
+          # Avoid leaving credentials around implicitly.
+          persist-credentials: false
+
+      - name: Validate package directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${{ inputs.workdir }}" || { echo "ERROR: workdir '${{ inputs.workdir }}' not found"; exit 1; }
+          test -f "${{ inputs.workdir }}/package.json" || { echo "ERROR: package.json not found in '${{ inputs.workdir }}'"; exit 1; }
+
+      - name: Configure git auth for private repos (no token echo)
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          # Use x-access-token so git understands it for GitHub HTTPS.
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "git@github.com:"
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install llvm-19 on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+          llvm-profdata-19 --version
+          llvm-cov-19 --version
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install Vulkan SDK on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc >/dev/null
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt-get update
+          sudo apt-get install -y vulkan-sdk
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure Windows runner
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm -y
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Install Vulkan SDK on Windows
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru | Out-Null
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Append
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in Windows
+        shell: pwsh
+        run: |
+          ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') | Out-File -FilePath $Env:GITHUB_ENV -Append
+
+      - if: ${{ matrix.os == 'macos-14' }}
+        name: Install vcpkg on macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+          echo "$VCPKG_ROOT" >> "$GITHUB_PATH"
+          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Configure vcpkg in Linux
+        shell: bash
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure CMake generator on Windows
+        shell: pwsh
+        run: |
+          "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $Env:GITHUB_ENV -Append
+          "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $Env:GITHUB_ENV -Append
+
+      - name: Create vcpkg cache location
+        shell: bash
+        run: mkdir -p "${{ inputs.workdir }}/vcpkg/cache"
+
+      - name: Get vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.workdir }}/vcpkg/cache
+          key: cpp-tests-v5-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          restore-keys: |
+            cpp-tests-v5-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: |
+            ${{ inputs.workdir }}/package-lock.json
+            ${{ inputs.workdir }}/npm-shrinkwrap.json
+
+      - name: Configure npm auth (write .npmrc INSIDE workdir + force npm to use it)
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_PKG_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=${{ inputs.qvac_registry }}
+          @tetherto:registry=${{ inputs.tetherto_registry }}
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GH_PKG_TOKEN}
+          NPMRC
+
+          # Make npm *deterministically* use this config file
+          echo "NPM_CONFIG_USERCONFIG=${PWD}/.npmrc" >> "$GITHUB_ENV"
+
+          # Sanity (no token leakage)
+          echo "npm userconfig: $(npm config get userconfig)"
+          echo "@qvac registry: $(npm config get @qvac:registry || true)"
+          echo "@tetherto registry: $(npm config get @tetherto:registry || true)"
+
+      - name: Install NPM dependencies
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          npm install -g bare bare-make
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.models != '[]' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Ensure AWS CLI exists (only when models are requested)
+        if: ${{ inputs.models != '[]' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v aws >/dev/null 2>&1; then
+            aws --version
+            exit 0
+          fi
+
+          echo "AWS CLI not found; installing..."
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "Installing AWS CLI via chocolatey..."
+            choco install awscli -y
+          else
+            python3 -m pip install --upgrade --user awscli
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          fi
+
+          aws --version
+
+      - name: Download test models (no jq; Python parses JSON)
+        if: ${{ inputs.models != '[]' }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          raw = r'''${{ inputs.models }}'''
+          data = json.loads(raw)
+          if not isinstance(data, list):
+            raise SystemExit("models input must be a JSON array")
+
+          for m in data:
+            uri = m["uri"]
+            dest = m["dest"]
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            print(f"Downloading {uri} -> {dest}")
+            subprocess.check_call(["aws", "s3", "cp", uri, dest])
+
+          print("Downloaded models:")
+          for root, _, files in os.walk("models"):
+            for f in files:
+              p = os.path.join(root, f)
+              print(" -", p)
+          PY
+
+      - name: Build C++ tests (coverage build on Linux)
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Linux" ] && [ "${{ inputs.enable_coverage }}" = "true" ]; then
+            npm run coverage:cpp:build
+          else
+            npm run test:cpp:build
+          fi
+
+      - name: Discover test executable (supports multiple package layouts)
+        id: discover
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+
+          ext=""
+          if [ "${{ runner.os }}" = "Windows" ]; then ext=".exe"; fi
+
+          candidates=(
+            "build/test/unit/addon-test${ext}"
+            "build/addon/tests/test-whisper-core${ext}"
+          )
+
+          found=""
+          for c in "${candidates[@]}"; do
+            if [ -f "$c" ]; then found="$c"; break; fi
+          done
+
+          if [ -z "$found" ]; then
+            # Last-resort: search under build/ for gtest-y binaries
+            found="$(find build -maxdepth 5 -type f \( -name "addon-test${ext}" -o -name "test-whisper-core${ext}" \) 2>/dev/null | head -n1 || true)"
+          fi
+
+          if [ -z "$found" ]; then
+            echo "ERROR: Could not find test executable. Looked for:"
+            printf ' - %s\n' "${candidates[@]}"
+            echo "Files under build/:"
+            find build -maxdepth 4 -type f | head -n 200 || true
+            exit 1
+          fi
+
+          echo "TEST_BIN=$found" >> "$GITHUB_OUTPUT"
+          echo "TEST_DIR=$(dirname "$found")" >> "$GITHUB_OUTPUT"
+          echo "Found test binary: $found"
+
+      - name: Run C++ tests (always emits XML; writes profraw on Linux coverage)
+        id: cpp-tests
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        env:
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ inputs.workdir }}/.lsan-suppressions.txt
+        run: |
+          set -euo pipefail
+
+          RESULTS_DIR=".test-results/cpp"
+          mkdir -p "$RESULTS_DIR"
+
+          TEST_BIN="${{ steps.discover.outputs.TEST_BIN }}"
+
+          # Force predictable location for profraw on Linux coverage builds
+          if [ "${{ runner.os }}" = "Linux" ] && [ "${{ inputs.enable_coverage }}" = "true" ]; then
+            export LLVM_PROFILE_FILE="${PWD}/${RESULTS_DIR}/default.profraw"
+          fi
+
+          echo "Running: $TEST_BIN"
+          "$TEST_BIN" --gtest_output=xml:"${RESULTS_DIR}/cpp-test-results.xml"
+
+          # Verify tests actually ran
+          if [ ! -f "${RESULTS_DIR}/cpp-test-results.xml" ]; then
+            echo "ERROR: Test results XML not generated"
+            exit 1
+          fi
+          test_count="$(grep -c '<testcase' "${RESULTS_DIR}/cpp-test-results.xml" || echo "0")"
+          if [ "$test_count" -eq 0 ]; then
+            echo "ERROR: No tests were executed! Test count: $test_count"
+            exit 1
+          fi
+          echo "✓ Successfully executed $test_count test(s)"
+
+      - name: Generate Coverage (Linux only; workflow-owned, not package-script-owned)
+        if: ${{ runner.os == 'Linux' && inputs.enable_coverage && always() }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+
+          RESULTS_DIR=".test-results/cpp"
+          mkdir -p "$RESULTS_DIR/coverage-html"
+
+          TEST_BIN="${{ steps.discover.outputs.TEST_BIN }}"
+          PROFRAW="${RESULTS_DIR}/default.profraw"
+          if [ ! -f "$PROFRAW" ]; then
+            echo "ERROR: profraw not found at $PROFRAW"
+            echo "Tip: ensure coverage build produces clang profile output."
+            ls -lha "$RESULTS_DIR" || true
+            exit 1
+          fi
+
+          IGNORE='(tests|build|node_modules|gtest|gmock|\.vcpkg|/usr)/'
+
+          llvm-profdata-19 merge -sparse "$PROFRAW" -o "$RESULTS_DIR/coverage.profdata"
+          llvm-cov-19 show "$TEST_BIN" -instr-profile="$RESULTS_DIR/coverage.profdata" -format=html -output-dir="$RESULTS_DIR/coverage-html" -ignore-filename-regex="$IGNORE"
+          llvm-cov-19 export "$TEST_BIN" -instr-profile="$RESULTS_DIR/coverage.profdata" -format=lcov -ignore-filename-regex="$IGNORE" > "$RESULTS_DIR/lcov.info"
+
+          # Human-readable report + summary
+          llvm-cov-19 report "$TEST_BIN" -instr-profile="$RESULTS_DIR/coverage.profdata" -ignore-filename-regex="$IGNORE" | tee "$RESULTS_DIR/coverage-report.txt"
+
+          # Extract TOTAL line coverage % (last percentage on TOTAL row)
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path(".test-results/cpp/coverage-report.txt")
+          txt = p.read_text(errors="ignore").splitlines()
+          total = next((l for l in reversed(txt) if l.startswith("TOTAL")), "")
+          percents = re.findall(r"(\d+(?:\.\d+)?)%", total)
+          line_cov = percents[-1] if percents else "0.0"
+          pathlib.Path(".test-results/cpp/coverage-summary.txt").write_text(total + "\n", encoding="utf-8")
+          print("LINE_COVERAGE_PERCENTAGE=" + line_cov)
+          PY | tee -a "$GITHUB_ENV"
+
+      - name: Upload test results (all OS)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-test-results-${{ inputs.artifact_prefix }}-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+          path: |
+            ${{ inputs.workdir }}/.test-results/cpp/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Upload coverage artifacts (Linux only)
+        if: ${{ runner.os == 'Linux' && inputs.enable_coverage && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-coverage-report-${{ inputs.artifact_prefix }}-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+          path: |
+            ${{ inputs.workdir }}/.test-results/cpp/coverage-html/
+            ${{ inputs.workdir }}/.test-results/cpp/lcov.info
+            ${{ inputs.workdir }}/.test-results/cpp/coverage-report.txt
+            ${{ inputs.workdir }}/.test-results/cpp/coverage-summary.txt
+            ${{ inputs.workdir }}/.test-results/cpp/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Comment Coverage on PR (Linux only)
+        if: ${{ runner.os == 'Linux' && inputs.enable_coverage && github.event.pull_request.number && always() }}
+        uses: actions/github-script@v7
+        env:
+          LINE_COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '${{ inputs.workdir }}/.test-results/cpp/coverage-summary.txt';
+            if (!fs.existsSync(path)) return;
+
+            const summary = fs.readFileSync(path, 'utf8');
+            const cov = process.env.LINE_COVERAGE_PERCENTAGE || '0.0';
+
+            const body = [
+              `## 🧪 C++ Coverage Report (${ { } } )`.replace(`${ { } }`, '${{ inputs.artifact_prefix }}'),
+              ``,
+              `**Line Coverage:** ${cov}%`,
+              ``,
+              `<details>`,
+              `<summary>📊 llvm-cov TOTAL row</summary>`,
+              ``,
+              '```',
+              summary.trim(),
+              '```',
+              `</details>`
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Step Summary (Linux coverage)
+        if: ${{ runner.os == 'Linux' && inputs.enable_coverage && always() }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          echo "## 🎯 C++ Coverage Summary (${{ inputs.artifact_prefix }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Line Coverage:** ${LINE_COVERAGE_PERCENTAGE:-0.0}%" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .test-results/cpp/coverage-summary.txt ]; then
+            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+            cat .test-results/cpp/coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
+            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

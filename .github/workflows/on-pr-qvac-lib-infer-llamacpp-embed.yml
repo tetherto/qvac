@@ -37,7 +37,7 @@ jobs:
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
 
   cpp-tests:
-    uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
+    uses: ./.github/workflows/cpp-tests.yaml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-embed
@@ -68,6 +68,7 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |
           cat > .npmrc <<NPMRC
           always-auth=true
@@ -77,11 +78,11 @@ jobs:
           NPMRC
 
       - name: Install dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm install
 
       - name: Type declaration check
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm run test:dts
 
   prebuild:
