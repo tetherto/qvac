@@ -130,7 +130,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
