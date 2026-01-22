@@ -35,12 +35,13 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: ${{ env.PKG_DIR }}
 
   cpp-tests:
     uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-infer-whispercpp
+      workdir: ${{ env.PKG_DIR }}
       artifact_prefix: whispercpp
       enable_coverage: true
       models: |
@@ -54,7 +55,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-whispercpp
+      workdir: ${{ env.PKG_DIR }}
 
   ts-checks:
     runs-on: ubuntu-latest
@@ -68,6 +69,7 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
+        working-directory: ${{ env.PKG_DIR }}
         run: |
           cat > .npmrc <<NPMRC
           always-auth=true
@@ -97,6 +99,7 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
       publish_target: 'gpr'
+
 
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
