@@ -796,7 +796,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -903,7 +903,7 @@ jobs:
           # Upload test package to AWS Device Farm
           echo "📤 Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}" \
             --name "$ZIP_NAME" \
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
@@ -963,9 +963,9 @@ jobs:
         id: schedule_run
         run: |
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN_NMTCPP }}"
           else
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_NMTCPP }}"
           fi
 
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
