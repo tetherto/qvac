@@ -624,4 +624,3 @@ This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENS
 ## Support
 
 For questions, bug reports, or feature requests, please [open an issue](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/issues) on GitHub.
-
