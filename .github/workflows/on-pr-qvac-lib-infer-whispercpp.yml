@@ -38,7 +38,7 @@ jobs:
           workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests:
-    uses: ./.github/workflows/cpp-tests.yaml
+    uses: ./.github/workflows/cpp-tests.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-whispercpp

@@ -37,7 +37,7 @@ jobs:
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
 
   cpp-tests:
-    uses: ./.github/workflows/cpp-tests.yaml
+    uses: ./.github/workflows/cpp-tests.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-embed
