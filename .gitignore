@@ -2,5 +2,6 @@
 sync-monorepo.sh
 
 /node_modules
-/testt
+/testgamot
+
 
