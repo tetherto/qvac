@@ -70,7 +70,6 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: ${{ env.PKG_DIR }}
         run: |
           cat > .npmrc <<NPMRC
           always-auth=true

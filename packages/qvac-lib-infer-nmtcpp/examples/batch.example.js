@@ -15,12 +15,30 @@
  *
  * Environment Variables:
  *   BERGAMOT_MODEL_PATH - Path to Bergamot model directory (default: ./model/bergamot/enit)
+ *
+ * Enable verbose C++ logging:
+ *   VERBOSE=1 bare examples/batch.example.js
  */
 
 const TranslationNmtcpp = require('..')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
+
+// ============================================================
+// LOGGING CONFIGURATION
+// Set VERBOSE=1 environment variable to enable C++ debug logs
+// ============================================================
+const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true'
+
+const logger = VERBOSE
+  ? {
+      info: (msg) => console.log('[C++ INFO]', msg),
+      warn: (msg) => console.warn('[C++ WARN]', msg),
+      error: (msg) => console.error('[C++ ERROR]', msg),
+      debug: (msg) => console.log('[C++ DEBUG]', msg)
+    }
+  : null // null = suppress all C++ logs
 
 // Sample texts to translate (English to target language based on model)
 // Note: Source language is fixed to English (en). Target depends on model (e.g., it, de, fr).
@@ -34,14 +52,6 @@ const textsToTranslate = [
 
 async function testBatchTranslation () {
   console.log('\n=== Batch Translation Example ===\n')
-
-  // Create logger
-  const logger = {
-    info: (msg) => console.log('[INFO]', msg),
-    warn: (msg) => console.warn('[WARN]', msg),
-    error: (msg) => console.error('[ERROR]', msg),
-    debug: (msg) => {} // Suppress debug logs
-  }
 
   // Use local model path for Bergamot
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'

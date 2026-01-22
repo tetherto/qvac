@@ -14,6 +14,7 @@ export interface SDKFunctions {
 	embed: any;
 	translate: any;
 	textToSpeech: any;  // TTS function (QVAC-9403)
+	ocr?: any;  // OCR function
 	loadModel: any;
 	unloadModel: any;
 	ragIngest: any;
@@ -24,6 +25,7 @@ export interface SDKFunctions {
 	LLAMA_3_2_1B_INST_Q4_0: any;
 	GTE_LARGE_FP16: any;
 	GTE_LARGE_335M_FP16_SHARD?: any; // Sharded model constant (PR #237)
+	OCR_CRAFT_LATIN_RECOGNIZER_1?: any; // OCR recognizer model constant
 	SDK_CLIENT_ERROR_CODES?: Record<string, number>; // Structured error codes (PR #243)
 	SDK_SERVER_ERROR_CODES?: Record<string, number>; // Structured error codes (PR #243)
 }
@@ -41,6 +43,7 @@ export abstract class TestExecutorBase {
 	protected toolsModelId: string | null = null;
 	protected ttsModelId: string | null = null;
 	protected nmtModelId: string | null = null;
+	protected ocrModelId: string | null = null;
 	protected bergamotModelId: string | null = null; // QVAC-10524
 	protected sdk: SDKFunctions;
 	protected platform: PlatformFunctions;
@@ -55,6 +58,7 @@ export abstract class TestExecutorBase {
 	// Abstract methods for platform-specific implementation
 	protected abstract readDocumentFile(filename: string, category: 'documents' | 'code'): Promise<string>;
 	protected abstract getAudioFilePath(filename: string): Promise<string>;
+	protected abstract getImageFilePath(filename: string): Promise<string>;
 
 	// Set model IDs after they're loaded
 	setVisionModelId(modelId: string) {
@@ -75,6 +79,10 @@ export abstract class TestExecutorBase {
 
 	setTtsModelId(modelId: string) {
 		this.ttsModelId = modelId;
+	}
+
+	setOcrModelId(modelId: string) {
+		this.ocrModelId = modelId;
 	}
 
 	// Helper function to count words in text
@@ -383,6 +391,29 @@ export abstract class TestExecutorBase {
 		// Enhanced RAG tests with real documents
 		this.testHandlers.set("rag-large-document-32kb", this.ragEmbeddings.bind(this));
 		this.testHandlers.set("rag-medium-document-10kb", this.ragEmbeddings.bind(this));
+
+		// OCR tests
+		this.testHandlers.set("model-load-ocr", this.modelLoadOcr.bind(this));
+		this.testHandlers.set("ocr-basic-png", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-basic-jpg", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-streaming", this.ocrStreaming.bind(this));
+		this.testHandlers.set("ocr-paragraph-mode", this.ocrParagraphMode.bind(this));
+		this.testHandlers.set("ocr-sign-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-logo-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-chart-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-no-text-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-large-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-small-image", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-low-quality", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-mixed-language", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-single-language", this.ocrBasic.bind(this));
+		// Edge case OCR tests
+		this.testHandlers.set("ocr-misaligned-text", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-blurry-text", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-vertically-inverted", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-horizontally-inverted", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-multi-sized-text", this.ocrBasic.bind(this));
+		this.testHandlers.set("ocr-multiple-fonts", this.ocrBasic.bind(this));
 
 		// Translation tests
 		this.testHandlers.set("translation-en-to-es", this.translation.bind(this));
@@ -4902,6 +4933,184 @@ export abstract class TestExecutorBase {
 			};
 		} catch (error: any) {
 			return { output: `Error: ${error.message}`, passed: false };
+		}
+	}
+
+	// ========== OCR TESTS ==========
+
+	protected async modelLoadOcr(modelId: string | null, params: any, expectation: any): Promise<TestResult> {
+		try {
+			if (!this.sdk.ocr) {
+				return { output: "OCR function not available in SDK", passed: false };
+			}
+
+			if (!this.sdk.OCR_CRAFT_LATIN_RECOGNIZER_1) {
+				return { output: "OCR model constant (OCR_CRAFT_LATIN_RECOGNIZER) not available in SDK", passed: false };
+			}
+
+			console.log("   📝 Loading OCR model (CRAFT Latin Recognizer - detector auto-derived)...");
+			
+			// Only need to pass the recognizer - detector is auto-derived from same hyperdrive key
+			const loadedModelId = await this.sdk.loadModel({
+				modelSrc: this.sdk.OCR_CRAFT_LATIN_RECOGNIZER_1,
+				modelType: "ocr",
+				modelConfig: {
+					langList: ["en"],
+				},
+			});
+
+			this.ocrModelId = loadedModelId;
+			console.log(`   ✅ OCR model loaded: ${loadedModelId}`);
+
+			return {
+				output: `OCR model loaded successfully: ${loadedModelId}`,
+				passed: true,
+				modelId: loadedModelId,
+			};
+		} catch (error: any) {
+			return {
+				output: `OCR model load failed: ${error.message}`,
+				passed: false,
+			};
+		}
+	}
+
+	protected async ocrBasic(modelId: string | null, params: any, expectation: any): Promise<TestResult> {
+		const ocrModel = this.ocrModelId || modelId;
+		if (!ocrModel) {
+			return { output: "No OCR model loaded", passed: false };
+		}
+
+		if (!this.sdk.ocr) {
+			return { output: "OCR function not available in SDK", passed: false };
+		}
+
+		try {
+			const imageFileName = params.imageFileName;
+			const imagePath = await this.getImageFilePath(imageFileName);
+
+			console.log(`   📷 Running OCR on image: ${imageFileName}`);
+
+			const { blocks } = this.sdk.ocr({
+				modelId: ocrModel,
+				image: imagePath,
+				options: params.paragraph ? { paragraph: true } : undefined,
+			});
+
+			const result = await blocks;
+
+			// Extract text from all blocks for validation
+			const allText = result.map((block: any) => block.text).join(' ');
+
+			// Check validation type
+			if (expectation.validation === 'contains-any' && expectation.contains) {
+				const containsAny = expectation.contains.some((keyword: string) => 
+					allText.toLowerCase().includes(keyword.toLowerCase())
+				);
+				return {
+					output: `OCR extracted ${result.length} blocks, text contains expected keywords: ${containsAny}`,
+					passed: containsAny,
+				};
+			}
+
+			if (expectation.validation === 'contains-all' && expectation.contains) {
+				const containsAll = expectation.contains.every((keyword: string) => 
+					allText.toLowerCase().includes(keyword.toLowerCase())
+				);
+				return {
+					output: `OCR extracted ${result.length} blocks, text contains all keywords: ${containsAll}`,
+					passed: containsAll,
+				};
+			}
+
+			// Default: validate array type
+			const isArray = Array.isArray(result);
+			return {
+				output: `OCR extracted ${result.length} blocks from ${imageFileName}`,
+				passed: isArray,
+			};
+		} catch (error: any) {
+			return {
+				output: `OCR failed: ${error.message}`,
+				passed: false,
+			};
+		}
+	}
+
+	protected async ocrStreaming(modelId: string | null, params: any, expectation: any): Promise<TestResult> {
+		const ocrModel = this.ocrModelId || modelId;
+		if (!ocrModel) {
+			return { output: "No OCR model loaded", passed: false };
+		}
+
+		if (!this.sdk.ocr) {
+			return { output: "OCR function not available in SDK", passed: false };
+		}
+
+		try {
+			const imageFileName = params.imageFileName;
+			const imagePath = await this.getImageFilePath(imageFileName);
+
+			console.log(`   📷 Running streaming OCR on image: ${imageFileName}`);
+
+			const { blockStream } = this.sdk.ocr({
+				modelId: ocrModel,
+				image: imagePath,
+				stream: true,
+			});
+
+			const allBlocks: any[] = [];
+			for await (const blocks of blockStream) {
+				allBlocks.push(...blocks);
+			}
+
+			const isArray = Array.isArray(allBlocks);
+			return {
+				output: `OCR streaming extracted ${allBlocks.length} blocks from ${imageFileName}`,
+				passed: isArray,
+			};
+		} catch (error: any) {
+			return {
+				output: `OCR streaming failed: ${error.message}`,
+				passed: false,
+			};
+		}
+	}
+
+	protected async ocrParagraphMode(modelId: string | null, params: any, expectation: any): Promise<TestResult> {
+		const ocrModel = this.ocrModelId || modelId;
+		if (!ocrModel) {
+			return { output: "No OCR model loaded", passed: false };
+		}
+
+		if (!this.sdk.ocr) {
+			return { output: "OCR function not available in SDK", passed: false };
+		}
+
+		try {
+			const imageFileName = params.imageFileName;
+			const imagePath = await this.getImageFilePath(imageFileName);
+
+			console.log(`   📷 Running OCR in paragraph mode on image: ${imageFileName}`);
+
+			const { blocks } = this.sdk.ocr({
+				modelId: ocrModel,
+				image: imagePath,
+				options: { paragraph: true },
+			});
+
+			const result = await blocks;
+
+			const isArray = Array.isArray(result);
+			return {
+				output: `OCR paragraph mode extracted ${result.length} blocks from ${imageFileName}`,
+				passed: isArray,
+			};
+		} catch (error: any) {
+			return {
+				output: `OCR paragraph mode failed: ${error.message}`,
+				passed: false,
+			};
 		}
 	}
 

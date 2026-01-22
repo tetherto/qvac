@@ -14,6 +14,7 @@ import {
 	TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG,
 	MARIAN_OPUS_DE_EN_Q0F32,
 	BERGAMOT_ENFR, // QVAC-10524: Bergamot translation engine
+	OCR_CRAFT_LATIN_RECOGNIZER_1,
 } from "@tetherto/sdk-dev";
 
 export class DesktopConsumer extends ConsumerBase {
@@ -137,6 +138,17 @@ export class DesktopConsumer extends ConsumerBase {
 				engine: "Bergamot",
 				from: "en",
 				to: "fr",
+			},
+		});
+	}
+
+	protected async loadOcrModel(): Promise<string> {
+		// Only need to pass the recognizer - detector is auto-derived
+		return await loadModel({
+			modelSrc: OCR_CRAFT_LATIN_RECOGNIZER_1,
+			modelType: "ocr",
+			modelConfig: {
+				langList: ["en"],
 			},
 		});
 	}

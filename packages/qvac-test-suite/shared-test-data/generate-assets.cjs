@@ -12,6 +12,7 @@ const ASSET_DIRS = {
 	audio: ['wav', 'mp3', 'm4a', 'aac', 'ogg', 'wma'],
 	documents: ['txt'],
 	code: ['py', 'js', 'json', 'html'],
+	images: ['jpg', 'jpeg', 'png', 'bmp', 'webp'],
 };
 
 function scanDir(dir, extensions) {

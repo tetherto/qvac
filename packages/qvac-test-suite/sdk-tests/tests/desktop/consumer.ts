@@ -10,6 +10,7 @@ import { CacheExecutor } from './executors/cache-executor.js';
 import { ErrorExecutor } from './executors/error-executor.js';
 import { ToolsExecutor } from './executors/tools-executor.js';
 import { TodoExecutor } from './executors/todo-executor.js';
+import { OcrExecutor } from './executors/ocr-executor.js';
 
 export const executor = createExecutor({
   handlers: [
@@ -23,5 +24,6 @@ export const executor = createExecutor({
     new ErrorExecutor(),
     new ToolsExecutor(),
     new TodoExecutor(),
+    new OcrExecutor(),
   ],
 });

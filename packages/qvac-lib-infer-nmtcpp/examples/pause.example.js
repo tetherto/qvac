@@ -8,10 +8,29 @@
  *
  * Usage:
  *   bare examples/pause.example.js
+ *
+ * Enable verbose C++ logging:
+ *   VERBOSE=1 bare examples/pause.example.js
  */
 
 const TranslationNmtcpp = require('../index')
 const HyperdriveDL = require('@qvac/dl-hyperdrive')
+const process = require('bare-process')
+
+// ============================================================
+// LOGGING CONFIGURATION
+// Set VERBOSE=1 environment variable to enable C++ debug logs
+// ============================================================
+const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true'
+
+const logger = VERBOSE
+  ? {
+      info: (msg) => console.log('[C++ INFO]', msg),
+      warn: (msg) => console.warn('[C++ WARN]', msg),
+      error: (msg) => console.error('[C++ ERROR]', msg),
+      debug: (msg) => console.log('[C++ DEBUG]', msg)
+    }
+  : null // null = suppress all C++ logs
 
 const text = `
   Down, down, down. Would the fall never come to an end? "I wonder how many miles I've fallen by this time?" she said aloud. "I must be getting somewhere near the centre of the earth. Let me see: that would be four thousand miles down. I think—" (for, you see, Alice had learnt several things of this sort in her lessons in the schoolroom, and though this was not a very good opportunity for showing off her knowledge, as there was no one to listen to her, still it was good practice to say it over) "—yes, that's about the right distance—but then I wonder what Latitude or Longitude I've got to?" (Alice had no idea what Latitude was, or Longitude either, but thought they were nice grand words to say.)
@@ -31,7 +50,8 @@ async function main () {
     loader: hdDL,
     params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: './models',
-    modelName: 'model.bin'
+    modelName: 'model.bin',
+    logger // Pass logger to enable/disable C++ logs
   }
   const model = new TranslationNmtcpp(args, { })
   await model.load()

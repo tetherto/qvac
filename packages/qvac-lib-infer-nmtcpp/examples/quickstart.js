@@ -10,6 +10,9 @@
  * Usage:
  *   bare examples/quickstart.js
  *   BERGAMOT_MODEL_PATH=/path/to/bergamot/model bare examples/quickstart.js
+ *
+ * Enable verbose C++ logging:
+ *   VERBOSE=1 bare examples/quickstart.js
  */
 
 const TranslationNmtcpp = require('..')
@@ -18,18 +21,25 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 
+// ============================================================
+// LOGGING CONFIGURATION
+// Set VERBOSE=1 environment variable to enable C++ debug logs
+// ============================================================
+const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true'
+
+const logger = VERBOSE
+  ? {
+      info: (msg) => console.log('[C++ INFO]', msg),
+      warn: (msg) => console.warn('[C++ WARN]', msg),
+      error: (msg) => console.error('[C++ ERROR]', msg),
+      debug: (msg) => console.log('[C++ DEBUG]', msg)
+    }
+  : null // null = suppress all C++ logs
+
 const text = 'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
 
 async function testGGML () {
   console.log('\n=== Testing GGML Backend ===\n')
-
-  // Create logger object
-  const logger = {
-    info: (msg) => console.log('[INFO]', msg),
-    warn: (msg) => console.warn('[WARN]', msg),
-    error: (msg) => console.error('[ERROR]', msg),
-    debug: (msg) => console.log('[DEBUG]', msg)
-  }
 
   // Create `DataLoader`
   const hdDL = new HyperdriveDL({
@@ -74,14 +84,6 @@ async function testGGML () {
 
 async function testBergamot () {
   console.log('\n=== Testing Bergamot Backend ===\n')
-
-  // Create logger object
-  const logger = {
-    info: (msg) => console.log('[INFO]', msg),
-    warn: (msg) => console.warn('[WARN]', msg),
-    error: (msg) => console.error('[ERROR]', msg),
-    debug: (msg) => console.log('[DEBUG]', msg)
-  }
 
   // Use local model path for Bergamot - env var or relative path
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'

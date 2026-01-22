@@ -1,13 +1,14 @@
 // Real SDK tests
 import type { TestDefinition } from '@tetherto/qvac-test-suite';
-import { completionTests } from './completion-tests.js';
-import { transcriptionTests } from './transcription-tests.js';
-import { embeddingTests } from './embedding-tests.js';
-import { ragTests } from './rag-tests.js';
-import { translationTests } from './translation-tests.js';
 import { cacheTests } from './cache-tests.js';
+import { completionTests } from './completion-tests.js';
+import { embeddingTests } from './embedding-tests.js';
 import { errorTests } from './error-tests.js';
+import { ocrTests } from './ocr-tests.js';
+import { ragTests } from './rag-tests.js';
 import { toolsTests } from './tools-tests.js';
+import { transcriptionTests } from './transcription-tests.js';
+import { translationTests } from './translation-tests.js';
 import { visionTests } from './vision-tests.js';
 
 // Model loading tests
@@ -23,6 +24,13 @@ export const modelLoadEmbedding: TestDefinition = {
   params: { modelType: 'embeddings', modelConstant: 'GTE_LARGE_FP16' },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'model', dependency: 'none', estimatedDurationMs: 60000 },
+};
+
+export const modelLoadOcr: TestDefinition = {
+  testId: 'model-load-ocr',
+  params: { modelType: 'ocr', modelConstant: 'OCR_CRAFT_LATIN_RECOGNIZER_1' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'model', dependency: 'none', estimatedDurationMs: 90000 },
 };
 
 export const modelLoadInvalid: TestDefinition = {
@@ -113,6 +121,7 @@ export const tests = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadEmbedding,
+  modelLoadOcr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -144,6 +153,9 @@ export const tests = [
 
   // Vision tests (SKIPPED - see vision-tests.ts for details)
   ...visionTests,
+
+  // OCR tests
+  ...ocrTests,
 
   // Model tests (second section - duplicates like old structure)
   modelLoadLlm,

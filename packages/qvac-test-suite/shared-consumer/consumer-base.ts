@@ -40,6 +40,7 @@ export abstract class ConsumerBase {
 	protected translationModelId: string | null = null;
 	protected nmtModelId: string | null = null;
 	protected bergamotModelId: string | null = null; // QVAC-10524: Bergamot engine
+	protected ocrModelId: string | null = null;
 	protected toolsModelId: string | null = null;
 	protected visionModelId: string | null = null;
 	protected ttsModelId: string | null = null;
@@ -122,10 +123,13 @@ export abstract class ConsumerBase {
 	protected abstract loadTtsModel(): Promise<string>;
 	protected abstract loadNmtModel(): Promise<string>;
 	protected abstract loadBergamotModel(): Promise<string>; // QVAC-10524
+	protected abstract loadOcrModel(): Promise<string>;
 
 	// Determine which model type a test needs
-	protected getRequiredModelType(testId: string): 'llm' | 'whisper' | 'embedding' | 'translation' | 'nmt' | 'bergamot' | 'tools' | 'vision' | 'tts' | null {
-		if (testId.startsWith("transcription") || testId.startsWith("config-reload")) {
+	protected getRequiredModelType(testId: string): 'llm' | 'whisper' | 'embedding' | 'translation' | 'nmt' | 'bergamot' | 'ocr' | 'tools' | 'vision' | 'tts' | null {
+		if (testId.startsWith("ocr-") || testId === "model-load-ocr") {
+			return 'ocr';
+		} else if (testId.startsWith("transcription") || testId.startsWith("config-reload")) {
 			// Config reload tests (QVAC-9409) require Whisper model
 			return 'whisper';
 		} else if (testId.startsWith("addon-logging-")) {
@@ -243,6 +247,17 @@ export abstract class ConsumerBase {
 				}
 			}
 			return this.bergamotModelId;
+		}
+
+		if (requiredModelType === 'ocr') {
+			if (!this.ocrModelId) {
+				this.log(`   📦 Loading OCR model (CRAFT Latin Recognizer)...`);
+				this.ocrModelId = await this.loadOcrModel();
+				if (this.executor.setOcrModelId) {
+					this.executor.setOcrModelId(this.ocrModelId);
+				}
+			}
+			return this.ocrModelId;
 		}
 
 		if (requiredModelType === 'tools') {

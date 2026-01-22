@@ -4,6 +4,7 @@ import {
 	embed,
 	translate,
 	textToSpeech,
+	ocr,
 	loadModel,
 	unloadModel,
 	ragIngest,
@@ -12,6 +13,7 @@ import {
 	loggingStream,
 	LLAMA_3_2_1B_INST_Q4_0,
 	GTE_LARGE_FP16,
+	OCR_CRAFT_LATIN_RECOGNIZER_1,
 } from "@tetherto/sdk-dev";
 // Dynamic import for SDK_LOG_ID (QVAC-9211) - may not be in types yet
 const sdkModule = require("@tetherto/sdk-dev");
@@ -28,6 +30,7 @@ export class TestExecutor extends TestExecutorBase {
 			embed,
 			translate,
 			textToSpeech,
+			ocr,
 			loadModel,
 			unloadModel,
 			ragIngest,
@@ -37,6 +40,7 @@ export class TestExecutor extends TestExecutorBase {
 			SDK_LOG_ID,
 			LLAMA_3_2_1B_INST_Q4_0,
 			GTE_LARGE_FP16,
+			OCR_CRAFT_LATIN_RECOGNIZER_1,
 			SDK_CLIENT_ERROR_CODES: undefined, // Not available in this SDK version
 			SDK_SERVER_ERROR_CODES: undefined, // Not available in this SDK version
 		};
@@ -57,5 +61,10 @@ export class TestExecutor extends TestExecutorBase {
 	protected async getAudioFilePath(filename: string): Promise<string> {
 		// Desktop uses direct file path
 		return this.platform.pathResolve(this.platform.getCwd(), "../shared-test-data/audio", filename);
+	}
+
+	protected async getImageFilePath(filename: string): Promise<string> {
+		// Desktop uses direct file path
+		return this.platform.pathResolve(this.platform.getCwd(), "../shared-test-data/images", filename);
 	}
 }

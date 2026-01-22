@@ -6,6 +6,7 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN_3_1_7B_INST_Q4,
+  OCR_CRAFT_LATIN_RECOGNIZER_1,
 } from '@qvac/sdk';
 
 export class ModelManager {
@@ -13,6 +14,7 @@ export class ModelManager {
   private static embeddingModelId: string | null = null;
   private static whisperModelId: string | null = null;
   private static toolsModelId: string | null = null;
+  private static ocrModelId: string | null = null;
 
   // Allow external setting (for model loading tests that load directly)
   static setLlmModel(modelId: string) {
@@ -116,10 +118,29 @@ export class ModelManager {
     return this.toolsModelId;
   }
 
+  static async getOcrModel(): Promise<string> {
+    if (!this.ocrModelId) {
+      console.log('    [ModelManager] Loading OCR model (CRAFT Latin Recognizer - detector auto-derived)...');
+      // Only need to pass the recognizer - detector is auto-derived from same hyperdrive key
+      this.ocrModelId = await loadModel({
+        modelSrc: OCR_CRAFT_LATIN_RECOGNIZER_1,
+        modelType: 'ocr',
+        modelConfig: {
+          langList: ['en'],
+        },
+      });
+      console.log(`    [ModelManager] OCR loaded: ${this.ocrModelId}`);
+    } else {
+      console.log(`    [ModelManager] Reusing OCR model: ${this.ocrModelId}`);
+    }
+    return this.ocrModelId;
+  }
+
   static reset() {
     this.llmModelId = null;
     this.embeddingModelId = null;
     this.whisperModelId = null;
     this.toolsModelId = null;
+    this.ocrModelId = null;
   }
 }
