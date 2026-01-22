@@ -28,7 +28,7 @@ on:
         description: "Full NPM package spec to test (default: @qvac/llamacpp-embed@latest)"
         type: string
         required: false
-        default: '@qvac/llamacpp-embed@latest'
+        default: "@qvac/llamacpp-embed@latest"
       workdir:
         description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
         type: string
@@ -36,12 +36,12 @@ on:
         default: "packages/qvac-lib-infer-llamacpp-embed"
 
 env:
-  NODE_VERSION: 'lts/*'
-  ADDON_NAME: '@qvac/llamacpp-embed'
-  PREBUILD_ARTIFACT_PREFIX: 'llamacpp-embed-'
-  TEST_FRAMEWORK_REF: 'main'
-  APP_BUNDLE_ID: 'io.tether.test.qvac'
-  PKG_DIR:  ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}
+  NODE_VERSION: "lts/*"
+  ADDON_NAME: "@qvac/llamacpp-embed"
+  PREBUILD_ARTIFACT_PREFIX: "llamacpp-embed-"
+  TEST_FRAMEWORK_REF: "main"
+  APP_BUNDLE_ID: "io.tether.test.qvac"
+  PKG_DIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}
 
 jobs:
   build-and-test:
@@ -395,8 +395,8 @@ jobs:
         if: matrix.platform == 'Android'
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
@@ -725,7 +725,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -770,4 +770,3 @@ jobs:
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
-

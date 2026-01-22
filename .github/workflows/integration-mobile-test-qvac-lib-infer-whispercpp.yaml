@@ -23,14 +23,14 @@ on:
         description: "Full NPM package spec to test (default: @qvac/whispercpp@latest)"
         type: string
         required: false
-        default: '@qvac/whispercpp@latest'
+        default: "@qvac/whispercpp@latest"
 
 env:
-  NODE_VERSION: 'lts/*'
-  ADDON_NAME: '@qvac/whispercpp'
-  PREBUILD_ARTIFACT_PREFIX: 'whispercpp-'
-  TEST_FRAMEWORK_REF: 'main'
-  APP_BUNDLE_ID: 'io.tether.test.qvac'
+  NODE_VERSION: "lts/*"
+  ADDON_NAME: "@qvac/whispercpp"
+  PREBUILD_ARTIFACT_PREFIX: "whispercpp-"
+  TEST_FRAMEWORK_REF: "main"
+  APP_BUNDLE_ID: "io.tether.test.qvac"
   PKG_DIR: packages/qvac-lib-infer-whispercpp
 
 jobs:
@@ -385,8 +385,8 @@ jobs:
         if: matrix.platform == 'Android'
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
@@ -715,7 +715,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)

@@ -763,7 +763,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -870,7 +870,7 @@ jobs:
           # Upload test package to AWS Device Farm
           echo "📤 Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}" \
             --name "$ZIP_NAME" \
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
@@ -1070,7 +1070,7 @@ jobs:
 
           echo "📤 Uploading test spec to Device Farm..."
           SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}" \
             --name "testspec.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
@@ -1108,9 +1108,9 @@ jobs:
         id: schedule_run
         run: |
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN_ONNX_TTS }}"
           else
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_ONNX_TTS }}"
           fi
 
           # Set run name based on trigger
@@ -1126,7 +1126,7 @@ jobs:
           echo "Run Name: $RUN_NAME"
 
           RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}" \
             --device-pool-arn "$POOL_ARN" \
             --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
             --name "$RUN_NAME" \
