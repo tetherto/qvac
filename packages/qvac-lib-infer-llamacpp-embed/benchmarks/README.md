@@ -1,9 +1,10 @@
-# EmbedLlamacpp Benchmark Suite
+# Embedding Benchmark Suite
 
 Comprehensive benchmarking system for evaluating **@qvac/embed-llamacpp addon** on embedding tasks using the [MTEB (Massive Text Embedding Benchmark)](https://github.com/embeddings-benchmark/mteb) framework. Supports single model evaluation and comparative analysis against SentenceTransformers.
 
 ## Table of Contents
 
+- [Addon Source](#addon-source)
 - [Prerequisites](#prerequisites)
 - [Platform Support](#platform-support)
 - [Quick Start](#quick-start)
@@ -13,6 +14,28 @@ Comprehensive benchmarking system for evaluating **@qvac/embed-llamacpp addon** 
 - [Tunable Parameters](#tunable-parameters)
 - [Results](#results)
 - [Architecture](#architecture)
+
+## Addon Source
+
+Benchmarks can run against two different addon sources:
+
+| Source | When to Use | Command |
+|--------|-------------|---------|
+| **Locally built addon** (default) | Development, testing local changes | `npm run benchmarks -- ...` |
+| **Published npm package** | CI/CD, release verification, regression testing | `npm run benchmarks -- --addon-version "0.10.0" ...` |
+
+
+```bash
+# Default: Uses locally built addon (file:../../)
+npm run benchmarks -- --gguf-model "ChristianAzinn/gte-large-gguf:F16"
+
+# Use specific published version from npm
+npm run benchmarks -- \
+  --addon-version "0.10.0" \
+  --gguf-model "ChristianAzinn/gte-large-gguf:F16" \
+  --samples 10
+
+```
 
 ## Prerequisites
 
@@ -144,20 +167,6 @@ npm run benchmarks -- \
   --samples 50
 ```
 
-**Version Testing**
-```bash
-# Test specific addon version
-npm run benchmarks -- \
-  --addon-version "0.9.0" \
-  --gguf-model "ChristianAzinn/gte-large-gguf:F16" \
-  --samples 100
-
-# Skip if results already exist today
-npm run benchmarks -- \
-  --gguf-model "ChristianAzinn/gte-large-gguf:F16" \
-  --skip-existing
-```
-
 **Gated/Private Models**
 ```bash
 # With HuggingFace token for gated models
@@ -224,7 +233,6 @@ npm run benchmarks -- \
 | `--device` | `str` | Device type | `cpu,gpu` | `gpu` |
 | `--batch-size` | `int` | Tokens for processing multiple prompts together | `512-8192` | `2048` |
 | `--gpu-layers` | `int` | GPU layers to offload | `0-999` | `99` |
-| `--ctx-size` | `int` | Context window size | `128-4096` | `512` |
 | `--verbosity` | `str` | Verbosity level | `0-3` | `0` |
 | `--addon-version` | `str` | Install specific @qvac/embed-llamacpp version | e.g., `0.9.0` | - |
 | `--skip-existing` | flag | Skip if results already exist for today | - | `false` |

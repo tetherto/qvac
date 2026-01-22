@@ -1,6 +1,6 @@
 # qvac-lib-infer-llamacpp-embed
 
-This native C++ addon, built using the `Bare` Runtime, implements the BERT GTE-Large (355M) model to enable efficient generation of high-quality contextual text embeddings. It supports a range of NLP tasks, including semantic similarity, text classification, and information retrieval.
+This native C++ addon, built using the `Bare` Runtime, simplifies running text embedding models to enable efficient generation of high-quality contextual text embeddings. It provides an easy interface to load, execute, and manage embedding model instances.
 
 ## Table of Contents
 
@@ -15,7 +15,9 @@ This native C++ addon, built using the `Bare` Runtime, implements the BERT GTE-L
   - [6. Load the model](#6-load-the-model)
   - [7. Generate embeddings for input sequence](#7-generate-embeddings-for-input-sequence)
   - [8. Unload the model](#8-unload-the-model)
-- [Quickstart example](#quickstart-example)
+- [Quickstart Example](#quickstart-example)
+- [Model Registry](#model-registry)
+- [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
 - [Glossary](#glossary)
@@ -100,11 +102,28 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
+The `config` is a string consisting of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
+Each parameter is separated by a tab (`\t`) from its value, and different parameters are separated by newlines (`\n`).
+
 ```js
-const config = '-ngl\t25'
+// an example of possible configuration
+const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
 ```
 
-### 5. Instanstiate the model
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| -dev    | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
+| -ngl | integer                                    | 0            | Number of model layers to offload to GPU              |
+|--batch-size  | integer                                     | 2048                         | Tokens for processing multiple prompts together             |
+| --pooling         | `{none,mean,cls,last,rank}`                 | model default                | Pooling type for embeddings                           |
+| --attention       | `{causal,non-causal}`                       | model default                | Attention type for embeddings                         |
+| --embd-normalize  | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
+| -fa               | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
+| --main-gpu        | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+
+
+### 5. Instantiate the model
 
 ```js
 const model = new GGMLBert(args, config)
@@ -126,10 +145,23 @@ _For example:_
 await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
 ```
 
+**Progress Callback Data**
+
+The progress callback receives an object with the following properties:
+
+| Property            | Type   | Description                             |
+|---------------------|--------|-----------------------------------------|
+| `action`            | string | Current operation being performed       |
+| `totalSize`         | number | Total bytes to be loaded                |
+| `totalFiles`        | number | Total number of files to process        |
+| `filesProcessed`    | number | Number of files completed so far        |
+| `currentFile`       | string | Name of file currently being processed  |
+| `currentFileProgress` | string | Percentage progress on current file     |
+| `overallProgress`   | string | Overall loading progress percentage     |
 
 ### 7. Generate embeddings for input sequence
 
-The model outputs a sequence of vectors, one for each token in the input sequence.
+The model outputs a vector for the input sequence.
 
 ```js
 const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
@@ -137,89 +169,63 @@ const response = await model.run(query)
 const embeddings = await response.await()
 ```
 
-### 8. Unload the model
+### 8. Release Resources
 
-Unloads the model after inference, to free up resources.
+Unload the model when finished:
 
-```js
-await model.unload()
-```
-
-## Quickstart example
-
-```js
-'use strict'
-
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const GGMLBert = require('../index.js')
-const process = require('bare-process')
-
-async function main () {
-  console.log('Quickstart Example: Basic model loading and inference demonstration')
-  console.log('===================================================================')
-
-  // 1. Initializing data loader
-  const store = new Corestore('./store')
-  const hdStore = store.namespace('hd')
-
-  const hdKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
-  const hdDL = new HyperDriveDL({
-    key: `hd://${hdKey}`,
-    store: hdStore
-  })
-
-  // 2. Configuring model settings
-  const args = {
-    loader: hdDL,
-    logger: console,
-    opts: { stats: true },
-    diskPath: './models',
-    modelName: 'gte-large_fp16.gguf'
-  }
-  const config = '-ngl\t25'
-
-  // 3. Loading model
-  await hdDL.ready()
-  const model = new GGMLBert(args, config)
-  const closeLoader = true
-  let totalProgress = 0
-  const reportProgressCallback = (report) => {
-    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
-      process.stdout.write(
-        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
-      )
-      if (Number(report.currentFileProgress) === 100) {
-        process.stdout.write('\n')
-      }
-      totalProgress = Number(report.overallProgress)
-    }
-  }
-  await model.load(closeLoader, reportProgressCallback)
-
-  try {
-    // 4. Generating embeddings
-    const query = "Hello, can you suggest a game I can play with my 1 year old daughter?"
-    const response = await model.run(query)
-    const embeddings = await response.await()
-
-    console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
-    console.log('First few values of first embedding:')
-    console.log(embeddings[0].slice(0, 5))
-  } catch (error) {
-    const errorMessage = error?.message || error?.toString() || String(error)
-    console.error('Error occurred:', errorMessage)
-    console.error('Error details:', error)
-  } finally {
-    // 5. Cleaning up resources
-    await model.unload()
-    await hdDL.close()
-    await store.close()
-  }
+```javascript
+try {
+  await model.unload()
+  // Close P2P resources if applicable
+} catch (error) {
+  console.error('Failed to unload model:', error)
 }
-
-main().catch(console.error)
 ```
+
+## Quickstart Example
+
+Clone the repository and navigate to it:
+```bash
+cd qvac-lib-infer-llamacpp-embed
+```
+
+Install dependencies:
+```bash
+npm install
+```
+
+Install the package:
+```bash
+npm install @qvac/embed-llamacpp@latest
+```
+
+Copy the prebuilt native binaries to your project root:
+```bash
+cp -r node_modules/@qvac/embed-llamacpp/prebuilds .
+```
+
+Run the quickstart example:
+```bash
+bare examples/quickstart.js
+```
+
+## Model Registry
+
+| Hyperdrive Key                                                   | `.gguf` File Name                        |
+| ---------------------------------------------------------------- | ---------------------------------------- |
+| d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e | gte-large_fp16.gguf                      |
+| c3b4c8f54ac3ed3e66323e011d52c88fcb1be8596251fd5457e4faab7b062798 | gte-large.Q2_K-00001-of-00005.gguf       |
+| f72fe66575d59db3fff8d01db7b185f5e30f291ade1dbfba8c4489742b93d4a0 | gte-large_fp16-00001-of-00005.gguf       |
+| 7eb0441fdc5074ceb02168822da8fef91de7f547cd71240bd36ea964816ab059 | embeddinggemma-300m-Q4_0.gguf            |
+| 304b3543f89f2d3f204b9638ad8e3ea0f237033b0e4d04c416a43e5921df4180 | embeddinggemma-300M-Q8_0.gguf            |
+| cb18d3fe8774ae03bdc0e8c9559371201e76fdb38e1a3f0cfbc700214d50c5b3 | embeddinggemma-300M-BF16.gguf            |
+
+## Other Examples
+
+- [Batch Inference](examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
+- [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+- [Native Logging](examples/nativeLog.js) – Demonstrates C++ addon logging integration.
+- [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
 
 ## Benchmarking
 
@@ -228,10 +234,6 @@ We conduct rigorous benchmarking of our embedding models to evaluate their retri
 ### Running Benchmarks
 
 For instructions on running benchmarks yourself, see the [Benchmark Runner Documentation](./benchmarks/README.md).
-
-### Benchmark Results
-
-For detailed benchmark results see our [Embedding Benchmark Results Summary](./benchmarks/results/results_summary.md).
 
 The benchmarking covers:
 
@@ -255,12 +257,8 @@ These tests validate the native implementation and help catch issues early in de
 ## Glossary
 
 * **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview). 
-* **BERT GTE‑Large (355M)** - A BERT‑based general text embedding model with 1024‑dimensional embeddings (~355 M parameters). [See on HuggingFace](https://huggingface.co/thenlper/gte-large).
-* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
 * **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).
-* **DataLoader** - Provides a common interface for loading data from various sources.
-* **HyperdriveDataLoader** - A data loading library designed to load model weights and other resources from a `Hyperdrive` instance. [See on Github](https://github.com/tetherto/qvac-lib-dl-hyperdrive).
-* **FileSystemDataLoader** - A data loading library designed to load model weights and other resources from a local filesystem.  [See on Github](https://github.com/tetherto/qvac-lib-dl-filesystem).
+* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
 
 ## License
 

@@ -1,0 +1,107 @@
+---
+title: "@qvac/sdk"
+titleStyle: code
+description: API reference — latest (v0.5)
+---
+
+## Overview
+
+`@qvac/sdk` npm package exposes a function-centric, typed JS API.
+
+## Functions
+
+| Function | Summary | Signature |
+| --- | --- | --- |
+| [`cancel()`](/sdk/api/latest/cancel) | Cancels an ongoing operation. | `cancel(params): Promise<void>` |
+| [`close()`](/sdk/api/latest/close) | Closes the RPC connection. | `close(): Promise<void>` |
+| [`completion()`](/sdk/api/latest/completion) | Generates completion from a language model based on conversation history. | `completion(params): object` |
+| [`deleteCache()`](/sdk/api/latest/deleteCache) | Deletes KV cache files. | `deleteCache(params): Promise<{ success: boolean }>` |
+| [`downloadAsset()`](/sdk/api/latest/downloadAsset) | Downloads an asset (model file) without loading it into memory. | `downloadAsset(options): Promise<string>` |
+| [`embed()`](/sdk/api/latest/embed) | Generates embeddings for text using a specified model. | `embed(params): Promise<number[]>` |
+| [`getLogger()`](/sdk/api/latest/getLogger) | Creates a logger instance. | `getLogger(namespace, options?): Logger` |
+| [`getModelByName()`](/sdk/api/latest/getModelByName) | Retrieves a model by its name. | `getModelByName(name): HyperdriveItem \| undefined` |
+| [`getModelBySrc()`](/sdk/api/latest/getModelBySrc) | Retrieves a model by its source. | `getModelBySrc(modelId, hyperdriveKey): HyperdriveItem \| undefined` |
+| [`getModelInfo()`](/sdk/api/latest/getModelInfo) | Retrieves information about a model. | `getModelInfo(params): Promise<object>` |
+| [`loadModel()`](/sdk/api/latest/loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. | `loadModel(options): Promise<string>` |
+| [`loggingStream()`](/sdk/api/latest/loggingStream) | Streams model logs in real-time. | `loggingStream(params): AsyncGenerator<object>` |
+| [`ocr()`](/sdk/api/latest/ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. | `ocr(params): object` |
+| [`ping()`](/sdk/api/latest/ping) | Sends a ping request to the server and returns the pong response. | `ping(): Promise<{ number: number, type: "pong" }>` |
+| [`ragDeleteEmbeddings()`](/sdk/api/latest/ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. | `ragDeleteEmbeddings(params): Promise<true>` |
+| [`ragSaveEmbeddings()`](/sdk/api/latest/ragSaveEmbeddings) | Saves document embeddings in the RAG vector database. | `ragSaveEmbeddings(params): Promise<object>` |
+| [`ragSearch()`](/sdk/api/latest/ragSearch) | Searches for similar documents in the RAG vector database. | `ragSearch(params): Promise<object[]>` |
+| [`startQVACProvider()`](/sdk/api/latest/startQVACProvider) | Starts a provider service for delegated inference. | `startQVACProvider(params): Promise<object>` |
+| [`stopQVACProvider()`](/sdk/api/latest/stopQVACProvider) | Stops a running provider service and leaves the specified topic. | `stopQVACProvider(params): Promise<object>` |
+| [`textToSpeech()`](/sdk/api/latest/textToSpeech) | Converts text to speech audio. | `textToSpeech(params): object` |
+| [`transcribe()`](/sdk/api/latest/transcribe) | Transcribes audio to text in a single response. | `transcribe(params): Promise<string>` |
+| [`transcribeStream()`](/sdk/api/latest/transcribeStream) | Streams audio transcription results in real-time. | `transcribeStream(params): AsyncGenerator<string>` |
+| [`translate()`](/sdk/api/latest/translate) | Translates text from one language to another using a specified translation model. | `translate(params): object` |
+| [`unloadModel()`](/sdk/api/latest/unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params): Promise<void>` |
+
+## Errors
+
+| Error | Summary | Thrown by |
+| --- | --- | --- |
+| `ARCHIVE_EXTRACTION_FAILED` | Failed to extract an archive. | `downloadAsset()`, `loadModel()` |
+| `ARCHIVE_MISSING_SHARDS` | Archive is missing required shards. | `downloadAsset()`, `loadModel()` |
+| `ARCHIVE_UNSUPPORTED_TYPE` | Unsupported archive type. | `downloadAsset()`, `loadModel()` |
+| `ATTACHMENT_NOT_FOUND` | Attachment file not found at path. | `completion()` |
+| `AUDIO_FILE_NOT_FOUND` | Audio file not found or not accessible. | `transcribe()`, `transcribeStream()` |
+| `CACHE_DIR_NOT_ABSOLUTE` | Cache directory must be an absolute path. | `deleteCache()` |
+| `CACHE_DIR_NOT_WRITABLE` | Cache directory is not writable. | `deleteCache()` |
+| `CANCEL_FAILED` | Failed to cancel operation. | `cancel()` |
+| `CHECKSUM_VALIDATION_FAILED` | Downloaded file checksum validation failed. | `downloadAsset()`, `loadModel()` |
+| `COMPLETION_FAILED` | Completion failed. | `completion()` |
+| `CONFIG_FILE_PARSE_FAILED` | Failed to import/parse a `qvac.config.*` file. | Any API call (during SDK initialization) |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | Model does not support hot config reload. | `transcribe()`, `transcribeStream()` |
+| `CONFIG_VALIDATION_FAILED` | Config validation failed (schema mismatch / invalid JSON). | Any API call (during SDK initialization) |
+| `DELEGATE_CONNECTION_FAILED` | Failed to connect to delegated provider. | `loadModel()`, `completion()` |
+| `DELEGATE_NO_FINAL_RESPONSE` | No final response received from delegated provider. | `loadModel()`, `completion()` |
+| `DELETE_CACHE_FAILED` | Failed to delete cache. | `deleteCache()` |
+| `DOWNLOAD_ASSET_FAILED` | Download failed. | `downloadAsset()`, `loadModel()` |
+| `DOWNLOAD_CANCELLED` | Download cancelled. | `cancel()`, `downloadAsset()`, `loadModel()` |
+| `EMBED_FAILED` | Failed to generate embeddings. | `embed()` |
+| `EMBED_NO_EMBEDDINGS` | No embeddings returned from model. | `embed()` |
+| `ESPEAK_DATA_PATH_REQUIRED` | `eSpeakDataPath` is required for TTS models. | `loadModel()` |
+| `FFMPEG_NOT_AVAILABLE` | Audio decoding required but FFmpeg is not available. | `transcribe()`, `transcribeStream()` |
+| `HTTP_ERROR` | HTTP request failed with status code. | `downloadAsset()`, `loadModel()` |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | Hyperdrive download failed. | `downloadAsset()`, `loadModel()` |
+| `IMAGE_FILE_NOT_FOUND` | Image file not found or not accessible. | `ocr()` |
+| `INVALID_AUDIO_CHUNK_TYPE` | Invalid audio chunk input type provided. | `transcribe()`, `transcribeStream()` |
+| `INVALID_DELETE_CACHE_PARAMS` | Invalid parameters for `deleteCache()`. | `deleteCache()` |
+| `INVALID_IMAGE_INPUT` | Invalid image input type provided. | `ocr()` |
+| `INVALID_OPERATION_IN_RESPONSE` | Response operation didn’t match the expected RAG operation. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `INVALID_RESPONSE_TYPE` | Invalid response type received (SDK/client-side validation). | `cancel()`, `downloadAsset()`, `embed()`, `getModelInfo()`, `loadModel()`, `loggingStream()`, `ping()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()`, `startQVACProvider()`, `stopQVACProvider()`, `unloadModel()` |
+| `INVALID_SHARD_URL_PATTERN` | Invalid shard URL pattern for sharded downloads. | `downloadAsset()`, `loadModel()` |
+| `INVALID_TOOL_SCHEMA` | Invalid tool schema provided. | `completion()` |
+| `INVALID_TOOLS_ARRAY` | Invalid tools array provided. | `completion()` |
+| `MODEL_ALREADY_REGISTERED` | Model with the same ID is already registered. | `loadModel()` |
+| `MODEL_FILE_LOCATE_FAILED` | Failed to locate model file for the given `modelType`. | `loadModel()` |
+| `MODEL_FILE_NOT_FOUND` | Model file not found at given path. | `loadModel()` |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | Expected model file not found in directory (e.g., by type). | `loadModel()` |
+| `MODEL_IS_DELEGATED` | Model is delegated and cannot be accessed as a local model. | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()` |
+| `MODEL_LOAD_FAILED` | Failed to load model (generic). | `loadModel()` |
+| `MODEL_NOT_FOUND` | Model ID not found in the registry. | `completion()`, `embed()`, `getModelInfo()`, `loggingStream()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()`, `unloadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `MODEL_NOT_LOADED` | Model exists but is not loaded. | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()` |
+| `MODEL_TYPE_MISMATCH` | Model type mismatch (expected vs provided). | `completion()`, `embed()`, `ocr()`, `textToSpeech()`, `transcribe()`, `transcribeStream()`, `translate()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `MODEL_UNLOAD_FAILED` | Failed to unload model. | `unloadModel()` |
+| `OCR_FAILED` | OCR operation failed. | `ocr()` |
+| `PARTIAL_DOWNLOAD_OFFLINE` | Partial download exists but offline prevents resuming. | `downloadAsset()`, `loadModel()` |
+| `PROJECTION_MODEL_REQUIRED` | Projection model source is required for multimodal LLM models. | `loadModel()` |
+| `PROVIDER_START_FAILED` | Failed to start provider. | `startQVACProvider()` |
+| `PROVIDER_STOP_FAILED` | Failed to stop provider. | `stopQVACProvider()` |
+| `RAG_CHUNK_FAILED` | Failed to chunk input into embeddings. | `ragSaveEmbeddings()` |
+| `RAG_DELETE_FAILED` | Failed to delete embeddings. | `ragDeleteEmbeddings()` |
+| `RAG_SAVE_FAILED` | Failed to save embeddings. | `ragSaveEmbeddings()` |
+| `RAG_SEARCH_FAILED` | Failed to search embeddings. | `ragSearch()` |
+| `RAG_WORKSPACE_IN_USE` | RAG workspace is in use and can’t be closed/deleted. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | Workspace is configured for a different embeddings model. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_NOT_FOUND` | RAG workspace not found. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RAG_WORKSPACE_NOT_OPEN` | RAG workspace is not open. | `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `RPC_CONNECTION_FAILED` | RPC connection failed (e.g., missing mobile worker bundle on Expo). | Any API call (startup/transport), or Expo runtime |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | Streaming RPC ended without a final response. | `downloadAsset()`, `loadModel()`, `ragDeleteEmbeddings()`, `ragSaveEmbeddings()`, `ragSearch()` |
+| `TEXT_TO_SPEECH_FAILED` | Text-to-speech operation failed. | `textToSpeech()` |
+| `TRANSCRIPTION_FAILED` | Transcription failed. | `transcribe()`, `transcribeStream()` |
+| `TRANSLATION_FAILED` | Translation failed. | `translate()` |
+| `TTS_CONFIG_MODEL_REQUIRED` | `ttsConfigModelPath` is required for TTS models. | `loadModel()` |
+| `UNKNOWN_MODEL_TYPE` | Unknown `modelType` in `loadModel()`. | `loadModel()` |
+| `VAD_MODEL_REQUIRED` | VAD model source is required for this configuration. | `loadModel()` |

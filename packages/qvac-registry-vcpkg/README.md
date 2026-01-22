@@ -1,1 +1,0 @@
-# qvac-registry-vcpkg

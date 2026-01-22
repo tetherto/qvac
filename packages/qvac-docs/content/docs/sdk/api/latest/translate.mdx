@@ -1,0 +1,73 @@
+---
+title: "translate( )"
+titleStyle: code
+description: Translates text from one language to another using a specified translation model.
+---
+
+```ts
+function translate(params): object;
+```
+
+## Description
+
+Supports both NMT (Neural Machine Translation) and LLM models.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | Translation configuration object |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | Model identifier |
+| text | `string` | ✓ | Text to translate |
+| modelType | `"nmt" \| "llm"` | ✓ | Type of translation model |
+| stream | `boolean` | ✗ | Whether to stream the translation |
+| from | `string` | ✗ | Source language (auto-detect if not specified) |
+| to | `string` | ✗ | Target language |
+
+## Returns
+
+`object` — Object with tokenStream generator and text/stats properties
+
+| Field | Type | Description |
+| --- | --- | --- |
+| text | `Promise<string>` | Complete translated text |
+| tokenStream | `AsyncGenerator<string>` | Stream of translation tokens |
+| stats | `Promise<object \| undefined>` | Translation statistics |
+
+## Throws
+
+When translation fails with an error message or when language detection fails
+
+## Example
+
+```typescript
+// Streaming mode (default)
+const result = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+});
+
+for await (const token of result.tokenStream) {
+  console.log(token);
+}
+
+// Non-streaming mode
+const response = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+  stream: false,
+});
+
+console.log(await response.text);
+```

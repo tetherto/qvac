@@ -1,23 +1,6 @@
-# LlamaCpp Benchmark Suite
+# Llm Benchmark Suite
 
 Comprehensive benchmarking system for evaluating **@qvac/llm-llamacpp addon** across reasoning, comprehension, and knowledge tasks. Supports single model evaluation and comparative analysis against HuggingFace Transformers.
-
-## Addon Source
-
-Benchmarks can run against two different addon sources:
-
-| Source | When to Use | Command |
-|--------|-------------|---------|
-| **Locally built addon** (default) | Development, testing local changes | `npm run benchmarks -- ...` |
-| **Published npm package** | CI/CD, release verification, regression testing | `npm run benchmarks -- --addon-version "0.6.0" ...` |
-
-```bash
-# Default: Uses locally built addon (file:../../)
-npm run benchmarks -- --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
-
-# Use specific published version from npm
-npm run benchmarks -- --addon-version "0.6.0" --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
-```
 
 ## Table of Contents
 
@@ -31,6 +14,24 @@ npm run benchmarks -- --addon-version "0.6.0" --gguf-model "bartowski/Llama-3.2-
 - [Tunable Parameters](#tunable-parameters)
 - [Results](#results)
 - [Architecture](#architecture)
+
+## Addon Source
+
+Benchmarks can run against two different addon sources:
+
+| Source | When to Use | Command |
+|--------|-------------|---------|
+| **Locally built addon** (default) | Development, testing local changes | `npm run benchmarks -- ...` |
+| **Published npm package** | CI/CD, release verification, regression testing | `npm run benchmarks -- --addon-version "0.8.0" ...` |
+
+```bash
+# Default: Uses locally built addon (file:../../)
+npm run benchmarks -- --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
+
+# Use specific published version from npm
+npm run benchmarks -- --addon-version "0.8.0" --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
+```
+
 
 ## Prerequisites
 
@@ -155,20 +156,6 @@ npm run benchmarks -- \
   --samples 10
 ```
 
-**Version Testing**
-```bash
-# Test specific addon version
-npm run benchmarks -- \
-  --addon-version "0.9.0" \
-  --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" \
-  --samples 10
-
-# Skip if results already exist today
-npm run benchmarks -- \
-  --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" \
-  --skip-existing
-```
-
 **Gated/Private Models**
 ```bash
 # With HuggingFace token for gated models
@@ -192,7 +179,7 @@ npm run benchmarks -- \
 - Typical GPU (RTX 3080/M1 Pro): ~50-100 tokens/sec
 - CPU-only: ~5-15 tokens/sec
 
-**Important**: LLM benchmarks require generating complete responses for each sample. Unlike embedding benchmarks, there is no corpus to pre-encode. Benchmark time scales linearly with `--samples`:
+**Important**: LLM benchmarks require generating complete responses for each sample. Benchmark time scales linearly with `--samples`:
 
 | Dataset | Samples | Avg Response Tokens | Est. Time (GPU) |
 |---------|---------|---------------------|-----------------|

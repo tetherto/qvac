@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.864.0",
-    "@huggingface/gguf": "^0.3.2",
+    "@huggingface/gguf": "^0.3.3",
     "@huggingface/hub": "^2.4.1",
     "@tetherto/qvac-registry-schema": "^0.1.0",
     "autobase": "^7.18.1",

@@ -1,0 +1,34 @@
+---
+title: "unloadModel( )"
+titleStyle: code
+description: Unloads a previously loaded model from the server.
+---
+
+```ts
+function unloadModel(params): Promise<void>;
+```
+
+## Description
+
+When the last model is unloaded (no more models remain), this function automatically closes the RPC connection, allowing the process to exit naturally without requiring manual cleanup.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The parameters for unloading the model |
+
+### params
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| modelId | `string` | ✓ | - | The unique identifier of the model to unload |
+| clearStorage | `boolean` | ✗ | `false` | Whether to clear the storage for the model |
+
+## Returns
+
+`Promise<void>` — Resolves when the model is unloaded
+
+## Throws
+
+When the response type is invalid or when the unload operation fails

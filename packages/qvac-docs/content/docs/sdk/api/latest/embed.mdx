@@ -1,0 +1,41 @@
+---
+title: "embed( )"
+titleStyle: code
+description: Generates embeddings for text using a specified model.
+---
+
+## Accepted forms
+
+### Single text
+
+```ts
+function embed(params): Promise<number[]>;
+```
+
+### Multiple texts
+
+```ts
+function embed(params): Promise<number[][]>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The parameters for the embedding |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the embedding model to use |
+| text | `string` or `string[]` | ✓ | The input text(s) to embed |
+
+## Returns
+
+- Single text: `Promise<number[]>` — Array of embedding values
+- Multiple texts: `Promise<number[][]>` — Array of embedding arrays
+
+## Throws
+
+When the response type is invalid or when the embedding fails

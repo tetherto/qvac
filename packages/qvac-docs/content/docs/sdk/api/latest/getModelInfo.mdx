@@ -1,0 +1,55 @@
+---
+title: "getModelInfo( )"
+titleStyle: code
+description: Retrieves information about a model.
+---
+
+```ts
+function getModelInfo(params): Promise<{
+  actualSize?: number;
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "tts" | "vad";
+  cachedAt?: Date;
+  cacheFiles: object[];
+  expectedSize: number;
+  hyperbeeKey: string;
+  hyperdriveKey: string;
+  isCached: boolean;
+  isLoaded: boolean;
+  loadedInstances?: object[];
+  modelId: string;
+  name: string;
+  sha256Checksum: string;
+}>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | Model query parameters |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| name | `string` | ✓ | Model name |
+
+## Returns
+
+`Promise<object>` — Model information
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| actualSize | `number` | ✗ | Actual size in bytes (if cached) |
+| addon | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "tts" \| "vad"` | ✓ | Model type |
+| cachedAt | `Date` | ✗ | When the model was cached |
+| cacheFiles | `object[]` | ✓ | Cache file information |
+| expectedSize | `number` | ✓ | Expected size in bytes |
+| hyperbeeKey | `string` | ✓ | Hyperbee key |
+| hyperdriveKey | `string` | ✓ | Hyperdrive key |
+| isCached | `boolean` | ✓ | Whether the model is cached |
+| isLoaded | `boolean` | ✓ | Whether the model is loaded |
+| loadedInstances | `object[]` | ✗ | Loaded instances information |
+| modelId | `string` | ✓ | Model identifier |
+| name | `string` | ✓ | Model name |
+| sha256Checksum | `string` | ✓ | SHA256 checksum |

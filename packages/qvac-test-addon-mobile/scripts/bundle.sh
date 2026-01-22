@@ -1,1 +1,0 @@
-bare-pack --target ios-arm64 --target android-arm64 --linked --out backend/app.bundle backend/backend.cjs

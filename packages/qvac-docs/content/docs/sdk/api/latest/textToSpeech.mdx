@@ -1,0 +1,34 @@
+---
+title: "textToSpeech( )"
+titleStyle: code
+description: Converts text to speech audio.
+---
+
+```ts
+function textToSpeech(params): object;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | Text-to-speech parameters |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | Model identifier |
+| text | `string` | ✓ | Text to convert to speech |
+| inputType | `string` | ✓ | Input type (e.g., "text") |
+| stream | `boolean` | ✓ | Whether to stream the audio |
+
+## Returns
+
+`object` — Object with bufferStream generator, buffer promise, and done promise
+
+| Field | Type | Description |
+| --- | --- | --- |
+| buffer | `Promise<number[]>` | Complete audio buffer |
+| bufferStream | `AsyncGenerator<number>` | Stream of audio samples |
+| done | `Promise<boolean>` | Promise indicating completion |

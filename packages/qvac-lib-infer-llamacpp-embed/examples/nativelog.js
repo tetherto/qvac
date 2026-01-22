@@ -49,7 +49,7 @@ async function main () {
     diskPath: './models',
     modelName: 'gte-large_fp16.gguf'
   }
-  const config = '-ngl\t25'
+  const config = '-ngl\t25\nverbosity\t2'
 
   // 4. Loading model
   await hdDL.ready()

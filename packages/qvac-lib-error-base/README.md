@@ -1,11 +1,11 @@
-# qvac-lib-error-base
+# @qvac/error-base
 
 This library provides standardized error handling capabilities for all QVAC libraries. It ensures consistency in error reporting, serialization, and handling across the entire QVAC ecosystem.
 
 ## Installation
 
 ```bash
-npm i git+https://github.com/tetherto/qvac-lib-error-base.git
+npm i @qvac/error-base
 ```
 
 ## Features

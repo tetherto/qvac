@@ -1,0 +1,35 @@
+# deps
+/node_modules
+
+# generated content
+.contentlayer
+.content-collections
+.source
+/content/docs/sdk/api.mdx
+/content/docs/qvac/examples.mdx
+
+# sync-readme generated components (except index.mdx)
+/content/docs/components/*.mdx
+!/content/docs/components/index.mdx
+
+# test & build
+/coverage
+/.next/
+/out/
+/build
+/dist
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+/.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# others
+.env*.local
+.vercel
+next-env.d.ts

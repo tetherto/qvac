@@ -1,0 +1,162 @@
+---
+title: OCR
+description: Optical character recognition (OCR) for extracting text from images.
+---
+
+## Overview
+
+OCR uses [ONNX runtime](https://onnxruntime.ai) as inference engine. Load any supported model using `modelType: "ocr"`. Then, provide `image` as either a file path (`string`) or an image `Buffer`.
+
+Each OCR block contains extracted `text` and may include `bbox` (the bounding box coordinates of the detected text region) and `confidence` (a score indicating how confident the model is about the recognition).
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api/latest/loadModel)
+2. [`ocr()`](/sdk/api/latest/ocr)
+3. [`unloadModel()`](/sdk/api/latest/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/api/latest/).
+
+## Models
+
+OCR uses a two-stage pipeline that requires compatible models for each stage:
+- **Text detection** (locate text regions in images)
+- **Text recognition** (decode characters within detected regions)
+
+Recommended model families:
+- For detection: CRAFT
+- For recognition: CRNN
+
+Model formats:
+- ONNX (`*.onnx`)  
+
+## Example
+
+The following script shows an example of OCR:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+```js file=../dist/examples/ocr.js title="ocr.js" lineNumbers
+import {
+  close,
+  loadModel,
+  ocr,
+  OCR_CRAFT_LATIN_RECOGNIZER,
+  unloadModel,
+} from "@qvac/sdk";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const imagePath =
+  process.argv[2] || path.join(__dirname, "image/basic_test.bmp");
+
+try {
+  console.log("🚀 Loading OCR model...");
+  // Only need to pass the recognizer - detector is auto-derived from same hyperdrive key
+  const modelId = await loadModel({
+    modelSrc: OCR_CRAFT_LATIN_RECOGNIZER,
+    modelType: "ocr",
+    modelConfig: {
+      langList: ["en"],
+    },
+  });
+  console.log(`✅ Model loaded successfully! Model ID: ${modelId}`);
+
+  console.log(`\n🔍 Running OCR on: ${imagePath}`);
+  const { blocks } = ocr({
+    modelId,
+    image: imagePath,
+  });
+
+  const result = await blocks;
+
+  console.log("\n📝 OCR Results:");
+  console.log("================================");
+  for (const block of result) {
+    console.log(`\n📄 Text: ${block.text}`);
+    if (block.bbox) {
+      console.log(`   📍 BBox: [${block.bbox.join(", ")}]`);
+    }
+    if (block.confidence !== undefined) {
+      console.log(`   ✓ Confidence: ${block.confidence}`);
+    }
+  }
+  console.log("\n================================");
+  console.log("\n🔄 Unloading model...");
+  await unloadModel({ modelId, clearStorage: false });
+  console.log("✅ Model unloaded successfully.");
+} catch (error) {
+  console.error("❌ Error during OCR processing:", error);
+  await close();
+}
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+```ts file=../examples/ocr.ts title="ocr.ts" lineNumbers
+import {
+  close,
+  loadModel,
+  ocr,
+  OCR_CRAFT_LATIN_RECOGNIZER,
+  unloadModel,
+} from "@qvac/sdk";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const imagePath =
+  process.argv[2] || path.join(__dirname, "image/basic_test.bmp");
+
+try {
+  console.log("🚀 Loading OCR model...");
+  // Only need to pass the recognizer - detector is auto-derived from same hyperdrive key
+  const modelId = await loadModel({
+    modelSrc: OCR_CRAFT_LATIN_RECOGNIZER,
+    modelType: "ocr",
+    modelConfig: {
+      langList: ["en"],
+    },
+  });
+  console.log(`✅ Model loaded successfully! Model ID: ${modelId}`);
+
+  console.log(`\n🔍 Running OCR on: ${imagePath}`);
+  const { blocks } = ocr({
+    modelId,
+    image: imagePath,
+  });
+
+  const result = await blocks;
+
+  console.log("\n📝 OCR Results:");
+  console.log("================================");
+  for (const block of result) {
+    console.log(`\n📄 Text: ${block.text}`);
+    if (block.bbox) {
+      console.log(`   📍 BBox: [${block.bbox.join(", ")}]`);
+    }
+    if (block.confidence !== undefined) {
+      console.log(`   ✓ Confidence: ${block.confidence}`);
+    }
+  }
+  console.log("\n================================");
+  console.log("\n🔄 Unloading model...");
+  await unloadModel({ modelId, clearStorage: false });
+  console.log("✅ Model unloaded successfully.");
+} catch (error) {
+  console.error("❌ Error during OCR processing:", error);
+  await close();
+}
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout title="Tip" type="success">
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+</Callout>

@@ -1,0 +1,50 @@
+---
+title: "ragSaveEmbeddings( )"
+titleStyle: code
+description: Saves document embeddings in the RAG vector database.
+---
+
+```ts
+function ragSaveEmbeddings(params): Promise<{
+  droppedIndices: number[];
+  processed: object[];
+}>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The parameters for saving embeddings |
+
+### params
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| modelId | `string` | ✓ | - | The identifier of the embedding model to use |
+| documents | `string` or `string[]` | ✓ | - | The documents to embed and save (string or array of strings) |
+| chunk | `boolean` | ✓ | - | Whether to chunk the documents before embedding |
+| chunkOpts | `object` | ✗ | - | Options for chunking documents |
+| workspace | `string` | ✗ | - | Optional workspace for isolated storage |
+
+### chunkOpts
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| chunkSize | `number` | ✗ | `512` | Size of each chunk |
+| chunkOverlap | `number` | ✗ | `0` | Overlap between chunks |
+| chunkStrategy | `"character" \| "paragraph"` | ✗ | `"character"` | Strategy for chunking |
+| splitStrategy | `"token" \| "character" \| "word" \| "sentence" \| "line"` | ✗ | `"character"` | Strategy for splitting text |
+
+## Returns
+
+`Promise<object>` — The processed results and dropped indices
+
+| Field | Type | Description |
+| --- | --- | --- |
+| droppedIndices | `number[]` | Indices of documents that were dropped |
+| processed | `object[]` | Processed document information |
+
+## Throws
+
+When the response type is invalid or when the operation fails
