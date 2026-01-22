@@ -199,14 +199,43 @@ jobs:
           restore-keys: |
             cpp-tests-v5-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
-      - name: Setup Node.js
+      - name: Detect npm lockfile for caching
+        id: lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Prefer package-level lockfiles for true per-package caching
+          if [[ -f "${{ inputs.workdir }}/package-lock.json" ]]; then
+            echo "path=${{ inputs.workdir }}/package-lock.json" >> "$GITHUB_OUTPUT"
+          elif [[ -f "${{ inputs.workdir }}/npm-shrinkwrap.json" ]]; then
+            echo "path=${{ inputs.workdir }}/npm-shrinkwrap.json" >> "$GITHUB_OUTPUT"
+          # Fallback: root lockfile (common in monorepos)
+          elif [[ -f "package-lock.json" ]]; then
+            echo "path=package-lock.json" >> "$GITHUB_OUTPUT"
+          elif [[ -f "npm-shrinkwrap.json" ]]; then
+            echo "path=npm-shrinkwrap.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Resolved lockfile path: '${{ steps.lockfile.outputs.path }}'"
+
+
+      - name: Setup Node.js (with cache)
+        if: ${{ steps.lockfile.outputs.path != '' }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node_version }}
+          node-version: ${{ inputs.node_version || 'lts/*' }}
           cache: npm
-          cache-dependency-path: |
-            ${{ inputs.workdir }}/package-lock.json
-            ${{ inputs.workdir }}/npm-shrinkwrap.json
+          cache-dependency-path: ${{ steps.lockfile.outputs.path }}
+
+      - name: Setup Node.js (no cache)
+        if: ${{ steps.lockfile.outputs.path == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version || 'lts/*' }}
+
 
       - name: Configure npm auth (write .npmrc INSIDE workdir + force npm to use it)
         shell: bash
