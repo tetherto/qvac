@@ -1,4 +1,5 @@
 # qvac-lib-infer-onnx-vad
+# Trigger
 
 This addon simplifies running voice-activity detection (VAD) with the Silero VAD model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Silero VAD inference instances over audio streams.
 
