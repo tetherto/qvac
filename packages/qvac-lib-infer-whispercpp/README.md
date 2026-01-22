@@ -1,4 +1,5 @@
 # qvac-lib-infer-whispercpp
+# Trigger
 
 This library simplifies running inference with the Whisper transcription model within QVAC runtime applications. It provides an easy interface to load, execute, and manage Whisper inference instances, supporting multiple data sources (data loaders).
 
