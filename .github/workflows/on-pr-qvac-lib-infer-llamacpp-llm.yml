@@ -37,7 +37,7 @@ jobs:
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
 
   cpp-tests:
-    uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
+    uses: ./.github/workflows/cpp-tests.yaml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm

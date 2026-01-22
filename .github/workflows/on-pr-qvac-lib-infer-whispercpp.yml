@@ -38,7 +38,7 @@ jobs:
           workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests:
-    uses: tetherto/qvac-devops/.github/workflows/cpp-tests.yaml@monorepo_update
+    uses: ./.github/workflows/cpp-tests.yaml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-whispercpp
