@@ -20,14 +20,14 @@ on:
         required: false
         default: main
       package:
-        description: "Full NPM package spec to test (default: @qvac/whispercpp@latest)"
+        description: "Full NPM package spec to test (default: @qvac/transcription-whispercpp@latest)"
         type: string
         required: false
-        default: "@qvac/whispercpp@latest"
+        default: "@qvac/transcription-whispercpp@latest"
 
 env:
   NODE_VERSION: "lts/*"
-  ADDON_NAME: "@qvac/whispercpp"
+  ADDON_NAME: "@qvac/transcription-whispercpp"
   PREBUILD_ARTIFACT_PREFIX: "whispercpp-"
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
