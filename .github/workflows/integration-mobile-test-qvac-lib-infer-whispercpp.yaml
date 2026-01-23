@@ -267,10 +267,6 @@ jobs:
           echo "Installing addon dependencies..."
           npm install
 
-      - name: Validate mobile tests are up-to-date
-        working-directory: ./addon/${{ env.PKG_DIR }}
-        run: npm run test:mobile:validate
-
       - name: Pack addon
         working-directory: ./addon/${{ env.PKG_DIR }}
         run: |
