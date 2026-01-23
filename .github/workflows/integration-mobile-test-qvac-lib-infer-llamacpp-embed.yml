@@ -113,10 +113,10 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          echo "Configuring .npmrc for monorepo package and test-framework..."
 
-          cd addon
-          cat > .npmrc <<NPMRC
+          # .npmrc for addon package (monorepo)
+          cat > "addon/${{ env.PKG_DIR }}/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -125,8 +125,8 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          cd ../test-framework
-          cat > .npmrc <<NPMRC
+          # .npmrc for test framework
+          cat > "test-framework/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -135,6 +135,7 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
+          # Ensure git can fetch private deps via https
           git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
 
       - name: Install global dependencies
