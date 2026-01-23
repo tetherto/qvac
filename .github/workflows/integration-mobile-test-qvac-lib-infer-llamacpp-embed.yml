@@ -25,10 +25,10 @@ on:
         required: false
         default: main
       package:
-        description: "Full NPM package spec to test (default: @qvac/llamacpp-embed@latest)"
+        description: "Full NPM package spec to test (default: @qvac/embed-llamacpp@latest)"
         type: string
         required: false
-        default: "@qvac/llamacpp-embed@latest"
+        default: "@qvac/embed-llamacpp@latest"
       workdir:
         description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
         type: string
@@ -37,8 +37,8 @@ on:
 
 env:
   NODE_VERSION: "lts/*"
-  ADDON_NAME: "@qvac/llamacpp-embed"
-  PREBUILD_ARTIFACT_PREFIX: "llamacpp-embed-"
+  ADDON_NAME: "@qvac/embed-llamacpp"
+  PREBUILD_ARTIFACT_PREFIX: "llama-cpp-"
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
   PKG_DIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}

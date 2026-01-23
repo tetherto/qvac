@@ -28,7 +28,7 @@ on:
 env:
   NODE_VERSION: "lts/*"
   ADDON_NAME: "@qvac/transcription-whispercpp"
-  PREBUILD_ARTIFACT_PREFIX: "whispercpp-"
+  PREBUILD_ARTIFACT_PREFIX: "whisper-cpp-"
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
   PKG_DIR: packages/qvac-lib-infer-whispercpp
