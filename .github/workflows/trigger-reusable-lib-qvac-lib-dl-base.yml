@@ -1,0 +1,53 @@
+name: General CI/CD (Qvac-lib-dl-base)
+# This workflow is used to call the reusable workflows in the qvac-devops repository
+# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+
+permissions:
+  packages: write
+  id-token: write
+  contents: write
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/qvac-lib-dl-base/**"
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled]
+    paths:
+      - "packages/qvac-lib-dl-base/**"
+  workflow_dispatch:
+    inputs:
+      custom_input_1:
+        required: false
+        type: string
+      custom_input_2:
+        required: false
+        type: string
+      custom_input_3:
+        required: false
+        type: string
+
+jobs:
+  call-devops-npm:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-dl-base
+
+  call-devops-gpr:
+    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-dl-base
+      name-suffix: "-mono"
+
+  merge-guard:
+    needs: [call-devops-npm, call-devops-gpr]
+    if: always() && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    secrets: inherit
+    with:
+      workdir: packages/qvac-lib-dl-base
