@@ -10,15 +10,13 @@ permissions:
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-error-base/**"
-
-  pull_request_target:
-    types: [opened, reopened, synchronize, labeled]
-    paths:
-      - "packages/qvac-lib-error-base/**"
-
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -32,24 +30,66 @@ on:
         type: string
 
 jobs:
-  call-devops-npm:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  publish-main-gpr-dev:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Publish to GitHub Packages (dev)
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: "dev"
+          path: packages/qvac-lib-error-base
+
+  publish-release-npm:
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-error-base
-  call-devops-gpr:
-    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
-    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@monorepo_update
-    secrets: inherit
-    with:
-      workdir: packages/qvac-lib-error-base
-      name-suffix: "-mono"
 
-  merge-guard:
-    needs: [call-devops-npm, call-devops-gpr]
-    if: always() && (needs.call-devops-npm.result == 'success' || needs.call-devops-gpr.result == 'success')
-    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
-    secrets: inherit
-    with:
-      workdir: packages/qvac-lib-error-base
+  publish-feature-gpr:
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'feature-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'feature-'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Publish to GitHub Packages (feature)
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: "feature"
+          path: packages/qvac-lib-error-base
+
+  publish-tmp-gpr:
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'tmp-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'tmp-'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Publish to GitHub Packages (tmp)
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: "tmp"
+          path: packages/qvac-lib-error-base
