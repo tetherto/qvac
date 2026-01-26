@@ -30,7 +30,7 @@ on:
 
 jobs:
   publish-main-gpr-dev:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,7 +40,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -49,14 +49,14 @@ jobs:
           path: packages/qvac-util-transcription
 
   publish-release-npm:
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
 
   publish-feature-gpr:
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'feature-')
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'feature-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'feature-'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,7 +66,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
           path: packages/qvac-util-transcription
 
   publish-tmp-gpr:
-    if: github.event_name == 'push' && startsWith(github.ref_name, 'tmp-')
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'tmp-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'tmp-'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,7 +85,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@main
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
