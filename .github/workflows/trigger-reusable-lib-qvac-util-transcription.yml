@@ -16,6 +16,11 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-util-transcription/**"
+  pull_request:
+    branches:
+      - release-*
+    paths:
+      - "packages/qvac-util-transcription/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -29,6 +34,17 @@ on:
         type: string
 
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@main
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-util-transcription
+      package-json-path: packages/qvac-util-transcription/package.json
+      changelog-path: packages/qvac-util-transcription/CHANGELOG.md
+
   publish-main-gpr-dev:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
