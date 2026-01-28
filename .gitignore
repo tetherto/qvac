@@ -3,4 +3,5 @@ sync-monorepo.sh
 /node_modules
 
 packages/**/.npmrc
-/ტესტ
+/ტესტt
+
