@@ -66,8 +66,7 @@ jobs:
           path: packages/qvac-lib-logging
 
   publish-release-npm:
-    needs: [release-pr-guard]
-    if: always() && ((github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))) && (needs.release-pr-guard.result == 'success' || needs.release-pr-guard.result == 'skipped')
+    if: (github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:

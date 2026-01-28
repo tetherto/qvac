@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
@@ -403,7 +406,11 @@ jobs:
 
   publish-gpr:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || github.event.inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && github.event.inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'gpr' || github.event.inputs.publish_target == 'gpr'
+            || (github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-')))
+            || (github.event_name == 'workflow_dispatch'
+                && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-'))
+                && github.event.inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -428,13 +435,15 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
           path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
           name-suffix: "-mono"
 
   publish-npm:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || github.event.inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'npm' || github.event.inputs.publish_target == 'npm'
+            || (github.event_name == 'push' && startsWith(github.ref_name, 'release-'))
+            || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-') && github.event.inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
