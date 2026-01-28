@@ -2,11 +2,7 @@ name: "prebuilds (Qvac-lib-infer-llamacpp-embed)"
 
 on:
   push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
+    branches: [main]
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
 
@@ -408,12 +404,8 @@ jobs:
           path: prebuilds
 
   publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr'
-      || (github.event_name == 'push' && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-')))
-      || (github.event_name == 'workflow_dispatch'
-      && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-'))
-      && inputs.publish_target == '') }}
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -440,15 +432,14 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ inputs.workdir }}
           name-suffix: "-mono"
 
+
   publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm'
-      || (github.event_name == 'push' && startsWith(github.ref_name, 'release-'))
-      || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-') && inputs.publish_target == '') }}
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -475,5 +466,5 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
+          tag: 'latest'
           workdir: ${{ inputs.workdir }}

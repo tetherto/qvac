@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - main
-      - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
   workflow_dispatch:
@@ -353,10 +350,10 @@ jobs:
         run: |
           rm -f ${{ env.PKG_DIR }}/prebuilds/linux-arm64/qvac__llm-llamacpp/*.a
 
-      - name: Smoke check (tmp-*) package name & prebuilds listing
-        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
-                || startsWith(github.ref_name, 'tmp-')
-                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
+      - name: Smoke check (temp-*) package name & prebuilds listing
+        if: ${{ startsWith(github.ref, 'refs/heads/temp-')
+                || startsWith(github.ref_name, 'temp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))) }}
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
         run: |
@@ -393,10 +390,7 @@ jobs:
     if: ${{ inputs.publish_target == 'gpr'
             || (
                  (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-                 && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-')
-                     || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/main') || startsWith(inputs.ref, 'main')
-                         || startsWith(inputs.ref, 'refs/heads/feature-') || startsWith(inputs.ref, 'feature-')
-                         || startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))))
+                 && (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))))
                  && (inputs.publish_target == '' || inputs.publish_target == null)
                ) }}
     continue-on-error: true
@@ -429,16 +423,19 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
           workdir: ${{ env.PKG_DIR }}
           name-suffix: "-mono"
           
 
   publish-npm:
     needs: [ prebuild, merge ]
-    if: ${{ inputs.publish_target == 'npm'
-            || (github.event_name == 'push' && startsWith(github.ref_name, 'release-'))
-            || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-') && (inputs.publish_target == '' || inputs.publish_target == null)) }}
+    if: ${{ (
+              inputs.publish_target == 'npm'
+              || github.event_name == 'push'
+              || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.publish_target == '' || inputs.publish_target == null))
+            )
+            && ! (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-')))) }}
     continue-on-error: true
     outputs:
       npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
