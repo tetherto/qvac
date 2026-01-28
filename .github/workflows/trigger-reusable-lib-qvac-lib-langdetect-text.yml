@@ -66,7 +66,8 @@ jobs:
           path: packages/qvac-lib-langdetect-text
 
   publish-release-npm:
-    if: (github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))
+    needs: [release-pr-guard]
+    if: always() && ((github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))) && (needs.release-pr-guard.result == 'success' || needs.release-pr-guard.result == 'skipped')
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
