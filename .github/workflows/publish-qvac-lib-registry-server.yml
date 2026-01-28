@@ -2,7 +2,11 @@ name: Publish (Qvac-lib-registry-server)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - 'packages/qvac-lib-registry-server/shared/**'
       - 'packages/qvac-lib-registry-server/client/**'
@@ -80,7 +84,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
-          tag: latest
+          tag: ${{ (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'release-') && 'latest') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   lint-and-test:
@@ -165,5 +169,5 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client
-          tag: latest
+          tag: ${{ (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'release-') && 'latest') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
           name-suffix: ${{ env.NAME_SUFFIX }}

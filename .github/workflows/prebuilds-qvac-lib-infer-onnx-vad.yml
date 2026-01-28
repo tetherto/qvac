@@ -26,6 +26,9 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-onnx-vad/**"
 
@@ -331,6 +334,7 @@ jobs:
 
   publish-gpr:
     needs: [prebuild, merge]
+    if: ${{ inputs.publish_target == 'gpr' || github.event.inputs.publish_target == 'gpr' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref_name == 'main' || startsWith(github.ref_name, 'feature-') || startsWith(github.ref_name, 'tmp-')) && (inputs.publish_target == '' || inputs.publish_target == null) && (github.event.inputs.publish_target == '' || github.event.inputs.publish_target == null)) }}
     continue-on-error: true
     runs-on: ubuntu-latest
     permissions:
@@ -377,5 +381,5 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}
-          tag: ${{ github.event.inputs.tag || inputs.tag || 'dev' }}
+          tag: ${{ github.event.inputs.tag || inputs.tag || (github.ref_name == 'main' && 'dev') || (startsWith(github.ref_name, 'feature-') && 'feature') || (startsWith(github.ref_name, 'tmp-') && 'tmp') || 'dev' }}
           name-suffix: "-mono"

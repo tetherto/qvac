@@ -2,7 +2,11 @@ name: Build and Publish (Qvac-sdk)
 
 on:
   push:
-    branches: ["main", "dev", "fix-*", "feature-*", "npm-patch-*"]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-sdk/**"
   workflow_dispatch:
