@@ -1,0 +1,17 @@
+{
+  "name": "release-pr-guard",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.0",
+    "@actions/github": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "@vercel/ncc": "^0.38.0",
+    "typescript": "^5.3.0"
+  }
+}
