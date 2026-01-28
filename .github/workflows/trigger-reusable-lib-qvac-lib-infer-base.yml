@@ -84,12 +84,12 @@ jobs:
           fetch-depth: 0
       - name: Publish to GitHub Packages (feature)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
-          tag: "feature"
-          path: packages/qvac-lib-infer-base
+    with:
+      secret-token: ${{ secrets.GITHUB_TOKEN }}
+      pat-token: ${{ secrets.PAT_TOKEN }}
+      npm-token: ${{ secrets.NPM_TOKEN }}
+      tag: "feature"
+      path: packages/qvac-lib-infer-base
 
   publish-tmp-gpr:
     if: (github.event_name == 'push' && startsWith(github.ref_name, 'tmp-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'tmp-'))
@@ -103,9 +103,9 @@ jobs:
           fetch-depth: 0
       - name: Publish to GitHub Packages (tmp)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
-          tag: "tmp"
-          path: packages/qvac-lib-infer-base
+    with:
+      secret-token: ${{ secrets.GITHUB_TOKEN }}
+      pat-token: ${{ secrets.PAT_TOKEN }}
+      npm-token: ${{ secrets.NPM_TOKEN }}
+      tag: "tmp"
+      path: packages/qvac-lib-infer-base
