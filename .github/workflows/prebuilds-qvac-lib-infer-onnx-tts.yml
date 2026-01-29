@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
@@ -401,10 +404,79 @@ jobs:
           name: prebuilds
           path: prebuilds
 
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      publish_npm: ${{ steps.logic.outputs.publish_npm }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_PUBLISH_TARGET: ${{ inputs.publish_target }}
+          EVENT_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+          publish_target="${INPUT_PUBLISH_TARGET}"
+          event_publish_target="${EVENT_PUBLISH_TARGET}"
+
+          publish_gpr="false"
+          publish_npm="false"
+
+          if [ "$publish_target" = "gpr" ] || [ "$event_publish_target" = "gpr" ]; then
+            publish_gpr="true"
+          fi
+
+          if [ "$publish_target" = "npm" ] || [ "$event_publish_target" = "npm" ]; then
+            publish_npm="true"
+          fi
+
+          if [ "$publish_gpr" = "false" ] && [ "$publish_npm" = "false" ]; then
+            if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+              if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+                publish_gpr="true"
+              elif [[ "$ref_name" == release-* ]]; then
+                publish_npm="true"
+              fi
+            fi
+          fi
+
+          if [[ "$ref_name" == release-* ]]; then
+            publish_gpr="false"
+          fi
+
+          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
+            publish_npm="false"
+          fi
+
+          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
+            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
+            exit 1
+          fi
+
+          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=$publish_npm" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || github.event.inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && github.event.inputs.publish_target == '') }}
-    continue-on-error: true
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
@@ -428,14 +500,13 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
           name-suffix: "-mono"
 
   publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || github.event.inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.publish_target == '') }}
-    continue-on-error: true
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest

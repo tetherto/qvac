@@ -26,6 +26,9 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-onnx-vad/**"
 
@@ -162,12 +165,12 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
           git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
-      
+
       - name: Configure npm for scoped packages
         shell: bash
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}     
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}    
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -186,7 +189,7 @@ jobs:
           # sanity check (won't print tokens)
           npm config get @tetherto:registry
           npm config get registry
-          
+
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
         shell: bash
@@ -329,9 +332,46 @@ jobs:
           name: prebuilds
           path: prebuilds
 
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_gpr="false"
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              publish_gpr="true"
+            fi
+          fi
+
+          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   publish-gpr:
-    needs: [prebuild, merge]
-    continue-on-error: true
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -377,5 +417,5 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ env.PKG_DIR }}
-          tag: ${{ github.event.inputs.tag || inputs.tag || 'dev' }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: "-mono"

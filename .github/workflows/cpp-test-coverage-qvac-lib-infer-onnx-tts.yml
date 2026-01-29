@@ -2,33 +2,33 @@ name: C++ Tests & Coverage (Qvac-lib-infer-onnx-tts)
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, release-*]
     types: [opened, closed]
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
   push:
-    branches: [main, dev]
+    branches: [main, release-*]
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_call:
     inputs:
       ref:
-        description: 'ref'
+        description: "ref"
         type: string
       repository:
         type: string
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-onnx-tts)'
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-onnx-tts)"
         required: false
         type: string
-        default: 'packages/qvac-lib-infer-onnx-tts'
+        default: "packages/qvac-lib-infer-onnx-tts"
   workflow_dispatch:
     inputs:
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-onnx-tts)'
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-onnx-tts)"
         required: false
         type: string
-        default: 'packages/qvac-lib-infer-onnx-tts'
+        default: "packages/qvac-lib-infer-onnx-tts"
 
 env:
   BUILD_TYPE: Debug

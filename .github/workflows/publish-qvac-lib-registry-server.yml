@@ -2,10 +2,14 @@ name: Publish (Qvac-lib-registry-server)
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
-      - 'packages/qvac-lib-registry-server/shared/**'
-      - 'packages/qvac-lib-registry-server/client/**'
+      - "packages/qvac-lib-registry-server/shared/**"
+      - "packages/qvac-lib-registry-server/client/**"
   workflow_dispatch:
 
 env:
@@ -56,9 +60,39 @@ jobs:
             echo "client=false" >> "$GITHUB_OUTPUT"
           fi
 
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_gpr="false"
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              publish_gpr="true"
+            fi
+          fi
+
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   publish-schema:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.schema_changed == 'true'
+    needs: [detect-changes, publish-logic]
+    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_gpr == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -80,7 +114,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/shared
-          tag: latest
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   lint-and-test:
@@ -95,7 +129,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Configure npm for package registries
         shell: bash
@@ -136,12 +170,13 @@ jobs:
         run: npm run typecheck
 
   publish-client:
-    needs: [detect-changes, publish-schema, lint-and-test]
+    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: |
       needs.detect-changes.outputs.client_changed == 'true' &&
       always() &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success'
+      needs.lint-and-test.result == 'success' &&
+      needs.publish-logic.outputs.publish_gpr == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -165,5 +200,5 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           path: ${{ env.PKG_DIR }}/client
-          tag: latest
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: ${{ env.NAME_SUFFIX }}

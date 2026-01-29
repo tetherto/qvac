@@ -11,10 +11,10 @@ name: PR Validation and Staging Sync (Qvac-lib-registry-server)
 
 on:
   pull_request_target:
-    branches: [main]
+    branches: [main, release-*]
     types: [opened, synchronize, reopened, labeled]
     paths:
-      - 'packages/qvac-lib-registry-server/**'
+      - "packages/qvac-lib-registry-server/**"
   workflow_dispatch:
 
 env:
@@ -33,7 +33,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-
 
       - name: Detect file changes
         id: filter
@@ -109,8 +108,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Install dependencies
@@ -135,8 +134,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: |
             ${{ env.PKG_DIR }}/package-lock.json
             ${{ env.PKG_DIR }}/client/package-lock.json
@@ -212,8 +211,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Install dependencies
@@ -265,8 +264,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Install server dependencies
