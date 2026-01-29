@@ -4,54 +4,54 @@ on:
   workflow_dispatch:
     inputs:
       pairs:
-        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
+        description: "Comma-separated language pairs (e.g., en-it,en-de,de-en)"
         required: true
-        default: 'en-it'
+        default: "en-it"
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: "Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)"
         required: false
-        default: 'qvac'
+        default: "qvac"
         type: string
       dataset_flores_devtest:
-        description: 'Evaluate on Flores-devtest dataset'
+        description: "Evaluate on Flores-devtest dataset"
         required: false
         default: true
         type: boolean
       dataset_conversational_phrases:
-        description: 'Evaluate on Conversational Phrases dataset'
+        description: "Evaluate on Conversational Phrases dataset"
         required: false
         default: false
         type: boolean
       metric_chrfpp:
-        description: 'Calculate chrF++ score'
+        description: "Calculate chrF++ score"
         required: false
         default: true
         type: boolean
       metric_comet:
-        description: 'Calculate COMET score'
+        description: "Calculate COMET score"
         required: false
         default: true
         type: boolean
       use_pivot:
-        description: 'Use English as pivot for non-English pairs (e.g., de-fr via de->en->fr)'
+        description: "Use English as pivot for non-English pairs (e.g., de-fr via de->en->fr)"
         required: false
         default: false
         type: boolean
       is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model supported with QVAC backend only'
+        description: "Use Quantized q4_0 gguf format model supported with QVAC backend only"
         required: false
         default: false
         type: boolean
       use_batch:
-        description: 'Use batch translation only with qvac_bergamot (faster) option'
+        description: "Use batch translation only with qvac_bergamot (faster) option"
         required: false
         default: false
         type: boolean
       hyperparams:
-        description: 'Hyperparameter preset for translation'
+        description: "Hyperparameter preset for translation"
         required: false
-        default: 'fast'
+        default: "fast"
         type: choice
         options:
           - default
@@ -60,53 +60,53 @@ on:
   workflow_call:
     inputs:
       pairs:
-        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
+        description: "Comma-separated language pairs (e.g., en-it,en-de,de-en)"
         required: true
         type: string
       translators:
-        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
+        description: "Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)"
         required: false
-        default: 'qvac'
+        default: "qvac"
         type: string
       dataset_flores_devtest:
-        description: 'Evaluate on Flores-devtest dataset'
+        description: "Evaluate on Flores-devtest dataset"
         required: false
         default: true
         type: boolean
       dataset_conversational_phrases:
-        description: 'Evaluate on Conversational Phrases dataset'
+        description: "Evaluate on Conversational Phrases dataset"
         required: false
         default: false
         type: boolean
       metric_chrfpp:
-        description: 'Calculate chrF++ score'
+        description: "Calculate chrF++ score"
         required: false
         default: true
         type: boolean
       metric_comet:
-        description: 'Calculate COMET score'
+        description: "Calculate COMET score"
         required: false
         default: true
         type: boolean
       use_pivot:
-        description: 'Use English as pivot for non-English pairs'
+        description: "Use English as pivot for non-English pairs"
         required: false
         default: false
         type: boolean
       is_quantized_model:
-        description: 'Use Quantized q4_0 gguf format model'
+        description: "Use Quantized q4_0 gguf format model"
         required: false
         default: false
         type: boolean
       use_batch:
-        description: 'Use batch translation only with qvac_bergamot (faster) option'
+        description: "Use batch translation only with qvac_bergamot (faster) option"
         required: false
         default: false
         type: boolean
       hyperparams:
-        description: 'Hyperparameter preset for translation'
+        description: "Hyperparameter preset for translation"
         required: false
-        default: 'fast'
+        default: "fast"
         type: string
 
 env:
@@ -185,7 +185,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -201,7 +201,7 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -247,7 +247,7 @@ jobs:
             libunwind-dev
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -314,7 +314,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 9  # Limit concurrent jobs to avoid resource contention
+      max-parallel: 9 # Limit concurrent jobs to avoid resource contention
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
@@ -323,14 +323,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
@@ -339,8 +339,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
@@ -376,7 +376,7 @@ jobs:
           # Download model for this specific language pair
           pair="${{ matrix.pair }}"
           echo "Downloading model for $pair..."
-          
+
           # Function to download a model
           download_model() {
             local model_pair=$1
@@ -453,10 +453,10 @@ jobs:
               rm -rf "$temp_dir"
             fi
           }
-          
+
           # Download the main model
           download_model "$pair"
-          
+
           # If using pivot translation and this is a non-English pair, download pivot models
           if [ "${{ inputs.use_pivot }}" = "true" ]; then
             src_lang="${pair%-*}"
@@ -609,7 +609,7 @@ jobs:
           echo "Selected metrics: $metrics"
 
       - name: Run evaluation on all selected datasets
-        timeout-minutes: 90  # Timeout per language pair evaluation
+        timeout-minutes: 90 # Timeout per language pair evaluation
         working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
         run: |
           # Set hyperparameters based on preset
@@ -821,4 +821,3 @@ jobs:
           name: consolidated-results
           path: all-results
           retention-days: 90
-

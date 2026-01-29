@@ -10,7 +10,8 @@ on:
     paths:
       - "packages/qvac-sdk/**"
     branches:
-      - dev
+      - main
+      - release-*
 
 jobs:
   validate-pr:
@@ -36,4 +37,3 @@ jobs:
 
           # Run validator
           node scripts/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
-

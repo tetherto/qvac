@@ -67,14 +67,14 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."

@@ -88,14 +88,14 @@ jobs:
           path: monorepo
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout mobile test framework
         uses: actions/checkout@v4
         with:
           repository: tetherto/qvac-test-addon-mobile
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: test-framework
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
@@ -107,9 +107,9 @@ jobs:
 
       - name: Configure scoped registry for @qvac and @tetherto packages
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
 

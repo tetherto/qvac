@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
           repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref }}
@@ -106,7 +106,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -133,8 +133,8 @@ jobs:
           echo "@qvac:registry=${qvac_registry}" >> .npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc
-          git config --global url."https://${{  secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "https://github.com/"
 
       - name: Install npm dependencies
         shell: bash

@@ -8,8 +8,15 @@ on:
   pull_request:
     paths:
       - "packages/qvac-sdk/**"
+    branches:
+      - main
+      - release-*
   push:
-    branches: [main, dev]
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-sdk/**"
 
