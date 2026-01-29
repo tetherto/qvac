@@ -107,7 +107,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yaml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -118,7 +118,7 @@ jobs:
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yaml
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -127,7 +127,7 @@ jobs:
   run-mobile-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yaml
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
