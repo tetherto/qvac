@@ -4,54 +4,54 @@ on:
   workflow_dispatch:
     inputs:
       pairs:
-        description: "Comma-separated language pairs (e.g., en-it,en-de,de-en)"
+        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
         required: true
-        default: "en-it"
+        default: 'en-it'
         type: string
       translators:
-        description: "Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)"
+        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: "qvac"
+        default: 'qvac'
         type: string
       dataset_flores_devtest:
-        description: "Evaluate on Flores-devtest dataset"
+        description: 'Evaluate on Flores-devtest dataset'
         required: false
         default: true
         type: boolean
       dataset_conversational_phrases:
-        description: "Evaluate on Conversational Phrases dataset"
+        description: 'Evaluate on Conversational Phrases dataset'
         required: false
         default: false
         type: boolean
       metric_chrfpp:
-        description: "Calculate chrF++ score"
+        description: 'Calculate chrF++ score'
         required: false
         default: true
         type: boolean
       metric_comet:
-        description: "Calculate COMET score"
+        description: 'Calculate COMET score'
         required: false
         default: true
         type: boolean
       use_pivot:
-        description: "Use English as pivot for non-English pairs (e.g., de-fr via de->en->fr)"
+        description: 'Use English as pivot for non-English pairs (e.g., de-fr via de->en->fr)'
         required: false
         default: false
         type: boolean
       is_quantized_model:
-        description: "Use Quantized q4_0 gguf format model supported with QVAC backend only"
+        description: 'Use Quantized q4_0 gguf format model supported with QVAC backend only'
         required: false
         default: false
         type: boolean
       use_batch:
-        description: "Use batch translation only with qvac_bergamot (faster) option"
+        description: 'Use batch translation only with qvac_bergamot (faster) option'
         required: false
         default: false
         type: boolean
       hyperparams:
-        description: "Hyperparameter preset for translation"
+        description: 'Hyperparameter preset for translation'
         required: false
-        default: "fast"
+        default: 'fast'
         type: choice
         options:
           - default
@@ -60,53 +60,53 @@ on:
   workflow_call:
     inputs:
       pairs:
-        description: "Comma-separated language pairs (e.g., en-it,en-de,de-en)"
+        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
         required: true
         type: string
       translators:
-        description: "Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)"
+        description: 'Comma-separated translators (qvac,qvac_bergamot,opusmt,google,nllb,bergamot)'
         required: false
-        default: "qvac"
+        default: 'qvac'
         type: string
       dataset_flores_devtest:
-        description: "Evaluate on Flores-devtest dataset"
+        description: 'Evaluate on Flores-devtest dataset'
         required: false
         default: true
         type: boolean
       dataset_conversational_phrases:
-        description: "Evaluate on Conversational Phrases dataset"
+        description: 'Evaluate on Conversational Phrases dataset'
         required: false
         default: false
         type: boolean
       metric_chrfpp:
-        description: "Calculate chrF++ score"
+        description: 'Calculate chrF++ score'
         required: false
         default: true
         type: boolean
       metric_comet:
-        description: "Calculate COMET score"
+        description: 'Calculate COMET score'
         required: false
         default: true
         type: boolean
       use_pivot:
-        description: "Use English as pivot for non-English pairs"
+        description: 'Use English as pivot for non-English pairs'
         required: false
         default: false
         type: boolean
       is_quantized_model:
-        description: "Use Quantized q4_0 gguf format model"
+        description: 'Use Quantized q4_0 gguf format model'
         required: false
         default: false
         type: boolean
       use_batch:
-        description: "Use batch translation only with qvac_bergamot (faster) option"
+        description: 'Use batch translation only with qvac_bergamot (faster) option'
         required: false
         default: false
         type: boolean
       hyperparams:
-        description: "Hyperparameter preset for translation"
+        description: 'Hyperparameter preset for translation'
         required: false
-        default: "fast"
+        default: 'fast'
         type: string
 
 env:
@@ -330,7 +330,7 @@ jobs:
         if: needs.setup.outputs.qvac_needed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
@@ -339,8 +339,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-          cache: "pip"
+          python-version: '3.10'
+          cache: 'pip'
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
