@@ -45,8 +45,55 @@ jobs:
       package-json-path: packages/qvac-lib-dl-hyperdrive/package.json
       changelog-path: packages/qvac-lib-dl-hyperdrive/CHANGELOG.md
 
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
+            fi
+          fi
+
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
+          fi
+
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   publish-main-gpr-dev:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,18 +108,20 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          tag: "dev"
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-dl-hyperdrive
 
   publish-release-npm:
-    if: (github.event_name == 'push' && startsWith(github.ref_name, 'release-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-'))
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
 
   publish-feature-gpr:
-    if: (github.event_name == 'push' && startsWith(github.ref_name, 'feature-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'feature-'))
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,11 +136,12 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          tag: "feature"
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-dl-hyperdrive
 
   publish-tmp-gpr:
-    if: (github.event_name == 'push' && startsWith(github.ref_name, 'tmp-')) || (github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'tmp-'))
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -106,5 +156,5 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          tag: "tmp"
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-dl-hyperdrive
