@@ -51,18 +51,18 @@ jobs:
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
 
   cpp-tests:
-    uses: ./.github/workflows/cpp-tests.yml
+    uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
       artifact_prefix: llm-llamacpp
       enable_coverage: true
-      models: |
-        [
-          {"uri": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf", "dest": "models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf"},
-          {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf"},
-          {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"}
-        ]
+      # models: |
+      #   [
+      #     {"uri": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf", "dest": "models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf"},
+      #     {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf"},
+      #     {"uri": "s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf", "dest": "models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"}
+      #   ]
 
   cpp-lint:
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update

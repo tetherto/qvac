@@ -1,16 +1,30 @@
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Run Integration Tests (Qvac-lib-infer-llamacpp-llm)
 
 on:
   workflow_call:
     inputs:
       ref:
-        description: "ref"
+        description: "Git ref (branch/tag/SHA) to test"
         type: string
+        required: false
       repository:
+        description: "Repository to checkout"
         type: string
+        required: false
       model:
+        description: "Model (currently unused by this workflow)"
         type: string
+        required: false
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0). If empty, download from artifacts."
+        type: string
+        required: false
+        default: ""
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-llm"
 
   workflow_dispatch:
     inputs:
@@ -20,13 +34,14 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (E.g. @qvac/llm-llamacpp@1.0.0)"
+        description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
         type: string
         required: true
-        default: "@qvac/llm-llamacpp@latest"
-
-env:
-  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-llm"
 
 jobs:
   run-integration-tests:
@@ -34,17 +49,31 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
     permissions:
       contents: read
       packages: read
+
+    env:
+      # Auth / cloud
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      # Workdir "port": everything runs under this package dir
+      WORKDIR: ${{ inputs.workdir }}
+      PKG_DIR: ${{ github.workspace }}/${{ inputs.workdir }}
+      PREBUILDS_DIR: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds
+
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: ubuntu-22.04
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -53,6 +82,10 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
@@ -74,11 +107,11 @@ jobs:
 
       - name: Windows - enable git long paths
         if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
         run: |
           git config --system core.longpaths true
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
-        shell: powershell
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,6 +120,19 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Validate workdir exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "WORKDIR=${WORKDIR}"
+          echo "PKG_DIR=${PKG_DIR}"
+          test -d "${PKG_DIR}" || {
+            echo "❌ workdir not found: ${PKG_DIR}"
+            echo "Repo root listing:"
+            ls -la
+            exit 1
+          }
+
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
@@ -94,6 +140,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
         run: |
           echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -108,12 +155,13 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
+          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
           else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
-        shell: bash
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
@@ -122,6 +170,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: powershell
         run: |
           echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
           echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
@@ -139,6 +188,7 @@ jobs:
           Get-Content .npmrc
           echo "=================================="
 
+          # Configure git
           if ($env:GIT_PAT) {
             git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "git@github.com:"
@@ -146,57 +196,70 @@ jobs:
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
           }
-        shell: powershell
 
       - name: Install NPM dependencies
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
           npm install
           npm install -g bare bare-make bare-runtime bare-https brittle
 
+      - name: Ensure prebuilds dir exists
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p "${PREBUILDS_DIR}"
+          ls -la "${PREBUILDS_DIR}"
+
       - name: Download prebuilds (from artifacts)
-        if: ${{ !inputs.prebuild_package }}
+        if: ${{ !inputs.prebuild_package || inputs.prebuild_package == '' }}
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds-llm-llamacpp
-          path: ${{ env.PKG_DIR }}/prebuilds
+          path: ${{ env.PREBUILDS_DIR }}
+          merge-multiple: true
 
       - name: Download prebuilds from package (Linux/macOS)
-        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        shell: bash
+        if: ${{ inputs.prebuild_package && inputs.prebuild_package != '' && matrix.platform != 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
+          set -euo pipefail
           PACKAGE="${{ inputs.prebuild_package }}"
           echo "Downloading $PACKAGE from npm..."
 
-          if ! npm pack $PACKAGE; then
+          # Download package from npm with error handling
+          if ! npm pack "$PACKAGE"; then
             echo "ERROR: Failed to download $PACKAGE from npm"
             echo "Please check that the package exists"
             exit 1
           fi
 
+          # Extract the tarball
           tar -xzf *.tgz
 
+          # Validate prebuilds directory exists
           if [ ! -d "package/prebuilds" ]; then
             echo "ERROR: No prebuilds directory found in package"
             echo "The downloaded package may not contain prebuilt binaries"
             exit 1
           fi
 
-          mv package/prebuilds ./prebuilds
+          # Move prebuilds to expected location (under workdir)
+          rm -rf "${PREBUILDS_DIR}" 2>/dev/null || true
+          mv package/prebuilds "${PREBUILDS_DIR}"
 
+          # Cleanup
           rm -rf package *.tgz
 
-          echo "Prebuilds downloaded from npm successfully"
-          ls -la prebuilds/
+          echo "Prebuilds downloaded from npm successfully:"
+          ls -la "${PREBUILDS_DIR}/"
 
       - name: Download prebuilds from package (Windows)
-        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        shell: powershell
+        if: ${{ inputs.prebuild_package && inputs.prebuild_package != '' && matrix.platform == 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
+        shell: powershell
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
-
           echo "Downloading $PACKAGE from npm..."
 
           npm pack $PACKAGE
@@ -221,45 +284,62 @@ jobs:
             exit 1
           }
 
-          Move-Item package/prebuilds ./prebuilds
+          # Replace prebuilds dir under workdir
+          if (Test-Path "$env:PREBUILDS_DIR") {
+            Remove-Item -Recurse -Force "$env:PREBUILDS_DIR"
+          }
+          New-Item -ItemType Directory -Force -Path "$env:PREBUILDS_DIR" | Out-Null
+          Move-Item package/prebuilds "$env:PREBUILDS_DIR"
 
           Remove-Item -Recurse -Force package
           Remove-Item $TARBALL
 
-          echo "Prebuilds downloaded from npm successfully"
-          Get-ChildItem prebuilds/
+          echo "Prebuilds downloaded from npm successfully:"
+          Get-ChildItem "$env:PREBUILDS_DIR"
 
       - name: Linux - install dependencies
         if: matrix.platform == 'linux' || matrix.platform == 'android'
+        working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - name: Linux - install glibcxx
+        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - name: Windows - Install Vulkan
         if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: powershell
+        timeout-minutes: 40
         run: |
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
-        run: npm run test:integration
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm run test:integration 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
-        run: |
-          npm run test:integration:generate
-          bare test/integration/all.js --exit | Tee-Object test-output.log
-          exit 0
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
-
+        run: |
+          npm run test:integration:generate
+          bare test/integration/all.js --exit | Tee-Object test-output.log
