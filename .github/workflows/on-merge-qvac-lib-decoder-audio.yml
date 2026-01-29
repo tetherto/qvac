@@ -24,6 +24,14 @@ jobs:
     with:
       workdir: "packages/qvac-lib-decoder-audio"
 
+  mobile-integration-tests:
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
+
   publish-npm:
     needs: run-integration-tests
     runs-on: ubuntu-latest
