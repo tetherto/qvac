@@ -453,6 +453,15 @@ jobs:
             publish_gpr="false"
           fi
 
+          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
+            publish_npm="false"
+          fi
+
+          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
+            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
+            exit 1
+          fi
+
           gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
