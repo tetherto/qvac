@@ -4,18 +4,16 @@ on:
   push:
     branches:
       - main
+      - release-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to publish with"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-          - latest
-          - dev
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -27,8 +25,7 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      tag: ${{ inputs.tag || 'latest' }}
-      publish_target: "npm"
+      tag: ${{ inputs.tag }}
 
   model-conversion-test:
     needs: [prebuild]
@@ -40,5 +37,5 @@ jobs:
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}

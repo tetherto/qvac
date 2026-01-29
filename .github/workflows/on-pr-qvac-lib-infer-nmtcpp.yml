@@ -101,7 +101,7 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          gpr-token: ${{ secrets.PAT_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           workdir: ${{ env.PKG_DIR }}
 
@@ -147,11 +147,18 @@ jobs:
 
       - name: Configure npm auth
         run: |
+          base_ref="${{ github.event.pull_request.base.ref || github.ref_name }}"
+          qvac_registry="https://npm.pkg.github.com/"
+          if [[ "$base_ref" == release-* ]]; then
+            qvac_registry="https://registry.npmjs.org/"
+          fi
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
+          @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
           NPMRC
 
       - name: Install dependencies

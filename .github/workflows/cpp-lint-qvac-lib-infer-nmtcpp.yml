@@ -125,7 +125,12 @@ jobs:
       - name: Configure npm registries
         shell: bash
         run: |
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          ref_name="${{ inputs.ref || github.ref_name }}"
+          qvac_registry="https://npm.pkg.github.com/"
+          if [[ "$ref_name" == release-* ]]; then
+            qvac_registry="https://registry.npmjs.org/"
+          fi
+          echo "@qvac:registry=${qvac_registry}" >> .npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}" >> .npmrc

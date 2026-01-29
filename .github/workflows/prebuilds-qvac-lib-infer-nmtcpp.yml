@@ -789,6 +789,7 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
+          name-suffix: "-mono"
 
   check-version-change:
     needs: [publish-npm]
@@ -826,11 +827,22 @@ jobs:
             echo "version=" >> $GITHUB_OUTPUT
           fi
 
-  # TODO: Migrate benchmark workflow
-  # run-automated-benchmarks:
-  #   needs: [check-version-change]
-  #   if: needs.check-version-change.outputs.version_changed == 'true'
-  #   uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yaml
-  #   secrets: inherit
-  #   with:
-  #     version: ${{ needs.check-version-change.outputs.new_version }}
+  create-github-release:
+    needs: [check-version-change]
+    if: needs.check-version-change.outputs.version_changed == 'true' && startsWith(github.ref_name, 'release-')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.check-version-change.outputs.new_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: ${{ env.PKG_DIR }}
+
+  run-automated-benchmarks:
+    needs: [check-version-change]
+    if: needs.check-version-change.outputs.version_changed == 'true'
+    uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.check-version-change.outputs.new_version }}
