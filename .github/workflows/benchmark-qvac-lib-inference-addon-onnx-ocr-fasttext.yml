@@ -72,7 +72,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -88,24 +88,26 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
+          ref_name="${{ github.ref_name }}"
+          qvac_registry="https://npm.pkg.github.com/"
+          if [[ "$ref_name" == release-* ]]; then
+            qvac_registry="https://registry.npmjs.org/"
+          fi
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          fi
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
@@ -191,7 +193,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -223,16 +225,20 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
+          ref_name="${{ github.ref_name }}"
+          qvac_registry="https://npm.pkg.github.com/"
+          if [[ "$ref_name" == release-* ]]; then
+            qvac_registry="https://registry.npmjs.org/"
+          fi
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
       - name: Install npm dependencies (for QVAC)

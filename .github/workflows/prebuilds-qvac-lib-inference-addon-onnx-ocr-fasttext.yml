@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
 
@@ -196,7 +199,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
 
@@ -210,7 +213,6 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -222,16 +224,11 @@ jobs:
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
@@ -399,9 +396,79 @@ jobs:
           name: models
           path: models
 
+  publish-logic:
+    runs-on: ubuntu-24.04
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      publish_npm: ${{ steps.logic.outputs.publish_npm }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_PUBLISH_TARGET: ${{ inputs.publish_target }}
+          EVENT_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+          publish_target="${INPUT_PUBLISH_TARGET}"
+          event_publish_target="${EVENT_PUBLISH_TARGET}"
+
+          publish_gpr="false"
+          publish_npm="false"
+
+          if [ "$publish_target" = "gpr" ] || [ "$event_publish_target" = "gpr" ]; then
+            publish_gpr="true"
+          fi
+
+          if [ "$publish_target" = "npm" ] || [ "$event_publish_target" = "npm" ]; then
+            publish_npm="true"
+          fi
+
+          if [ "$publish_gpr" = "false" ] && [ "$publish_npm" = "false" ]; then
+            if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+              if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+                publish_gpr="true"
+              elif [[ "$ref_name" == release-* ]]; then
+                publish_npm="true"
+              fi
+            fi
+          fi
+
+          if [[ "$ref_name" == release-* ]]; then
+            publish_gpr="false"
+          fi
+
+          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
+            publish_npm="false"
+          fi
+
+          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
+            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
+            exit 1
+          fi
+
+          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="$ref_name"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=$publish_npm" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   publish-gpr:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -413,7 +480,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
 
@@ -428,13 +495,13 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: ${{ env.PKG_DIR }}
           name-suffix: "-mono"
 
   publish-npm:
-    needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -463,3 +530,15 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
+
+  create-github-release:
+    needs: [publish-npm]
+    if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: ${{ env.PKG_DIR }}
