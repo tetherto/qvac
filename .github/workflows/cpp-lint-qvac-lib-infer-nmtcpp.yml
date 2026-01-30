@@ -106,7 +106,10 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -125,16 +128,15 @@ jobs:
       - name: Configure npm registries
         shell: bash
         run: |
-          ref_name="${{ inputs.ref || github.ref_name }}"
-          qvac_registry="https://npm.pkg.github.com/"
-          if [[ "$ref_name" == release-* ]]; then
-            qvac_registry="https://registry.npmjs.org/"
-          fi
+          qvac_registry="https://registry.npmjs.org/"
           echo "@qvac:registry=${qvac_registry}" >> .npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
           echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install npm dependencies
         shell: bash
