@@ -85,6 +85,8 @@ jobs:
           if [[ "$ref_name" == release-* ]]; then
             qvac_registry="https://registry.npmjs.org/"
           fi
+          echo "Ref name: $ref_name"
+          echo "Resolved @qvac registry: $qvac_registry"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
