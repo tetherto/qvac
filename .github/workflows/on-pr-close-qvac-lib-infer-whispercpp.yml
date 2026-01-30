@@ -24,7 +24,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "@qvac/transcription-whispercpp @tetherto/transcription-whispercpp"
+        default: "qvac-lib-infer-whispercpp"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
