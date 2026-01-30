@@ -6,8 +6,8 @@ on:
       - opened
       - synchronize
       - reopened
-  paths:
-    - packages/qvac-lib-infer-llamacpp-llm/**
+    paths:
+      - packages/qvac-lib-infer-llamacpp-llm/**
 
 permissions:
   pull-requests: read

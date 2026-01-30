@@ -11,6 +11,7 @@ on:
         description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
         required: true
         default: "packages/qvac-lib-infer-whispercpp"
+        type: string
 
   workflow_call:
     inputs:
@@ -32,6 +33,7 @@ on:
         description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
         required: true
         default: "packages/qvac-lib-infer-whispercpp"
+        type: string
 
 jobs:
   run-integration-tests:

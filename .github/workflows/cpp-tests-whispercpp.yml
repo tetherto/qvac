@@ -12,12 +12,14 @@ on:
         description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
         required: true
         default: 'packages/qvac-lib-infer-whispercpp'
+        type: string
   workflow_dispatch:
     inputs:
       workdir:
         description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
         required: true
         default: 'packages/qvac-lib-infer-whispercpp'
+        type: string
 
 env:
   BUILD_TYPE: Debug

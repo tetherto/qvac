@@ -15,6 +15,7 @@ on:
         description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
         required: true
         default: 'packages/qvac-lib-infer-whispercpp'
+        type: string
 
 permissions:
   contents: write
