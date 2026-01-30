@@ -4,24 +4,23 @@ on:
   push:
     branches:
       - main
+      - release-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag to publish with"
-        required: false
+        required: true
         default: "dev"
         type: choice
         options:
           - latest
           - dev
-  workflow_call:
-    inputs:
-      tag:
-        description: "Tag to publish with"
+      tar-run-id:
+        description: "Tar run id https://github.com/tetherto/qvac-ext-lib-mlc/actions/runs/14774672942 "
         required: false
-        default: "dev"
+        default: "14774672942"
         type: string
 
 permissions:
@@ -31,12 +30,35 @@ permissions:
 
 jobs:
   prebuild:
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || 'latest' }}
-      publish_target: 'npm'
+      publish_target: ${{ github.ref == 'refs/heads/main' && 'npm' || 'gpr' }}
+
+  publish-release:
+    needs: prebuild
+    if: needs.prebuild.result == 'success' && needs.prebuild.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-whispercpp.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.prebuild.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+
+  integration-tests:
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+    needs: prebuild
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  mobile-integration-tests:
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
+    needs: prebuild
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
