@@ -58,7 +58,7 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
@@ -108,7 +108,7 @@ jobs:
           echo "Matrix tags: ${{ matrix.tags }}"
           echo "PKG_DIR: ${{ env.PKG_DIR }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
@@ -228,7 +228,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -260,7 +260,7 @@ jobs:
           env | sort
         continue-on-error: true
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Update apt sources
         run: sudo apt-get update
 
@@ -290,7 +290,7 @@ jobs:
           sudo apt update
           sudo apt install -y vulkan-sdk
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Cache Vulkan SDK for linux arm64
         id: cache-vulkan-arm64
         uses: actions/cache@v4
@@ -298,7 +298,7 @@ jobs:
           path: ~/vulkan
           key: vulkan-sdk-linux-arm64-v1
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
         name: Build Vulkan SDK for linux arm64
         run: |
           sudo apt install -y xz-utils
@@ -309,7 +309,7 @@ jobs:
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
           ./vulkansdk --maxjobs
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Setup Vulkan SDK environment for linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
