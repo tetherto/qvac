@@ -7,6 +7,8 @@ on:
       - release-*
       - feature-*
       - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-whispercpp/**"
   workflow_dispatch: # TODO: remove this once the workflow works as expected.
     inputs:
       tag:

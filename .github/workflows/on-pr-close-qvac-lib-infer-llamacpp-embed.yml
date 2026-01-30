@@ -2,10 +2,10 @@ name: Delete NPM Versions (qvac-lib-infer-llamacpp-embed)
 
 on:
   pull_request:
-    types:
-      - closed
+    types: [closed]
     paths:
       - "packages/qvac-lib-infer-llamacpp-embed/**"
+
   workflow_dispatch:
     inputs:
       version:
@@ -24,16 +24,24 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "@qvac/llamacpp-embed @tetherto/llamacpp-embed"
+        default: "qvac-lib-infer-llamacpp-embed"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
         default: true
 
-run-name: Delete NPM Versions (llamacpp-embed) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+run-name: >-
+  Delete NPM Versions
+  v=${{ inputs.version }}
+  pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+  dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  print-context-trigger:
+  print-context:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -47,11 +55,12 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
 
   delete-npm-versions-trigger:
-    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@v1.1.0
+    uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@monorepo_update
     with:
       version: ${{ inputs.version }}
-      pr-number: ${{ inputs.pr-number }}
+      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages }}
-      dry-run: ${{ inputs.dry-run || true }}
+      packages: ${{ inputs.packages || 'qvac-lib-infer-llamacpp-embed' }}
+      # PR-close runs default to dry-run=true for safety; manual runs respect the UI toggle (true/false)
+      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
     secrets: inherit

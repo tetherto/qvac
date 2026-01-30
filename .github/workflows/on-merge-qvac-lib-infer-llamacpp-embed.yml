@@ -3,34 +3,15 @@ name: On Merge Trigger (qvac-lib-infer-llamacpp-embed)
 on:
   push:
     branches:
-      - main
+      - main 
     paths:
-      - "packages/qvac-lib-infer-llamacpp-embed/**"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to publish with"
-        required: false
-        default: "dev"
-        type: choice
-        options:
-          - latest
-          - dev
-  workflow_call:
-    inputs:
-      tag:
-        description: "Tag to publish with"
-        required: false
-        default: "dev"
-        type: string
-
+      - "packages/qvac-lib-infer-llamacpp-embed/**"    
 permissions:
   contents: write
   pull-requests: write
   packages: write
-
 jobs:
-  prebuild:
+  build-and-publish:
     permissions:
       contents: write
       packages: write
@@ -40,3 +21,14 @@ jobs:
     with:
       tag: ${{ inputs.tag || 'latest' }}
       publish_target: 'npm'
+
+  publish-release:
+    needs: build-and-publish
+    if: needs.build-and-publish.result == 'success' && needs.build-and-publish.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yaml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.build-and-publish.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
