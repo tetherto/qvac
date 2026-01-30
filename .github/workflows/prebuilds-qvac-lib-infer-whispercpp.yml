@@ -370,7 +370,7 @@ jobs:
             format('{0}/vcpkg.json', inputs.workdir),
             format('{0}/vcpkg-configuration.json', inputs.workdir),
             format('{0}/vcpkg/ports/**', inputs.workdir)
-          ) }}
+           ) }}
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
