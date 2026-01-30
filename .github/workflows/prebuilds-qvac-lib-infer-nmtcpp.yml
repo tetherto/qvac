@@ -837,7 +837,7 @@ jobs:
     with:
       published_version: ${{ needs.check-version-change.outputs.new_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: ${{ env.PKG_DIR }}
+      workdir: packages/qvac-lib-infer-nmtcpp
 
   run-automated-benchmarks:
     needs: [check-version-change]
