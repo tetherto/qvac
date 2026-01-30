@@ -26,7 +26,7 @@ jobs:
       contents: write
       packages: write
     env:
-      READ_NPM_TOKEN: ${{ secrets.PAT_TOKEN }}
+      READ_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WRITE_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -44,28 +44,31 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
+          ref_name="${GITHUB_REF#refs/heads/}"
+          qvac_registry="https://npm.pkg.github.com/"
+          qvac_token="${GPR_TOKEN}"
+          if [[ "$ref_name" == release-* ]]; then
+            qvac_registry="https://registry.npmjs.org/"
+            qvac_token="${NPM_TOKEN}"
+          fi
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
           # Optional: make private git deps work without prompting
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
 
           # Configure bunfig.toml for reading packages
           cat > bunfig.toml << EOF
@@ -74,69 +77,12 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
+          "@qvac" = { token = "${qvac_token}", url = "${qvac_registry}" }
           EOF
 
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR }}
         run: bun install
-
-      - name: Modify package name for branch-based builds
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-
-          # Only modify package name for feature/tmp branches (keep main/release intact)
-          case "$BRANCH_NAME" in
-            main)
-              echo "Main branch - keeping original package name"
-              exit 0
-              ;;
-            release-*)
-              echo "Release branch - keeping original package name"
-              exit 0
-              ;;
-            feature-*|tmp-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
-              ;;
-            *)
-              echo "Branch $BRANCH_NAME not configured for modified package name"
-              exit 0
-              ;;
-          esac
-
-          echo "Modifying package for branch: $BRANCH_NAME"
-
-          # Change namespace from @qvac to @tetherto and add suffix
-          ORIGINAL_NAME=$(node -p "require('./package.json').name")
-          NEW_NAME="@tetherto/sdk-${SUFFIX}"
-
-          echo "Package name: $ORIGINAL_NAME → $NEW_NAME"
-
-          # Update package.json
-          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
-          mv package.json.tmp package.json
-
-          MODIFIED_NAME=$(node -p "require('./package.json').name")
-          echo "✓ Modified package.json: $MODIFIED_NAME"
-
-          # Update references in withMobileBundle.ts
-          MOBILE_BUNDLE_FILE="expo/plugins/withMobileBundle.ts"
-          if [ -f "$MOBILE_BUNDLE_FILE" ]; then
-            echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
-            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
-            rm "${MOBILE_BUNDLE_FILE}.bak"
-            echo "✓ Updated $MOBILE_BUNDLE_FILE"
-          fi
-
-          # Update references in expo-rpc-client.ts
-          EXPO_RPC_CLIENT_FILE="client/rpc/expo-rpc-client.ts"
-          if [ -f "$EXPO_RPC_CLIENT_FILE" ]; then
-            echo "Updating @qvac/sdk references in $EXPO_RPC_CLIENT_FILE to $NEW_NAME"
-            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$EXPO_RPC_CLIENT_FILE"
-            rm "${EXPO_RPC_CLIENT_FILE}.bak"
-            echo "✓ Updated $EXPO_RPC_CLIENT_FILE"
-          fi
 
       - name: Build (includes lint, typecheck, compile)
         working-directory: ${{ env.WORKDIR }}
@@ -217,7 +163,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -231,7 +177,7 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          git-token: ${{ secrets.PAT_TOKEN }}
+          git-token: ${{ secrets.GITHUB_TOKEN }}
           create-tag: "true"
           workdir: ${{ env.WORKDIR }}
 
@@ -248,41 +194,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
-
-      - name: Modify package name for branch-based test publishing
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-
-          # Extract suffix from branch patterns
-          case "$BRANCH_NAME" in
-            feature-*|tmp-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
-              ;;
-            *)
-              echo "Branch $BRANCH_NAME not configured for modified package name"
-              exit 0
-              ;;
-          esac
-
-          echo "Modifying package name for branch: $BRANCH_NAME → suffix: $SUFFIX"
-
-          # Modify package.json
-          ORIGINAL_NAME=$(node -p "require('./package.json').name")
-          NEW_NAME="${ORIGINAL_NAME}-${SUFFIX}"
-
-          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
-          mv package.json.tmp package.json
-
-          MODIFIED_NAME=$(node -p "require('./package.json').name")
-          echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -291,4 +209,3 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || needs.build.outputs.tag || 'dev' }}
           workdir: ${{ env.WORKDIR }}
-          name-suffix: "-mono"
