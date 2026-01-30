@@ -28,4 +28,4 @@ poetry.lock
 .valgrind.supp
 
 # Benchmarks and test data
-/test
+/testtt
