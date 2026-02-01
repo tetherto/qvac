@@ -531,7 +531,7 @@ add_parameter_overrides() {
     fi
     
     if [[ -n "$DATASETS" ]]; then
-        cmd="$cmd --datasets $DATASETS"
+        cmd="$cmd --datasets \"$DATASETS\""
     fi
     
     if [[ "$DEVICE" != "$DEFAULT_DEVICE" ]]; then

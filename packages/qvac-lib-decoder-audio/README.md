@@ -4,6 +4,7 @@ This decoder library leverages FFmpeg for efficient audio decoding. It simplifie
 
 ## Table of Contents
 
+- [Supported Platforms](#supported-platforms)
 - [Installation](#installation)  
 - [Usage](#usage)  
   - [1. Creating the Decoder Instance](#1-creating-the-decoder-instance)  
@@ -18,6 +19,21 @@ This decoder library leverages FFmpeg for efficient audio decoding. It simplifie
 - [Glossary](#glossary)  
 - [Resources](#resources)  
 - [License](#license)  
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status | GPU Support |
+|----------|-------------|-------------|--------|-------------|
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | N/A (CPU only) |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | N/A (CPU only) |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | N/A (CPU only) |
+| Android | arm64 | 12+ | ✅ Tier 1 | N/A (CPU only) |
+| Windows | x64 | 10+ | ✅ Tier 1 | N/A (CPU only) |
+
+**Dependencies:**
+- qvac-lib-inference-addon-cpp: C++ addon framework
+- FFmpeg: Audio decoding engine
+- Bare Runtime (latest): JavaScript runtime
 
 ## Installation
 

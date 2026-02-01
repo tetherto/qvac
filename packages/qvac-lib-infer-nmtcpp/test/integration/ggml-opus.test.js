@@ -7,8 +7,8 @@
  * Uses HyperDrive to download model if not cached locally.
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Uses writable directory from test framework (global.dirPath or global.testDir)
- *   - Desktop: Uses local ../../model/nmt directory
+ *   - Mobile (iOS/Android): Tests both CPU and GPU modes
+ *   - Desktop: Tests CPU mode only
  *
  * Usage:
  *   bare test/integration/ggml-opus.test.js
@@ -21,13 +21,33 @@ const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const { isMobile, platform, TEST_TIMEOUT } = require('./utils')
+const {
+  isMobile,
+  platform,
+  TEST_TIMEOUT,
+  createPerformanceCollector,
+  formatPerformanceMetrics
+} = require('./utils')
 
 /** HyperDrive key for downloading NMT model */
 const HYPERDRIVE_KEY = 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
 
 /** Model filename in HyperDrive */
 const MODEL_NAME = 'model.bin'
+
+/**
+ * Device configurations for testing
+ * - Mobile (iOS/Android): Both CPU and GPU
+ * - Desktop: CPU only
+ */
+const ALL_DEVICE_CONFIGS = [
+  { id: 'gpu', useGpu: true },
+  { id: 'cpu', useGpu: false }
+]
+
+const DEVICE_CONFIGS = isMobile
+  ? ALL_DEVICE_CONFIGS
+  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 
 /**
  * Gets the working directory for model storage
@@ -38,29 +58,19 @@ const MODEL_NAME = 'model.bin'
  */
 function getModelDir () {
   if (isMobile) {
-    // Mobile: must use writable directory provided by test framework
-    // Check multiple possible globals that the framework might set
     const writableDir = global.dirPath || global.testDir || '/tmp'
     console.log('[GGML] Mobile detected, using writable dir:', writableDir)
-    console.log('[GGML] global.dirPath:', global.dirPath)
-    console.log('[GGML] global.testDir:', global.testDir)
     return writableDir
   }
-  // Desktop: use project model directory
   return path.resolve(__dirname, '../../model/nmt')
 }
 
 /**
  * Downloads NMT model from HyperDrive if not already present
- * Uses WeightsProvider for reliable download with progress tracking
- *
- * @param {string} dirPath - Directory path for model storage
- * @returns {Promise<string>} Path to the model file
  */
 async function ensureModel (dirPath) {
   const modelPath = path.join(dirPath, MODEL_NAME)
 
-  // Check if model already exists
   if (fs.existsSync(modelPath)) {
     console.log('[GGML] 📦 Model already cached, skipping download')
     return modelPath
@@ -69,10 +79,8 @@ async function ensureModel (dirPath) {
   console.log('[GGML] 📥 Downloading NMT model from HyperDrive...')
   console.log('[GGML] Target directory:', dirPath)
 
-  // Create directory if needed
   fs.mkdirSync(dirPath, { recursive: true })
 
-  // Use HyperDriveDL to download the model
   const hd = new HyperDriveDL({ key: HYPERDRIVE_KEY })
   const weightsProvider = new WeightsProvider(hd, console)
 
@@ -84,100 +92,102 @@ async function ensureModel (dirPath) {
   return modelPath
 }
 
-test('GGML/Opus backend - English to Italian translation', { timeout: TEST_TIMEOUT }, async t => {
-  const dirPath = getModelDir()
-  // Variables for cleanup
-  let translation = null
-  let loader = null
+for (const deviceConfig of DEVICE_CONFIGS) {
+  const label = `[${deviceConfig.id.toUpperCase()}]`
 
-  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-  t.comment('Working directory: ' + dirPath)
+  test(`GGML/Opus backend ${label} - English to Italian translation`, { timeout: TEST_TIMEOUT }, async t => {
+    const dirPath = getModelDir()
+    let translation = null
+    let loader = null
 
-  try {
-    const modelPath = await ensureModel(dirPath)
-    t.ok(modelPath, 'model path should be available')
-    t.comment('Model path: ' + modelPath)
+    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+    t.comment(`${label} Working directory: ` + dirPath)
+    t.comment(`${label} Testing with use_gpu: ${deviceConfig.useGpu}`)
 
-    // Create FilesystemDL loader for the downloaded model
-    loader = new FilesystemDL({ dirPath })
-    t.ok(loader, 'loader created')
+    const perfCollector = createPerformanceCollector()
 
-    /** GGML translation configuration */
-    const config = {
-      beamsize: 4,
-      lengthpenalty: 0.4,
-      maxlength: 128,
-      repetitionpenalty: 1.2,
-      norepeatngramsize: 2,
-      temperature: 0.8,
-      topk: 40,
-      topp: 0.9,
-      use_gpu: false
-    }
+    try {
+      const modelPath = await ensureModel(dirPath)
+      t.ok(modelPath, `${label} model path should be available`)
+      t.comment(`${label} Model path: ` + modelPath)
 
-    /** TranslationNmtcpp constructor arguments */
-    const args = {
-      loader,
-      modelName: MODEL_NAME,
-      params: {
-        srcLang: 'en',
-        dstLang: 'it' // English to Italian translation
-      },
-      logger: console,
-      diskPath: dirPath,
-      exclusiveRun: true
-    }
+      loader = new FilesystemDL({ dirPath })
+      t.ok(loader, `${label} loader created`)
 
-    translation = new TranslationNmtcpp(args, config)
-    t.ok(translation, 'translation engine created')
-
-    await translation.load()
-    t.pass('model loaded successfully')
-
-    // Run translation
-    const inputText = 'Hello, how are you today?'
-    t.comment('Translating: "' + inputText + '"')
-
-    const startTime = Date.now()
-    const response = await translation.run(inputText)
-
-    let translatedText = ''
-    await response
-      .onUpdate(data => {
-        translatedText += data
-      })
-      .await()
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2)
-
-    t.ok(translatedText.length > 0, 'translation should not be empty')
-    t.comment('Translation: ' + translatedText)
-    t.comment('Duration: ' + duration + 's')
-    t.pass('GGML/Opus translation completed successfully')
-  } catch (err) {
-    t.fail('GGML/Opus test failed: ' + err.message)
-    console.error('[GGML] Error:', err)
-    throw err
-  } finally {
-    // Cleanup: unload translation engine
-    if (translation) {
-      try {
-        await translation.unload()
-        t.comment('Translation engine unloaded')
-      } catch (e) {
-        t.comment('unload error: ' + e.message)
+      const config = {
+        beamsize: 4,
+        lengthpenalty: 0.4,
+        maxlength: 128,
+        repetitionpenalty: 1.2,
+        norepeatngramsize: 2,
+        temperature: 0.8,
+        topk: 40,
+        topp: 0.9,
+        use_gpu: deviceConfig.useGpu
       }
-      translation = null
-    }
-    // Cleanup: close loader
-    if (loader) {
-      try {
-        await loader.close()
-        t.comment('Loader closed')
-      } catch (e) {
-        t.comment('loader.close error: ' + e.message)
+
+      const args = {
+        loader,
+        modelName: MODEL_NAME,
+        params: {
+          srcLang: 'en',
+          dstLang: 'it'
+        },
+        logger: console,
+        diskPath: dirPath,
+        exclusiveRun: true,
+        opts: { stats: true }
       }
-      loader = null
+
+      translation = new TranslationNmtcpp(args, config)
+      t.ok(translation, `${label} translation engine created`)
+
+      await translation.load()
+      t.pass(`${label} model loaded successfully`)
+
+      const inputText = 'Hello, how are you today?'
+      t.comment(`${label} Translating: "` + inputText + '"')
+
+      perfCollector.start()
+
+      const response = await translation.run(inputText)
+
+      await response
+        .onUpdate(data => {
+          perfCollector.onToken(data)
+        })
+        .await()
+
+      const addonStats = response.stats || {}
+      t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+      const metrics = perfCollector.getMetrics(inputText, addonStats)
+      t.comment(formatPerformanceMetrics(`[GGML/Opus] ${label}`, metrics))
+
+      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+      t.pass(`${label} GGML/Opus translation completed successfully`)
+    } catch (err) {
+      t.fail(`${label} GGML/Opus test failed: ` + err.message)
+      console.error('[GGML] Error:', err)
+      throw err
+    } finally {
+      if (translation) {
+        try {
+          await translation.unload()
+          t.comment(`${label} Translation engine unloaded`)
+        } catch (e) {
+          t.comment(`${label} unload error: ` + e.message)
+        }
+        translation = null
+      }
+      if (loader) {
+        try {
+          await loader.close()
+          t.comment(`${label} Loader closed`)
+        } catch (e) {
+          t.comment(`${label} loader.close error: ` + e.message)
+        }
+        loader = null
+      }
     }
-  }
-})
+  })
+}

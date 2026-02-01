@@ -1,6 +1,4 @@
 {
-  "name": "qvac-lib-infer-nmtcpp",
-  "version": "2.1.5",
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",

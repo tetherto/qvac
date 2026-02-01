@@ -10,8 +10,7 @@ description: Speech synthesis for text-to-speech (TTS).
 
 ## Models
 
-- Recommended model family: Piper
-- Model format: ONNX (`*.onnx`)
+You can load any **Piper** voice bundle compatible with ONNX Runtime. Required files: `model.onnx` (file format: `*.onnx`) + `config.json`.
 
 ## Requirement
 
@@ -20,7 +19,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/tts-onnx
+npm i @qvac/tts-onnx
 ```
 
 ## Quickstart
@@ -30,7 +29,7 @@ npm install @qvac/tts-onnx
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -46,7 +45,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install @qvac/tts-onnx
+npm i @qvac/tts-onnx
 ```
 </Step>
 
@@ -133,6 +132,12 @@ bare index.js
 ```
 </Step>
 </Steps>
+
+## Other Examples
+
+- [Basic TTS](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/example-onnx-tts.js) – Demonstrates basic text-to-speech synthesis.
+- [Hyperdrive TTS](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/example-hd-onnx-tts.js) – Demonstrates TTS with Hyperdrive data loader.
+- Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/) for more usage examples.
 
 ## Usage
 
@@ -366,5 +371,5 @@ console.log(`Total audio samples generated: ${audioSamples.length}`)
 
 ## More resources
 
-- [Source code at GitHub](https://github.com/tetherto)
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-onnx-tts/)
 - [Package at npm](https://www.npmjs.com/package/@qvac/tts-onnx)

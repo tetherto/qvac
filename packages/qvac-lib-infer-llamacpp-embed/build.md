@@ -59,6 +59,13 @@ If you want to build the addon from source instead of using pre-built packages, 
      - Xcode Command Line Tools
      - For Android cross-compilation: Android NDK and Vulkan tools (`brew install shaderc vulkan-tools molten-vk vulkan-headers`)
    - **Linux**: GCC/G++ compiler, CMake
+     - Ubuntu-22 requires g++-13 installed:
+        
+        ```bash
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+        ```
    - **Windows**:  
       - Install Visual Studio 2022 with C++ tools, Clang and llvm tools
       - Install Vulkan

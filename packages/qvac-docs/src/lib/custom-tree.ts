@@ -40,10 +40,16 @@ export const customTree: Node[] = [
     collapsible: false,  
     children: [
       {
-        name: 'Install and quickstart',
-        url: '/sdk/install-and-quickstart',
+        name: 'Quickstart',
+        url: '/sdk/quickstart',
         type: 'page',
         icon: resolveIcon('Rocket'),
+      },
+      {
+        name: 'Installation',
+        url: '/sdk/install',
+        type: 'page',
+        icon: resolveIcon('Wrench'),
       },
       {
         name: 'API',

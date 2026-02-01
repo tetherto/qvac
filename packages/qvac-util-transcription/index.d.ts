@@ -1,6 +1,6 @@
 import { Readable } from 'bare-stream'
 import { QvacResponse } from '@qvac/response'
-import { GSTDecoder } from '@qvac/decoder-audio'
+import { FFmpegDecoder } from '@qvac/decoder-audio'
 
 interface TranscriptionPipelineConfig {
   sampleRate?: number
@@ -9,7 +9,7 @@ interface TranscriptionPipelineConfig {
 
 interface TranscriptionPipelineAddons {
   whisperAddon: any
-  decoder?: GSTDecoder
+  decoder?: FFmpegDecoder
 }
 
 declare class TranscriptionPipeline {

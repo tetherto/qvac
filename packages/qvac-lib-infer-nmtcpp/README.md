@@ -7,6 +7,7 @@ This library simplifies the process of running various translation models within
 
 ## Table of Contents
 
+- [Supported Platforms](#supported-platforms)
 - [Installation](#installation)
 - [Usage](#usage)
   - [1. Create DataLoader](#1-create-dataloader)
@@ -30,6 +31,16 @@ This library simplifies the process of running various translation models within
 - [Resources](#resources)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status |
+|----------|-------------|-------------|--------|
+| macOS | arm64, x64 | 14.0+ | Tier 1 |
+| iOS | arm64 | 17.0+ | Tier 1 |
+| Linux | arm64, x64 | Ubuntu 22+ | Tier 1 |
+| Android | arm64 | 12+ | Tier 1 |
+| Windows | x64 | 10+ | Tier 1 |
 
 ## Installation
 
@@ -1048,9 +1059,13 @@ npm run build
 3. **Install and build**: `npm install && npm run build`
 4. **Create a branch**: `git checkout -b feature/your-feature-name`
 5. **Make changes** and ensure tests pass: `npm test`
-6. **Commit** with a descriptive message: `git commit -m "feat: add your feature"`
-7. **Push** to your fork: `git push origin feature/your-feature-name`
-8. **Open a Pull Request** against the `main` branch
+6. **Bump version** in `package.json` if your changes require a release (bug fixes, features, breaking changes)
+7. **Commit** with a descriptive message: `git commit -m "feat: add your feature"`
+8. **Push** to your fork: `git push origin feature/your-feature-name`
+9. **Open a Pull Request**
+   * Use `/prepare_release_notes` in Cursor to generate release notes for your changes (creates `release-notes/vX.Y.Z.md`)
+   * Use `/prepare_pr` in Cursor to automatically generate a PR description and create the pull request
+   * The PR description will be populated based on `PULL_REQUEST_TEMPLATE.md`
 
 ### Code Style
 

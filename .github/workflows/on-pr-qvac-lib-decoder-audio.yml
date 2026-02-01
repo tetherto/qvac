@@ -27,6 +27,13 @@ jobs:
       package-json-path: packages/qvac-lib-decoder-audio/package.json
       changelog-path: packages/qvac-lib-decoder-audio/CHANGELOG.md
 
+  release-notes-check:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/release-notes-check-qvac-lib-decoder-audio.yml
+    secrets: inherit
+
   sanity-checks:
     runs-on: ubuntu-24.04
     permissions:
@@ -111,11 +118,25 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
       workdir: "packages/qvac-lib-decoder-audio"
 
+  run-mobile-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
+
   merge-guard:
-    needs: [sanity-checks, run-integration-tests]
+    needs: [release-notes-check, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
     secrets: inherit

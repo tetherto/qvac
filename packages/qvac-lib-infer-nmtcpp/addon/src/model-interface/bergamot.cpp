@@ -281,6 +281,11 @@ std::string bergamot_translate(bergamot_context* ctx, const char* input) {
     ctx->total_decode_time += duration.count() / 1000000.0;
 
     if (!responses.empty()) {
+      // Count total tokens across all sentences in the response
+      size_t numSentences = responses[0].target.numSentences();
+      for (size_t i = 0; i < numSentences; ++i) {
+        ctx->total_tokens += static_cast<int>(responses[0].target.numWords(i));
+      }
       return responses[0].target.text;
     }
 
@@ -308,6 +313,8 @@ bergamot_batch_result bergamot_translate_batch(
     return result;
   }
 
+  auto start = std::chrono::high_resolution_clock::now();
+
   try {
     std::vector<std::string> inputs{texts};
     // response options for each text
@@ -322,10 +329,24 @@ bergamot_batch_result bergamot_translate_batch(
     auto responses =
         ctx->service->translateMultiple(ctx->model, std::move(inputs), options);
 
-    // Extract Results
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    // Update timing statistics (total time = decode time for Bergamot, no
+    // separate encode)
+    ctx->total_decode_time += duration.count() / 1000000.0;
+
+    // Extract Results and count tokens
     for (size_t i = 0; i < responses.size(); ++i) {
       result.translations[i] = responses[i].target.text;
       result.success[i] = true;
+
+      // Count tokens for this response (all sentences in the target)
+      size_t numSentences = responses[i].target.numSentences();
+      for (size_t s = 0; s < numSentences; ++s) {
+        ctx->total_tokens += static_cast<int>(responses[i].target.numWords(s));
+      }
     }
   } catch (const std::exception& e) {
     QLOG(

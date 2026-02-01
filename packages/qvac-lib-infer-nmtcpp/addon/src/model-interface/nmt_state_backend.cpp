@@ -439,9 +439,7 @@ void nmt_reset_state(struct nmt_context* ctx) {
   state->inp_mask.clear();
 
   state->input_embeddings = nullptr;
-  state->debug_tensor = nullptr;
-  state->tmp_tensor = nullptr;
-  state->embd_conv = nullptr;
+  state->logits_tensor = nullptr;
   state->embd_enc = nullptr;
   state->aheads_cross_QKs = nullptr;
   state->aheads_cross_QKs_data.clear();

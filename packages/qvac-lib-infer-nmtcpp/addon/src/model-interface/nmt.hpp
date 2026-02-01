@@ -351,9 +351,7 @@ struct nmt_state {
     // result of the encoder
 
     struct ggml_tensor *input_embeddings = nullptr;
-    struct ggml_tensor *debug_tensor = nullptr;
-    struct ggml_tensor *tmp_tensor = nullptr;
-    struct ggml_tensor *embd_conv = nullptr;
+    struct ggml_tensor* logits_tensor = nullptr;
     struct ggml_tensor *embd_enc = nullptr;
 
     // This is to surcomvent an issue where accessing embd_enc in docoder was not working

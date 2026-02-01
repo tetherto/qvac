@@ -5,10 +5,13 @@ on:
     types: [closed]
     paths:
       - "packages/qvac-sdk/README.md"
+    branches:
+      - main
+      - release-*
 
 jobs:
   dispatch:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    if: github.event.pull_request.merged == true && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'release-'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout merge commit

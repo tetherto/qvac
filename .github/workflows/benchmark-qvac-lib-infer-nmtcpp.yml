@@ -185,7 +185,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -201,7 +201,7 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -247,7 +247,7 @@ jobs:
             libunwind-dev
 
       - name: Configure git
-        run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -314,7 +314,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 9  # Limit concurrent jobs to avoid resource contention
+      max-parallel: 9 # Limit concurrent jobs to avoid resource contention
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
@@ -323,7 +323,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -376,7 +376,7 @@ jobs:
           # Download model for this specific language pair
           pair="${{ matrix.pair }}"
           echo "Downloading model for $pair..."
-          
+
           # Function to download a model
           download_model() {
             local model_pair=$1
@@ -453,10 +453,10 @@ jobs:
               rm -rf "$temp_dir"
             fi
           }
-          
+
           # Download the main model
           download_model "$pair"
-          
+
           # If using pivot translation and this is a non-English pair, download pivot models
           if [ "${{ inputs.use_pivot }}" = "true" ]; then
             src_lang="${pair%-*}"
@@ -609,7 +609,7 @@ jobs:
           echo "Selected metrics: $metrics"
 
       - name: Run evaluation on all selected datasets
-        timeout-minutes: 90  # Timeout per language pair evaluation
+        timeout-minutes: 90 # Timeout per language pair evaluation
         working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
         run: |
           # Set hyperparameters based on preset
@@ -821,4 +821,3 @@ jobs:
           name: consolidated-results
           path: all-results
           retention-days: 90
-

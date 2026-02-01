@@ -20,11 +20,10 @@ For how to use each function, see [SDK — API reference](/sdk/api/latest/).
 
 ## Models
 
-Recommended model families:
-- GTE
-- EmbeddingGemma
+You can load any `llama.cpp`-compatible embeddings model. Model file format: `*.gguf`.
 
-Model format: GGUF (`*.gguf`)
+- If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/sdk/sharded-models).
+- For models available as constants, see [Hyperdrive model index](https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts).
 
 ## Example
 
@@ -33,6 +32,7 @@ The following script shows an example of embedding:
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/text-embeddings.js title="text-embeddings.js" lineNumbers
 import { embed, GTE_LARGE_FP16, loadModel, unloadModel } from "@qvac/sdk";
 
@@ -111,6 +111,7 @@ try {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/text-embeddings.ts title="text-embeddings.ts" lineNumbers
 import { embed, GTE_LARGE_FP16, loadModel, unloadModel } from "@qvac/sdk";
 
@@ -189,6 +190,5 @@ try {
 </Tabs>
 
 <Callout title="Tip" type="success">
-All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
 </Callout>
-

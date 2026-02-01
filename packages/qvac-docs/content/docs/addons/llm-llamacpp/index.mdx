@@ -10,13 +10,7 @@ description: LLM inference for text generation and chat with support to images, 
 
 ## Models
 
-Recommended model families:
-- LLaMA
-- Qwen
-- Mixtral
-- Gemma
-
-Model format: GGUF (`*.gguf`)
+You can load any `llama.cpp`-compatible text-generation/chat model. Model file format: `*.gguf`.
 
 ## Requirement
 
@@ -25,7 +19,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/llm-llamacpp
+npm i @qvac/llm-llamacpp
 ```
 
 ## Quickstart
@@ -35,7 +29,7 @@ npm install @qvac/llm-llamacpp
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -51,7 +45,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install hyperswarm corestore @qvac/dl-hyperdrive @qvac/llm-llamacpp bare-process
+npm i hyperswarm corestore @qvac/dl-hyperdrive @qvac/llm-llamacpp bare-process
 ```
 </Step>
 
@@ -178,6 +172,17 @@ bare index.js
 ```
 </Step>
 </Steps>
+
+## Other examples
+
+-   [SalamandraTA](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
+-   [Multimodal](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/multiModal.js) – Demonstrates how to run multimodal inference.
+-   [Multi-Cache](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/multiCache.js) – Demonstrates session handling and caching capabilities.
+-   [Native Logging](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/nativelog.js) – Demonstrates C++ addon logging integration.
+-   [FileSystem](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+-   [Sharded Loading](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/shardedLoading.js) – Demonstrates loading sharded model files.
+-   [Tool Calling](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-    Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/tree/main/examples/) for more usage examples.
 
 ## Usage
 

@@ -1,0 +1,212 @@
+---
+title: Installation
+description: Supported environments and how to install the SDK for each one.
+---
+
+## Supported environments
+
+QVAC SDK is distributed as the npm package `@qvac/sdk` for JavaScript/TypeScript projects.
+
+### JS environments
+
+- Node.js $\geq$ v22.17
+- [Bare](https://bare.pears.com) $\geq$ v1.24
+- [Expo](https://expo.dev) $\geq$ v54
+  
+### OS
+
+- macOS
+- Linux
+- Windows
+- iOS (via Expo)
+- Android (via Expo)
+
+## Installation
+
+```bash
+npm i @qvac/sdk
+```
+
+### Linux
+
+Requirements:
+- GLIBC $\geq$ v2.38
+- Vulkan runtime: Vulkan loader + a GPU driver with Vulkan support
+
+On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
+
+<Callout type="info">
+On PCs, the Vulkan runtime is usually installed along with the GPU drivers. In other words, _if you’ve installed the correct driver for your GPU (with Vulkan support), you typically don’t need to install anything else._
+</Callout>
+
+In minimalist/headless installations (e.g., Ubuntu server), you may need to manually install Vulkan loader and Vulkan driver (ICD). The procedure varies depending on Linux distro and GPU vendor. For instance, on minimal/headless Ubuntu, install the Vulkan runtime (Intel/AMD via Mesa):
+
+```bash
+sudo apt update
+sudo apt install -y libvulkan1 mesa-vulkan-drivers vulkan-tools
+vulkaninfo --summary
+```
+
+### Expo
+
+<Steps>
+<Step>
+Install peer dependencies:
+
+```bash
+npm i expo-file-system react-native-bare-kit@0.11.5
+npm i -D bare-pack@1.5.1
+```
+</Step>
+
+<Step>
+Add the QVAC-Expo plugin to `app.json`:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      "@qvac/sdk/expo-plugin"
+    ]
+  }
+}
+```
+</Step>
+
+<Step>
+Install `expo-build-properties`:
+
+```bash
+npx expo install expo-build-properties
+```
+</Step>
+
+<Step>
+Use `expo-build-properties` to set up Android devices in `app.json`:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      "@qvac/sdk/expo-plugin",
+            [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29,
+            "ndkVersion": "29.0.14206865",
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
+          }
+        }
+      ]
+    ]
+  }
+}
+```
+
+</Step>
+
+<Step>
+Create `plugins/withAndroidNdkVersion.js`:
+<WrapCode>
+
+```js title="plugins/withAndroidNdkVersion.js" lineNumbers
+const { withDangerousMod } = require("@expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
+
+/**
+ * Custom Expo config plugin to set NDK version in android/build.gradle
+ * This ensures NDK 29 is used to match the addon build version
+ */
+const withAndroidNdkVersion = (config, ndkVersion = "29.0.14206865") => {
+  return withDangerousMod(config, [
+    "android",
+    async (config) => {
+      const buildGradlePath = path.join(config.modRequest.platformProjectRoot, "build.gradle");
+      
+      if (fs.existsSync(buildGradlePath)) {
+        let buildGradle = fs.readFileSync(buildGradlePath, "utf8");
+
+        // Check if ndkVersion already exists
+        if (buildGradle.includes("ndkVersion")) {
+          // Replace existing ndkVersion
+          buildGradle = buildGradle.replace(
+            /ndkVersion\s*=\s*["'][^"']+["']/g,
+            `ndkVersion = "${ndkVersion}"`
+          );
+        } else {
+          // Add ext block with ndkVersion after buildscript {
+          buildGradle = buildGradle.replace(
+            /(buildscript\s*\{)/,
+            `$1\n  ext {\n    ndkVersion = "${ndkVersion}"\n  }`
+          );
+        }
+
+        fs.writeFileSync(buildGradlePath, buildGradle);
+      }
+
+      return config;
+    },
+  ]);
+};
+
+module.exports = withAndroidNdkVersion;
+```
+
+</WrapCode>
+</Step>
+
+<Step>
+Add the new plugin `withAndroidNdkVersion.js` to `app.json`:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      "@qvac/sdk/expo-plugin",
+        [
+          "expo-build-properties",
+          {
+            "android": {
+              "minSdkVersion": 29,
+              "ndkVersion": "29.0.14206865",
+              "enableProguardInReleaseBuilds": true,
+              "enableShrinkResourcesInReleaseBuilds": true,
+              "enableMinifyInReleaseBuilds": true
+            }
+          }
+        ],
+      ["./plugins/withAndroidNdkVersion.js", "29.0.14206865"]
+    ]
+  }
+}
+```
+
+</Step>
+
+<Step>
+Prebuild your project to generate the native files:
+
+```bash
+npx expo prebuild
+```
+</Step>
+
+<Step>
+Build and run it on a **physical device**:
+
+```bash
+npx expo run:ios --device
+# or
+npx expo run:android --device
+```
+</Step>
+</Steps>
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>

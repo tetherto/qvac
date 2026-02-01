@@ -8,6 +8,9 @@ on:
       - reopened
     paths:
       - "packages/qvac-sdk/**"
+    branches:
+      - main
+      - release-*
   workflow_dispatch:
 
 concurrency:

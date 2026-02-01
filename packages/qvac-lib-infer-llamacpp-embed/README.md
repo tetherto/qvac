@@ -4,6 +4,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 
 ## Table of Contents
 
+- [Supported platforms](#supported-platforms)
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Usage](#usage)
@@ -22,6 +23,23 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 - [Tests](#tests)
 - [Glossary](#glossary)
 - [License](#license)
+
+## Supported platforms
+
+| Platform | Architecture | Min Version | Status | GPU Support |
+|----------|-------------|-------------|--------|-------------|
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+
+**Dependencies:**
+- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
+- qvac-fabric-llm.cpp (=7248.1.0): Inference engine
+- Bare Runtime (≥1.24.0): JavaScript runtime
+- Ubuntu-22 requires g++-13 installed
+
 
 ## Installation
 
@@ -122,6 +140,15 @@ const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
 | --main-gpu        | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 
+#### IGPU/GPU  selection logic:
+
+| Scenario                       | main-gpu not specified                | main-gpu: `"dedicated"`             | main-gpu: `"integrated"`           |
+|---------------------------------|---------------------------------------|-------------------------------------|-------------------------------------|
+| Devices considered              | All GPUs (dedicated + integrated)     | Only dedicated GPUs                 | Only integrated GPUs                |
+| System with iGPU only           | ✅ Uses iGPU                          | ❌ Falls back to CPU                | ✅ Uses iGPU                        |
+| System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
+| System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
+
 
 ### 5. Instantiate the model
 
@@ -194,19 +221,9 @@ Install dependencies:
 npm install
 ```
 
-Install the package:
+Run the quickstart example (uses examples/quickstart.js):
 ```bash
-npm install @qvac/embed-llamacpp@latest
-```
-
-Copy the prebuilt native binaries to your project root:
-```bash
-cp -r node_modules/@qvac/embed-llamacpp/prebuilds .
-```
-
-Run the quickstart example:
-```bash
-bare examples/quickstart.js
+npm run quickstart
 ```
 
 ## Model Registry

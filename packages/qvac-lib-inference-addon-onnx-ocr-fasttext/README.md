@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![npm version](https://img.shields.io/npm/v/@qvac/ocr-onnx.svg)](https://www.npmjs.com/package/@qvac/ocr-onnx)
 
-This library provides Optical Character Recognition (OCR) capabilities for QVAC runtime applications, leveraging the ONNX Runtime for efficient inference. It implements the [QVAC Inference Addon ONNX base class](https://github.com/tetherto/qvac-lib-infer-onnx-base).
+This library provides Optical Character Recognition (OCR) capabilities for QVAC runtime applications, leveraging the ONNX Runtime for efficient inference.
 
 The OCR process uses two models:
 *   **Detector:** Locates text regions within an image.
@@ -12,66 +12,44 @@ The OCR process uses two models:
 
 ## Table of Contents
 
+*   [Supported Platforms](#supported-platforms)
 *   [Installation](#installation)
 *   [Building from Source](#building-from-source)
-*   [Obtaining Models](#obtaining-models)
 *   [Usage](#usage)
-    *   [1. Configure Parameters](#1-configure-parameters)
-    *   [2. Create Model Instance](#2-create-model-instance)
-    *   [3. Load Model](#3-load-model)
-    *   [4. Run OCR](#4-run-ocr)
-    *   [5. Process Output](#5-process-output)
-    *   [6. Release Resources](#6-release-resources)
-*   [Quickstart Example](#quickstart-example)
 *   [Output Format](#output-format)
 *   [Glossary](#glossary)
-*   [Resources](#resources)
 *   [Supported Languages](#supported-languages)
-*   [Error Codes](#error-code)
 *   [Contributing](#contributing)
 *   [License](#license)
 *   [Support](#support)
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status |
+|----------|-------------|-------------|--------|
+| macOS | arm64, x64 | 14.0+ | Tier 1 |
+| iOS | arm64 | 17.0+ | Tier 1 |
+| Linux | arm64, x64 | Ubuntu 22+ | Tier 1 |
+| Android | arm64 | 12+ | Tier 1 |
+| Windows | x64 | 10+ | Tier 1 |
 
 ## Installation
 
 ### Prerequisites
 
-Install [Bare](https://docs.pears.com/bare-reference/overview) Runtime:
+Install Bare Runtime:
 ```bash
 npm install -g bare
 ```
-Note : Make sure the Bare version is `>= 1.19.3`. Check this using :
+Note: Make sure the Bare version is `>= 1.19.3`. Check this using:
 
 ```bash
 bare -v
 ```
 
-To install and run this package you will need a project folder. If one doesn't exist, create a simple test project using:
-
-```bash
-mkdir my-ocr-test-project
-cd my-ocr-test-project
-npm init -y
-```
-
-Before proceeding with the installation, please generate a **classic GitHub Personal Access Token (PAT)** with the `read:packages` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to GitHub Packages when installing scoped packages.
-
 ### Installing the Package
 
-Now, you should be able to install the latest version of the package running:
+Install the latest version of the package:
 ```shell
 npm install @qvac/ocr-onnx@latest
 ```
@@ -129,51 +107,30 @@ This command will:
 
 ### Verifying the Build
 
-After building, you can run the tests to verify everything works:
-
-```bash
-npm run test:unit
-npm run test:integration  # Requires model files
-```
-
-**Note**: Integration tests require model files to be present in the `models/` directory. See the [CI integration test script](ci/integration-test.sh) for details on model requirements.
-
-## Obtaining Models
-
-OCR models are **not included** in the repository due to their size. You need to download them before running the examples.
-
-### Option 1: Download via Hyperdrive (Recommended)
-
-Run the Hyperdrive example to automatically download and cache models:
+After building, verify everything works by running the Hyperdrive example:
 
 ```bash
 bare examples/example.hd.js
 ```
 
-This downloads models to `models/hd/`. To use them with other examples, copy to the expected location:
+This example will:
+- Download the detector and recognizer models from Hyperdrive (cached locally in `models/hd/`)
+- Load the OCR model
+- Run text recognition on a test image
+- Display the detected text with confidence scores
 
-```bash
-cp models/hd/*.onnx models/ocr/
-```
+### Examples
 
-### Option 2: Manual Download
+The `examples/` folder contains several examples to help you get started:
 
-Download the models manually using the Hyperdrive key:
-
-```
-hd://03d712abb026bc390cfe803fb851a1b4a581c31c5b9335ef6294333bbeb60043
-```
-
-Required files:
-- `detector_craft.onnx` - Text detection model
-- `recognizer_latin.onnx` - Text recognition model (Latin languages)
-
-Place the downloaded files in `models/ocr/` directory:
-
-```bash
-mkdir -p models/ocr
-# Copy your downloaded models here
-```
+| Example | Description |
+|---------|-------------|
+| `example.hd.js` | Downloads models from Hyperdrive and runs OCR |
+| `example.fs.js` | Basic OCR using local model files |
+| `exampleGPU.fs.js` | OCR with GPU acceleration enabled |
+| `example.logger.js` | OCR with custom logging |
+| `visualize_ocr.js` | Runs OCR and saves results to JSON for visualization |
+| `draw_boxes.py` | Python script to draw bounding boxes on images using OCR results |
 
 ## Usage
 
@@ -322,185 +279,6 @@ try {
 }
 ```
 
-## Quickstart Example
-
-This example demonstrates loading the OCR model, running inference on an image, and printing the results.
-
-### 1. Clone the repo & Install the dependencies
-```bash
-git clone git@github.com:tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
-cd qvac-lib-inference-addon-onnx-ocr-fasttext/examples
-npm install
-```
-
-Install the [model package](#installation), run the command:
-```bash
-npm install @qvac/ocr-onnx@latest
-```
-
-### 2. Run the example
-
-From the repository root, run:
-
-```bash
-# CPU example (uses pathRecognizerPrefix for automatic language detection)
-bare examples/example.fs.js
-
-# GPU example (explicitly enables GPU acceleration and explicit recognizer)
-bare examples/exampleGPU.fs.js
-```
-
-You can also pass custom paths as arguments:
-```bash
-bare examples/example.fs.js <images_dir> <detector_path> <recognizer_prefix>
-# Example:
-bare examples/example.fs.js test/images models/ocr/detector_craft.onnx models/ocr/recognizer_
-```
-
-### 3. Code Walkthrough
-
-```javascript
-'use strict'
-
-const process = require('bare-process')
-const path = require('bare-path')
-const { ONNXOcr } = require('@qvac/ocr-onnx')
-
-// Command line arguments with defaults
-const args = process.argv.slice(2)
-const [
-  argImagesDir = 'test/images',
-  argDetectorPath = 'models/ocr/detector_craft.onnx',
-  argRecognizerPrefix = 'models/ocr/recognizer_'
-] = args
-
-const basePath = process.cwd()
-
-// Define paths relative to the current working directory
-const imagePath = path.join(basePath, `${argImagesDir}/basic_test.bmp`)
-const modelDetectorPath = path.join(basePath, argDetectorPath)
-const modelRecognizerPrefix = path.join(basePath, argRecognizerPrefix)
-
-async function main () {
-  const args = {
-    params: {
-      langList: ['en'],
-      pathDetector: modelDetectorPath,
-      pathRecognizerPrefix: modelRecognizerPrefix, // Library appends language suffix
-    },
-    opts: { stats: true } // Enable stats logging
-  }
-
-  const model = new ONNXOcr(args)
-
-  try {
-    console.log('Loading OCR model...')
-    await model.load()
-    console.log('Model loaded.')
-
-    console.log(`Running OCR on: ${imagePath}`)
-    const response = await model.run({
-      path: imagePath
-      // options: { paragraph: true } // Optional paragraph mode
-    })
-
-    console.log('Waiting for OCR results...')
-    await response
-      .onUpdate(data => {
-        console.log('--- OCR Update ---')
-        console.log('Output: ' + JSON.stringify(data.map(o => o[1]))) // Extract text strings
-        console.log('--- data ---')
-        // Output structure might vary based on paragraph option and updates
-        // Refer to Output Format section
-        console.log(JSON.stringify(data, null, 2))
-        console.log('------------------')
-      })
-      .await() // Wait for the final result
-
-    console.log('OCR finished!')
-    if (response.stats) {
-      console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
-    }
-  } catch (err) {
-    console.error('Error during OCR processing:', err)
-  } finally {
-    console.log('Unloading model...')
-    await model.unload()
-    console.log('Model unloaded.')
-  }
-}
-
-main().catch(console.error)
-```
-
-#### GPU Example
-
-To run with GPU acceleration, use `exampleGPU.fs.js` which sets `useGPU: true`:
-
-```javascript
-const args = {
-  params: {
-    langList: ['en'],
-    pathDetector: './models/ocr/detector_craft.onnx',
-    pathRecognizer: './models/ocr/recognizer_latin.onnx', // Explicit recognizer path
-    useGPU: true, // Enable GPU acceleration
-    timeout: 120 // Optional: inference timeout in seconds
-  },
-  opts: { stats: true }
-}
-```
-
-*(See [`examples/example.fs.js`](examples/example.fs.js) and [`examples/exampleGPU.fs.js`](examples/exampleGPU.fs.js) for the full examples.)*
-
-#### Hyperdrive Example
-
-To load models from [Hyperdrive](https://github.com/holepunchto/hyperdrive) (peer-to-peer distributed storage), use `example.hd.js`:
-
-```bash
-bare examples/example.hd.js
-bare examples/example.hd.js /path/to/image.jpg
-```
-
-This example demonstrates:
-- Downloading OCR models from Hyperdrive using a content-addressed key
-- Caching models locally for subsequent runs
-- Running OCR with the downloaded models
-
-```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-const { ONNXOcr } = require('@qvac/ocr-onnx')
-
-// Model configuration
-const MODEL_KEY = 'hd://03d712abb026bc390cfe803fb851a1b4a581c31c5b9335ef6294333bbeb60043'
-
-// Initialize Hyperdrive loader
-const hdDL = new HyperdriveDL({ key: MODEL_KEY })
-await hdDL.ready()
-
-// Download models
-const detectorDownload = await hdDL.download('detector_craft.onnx', { diskPath: './models/hd' })
-await detectorDownload.await()
-
-const recognizerDownload = await hdDL.download('recognizer_latin.onnx', { diskPath: './models/hd' })
-await recognizerDownload.await()
-
-// Initialize OCR with downloaded model paths
-const model = new ONNXOcr({
-  params: {
-    langList: ['en'],
-    pathDetector: './models/hd/detector_craft.onnx',
-    pathRecognizer: './models/hd/recognizer_latin.onnx',
-    useGPU: false
-  }
-})
-
-await model.load()
-// ... run OCR
-await hdDL.close()
-```
-
-*(See [`examples/example.hd.js`](examples/example.hd.js) for the full example.)*
-
 ## Output Format
 
 The output is typically received via the `onUpdate` callback of the `QvacResponse` object. It's a JSON array where each element represents a detected text block.
@@ -552,66 +330,31 @@ The box coordinates are always provided in clockwise direction and starting from
 
 ## Glossary
 
-*   **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).
+*   **Bare** – Small and modular JavaScript runtime for desktop and mobile.
 *   **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.
 *   **ONNX** – Open Neural Network Exchange is an open format built to represent machine learning models. [Learn more](https://onnx.ai/).
 
-## Resources
-
-*   **QVAC Examples Repo (Lens App):** [https://github.com/tetherto/qvac-examples/tree/main/lens-app](https://github.com/tetherto/qvac-examples/tree/main/lens-app)
-    *   `desktop` - Desktop application branch (Linux, macOS, Windows)
-    *   `mobile` - Mobile application branch (Android and iOS)
-*   **ONNX Runtime:** [https://onnxruntime.ai/](https://onnxruntime.ai/)
-*   **Base ONNX Addon:** [https://github.com/tetherto/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac-lib-infer-onnx-base)
-
 ## Supported Languages
 
-*   af — Afrikaans
-*   az — Azerbaijani
-*   bs — Bosnian
-*   cs — Czech
-*   cy — Welsh
-*   da — Danish
-*   de — German
-*   en — English
-*   es — Spanish
-*   et — Estonian
-*   fr — French
-*   ga — Irish
-*   hr — Croatian
-*   hu — Hungarian
-*   id — Indonesian
-*   is — Icelandic
-*   it — Italian
-*   ku — Kurdish
-*   la — Latin
-*   lt — Lithuanian
-*   lv — Latvian
-*   mi — Māori
-*   ms — Malay
-*   mt — Maltese
-*   nl — Dutch
-*   no — Norwegian
-*   oc — Occitan
-*   pi — Pali
-*   pl — Polish
-*   pt — Portuguese
-*   ro — Romanian
-*   rs_latin — Serbian (Latin script)
-*   sk — Slovak
-*   sl — Slovenian
-*   sq — Albanian
-*   sv — Swedish
-*   sw — Swahili
-*   tl — Tagalog
-*   tr — Turkish
-*   uz — Uzbek
-*   vi — Vietnamese
+Language support is determined by the recognizer model used. Each recognizer model supports a specific set of languages. The library automatically selects the appropriate model based on the `langList` parameter.
 
-*(Note: Other languages like Arabic, Bengali, Cyrillic, Devanagari, Thai, Chinese, Japanese, Korean, Tamil, Telugu, Kannada may be supported via different recognizer model files, determined automatically based on the `langList` provided. See `index.js` for details.)*
+| Recognizer Model | Languages |
+|------------------|-----------|
+| `recognizer_latin.onnx` | af, az, bs, cs, cy, da, de, en, es, et, fr, ga, hr, hu, id, is, it, ku, la, lt, lv, mi, ms, mt, nl, no, oc, pi, pl, pt, ro, rs_latin, sk, sl, sq, sv, sw, tl, tr, uz, vi |
+| `recognizer_arabic.onnx` | ar, fa, ug, ur |
+| `recognizer_cyrillic.onnx` | ru, rs_cyrillic, be, bg, uk, mn, abq, ady, kbd, ava, dar, inh, che, lbe, lez, tab, tjk |
+| `recognizer_devanagari.onnx` | hi, mr, ne, bh, mai, ang, bho, mah, sck, new, gom, sa, bgc |
+| `recognizer_bengali.onnx` | bn, as, mni |
+| `recognizer_thai.onnx` | th |
+| `recognizer_zh_sim.onnx` | ch_sim |
+| `recognizer_zh_tra.onnx` | ch_tra |
+| `recognizer_japanese.onnx` | ja |
+| `recognizer_korean.onnx` | ko |
+| `recognizer_tamil.onnx` | ta |
+| `recognizer_telugu.onnx` | te |
+| `recognizer_kannada.onnx` | kn |
 
-## Error code
-This library uses error code in the range of 9001 to 10,000.
+See `supportedLanguages.js` for the complete language definitions.
 
 ## Contributing
 

@@ -265,6 +265,104 @@ function createLogger () {
   }
 }
 
+// ============================================================================
+// Performance Metrics Helpers
+// ============================================================================
+
+/**
+ * Creates a performance collector for tracking translation metrics
+ * Tracks timing, tokens, and output during streaming translation
+ * Can be combined with native addon stats for complete metrics
+ *
+ * @returns {Object} Collector with tracking methods and metrics getters
+ */
+function createPerformanceCollector () {
+  let startTime = null
+  let firstTokenTime = null
+  let generatedText = ''
+
+  return {
+    /**
+     * Sets the start time for performance measurement
+     */
+    start () {
+      startTime = Date.now()
+      firstTokenTime = null
+      generatedText = ''
+    },
+
+    /**
+     * Called when new output is received (onUpdate handler)
+     * @param {string} data - The output chunk received
+     */
+    onToken (data) {
+      if (firstTokenTime === null && startTime) {
+        firstTokenTime = Date.now()
+      }
+      generatedText += data
+    },
+
+    /**
+     * Gets the collected metrics after translation completes
+     * Fetches computed statistics from native addon
+     *
+     * @param {string} prompt - The input prompt text
+     * @param {Object} [addonStats={}] - Native stats from response.stats (totalTime, totalTokens, decodeTime, TPS)
+     * @returns {Object} Performance metrics
+     */
+    getMetrics (prompt, addonStats = {}) {
+      // Use native addon stats directly (times are in seconds, convert to milliseconds)
+      const totalTimeMs = addonStats.totalTime ? addonStats.totalTime * 1000 : 0
+      const decodeTimeMs = addonStats.decodeTime ? addonStats.decodeTime * 1000 : 0
+
+      // Use native stats directly
+      const generatedTokens = addonStats.totalTokens || 0
+      const tps = addonStats.TPS || 0
+
+      return {
+        totalTime: totalTimeMs,
+        generatedTokens,
+        prompt,
+        tps,
+        fullOutput: generatedText,
+        decodeTime: decodeTimeMs
+      }
+    }
+  }
+}
+
+/**
+ * Formats performance metrics for test output
+ * Outputs in a structured format for easy parsing by log analyzers
+ *
+ * @param {string} label - Test label prefix (e.g., '[Bergamot]')
+ * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
+ * @returns {string} Formatted performance metrics string
+ */
+function formatPerformanceMetrics (label, metrics) {
+  const {
+    totalTime,
+    generatedTokens,
+    prompt,
+    tps,
+    fullOutput,
+    decodeTime
+  } = metrics
+
+  const totalTimeMs = typeof totalTime === 'number' ? totalTime : 0
+  const totalSeconds = (totalTimeMs / 1000).toFixed(2)
+  const tpsValue = typeof tps === 'number' ? tps.toFixed(2) : '0.00'
+  const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
+
+  return `${label} Performance Metrics:
+    - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
+    - Decode time: ${decodeTimeMs.toFixed(2)}ms
+    - Generated tokens: ${generatedTokens} tokens
+    - Prompt: "${prompt}"
+    - Tokens per second (TPS): ${tpsValue} t/s
+    - Full output: "${fullOutput}"`
+}
+
 /**
  * Waits for addon to reach a target status
  * Handles race conditions where status may progress past target
@@ -334,5 +432,9 @@ module.exports = {
   // Utilities
   createLogger,
   waitForStatus,
-  TEST_TIMEOUT
+  TEST_TIMEOUT,
+
+  // Performance metrics
+  createPerformanceCollector,
+  formatPerformanceMetrics
 }

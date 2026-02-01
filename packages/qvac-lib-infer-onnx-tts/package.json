@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.2.10",
+  "version": "0.2.12",
   "description": "TTS addon skeleton for qvac",
   "addon": true,
   "engines": {
@@ -71,6 +71,7 @@
     "process": "npm:bare-process",
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
+    "fflate": "^0.8.2",
     "stream": "npm:bare-node-stream",
     "tty": "npm:bare-node-tty",
     "util": "npm:bare-utils@^1.5.1"

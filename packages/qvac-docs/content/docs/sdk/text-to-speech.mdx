@@ -20,13 +20,14 @@ For how to use each function, see [SDK — API reference](/sdk/api/latest/).
 
 ## Models
 
-- Recommended model family: Piper
-- Model format: ONNX (`*.onnx`)
+You can load any **Piper** voice bundle compatible with ONNX Runtime. Required files: `model.onnx` (file format: `*.onnx`) + `config.json`.
 
-### Required artifacts
+For models available as constants, see [Hyperdrive model index](https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts).
+
+### Required inputs to `loadModel()`
 
 When loading TTS models, `loadModel()` also requires:
-- `configSrc`: [Piper voice configuration JSON that pairs with `.onnx` model](https://deepwiki.com/rhasspy/piper/3.2-voice-configuration).
+- `configSrc`: [Piper voice configuration JSON that pairs with `.onnx` model](https://deepwiki.com/rhasspy/piper/3.2-voice-configuration) (`config.json` from voice bundle).
 - `eSpeakDataPath`: [path to eSpeak NG data directory, used to convert text to phonemes before synthesis](https://man.archlinux.org/man/extra/espeak-ng/espeak-ng.1.en).
 
 ## Example
@@ -36,6 +37,7 @@ The following script shows an example of text-to-speech, saving the output to a 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/text-to-speech.js title="text-to-speech.js" lineNumbers
 import {
   loadModel,
@@ -206,6 +208,7 @@ function playAudio(audioBuffer) {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/text-to-speech.ts title="text-to-speech.ts" lineNumbers
 import {
   loadModel,
@@ -386,6 +389,5 @@ export function playAudio(audioBuffer: Buffer): void {
 </Tabs>
 
 <Callout title="Tip" type="success">
-All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
 </Callout>
-

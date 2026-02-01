@@ -24,13 +24,11 @@ For how to use each function, see [SDK — API reference](/sdk/api/latest/).
 
 ## Models
 
-Recommended model families:
-- LLaMA
-- Qwen
-- Mixtral
-- Gemma
+You can load any `llama.cpp`-compatible text-generation/chat model. Model file format: `*.gguf`.
 
-Model format: GGUF (`*.gguf`)
+- If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/sdk/sharded-models).
+- For multimodal prompts (images + text), see [Multimodal](/sdk/multimodal).
+- For models available as constants, see [Hyperdrive model index](https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts).
 
 ## Features
 
@@ -43,10 +41,8 @@ Model format: GGUF (`*.gguf`)
 ### Usage
 
 The following script shows a basic example of completion:
-
-<Tabs>
-<Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/completion.js title="completion.js" lineNumbers
 import { loadModel, LLAMA_3_2_1B_INST_Q4_0, completion, unloadModel, } from "@qvac/sdk";
 try {
@@ -82,52 +78,6 @@ catch (error) {
 
 ```
 </WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<WrapCode>
-```ts file=../examples/quickstart.ts title="completion.ts" lineNumbers
-import {
-  loadModel,
-  LLAMA_3_2_1B_INST_Q4_0,
-  completion,
-  unloadModel,
-} from "@qvac/sdk";
-
-try {
-  // Load a model type 'llm'
-  const modelId = await loadModel({
-    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
-    onProgress: (progress) => {
-      console.log(progress);
-    },
-  });
-  // All messages from the conversation
-  // between you (user) and it (assistant)
-  history: [
-    { role: "user", content: "Remember this number: 42." },
-    { role: "assistant", content: "I'll remember that the number is 42." },
-    {
-      role: "user",
-      content:
-        "What number did I tell you to remember? Answer with just the number.",
-    },
-  ],
-  const result = completion({ modelId, history, stream: true });
-  for await (const token of result.tokenStream) {
-    process.stdout.write(token);
-  }
-  await unloadModel({ modelId });
-} catch (error) {
-  console.error("❌ Error:", error);
-  process.exit(1);
-}
-
-```
-</WrapCode>
-</Tab>
-</Tabs>
 
 ### Tool call
 
@@ -136,6 +86,7 @@ The following script shows how to provide tool definitions to `completion()`, st
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/llamacpp-native-tools.js title="completion-tool-call.js" lineNumbers
 import { z } from "zod";
 import { completion, loadModel, unloadModel, QWEN_3_1_7B_INST_Q4, } from "../index.js";
@@ -289,6 +240,7 @@ catch (error) {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/llamacpp-native-tools.ts title="completion-tool-call.ts" lineNumbers
 import { z } from "zod";
 import {
@@ -477,6 +429,7 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/mcp-websearch.js title="completion-mcp.js" lineNumbers
 /**
  * MCP DuckDuckGo Search Example
@@ -660,6 +613,7 @@ finally {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/mcp-websearch.ts title="completion-mcp.ts" lineNumbers
 /**
  * MCP DuckDuckGo Search Example
@@ -912,9 +866,8 @@ Always cite your sources with the URL.`,
 
 The following script enables `kvCache: true` to speed up follow-up turns, and then compares it with `kvCache: false` on the same history:
 
-<Tabs>
-<Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/kv-cache-example.js title="completion-kv-cache.js" lineNumbers
 import { completion, LLAMA_3_2_1B_INST_Q4_0, loadModel, unloadModel, VERBOSITY, } from "@qvac/sdk";
 try {
@@ -991,107 +944,7 @@ catch (error) {
 }
 ```
 </WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<WrapCode>
-```ts file=../examples/kv-cache-example.ts title="completion-kv-cache.ts" lineNumbers
-import {
-  completion,
-  LLAMA_3_2_1B_INST_Q4_0,
-  loadModel,
-  unloadModel,
-  VERBOSITY,
-} from "@qvac/sdk";
-
-try {
-  // Load the model
-  const modelId = await loadModel({
-    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-    modelType: "llm",
-    modelConfig: {
-      device: "gpu",
-      ctx_size: 2048,
-      verbosity: VERBOSITY.ERROR,
-    },
-  });
-
-  console.log("🧠 Testing KV Cache functionality...\n");
-
-  // First conversation with cache enabled
-  console.log("📝 First conversation (building cache):");
-  const history1 = [{ role: "user", content: "What is the capital of France?" }];
-
-  const result1 = completion({
-    modelId,
-    history: history1,
-    stream: true,
-    kvCache: true,
-  }); // kvCache = true
-
-  let response1 = "";
-  for await (const token of result1.tokenStream) {
-    response1 += token;
-    process.stdout.write(token);
-  }
-
-  const stats1 = await result1.stats;
-  console.log(`\n⏱️  First completion stats: ${JSON.stringify(stats1)}\n`);
-
-  // Continue conversation (should reuse cache from previous conversation)
-  console.log("🔄 Continuing conversation (reusing cache):");
-  const history2 = [
-    { role: "user", content: "What is the capital of France?" },
-    { role: "assistant", content: response1.trim() },
-    { role: "user", content: "What about Germany?" },
-  ];
-
-  // This should:
-  // 1. Find existing cache from [user: "What is the capital of France?"] (history minus last message)
-  // 2. Load that cache and process the new "What about Germany?" message
-  // 3. Save the updated cache and rename it to include all messages
-  const result2 = completion({
-    modelId,
-    history: history2,
-    stream: true,
-    kvCache: true,
-  }); // kvCache = true
-
-  for await (const token of result2.tokenStream) {
-    process.stdout.write(token);
-  }
-
-  const stats2 = await result2.stats;
-  console.log(`\n⏱️  Second completion stats: ${JSON.stringify(stats2)}\n`);
-
-  // Compare with non-cached version
-  console.log("🚀 Same conversation without cache:");
-  const result3 = completion({
-    modelId,
-    history: history2,
-    stream: true,
-    kvCache: false,
-  }); // kvCache = false
-
-  for await (const token of result3.tokenStream) {
-    process.stdout.write(token);
-  }
-
-  const stats3 = await result3.stats;
-  console.log(`\n⏱️  Non-cached completion stats: ${JSON.stringify(stats3)}\n`);
-
-  console.log("✅ KV Cache test completed!");
-
-  await unloadModel({ modelId, clearStorage: false });
-} catch (error) {
-  console.error("❌ Error:", error);
-  process.exit(1);
-}
-```
-</WrapCode>
-</Tab>
-</Tabs>
 
 <Callout title="Tip" type="success">
-All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
 </Callout>

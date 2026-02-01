@@ -1,30 +1,8 @@
 name: "prebuilds (Qvac-lib-infer-llamacpp-embed)"
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-llamacpp-embed/**"
-
   workflow_dispatch:
     inputs:
-      repository:
-        description: "Repo to build (owner/name). Defaults to this repo."
-        required: false
-        type: string
-      ref:
-        description: "Git ref (branch/tag/SHA). Defaults to current ref."
-        required: false
-        type: string
-      workdir:
-        description: "Monorepo package dir"
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
       tag:
         description: "Tag to publish with ('latest' by default)"
         required: true
@@ -36,41 +14,35 @@ on:
       vk-profiling:
         type: boolean
         default: false
-      publish_target:
-        description: "Target registry for publishing (npm or gpr)"
-        type: string
+      workdir:
+        description: "Working directory (optional)"
         required: false
-        default: ""
-
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-embed"
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
-        required: false
       repository:
         type: string
         required: false
-        default: "tetherto/qvac"
-      workdir:
-        description: "Monorepo package dir"
-        type: string
-        required: false
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "tetherto/qvac-lib-infer-llamacpp-embed"
       tag:
         description: "Tag to publish"
         type: string
         required: false
         default: "dev"
       publish_target:
-        description: "Target registry for publishing (npm or gpr)"
+        description: "Target registry for publishing (npm, gpr, or both)"
         type: string
         required: false
         default: ""
-      vk-profiling:
-        type: boolean
+      workdir:
+        description: "Working directory (optional)"
         required: false
-        default: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-embed"
     outputs:
       published_version:
         description: "Version published to registry"
@@ -85,10 +57,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          # TODO: macos-x64 (they are not a priority as of 14th July 2025)
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
@@ -122,8 +95,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      # monorepo: keep cache under package dir
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir }}/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
@@ -137,7 +109,7 @@ jobs:
         run: |
           printenv
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Maximize build space
         run: |
           sudo docker image prune --all --force
@@ -150,19 +122,26 @@ jobs:
         run: |
           echo "Workflow inputs:"
           echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
-          echo "Ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}"
-          echo "Repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}"
-          echo "Workdir: ${{ inputs.workdir || github.event.inputs.workdir }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Workdir: ${{ inputs.workdir }}"
           echo "Matrix platform: ${{ matrix.platform }}"
           echo "Matrix arch: ${{ matrix.arch }}"
           echo "Matrix tags: ${{ matrix.tags }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Update c++ tools
         run: |
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
@@ -174,8 +153,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -191,11 +170,9 @@ jobs:
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          echo "Writing .npmrc for dual registry install…"
 
-          # monorepo: write it inside the package dir so npm install in workdir uses it
-          cd "${{ inputs.workdir || github.event.inputs.workdir }}"
-          cat > .npmrc <<NPMRC
+          echo "Writing .npmrc into package workdir..."
+          cat > "${{ inputs.workdir }}/.npmrc" <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -233,7 +210,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -247,21 +224,23 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Update apt sources
         run: sudo apt-get update
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Install ccache on Linux
         run: |
           sudo apt-get install -y ccache
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Configure ccache
         run: |
           ccache --set-config=max_size=2G
@@ -270,38 +249,35 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Get ccache cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
-          save-always: true
+          path: ~/.cache/ccache-arm
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
         run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Install vulkan in linux
         run: |
           sudo apt install xz-utils
+          # Get the latest vulkan sdk to be consistent with windows
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
           cd ~
           mkdir vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04' }}
         name: Setup vulkan sdk path in linux x64
         run: |
           VULKAN_SDK=~/vulkan/x86_64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Setup vulkan sdk path in linux arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
@@ -309,7 +285,7 @@ jobs:
           cd ~/vulkan
           ./vulkansdk --maxjobs
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Export rest of vulkan sdk variables in linux
         run: |
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
@@ -325,10 +301,6 @@ jobs:
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
-        name: Install tooling for cross compilation - ubuntu arm64
-        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
-
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
         run: |
@@ -340,18 +312,17 @@ jobs:
         run: npm install
 
       - name: Create vcpkg cache location
-        working-directory: ${{ inputs.workdir }}
         run: mkdir -p vcpkg/cache
 
       - name: Get vcpkg cache
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
-          path: ${{ inputs.workdir }}/vcpkg/cache
+          path: vcpkg/cache
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), format('{0}/vcpkg/ports/**', inputs.workdir)) }}
           restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
-      - if: ${{ inputs['vk-profiling'] }}
+      - if: ${{ inputs.vk-profiling }}
         name: Enable vulkan profiling
         run: |
           echo "CFG_OPTS=-D VK_PROFILING=ON $CFG_OPTS" >> $GITHUB_ENV
@@ -371,17 +342,30 @@ jobs:
         run: |
           bare-make install
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Remove .a files (Linux x64 only)
         working-directory: ${{ inputs.workdir }}
         run: |
           rm -f prebuilds/linux-x64/qvac__embed-llamacpp/*.a
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Remove .a files (Linux arm64 only)
         working-directory: ${{ inputs.workdir }}
         run: |
           rm -f prebuilds/linux-arm64/qvac__embed-llamacpp/*.a
+
+      - name: Strip debug symbols
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "android" ]]; then
+            find prebuilds -name "*.bare" -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
+          elif [[ "${{ matrix.platform }}" == "darwin" || "${{ matrix.platform }}" == "ios" ]]; then
+            find prebuilds -name "*.bare" -exec strip -S {} \;
+          else
+            find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -407,111 +391,42 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-  publish-logic:
-    runs-on: ubuntu-latest
-    outputs:
-      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
-      publish_npm: ${{ steps.logic.outputs.publish_npm }}
-      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
-    steps:
-      - id: logic
-        shell: bash
-        env:
-          INPUT_PUBLISH_TARGET: ${{ inputs.publish_target }}
-          EVENT_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
-          INPUT_TAG: ${{ inputs.tag }}
-          EVENT_TAG: ${{ github.event.inputs.tag }}
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-          publish_target="${INPUT_PUBLISH_TARGET}"
-          event_publish_target="${EVENT_PUBLISH_TARGET}"
-
-          publish_gpr="false"
-          publish_npm="false"
-
-          if [ "$publish_target" = "gpr" ] || [ "$event_publish_target" = "gpr" ]; then
-            publish_gpr="true"
-          fi
-
-          if [ "$publish_target" = "npm" ] || [ "$event_publish_target" = "npm" ]; then
-            publish_npm="true"
-          fi
-
-          if [ "$publish_gpr" = "false" ] && [ "$publish_npm" = "false" ]; then
-            if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-              if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-                publish_gpr="true"
-              elif [[ "$ref_name" == release-* ]]; then
-                publish_npm="true"
-              fi
-            fi
-          fi
-
-          if [[ "$ref_name" == release-* ]]; then
-            publish_gpr="false"
-          fi
-
-          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
-            publish_npm="false"
-          fi
-
-          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
-            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
-            exit 1
-          fi
-
-          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
-          if [ -z "$gpr_tag" ]; then
-            if [ "$ref_name" = "main" ]; then
-              gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
-            else
-              gpr_tag="dev"
-            fi
-          fi
-
-          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
-          echo "publish_npm=$publish_npm" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-
   publish-gpr:
-    needs: [prebuild, merge, publish-logic]
-    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
+    needs: [prebuild, merge]
+    if: ${{ inputs.publish_target == 'gpr' || inputs.publish_target == 'both' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
+    continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts into package dir
+      - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ inputs.workdir }}/prebuilds
+          path: prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: ${{ inputs.workdir }}
-          name-suffix: "-mono"
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          name-suffix: "mono"
 
   publish-npm:
-    needs: [prebuild, merge, publish-logic]
-    if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
+    needs: [prebuild, merge]
+    if: ${{ inputs.publish_target == 'npm' || inputs.publish_target == 'both' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
+    continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
@@ -523,14 +438,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.event.inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
 
-      - name: Download prebuild artifacts into package dir
+      - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${{ inputs.workdir }}/prebuilds
+          path: prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -538,4 +453,3 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          workdir: ${{ inputs.workdir }}

@@ -23,7 +23,6 @@ if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
 endif()
 
 project(qvac-lib-infer-nmtcpp
-  VERSION 2.0.0
   LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)

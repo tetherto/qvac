@@ -1,7 +1,7 @@
 'use strict'
 
 const { Readable } = require('bare-stream')
-const GSTDecoder = require('@qvac/decoder-audio')
+const { FFmpegDecoder } = require('@qvac/decoder-audio')
 const { QvacErrorTranscriptionUtils, ERR_CODES } = require('./src/utils/errors')
 const AUDIO_FORMAT_OPTIONS = [
   'decoded',
@@ -25,7 +25,7 @@ class TranscriptionPipeline {
   /**
    * @param {Object} addons - Inference arguments
    * @param {Object} addons.whisperAddon - Whisper addon instance (required)
-   * @param {Object} [addons.decoder] - Optional GSTDecoder instance
+   * @param {Object} [addons.decoder] - Optional FFmpegDecoder instance
    * @param {Object} config - Configuration for defaults
    */
   constructor (addons, config) {
@@ -63,7 +63,7 @@ class TranscriptionPipeline {
 
     if (config?.audioFormat !== 'decoded' || decoder) {
       if (!decoder) {
-        this.decoder = new GSTDecoder({
+        this.decoder = new FFmpegDecoder({
           config: {
             audioFormat: config?.audioFormat,
             sampleRate: config?.sampleRate

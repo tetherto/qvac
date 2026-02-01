@@ -1,13 +1,50 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const fflate = require('fflate')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
+/**
+ * Extract a zip file to a directory using fflate (no subprocess).
+ * Works on iOS/Android where unzip command may be unavailable or sandboxed.
+ */
+function extractZipToDir (zipPath, extractDir) {
+  const buf = fs.readFileSync(zipPath)
+  const entries = fflate.unzipSync(new Uint8Array(buf))
+  const extractDirResolved = path.resolve(extractDir)
+  for (const name of Object.keys(entries)) {
+    const normalized = name.replace(/\\/g, '/')
+    if (normalized.endsWith('/')) continue // directory entry only
+    const outPath = path.resolve(extractDir, normalized)
+    const rel = path.relative(extractDirResolved, outPath)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) continue // path traversal
+    const dir = path.dirname(outPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(outPath, Buffer.from(entries[name]))
+  }
+}
+
 // Returns base directory for models - uses global.testDir on mobile, current dir otherwise
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
+}
+
+/** Returns true if file exists and is valid JSON; false if missing, wrong size, or invalid. */
+function isValidJsonCache (filepath) {
+  try {
+    if (!fs.existsSync(filepath)) return false
+    const stats = fs.statSync(filepath)
+    // 1024 bytes is the binary placeholder size - treat as invalid cache for JSON
+    if (stats.size === 1024) return false
+    if (stats.size < 10) return false
+    const raw = fs.readFileSync(filepath, 'utf8')
+    const parsed = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null
+  } catch (e) {
+    return false
+  }
 }
 
 /**
@@ -34,14 +71,18 @@ async function downloadWithHttp (url, filepath, maxRedirects = 10) {
     console.log(` [HTTPS] Requesting: ${parsedUrl.hostname}${parsedUrl.pathname}`)
 
     const req = https.request(options, (res) => {
-      // Handle redirects
+      // Handle redirects (resolve relative Location against current request URL)
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         if (maxRedirects <= 0) {
           reject(new Error('Too many redirects'))
           return
         }
-        console.log(` [HTTPS] Redirecting to: ${res.headers.location}`)
-        downloadWithHttp(res.headers.location, filepath, maxRedirects - 1)
+        const location = res.headers.location
+        const redirectUrl = location.startsWith('http://') || location.startsWith('https://')
+          ? location
+          : new URL(location, parsedUrl.origin + parsedUrl.pathname).href
+        console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
+        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
           .then(resolve)
           .catch(reject)
         return
@@ -132,8 +173,14 @@ async function downloadRealModel (url, filepath) {
   if (fs.existsSync(filepath)) {
     const stats = fs.statSync(filepath)
     if (stats.size >= minSize) {
-      console.log(` ✓ Using cached model: ${path.basename(filepath)} (${stats.size} bytes)`)
-      return { success: true, path: filepath, isReal: true }
+      // For .json files, ensure content is valid JSON (reject placeholder or corrupt cache)
+      if (isJson && !isValidJsonCache(filepath)) {
+        console.log(` Cached JSON invalid or placeholder (${stats.size} bytes), re-downloading...`)
+        fs.unlinkSync(filepath)
+      } else {
+        console.log(` ✓ Using cached model: ${path.basename(filepath)} (${stats.size} bytes)`)
+        return { success: true, path: filepath, isReal: true }
+      }
     } else {
       console.log(` Cached file too small (${stats.size} bytes), re-downloading...`)
       fs.unlinkSync(filepath)
@@ -152,8 +199,13 @@ async function downloadRealModel (url, filepath) {
       if (result.success && fs.existsSync(filepath)) {
         const stats = fs.statSync(filepath)
         if (stats.size >= minSize) {
-          console.log(` ✓ Downloaded: ${path.basename(filepath)} (${stats.size} bytes)`)
-          return { success: true, path: filepath, isReal: true }
+          if (isJson && !isValidJsonCache(filepath)) {
+            console.log(' Downloaded file is not valid JSON, discarding')
+            fs.unlinkSync(filepath)
+          } else {
+            console.log(` ✓ Downloaded: ${path.basename(filepath)} (${stats.size} bytes)`)
+            return { success: true, path: filepath, isReal: true }
+          }
         } else {
           console.log(` Downloaded file too small: ${stats.size} bytes (expected >${minSize})`)
         }
@@ -179,8 +231,13 @@ async function downloadRealModel (url, filepath) {
           fs.writeFileSync(filepath, result.stdout)
           const stats = fs.statSync(filepath)
           if (stats.size >= minSize) {
-            console.log(` ✓ Downloaded: ${path.basename(filepath)} (${stats.size} bytes)`)
-            return { success: true, path: filepath, isReal: true }
+            if (!isValidJsonCache(filepath)) {
+              console.log(' Downloaded file is not valid JSON, discarding')
+              fs.unlinkSync(filepath)
+            } else {
+              console.log(` ✓ Downloaded: ${path.basename(filepath)} (${stats.size} bytes)`)
+              return { success: true, path: filepath, isReal: true }
+            }
           } else {
             console.log(` Downloaded file too small: ${stats.size} bytes (expected >${minSize})`)
           }
@@ -213,8 +270,14 @@ async function downloadRealModel (url, filepath) {
     }
   }
 
-  console.log(' Creating placeholder model for error testing')
-  fs.writeFileSync(filepath, Buffer.alloc(1024))
+  // Only create placeholder for binary files (not JSON) - JSON placeholders would
+  // pass the size check (1024 > 100) and cause parse errors on subsequent runs
+  if (!isJson) {
+    console.log(' Creating placeholder model for error testing')
+    fs.writeFileSync(filepath, Buffer.alloc(1024))
+  } else {
+    console.log(' Skipping placeholder creation for JSON file')
+  }
   return { success: false, path: filepath, isReal: false }
 }
 
@@ -229,9 +292,11 @@ async function ensureTTSModelPair (modelName) {
 
   const [language] = locale.split('_')
 
-  const baseUrl = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${language}/${locale}/${voice}/${quality}`
-  const onnxUrl = `${baseUrl}/${modelName}.onnx`
-  const jsonUrl = `${baseUrl}/${modelName}.onnx.json`
+  // Use resolve (CDN) for binary .onnx; use raw for .json so we get file contents in response body, not an HTML page
+  const baseResolve = `https://huggingface.co/rhasspy/piper-voices/resolve/main/${language}/${locale}/${voice}/${quality}`
+  const baseRaw = `https://huggingface.co/rhasspy/piper-voices/raw/main/${language}/${locale}/${voice}/${quality}`
+  const onnxUrl = `${baseResolve}/${modelName}.onnx`
+  const jsonUrl = `${baseRaw}/${modelName}.onnx.json`
 
   const onnxPath = path.join(getBaseDir(), 'models', 'tts', `${modelName}.onnx`)
   const jsonPath = path.join(getBaseDir(), 'models', 'tts', `${modelName}.onnx.json`)
@@ -336,22 +401,37 @@ async function ensureEspeakData (targetPath = null) {
       fs.mkdirSync(tmpExtractDir, { recursive: true })
     }
 
-    // Use unzip command (available on both desktop and mobile via bare-subprocess)
-    // Note: On mobile, this may not work - consider bundling espeak-ng-data as test asset
     let unzipSuccess = false
-    try {
-      const { spawnSync } = require('bare-subprocess')
-      const unzipResult = spawnSync('unzip', [
-        '-q', '-o', tmpZipFile, '-d', tmpExtractDir
-      ], { stdio: ['inherit', 'inherit', 'pipe'] })
-      unzipSuccess = unzipResult.status === 0
-      if (!unzipSuccess) {
-        console.log(` Unzip failed with exit code: ${unzipResult.status}`)
+    if (isMobile) {
+      // On iOS/Android, unzip command is often unavailable or sandboxed; use JS extraction
+      try {
+        extractZipToDir(tmpZipFile, tmpExtractDir)
+        unzipSuccess = fs.existsSync(tmpExtractDir) && fs.readdirSync(tmpExtractDir).length > 0
+      } catch (e) {
+        console.log(` JS unzip error: ${e.message}`)
       }
-    } catch (e) {
-      console.log(` Unzip error: ${e.message}`)
-      // On mobile, unzip may not be available
-      // Consider using a JavaScript-based unzip library
+    } else {
+      // Desktop: try unzip command first, fall back to JS extraction
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const unzipResult = spawnSync('unzip', [
+          '-q', '-o', tmpZipFile, '-d', tmpExtractDir
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        unzipSuccess = unzipResult.status === 0
+        if (!unzipSuccess) {
+          console.log(` Unzip command failed (exit ${unzipResult.status}), trying JS extraction...`)
+          extractZipToDir(tmpZipFile, tmpExtractDir)
+          unzipSuccess = fs.existsSync(tmpExtractDir) && fs.readdirSync(tmpExtractDir).length > 0
+        }
+      } catch (e) {
+        console.log(` Unzip error: ${e.message}, trying JS extraction...`)
+        try {
+          extractZipToDir(tmpZipFile, tmpExtractDir)
+          unzipSuccess = fs.existsSync(tmpExtractDir) && fs.readdirSync(tmpExtractDir).length > 0
+        } catch (e2) {
+          console.log(` JS unzip error: ${e2.message}`)
+        }
+      }
     }
 
     if (!unzipSuccess) {
