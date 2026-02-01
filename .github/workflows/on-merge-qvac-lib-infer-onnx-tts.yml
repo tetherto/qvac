@@ -17,7 +17,7 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
     with:
-      publish_target: "gpr"
+      publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
 
