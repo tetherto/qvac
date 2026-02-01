@@ -111,6 +111,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-rag
+          name-suffix: "-mono"
 
   publish-release-npm:
     needs: publish-logic
@@ -139,6 +140,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-rag
+          name-suffix: "-mono"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -159,3 +161,4 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           path: packages/qvac-lib-rag
+          name-suffix: "-mono"
