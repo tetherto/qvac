@@ -1,4 +1,4 @@
-name: "create-github-release (Qvac-lib-infer-whispercpp)"
+name: "Create GitHub Release (Qvac-lib-infer-whispercpp)"
 
 on:
   workflow_call:
@@ -20,9 +20,6 @@ on:
 permissions:
   contents: write
 
-env:
-  WORKDIR: ${{ inputs.workdir }}
-
 jobs:
   publish-release:
     if: inputs.published_version != ''
@@ -41,12 +38,14 @@ jobs:
         with:
           current_version: ${{ inputs.published_version }}
           prev_sha: ${{ inputs.prev_sha }}
+          workdir: ${{ inputs.workdir }}
 
       - name: Verify Release Notes
         if: steps.version.outputs.bumped == 'true'
+        working-directory: ${{ inputs.workdir }}
         run: |
           set -euo pipefail
-          notes_path="${WORKDIR}/release-notes/v${{ steps.version.outputs.current }}.md"
+          notes_path="release-notes/v${{ steps.version.outputs.current }}.md"
           if [ ! -s "${notes_path}" ]; then
             echo "Missing or empty release notes: ${notes_path}"
             exit 1
