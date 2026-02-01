@@ -54,21 +54,24 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         run: |
-          qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
+          @qvac:registry=https://npm.pkg.github.com/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
           //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           NPMRC
+          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
+          fi
           GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
           git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
           git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install NPM dependencies
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ env.WORKDIR }}/.npmrc
         run: |
           npm install
           npm install -g bare bare-make

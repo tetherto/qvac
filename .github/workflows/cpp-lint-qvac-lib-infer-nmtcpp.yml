@@ -108,6 +108,7 @@ jobs:
       - name: Configure git
         run: |
           GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
           git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
@@ -127,20 +128,22 @@ jobs:
 
       - name: Configure npm registries
         shell: bash
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          qvac_registry="https://registry.npmjs.org/"
-          echo "@qvac:registry=${qvac_registry}" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
-          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://npm.pkg.github.com/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
 
       - name: Install npm dependencies
         shell: bash
         working-directory: ${{ env.WORKDIR }}
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ env.WORKDIR }}/.npmrc
         run: npm install
 
       - name: Configure vcpkg
