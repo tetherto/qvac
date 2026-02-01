@@ -364,10 +364,10 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: rm -f prebuilds/linux-arm64/qvac__llm-llamacpp/*.a
 
-      - name: Smoke check (temp-*) package name & prebuilds listing
-        if: ${{ startsWith(github.ref, 'refs/heads/temp-')
-                || startsWith(github.ref_name, 'temp-')
-                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))) }}
+      - name: Smoke check (tmp-*) package name & prebuilds listing
+        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -414,12 +414,22 @@ jobs:
 
   publish-gpr:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || inputs.publish_target == 'both'
-            || (
-                 (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
-                 && (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-'))))
-                 && (inputs.publish_target == '' || inputs.publish_target == null)
-               ) }}
+    if: ${{ inputs.publish_target == 'gpr'
+          || inputs.publish_target == 'both'
+          || (
+              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+              && (inputs.publish_target == '' || inputs.publish_target == null)
+              && (
+                github.ref_name == 'main'
+                || startsWith(github.ref_name, 'feature-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (
+                      inputs.ref == 'refs/heads/main'
+                      || startsWith(inputs.ref, 'refs/heads/feature-')
+                      || startsWith(inputs.ref, 'refs/heads/tmp-')
+                   ))
+              )
+            ) }}
     continue-on-error: true
     outputs:
       npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -486,14 +496,17 @@ jobs:
 
   publish-npm:
     needs: [prebuild, merge]
-    if: ${{ (
-              inputs.publish_target == 'npm'
-              || inputs.publish_target == 'both'
-              || github.event_name == 'push'
-              || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.publish_target == '' || inputs.publish_target == null))
-            )
-            && ! (startsWith(github.ref, 'refs/heads/temp-') || startsWith(github.ref_name, 'temp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/temp-') || startsWith(inputs.ref, 'temp-')))) }}
-    continue-on-error: true
+    if: ${{ inputs.publish_target == 'npm'
+          || inputs.publish_target == 'both'
+          || (
+              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+              && (inputs.publish_target == '' || inputs.publish_target == null)
+              && (
+                startsWith(github.ref_name, 'release-')
+                || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
+              )
+            ) }}
+    continue-on-error: false
     outputs:
       npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
