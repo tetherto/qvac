@@ -1,4 +1,4 @@
-name: Build and Publish (Qvac-sdk)
+name: Build and Publish QVAC SDK (Qvac-sdk)
 
 on:
   push:
@@ -9,24 +9,44 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-sdk/**"
+
+  pull_request:
+    branches:
+      - release-*
+    paths:
+      - "packages/qvac-sdk/**"
+
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag for publishing"
+        description: "Tag for publishing (optional override for GPR)"
         required: false
         default: "dev"
 
 env:
   WORKDIR: packages/qvac-sdk
 
+permissions: read-all
+
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-sdk
+      package-json-path: packages/qvac-sdk/package.json
+      changelog-path: packages/qvac-sdk/CHANGELOG.md
+
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     env:
-      READ_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      READ_NPM_TOKEN: ${{ secrets.PAT_TOKEN }}
       WRITE_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -44,31 +64,28 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
-          ref_name="${GITHUB_REF#refs/heads/}"
-          qvac_registry="https://npm.pkg.github.com/"
-          qvac_token="${GPR_TOKEN}"
-          if [[ "$ref_name" == release-* ]]; then
-            qvac_registry="https://registry.npmjs.org/"
-            qvac_token="${NPM_TOKEN}"
-          fi
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
           # Optional: make private git deps work without prompting
-          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
 
           # Configure bunfig.toml for reading packages
           cat > bunfig.toml << EOF
@@ -77,16 +94,72 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${qvac_token}", url = "${qvac_registry}" }
+          "@qvac" = { token = "${{ env.NPM_TOKEN }}", url = "https://registry.npmjs.org" }
           EOF
 
       - name: Install dependencies
-        working-directory: ${{ env.WORKDIR }}
         run: bun install
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Modify package name for branch-based builds
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          # Only modify package name for dev, fix-*, feature-* branches
+          case "$BRANCH_NAME" in
+            main)
+              echo "Main branch - keeping original package name"
+              exit 0
+              ;;
+            dev)
+              SUFFIX="dev"
+              ;;
+            fix-*|feature-*)
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              ;;
+            *)
+              echo "Branch $BRANCH_NAME not configured for modified package name"
+              exit 0
+              ;;
+          esac
+
+          echo "Modifying package for branch: $BRANCH_NAME"
+
+          # Change namespace from @qvac to @tetherto and add suffix
+          ORIGINAL_NAME=$(node -p "require('./package.json').name")
+          NEW_NAME="@tetherto/sdk-${SUFFIX}"
+
+          echo "Package name: $ORIGINAL_NAME → $NEW_NAME"
+
+          # Update package.json
+          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          MODIFIED_NAME=$(node -p "require('./package.json').name")
+          echo "✓ Modified package.json: $MODIFIED_NAME"
+
+          # Update references in withMobileBundle.ts
+          MOBILE_BUNDLE_FILE="expo/plugins/withMobileBundle.ts"
+          if [ -f "$MOBILE_BUNDLE_FILE" ]; then
+            echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
+            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
+            rm "${MOBILE_BUNDLE_FILE}.bak"
+            echo "✓ Updated $MOBILE_BUNDLE_FILE"
+          fi
+
+          # Update references in expo-rpc-client.ts
+          EXPO_RPC_CLIENT_FILE="client/rpc/expo-rpc-client.ts"
+          if [ -f "$EXPO_RPC_CLIENT_FILE" ]; then
+            echo "Updating @qvac/sdk references in $EXPO_RPC_CLIENT_FILE to $NEW_NAME"
+            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$EXPO_RPC_CLIENT_FILE"
+            rm "${EXPO_RPC_CLIENT_FILE}.bak"
+            echo "✓ Updated $EXPO_RPC_CLIENT_FILE"
+          fi
 
       - name: Build (includes lint, typecheck, compile)
-        working-directory: ${{ env.WORKDIR }}
         run: bun run build
+        working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -95,66 +168,83 @@ jobs:
           path: ${{ env.WORKDIR }}/dist/
           retention-days: 1
 
-      - name: Determine version and tag
-        working-directory: ${{ env.WORKDIR }}
-        id: version
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
         run: |
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          BASE_VERSION=$(node -p "require('./package.json').version")
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
 
-          if [ "$BRANCH_NAME" = "main" ]; then
-            VERSION="$BASE_VERSION"
-            TAG="dev"
-            echo "Publishing main branch as @dev"
-          elif [[ "$BRANCH_NAME" == release-* ]]; then
-            VERSION="$BASE_VERSION"
-            TAG="latest"
-            echo "Publishing release branch as @latest"
-          else
-            # Clean branch name for npm (replace invalid chars with -)
-            CLEAN_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9.-]/-/g')
-            VERSION="${BASE_VERSION}-${CLEAN_BRANCH}.$(date +%s).${GITHUB_SHA:0:7}"
-            TAG="$CLEAN_BRANCH"
-            echo "Publishing branch '$BRANCH_NAME' as @$TAG"
-          fi
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
 
-          publish_gpr="false"
-          publish_npm="false"
-          if [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$BRANCH_NAME" = "main" ] || [[ "$BRANCH_NAME" == feature-* ]] || [[ "$BRANCH_NAME" == tmp-* ]]; then
-              publish_gpr="true"
-            elif [[ "$BRANCH_NAME" == release-* ]]; then
-              publish_npm="true"
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
             fi
           fi
 
-          if [ "$publish_npm" = "true" ] && { [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; }; then
-            publish_npm="false"
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
           fi
 
-          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
-            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
-            exit 1
-          fi
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "publish_gpr=$publish_gpr" >> $GITHUB_OUTPUT
-          echo "publish_npm=$publish_npm" >> $GITHUB_OUTPUT
+  publish-gpr:
+    name: Publish to GitHub Packages (GPR)
+    needs: [build, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
-      branch: ${{ steps.version.outputs.branch }}
-      publish_gpr: ${{ steps.version.outputs.publish_gpr }}
-      publish_npm: ${{ steps.version.outputs.publish_npm }}
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ${{ env.WORKDIR }}/dist/
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ env.WORKDIR }}
+          name-suffix: "-mono"
 
   publish-npm:
-    needs: build
-    if: ${{ needs.build.outputs.publish_npm == 'true' }}
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    name: Publish to NPM
+    needs: [build, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -162,8 +252,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -177,35 +265,6 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
+          git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
-          workdir: ${{ env.WORKDIR }}
-
-  publish-gpr:
-    needs: build
-    if: ${{ needs.build.outputs.publish_gpr == 'true' }}
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: ${{ env.WORKDIR }}/dist/
-
-      - name: Publish to GitHub Package Registry
-        id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ inputs.tag || github.event.inputs.tag || needs.build.outputs.tag || 'dev' }}
           workdir: ${{ env.WORKDIR }}
