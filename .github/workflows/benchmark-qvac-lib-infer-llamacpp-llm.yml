@@ -187,7 +187,6 @@ jobs:
     steps:
       - name: Echo workflow inputs
         shell: bash
-        working-directory: ${{ inputs.workdir }}
         env:
           GGUF_MODEL: ${{ inputs.gguf_model }}
           NUM_SAMPLES: ${{ inputs.num_samples }}
@@ -239,7 +238,6 @@ jobs:
           fi
 
       - name: Check GPU availability
-        working-directory: ${{ inputs.workdir }}
         run: |
           echo "=== GPU Information ==="
           if command -v nvidia-smi &> /dev/null; then

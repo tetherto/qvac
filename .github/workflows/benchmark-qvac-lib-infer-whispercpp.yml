@@ -235,7 +235,6 @@ jobs:
 
     steps:
       - name: Display benchmark configuration
-        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "=== Benchmark Configuration ==="
           echo "Dataset Type: ${{ github.event.inputs.dataset_type }}"
@@ -270,7 +269,6 @@ jobs:
           fi
 
       - name: Maximize build space
-        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "=== Disk space before cleanup ==="
           df -h
