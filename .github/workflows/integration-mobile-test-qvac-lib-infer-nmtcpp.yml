@@ -175,9 +175,13 @@ jobs:
           VERSION="${{ inputs.version || 'latest' }}"
           echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
 
-          # Force @qvac registry to npmjs for manual downloads
-          npm config set @qvac:registry https://registry.npmjs.org/
-          npm config set registry https://registry.npmjs.org/
+          # Force @qvac registry to npmjs for manual downloads (project-level)
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
 
           # Download package from npm
           if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then

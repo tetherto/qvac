@@ -199,7 +199,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
 
@@ -213,6 +213,7 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -227,8 +228,8 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
@@ -541,4 +542,4 @@ jobs:
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: ${{ env.PKG_DIR }}
+      workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext

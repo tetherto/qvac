@@ -79,14 +79,14 @@ jobs:
           path: addon
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout mobile test framework
         uses: actions/checkout@v4
         with:
           repository: tetherto/qvac-test-addon-mobile
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           path: test-framework
           ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
@@ -100,6 +100,7 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -131,7 +132,8 @@ jobs:
           NPMRC
 
           # Configure git for private repos
-          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install global dependencies
         run: |
@@ -165,6 +167,14 @@ jobs:
           echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
 
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
+
+          # Force @qvac registry to npmjs for manual downloads (project-level)
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
 
           if ! npm pack "$PACKAGE_SPEC"; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"

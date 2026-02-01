@@ -72,7 +72,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
@@ -86,8 +86,8 @@ jobs:
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -103,10 +103,11 @@ jobs:
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
           git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
 
       - name: Configure vcpkg
@@ -223,8 +224,8 @@ jobs:
         if: needs.setup.outputs.qvac_needed == 'true'
         working-directory: ${{ env.PKG_DIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           ref_name="${{ github.ref_name }}"
@@ -238,8 +239,11 @@ jobs:
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
+
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install npm dependencies (for QVAC)
         if: needs.setup.outputs.qvac_needed == 'true'
