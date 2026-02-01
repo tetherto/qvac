@@ -129,12 +129,12 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          # Configure test-framework registry
+          # Configure test-framework registry (always npmjs for public @qvac deps)
           cd $GITHUB_WORKSPACE/test-framework
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
