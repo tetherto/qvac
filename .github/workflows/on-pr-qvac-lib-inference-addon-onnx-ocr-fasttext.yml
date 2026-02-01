@@ -67,6 +67,8 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          sparse-checkout: |
+            packages/qvac-lib-inference-addon-onnx-ocr-fasttext
 
       - name: Fetch PR head and target branch
         id: fetch_pr
