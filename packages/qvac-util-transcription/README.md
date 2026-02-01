@@ -63,7 +63,7 @@ npm install @tetherto/qvac-util-transcription@latest
 
 This utility class creates a transcription pipeline that is designed to be flexible, allowing you to use any combination of its components based on your needs. The pipeline consists of two components that can be chained together:
 
-- **Decoder**: Handles audio decoding (e.g., GSTDecoder)
+- **Decoder**: Handles audio decoding (FFmpegDecoder)
 - **Whisper Addon**: Executes the Whisper transcription model (with optional VAD support)
 
 The pipeline automatically adapts based on which components you provide:
@@ -100,7 +100,7 @@ const pipeline = new TranscriptionPipeline({
   whisperAddon: whisper 
 }, {
   sampleRate: 16000,
-  audioFormat: 'encoded' //If you select decoded we will not use GSTDecoder
+  audioFormat: 'encoded' //If you select decoded we will not use FFmpegDecoder
 })
 ```
 
@@ -210,7 +210,7 @@ main().catch(console.error)
 
 **`new TranscriptionPipeline({ decoder, whisperAddon }, config)`**
 
-- `decoder` (optional): Instance of GSTDecoder for audio decoding, and the format is not 'decoded' we will initialize a GSTDecoder.
+- `decoder` (optional): Instance of FFmpegDecoder for audio decoding. If the format is not 'decoded', we will initialize an FFmpegDecoder.
 - `whisperAddon` (required): Whisper addon instance for transcription. VAD can be configured within the whisper configuration by providing a `vadModelName` and VAD-related settings.
 - `config` (optional): Additional configuration object.
 - `config.audioFormat`: (passed down to decoder) It can be 'decoded' | 'encoded' | 's16le' | 'f32le' | 'mp3' | 'wav' | 'm4a' (default: 'encoded'), if you set it to 'decoded' we will not use the decoder addon to decode the audio,

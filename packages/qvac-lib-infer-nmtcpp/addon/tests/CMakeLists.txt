@@ -60,6 +60,7 @@ target_include_directories(
 
 # Add bergamot compile definition if enabled
 if(USE_BERGAMOT)
+  find_package(bergamot-translator CONFIG REQUIRED)
   target_compile_definitions(addon-test PRIVATE HAVE_BERGAMOT)
 endif()
 
@@ -98,7 +99,7 @@ if(USE_BERGAMOT)
   target_link_libraries(
     addon-test
     PRIVATE
-      bergamot-translator
+      bergamot-translator::bergamot-translator
   )
 endif()
 

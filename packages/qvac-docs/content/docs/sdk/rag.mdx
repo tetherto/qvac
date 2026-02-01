@@ -24,13 +24,9 @@ Use the following sequence of function calls:
 
 For how to use each function, see [SDK — API reference](/sdk/api/latest/).
 
-## Models
+## Pipeline
 
-Recommended model families:
-- GTE
-- EmbeddingGemma
-
-Model format: GGUF (`*.gguf`)
+Create your RAG pipeline using [text embeddings](/sdk/text-embeddings) and [completion](/sdk/completion).
 
 <Callout title="Important" type="info">
 Make sure your vector DB schema matches the embedding dimensionality produced by your model (e.g., GTE Large embeddings used in the example are 1024‑dimensional).
@@ -43,6 +39,7 @@ The following script shows a RAG-style workflow using an embeddings model plus a
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/rag.js title="rag.js" lineNumbers
 import { embed, loadModel, unloadModel, GTE_LARGE_FP16 } from "@qvac/sdk";
 import sqlite3InitModule from "@sqliteai/sqlite-wasm";
@@ -172,6 +169,7 @@ try {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/rag.ts title="rag.ts" lineNumbers
 import { embed, loadModel, unloadModel, GTE_LARGE_FP16 } from "@qvac/sdk";
 import sqlite3InitModule from "@sqliteai/sqlite-wasm";
@@ -306,6 +304,6 @@ try {
 </Tabs>
 
 <Callout title="Tip" type="success">
-All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
 </Callout>
 

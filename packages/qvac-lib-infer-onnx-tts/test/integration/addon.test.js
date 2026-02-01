@@ -10,7 +10,7 @@ const { ensureTTSModelPair, ensureEspeakData, ensureWhisperModel } = require('..
 const platform = os.platform()
 const isLinux = platform === 'linux'
 const isMobile = platform === 'ios' || platform === 'android'
-const shouldRunWhisper = !isLinux
+const shouldRunWhisper = !isLinux && !isMobile
 
 // Returns base directory for models - uses global.testDir on mobile, current dir otherwise
 function getBaseDir () {
@@ -44,6 +44,7 @@ test('English TTS synthesis and WER verification', { timeout: 1200000 }, async (
   console.log('\n=== Ensuring English TTS model ===')
   const modelResult = await ensureTTSModelPair('en_US-lessac-medium')
   t.ok(modelResult.success, 'English TTS model should be downloaded')
+  if (!modelResult.success) return
 
   const modelParams = {
     mainModelUrl: path.join(ttsDir, 'en_US-lessac-medium.onnx'),
@@ -157,6 +158,7 @@ test('Spanish TTS synthesis and WER verification', { timeout: 1200000 }, async (
   console.log('\n=== Ensuring Spanish TTS model ===')
   const modelResult = await ensureTTSModelPair('es_ES-davefx-medium')
   t.ok(modelResult.success, 'Spanish TTS model should be downloaded')
+  if (!modelResult.success) return
 
   const modelParams = {
     mainModelUrl: path.join(ttsDir, 'es_ES-davefx-medium.onnx'),

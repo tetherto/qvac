@@ -168,7 +168,7 @@ int nmt_decode_beam_search(
       kv_pool.kv_caches[beam.kv_cache_idx] = ctx->state->kv_self;
       ctx->state->kv_self = original_kv;
 
-      ggml_tensor* logits = ctx->state->debug_tensor;
+      ggml_tensor* logits = ctx->state->logits_tensor;
       std::vector<float> next_token_logits_vec(vocab_size);
 
       const int number_of_tokens = ggml_nelements(logits) / vocab_size;
@@ -255,8 +255,6 @@ int nmt_decode_beam_search(
           top_candidates.pop();
         }
       }
-
-      ctx->state->n_decode += 1;
     }
 
     if (!any_active) {
@@ -352,6 +350,9 @@ int nmt_decode_beam_search(
 
   if (best_beam != beams.end()) {
     ctx->state->decoder_inputs = best_beam->tokens;
+    // Count actual output tokens (excluding BOS) for consistent metrics
+    ctx->state->n_decode =
+        static_cast<int32_t>(best_beam->tokens.size()) - 1; // -1 for BOS
   }
 
   kv_pool.cleanup();

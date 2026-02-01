@@ -6,6 +6,7 @@ This library simplifies running inference with the Whisper transcription model w
 
 ## Table of Contents
 
+- [Supported Platforms](#supported-platforms)
 - [Installation](#installation)
 - [Development](#development)
 - [Usage](#usage)
@@ -22,6 +23,22 @@ This library simplifies running inference with the Whisper transcription model w
 - [Other examples](#other-examples)
 - [Resources](#resources)
 - [License](#license)
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status | GPU Support |
+|----------|-------------|-------------|--------|-------------|
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Android | arm64 | 12+ | ✅ Tier 1 | Vulkan |
+| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+
+**Dependencies:**
+- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
+- qvac-fabric-whisper.cpp (latest): Inference engine
+- Bare Runtime (≥1.24.2): JavaScript runtime
+- Ubuntu-22 requires g++-13 installed
 
 ## Installation
 

@@ -6,6 +6,7 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
 
 ## Table of Contents
 
+- [Supported Platforms](#supported-platforms)
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Usage](#usage)
@@ -25,6 +26,23 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
 - [Resources](#resources)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Supported Platforms
+
+| Platform | Architecture | Min Version | Status | GPU Support |
+|----------|-------------|-------------|--------|-------------|
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+
+**Dependencies:**
+- qvac-lib-inference-addon-cpp: C++ addon framework
+- ONNX Runtime: Inference engine
+- Piper TTS: Neural text-to-speech model
+- Bare Runtime (≥1.17.3): JavaScript runtime
+- Ubuntu-22 requires g++-13 installed
 
 ## Installation
 

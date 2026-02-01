@@ -6,13 +6,13 @@ description: Text-to-text neural machine translation (NMT).
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [Marian](https://marian-nmt.github.io) or [Bergamot](https://browser.mt) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`nmt.cpp`](https://github.com/tetherto/qvac-lib-infer-nmtcpp) or [Bergamot](https://browser.mt) as the inference engine.
 
 ## Models
 
-Recommended model families:
-- For Marian: IndicTrans
-- For Bergamot: specific models
+You should load a model compatible with your chosen inference engine:
+- `nmt.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
 
 ## Requirement
 
@@ -21,7 +21,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/translation-nmtcpp
+npm i @qvac/translation-nmtcpp
 ```
 
 ## Quickstart
@@ -31,7 +31,7 @@ npm install @qvac/translation-nmtcpp
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -47,7 +47,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install @qvac/translation-nmtcpp @qvac/dl-hyperdrive
+npm i @qvac/translation-nmtcpp @qvac/dl-hyperdrive
 ```
 </Step>
 
@@ -123,6 +123,21 @@ bare example.js
 ```
 </Step>
 </Steps>
+
+## Other Examples
+
+For more detailed examples covering different use cases, refer to the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/)  directory:
+
+| Example | Description | Model Type |
+|---------|-------------|------------|
+| [example.hd.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/example.hd.js) | Hyperdrive Data Loader for Marian model inference | OPUS/Marian |
+| [indictrans.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
+| [batch.example.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
+| [pause.example.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/pause.example.js) | Pausing and resuming during inference | Any |
+| [quickstart.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/quickstart.js) | Both GGML and Bergamot backends | Multiple |
+
+Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/) for more usage examples.
+
 ## Usage
 ### 1. Create `DataLoader`
 
@@ -325,5 +340,5 @@ Here is the list of languages supported by the IndicTrans2 models:
 
 ## More resources
 
-- [Source code at GitHub](https://github.com/tetherto)
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-nmtcpp/)
 - [Package at npm](https://www.npmjs.com/package/@qvac/translation-nmtcpp)

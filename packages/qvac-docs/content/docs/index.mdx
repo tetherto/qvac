@@ -3,7 +3,7 @@ title: QVAC by Tether
 description: Official documentation — everything you need to use QVAC.
 ---
 
-import { Compass, Telescope, Toolbox, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark } from 'lucide-react'
+import { Compass, Telescope, Toolbox, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench } from 'lucide-react'
 import { SiDiscord, SiHuggingface, SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 import { CopyInline } from '@/components/copy-inline'
 import { FeaturebaseIcon } from '@/components/featurebase-icon';
@@ -25,8 +25,11 @@ import { FeaturebaseIcon } from '@/components/featurebase-icon';
   <Card href="/sdk" icon={<Toolbox className="text-[var(--color-fd-primary)]" />} title="Get started with QVAC SDK">
     Use the JS/TS SDK to build local and P2P AI applications and systems.
   </Card>
-  <Card href="/sdk/install-and-quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Install and quickstart">
-    Supported platforms, and how to install and run a simple example using the JS/TS SDK.
+  <Card href="/sdk/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
+    Run your first example using the JS/TS SDK.
+  </Card>
+  <Card href="/sdk/install" icon={<Wrench className="text-[var(--color-fd-primary)]" />} title="Installation">
+    Supported environments and how to install the SDK for each one: Node.js, Bare, and Expo.
   </Card>
   <Card href="/sdk/api/latest" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="API reference (latest)">
     `@qvac/sdk` npm package exposes a function-centric, typed JS API.
@@ -121,5 +124,4 @@ To get support, use the community channels listed in the previous section:
 ## Miscellaneous
 
 Other resources:
-- [Main website](https://qvac.tether.dev)
-- [Landing page](https://qvac.tether.io) 
+- [Main website](https://qvac.tether.io)

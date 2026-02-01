@@ -305,7 +305,15 @@ class BaseInference {
       response.failed(error)
       this._deleteJobMapping(jobId)
     } else if (event === 'Output') {
-      this.logger.debug(`Job ${jobId} produced output: ${dataAsString(data)}`)
+      try {
+        this.logger.debug(`Job ${jobId} produced output: ${dataAsString(data)}`)
+      } catch (err) {
+        if (err instanceof RangeError) {
+          this.logger.debug(`Job ${jobId} produced output: [data too large]`)
+        } else {
+          throw err
+        }
+      }
       response.updateOutput(data)
     } else if (event === 'JobEnded') {
       this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)

@@ -692,7 +692,7 @@ struct ggml_cgraph* nmt_build_graph_decoder(
   }
 
   ggml_build_forward_expand(gf, logits);
-  state.debug_tensor = logits;
+  state.logits_tensor = logits;
   ggml_free(ctx0);
 
   return gf;

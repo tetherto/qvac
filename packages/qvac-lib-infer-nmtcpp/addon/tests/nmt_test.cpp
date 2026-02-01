@@ -184,9 +184,7 @@ TEST_F(Nmt, State_Defaults) {
 
   // Pointers and buffers
   EXPECT_EQ(state.input_embeddings, nullptr);
-  EXPECT_EQ(state.debug_tensor, nullptr);
-  EXPECT_EQ(state.tmp_tensor, nullptr);
-  EXPECT_EQ(state.embd_conv, nullptr);
+  EXPECT_EQ(state.logits_tensor, nullptr);
   EXPECT_EQ(state.embd_enc, nullptr);
 
   EXPECT_TRUE(state.encoder_result.empty());

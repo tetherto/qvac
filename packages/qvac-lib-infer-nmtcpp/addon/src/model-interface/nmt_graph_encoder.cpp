@@ -281,7 +281,6 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
   }
 
   ggml_build_forward_expand(gf, cur);
-  state.tmp_tensor = cur;
   state.embd_enc = cur;
 
   ggml_free(ctx0);

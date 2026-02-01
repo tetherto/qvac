@@ -10,11 +10,7 @@ description: Vector embedding generation for semantic search, clustering, and re
 
 ## Models
 
-Recommended model families:
-- GTE
-- EmbeddingGemma
-
-Model format: GGUF (`*.gguf`)
+You can load any `llama.cpp`-compatible embeddings model. Model file format: `*.gguf`.
 
 ## Requirement
 
@@ -23,7 +19,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/embed-llamacpp
+npm i @qvac/embed-llamacpp
 ```
 
 ## Quickstart
@@ -33,7 +29,7 @@ npm install @qvac/embed-llamacpp
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -49,7 +45,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install corestore @qvac/dl-hyperdrive @qvac/embed-llamacpp bare-process
+npm i corestore @qvac/dl-hyperdrive @qvac/embed-llamacpp bare-process
 ```
 </Step>
 
@@ -144,6 +140,14 @@ bare index.js
 </Step>
 </Steps>
 
+## Other Examples
+
+- [Batch Inference](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
+- [FileSystem](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+- [Native Logging](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/nativeLog.js) – Demonstrates C++ addon logging integration.
+- [Sharded Loading](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/shardedLoading.js) – Demonstrates loading sharded model files.
+-  Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/) for more usage examples.
+
 ## Usage
 
 ### 1. Import the Model Class
@@ -234,5 +238,5 @@ await model.unload()
 
 ## More resources
 
-- [Source code at GitHub](https://github.com/tetherto)
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed)
 - [Package at npm](https://www.npmjs.com/package/@qvac/embed-llamacpp)

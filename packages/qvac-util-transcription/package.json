@@ -1,6 +1,6 @@
 {
   "name": "@qvac/util-transcription",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "Tether",
   "main": "index.js",
   "scripts": {
@@ -31,7 +31,7 @@
     "url": "git+https://github.com/tetherto/qvac-util-transcription.git"
   },
   "dependencies": {
-    "@qvac/decoder-audio": "^0.2.9",
+    "@qvac/decoder-audio": "^0.3.3",
     "@qvac/error": "^0.1.0",
     "@qvac/response": "^0.1.0"
   },

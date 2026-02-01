@@ -10,13 +10,9 @@ description: Automatic speech recognition (ASR) for speech-to-text.
 
 ## Models
 
-Recommended models:
-- ASR model families: Whisper
-- Supporting models: Silero VAD for voice activity detection
-
-Model formats:
-- ASR: GGUF (`*.gguf`)
-- VAD: ONNX (`*.onnx`)
+You should load two models:
+- a `whisper.cpp`-compatible model for transcription. Model file format: `*.bin`; and
+- a VAD model (e.g., Silero) converted to GGML. Model file format: `*.bin` _(optional, recommended)_.
 
 ## Requirement
 
@@ -25,7 +21,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/transcription-whispercpp
+npm i @qvac/transcription-whispercpp
 ```
 
 ## Quickstart
@@ -35,7 +31,7 @@ npm install @qvac/transcription-whispercpp
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -51,7 +47,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install corestore @qvac/dl-hyperdrive @qvac/transcription-whispercpp bare-fs bare-process
+npm i corestore @qvac/dl-hyperdrive @qvac/transcription-whispercpp bare-fs bare-process
 ```
 </Step>
 
@@ -148,6 +144,18 @@ bare index.js /path/to/audio.ogg
 ```
 </Step>
 </Steps>
+
+## Other examples
+
+-   [Quickstart](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/quickstart.js) – Basic transcription example using HyperDrive loader.
+-   [HyperDrive Transcription](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/transcription.hd.js) – Transcribes pre-decoded raw audio files using HyperDrive model loading.
+-   [VAD with HyperDrive](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/exampleVad.hd.js) – Demonstrates Voice Activity Detection (VAD) with HyperDrive model loading.
+-   [FFmpeg Decoder](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/example.ffmpeg.js) – Transcribes encoded audio files (MP3, WAV, etc.) using the FFmpeg decoder pipeline.
+-   [Standalone Decoder](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/example.decoder.js) – Demonstrates the FFmpeg decoder independently for audio format conversion.
+-   [Model Reload](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/example.reload.js) – Shows how to reload models with different configurations (language, temperature).
+-   [Audio ctx chunking](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/example.audio-ctx-chunking.js) – Processes long recordings by reloading with `offset_ms`, `duration_ms`, and `audio_ctx` per chunk (mirrors the `audio-ctx-chunking` integration test).
+- [Live transcription](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/example.live-transcription.js) – Streams small chunks into a single job while maintaining Whisper state between updates (mirrors the `live-stream-simulation` integration test).
+-   Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-whispercpp/tree/main/examples/) for more usage examples.
 
 ## Usage
 
@@ -306,5 +314,5 @@ Supported keys:
 
 ## More resources
 
-- [Source code at GitHub](https://github.com/tetherto)
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-whispercpp/)
 - [Package at npm](https://www.npmjs.com/package/@qvac/transcription-whispercpp)

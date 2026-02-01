@@ -427,7 +427,7 @@ run_benchmarks() {
     fi
     
     if [[ -n "$DATASETS" ]]; then
-        PYTHON_CMD="$PYTHON_CMD --datasets $DATASETS"
+        PYTHON_CMD="$PYTHON_CMD --datasets \"$DATASETS\""
     fi
     
     if [[ "$DEVICE" != "$DEFAULT_DEVICE" ]]; then

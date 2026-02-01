@@ -440,16 +440,19 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
 
     if (bergamot_get_runtime_stats(
             bergamotCtx_.get(), &encodeTime, &decodeTime, &totalTokens) == 0) {
+      // For Bergamot: totalTime = decodeTime (no separate encode phase)
+      double totalTime = decodeTime;
+      // TPS = tokens per second (total tokens / total time)
+      double tps = (totalTime > 0) ? totalTokens / totalTime : 0.0;
+
       return {
           std::make_pair(
               "totalTokens",
               std::variant<double, int64_t>(static_cast<int64_t>(totalTokens))),
+          std::make_pair("totalTime", std::variant<double, int64_t>(totalTime)),
           std::make_pair(
-              "totalTime",
-              std::variant<double, int64_t>(encodeTime + decodeTime)),
-          std::make_pair("encodeTime", std::variant<double, int64_t>(encodeTime)),
-          std::make_pair(
-              "decodeTime", std::variant<double, int64_t>(decodeTime))};
+              "decodeTime", std::variant<double, int64_t>(decodeTime)),
+          std::make_pair("TPS", std::variant<double, int64_t>(tps))};
     }
 
     return {};
@@ -467,6 +470,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
 
   if (nmt_get_runtime_stats(
           nmtCtx_.get(), &encodeTime, &decodeTime, &totalTokens) == 0) {
+    // TTFT = encodeTime in milliseconds (time before first output token)
+    double ttft = encodeTime * 1000.0;
+    // TPS = tokens per second (total tokens / total time)
+    double totalTime = encodeTime + decodeTime;
+    double tps = (totalTime > 0) ? totalTokens / totalTime : 0.0;
+
     return {
         std::make_pair(
             "totalTokens",
@@ -475,8 +484,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
             "totalTime",
             std::variant<double, int64_t>(encodeTime + decodeTime)),
         std::make_pair("encodeTime", std::variant<double, int64_t>(encodeTime)),
-        std::make_pair(
-            "decodeTime", std::variant<double, int64_t>(decodeTime))};
+        std::make_pair("decodeTime", std::variant<double, int64_t>(decodeTime)),
+        std::make_pair("TTFT", std::variant<double, int64_t>(ttft)),
+        std::make_pair("TPS", std::variant<double, int64_t>(tps))};
   }
 
   return {};

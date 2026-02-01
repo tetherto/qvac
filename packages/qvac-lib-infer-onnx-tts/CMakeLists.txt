@@ -232,6 +232,22 @@ if(WIN32)
   )
 endif()
 
+if(UNIX AND NOT APPLE)
+  target_link_options(
+    ${qvac-lib-inference-tts}_module
+    PRIVATE
+      -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
+  )
+elseif(APPLE)
+  # macOS uses -exported_symbols_list instead of version script
+  target_link_options(
+    ${qvac-lib-inference-tts}_module
+    PRIVATE
+      -Wl,-exported_symbol,_bare_get_module_name_v0
+      -Wl,-exported_symbol,_bare_register_module_v0
+  )
+endif()
+
 target_compile_definitions(${qvac-lib-inference-tts} PUBLIC JS_LOGGER)
 
 if(BUILD_TESTING)

@@ -1,0 +1,7 @@
+{
+  global:
+    bare_*;
+    napi_*;
+  local:
+    *;
+};

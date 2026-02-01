@@ -5,10 +5,10 @@ description: LLM inference over text, images, and other media within a single co
 
 ## Overview
 
-Multimodal enables to attach media files as part of the input for [`completion()`](/sdk/api/latest/completion). You can include multiple attachments in the same input (e.g., to compare two images).
+[Completion](/sdk/completion) supports multimodal prompts. Multimodal lets you attach media files to inputs for [`completion()`](/sdk/api/latest/completion). You can include multiple attachments in the same request (e.g., to compare two images).
 
-Compared to a text-only completion inference, the key differences are:
-- You must load a multimodal-capable LLM *and* its matching `projectionModelSrc` via [`loadModel()`](/sdk/api/latest/loadModel).
+Compared to text-only completion inference, the key differences are:
+- You must load a multimodal-capable LLM **and** its matching `projectionModelSrc` via [`loadModel()`](/sdk/api/latest/loadModel).
 - Your `history` messages can include `attachments: [{ path: "/path/to/image.jpg" }]` (the file must exist on disk).
 - Aside from attachments, you still call `completion({ modelId, history, stream })` the same way and consume the same streaming output.
 
@@ -23,15 +23,15 @@ For how to use each function, see [SDK — API reference](/sdk/api/latest/).
 
 ## Models
 
-Multimodal inference requires a compatible pair of models:
-- a **multimodal-capable LLM**, and
-- a **projection model** (mmproj) that maps non-text inputs into the LLM embedding space.
+You should load two models:
+- a `llama.cpp`-compatible multimodal-capable LLM. Model file format: `*.gguf`; and
+- a matching projection model (`mmproj-*.gguf`). Model file format: `*.gguf`.
 
-Recommended model pairs:
-	- SmolVLM2 + mmproj
-	- Qwen + mmproj
+Recommended pairs:
+- SmolVLM2 + mmproj-*
+- Qwen2.5-Omni + mmproj-* (or Qwen3-VL + mmproj-*)
 
-Model format: GGUF (`*.gguf`)
+For models available as constants, see [Hyperdrive model index](https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts).
 
 ## Example
 
@@ -40,6 +40,7 @@ The following script shows an example of multimodal completion with one image (a
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
+
 ```js file=../dist/examples/multimodal.js title="multimodal.js" lineNumbers
 import {
   completion,
@@ -131,6 +132,7 @@ try {
 
 <Tab value="ts" label="TypeScript">
 <WrapCode>
+
 ```ts file=../examples/multimodal.ts title="multimodal.ts" lineNumbers
 import {
   completion,
@@ -223,6 +225,6 @@ try {
 </Tabs>
 
 <Callout title="Tip" type="success">
-All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/install-and-quickstart#quickstart).
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
 </Callout>
 

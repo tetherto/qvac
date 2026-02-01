@@ -11,8 +11,8 @@
  *   - No manual language prefixes needed (unlike raw model access)
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Downloads from presigned S3 URL (configured in indictrans-model-urls.json)
- *   - Desktop: Uses local ../../model/indictrans directory
+ *   - Mobile (iOS/Android): Tests both CPU and GPU modes
+ *   - Desktop: Tests CPU mode only
  *
  * Usage:
  *   bare test/integration/indictrans.test.js
@@ -22,92 +22,113 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-const { ensureIndicTransModel, createLogger, TEST_TIMEOUT } = require('./utils')
+const {
+  ensureIndicTransModel,
+  createLogger,
+  TEST_TIMEOUT,
+  createPerformanceCollector,
+  formatPerformanceMetrics,
+  isMobile,
+  platform
+} = require('./utils')
 
-test('IndicTrans backend - English to Hindi translation', { timeout: TEST_TIMEOUT }, async function (t) {
-  const modelPath = await ensureIndicTransModel()
-  t.ok(modelPath, 'IndicTrans model path should be available')
-  t.comment('Model path: ' + modelPath)
+/**
+ * Device configurations for testing
+ * - Mobile (iOS/Android): Both CPU and GPU
+ * - Desktop: CPU only
+ */
+const ALL_DEVICE_CONFIGS = [
+  { id: 'gpu', useGpu: true },
+  { id: 'cpu', useGpu: false }
+]
 
-  const modelDir = path.dirname(modelPath)
-  const modelName = path.basename(modelPath)
+const DEVICE_CONFIGS = isMobile
+  ? ALL_DEVICE_CONFIGS
+  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 
-  /**
-   * Local file loader for IndicTrans model
-   * Provides synchronous file access for model loading
-   */
-  const localLoader = {
-    ready: async () => {},
-    close: async () => {},
-    /**
-     * Downloads/reads a file from the model directory
-     * @param {string} filename - Name of file to read
-     * @returns {Buffer} File contents
-     */
-    download: async (filename) => {
-      const filePath = path.join(modelDir, filename)
-      return fs.readFileSync(filePath)
-    },
-    /**
-     * Gets file size for a file in the model directory
-     * @param {string} filename - Name of file to check
-     * @returns {number} File size in bytes
-     */
-    getFileSize: async (filename) => {
-      const filePath = path.join(modelDir, filename)
-      const stats = fs.statSync(filePath)
-      return stats.size
-    }
-  }
+for (const deviceConfig of DEVICE_CONFIGS) {
+  const label = `[${deviceConfig.id.toUpperCase()}]`
 
-  const logger = createLogger()
-  let model
+  test(`IndicTrans backend ${label} - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
+    const modelPath = await ensureIndicTransModel()
+    t.ok(modelPath, `${label} IndicTrans model path should be available`)
+    t.comment(`${label} Model path: ` + modelPath)
+    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
 
-  try {
-    model = new TranslationNmtcpp({
-      loader: localLoader,
-      params: {
-        mode: 'full', // Use IndicProcessor for preprocessing
-        srcLang: 'eng_Latn', // English (Latin script)
-        dstLang: 'hin_Deva' // Hindi (Devanagari script)
+    const modelDir = path.dirname(modelPath)
+    const modelName = path.basename(modelPath)
+
+    const localLoader = {
+      ready: async () => {},
+      close: async () => {},
+      download: async (filename) => {
+        const filePath = path.join(modelDir, filename)
+        return fs.readFileSync(filePath)
       },
-      diskPath: modelDir,
-      modelName,
-      logger
-    }, {
-      modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
-      use_gpu: false
-    })
-
-    await model.load()
-    t.pass('IndicTrans model loaded successfully')
-
-    const testSentence = 'Hello, how are you?'
-    t.comment('Translating: "' + testSentence + '"')
-
-    const response = await model.run(testSentence)
-    let translation = ''
-
-    await response
-      .onUpdate(data => {
-        translation += data
-      })
-      .await()
-
-    t.ok(translation.length > 0, 'translation should not be empty')
-    t.comment('Translation output: ' + translation)
-    t.pass('IndicTrans translation completed successfully')
-  } catch (e) {
-    t.fail('IndicTrans test failed: ' + e.message)
-    throw e
-  } finally {
-    // Cleanup: unload model
-    if (model) {
-      try {
-        await model.unload()
-      } catch (e) {
-        t.comment('unload() error: ' + e.message)
+      getFileSize: async (filename) => {
+        const filePath = path.join(modelDir, filename)
+        const stats = fs.statSync(filePath)
+        return stats.size
       }
     }
-  }
-})
+
+    const logger = createLogger()
+    const perfCollector = createPerformanceCollector()
+    let model
+
+    t.comment(`${label} Testing with use_gpu: ${deviceConfig.useGpu}`)
+
+    try {
+      model = new TranslationNmtcpp({
+        loader: localLoader,
+        params: {
+          mode: 'full',
+          srcLang: 'eng_Latn',
+          dstLang: 'hin_Deva'
+        },
+        diskPath: modelDir,
+        modelName,
+        logger,
+        opts: { stats: true }
+      }, {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: deviceConfig.useGpu
+      })
+
+      await model.load()
+      t.pass(`${label} IndicTrans model loaded successfully`)
+
+      const testSentence = 'Hello, how are you?'
+      t.comment(`${label} Translating: "` + testSentence + '"')
+
+      perfCollector.start()
+
+      const response = await model.run(testSentence)
+
+      await response
+        .onUpdate(data => {
+          perfCollector.onToken(data)
+        })
+        .await()
+
+      const addonStats = response.stats || {}
+      t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+      const metrics = perfCollector.getMetrics(testSentence, addonStats)
+      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics))
+
+      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+      t.pass(`${label} IndicTrans translation completed successfully`)
+    } catch (e) {
+      t.fail(`${label} IndicTrans test failed: ` + e.message)
+      throw e
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (e) {
+          t.comment(`${label} unload() error: ` + e.message)
+        }
+      }
+    }
+  })
+}

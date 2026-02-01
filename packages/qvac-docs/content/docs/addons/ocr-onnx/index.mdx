@@ -6,20 +6,13 @@ description: Optical character recognition (OCR) for extracting text from images
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for OCR in QVAC using [ONNX runtime](https://onnxruntime.ai) as the inference engine.
+[Bare module](https://bare.pears.com) that adds support for OCR in QVAC using [ONNX runtime](https://onnxruntime.ai) as the inference engine. It runs a two-stage pipeline and requires compatible models for both stages:
+* **Text detection**: locate text regions in an image
+* **Text recognition**: decode characters in detected regions
 
 ## Models
 
-OCR uses a two-stage pipeline that requires compatible models for each stage:
-- **Text detection** (locate text regions in images)
-- **Text recognition** (decode characters within detected regions)
-
-Recommended model families:
-- For detection: CRAFT
-- For recognition: CRNN
-
-Model formats:
-- ONNX (`*.onnx`)
+You can load any ONNX Runtime-compatible OCR pipeline. Required files: `detector_craft.onnx` + `recognizer_<lang>.onnx` (file format: `*.onnx`).
 
 ## Requirement
 
@@ -28,7 +21,7 @@ Bare $\geq$ v1.24
 ## Installation
 
 ```bash
-npm install @qvac/ocr-onnx
+npm i @qvac/ocr-onnx
 ```
 
 ## Quickstart
@@ -38,7 +31,7 @@ npm install @qvac/ocr-onnx
 <Step>
 If you don't have Bare runtime, install it:
 ```bash
-npm install -g bare
+npm i -g bare
 ```
 </Step>
 
@@ -54,7 +47,7 @@ npm init -y
 <Step>
 Install dependencies:
 ```bash
-npm install @qvac/ocr-onnx bare-process bare-path
+npm i @qvac/ocr-onnx bare-process bare-path
 ```
 </Step>
 
@@ -144,6 +137,12 @@ bare index.js <images_dir> <detector_path> <recognizer_prefix>
 </Step>
 
 </Steps>
+
+## Other Examples
+
+-   [Basic TTS](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/example-onnx-tts.js) – Demonstrates basic text-to-speech synthesis.
+-   [Hyperdrive TTS](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/example-hd-onnx-tts.js) – Demonstrates TTS with Hyperdrive data loader.
+-   Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-onnx-tts/tree/main/examples/) for more usage examples.
 
 ## Usage
 
@@ -355,5 +354,5 @@ The box coordinates are always provided in clockwise direction and starting from
 
 ## More resources
 
-- [Source code at GitHub](https://github.com/tetherto)
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-onnx-tts/)
 - [Package at npm](https://www.npmjs.com/package/@qvac/ocr-onnx)
