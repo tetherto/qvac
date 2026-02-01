@@ -38,6 +38,11 @@ jobs:
     outputs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
