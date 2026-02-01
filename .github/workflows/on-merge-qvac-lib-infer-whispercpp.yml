@@ -141,18 +141,37 @@ jobs:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
 
-  integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
-    needs: prebuild
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+prebuild:
+    name: Prebuild Gate
+    runs-on: ubuntu-latest
+    needs: [publish-release-npm, publish-main-gpr, publish-tmp-gpr, publish-feature-gpr]
+    if: always()
+    outputs:
+      should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
+    steps:
+      - id: gate
+        run: |
+          echo "should_run_tests=${{ (
+            needs.publish-release-npm.result == 'success' ||
+            needs.publish-main-gpr.result == 'success' ||
+            needs.publish-tmp-gpr.result == 'success' ||
+            needs.publish-feature-gpr.result == 'success'
+          ) && 'true' || 'false' }}" >> "$GITHUB_OUTPUT"
 
-  mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
-    needs: prebuild
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+integration-tests:
+  uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+  needs: prebuild
+  if: needs.prebuild.outputs.should_run_tests == 'true'
+  secrets: inherit
+  with:
+    repository: ${{ github.event.pull_request.head.repo.full_name }}
+    ref: ${{ github.sha }}
+
+mobile-integration-tests:
+  uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
+  needs: prebuild
+  if: needs.prebuild.outputs.should_run_tests == 'true'
+  secrets: inherit
+  with:
+    repository: ${{ github.repository }}
+    ref: ${{ github.sha }}

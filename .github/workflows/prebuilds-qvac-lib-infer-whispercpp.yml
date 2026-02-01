@@ -555,7 +555,7 @@ jobs:
 
       - name: Capture published version
         id: capture_version
-        working_directory: ${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}
         if: success()
         shell: bash
         run: |
