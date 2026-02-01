@@ -141,7 +141,9 @@ jobs:
           NPMRC
 
           # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install global dependencies
         run: |

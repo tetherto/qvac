@@ -323,7 +323,11 @@ jobs:
 
       - name: Configure git
         shell: bash
-        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}

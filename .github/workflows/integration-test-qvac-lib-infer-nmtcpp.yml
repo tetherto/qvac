@@ -94,9 +94,9 @@ jobs:
 
           # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
           else
             # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"

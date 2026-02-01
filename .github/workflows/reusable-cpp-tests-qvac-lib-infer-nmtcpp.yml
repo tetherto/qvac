@@ -64,9 +64,9 @@ jobs:
           //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           NPMRC
           GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install NPM dependencies
         run: |
