@@ -47,6 +47,8 @@ on:
       published_version:
         description: "Version published to registry"
         value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+env:
+  WORKDIR: ${{ inputs.workdir }}
 
 jobs:
   prebuild:
@@ -95,8 +97,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
-
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-llamacpp-embed' }}/vcpkg/cache,readwrite
     steps:
       - if: ${{ matrix.platform == 'android' }}
         name: Select NDK
@@ -167,12 +168,11 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-
-          echo "Writing .npmrc into package workdir..."
-          cat > "${{ inputs.workdir }}/.npmrc" <<NPMRC
+          cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
@@ -181,7 +181,6 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
@@ -393,7 +392,22 @@ jobs:
 
   publish-gpr:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'gpr' || inputs.publish_target == 'both' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'gpr'
+      || inputs.publish_target == 'both'
+      || (
+          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+          && (inputs.publish_target == '' || inputs.publish_target == null)
+          && (
+            github.ref_name == 'main'
+            || startsWith(github.ref_name, 'feature-')
+            || startsWith(github.ref_name, 'tmp-')
+            || (inputs.ref != '' && (
+                  inputs.ref == 'refs/heads/main'
+                  || startsWith(inputs.ref, 'refs/heads/feature-')
+                  || startsWith(inputs.ref, 'refs/heads/tmp-')
+                ))
+          )
+        ) }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -421,11 +435,20 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          name-suffix: "mono"
+          name-suffix: "-mono"
 
   publish-npm:
     needs: [prebuild, merge]
-    if: ${{ inputs.publish_target == 'npm' || inputs.publish_target == 'both' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_target == '') }}
+    if: ${{ inputs.publish_target == 'npm'
+        || inputs.publish_target == 'both'
+        || (
+            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+            && (inputs.publish_target == '' || inputs.publish_target == null)
+            && (
+              startsWith(github.ref_name, 'release-')
+              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
+            )
+          ) }}
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}

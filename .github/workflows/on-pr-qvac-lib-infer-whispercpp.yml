@@ -1,7 +1,7 @@
 name: On PR Trigger (Qvac-lib-infer-whispercpp)
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -25,7 +25,21 @@ permissions:
   packages: write
   checks: write
 
+env:
+  PKG_DIR: packages/qvac-lib-infer-whispercpp
+
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-infer-llamacpp-llm
+      package-json-path: packages/packages/qvac-lib-infer-whispercpp/package.json
+      changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
+
   sanity-checks:
     runs-on: ubuntu-latest
     steps:

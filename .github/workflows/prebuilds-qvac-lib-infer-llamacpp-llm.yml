@@ -1,4 +1,4 @@
-name: Build Prebuilds (Qvac-lib-infer-nmtcpp)
+name: Build Prebuilds (Qvac-lib-infer-llm)
 
 on:
   workflow_dispatch:
@@ -456,26 +456,6 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-      - name: Move prebuilds into package folder
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${{ env.WORKDIR }}/prebuilds"
-          rsync -a prebuilds/ "${{ env.WORKDIR }}/prebuilds/"
-
-      - name: Configure npm auth for GitHub Packages (GPR)
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          @tetherto:registry=https://npm.pkg.github.com/
-          //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-          NPMRC
-
       - name: Scope package as @tetherto for GPR
         shell: bash
         run: |
@@ -485,14 +465,11 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          set -euo pipefail
-          TAG="${{ inputs.tag || github.event.inputs.tag || 'dev' }}"
-          npm publish --tag "$TAG" --registry https://npm.pkg.github.com/
-          VERSION="$(node -p "require('./package.json').version")"
-          echo "npm_published_version=$VERSION" >> "$GITHUB_OUTPUT"
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          name-suffix: "-mono"
 
   publish-npm:
     needs: [prebuild, merge]
@@ -532,40 +509,17 @@ jobs:
           name: prebuilds
           path: prebuilds
 
-      - name: Move prebuilds into package folder
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${{ env.WORKDIR }}/prebuilds"
-          rsync -a prebuilds/ "${{ env.WORKDIR }}/prebuilds/"
-
-      - name: Configure npm auth for npmjs
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          NPMRC
-
+      # Re-assert scope for public npm (fresh checkout)
       - name: Scope package as @qvac for npm
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const f='${{ env.WORKDIR }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@qvac/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
-          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('${{ env.WORKDIR }}/package.json','utf8')).name)"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/llm-llamacpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
 
       - name: Publish to NPM Package Registry
         id: publish
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          set -euo pipefail
-          # Keeping your original behavior: publish to npm with tag 'latest'
-          npm publish --tag latest --access public
-          VERSION="$(node -p "require('./package.json').version")"
-          echo "npm_published_version=$VERSION" >> "$GITHUB_OUTPUT"
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: 'latest'
