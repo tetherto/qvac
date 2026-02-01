@@ -1,0 +1,344 @@
+---
+title: "@qvac/translation-nmtcpp"
+titleStyle: code
+description: Text-to-text neural machine translation (NMT).
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`nmt.cpp`](https://github.com/tetherto/qvac-lib-infer-nmtcpp) or [Bergamot](https://browser.mt) as the inference engine.
+
+## Models
+
+You should load a model compatible with your chosen inference engine:
+- `nmt.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
+
+## Requirement
+
+Bare $\geq$ v1.24
+
+## Installation
+
+```bash
+npm i @qvac/translation-nmtcpp
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+```bash
+mkdir qvac-translation-quickstart
+cd qvac-translation-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+```bash
+npm i @qvac/translation-nmtcpp @qvac/dl-hyperdrive
+```
+</Step>
+
+<Step>
+Create `example.js`:
+</Step>
+
+<WrapCode>
+```js title="example.js"
+'use strict'
+
+const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
+const HyperdriveDL = require('@qvac/dl-hyperdrive')
+
+const text =
+  'La traduzione automatica ha rivoluzionato il modo in cui comunichiamo attraverso le barriere linguistiche nel mondo digitale moderno.'
+
+async function main () {
+  // 1. Create `DataLoader`
+  const hdDL = new HyperdriveDL({
+    // The hyperdrive key for it->en translation model weights and config
+    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
+  })
+
+  // 2. Create the `args` object
+  const args = {
+    loader: hdDL,
+    params: { mode: 'full', dstLang: 'en', srcLang: 'it' },
+    diskPath: './models',
+    modelName: 'model.bin'
+  }
+
+  // 3. Optional: Create config object
+  const config = { beamsize: 4 }
+
+  // 4. Create Model Instance
+  const model = new TranslationNmtcpp(args, config)
+
+  // 5. Load model
+  await model.load()
+
+  try {
+    // 6. Run the Model
+    const response = await model.run(text)
+
+    await response
+      .onUpdate(data => {
+        console.log(data)
+      })
+      .await()
+
+    console.log('translation finished!')
+  } finally {
+    // 7. Unload the model
+    await model.unload()
+
+    // Close the DataLoader
+    await hdDL.close()
+  }
+}
+
+main().catch(console.error)
+```
+</WrapCode>
+
+<Step>
+Run `example.js`:
+</Step>
+
+<Step>
+```bash
+bare example.js
+```
+</Step>
+</Steps>
+
+## Other Examples
+
+For more detailed examples covering different use cases, refer to the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/)  directory:
+
+| Example | Description | Model Type |
+|---------|-------------|------------|
+| [example.hd.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/example.hd.js) | Hyperdrive Data Loader for Marian model inference | OPUS/Marian |
+| [indictrans.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/indictrans.js) | English-to-Hindi translation with IndicTrans2 | IndicTrans2 |
+| [batch.example.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/batch.example.js) | Batch translation with `runBatch()` method | Bergamot |
+| [pause.example.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/pause.example.js) | Pausing and resuming during inference | Any |
+| [quickstart.js](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/quickstart.js) | Both GGML and Bergamot backends | Multiple |
+
+Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-nmtcpp/tree/main/examples/) for more usage examples.
+
+## Usage
+### 1. Create `DataLoader`
+
+In QVAC, the `DataLoader` class provides an interface for fetching model weights and other resources crucial for running AI models. A `DataLoader` instance is required to successfully instantiate a translation model.
+
+```js
+const HyperdriveDL = require('@qvac/dl-hyperdrive')
+
+const hdDL = new HyperdriveDL({
+  key: 'hyperdrive-key-hex', // (Required) The Hyperdrive key containing model files.
+  store: corestore // (Optional) Corestore instance (defaults to in-memory store)
+})
+```
+
+### 2. Create the `args` object
+
+The `args` object contains the `DataLoader` plus translation parameters (source/target languages) and optional stats.
+
+```js
+const args = {
+  loader: hdDL, // or fsDL
+  params: {
+    mode: 'full',
+    srcLang: 'en',
+    dstLang: 'it'
+  },
+  opts: {
+    stats: true
+  }
+}
+```
+
+### 3. Create the `config` object
+
+This config controls decoding and constraints for generation.
+
+```js
+const config = {
+  beamsize: 4,
+  lengthpenalty: 0.6,
+  maxlength: 128,
+  repetitionpenalty: 1.2,
+  norepeatngramsize: 2,
+  temperature: 0.8,
+  topk: 40,
+  topp: 0.9
+}
+```
+
+### 4. Create model instance
+
+```js
+const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
+const model = new TranslationNmtcpp(args, config)
+```
+
+### 5. Load model
+
+```js
+await model.load()
+```
+
+### 6. Run the model
+
+```js
+const response = await model.run('Hello world! Welcome to the internet of peers!')
+
+await response
+  .onUpdate(outputChunk => {
+    console.log(outputChunk)
+  })
+  .await()
+
+if (response.stats) {
+  console.log('Translation completed in:', response.stats.totalTime, 'ms')
+}
+```
+
+### 7. Unload the model
+
+```js
+await model.unload()
+```
+
+
+
+## Model Registry
+
+The **Hyperbee key** for the model registry is:
+
+```
+7504626aaa534ac55d91b4b3067504774ae1457b03ddfbd86d817dd8cfbca8c8
+```
+
+Below is the section of the registry dedicated to **translation tasks**. Each entry maps a specific model and language pair (left-hand side) to the corresponding **Hyperdrive key** (right-hand side), which stores the model's weights and configuration settings.
+
+```javascript
+"translation:marian:opus-ggml:::q0f32:1.0.0:en-it": "9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f"
+"translation:marian:opus-ggml:::q0f32:1.0.0:en-de": "7b1d16235cd4dd9cc2c58d1fc1c41d65159aa4d2337169c6243a5bc8bf49689b"
+"translation:marian:opus-ggml:::q0f32:1.0.0:en-es": "8aa823831cc55f5c1cba2c046e98b53a0d32376267ca73d653294b8b114459a2"
+"translation:marian:opus-ggml:::q0f32:1.0.0:de-en": "b4d1ab62f885d9814acfddc565761b607bf86a307c38430ec1dabfe1a92532af"
+"translation:marian:opus-ggml:::q0f32:1.0.0:de-es": "f432152db25ebd86fa0e48cd12f27e67e5c052c9af99c7662939dc1d84792c3e"
+"translation:marian:opus-ggml:::q0f32:1.0.0:de-it": "06d26bdc965d548c156885ed105f8150618aaa11712579158e81f1d49735aaf6"
+"translation:marian:opus-ggml:::q0f32:1.0.0:es-de": "ff6a02096c3e2f4e1aa7e4a75cb37aa851bc924c9d4af2b30b26431f1cb9d156"
+"translation:marian:opus-ggml:::q0f32:1.0.0:es-en": "b96cf6c79119578b9f9a2206b19ce9686e95f31949ce62b24aef83fbdf4b0b08"
+"translation:marian:opus-ggml:::q0f32:1.0.0:es-it": "b04ba8638fea5adff061aba9ccc671936ab8f7459346461f6c2010d4c7413254"
+"translation:marian:opus-ggml:::q0f32:1.0.0:it-de": "438cbda449f1ac258a2fdea55cfd1f9f83dfb0ea20103c1e5113906081eec4f5"
+"translation:marian:opus-ggml:::q0f32:1.0.0:it-en": "68778c8375fbb1e7f5c20b4e6087131206e9ddba1872655e20931b7e08fe3954"
+"translation:marian:opus-ggml:::q0f32:1.0.0:it-es": "1b78d8309f80fcda61d0291ed5dc755e10e46b39d7e7484083a3c6d20b86c679"
+"translation:ggml-indictrans:full:2:1B:q0f32:1.0.0:hi-en": "d46a9192b479fb5c982e60b84ae25bb5a61f3f090a41d45d5c5dda597973a9dd"
+"translation:ggml-indictrans:full:2:1B:q0f32:1.0.0:en-hi": "61d1eb542956914ad2eadaf405b76a4dcc327fd6ccf1191bb17cd102a642691e"
+"translation:ggml-indictrans:full:2:1B:q0f32:1.0.0:hi-hi": "cd8e441d1da68602e19a92f5d1ee794852e802ee234a638df2976bb1bc2493ad"
+"translation:ggml-indictrans:dist:2:200M:q0f32:1.0.0:en-hi": "268c2e9b2a3420632e4b6649e32822f42d5dfbda4c7e96daec5b629ed20f99f7"
+"translation:ggml-indictrans:dist:2:200M:q0f32:1.0.0:hi-en": "dfea395ffe1cb6d259029e5c81c290f8828981987855e23e7b66fd7c705901eb"
+"translation:ggml-indictrans:dist:2:320M:q0f32:1.0.0:hi-hi": "9a66da960931c449b41e3315d9aea4d3925f2cda024e8a4c139b64d0a539ed41"
+"translation:ggml-indictrans:full:2:1B:q0f16:1.0.0:en-hi": "be5bff40a002c627a992d096861c0e9b0be6ac7770300cee0bb09ccda87404cb"
+"translation:ggml-indictrans:full:2:200M:q0f16:1.0.0:en-hi": "42ba45bbf4c24ff743890bc0cc65d8c23c91a14d26f760b3f814df76be8e036f"
+"translation:ggml-indictrans:full:2:1B:q0f16:1.0.0:hi-en": "d06c487c56a36bb153d9d33bc1085bc90561d2a8dad5cd5701db782e1540a343"
+"translation:ggml-indictrans:full:2:200M:q0f16:1.0.0:hi-en": "2e35d09ba69dd2b692c668862fdee43fa941859690b1e17aecc96c73474521b9"
+"translation:ggml-indictrans:full:2:1B:q0f16:1.0.0:hi-hi": "f4edc8b072c34840c08aab2c8abdc288aa2dff8c2ed76fc96ad6604e322a038f"
+"translation:ggml-indictrans:full:2:320M:q0f16:1.0.0:hi-hi": "1bb2ad463127325ca8daa801ec89ae6a2983ddeb90c5461a965e65fa295e3655"
+"translation:ggml-indictrans:full:2:1B:q4_0:1.0.0:en-hi": "9fb5b7338504b24df0f3dd9ae8a1c280c6f00fd7f3295cca8f884514c5fa9713"
+"translation:ggml-indictrans:full:2:200M:q4_0:1.0.0:en-hi": "8336d23073b2fd99723bf17d65ddc7b54b8ee886d6627659ba95c7a8fb932dc8"
+"translation:ggml-indictrans:full:2:1B:q4_0:1.0.0:hi-en": "1fd66a6862776a92c7fae1962a1f07a5bc7369fb8be3dd9b76adf7c71855af7f"
+"translation:ggml-indictrans:full:2:200M:q4_0:1.0.0:hi-en": "ba7db8c0dbcb6fc4276f86a27e3b9dd0f5e90b79f550a1666757f6074e2a4331"
+"translation:ggml-indictrans:full:2:1B:q4_0:1.0.0:hi-hi": "0f03a3a06bc7006deb0da42643585dc0da49b897ba49e449ec67013ba4464e8a"
+"translation:ggml-indictrans:full:2:320M:q4_0:1.0.0:hi-hi": "6cba73db82148a228bfdc586e2e565db6e6beb476575de3602d927ecb08b1a70"
+```
+
+Each key in this list follows the general pattern:
+
+```
+<model_family>:<version>:<size>:<quantization>:<release>:<source-lang>-<target-lang>
+```
+
+## Supported Languages
+
+Here is the list of languages supported for the Marian models: 
+
+<table>
+  <tbody>
+    <tr><td>English (en)</td></tr>
+    <tr><td>German (de)</td></tr>
+    <tr><td>Italian (it)</td></tr>
+    <tr><td>Spanish (es)</td></tr>
+  </tbody>
+</table>
+
+Here is the list of languages supported by the IndicTrans2 models:
+
+<table>
+<tbody>
+  <tr>
+    <td>Assamese (asm_Beng)</td>
+    <td>Kashmiri (Arabic) (kas_Arab)</td>
+    <td>Punjabi (pan_Guru)</td>
+  </tr>
+  <tr>
+    <td>Bengali (ben_Beng)</td>
+    <td>Kashmiri (Devanagari) (kas_Deva)</td>
+    <td>Sanskrit (san_Deva)</td>
+  </tr>
+  <tr>
+    <td>Bodo (brx_Deva)</td>
+    <td>Maithili (mai_Deva)</td>
+    <td>Santali (sat_Olck)</td>
+  </tr>
+  <tr>
+    <td>Dogri (doi_Deva)</td>
+    <td>Malayalam (mal_Mlym)</td>
+    <td>Sindhi (Arabic) (snd_Arab)</td>
+  </tr>
+  <tr>
+    <td>English (eng_Latn)</td>
+    <td>Marathi (mar_Deva)</td>
+    <td>Sindhi (Devanagari) (snd_Deva)</td>
+  </tr>
+  <tr>
+    <td>Konkani (gom_Deva)</td>
+    <td>Manipuri (Bengali) (mni_Beng)</td>
+    <td>Tamil (tam_Taml)</td>
+  </tr>
+  <tr>
+    <td>Gujarati (guj_Gujr)</td>
+    <td>Manipuri (Meitei) (mni_Mtei)</td>
+    <td>Telugu (tel_Telu)</td>
+  </tr>
+  <tr>
+    <td>Hindi (hin_Deva)</td>
+    <td>Nepali (npi_Deva)</td>
+    <td>Urdu (urd_Arab)</td>
+  </tr>
+  <tr>
+    <td>Kannada (kan_Knda)</td>
+    <td>Odia (ory_Orya)</td>
+    <td></td>
+  </tr>
+</tbody>
+</table>
+
+## More resources
+
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-nmtcpp/)
+- [Package at npm](https://www.npmjs.com/package/@qvac/translation-nmtcpp)

@@ -1,0 +1,28 @@
+---
+title: "getLogger( )"
+titleStyle: code
+description: Creates a logger instance.
+---
+
+```ts
+function getLogger(namespace, options?): Logger;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| namespace | `string` | ✓ | Logger namespace |
+| options | `object` | ✗ | Logger options |
+
+### options
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| level | `string` | ✗ | `"info"` | Log level |
+| enableConsole | `boolean` | ✗ | `true` | Whether to enable console output |
+| transports | `LogTransport[]` | ✗ | `[]` | Custom log transports |
+
+## Returns
+
+`Logger` — Logger instance with methods: error, warn, info, debug, trace, setLevel, getLevel, setConsoleOutput, addTransport

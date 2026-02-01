@@ -1,0 +1,195 @@
+name: Run Integration Tests (Qvac-lib-infer-whispercpp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
+        required: true
+        type: string
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
+        required: true
+        default: "packages/qvac-lib-infer-whispercpp"
+        type: string
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+
+      # Optional here to preserve existing conditional logic safely
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
+        required: false
+        type: string
+
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
+        required: false
+        default: "packages/qvac-lib-infer-whispercpp"
+        type: string
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir }}
+      PREBUILD_PACKAGE: ${{ inputs.prebuild_package || github.event.inputs.prebuild_package || '' }}
+      REPO_DIR: repo
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm64-private
+            platform: linux
+            arch: arm64
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ${{ env.REPO_DIR }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ env.PREBUILD_PACKAGE == '' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ env.PREBUILD_PACKAGE != '' }}
+        shell: bash
+        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        run: |
+          mkdir -p prebuilds
+          npm pack "${PREBUILD_PACKAGE}" --pack-destination /tmp
+          rm -rf /tmp/package || true
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Install gh cli for ai-run-linux-gpu
+        if: matrix.os == 'ai-run-linux-gpu'
+        shell: bash
+        run: |
+          (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+            && sudo mkdir -p -m 755 /etc/apt/keyrings \
+                  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+            && sudo apt update \
+            && sudo apt install gh -y
+          gh --version
+        continue-on-error: true
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+          # Add whisper.cpp dependencies for integration tests
+          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
+
+      - name: Linux - install glibcxx
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: macOS - install whisper dependencies
+        if: matrix.platform == 'darwin'
+        shell: bash
+        run: |
+          brew install --quiet openblas lapack fftw
+
+      - name: Run integration test
+        shell: bash
+        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        run: |
+          npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Print run state
+        shell: bash
+        if: always()
+        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        run: |
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true

@@ -1,0 +1,47 @@
+<suppressionList>
+    <!-- Suppress unusedFunction in header-only libraries -->
+    <suppression id="unusedFunction">
+        <path>.*\.h</path>
+    </suppression>
+
+    <!-- Allow smart pointers to be passed by value -->
+    <suppression id="passedByValue">
+        <pattern>.*</pattern>
+    </suppression>
+
+    <!-- Allow missing virtual destructor in final classes -->
+    <suppression id="missingVirtualDestructor">
+        <pattern>.*final.*</pattern>
+    </suppression>
+
+    <!-- C++20: suppress false positive on structured bindings -->
+    <suppression id="uninitvar">
+        <pattern>.*</pattern>
+    </suppression>
+
+    <!-- C++20 coroutines: suppress unrecognized flow issues -->
+    <suppression id="unreachableCode">
+        <pattern>.*</pattern>
+    </suppression>
+
+    <!-- Ignore complex template metaprogramming -->
+    <suppression id="syntaxError">
+        <pattern>.*templates.*</pattern>
+    </suppression>
+
+    <!-- Ignore false positives on move constructors and elision -->
+    <suppression id="noCopyConstructor">
+        <pattern>.*</pattern>
+    </suppression>
+
+    <!-- C++20 concepts sometimes trigger duplicate warnings -->
+    <suppression id="duplicateBranch">
+        <pattern>.*</pattern>
+    </suppression>
+
+    <!-- Optional: Suppress C-style cast warnings if you're OK with them -->
+    <suppression id="cstyleCast">
+        <pattern>.*</pattern>
+    </suppression>
+</suppressionList>
+

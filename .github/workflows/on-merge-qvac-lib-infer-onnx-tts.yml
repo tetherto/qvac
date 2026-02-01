@@ -1,0 +1,39 @@
+name: On Merge to Main (Qvac-lib-infer-onnx-tts)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  prebuild-main:
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+
+  run-integration-tests:
+    needs: prebuild-main
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+
+  prebuild-release:
+    if: startsWith(github.ref_name, 'release-')
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      publish_target: "npm"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}

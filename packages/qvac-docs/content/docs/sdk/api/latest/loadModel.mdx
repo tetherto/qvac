@@ -1,0 +1,268 @@
+---
+title: "loadModel( )"
+titleStyle: code
+description: Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+---
+
+```ts
+function loadModel(options): Promise<string>;
+```
+
+## Description
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition), embeddings, NMT (translation), TTS, and OCR. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress. Otherwise, it uses a simple request-response pattern for faster execution.
+
+## Accepted forms
+
+### Load new model
+
+```ts
+function loadModel(options): Promise<string>;
+```
+
+### Hot-reload existing model config
+
+```ts
+function loadModel(options): Promise<string>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| options | `object` | ✓ | Model loading configuration |
+
+### options (new model)
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelSrc | `string` | ✓ | The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL) |
+| modelType | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "tts" \| "ocr"` | ✓ | The type of model |
+| modelConfig | `object` | ✗ | Model-specific configuration options |
+| projectionModelSrc | `string` | ✗ | (LLM only) Projection model source for multimodal models |
+| vadModelSrc | `string` | ✗ | (Whisper only) VAD model source for voice activity detection |
+| configSrc | `string` | ✗ | (TTS only) Config file source |
+| eSpeakDataPath | `string` | ✗ | (TTS only) Path to eSpeak data |
+| detectorModelSrc | `string` | ✗ | (OCR only) Optional detector model source (defaults/derives from the recognizer when possible) |
+| delegate | `object` | ✗ | Delegation configuration for P2P inference |
+| onProgress | `function` | ✗ | Callback for download progress updates |
+| logger | `Logger` | ✗ | Logger instance for model operation logs |
+
+### options (hot-reload)
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The ID of an existing loaded model |
+| modelType | `"llm" \| "whisper" \| "embeddings" \| "nmt" \| "tts" \| "ocr"` | ✓ | The type of model (must match) |
+| modelConfig | `object` | ✓ | New configuration to apply |
+
+### modelConfig (varies by model type)
+
+Configuration options depend on the `modelType`. Common options include:
+
+**LLM models:**
+
+- `ctx_size` (number): Context window size
+- `device` ("cpu" | "gpu"): Device to use
+- `temp` (number): Temperature
+- `top_p` (number): Top-p sampling
+- `top_k` (number): Top-k sampling
+- `seed` (number): Random seed
+- `n_predict` (number): Max tokens to predict
+
+**Whisper models:**
+
+- `strategy` ("greedy" | "beam_search"): Sampling strategy
+- `n_threads` (number): Number of CPU threads
+- `n_max_text_ctx` (number): Max text context size (tokens) used by whisper.cpp
+- `offset_ms` (number): Offset (ms) to start processing from
+- `duration_ms` (number): Duration (ms) to process
+- `audio_ctx` (number): Audio context size
+- `translate` (boolean): Whether to translate to English
+- `no_context` (boolean): Disable use of previous text as context
+- `no_timestamps` (boolean): Disable timestamps
+- `single_segment` (boolean): Output as a single segment
+- `print_special` (boolean): Print special tokens
+- `print_progress` (boolean): Print progress
+- `print_realtime` (boolean): Print realtime progress
+- `print_timestamps` (boolean): Print timestamps
+- `token_timestamps` (boolean): Enable token-level timestamps
+- `thold_pt` (number): Token timestamp probability threshold (advanced)
+- `thold_ptsum` (number): Token timestamp probability sum threshold (advanced)
+- `max_len` (number): Max segment length (tokens)
+- `split_on_word` (boolean): Split on word boundaries when possible
+- `max_tokens` (number): Max tokens to generate
+- `debug_mode` (boolean): Enable debug mode
+- `tdrz_enable` (boolean): Enable tdrz (advanced)
+- `suppress_regex` (string): Regex to suppress from output
+- `initial_prompt` (string): Initial prompt passed to whisper.cpp
+- `language` (string): Language code (e.g., "en")
+- `detect_language` (boolean): Auto-detect language
+- `suppress_blank` (boolean): Suppress blank outputs
+- `suppress_nst` (boolean): Suppress non-speech tokens
+- `temperature` (number): Temperature
+- `length_penalty` (number): Length penalty (beam search)
+- `temperature_inc` (number): Temperature increment (advanced)
+- `entropy_thold` (number): Entropy threshold (advanced)
+- `logprob_thold` (number): Log-probability threshold (advanced)
+- `greedy_best_of` (number): Best-of for greedy sampling (advanced)
+- `beam_search_beam_size` (number): Beam size for beam search
+- `vad_model_path` (string): Path to VAD model (advanced)
+- `audio_format` ("f32le" | "s16le"): Audio format
+- `vad_params` (object): VAD parameters
+  - `threshold` (number): VAD threshold
+  - `min_speech_duration_ms` (number): Minimum speech duration (ms)
+  - `min_silence_duration_ms` (number): Minimum silence duration (ms)
+  - `max_speech_duration_s` (number): Maximum speech duration (s)
+  - `speech_pad_ms` (number): Padding around speech segments (ms)
+  - `samples_overlap` (number): Overlap between windows (0-1)
+- `contextParams` (object): GPU/context parameters (advanced)
+  - `model` (string): Override model name/path (advanced)
+  - `use_gpu` (boolean): Use GPU
+  - `flash_attn` (boolean): Enable flash attention (GPU)
+  - `gpu_device` (number): GPU device index
+- `miscConfig` (object): Miscellaneous config (advanced)
+  - `caption_enabled` (boolean): Enable caption mode (advanced)
+
+**Embeddings models:**
+
+- `gpuLayers` (number): Number of GPU layers (default: 99)
+- `device` (string): Device to use (default: "gpu")
+- `batchSize` (number): Embedding batch size (default: 1024)
+- `ctxSize` (number): Context size (optional)
+- `flashAttention` ("on" | "off"): Flash attention toggle (optional)
+- `rawConfig` (string): Raw CLI override (advanced; takes precedence if set)
+
+**NMT models:**
+
+- `engine` ("Opus" | "Bergamot" | "IndicTrans"): Translation engine preset used by the NMT backend.
+- `from` (string): Source language code (supported values depend on `engine`)
+- `to` (string): Target language code (supported values depend on `engine`)
+- `mode` ("full"): Generation mode (default: `"full"`)
+- `beamsize` (number): Beam size (default: `4`)
+- `lengthpenalty` (number): Length penalty (default: `1.0`)
+- `maxlength` (number): Max output length in tokens (default: `512`)
+- `repetitionpenalty` (number): Repetition penalty (default: `1.0`)
+- `norepeatngramsize` (number): No-repeat n-gram size (default: `0`)
+- `temperature` (number): Temperature (default: `0.3`)
+- `topk` (number): Top-k sampling (default: `0`)
+- `topp` (number): Top-p sampling (default: `1.0`)
+- `srcVocabPath` (string): (Bergamot only) Source vocabulary path (usually derived/resolved automatically)
+- `dstVocabPath` (string): (Bergamot only) Target vocabulary path (usually derived/resolved automatically)
+- `normalize` (number): (Bergamot only) Normalization parameter
+
+Note: `engine: "IndicTrans"` is defined in the SDK schemas, but is currently rejected by the server due to addon limitations.
+
+**TTS models:**
+
+- `language` ("en" | "es" | "de" | "it"): Language code (must match the voice/model you load)
+
+**OCR models:**
+
+- `langList` (string[]): Languages to recognize (default: `["en"]`)
+- `useGPU` (boolean): Enable GPU when supported (default: `true`)
+
+### delegate
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | P2P topic for delegation |
+| providerPublicKey | `string` | ✓ | Provider's public key |
+| timeout | `number` | ✗ | Timeout in milliseconds |
+| fallbackToLocal | `boolean` | ✗ | Whether to fallback to local inference if delegation fails |
+
+### onProgress callback
+
+```ts
+(progress: ModelProgressUpdate) => void
+```
+
+**ModelProgressUpdate object:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| percentage | `number` | Download percentage (0-100) |
+| downloaded | `number` | Bytes downloaded |
+| total | `number` | Total bytes |
+| downloadKey | `string` | Key for canceling download |
+| shardInfo | `object` | Shard information (if sharded model) |
+
+## Returns
+
+`Promise<string>` — Promise that resolves to the model ID (either the provided modelSrc or a generated ID)
+
+## Throws
+
+- When model loading fails, with details in the error message
+- When streaming ends unexpectedly (only when using onProgress)
+- When receiving an invalid response type from the server
+
+## Example
+
+```typescript
+// Local file path - absolute path
+const localModelId = await loadModel({
+  modelSrc: "/home/user/models/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { ctx_size: 2048 }
+});
+
+// Local file path - relative path
+const relativeModelId = await loadModel({
+  modelSrc: "./models/whisper-base.gguf",
+  modelType: "whisper"
+});
+
+// Hyperdrive URL with key and path
+const hyperdriveId = await loadModel({
+  modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { ctx_size: 2048 }
+});
+
+// Remote HTTP/HTTPS URL with progress tracking
+const remoteId = await loadModel({
+  modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
+  modelType: "llm",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+
+// Multimodal model with projection
+const multimodalId = await loadModel({
+  modelSrc: "https://huggingface.co/.../main-model.gguf",
+  modelType: "llm",
+  projectionModelSrc: "https://huggingface.co/.../projection-model.gguf",
+  modelConfig: { ctx_size: 512 },
+  onProgress: (progress) => {
+    console.log(`Loading: ${progress.percentage}%`);
+  }
+});
+
+// Whisper with VAD model
+const whisperId = await loadModel({
+  modelSrc: "https://huggingface.co/.../whisper-model.gguf",
+  modelType: "whisper",
+  vadModelSrc: "https://huggingface.co/.../vad-model.bin",
+  modelConfig: {
+    language: "en",
+    strategy: "greedy",
+    vad_params: {
+      threshold: 0.35
+    }
+  }
+});
+
+// Load with automatic logging
+import { getLogger } from "@qvac/sdk";
+const logger = getLogger("my-app");
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+  logger
+});
+```

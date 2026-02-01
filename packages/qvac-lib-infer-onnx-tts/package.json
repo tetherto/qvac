@@ -1,0 +1,87 @@
+{
+  "name": "@qvac/tts-onnx",
+  "version": "0.2.12",
+  "description": "TTS addon skeleton for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "example": "bare examples/example-onnx-tts.js",
+    "lint": "standard \"test/**/*.js\" \"*.js\"",
+    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\"",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:integration": "brittle-bare test/integration/addon.test.js && brittle-bare test/integration/reload-model.test.js",
+    "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
+    "test:cpp:run": "cd build/addon/test/unit && ./qvac-lib-inference-tts-unit-test",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build",
+    "coverage:cpp:run": "cd build/addon/test/unit && LLVM_PROFILE_FILE=default.profraw ./qvac-lib-inference-tts-unit-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:summary": "cd build/addon/test/unit && llvm-cov-19 report ./qvac-lib-inference-tts-unit-test  --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/addon/test/unit && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "index.js",
+    "lib",
+    "prebuilds",
+    "index.d.ts",
+    "tts.js",
+    "assets/tashkeel",
+    "test/mobile",
+    "test/integration",
+    "test/utils/runTTS.js",
+    "test/utils/downloadModel.js",
+    "test/utils/wav-helper.js",
+    "test/utils/loader.fake.js",
+    "test/utils/runWhisper.js"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@qvac/transcription-whispercpp": "^0.3.1",
+    "bare-buffer": "^3.4.2",
+    "bare-node-stream": "^1.0.0",
+    "bare-process": "^4.2.2",
+    "bare-subprocess": "^5.2.1",
+    "bare-tty": "^5.0.3",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "fs": "npm:bare-fs",
+    "husky": "^9.1.7",
+    "os": "npm:bare-os@^3.6.2",
+    "process": "npm:bare-process",
+    "sinon": "^21.0.0",
+    "standard": "^17.0.0",
+    "fflate": "^0.8.2",
+    "stream": "npm:bare-node-stream",
+    "tty": "npm:bare-node-tty",
+    "util": "npm:bare-utils@^1.5.1"
+  },
+  "dependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0",
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.1.0",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0"
+  },
+  "types": "index.d.ts"
+}

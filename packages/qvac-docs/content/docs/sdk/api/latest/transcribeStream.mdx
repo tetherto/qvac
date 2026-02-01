@@ -1,0 +1,35 @@
+---
+title: "transcribeStream( )"
+titleStyle: code
+description: Streams audio transcription results in real-time.
+---
+
+```ts
+function transcribeStream(params): AsyncGenerator<string, void, unknown>;
+```
+
+## Description
+
+This function streams audio transcription results in real-time, yielding text chunks as they become available from the model.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The arguments for the transcription |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | Model identifier |
+| audioChunk | `string` or `Buffer` | ✓ | Audio data (file path or buffer) |
+| prompt | `string` | ✗ | Optional prompt to guide transcription |
+
+## Returns
+
+`AsyncGenerator<string, void, unknown>` — AsyncGenerator yielding text chunks as they are transcribed
+
+## Throws
+
+When transcription fails with an error message

@@ -1,0 +1,35 @@
+---
+title: "transcribe( )"
+titleStyle: code
+description: Transcribes audio to text in a single response.
+---
+
+```ts
+function transcribe(params): Promise<string>;
+```
+
+## Description
+
+This function provides a simple interface for transcribing audio by collecting all streaming results into a single string response.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The arguments for the transcription |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | Model identifier |
+| audioChunk | `string` or `Buffer` | ✓ | Audio data (file path or buffer) |
+| prompt | `string` | ✗ | Optional prompt to guide transcription |
+
+## Returns
+
+`Promise<string>` — The complete transcribed text
+
+## Throws
+
+When transcription fails (propagated from transcribeStream)

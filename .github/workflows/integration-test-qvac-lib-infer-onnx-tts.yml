@@ -1,0 +1,162 @@
+name: Run Integration Tests (Qvac-lib-infer-onnx-tts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/tts-onnx@1.0.0)"
+        required: true
+        type: string
+      ref:
+        description: "Git ref to checkout"
+        required: false
+        type: string
+      repository:
+        description: "Repository to checkout"
+        required: false
+        type: string
+      model:
+        description: "Model to use"
+        required: false
+        type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-onnx-tts"
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+      model:
+        type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        required: false
+        default: "packages/qvac-lib-infer-onnx-tts"
+        type: string
+
+jobs:
+  run-integration-tests:
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04 # ai-run-linux-gpu - to be updated once the new runner is available
+            platform: linux
+            arch: x64
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+          - os: windows-2022 # ai-run-windows-gpu - to be updated once the new runner is available
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          qvac_registry="https://registry.npmjs.org/"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Update c++ tools to install GLIBC++
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: Download onnx model files
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          mkdir -p models/tts
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-09-04/ models/tts --recursive
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-12-05/es_ES-davefx-medium/ models/tts --recursive
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-11-26/en_US-lessac-medium/ models/tts --recursive
+
+      - name: Run integration test
+        working-directory: ${{ inputs.workdir }}
+        run: npm run test:integration
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}

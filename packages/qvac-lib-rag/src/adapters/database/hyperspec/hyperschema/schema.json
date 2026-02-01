@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "documents",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": 5,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "content",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "contentHash",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        },
+        {
+          "name": "metadata",
+          "required": false,
+          "type": "json",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "vectors",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "docId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "vector",
+          "required": true,
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "centroids",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "vector",
+          "required": true,
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "index",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "ivfBuckets",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "centroidId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "documentIds",
+          "required": true,
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "capacity",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "embeddingModelId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "dimension",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "NUM_CENTROIDS",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "BUCKET_SIZE",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "BATCH_SIZE",
+          "required": true,
+          "type": "uint32",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}

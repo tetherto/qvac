@@ -1,0 +1,21 @@
+{
+  "name": "sdk-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SDK tests using QVAC test framework",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "consumer:desktop:run": "qvac-test run:consumer:desktop"
+  },
+  "dependencies": {
+    "@qvac/sdk": "file:..",
+    "@tetherto/qvac-test-suite": "^0.1.2",
+    "mqtt": "^5.14.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

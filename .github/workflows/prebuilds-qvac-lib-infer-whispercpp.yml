@@ -1,0 +1,570 @@
+name: "prebuilds (Qvac-lib-infer-whispercpp)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with ('latest' by default)"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+      workdir:
+        description: "Working directory"
+        required: false
+        default: "packages/qvac-lib-infer-whispercpp"
+        type: string
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      tar-run-id:
+        type: string
+        required: false
+        default: "on-mlc-whisper"
+      tag:
+        description: "Tag to publish"
+        type: string
+        required: false
+        default: "dev"
+      publish_target:
+        description: "Where to publish (npm or gpr)"
+        type: string
+        required: false
+        default: ""
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-whispercpp"
+    outputs:
+      published_version:
+        description: "The version that was published"
+        value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm64-private
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            flags: -D ANDROID_STL=c++_shared
+          - os: macos-14
+            platform: ios
+            arch: arm64
+          - os: macos-14
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: macos-15
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}/vcpkg/cache,readwrite"
+      VCPKG_BUILD_TYPE: release
+
+    steps:
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Echo workflow inputs
+        shell: bash
+        run: |
+          echo "Workflow inputs:"
+          echo "Workdir: ${{ env.WORKDIR }}"
+          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Matrix platform: ${{ matrix.platform }}"
+          echo "Matrix arch: ${{ matrix.arch }}"
+          echo "Matrix tags: ${{ matrix.tags }}"
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        run: |
+          git config --system core.longpaths true
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $ccacheDir -Force
+          $ccacheBin = Get-ChildItem -Path $ccacheDir -Recurse -Filter "ccache.exe" | Select-Object -First 1
+          $ccachePath = $ccacheBin.DirectoryName
+          echo "$ccachePath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure ccache on Windows
+        shell: bash
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Get ccache cache (Windows)
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        run: |
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        name: Rename win sdk folder to disable it
+        run: |
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install vcpkg in macos
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Configure vcpkg in linux (standard runner)
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator in windows
+        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Disable parallel configuration for Visual Studio generator
+        run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Disable parallel configuration for Apple toolchains
+        run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Update c++ tools
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        name: Install ccache on Linux
+        run: sudo apt-get install -y ccache
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install ccache on macOS
+        run: brew install ccache
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Get ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install required packages linux
+        run: |
+          sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev
+          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install vulkan in linux
+        run: |
+          sudo apt install xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup vulkan sdk path in linux x64
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Setup vulkan sdk path in linux arm64
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          cd ~/vulkan
+          ./vulkansdk --maxjobs
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Export rest of vulkan sdk variables in linux
+        run: |
+          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'macos') }}
+        name: Install whisper dependencies for macOS
+        run: |
+          brew install --quiet openblas lapack fftw
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.WORKDIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.workdir }}/vcpkg/cache
+          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(
+            format('{0}/vcpkg.json', inputs.workdir),
+            format('{0}/vcpkg-configuration.json', inputs.workdir),
+            format('{0}/vcpkg/ports/**', inputs.workdir)
+           ) }}
+          restore-keys: |
+            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Run bare-make generate
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ (matrix.platform == 'darwin' || matrix.platform == 'ios') && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS
+
+      - name: Run bare-make build
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make build
+
+      - name: Run bare-make install
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make install
+
+      - name: Strip debug symbols (skip windows and android)
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          find prebuilds -name "*.bare" -exec strip {} \;
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ inputs.workdir }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: prebuild
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds
+          path: prebuilds
+
+  publish-gpr:
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'gpr'
+      || inputs.publish_target == 'both'
+      || (
+          (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+          && (inputs.publish_target == '' || inputs.publish_target == null)
+          && (
+            github.ref_name == 'main'
+            || startsWith(github.ref_name, 'feature-')
+            || startsWith(github.ref_name, 'tmp-')
+            || (inputs.ref != '' && (
+                  inputs.ref == 'refs/heads/main'
+                  || startsWith(inputs.ref, 'refs/heads/feature-')
+                  || startsWith(inputs.ref, 'refs/heads/tmp-')
+                ))
+          )
+        ) }}
+    continue-on-error: true
+    outputs:
+      published_version: ${{ steps.capture_version.outputs.published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds
+          path: /tmp/prebuilds
+
+      - name: Place merged prebuilds into package workdir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKDIR}/prebuilds"
+          rm -rf "${WORKDIR}/prebuilds"/*
+          cp -R /tmp/prebuilds/* "${WORKDIR}/prebuilds/"
+
+      - name: Rename prebuild files from qvac_ to tetherto_ prefix
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${WORKDIR}"
+
+          find prebuilds -depth -name 'qvac_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+          if [ -f binding.js ]; then
+            sed -i 's/qvac_/tetherto_/g' binding.js
+          fi
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          workdir: ${{ inputs.workdir }}
+          name-suffix: "-mono"
+
+      - name: Capture published version
+        id: capture_version
+        if: success()
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${WORKDIR}"
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+
+          VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_NAME_GPR=$(echo "$PACKAGE_NAME" | sed 's/@qvac/@tetherto/')
+
+          if npm view "${PACKAGE_NAME_GPR}@${VERSION}" version --registry=https://npm.pkg.github.com/ >/dev/null 2>&1; then
+            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-npm:
+    needs: [ prebuild, merge ]
+    if: ${{ inputs.publish_target == 'npm'
+        || inputs.publish_target == 'both'
+        || (
+            (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+            && (inputs.publish_target == '' || inputs.publish_target == null)
+            && (
+              startsWith(github.ref_name, 'release-')
+              || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
+            )
+          ) }} 
+    continue-on-error: true
+    outputs:
+      published_version: ${{ steps.capture_version.outputs.published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+
+      - name: Capture published version
+        id: capture_version
+        working-directory: ${{ env.WORKDIR }}
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${WORKDIR}"
+
+          VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi

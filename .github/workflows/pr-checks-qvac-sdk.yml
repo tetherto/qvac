@@ -1,0 +1,176 @@
+name: PR Checks (Qvac-sdk)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - "packages/qvac-sdk/**"
+    branches:
+      - main
+      - release-*
+  workflow_dispatch:
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.filter.outputs.pkg }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg:
+              - "packages/qvac-sdk/**"
+
+  sanity-checks:
+    needs: changes
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/qvac-sdk
+    steps:
+      - name: Checkout PR head and target
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Fetch PR head and target branch
+        shell: bash
+        id: fetch_pr
+        if: |
+          github.event_name == 'pull_request_target' ||
+          github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git remote set-url origin https://github.com/${{ github.repository }}.git
+          git fetch origin +refs/heads/*:refs/remotes/origin/*
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+          PR_FORK_URL=${{ github.event.pull_request.head.repo.clone_url }}
+          PR_HEAD_REF=${{ github.event.pull_request.head.ref }}
+          git fetch origin $PR_HEAD_REF:refs/pr/head || git fetch $PR_FORK_URL $PR_HEAD_REF:refs/pr/head
+
+      - name: Check PR status vs. target branch
+        shell: bash
+        id: target_branch_checks
+        if: |
+          github.event_name == 'pull_request_target' ||
+          github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          TARGET_SHA=${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+            echo "ℹ️  Suggestion: Consider rebasing or merging the latest changes from the target branch"
+          fi
+
+      - name: Check for disallowed dependencies
+        shell: bash
+        id: check_dependencies
+        continue-on-error: true
+        run: |
+          deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+            exit 1
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
+          NPMRC
+
+          # Configure git for private dependencies
+          if [ -n "${PAT_TOKEN:-}" ]; then
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          # Configure bunfig.toml for reading packages
+          cat > bunfig.toml << EOF
+          [install]
+          registry = "https://registry.npmjs.org/"
+
+          [install.scopes]
+          "@tetherto" = { token = "${PAT_TOKEN}", url = "https://npm.pkg.github.com" }
+          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
+          EOF
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run lint checks
+        id: run_lint
+        continue-on-error: true
+        run: bun run lint
+
+      - name: Run build
+        id: run_build
+        continue-on-error: true
+        run: bun run build
+
+      - name: Check for errors
+        shell: bash
+        run: |
+          count=0
+          if [ "${{ steps.run_lint.outcome }}" = "failure" ]; then
+            echo "::error::Step - Lint checks failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_build.outcome }}" = "failure" ]; then
+            echo "::error::Step - Build failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check for disallowed dependencies failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check PR Status with Target Branch failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+            echo "::error::Step - Fetch PR head and target branch failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi

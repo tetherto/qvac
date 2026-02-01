@@ -1,0 +1,200 @@
+[
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-silero",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-silero",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300m-Q4_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "300M",
+    "license": "Apache-2.0",
+    "tags": [
+      "embedding",
+      "embed",
+      "embeddinggemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/speaches-ai/piper-it_IT-paola-medium/resolve/main/model.onnx",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-paola",
+      "it_it"
+    ],
+    "notes": "",
+    "deprecated": true,
+    "replacedBy": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
+    "deprecationReason": "Superseded by v2"
+  },
+  {
+    "source": "https://huggingface.co/speaches-ai/piper-it_IT-paola-medium/resolve/main/config.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-paola",
+      "it_it"
+    ],
+    "notes": "",
+    "deprecated": true,
+    "replacedBy": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
+    "deprecationReason": "Superseded by v2"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-sharvard",
+      "es_es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-sharvard",
+      "es_es"
+    ],
+    "notes": ""
+  }
+]

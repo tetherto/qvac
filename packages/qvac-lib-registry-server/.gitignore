@@ -1,0 +1,23 @@
+.DS_Store
+node_modules
+.env*
+
+client/package-lock.json
+shared/package-lock.json
+
+# Corestore for registry
+corestore/
+# Corestore for model hyperdrives
+model-drives/
+# Registry config file
+registry.config.json
+# Downloaded models cache
+downloaded-models/
+client/downloaded
+
+# Test artifacts
+tests/**/test-storage-*
+tests/**/custom-storage-*
+temp/
+temp-client-storage/
+writer-storage/

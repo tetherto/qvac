@@ -1,0 +1,53 @@
+---
+title: "startQVACProvider( )"
+titleStyle: code
+description: Starts a provider service for delegated inference.
+---
+
+```ts
+function startQVACProvider(params): Promise<{
+  error?: string;
+  publicKey?: string;
+  success: boolean;
+  type: "provide";
+}>;
+```
+
+## Description
+
+Starts a provider service that offers QVAC capabilities to remote peers. The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | Provider configuration |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | Topic to join |
+| firewall | `object` | ✗ | Optional firewall configuration |
+
+### firewall
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| mode | `"allow" \| "deny"` | ✓ | Firewall mode |
+| publicKeys | `string[]` | ✓ | Array of public keys to allow or deny |
+
+## Returns
+
+`Promise<object>` — A promise that resolves to the provide response containing success status and public key
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| success | `boolean` | ✓ | Whether the operation succeeded |
+| publicKey | `string` | ✗ | Provider's public key |
+| error | `string` | ✗ | Error message if failed |
+| type | `"provide"` | ✓ | Response type |
+
+## Throws
+
+When the response type is not "provide" or the request fails

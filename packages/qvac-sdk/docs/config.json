@@ -1,0 +1,21 @@
+{
+  "site": {
+    "pages": [
+      "index.mdx",
+      "blind-relays.mdx",
+      "completion.mdx",
+      "delegated-inference.mdx",
+      "download-lifecycle.mdx",
+      "get-started.mdx",
+      "how-it-works.mdx",
+      "logging.mdx",
+      "multimodal.mdx",
+      "rag.mdx",
+      "sharded-models.mdx",
+      "text-embeddings.mdx",
+      "text-to-speech.mdx",
+      "transcription.mdx",
+      "translation.mdx"
+    ]
+  }
+}

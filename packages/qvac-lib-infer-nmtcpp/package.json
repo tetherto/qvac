@@ -1,0 +1,101 @@
+{
+  "name": "@qvac/translation-nmtcpp",
+  "version": "0.3.7",
+  "description": "translation addon for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy nmtcpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:integration": "npm run test:integration:generate && bare test/integration/all.js",
+    "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test": "npm run lint && npm run test:unit && npm run test:integration",
+    "model:init": "qvac-dev model init",
+    "model:new": "qvac-dev model new",
+    "model:generate": "qvac-dev model generate",
+    "test:dts": "tsc -p tsconfig.dts.json",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D USE_BERGAMOT=ON && bare-make build --target addon-test",
+    "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
+    "coverage:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:summary": "cd build/addon/tests && llvm-cov-19 report ./addon-test  --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
+    "test:all": "npm run test && npm run test:cpp"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "index.js",
+    "marian.js",
+    "prebuilds",
+    "third-party",
+    "lib",
+    "index.d.ts",
+    "test/mobile",
+    "test/integration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-lib-infer-nmtcpp.git"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "marian",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-nmtcpp/issues",
+  "homepage": "https://github.com/tetherto/qvac-lib-infer-nmtcpp#readme",
+  "devDependencies": {
+    "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-filesystem": "^0.1.0",
+    "bare-fetch": "^2.5.1",
+    "bare-fs": "^4.5.1",
+    "bare-process": "^4.2.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^5.2.1",
+    "brittle": "^3.4.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "standard": "^17.0.0",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.2.1"
+  },
+  "dependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0",
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.2.0",
+    "bare-path": "^3.0.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js"
+  },
+  "types": "index.d.ts",
+  "standard": {
+    "ignore": [
+      "third-party/**",
+      "build/**",
+      "prebuilds/**"
+    ]
+  }
+}

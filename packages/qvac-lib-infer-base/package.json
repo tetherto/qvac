@@ -1,0 +1,41 @@
+{
+  "name": "@qvac/infer-base",
+  "version": "0.2.2",
+  "description": "Base class for inference clients",
+  "main": "index.js",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:dts": "tsc index.d.ts --noEmit",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test": "npm run test:unit"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "inference",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-events": "2.4.2",
+    "bare-os": "^3.2.0",
+    "bare-path": "^3.0.0"
+  },
+  "devDependencies": {
+    "brittle": "^3.15.0",
+    "standard": "^17.1.0"
+  },
+  "peerDependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0"
+  },
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-base/issues",
+  "files": [
+    "src",
+    "index.d.ts",
+    "WeightsProvider"
+  ],
+  "types": "index.d.ts"
+}

@@ -1,0 +1,282 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Run Integration Tests (qvac-lib-infer-llamacpp-embed)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      prebuild_package:
+        description: "Optional NPM package containing prebuilds (e.g. @qvac/embed-llamacpp@1.0.0). If empty, workflow downloads artifacts."
+        type: string
+        required: false
+        default: ""
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-embed"
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/embed-llamacpp@1.0.0)"
+        type: string
+        required: true
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-embed"
+
+env:
+  NODE_VERSION: "lts/*"
+
+jobs:
+  run-integration-tests:
+    runs-on: ${{ matrix.runner || matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: ai-run-linux-gpu
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: macos-15-xlarge
+            platform: darwin
+            arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            runner: ai-run-windows-gpu
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Linux glibcxx
+        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        run: git config --system core.longpaths true
+
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -eu
+          echo "Writing .npmrc in workdir: ${{ inputs.workdir }}"
+          mkdir -p "${{ inputs.workdir }}"
+          cat > "${{ inputs.workdir }}/.npmrc" <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ inputs.workdir }}" | Out-Null
+          @"
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath "${{ inputs.workdir }}\.npmrc" -Encoding utf8
+
+          if ($env:GIT_PAT) {
+            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
+          } else {
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          }
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds (from artifacts)
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -eu
+          PACKAGE="${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+
+          if ! npm pack "$PACKAGE"; then
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            exit 1
+          fi
+
+          tar -xzf *.tgz
+
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            exit 1
+          fi
+
+          rm -rf ./prebuilds 2>/dev/null || true
+          mv package/prebuilds ./prebuilds
+
+          rm -rf package *.tgz
+          echo "Prebuilds downloaded:"
+          ls -la prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          $PACKAGE = "${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+          npm pack $PACKAGE
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) { exit 1 }
+
+          tar -xzf $TARBALL
+
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            exit 1
+          }
+
+          if (Test-Path "prebuilds") { Remove-Item -Recurse -Force prebuilds }
+          Move-Item package/prebuilds ./prebuilds
+
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+          Get-ChildItem prebuilds/
+
+      - name: Print run state
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          npm list || true
+          npm config list || true
+        continue-on-error: true
+
+      - name: Install gh cli for Linux runners (if needed)
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+            && sudo mkdir -p -m 755 /etc/apt/keyrings \
+            && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+            && sudo apt update \
+            && sudo apt install gh -y
+          gh --version
+        continue-on-error: true
+
+      - name: Print run state (files)
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          ls -la model/marian/vulkan/en-it/ || true
+          (command -v tree >/dev/null && tree model/marian/vulkan/en-it/ || true)
+          ls -la prebuilds || true
+          (command -v tree >/dev/null && tree prebuilds || true)
+        continue-on-error: true
+
+      - name: Linux - install dependencies
+        if: ${{ matrix.platform == 'linux' || matrix.platform == 'android' }}
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Windows - Install Vulkan
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        timeout-minutes: 40
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - name: Run integration test
+        working-directory: ${{ inputs.workdir }}
+        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}

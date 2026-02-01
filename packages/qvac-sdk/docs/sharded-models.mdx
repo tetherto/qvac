@@ -1,0 +1,16 @@
+---
+title: SDK — Sharded models
+description: Initializing models for inference.
+---
+
+# Sharded models
+
+Download a model that is sharded into multiple parts
+
+## Usage
+
+Sharded models automatically download all parts sequentially with detailed progress tracking per shard. For local sharded models, pass the path to the first shard file (e.g., `model-00001-of-00005.gguf`), and remaining shards will be loaded automatically.
+
+```ts file=../examples/llamacpp-sharded.ts
+
+```

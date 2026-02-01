@@ -1,0 +1,13 @@
+node_modules
+build
+prebuilds
+.history
+.npmrc
+package-lock.json
+.idea/
+coverage
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

@@ -1,0 +1,27 @@
+.vs/
+build/
+models/
+node_modules/
+.idea/
+prebuilds/
+addon/gst/.meson
+vcpkg/
+benchmarks/data/
+
+test/unit/all.js
+test/integration/all.js
+test/.test-models/
+package-lock.json
+.npmrc
+storage/
+
+__pycache__/
+.pytest_cache/
+poetry.lock
+.idea/
+.vscode
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

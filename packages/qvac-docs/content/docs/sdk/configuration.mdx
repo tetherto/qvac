@@ -1,0 +1,85 @@
+---
+title: Configuration
+description: Use qvac.config.* to configure the SDK's overall behavior.
+---
+
+## Overview
+
+SDK configuration is loaded once during initialization from `qvac.config.*` file — `qvac.config.json`, `qvac.config.js`, or `qvac.config.ts` — and remains immutable for the lifetime of the SDK instance.
+
+_Providing the configuration file is **not required**._ If you don't, the SDK still works using the defaults.
+
+## Usage
+
+The SDK initializes lazily on first use, either when you call `loadModel()` or any AI task function. Its life cycle ends when you call `close()`.
+
+To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+
+## Examples
+
+Below are examples of `qvac.config.*` files. Values marked with `<placeholders>` should be replaced with your actual values.
+
+<Tabs>
+<Tab value="json" label="JSON" default>
+<WrapCode>
+```json title="qvac.config.json" lineNumbers
+{
+  "cacheDirectory": "</absolute/path/to/.qvac/models>",
+  "swarmRelays": ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  "loggerLevel": "info",
+  "loggerConsoleOutput": true,
+  "httpDownloadConcurrency": 3,
+  "httpConnectionTimeoutMs": 10000
+}
+```
+</WrapCode>
+</Tab>
+
+<Tab value="js" label="JavaScript">
+<WrapCode>
+```js title="qvac.config.js" lineNumbers
+module.exports = {
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  loggerLevel: "info",
+  loggerConsoleOutput: true,
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+};
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts title="qvac.config.ts" lineNumbers
+import type { QvacConfig } from "@qvac/sdk";
+
+const config: QvacConfig = {
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  loggerLevel: "info",
+  loggerConsoleOutput: true,
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+};
+
+export default config;
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+## Options
+
+The following table lists all supported configuration options for `qvac.config.*`:
+
+| Option | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. | `string` | No | `~/.qvac/models` |
+| `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
+| `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
+| `loggerConsoleOutput` | Enable or disable console output for SDK loggers. | `boolean` | No | `true` |
+| `loggerLevel` | Global log level for all SDK loggers. | `"error" \| "warn" \| "info" \| "debug"` | No | `"info"` |
+| `swarmRelays` | Hyperswarm relay public keys (hex strings) for improved P2P connectivity (blind relays). | `string[]` | No | — |

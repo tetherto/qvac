@@ -1,0 +1,770 @@
+name: Benchmark  (Qvac-lib-infer-whispercpp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_type:
+        description: 'Dataset type'
+        required: true
+        type: choice
+        default: librispeech
+        options:
+          - librispeech
+          - fleurs
+      language:
+        description: 'Language for benchmarking'
+        required: true
+        type: choice
+        options:
+          - english
+          - french
+          - german
+          - spanish
+          - italian
+          - portuguese
+          - mandarin_chinese
+          - arabic
+          - russian
+          - japanese
+          - czech
+      arabic_dataset:
+        description: 'Arabic dataset variant (only used when language is Arabic)'
+        required: false
+        type: choice
+        default: arabic_validated_all
+        options:
+          - arabic_validated_all
+          - arabic_levantine
+          - arabic_egyptian
+      model_size:
+        description: 'Model size'
+        required: true
+        type: choice
+        default: tiny
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      streaming_mode:
+        description: 'Enable Streaming Mode (chunked processing)'
+        required: true
+        type: boolean
+        default: false
+      streaming_chunk_size:
+        description: 'Streaming chunk size in bytes (e.g., 16384 for ~500ms, 32000 for ~1s with f32le)'
+        required: false
+        type: number
+        default: 64000
+      custom_model_repo:
+        description: 'Custom HuggingFace model repository URL (e.g., https://huggingface.co/user/model) - Leave empty to use default models'
+        required: false
+        type: string
+        default: ''
+      max_samples:
+        description: 'Maximum number of samples to process (0 = unlimited, leave empty to use default based on model size)'
+        required: false
+        type: number
+        default: -1
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
+        required: false
+        type: string
+        default: 'packages/qvac-lib-infer-whispercpp'
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Generate matrix based on language
+        id: set-matrix
+        run: |
+          LANGUAGE="${{ github.event.inputs.language }}"
+          MODEL_SIZE="${{ github.event.inputs.model_size }}"
+          CUSTOM_MODEL_REPO="${{ github.event.inputs.custom_model_repo }}"
+
+          if [ -n "$CUSTOM_MODEL_REPO" ]; then
+            echo "Using custom model repository: $CUSTOM_MODEL_REPO"
+
+            # Map dataset language to whisper language code
+            case "$LANGUAGE" in
+              english) WHISPER_LANG="" ;;
+              french) WHISPER_LANG="fr" ;;
+              german) WHISPER_LANG="de" ;;
+              spanish) WHISPER_LANG="es" ;;
+              italian) WHISPER_LANG="it" ;;
+              portuguese) WHISPER_LANG="pt" ;;
+              mandarin_chinese) WHISPER_LANG="zh" ;;
+              arabic) WHISPER_LANG="ar" ;;
+              russian) WHISPER_LANG="ru" ;;
+              japanese) WHISPER_LANG="ja" ;;
+              czech) WHISPER_LANG="cs" ;;
+              *) WHISPER_LANG="" ;;
+            esac
+
+            MATRIX=$(python3 <<PYEOF
+          import json
+
+          language = "${WHISPER_LANG}"
+
+          matrix = {
+              "model_variant": ["custom"],
+              "include": [{
+                  "model_variant": "custom",
+                  "model_file": "custom.bin",
+                  "quantization": "f16",
+                  "language": language,
+                  "source": "custom"
+              }]
+          }
+
+          print(json.dumps(matrix))
+          PYEOF
+            )
+          else
+            MATRIX=$(python3 <<PYEOF
+          import json
+
+          language = "${LANGUAGE}"
+          model_size = "${MODEL_SIZE}"
+
+          quant_configs = {
+              "tiny": ["f16", "q5_1", "q8_0"],
+              "base": ["f16", "q5_1", "q8_0"],
+              "small": ["f16", "q5_1", "q8_0"],
+              "medium": ["f16", "q5_0", "q8_0"]
+          }
+
+          variants = []
+          include = []
+
+          for quant in quant_configs[model_size]:
+              if quant == "f16":
+                  model_file = f"ggml-{model_size}.bin"
+                  variant = model_size
+              else:
+                  model_file = f"ggml-{model_size}-{quant}.bin"
+                  variant = f"{model_size}-{quant}"
+
+              variants.append(variant)
+              include.append({
+                  "model_variant": variant,
+                  "model_file": model_file,
+                  "quantization": quant,
+                  "language": "auto",
+                  "source": "huggingface"
+              })
+
+              if language == "english":
+                  if quant == "f16":
+                      en_file = f"ggml-{model_size}.en.bin"
+                      en_variant = f"{model_size}.en"
+                  else:
+                      en_file = f"ggml-{model_size}.en-{quant}.bin"
+                      en_variant = f"{model_size}.en-{quant}"
+
+                  variants.append(en_variant)
+                  include.append({
+                      "model_variant": en_variant,
+                      "model_file": en_file,
+                      "quantization": quant,
+                      "language": "en",
+                      "source": "huggingface"
+                  })
+
+          if model_size != "medium":
+              futo_url = f"https://voiceinput.futo.org/VoiceInput/{model_size}_acft_q8_0.bin"
+              variants.append(f"futo-{model_size}-acft-q8_0")
+              include.append({
+                  "model_variant": f"futo-{model_size}-acft-q8_0",
+                  "model_file": f"{model_size}_acft_q8_0.bin",
+                  "quantization": "acft-q8_0",
+                  "language": "auto",
+                  "source": "futo",
+                  "download_url": futo_url
+              })
+
+              if language == "english":
+                  futo_en_url = f"https://voiceinput.futo.org/VoiceInput/{model_size}_en_acft_q8_0.bin"
+                  variants.append(f"futo-{model_size}.en-acft-q8_0")
+                  include.append({
+                      "model_variant": f"futo-{model_size}.en-acft-q8_0",
+                      "model_file": f"{model_size}_en_acft_q8_0.bin",
+                      "quantization": "acft-q8_0",
+                      "language": "en",
+                      "source": "futo",
+                      "download_url": futo_en_url
+                  })
+
+          matrix = {
+              "model_variant": variants,
+              "include": include
+          }
+
+          print(json.dumps(matrix))
+          PYEOF
+            )
+          fi
+
+          COMPACT_MATRIX=$(echo "$MATRIX" | jq -c .)
+          echo "matrix=$COMPACT_MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for language: $LANGUAGE, model size: $MODEL_SIZE"
+          echo "$MATRIX" | jq .
+
+  benchmark-whispercpp:
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 1440
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      WORKDIR: ${{ github.event.inputs.workdir }}
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+
+    name: benchmark-clean-${{ matrix.model_variant }}
+
+    steps:
+      - name: Display benchmark configuration
+        run: |
+          echo "=== Benchmark Configuration ==="
+          echo "Dataset Type: ${{ github.event.inputs.dataset_type }}"
+          echo "Language: ${{ github.event.inputs.language }}"
+
+          if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
+            ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
+            if [ -z "$ARABIC_DATASET" ]; then
+              ARABIC_DATASET="arabic_validated_all"
+            fi
+            echo "Arabic Dataset: $ARABIC_DATASET"
+          fi
+
+          echo "Model Size: ${{ github.event.inputs.model_size }}"
+          echo "Model Variant: ${{ matrix.model_variant }}"
+          echo "Streaming Mode: ${{ github.event.inputs.streaming_mode }}"
+          echo "Streaming Chunk Size: ${{ github.event.inputs.streaming_chunk_size }}"
+
+          INPUT_MAX_SAMPLES="${{ github.event.inputs.max_samples }}"
+          if [ "$INPUT_MAX_SAMPLES" != "-1" ]; then
+            echo "Max Samples: $INPUT_MAX_SAMPLES (user-specified)"
+          else
+            echo "Max Samples: Auto (based on model size)"
+          fi
+
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            echo "Custom Model Repository: ${{ github.event.inputs.custom_model_repo }}"
+            echo "⚠️  Using custom model - ignoring default models"
+          else
+            echo "Using default model: ${{ matrix.model_file }}"
+            echo "Source: ${{ matrix.source }}"
+          fi
+
+      - name: Maximize build space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+
+          echo "=== Cleaning up disk space ==="
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+
+          echo "=== Disk space after cleanup ==="
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          cp .npmrc benchmarks/server/.npmrc
+
+          echo "=== .npmrc contents ==="
+          cat .npmrc
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg build-essential cmake unzip curl
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g bare-dev
+          npm install -g bare bare-make
+
+      - name: Clone custom model repository
+        if: github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Cloning custom model from: ${{ github.event.inputs.custom_model_repo }}"
+          git clone ${{ github.event.inputs.custom_model_repo }} /tmp/custom-model
+          ls -lah /tmp/custom-model
+
+      - name: Install conversion requirements
+        if: github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          pip install -r benchmarks/ci/requirements-conversion.txt
+
+      - name: Convert custom model to GGML format
+        if: github.event.inputs.custom_model_repo != ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Converting custom model to GGML format..."
+
+          WHISPER_PATH=$(python -c "import whisper; import os; print(os.path.dirname(whisper.__file__))")
+          WHISPER_PARENT=$(dirname "$WHISPER_PATH")
+          echo "Using whisper package at: $WHISPER_PARENT"
+
+          python benchmarks/ci/convert-hf-to-ggml.py /tmp/custom-model "$WHISPER_PARENT" /tmp/custom-model-ggml
+
+          GGML_FILE=$(find /tmp/custom-model-ggml -name "ggml-model.bin" -type f | head -n 1)
+
+          if [ -z "$GGML_FILE" ]; then
+            echo "Error: ggml-model.bin not found in /tmp/custom-model-ggml"
+            ls -lah /tmp/custom-model-ggml
+            exit 1
+          fi
+
+          mkdir -p examples
+          CUSTOM_MODEL_NAME="custom-$(basename ${{ github.event.inputs.custom_model_repo }})-${{ matrix.model_variant }}.bin"
+          cp "$GGML_FILE" "examples/$CUSTOM_MODEL_NAME"
+          echo "CUSTOM_MODEL_FILE=$CUSTOM_MODEL_NAME" >> $GITHUB_ENV
+
+          echo "Custom model converted and saved to: examples/$CUSTOM_MODEL_NAME"
+          ls -lh "examples/$CUSTOM_MODEL_NAME"
+
+      - name: Download Arabic Common Voice dataset from S3
+        if: github.event.inputs.language == 'arabic'
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
+
+          # Default to arabic_validated_all if not specified
+          if [ -z "$ARABIC_DATASET" ]; then
+            ARABIC_DATASET="arabic_validated_all"
+          fi
+
+          echo "=== Downloading Arabic Common Voice dataset from S3 ==="
+          echo "Selected dataset: $ARABIC_DATASET"
+
+          # Create directory structure
+          mkdir -p "benchmarks/data/samples/${ARABIC_DATASET}"
+
+          # Download from S3
+          S3_PATH="s3://tether-ai-dev/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
+          echo "Downloading from ${S3_PATH}"
+          aws s3 sync \
+            "${S3_PATH}" \
+            "benchmarks/data/samples/${ARABIC_DATASET}/" \
+            --quiet
+
+          # Verify download
+          if [ ! -f "benchmarks/data/samples/${ARABIC_DATASET}/manifest.json" ]; then
+            echo "Error: manifest.json not found after S3 download"
+            exit 1
+          fi
+
+          echo "=== Download complete ==="
+          echo "Files downloaded:"
+          ls -lh "benchmarks/data/samples/${ARABIC_DATASET}/" | head -20
+
+          # Count samples (try both .wav and .mp3 extensions)
+          WAV_COUNT=$(ls -1 "benchmarks/data/samples/${ARABIC_DATASET}"/*.wav 2>/dev/null | wc -l)
+          MP3_COUNT=$(ls -1 "benchmarks/data/samples/${ARABIC_DATASET}"/*.mp3 2>/dev/null | wc -l)
+          SAMPLE_COUNT=$((WAV_COUNT + MP3_COUNT))
+          echo "Total audio files: $SAMPLE_COUNT (.wav: $WAV_COUNT, .mp3: $MP3_COUNT)"
+
+          # Show manifest info
+          echo ""
+          echo "=== Manifest info ==="
+          python3 -c "
+          import json
+          with open('benchmarks/data/samples/${ARABIC_DATASET}/manifest.json', 'r') as f:
+              manifest = json.load(f)
+
+          # Handle both manifest formats
+          if 'samples' in manifest:
+              total = len(manifest['samples'])
+          elif 'dialects' in manifest:
+              total = sum(len(samples) for samples in manifest['dialects'].values())
+          else:
+              total = 0
+
+          print(f'Total samples in manifest: {total}')
+          print(f'Language: {manifest.get(\"language\", \"unknown\")}')
+
+          # Print dialect info if available
+          if 'dialect' in manifest:
+              print(f'Dialect: {manifest.get(\"dialect\", \"unknown\")}')
+
+          print(f'Version: {manifest.get(\"version\", \"unknown\")}')
+          "
+
+          # Export for use in later steps
+          echo "ARABIC_DATASET=${ARABIC_DATASET}" >> $GITHUB_ENV
+
+      - name: Download Whisper model (${{ matrix.model_file }})
+        if: github.event.inputs.custom_model_repo == ''
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          cd examples
+          if [ ! -f "${{ matrix.model_file }}" ]; then
+            echo "Downloading ${{ matrix.model_file }} from ${{ matrix.source }}..."
+            if [ "${{ matrix.source }}" = "futo" ]; then
+              MODEL_URL="${{ matrix.download_url }}"
+            else
+              MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${{ matrix.model_file }}"
+            fi
+            wget "$MODEL_URL" -O "${{ matrix.model_file }}"
+          else
+            echo "${{ matrix.model_file }} already exists"
+          fi
+          ls -lh ${{ matrix.model_file }}
+
+      - name: Update config with runner paths
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_FILE="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_FILE="${{ matrix.model_file }}"
+          fi
+
+          RUNNER_MODEL_PATH="${GITHUB_WORKSPACE}/${WORKDIR}/examples/${MODEL_FILE}"
+          DATASET_TYPE="${{ github.event.inputs.dataset_type }}"
+          DATASET_LANGUAGE="${{ github.event.inputs.language }}"
+          MODEL_SIZE="${{ github.event.inputs.model_size }}"
+          STREAMING_MODE="${{ github.event.inputs.streaming_mode }}"
+          STREAMING_CHUNK_SIZE="${{ github.event.inputs.streaming_chunk_size }}"
+          INPUT_MAX_SAMPLES="${{ github.event.inputs.max_samples }}"
+
+          # Use arabic_cv config for Arabic language
+          if [ "$DATASET_LANGUAGE" = "arabic" ]; then
+            # Use dataset-specific config if available, otherwise default
+            ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
+            if [ -z "$ARABIC_DATASET" ]; then
+              ARABIC_DATASET="arabic_validated_all"
+            fi
+
+            if [ "$ARABIC_DATASET" = "arabic_levantine" ]; then
+              CONFIG_FILE="config.arabic_levantine_cv.yaml"
+              echo "Using Arabic Levantine configuration: $CONFIG_FILE"
+            elif [ "$ARABIC_DATASET" = "arabic_egyptian" ]; then
+              CONFIG_FILE="config.arabic_egyptian_cv.yaml"
+              echo "Using Arabic Egyptian configuration: $CONFIG_FILE"
+            else
+              CONFIG_FILE="config.arabic_cv.yaml"
+              echo "Using Arabic Common Voice configuration: $CONFIG_FILE"
+            fi
+          else
+            CONFIG_FILE="config.yaml"
+            echo "Using standard configuration: $CONFIG_FILE"
+          fi
+          echo "CONFIG_FILE=$CONFIG_FILE" >> $GITHUB_ENV
+
+          # Set max samples based on input or model size to prevent timeouts
+          if [ "$INPUT_MAX_SAMPLES" != "-1" ]; then
+            MAX_SAMPLES="$INPUT_MAX_SAMPLES"
+            echo "Using user-specified max_samples: $MAX_SAMPLES"
+          else
+            case "$MODEL_SIZE" in
+              tiny) MAX_SAMPLES=0 ;;
+              base) MAX_SAMPLES=0 ;;
+              small) MAX_SAMPLES=1000 ;;
+              medium) MAX_SAMPLES=100 ;;
+              *) MAX_SAMPLES=0 ;;
+            esac
+            echo "Using default max_samples for $MODEL_SIZE: $MAX_SAMPLES"
+          fi
+
+          # Set timeout based on model size
+          case "$MODEL_SIZE" in
+            tiny) TIMEOUT=40 ;;
+            base) TIMEOUT=100 ;;
+            small) TIMEOUT=200 ;;
+            medium) TIMEOUT=1000 ;;
+            *) TIMEOUT=40 ;;
+          esac
+
+          # Double timeout for streaming mode
+          if [ "$STREAMING_MODE" = "true" ]; then
+            TIMEOUT=$((TIMEOUT * 2))
+          fi
+
+          # Map dataset language to whisper language code
+          case "$DATASET_LANGUAGE" in
+            english) WHISPER_LANG="" ;;
+            french) WHISPER_LANG="fr" ;;
+            german) WHISPER_LANG="de" ;;
+            spanish) WHISPER_LANG="es" ;;
+            italian) WHISPER_LANG="it" ;;
+            portuguese) WHISPER_LANG="pt" ;;
+            mandarin_chinese) WHISPER_LANG="zh" ;;
+            arabic) WHISPER_LANG="ar" ;;
+            russian) WHISPER_LANG="ru" ;;
+            japanese) WHISPER_LANG="ja" ;;
+            czech) WHISPER_LANG="cs" ;;
+            *) WHISPER_LANG="" ;;
+          esac
+
+          # Override with model-specific language if it's English-only
+          if [ "${{ matrix.language }}" = "en" ]; then
+            WHISPER_LANG="en"
+          fi
+
+          CONFIG_PATH="benchmarks/client/config/${CONFIG_FILE}"
+
+          # Update config file with runtime values
+          sed -i "s|timeout:.*|timeout: ${TIMEOUT}|" "$CONFIG_PATH"
+          sed -i "s|path:.*|path: \"${RUNNER_MODEL_PATH}\"|" "$CONFIG_PATH"
+          sed -i "s|speaker_group:.*|speaker_group: \"clean\"|" "$CONFIG_PATH"
+
+          # For Arabic Common Voice, we use common_voice dataset type
+          if [ "$DATASET_LANGUAGE" = "arabic" ]; then
+            # Update manifest path to absolute path using selected dataset
+            ARABIC_DATASET="${{ github.event.inputs.arabic_dataset }}"
+            if [ -z "$ARABIC_DATASET" ]; then
+              ARABIC_DATASET="arabic_validated_all"
+            fi
+            MANIFEST_PATH="${GITHUB_WORKSPACE}/${WORKDIR}/benchmarks/data/samples/${ARABIC_DATASET}/manifest.json"
+            sed -i "s|common_voice_manifest:.*|common_voice_manifest: \"${MANIFEST_PATH}\"|" "$CONFIG_PATH"
+            echo "Updated Common Voice manifest path to: ${MANIFEST_PATH}"
+          else
+            sed -i "/^dataset:/,/^[^ ]/ s|  dataset_type:.*|  dataset_type: \"${DATASET_TYPE}\"|" "$CONFIG_PATH"
+          fi
+
+          sed -i "/^dataset:/,/^[^ ]/ s|  language:.*|  language: \"${DATASET_LANGUAGE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  language:.*|  language: \"${WHISPER_LANG}\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  vad:.*|  vad: false|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  vad_model_path:.*|  vad_model_path: \"\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
+
+          echo "=== Updated ${CONFIG_FILE} ==="
+          cat "$CONFIG_PATH"
+
+      - name: Install benchmark server dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: npm install
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        run: poetry install --no-cache
+
+      - name: Start benchmark server
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Server started successfully"
+
+      - name: Run benchmark
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          echo "Running benchmark with config: ${CONFIG_FILE}"
+          poetry run python -u -m src.whisper.main --config config/${CONFIG_FILE}
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop benchmark server
+        if: always()
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
+
+      - name: Display server logs
+        if: always()
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
+        run: |
+          if [ -f server.log ]; then
+            echo "=== Server Logs ==="
+            cat server.log
+          fi
+
+      - name: Display results summary
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_NAME="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_NAME="${{ matrix.model_file }}"
+          fi
+          MODEL_NAME="${MODEL_NAME%.bin}"
+
+          # Use common_voice for Arabic, otherwise use input dataset type
+          if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
+            DATASET_TYPE="common_voice"
+          else
+            DATASET_TYPE="${{ github.event.inputs.dataset_type }}"
+          fi
+
+          DATASET_LANG="${{ github.event.inputs.language }}"
+          VAD_SUFFIX="no_vad"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ github.event.inputs.vad_enabled }}" = "true" ]; then
+            VAD_SUFFIX="vad"
+          fi
+
+          if [ "${{ github.event.inputs.streaming_mode }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_NAME}-${VAD_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "=== Benchmark Configuration ==="
+          echo "Model Variant: ${{ matrix.model_variant }}"
+          echo "Quantization: ${{ matrix.quantization }}"
+          echo "Model Language: ${{ matrix.language }}"
+          echo "Dataset Language: ${{ github.event.inputs.language }}"
+          echo "Source: ${{ matrix.source }}"
+          echo "Model File: ${{ matrix.model_file }}"
+          echo "Streaming Mode: ${{ github.event.inputs.streaming_mode }}"
+          echo "Streaming Chunk Size: ${{ github.event.inputs.streaming_chunk_size }} bytes"
+          echo "Max Samples: ${MAX_SAMPLES} (0 = unlimited)"
+          echo ""
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "=== Results from $RESULT_FILE ==="
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "Samples evaluated: $SAMPLES"
+            echo "WER: $WER"
+            echo "CER: $CER"
+
+            # Check for AraDiaWER metrics (Arabic only)
+            if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
+              ARADIAWER=$(grep "AraDiaWER:" "$RESULT_FILE" | head -1 | sed 's/.*AraDiaWER: //' | sed 's/\*\*//' || echo "N/A")
+              if [ "$ARADIAWER" != "N/A" ]; then
+                echo "AraDiaWER: $ARADIAWER"
+              fi
+            fi
+
+            echo "Load time: $LOAD_TIME"
+            echo "Run time: $RUN_TIME"
+          else
+            echo "❌ Results file not found: $RESULT_FILE"
+          fi
+
+      - name: Add results to job summary
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+            MODEL_NAME="${CUSTOM_MODEL_FILE}"
+          else
+            MODEL_NAME="${{ matrix.model_file }}"
+          fi
+          MODEL_NAME="${MODEL_NAME%.bin}"
+
+          # Use common_voice for Arabic, otherwise use input dataset type
+          if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
+            DATASET_TYPE="common_voice"
+          else
+            DATASET_TYPE="${{ github.event.inputs.dataset_type }}"
+          fi
+
+          DATASET_LANG="${{ github.event.inputs.language }}"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ github.event.inputs.streaming_mode }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_NAME}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_NAME}-no_vad-${STREAMING_SUFFIX}.md"
+
+          echo "### ${{ matrix.model_variant }} (${STREAMING_SUFFIX})" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$RESULT_FILE" ]; then
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            if [ -n "${{ github.event.inputs.custom_model_repo }}" ]; then
+              echo "| Custom Model | ${{ github.event.inputs.custom_model_repo }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "| Language | ${DATASET_LANG} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Dataset | ${DATASET_TYPE} (clean) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Samples | ${SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Mode | ${STREAMING_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
+            echo "| WER | ${WER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| CER | ${CER} |" >> $GITHUB_STEP_SUMMARY
+
+            # Add AraDiaWER metrics for Arabic
+            if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
+              ARADIAWER=$(grep "Ara

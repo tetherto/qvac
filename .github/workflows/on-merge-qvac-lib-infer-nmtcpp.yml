@@ -1,0 +1,52 @@
+name: On Merge to Main (Qvac-lib-infer-nmtcpp)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-infer-nmtcpp/**"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  prebuild-main:
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag }}
+      publish_target: "gpr"
+
+  model-conversion-test:
+    needs: [prebuild-main]
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+
+  run-integration-tests:
+    needs: [prebuild-main]
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+
+  prebuild-release:
+    if: startsWith(github.ref_name, 'release-')
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag }}
+      publish_target: "npm"

@@ -1,0 +1,191 @@
+name: C++ Tests with Coverage (QVAC Lib Infer NMTCpp)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+
+env:
+  WORKDIR: packages/qvac-lib-infer-nmtcpp
+
+jobs:
+  cpp-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: ${{ env.WORKDIR }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.ref }}
+          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install system dependencies
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - name: Install Vulkan SDK
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt update
+          sudo apt install -y vulkan-sdk
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          NPMRC
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Install NPM dependencies
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ env.WORKDIR }}/.npmrc
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Configure vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download models from S3
+        run: |
+          echo "Creating models directory..."
+          mkdir -p models/unit-test
+          echo "Downloading models from S3..."
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
+          aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
+          aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
+          echo "Verifying downloaded models..."
+          ls -lh models/unit-test/
+          du -sh models/unit-test/*
+
+      - name: Create config.cmake to disable Bergamot for tests
+        run: |
+          # Disable Bergamot for C++ tests because TranslationModel.cpp includes
+          # bergamot function calls that can't be linked without bergamot-translator,
+          # but linking bergamot-translator causes header conflicts with gtest.
+          echo "set(USE_BERGAMOT OFF CACHE BOOL \"Disable Bergamot for tests\" FORCE)" > config.cmake
+          cat config.cmake
+
+      - name: Build C++ tests with coverage
+        run: npm run coverage:cpp:build
+
+      - name: Run C++ tests
+        id: cpp-tests
+        run: |
+          if [ ! -f "build/addon/tests/addon-test" ]; then
+            echo "ERROR: Test executable not found at build/addon/tests/addon-test"
+            exit 1
+          fi
+
+          cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml
+
+          # Verify that tests were actually executed
+          if [ -f cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+            if [ "$test_count" -eq 0 ]; then
+              echo "ERROR: No tests were executed! Test count: $test_count"
+              exit 1
+            fi
+            echo "✓ Successfully executed $test_count test(s)"
+          else
+            echo "ERROR: Test results file not generated"
+            exit 1
+          fi
+
+      - name: Generate Coverage Report
+        if: always()
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+
+      - name: Archive Coverage Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-html/
+            ${{ env.WORKDIR }}/build/addon/tests/lcov.info
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Comment Coverage on PR
+        if: github.event_name == 'pull_request_target' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt';
+            if (fs.existsSync(path)) {
+              const coverage = fs.readFileSync(path, 'utf8');
+              const body = `## 🧪 C++ Test Coverage Report
+
+              **Coverage:** ${process.env.LINE_COVERAGE_PERCENTAGE}
+
+              <details>
+              <summary>📊 Detailed Coverage</summary>
+
+              \`\`\`
+              ${coverage}
+              \`\`\`
+
+              </details>`;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+      - name: Coverage Summary
+        if: always()
+        run: |
+          echo "## 🎯 C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/addon/tests/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/addon/tests/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi

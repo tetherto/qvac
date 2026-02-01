@@ -1,0 +1,38 @@
+# Changelog
+
+## [1.0.0] - 2025-12-15
+
+Refactored from complex templated Addon and JsInterface classes to a simpler architecture using `std::any` and output handlers. The use of `std::any` is better aligned with the already dynamic handling of JavaScript types. Refer to [docs/usage.md](docs/usage.md) for updated usage and examples.
+
+### Breaking 
+- Templated and overridden Addon and JsInterface no longer supported
+
+### Changes
+- Eliminated complex state handling 
+- Simplified job execution with single JobRunner (no priority queue)
+- Eliminated templated Addon and JsInterface
+- Eliminated coupling of js-related code with C++ core
+- `AddonCpp` and `AddonJs` are composed of several components instead of having all implementation in one file
+- Model's `process(std::any)` receives input directly (no input handlers)
+- JobRunner releases lock during `model->process()` to allow cancellation
+
+### Added 
+- Extensible output handlers
+- C++ Addon tests 
+- C++ Handlers tests
+
+### Kept
+- Multiple parallel instances: Needed to use several addons at once
+- Job cancellation: Important feature required by some Addon implementations
+
+### Benefits
+- **Modular Architecture**: Components are now separated into smaller, focused modules
+- **Extensibility**: New output handlers can be added without modifying core classes
+- **Separation of Concerns**: JavaScript-specific code is decoupled from C++ core
+- **Type Flexibility**: Use of `std::any` aligns better with JavaScript's dynamic typing
+- **Simplified Testing**: Pure C++ addons can be tested directly without JavaScript bindings
+- **Reduced Complexity**: Single job runner is easier to reason about
+
+### Trade-offs
+- **Runtime Type Checking**: Using `std::any` means type checking happens at runtime
+- **Single Job Execution**: No priority scheduling (application manages job ordering if needed)

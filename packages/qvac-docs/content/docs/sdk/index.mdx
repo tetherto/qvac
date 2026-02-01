@@ -1,0 +1,110 @@
+---
+title: SDK
+description: Use the JS/TS SDK to build local and P2P AI applications and systems.
+---
+
+## Overview
+
+Install the npm package `@qvac/sdk` in your project. Then, load models and use them to perform AI inference locally, or delegate inference to peers using the built-in P2P capability.
+
+## Releases
+
+- [Latest version: v0.5.0](https://www.npmjs.com/package/@qvac/sdk)
+- [Release notes for this version](/sdk/release-notes/v0-5)
+
+## Description
+
+The JS SDK is cross-platform, type-safe, and exposes all QVAC capabilities through a unified interface.
+
+### Key features
+
+- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
+- **Cross-platform:** consistent behavior across platforms and JS runtime environments — write code once, run it everywhere.
+- **Type-safe:** typed JS API.
+
+## Quickstart
+
+<Card href="/sdk/quickstart" title="Run your first example using the JS SDK">
+  At the end, you’ll find instructions for running all examples in this documentation.
+</Card>
+
+## Installation
+
+<Card href="/sdk/install" title="Install and run on Node.js, Bare, or Expo">
+  Supported environments and how to install the SDK for each one.
+</Card>
+
+## Functionalities
+
+### AI tasks
+
+{/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
+{/* <task>: <tech process> for <use case>, via <engine> */}
+
+* [**Completion:**](/sdk/completion) LLM inference for text generation and chat via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
+* [**Text embeddings:**](/sdk/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `llama.cpp`.
+* [**Translation:**](/sdk/translation) text-to-text neural machine translation (NMT), via [Marian](https://marian-nmt.github.io) and [Bergamot](https://browser.mt).
+* [**Transcription:**](/sdk/transcription) automatic speech recognition (ASR) for speech-to-text via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp).
+* [**Text-to-Speech:**](/sdk/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+* [**OCR:**](/sdk/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
+* [**Multimodal:**](/sdk/multimodal) LLM inference over text, images, and other media within a single conversation context.
+* [**RAG:**](/sdk/rag) out-of-the-box retrieval-augmented generation workflow.
+
+### Utilities
+
+* [**Delegated inference:**](/sdk/delegated-inference) perform peer-to-peer inference delegation via [Holepunch stack](https://holepunch.to), enabling resource sharing.
+* [**Logging:**](/sdk/logging) visibility into what's happening  during loading, inference, and other operations.
+* [**Blind relays:**](/sdk/blind-relays) establish peer connections through NAT/firewalls by routing traffic via relay nodes.
+* [**Download Lifecycle:**](/sdk/download-lifecycle) pause and resume model downloads.
+* [**Sharded models:**](/sdk/sharded-models) download a model that is sharded into multiple parts.
+
+## Flow
+
+Before you can use a model, you need to load it from some location into memory. Flow for performing AI inference:
+
+1. Initialize the SDK and load one model by calling function [`loadModel()`](/sdk/api/latest/loadModel). You can load multiple models simultaneously calling `loadModel()` again.
+2. Perform AI tasks by calling the appropriate functions from SDK API — e.g., `completion()`.
+3. When you are done with a model, call [`unloadModel()`](/sdk/api/latest/unloadModel) to release computer resources.
+4. Finally, close the SDK instance by calling [`close()`](/sdk/api/latest/close).
+
+## Models
+
+Each [AI task](#ai-tasks) works with different model families, and among the supported ones, you can choose which to use and how to obtain them. `loadModel()` manages the download and caching of models (one or multiple files), and their loading from disk into memory, preparing them for use.
+
+`loadModel()` supports loading models from three different locations:
+* Local filesystem, by providing a path.
+* HTTP server, by providing an HTTP URL.
+* [Hyperdrive (P2P filesystem)](https://docs.pears.com/building-blocks/hyperdrive), by providing a Hyperdrive key.
+
+The SDK package does not ship with built-in models, **but** its API exposes constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already seeded on Hyperdrive. When calling `loadModel()`, you can provide one of these constants instead of a location, making model retrieval transparent.
+
+<Card href="https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts" title="Hyperdrive model index">
+  See the index of available models seeded on Hyperdrive.
+</Card>
+
+For more on loading models, see [`loadModel()` at `@qvac/sdk` API reference](/sdk/api/latest/loadModel).
+
+## Configuration
+
+<Card href="/sdk/configuration" title="qvac.config.*">
+  Use `qvac.config.*` to configure the SDK's overall behavior.
+</Card>
+
+## API
+
+<Card href="/sdk/api/latest" title="API reference (latest)">
+  `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+</Card>
+
+## How it works
+
+<Card href="/sdk/how-it-works" title="How it works">
+  Understand what happens under the hood when you use QVAC SDK in your application
+</Card>
+
+## Other resources
+
+- [SDK landing page and FAQ](https://qvac.tether.dev/products/sdk/)
+- [Current known issues](/sdk/release-notes/v0-5/#known-issues)
+- [Source code at GitHub](https://github.com/tetherto/qvac-sdk)
+- [Package at npm](https://www.npmjs.com/package/@qvac/sdk)

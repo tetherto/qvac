@@ -1,0 +1,85 @@
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "documents",
+      "namespace": "rag",
+      "id": 0,
+      "type": 1,
+      "indexes": [
+        "@rag/doc-by-content-hash"
+      ],
+      "schema": "@rag/documents",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "vectors",
+      "namespace": "rag",
+      "id": 1,
+      "type": 1,
+      "indexes": [],
+      "schema": "@rag/vectors",
+      "derived": false,
+      "key": [
+        "docId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "centroids",
+      "namespace": "rag",
+      "id": 2,
+      "type": 1,
+      "indexes": [],
+      "schema": "@rag/centroids",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "ivfBuckets",
+      "namespace": "rag",
+      "id": 3,
+      "type": 1,
+      "indexes": [],
+      "schema": "@rag/ivfBuckets",
+      "derived": false,
+      "key": [
+        "centroidId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "doc-by-content-hash",
+      "namespace": "rag",
+      "id": 4,
+      "type": 2,
+      "collection": "@rag/documents",
+      "unique": false,
+      "deprecated": false,
+      "key": [
+        "contentHash"
+      ]
+    },
+    {
+      "name": "config",
+      "namespace": "rag",
+      "id": 5,
+      "type": 1,
+      "indexes": [],
+      "schema": "@rag/config",
+      "derived": false,
+      "key": [
+        "key"
+      ],
+      "trigger": null
+    }
+  ]
+}

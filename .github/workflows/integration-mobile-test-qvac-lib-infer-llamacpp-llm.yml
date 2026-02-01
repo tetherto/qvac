@@ -1,0 +1,604 @@
+name: Run Mobile Integration Tests (Qvac-lib-infer-llamacpp-llm)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-llm"
+      package:
+        description: "Full NPM package spec to test (optional for workflow_call)"
+        type: string
+        required: false
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package:
+        description: "Full NPM package spec to test (default: @qvac/llm-llamacpp@latest)"
+        type: string
+        required: true
+        default: '@qvac/llm-llamacpp@latest'
+      workdir:
+        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-llm)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-llamacpp-llm"
+
+env:
+  NODE_VERSION: 'lts/*'
+  ADDON_NAME: '@qvac/llm-llamacpp'
+  PREBUILD_ARTIFACT_PREFIX: 'llama-cpp-'
+  TEST_FRAMEWORK_REF: 'main'
+  APP_BUNDLE_ID: 'io.tether.test.qvac'
+
+jobs:
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: ai-run-linux
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    env:
+      ADDON_REPO_DIR: addon
+      ADDON_WORKDIR: addon/${{ inputs.workdir }}
+
+    steps:
+      - name: Free up disk space
+        if: matrix.platform == 'Android'
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Python || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /usr/share/swift || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Checkout addon repository
+        uses: actions/checkout@v4
+        with:
+          path: addon
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Checkout mobile test framework
+        uses: actions/checkout@v4
+        with:
+          repository: tetherto/qvac-test-addon-mobile
+          token: ${{ secrets.PAT_TOKEN }}
+          path: test-framework
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure scoped registry for @qvac and @tetherto packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Configuring scoped registry..."
+
+          # addon repo root
+          cat > "${GITHUB_WORKSPACE}/${ADDON_REPO_DIR}/.npmrc" <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # addon package workdir (critical for 'run under inputs.workdir')
+          mkdir -p "${GITHUB_WORKSPACE}/${ADDON_WORKDIR}"
+          cat > "${GITHUB_WORKSPACE}/${ADDON_WORKDIR}/.npmrc" <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # test-framework
+          cat > "${GITHUB_WORKSPACE}/test-framework/.npmrc" <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+
+      - name: Install global dependencies
+        run: |
+          echo "Installing global dependencies..."
+          npm install -g @expo/cli@latest
+
+      - name: Download Android prebuilds (from artifacts)
+        if: matrix.platform == 'Android' && !inputs.package
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download iOS prebuilds (from artifacts)
+        if: matrix.platform == 'iOS' && !inputs.package
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download prebuilds from package
+        if: inputs.package
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_SPEC="${{ inputs.package }}"
+          echo "📦 Downloading $PACKAGE_SPEC from npm..."
+
+          PACKAGE_NAME="${PACKAGE_SPEC%@*}"
+
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
+            echo "Check that the package exists on npm: $PACKAGE_NAME"
+            exit 1
+          fi
+
+          tar -xzf *.tgz
+
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            exit 1
+          fi
+
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+
+          echo "✅ Prebuilds downloaded from npm:"
+          ls -la prebuilds/
+
+      - name: Verify and prepare prebuilds
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking for prebuilds..."
+          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds 2>/dev/null || true)" ]; then
+            echo "✅ Prebuilds found:"
+            ls -la prebuilds/
+          else
+            echo "❌ ERROR: No prebuilds found!"
+            echo "This workflow requires prebuilds to be available."
+            exit 1
+          fi
+
+          if npm run mobile:copy-prebuilds 2>/dev/null; then
+            echo "✅ Mobile prebuilds prepared"
+          else
+            echo "⚠️  mobile:copy-prebuilds script not available or failed"
+          fi
+
+      - name: Remove desktop prebuilds to save disk space
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        shell: bash
+        run: |
+          echo "Removing desktop prebuilds to save disk space (keeping Android + iOS)..."
+          echo "Before cleanup:"
+          du -sh prebuilds/* 2>/dev/null || true
+
+          rm -rf prebuilds/darwin-* prebuilds/win32-* prebuilds/linux-* 2>/dev/null || true
+
+          echo "After cleanup (Android + iOS only):"
+          du -sh prebuilds/* 2>/dev/null || true
+          df -h
+
+      - name: Verify test files exist
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Verifying addon has mobile tests..."
+
+          if [ ! -d "test/mobile" ]; then
+            echo "❌ ERROR: test/mobile directory not found!"
+            exit 1
+          fi
+
+          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l | tr -d ' ')
+          if [ "$CJS_COUNT" -eq 0 ]; then
+            echo "❌ ERROR: No .cjs test files found in test/mobile!"
+            exit 1
+          fi
+
+          echo "✅ Mobile test files found:"
+          ls -la test/mobile/*.cjs
+
+          if [ -d "test/mobile/testAssets" ]; then
+            echo "✅ Test assets found:"
+            ls -lah test/mobile/testAssets/
+          else
+            echo "ℹ️  No testAssets directory (optional)"
+          fi
+
+      - name: Install Ninja build tool
+        if: matrix.platform == 'iOS'
+        run: |
+          brew install ninja
+          ninja --version
+
+      - name: Install addon dependencies
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        run: |
+          echo "Installing addon dependencies..."
+          npm install
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        run: npm run test:mobile:validate
+
+      - name: Pack addon
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Packing addon..."
+          if npm run build:pack 2>/dev/null; then
+            echo "✅ Addon packed using build:pack script"
+          else
+            echo "📦 Using npm pack directly..."
+            mkdir -p dist
+            npm pack --pack-destination dist
+          fi
+
+          PACK_FILE=$(ls dist/*.tgz 2>/dev/null | head -1 || true)
+          if [ -f "$PACK_FILE" ]; then
+            SIZE=$(du -h "$PACK_FILE" | cut -f1)
+            echo "✅ Pack file created: $PACK_FILE (Size: $SIZE)"
+          else
+            echo "❌ Pack file not found in dist/"
+            exit 1
+          fi
+
+      - name: Setup test framework dependencies
+        working-directory: ./test-framework
+        run: |
+          npm install
+          echo "✅ Test framework dependencies installed"
+
+      - name: Build test app with addon
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDON_PATH="${GITHUB_WORKSPACE}/${ADDON_WORKDIR}"
+          echo "Building test app with addon at: $ADDON_PATH"
+          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+
+          test -f "backend/backend.cjs" || (echo "❌ missing backend/backend.cjs" && exit 1)
+          test -f "e2e/tests/app.test.js" || (echo "❌ missing e2e/tests/app.test.js" && exit 1)
+          test -f "backend/app.bundle" || (echo "❌ missing backend/app.bundle" && exit 1)
+
+      - name: Display build summary
+        if: always()
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 BUILD SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Platform: ${{ matrix.platform }}"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Package: ${{ inputs.package }}"
+          else
+            echo "Addon: ${{ env.ADDON_NAME }} (from PR artifacts)"
+          fi
+          echo ""
+          echo "Generated Files:"
+          echo "  backend/backend.cjs: $([ -f backend/backend.cjs ] && echo '✅' || echo '❌')"
+          echo "  backend/app.bundle: $([ -f backend/app.bundle ] && echo '✅' || echo '❌')"
+          echo "  app/testConfig.js: $([ -f app/testConfig.js ] && echo '✅' || echo '❌')"
+          echo "  app/assetManifest.js: $([ -f app/assetManifest.js ] && echo '✅' || echo '❌')"
+          echo "  e2e/tests/app.test.js: $([ -f e2e/tests/app.test.js ] && echo '✅' || echo '❌')"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # Android-specific steps (unchanged)
+      - name: Set up JDK 17
+        if: matrix.platform == 'Android'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        if: matrix.platform == 'Android'
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Android project
+        if: matrix.platform == 'Android'
+        working-directory: ./test-framework
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build Android APK
+        if: matrix.platform == 'Android'
+        id: build_apk
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JAVA_HOME=$JAVA_HOME_17_X64
+
+          npm run bundle
+
+          cd android
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            --no-daemon \
+            --no-build-cache \
+            --stacktrace
+          cd ..
+
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | grep "release" | grep -v "unaligned" | head -1 || true)
+          if [ -f "$APK_PATH" ]; then
+            APK_ABSOLUTE_PATH="${GITHUB_WORKSPACE}/test-framework/$APK_PATH"
+            echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
+            echo "app_type=ANDROID_APP" >> $GITHUB_OUTPUT
+            echo "app_name=test-app-${{ matrix.platform }}.apk" >> $GITHUB_OUTPUT
+          else
+            echo "❌ APK file not found"
+            exit 1
+          fi
+
+      # iOS-specific steps (unchanged)
+      - name: Set up Xcode version
+        if: matrix.platform == 'iOS'
+        run: |
+          echo "Current Xcode:"
+          xcodebuild -version
+          if [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.0.app
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          else
+            echo "❌ ERROR: No suitable Xcode version found (need >= 16.1)"
+            exit 1
+          fi
+          xcodebuild -version
+
+      - name: Install CocoaPods
+        if: matrix.platform == 'iOS'
+        run: |
+          sudo gem install cocoapods
+          pod --version
+
+      - name: Create Keychain and Import Certificate
+        if: matrix.platform == 'iOS'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PP_PATH))
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+
+      - name: Verify provisioning profile
+        if: matrix.platform == 'iOS'
+        run: |
+          PP_FILE=~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+          test -f "$PP_FILE" || (echo "❌ profile missing" && exit 1)
+          security cms -D -i "$PP_FILE" > /tmp/profile.plist
+
+          PROFILE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          HAS_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" /tmp/profile.plist 2>/dev/null && echo "yes" || echo "no")
+          PROVISIONS_ALL=$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" /tmp/profile.plist 2>/dev/null || echo "false")
+          HAS_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /tmp/profile.plist 2>/dev/null || echo "false")
+
+          if [[ "$PROVISIONS_ALL" == "true" ]]; then
+            EXPORT_METHOD="enterprise"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "true" ]]; then
+            EXPORT_METHOD="development"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "false" ]]; then
+            EXPORT_METHOD="ad-hoc"
+          else
+            EXPORT_METHOD="app-store"
+          fi
+          echo "EXPORT_METHOD=$EXPORT_METHOD" >> $GITHUB_ENV
+
+          BUNDLE_ID_ONLY=$(echo "$PROFILE_BUNDLE_ID" | sed 's/^[^.]*\.//')
+          if [[ "$BUNDLE_ID_ONLY" != "${{ env.APP_BUNDLE_ID }}" ]]; then
+            echo "❌ bundle id mismatch: $BUNDLE_ID_ONLY vs ${{ env.APP_BUNDLE_ID }}"
+            exit 1
+          fi
+
+      - name: Generate iOS project
+        if: matrix.platform == 'iOS'
+        working-directory: ./test-framework
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install iOS dependencies
+        if: matrix.platform == 'iOS'
+        working-directory: ./test-framework/ios
+        run: pod install --repo-update
+
+      - name: Build and Archive iOS App
+        if: matrix.platform == 'iOS'
+        id: build_ios
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run bundle
+          cd ios
+          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+          xcodebuild -workspace $SCHEME_NAME.xcworkspace \
+            -scheme "$SCHEME_NAME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            clean archive
+
+      - name: Export IPA
+        if: matrix.platform == 'iOS'
+        id: export_ipa
+        working-directory: ./test-framework/ios
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+
+          EXPORT_OPTS_PATH=$RUNNER_TEMP/ExportOptions.plist
+          cat > $EXPORT_OPTS_PATH << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>$EXPORT_METHOD</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ env.APP_BUNDLE_ID }}</key>
+              <string>$PP_UUID</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+            -exportOptionsPlist $EXPORT_OPTS_PATH \
+            -exportPath $RUNNER_TEMP/build
+
+          IPA_FILE=$(find $RUNNER_TEMP/build -name "*.ipa" | head -1 || true)
+          test -f "$IPA_FILE" || (echo "❌ IPA missing" && exit 1)
+          echo "apk_path=$IPA_FILE" >> $GITHUB_OUTPUT
+          echo "app_type=IOS_APP" >> $GITHUB_OUTPUT
+          echo "app_name=test-app-${{ matrix.platform }}.ipa" >> $GITHUB_OUTPUT
+
+      # Everything below here stays the same (Device Farm upload, testspec creation, scheduling, monitor, PR comment)
+      # NOTE: no addon paths are assumed below this point.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Upload App to Device Farm
+        id: upload_app
+        run: |
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            APP_PATH="${{ steps.build_apk.outputs.apk_path }}"
+            APP_TYPE="${{ steps.build_apk.outputs.app_type }}"
+            APP_NAME="${{ steps.build_apk.outputs.app_name }}"
+          else
+            APP_PATH="${{ steps.export_ipa.outputs.apk_path }}"
+            APP_TYPE="${{ steps.export_ipa.outputs.app_type }}"
+            APP_NAME="${{ steps.export_ipa.outputs.app_name }}"
+          fi
+
+          UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --name "$APP_NAME" \
+            --type "$APP_TYPE" \
+            --output json)
+
+          APP_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
+          APP_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
+          echo "app_upload_arn=$APP_UPLOAD_ARN" >> $GITHUB_OUTPUT
+
+          curl -T "$APP_PATH" "$APP_UPLOAD_URL"
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
+            echo "Status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+            if [ "$STATUS" = "SUCCEEDED" ]; then break; fi
+            if [ "$STATUS" = "FAILED" ]; then aws devicefarm get-upload --arn "$APP_UPLOAD_ARN"; exit 1; fi
+            sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+      # ... keep the rest of your steps exactly as-is ...

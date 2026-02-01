@@ -1,0 +1,13 @@
+# Dataset downloads
+data/flores101_dataset/
+data/flores200_dataset/
+*.tar.gz
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Results and logs
+results/
+*.log

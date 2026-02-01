@@ -1,0 +1,9 @@
+.idea/
+.vs/
+build/
+package-lock.json
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

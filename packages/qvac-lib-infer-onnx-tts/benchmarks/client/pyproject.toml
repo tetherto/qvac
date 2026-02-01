@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "qvac-tts-onnx-benchmark-client"
+version = "0.1.0"
+description = "Benchmark client for TTS ONNX addon vs Python native"
+authors = ["Tether"]
+license = "Apache-2.0"
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pyyaml = ">=6.0"
+pydantic = ">=2.0"
+httpx = ">=0.24.0"
+datasets = ">=2.14.0"
+numpy = ">=1.26.0"
+faster-whisper = ">=1.0.0"
+jiwer = ">=3.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+

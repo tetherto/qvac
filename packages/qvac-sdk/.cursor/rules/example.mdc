@@ -1,0 +1,14 @@
+---
+globs: examples/**/*.ts
+description: Rules for example files
+alwaysApply: false
+---
+- All example files should have consistent error handling using try-catch blocks with process.exit(0) on success and process.exit(1) on error
+- Use top-level await with try-catch instead of async function wrappers
+- Error messages should use: `console.error("❌ Error:", error)`
+- Examples can use plain `Error` objects (they're user-facing demos, not SDK code)
+- All example files which load models should have an unloadModel call to unload the model when done
+- Exception for continuously running services (providers, seeders, microphone recording):
+  - Use `process.stdin.resume()` to keep running
+  - Include SIGINT handler for graceful shutdown: `process.on("SIGINT", () => { console.log("\n🛑 Service stopped"); process.exit(0); })`
+  

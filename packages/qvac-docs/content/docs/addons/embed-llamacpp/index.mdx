@@ -1,0 +1,242 @@
+---
+title: "@qvac/embed-llamacpp"
+titleStyle: code
+description: Vector embedding generation for semantic search, clustering, and retrieval that seamlessly supports retrieval-augmented generation workflow.
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text embeddings and RAG in QVAC using [`llama.cpp`](https://github.com/ggml-org/llama.cpp) as the inference engine.
+
+## Models
+
+You can load any `llama.cpp`-compatible embeddings model. Model file format: `*.gguf`.
+
+## Requirement
+
+Bare $\geq$ v1.24
+
+## Installation
+
+```bash
+npm i @qvac/embed-llamacpp
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+```bash
+mkdir qvac-embed-quickstart
+cd qvac-embed-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+```bash
+npm i corestore @qvac/dl-hyperdrive @qvac/embed-llamacpp bare-process
+```
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+```js title="index.js"
+'use strict'
+
+const Corestore = require('corestore')
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+const GGMLBert = require('@qvac/embed-llamacpp')
+const process = require('bare-process')
+
+async function main () {
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
+
+  // 1. Initializing data loader
+  const store = new Corestore('./store')
+  const hdStore = store.namespace('hd')
+
+  const hdKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
+  const hdDL = new HyperDriveDL({
+    key: `hd://${hdKey}`,
+    store: hdStore
+  })
+
+  // 2. Configuring model settings
+  const args = {
+    loader: hdDL,
+    logger: console,
+    opts: { stats: true },
+    diskPath: './models',
+    modelName: 'gte-large_fp16.gguf'
+  }
+  const config = '-ngl\t25'
+
+  // 3. Loading model
+  await hdDL.ready()
+  const model = new GGMLBert(args, config)
+  const closeLoader = true
+  let totalProgress = 0
+  const reportProgressCallback = (report) => {
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+      )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
+    }
+  }
+  await model.load(closeLoader, reportProgressCallback)
+
+  try {
+    // 4. Generating embeddings
+    const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+    const response = await model.run(query)
+    const embeddings = await response.await()
+
+    console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
+    console.log('First few values of first embedding:')
+    console.log(embeddings[0].slice(0, 5))
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
+  } finally {
+    // 5. Cleaning up resources
+    await model.unload()
+    await hdDL.close()
+    await store.close()
+  }
+}
+
+main().catch(console.error)
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+</Step>
+
+<Step>
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Other Examples
+
+- [Batch Inference](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
+- [FileSystem](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+- [Native Logging](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/nativeLog.js) – Demonstrates C++ addon logging integration.
+- [Sharded Loading](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/shardedLoading.js) – Demonstrates loading sharded model files.
+-  Check the [`examples` directory](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main/examples/) for more usage examples.
+
+## Usage
+
+### 1. Import the Model Class
+
+```js
+const GGMLBert = require('@qvac/embed-llamacpp')
+```
+
+### 2. Create a Data Loader
+
+Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](https://github.com/tetherto/qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+
+```js
+const store = new Corestore('./store')
+const hdStore = store.namespace('hd')
+
+const hdDL = new HyperDriveDL({
+  key: 'hd://d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e',
+  store: hdStore
+})
+```
+
+### 3. Create the `args` obj
+
+```js
+const args = {
+  loader: hdDL,
+  logger: console,
+  opts: { stats: true },
+  diskPath: './models',
+  modelName: 'gte-large_fp16.gguf'
+}
+```
+
+The `args` obj contains the following properties:
+
+* `loader`: The Data Loader instance from which the model file will be streamed.
+* `logger`: This property is used to create a [`QvacLogger`](https://github.com/tetherto/qvac-lib-logging) instance, which handles all logging functionality. 
+* `opts.stats`: This flag determines whether to calculate inference stats.
+* `diskPath`: The local directory where the model file will be downloaded to.
+* `modelName`: The name of model file in the Data Loader.
+
+### 4. Create `config`
+
+```js
+const config = '-ngl\t25'
+```
+
+### 5. Instanstiate the model
+
+```js
+const model = new GGMLBert(args, config)
+```
+
+### 6. Load the model
+
+```js
+await model.load()
+```
+
+_Optionally_ you can pass the following parameters to tweak the loading behaviour.
+* `close?`: This boolean value determines whether to close the Data Loader after loading. Defaults to `true`
+* `reportProgressCallback?`: A callback function which gets called periodically with progress updates. It can be used to display overall progress percentage.
+
+_For example:_
+
+```js
+await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
+```
+
+### 7. Generate embeddings for input sequence
+
+The model outputs a sequence of vectors, one for each token in the input sequence.
+
+```js
+const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+const response = await model.run(query)
+const embeddings = await response.await()
+```
+
+### 8. Unload the model
+
+Unloads the model after inference, to free up resources.
+
+```js
+await model.unload()
+```
+
+## More resources
+
+- [Source code at GitHub](https://github.com/tetherto/qvac-lib-infer-llamacpp-embed)
+- [Package at npm](https://www.npmjs.com/package/@qvac/embed-llamacpp)

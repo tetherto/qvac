@@ -1,0 +1,102 @@
+---
+title: "completion( )"
+titleStyle: code
+description: Generates completion from a language model based on conversation history.
+---
+
+```ts
+function completion(params): object;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The completion parameters |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the model to use for completion |
+| history | `object[]` | ✓ | Array of conversation messages with role, content, and optional attachments |
+| stream | `boolean` | ✗ | Whether to stream tokens (true) or return complete response (false). Defaults to true |
+| tools | `Tool[] \| ToolInput[]` | ✗ | Optional array of tools (can be simple ToolInput with Zod schemas or full Tool objects) |
+| mcp | `McpClientInput[]` | ✗ | Optional array of MCP client inputs for tool integration |
+| kvCache | `boolean \| string` | ✗ | Optional KV cache configuration (`true`, `"custom-key"`, `false`) |
+
+## Returns
+
+`object` — Object with tokenStream generator, toolCallStream generator, text promise, toolCalls promise (with invoke method), and stats promise
+
+| Field | Type | Description |
+| --- | --- | --- |
+| text | `Promise<string>` | Complete generated text |
+| tokenStream | `AsyncGenerator<string>` | Stream of tokens |
+| toolCalls | `Promise<ToolCallWithCall[]>` | Tool calls made during completion (may include `invoke()` when handler is available) |
+| toolCallStream | `AsyncGenerator<ToolCallEvent>` | Stream of tool call events |
+| stats | `Promise<CompletionStats \| undefined>` | Performance statistics |
+
+### stats object
+
+| Field | Type | Description |
+| --- | --- | --- |
+| cacheTokens | `number` | Number of cached tokens |
+| timeToFirstToken | `number` | Time to first token in ms |
+| tokensPerSecond | `number` | Tokens per second |
+
+### toolCallStream events
+
+**Tool call event:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| type | `"toolCall"` | Event type |
+| call.id | `string` | Call identifier |
+| call.name | `string` | Tool name |
+| call.arguments | `Record<string, unknown>` | Tool arguments |
+| call.raw | `string` | Raw call text (optional) |
+
+**Tool call error event:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| type | `"toolCallError"` | Event type |
+| error.code | `"PARSE_ERROR" \| "VALIDATION_ERROR" \| "UNKNOWN_TOOL"` | Error code |
+| error.message | `string` | Error message |
+| error.raw | `string` | Raw text (optional) |
+
+## Example
+
+```typescript
+import { z } from "zod";
+
+const result = completion({
+  modelId: "llama-2",
+  history: [
+    { role: "user", content: "What's the weather in Tokyo?" }
+  ],
+  stream: true,
+  tools: [{
+    name: "get_weather",
+    description: "Get current weather",
+    parameters: z.object({
+      city: z.string().describe("City name"),
+    }),
+    handler: async (args) => {
+      return { temperature: 22, condition: "sunny" };
+    }
+  }]
+});
+
+for await (const token of result.tokenStream) {
+  process.stdout.write(token);
+}
+
+for (const toolCall of await result.toolCalls) {
+  if (toolCall.invoke) {
+    const toolResult = await toolCall.invoke();
+    console.log(toolResult);
+  }
+}
+```

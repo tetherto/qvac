@@ -1,0 +1,420 @@
+---
+description: Model Cache Management APIs
+alwaysApply: false
+---
+
+# Model Cache Management API
+
+## Overview
+
+The SDK provides APIs to query and manage the model cache:
+- Check if models are cached on disk
+- Check if models are loaded in memory
+- Get model metadata and status
+- Download models explicitly
+- Manage model lifecycle (load/unload)
+
+## getModelInfo API
+
+Returns comprehensive model status including cache state, loaded instances, and complete metadata.
+
+### Parameters
+
+```typescript
+{
+  name: string; // Unique model name from catalog (e.g., "WHISPER_TINY")
+}
+```
+
+### Response
+
+```typescript
+{
+  // Metadata from catalog
+  name: string;
+  modelId: string;
+  hyperdriveKey: string;
+  hyperbeeKey: string;
+  expectedSize: number;
+  sha256Checksum: string;
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+
+  // Cache status
+  isCached: boolean;
+  cacheFiles: Array<{
+    filename: string;
+    path: string;
+    expectedSize: number;
+    sha256Checksum: string;
+    isCached: boolean;
+    actualSize?: number;
+    cachedAt?: Date;
+  }>;
+  actualSize?: number;
+  cachedAt?: Date;
+
+  // Loaded status
+  isLoaded: boolean;
+  loadedInstances?: Array<{
+    registryId: string;
+    loadedAt: Date;
+    config?: unknown;
+  }>;
+}
+```
+
+**Note:** `cacheFiles` is always an array:
+- **Single-file models**: Array with 1 element containing the model file
+- **Sharded models**: Array with multiple elements (one per shard file)
+- Each element tracks its own cache status, size, and path
+
+### Matching Logic
+
+When identifying loaded instances, `getModelInfo` uses a two-tier matching strategy:
+
+1. **Name matching** (preferred) - If registry entry has a `name`, compare with requested name
+2. **Path matching** (fallback) - If no name match, compare with first cache file path
+
+This ensures accurate identification when models are loaded using object-based constants.
+
+**Implementation:**
+
+```typescript
+// server/rpc/handlers/get-model-info.ts
+const loadedInstances: LoadedInstance[] = [];
+for (const id of loadedModelIds) {
+  const entry = getModelEntry(id);
+  if (!entry?.local) continue;
+
+  // Match by name if available (more specific), otherwise fall back to path
+  const matchesByName = entry.local.name && entry.local.name === name;
+  const matchesByPath = cacheFiles.length > 0 && entry.local.path === cacheFiles[0]?.path;
+
+  if (matchesByName || matchesByPath) {
+    loadedInstances.push({
+      registryId: id,
+      loadedAt: entry.local.loadedAt,
+      config: entry.local.config,
+    });
+  }
+}
+```
+
+### Usage Example
+
+```typescript
+import { WHISPER_TINY, LLAMA_3_2_1B_INST_Q4_0_SHARD } from "qvac-sdk";
+import { getModelInfo } from "qvac-sdk";
+
+// Single-file model
+const info = await getModelInfo(WHISPER_TINY);
+console.log("Model:", info.name);
+console.log("Is cached:", info.isCached);
+console.log("Cache files:", info.cacheFiles.length); // 1 for single-file models
+console.log("Path:", info.cacheFiles[0]?.path);
+
+// Sharded model
+const shardedInfo = await getModelInfo({ name: "LLAMA_3_2_1B_INST_Q4_0_SHARD" });
+console.log("Cache files:", shardedInfo.cacheFiles.length); // Multiple for sharded models
+for (const file of shardedInfo.cacheFiles) {
+  console.log(`${file.filename}: ${file.isCached ? "✅" : "❌"} - ${file.path}`);
+}
+
+// Check if all files are cached
+if (info.isCached) {
+  console.log("Total size:", info.actualSize);
+  console.log("Latest cached at:", info.cachedAt);
+}
+
+// Check loaded instances
+if (info.isLoaded) {
+  console.log("Loaded instances:", info.loadedInstances?.length);
+  info.loadedInstances?.forEach((instance) => {
+    console.log("  Registry ID:", instance.registryId);
+    console.log("  Loaded at:", instance.loadedAt);
+  });
+}
+```
+
+## downloadAsset API
+
+Explicitly download a model to cache without loading it into memory.
+
+### Parameters
+
+```typescript
+{
+  assetSrc: string | ModelConstant; // Model source (string or object)
+  onProgress?: (progress: ModelProgressUpdate) => void;
+}
+```
+
+### Response
+
+```typescript
+{
+  type: "downloadAsset";
+  assetId: string;
+  cachePath: string;
+}
+```
+
+### Usage Example
+
+```typescript
+import { WHISPER_TINY } from "@/models/hyperdrive";
+import { downloadAsset } from "qvac-sdk";
+
+// Download with progress tracking
+await downloadAsset({
+  assetSrc: WHISPER_TINY,
+  onProgress: (progress) => {
+    console.log(`Progress: ${progress.progress}%`);
+    console.log(`Downloaded: ${progress.loaded} / ${progress.total} bytes`);
+  },
+});
+
+console.log("✅ Model downloaded to cache");
+```
+
+## loadModel API
+
+Load a model into memory. Will download if not cached.
+
+### Parameters
+
+```typescript
+{
+  modelSrc: string | ModelConstant;
+  modelType: "llm" | "whisper" | "embeddings" | "nmt" | "tts";
+  // ... additional model-specific config
+}
+```
+
+### Response
+
+```typescript
+string; // Registry ID for the loaded model
+```
+
+### Usage Example
+
+```typescript
+import { WHISPER_TINY } from "@/models/hyperdrive";
+import { loadModel } from "qvac-sdk";
+
+// Load model (downloads if not cached)
+const modelId = await loadModel({
+  modelSrc: WHISPER_TINY,
+  modelType: "whisper",
+});
+
+console.log("Model loaded with ID:", modelId);
+```
+
+## unloadModel API
+
+Unload a model from memory.
+
+### Parameters
+
+```typescript
+{
+  modelId: string; // Registry ID from loadModel
+}
+```
+
+### Response
+
+```typescript
+{
+  type: "unloadModel";
+  success: boolean;
+}
+```
+
+### Usage Example
+
+```typescript
+import { unloadModel } from "qvac-sdk";
+
+await unloadModel({ modelId });
+console.log("✅ Model unloaded from memory");
+```
+
+## Complete Workflow Example
+
+```typescript
+import { WHISPER_TINY } from "@/models/hyperdrive";
+import { 
+  getModelInfo, 
+  downloadAsset, 
+  loadModel, 
+  unloadModel 
+} from "qvac-sdk";
+
+try {
+  // 1. Check initial status
+  console.log("1️⃣  Checking model status...");
+  const initialInfo = await getModelInfo(WHISPER_TINY);
+  console.log("Is cached:", initialInfo.isCached);
+  console.log("Is loaded:", initialInfo.isLoaded);
+
+  // 2. Download if not cached
+  if (!initialInfo.isCached) {
+    console.log("\n2️⃣  Downloading model...");
+    await downloadAsset({ 
+      assetSrc: WHISPER_TINY,
+      onProgress: (p) => console.log(`  ${p.progress}% complete`)
+    });
+    console.log("✅ Download complete");
+  } else {
+    console.log("\n2️⃣  Model already cached");
+  }
+
+  // 3. Load if not loaded
+  let modelId: string;
+  const beforeLoad = await getModelInfo(WHISPER_TINY);
+  
+  if (!beforeLoad.isLoaded) {
+    console.log("\n3️⃣  Loading model into memory...");
+    modelId = await loadModel({
+      modelSrc: WHISPER_TINY,
+      modelType: "whisper",
+    });
+    console.log("✅ Model loaded:", modelId);
+  } else {
+    console.log("\n3️⃣  Model already loaded");
+    // Use existing loaded instance
+    modelId = beforeLoad.loadedInstances![0].registryId;
+  }
+
+  // 4. Use model for inference...
+  console.log("\n4️⃣  Using model...");
+  // (your inference code here)
+
+  // 5. Unload when done
+  console.log("\n5️⃣  Unloading model...");
+  await unloadModel({ modelId });
+  console.log("✅ Model unloaded");
+
+  // 6. Verify final status
+  const finalInfo = await getModelInfo(WHISPER_TINY);
+  console.log("\n6️⃣  Final status:");
+  console.log("Is cached:", finalInfo.isCached); // true (still on disk)
+  console.log("Is loaded:", finalInfo.isLoaded); // false (removed from memory)
+
+  process.exit(0);
+} catch (error) {
+  console.error("❌ Error:", error);
+  process.exit(1);
+}
+```
+
+## Cache Directory Structure
+
+Models are cached in the configured cache directory (default: `~/.qvac/models/`):
+
+```
+~/.qvac/models/
+  ├── a1b2c3d_model.bin         # Cached model file
+  ├── e4f5g6h_whisper-tiny.bin  # Another cached model
+  └── ...
+```
+
+**File naming:** `{shortHash}_{modelId}`
+- `shortHash` - Short hash of the hyperdrive key + model ID
+- `modelId` - Original model filename
+
+## Cache States
+
+A model can be in one of four states:
+
+| State | `isCached` | `isLoaded` | Description |
+|-------|------------|------------|-------------|
+| **Not Downloaded** | `false` | `false` | Model not on disk, not in memory |
+| **Cached** | `true` | `false` | Model on disk, not in memory |
+| **Loaded** | `true` | `true` | Model on disk and in memory |
+| **Memory Only** | `false` | `true` | Model in memory (loaded from non-cache source)* |
+
+*\*Rare case when model is loaded from a source that doesn't use the cache directory*
+
+## Cache Management Best Practices
+
+### 1. Check Before Download
+
+```typescript
+const info = await getModelInfo(WHISPER_TINY);
+if (!info.isCached) {
+  await downloadAsset({ assetSrc: WHISPER_TINY });
+}
+```
+
+### 2. Reuse Loaded Instances
+
+```typescript
+const info = await getModelInfo(WHISPER_TINY);
+let modelId: string;
+
+if (info.isLoaded) {
+  // Reuse existing instance
+  modelId = info.loadedInstances![0].registryId;
+} else {
+  // Load new instance
+  modelId = await loadModel({ modelSrc: WHISPER_TINY, modelType: "whisper" });
+}
+```
+
+### 3. Unload When Done
+
+```typescript
+try {
+  const modelId = await loadModel({ modelSrc: WHISPER_TINY, modelType: "whisper" });
+  
+  // Use model...
+  
+} finally {
+  // Always unload to free memory
+  await unloadModel({ modelId });
+}
+```
+
+### 4. Pre-download Models
+
+```typescript
+// Download models during app initialization
+const modelsToPreload = [WHISPER_TINY, LLAMA_3_2_1B, EMBEDDINGS_NOMIC];
+
+await Promise.all(
+  modelsToPreload.map(model => 
+    downloadAsset({ assetSrc: model })
+  )
+);
+
+console.log("✅ All models pre-downloaded");
+```
+
+## Error Handling
+
+```typescript
+import { WHISPER_TINY } from "@/models/hyperdrive";
+import { getModelInfo } from "qvac-sdk";
+
+try {
+  const info = await getModelInfo(WHISPER_TINY);
+  console.log(info);
+} catch (error) {
+  if (error instanceof Error) {
+    if (error.message.includes("not found in catalog")) {
+      console.error("Model not in catalog");
+    } else {
+      console.error("API error:", error.message);
+    }
+  }
+}
+```
+
+## See Also
+
+- [Model Constants and Sources](./model-constants-and-sources.mdc) - Object-based model constants
+- [Config Persistence](./config-persistence.mdc) - Config persistence across worker restarts

@@ -1,0 +1,33 @@
+---
+title: "ragSearch( )"
+titleStyle: code
+description: Searches for similar documents in the RAG vector database.
+---
+
+```ts
+function ragSearch(params): Promise<object[]>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The parameters for searching |
+
+### params
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| modelId | `string` | ✓ | - | The identifier of the embedding model to use |
+| query | `string` | ✓ | - | The search query text |
+| topK | `number` | ✗ | `5` | Number of top results to retrieve |
+| n | `number` | ✗ | `3` | Number of centroids to use for IVF index search |
+| workspace | `string` | ✗ | - | Optional workspace for isolated storage |
+
+## Returns
+
+`Promise<object[]>` — Array of search results with id, content, and score
+
+## Throws
+
+When the response type is invalid or when the operation fails

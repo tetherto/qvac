@@ -1,0 +1,5 @@
+server:
+  url: "http://localhost:8080/run"
+  batch_size: 5
+  lib: "@tetherto/qvac-lib-inference-addon-onnx-silerovad"
+  version: "0.4.4"

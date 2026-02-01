@@ -1,0 +1,42 @@
+{
+  "name": "@qvac/tts-onnx-benchmark-server",
+  "version": "0.1.0",
+  "description": "Benchmark server for TTS ONNX addon",
+  "main": "index.js",
+  "scripts": {
+    "setup": "bare setup.js",
+    "start": "bare index.js",
+    "lint": "standard",
+    "lint:fix": "standard --fix"
+  },
+  "keywords": [
+    "tts",
+    "benchmark",
+    "onnx"
+  ],
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0",
+    "@qvac/tts-onnx": "../../",
+    "bare-buffer": "^3.4.2",
+    "bare-fs": "^4.1.5",
+    "bare-http1": "^4.0.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.1",
+    "bare-stream": "^2.6.5",
+    "bare-subprocess": "^5.2.1",
+    "bare-url": "^2.1.6",
+    "buffer": "npm:bare-buffer",
+    "fs": "npm:bare-fs",
+    "path": "npm:bare-path",
+    "process": "npm:bare-process",
+    "stream": "npm:bare-stream",
+    "url": "npm:bare-url",
+    "yaml": "^2.3.4",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "standard": "^17.1.2"
+  }
+}

@@ -1,0 +1,72 @@
+---
+title: "ocr( )"
+titleStyle: code
+description: Performs Optical Character Recognition (OCR) on an image to extract text.
+---
+
+```ts
+function ocr(params): object;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The OCR parameters |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| modelId | `string` | ✓ | The identifier of the loaded OCR model to use |
+| image | `string \| Buffer` | ✓ | Image input as either a file path (string) or image buffer |
+| options | `object` | ✗ | Optional OCR options (e.g., paragraph mode) |
+| stream | `boolean` | ✗ | Whether to stream blocks as they're detected (true) or return all at once (false). Defaults to false |
+
+### options
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| paragraph | `boolean` | ✗ | Enable paragraph mode |
+
+## Returns
+
+`object` — Object with blockStream generator, blocks promise, and stats promise
+
+| Field | Type | Description |
+| --- | --- | --- |
+| blockStream | `AsyncGenerator<OCRTextBlock[]>` | Stream of OCR blocks (only yields in streaming mode) |
+| blocks | `Promise<OCRTextBlock[]>` | All OCR blocks (non-streaming mode) |
+| stats | `Promise<OCRStats \| undefined>` | OCR timing statistics |
+
+### OCRTextBlock
+
+| Field | Type | Description |
+| --- | --- | --- |
+| text | `string` | Extracted text |
+| bbox | `[number, number, number, number]` | Bounding box (optional) |
+| confidence | `number` | Confidence score (optional) |
+
+### OCRStats
+
+| Field | Type | Description |
+| --- | --- | --- |
+| detectionTime | `number` | Detector time (optional) |
+| recognitionTime | `number` | Recognizer time (optional) |
+| totalTime | `number` | Total time (optional) |
+
+## Example
+
+```typescript
+// Non-streaming mode (default) - get all blocks at once
+const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
+for (const block of await blocks) {
+  console.log(block.text, block.bbox, block.confidence);
+}
+
+// Streaming mode - process blocks as they arrive
+const { blockStream } = ocr({ modelId, image: imageBuffer, stream: true });
+for await (const blocks of blockStream) {
+  console.log("Detected:", blocks);
+}
+```

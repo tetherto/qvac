@@ -1,0 +1,2813 @@
+[
+  {
+    "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "small",
+      "whisper",
+      "silero"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "large",
+      "whisper",
+      "silero"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-silero",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny",
+      "whisper",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny",
+      "whisper",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base",
+      "whisper",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base",
+      "whisper",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "small",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "small",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "small",
+      "whisper",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v5.1.2.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "VAD model for Whisper",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-silero",
+      "whisper"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Multimodal 4B model, good for tool calls",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen3"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/blob/fa17ea2647ef236db91adfe1465a61ab6562cf2c/medgemma-4b-it-Q4_1.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Finetuned for medicine 4B model, good for tool calls",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/fa17ea2647ef236db91adfe1465a61ab6562cf2c/medgemma-4b-it-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Finetuned for medicine 4B model, good for tool calls",
+    "quantization": "q8_0",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/blob/b69aef112e9f895e6f98d7ae0949f72ff09aa401/Llama-3.2-1B-Instruct-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama-ggml"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ChristianAzinn/gte-large-gguf/blob/f9fa5479908e72c2a8b9d6ba112911cd1e51be53/gte-large_fp16.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large-gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF/blob/75f1b73b657a50f5092502799457ccb4a4a1f9df/Qwen2.5-Omni-3B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Multimodal for text, image, and audio",
+    "quantization": "",
+    "params": "3B",
+    "license": "Qwen",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen2.5-omni"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF/blob/75f1b73b657a50f5092502799457ccb4a4a1f9df/mmproj-Qwen2.5-Omni-3B-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "",
+    "params": "3B",
+    "license": "Qwen",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen2.5-omni"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision-language model for video understanding",
+    "quantization": "q8_0",
+    "params": "500M",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "smolvlm2",
+      "video-instruct"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "500M",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "smolvlm2",
+      "video-instruct"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00002-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00003-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00004-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00005-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00001-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00002-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00003-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00004-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00005-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q8_1",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "it",
+      "medgemma",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "fp16",
+    "params": "335M",
+    "license": "MIT",
+    "tags": [
+      "embedding",
+      "bert",
+      "gte-large",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 1/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 2/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 3/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00004-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 4/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00005-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 5/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00006-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 6/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00007-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 7/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "shard 8/8"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "Llama-3.2",
+    "tags": [
+      "generation",
+      "instruct",
+      "llama",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00001-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00002-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00003-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00004-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00005-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4",
+    "params": "4B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00001-of-00003.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 1/3"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00002-of-00003.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 2/3"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00003-of-00003.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 3/3"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4.tensors.txt",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00001-of-00004.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 1/4"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00002-of-00004.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 2/4"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00003-of-00004.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 3/4"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00004-of-00004.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "shard 4/4"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8.tensors.txt",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q8",
+    "params": "2B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "salamandrata",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00001-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00002-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00003-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00004-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00005-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "q4",
+    "params": "1.7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "300M",
+    "license": "Apache-2.0",
+    "tags": [
+      "embedding",
+      "embed",
+      "embeddinggemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "300M",
+    "license": "Apache-2.0",
+    "tags": [
+      "embedding",
+      "embed",
+      "embeddinggemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "BF16",
+    "params": "300M",
+    "license": "Apache-2.0",
+    "tags": [
+      "embedding",
+      "embed",
+      "embeddinggemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-F32.gguf",
+    "engine": "@qvac/embed-llamacpp",
+    "description": "",
+    "quantization": "F32",
+    "params": "300M",
+    "license": "Apache-2.0",
+    "tags": [
+      "embedding",
+      "embed",
+      "embeddinggemma"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/448afcb8afc647d0c565071222fb8b0c7f9860b4/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "MoE model with DPO training",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "laser-dolphin",
+      "mixtral"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-en-indic-1B/2025-09-09/ggml-indictrans2-en-indic-1B-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "en-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-en-indic-dist-200M/2025-09-09/ggml-indictrans2-en-indic-dist-200M-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "200M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "en-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-en-1B/2025-09-09/ggml-indictrans2-indic-en-1B-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-en-dist-200M/2025-09-09/ggml-indictrans2-indic-en-dist-200M-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "200M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-indic-1B/2025-09-09/ggml-indictrans2-indic-indic-1B-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-indic-dist-320M/2025-09-09/ggml-indictrans2-indic-indic-dist-320M-q0f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "320M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2025-09-09/ggml-indictrans2-en-indic-1B-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "en-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2025-09-09/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "200M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "en-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2025-09-09/ggml-indictrans2-indic-en-1B-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2025-09-09/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "200M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2025-09-09/ggml-indictrans2-indic-indic-1B-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "1B",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2025-09-09/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "320M",
+    "license": "MIT",
+    "tags": [
+      "translation",
+      "full",
+      "ggml-indictrans",
+      "hi-hi"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Norman voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-norman",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-norman",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Lessac voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-lessac",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-lessac",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-low",
+      "piper-amy",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-low",
+      "piper-amy",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Amy voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-amy",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-amy",
+      "en_us"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Sharvard voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-sharvard",
+      "es_es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-sharvard",
+      "es_es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Davefx voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-davefx",
+      "es_es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-davefx",
+      "es_es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Thorsten voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-thorsten",
+      "de_de"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-thorsten",
+      "de_de"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Paola voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-paola",
+      "it_it"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-paola",
+      "it_it"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Irina voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-irina",
+      "ru_ru"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-irina",
+      "ru_ru"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx",
+    "engine": "@qvac/tts",
+    "description": "Gilles voice (low quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-low",
+      "piper-gilles",
+      "fr_fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-low",
+      "piper-gilles",
+      "fr_fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-tugao",
+      "pt_pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-tugao",
+      "pt_pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx",
+    "engine": "@qvac/tts",
+    "description": "Cadu voice (medium quality)",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-cadu",
+      "pt_br"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx.json",
+    "engine": "@qvac/tts",
+    "description": "",
+    "quantization": "fp32",
+    "params": "20M",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "onnx-medium",
+      "piper-cadu",
+      "pt_br"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "shard 1/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00002-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "shard 2/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00003-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "shard 3/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00004-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "shard 4/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00005-of-00005.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "shard 5/5"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K.tensors.txt",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Required for Llamacpp to create the model layers before the weights are loaded",
+    "quantization": "Q2_K",
+    "params": "2x7B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "moe",
+      "dolphin-mixtral",
+      "shard"
+    ],
+    "notes": "tensors config"
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-ru/2025-11-09/ggml-opus-en-ru.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-ru"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "ru-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-ru"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "ru-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-f16.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "500M",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "smolvlm2",
+      "video-instruct"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
+    "engine": "@qvac/translation-llamacpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "500M",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "smolvlm2",
+      "video-instruct"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "q4",
+    "params": "600M",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "instruct",
+      "qwen3"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "Fine-tuned for Norwegian",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-norwegian",
+      "norwegian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "With acoustic fine-tuning",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "ggml",
+      "whisper-futo"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "With acoustic fine-tuning",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "ggml",
+      "whisper-futo"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-pt/2025-11-07/ggml-opus-mt-en-roa-f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "en-pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "pt-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "en-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "de-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "de-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "es-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "es-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "fr-es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "fr-es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "fr-de"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "fr-de"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q0f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "fr-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus-ggml",
+      "marian",
+      "en-pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/recognizer_english.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "craft",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "CRAFT text detector",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "craft",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-it"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "it-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-de"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "de-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-es"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "es-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-fr"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "fr-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-ar"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "ar-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-zh"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "zh-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "ja-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "en-roa"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
+    "engine": "@qvac/translation-nmtcpp",
+    "description": "",
+    "quantization": "q4_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "translation",
+      "opus",
+      "marian",
+      "roa-en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "Fine-tuned for French",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-french",
+      "french"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-french",
+      "french"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "Fine-tuned for German",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-german",
+      "german"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-german",
+      "german"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-italian",
+      "italian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-italian",
+      "italian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-spanish",
+      "spanish"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-spanish",
+      "spanish"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-portuguese",
+      "portuguese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-portuguese",
+      "portuguese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-french",
+      "french"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-french",
+      "french"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-german",
+      "german"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-german",
+      "german"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-italian",
+      "italian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-italian",
+      "italian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-portuguese",
+      "portuguese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-portuguese",
+      "portuguese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-english",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-english",
+      "english"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-russian",
+      "russian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-russian",
+      "russian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-russian-tiny",
+      "russian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-russian-tiny",
+      "russian"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-japanese",
+      "japanese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "base-ggml",
+      "whisper-japanese",
+      "japanese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-japanese-tiny",
+      "japanese-fleurs"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
+    "engine": "@qvac/transcription-whispercpp",
+    "description": "",
+    "quantization": "q8_0",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "transcription",
+      "tiny-ggml",
+      "whisper-japanese-tiny",
+      "japanese-fleurs"
+    ],
+    "notes": ""
+  }
+]

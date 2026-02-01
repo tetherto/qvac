@@ -1,0 +1,215 @@
+name: Publish (Qvac-lib-registry-server)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-registry-server/shared/**"
+      - "packages/qvac-lib-registry-server/client/**"
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-registry-server
+  NAME_SUFFIX: "-mono"
+
+jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-dl-base
+      package-json-path: packages/qvac-lib-dl-base/package.json
+      changelog-path: packages/qvac-lib-dl-base/CHANGELOG.md
+
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      schema_changed: ${{ steps.filter.outputs.schema }}
+      client_changed: ${{ steps.filter.outputs.client }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect file changes
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+
+          # workflow_dispatch has no "before". Also guard against the all-zero SHA.
+          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+            BEFORE_SHA="$(git rev-parse "${AFTER_SHA}^" 2>/dev/null || true)"
+          fi
+
+          # If we still couldn't resolve BEFORE_SHA (rare), treat as changed to allow manual runs.
+          if [[ -z "${BEFORE_SHA}" ]]; then
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+            echo "client=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- "${PKG_DIR}/shared/" | grep -q .; then
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "schema=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- "${PKG_DIR}/client/" | grep -q .; then
+            echo "client=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "client=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_gpr="false"
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+              publish_gpr="true"
+            fi
+          fi
+
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
+  publish-schema:
+    needs: [detect-changes, publish-logic]
+    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_gpr == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure npm for GitHub Package Registry
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+
+      - name: Publish to GitHub Package Registry
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: ${{ env.PKG_DIR }}/shared
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          name-suffix: ${{ env.NAME_SUFFIX }}
+
+  lint-and-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.client_changed == 'true'
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure npm for package registries
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.PAT_TOKEN }}" >> ~/.npmrc
+
+      - name: Install client dependencies
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm install
+
+      - name: Install bare globally
+        shell: bash
+        run: npm install -g bare
+
+      - name: Lint
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm run lint
+
+      - name: Unit tests (node)
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm run test:unit
+
+      - name: Unit tests (bare)
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm run test:unit:bare
+
+      - name: Validate typings
+        working-directory: ${{ env.PKG_DIR }}/client
+        shell: bash
+        run: npm run typecheck
+
+  publish-client:
+    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    if: |
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      always() &&
+      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
+      needs.lint-and-test.result == 'success' &&
+      needs.publish-logic.outputs.publish_gpr == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure npm for package registries
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Publish to GitHub Package Registry
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: ${{ env.PKG_DIR }}/client
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          name-suffix: ${{ env.NAME_SUFFIX }}

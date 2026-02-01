@@ -1,0 +1,36 @@
+{
+  "name": "@qvac/error",
+  "version": "0.1.1",
+  "description": "Base error handling library for QVAC",
+  "main": "index.js",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "build:types": "tsc",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:dts": "tsc index.d.ts --noEmit",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test": "npm run test:unit && npm run test:dts",
+    "test:coverage": "brittle --coverage test/**/*.test.js",
+    "prepare": "husky || true"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "error",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "brittle": "^3.10.1",
+    "husky": "^9.1.7",
+    "standard": "17.1.0",
+    "typescript": "^5.9.3"
+  },
+  "bugs": "https://github.com/tetherto/qvac-lib-error-base/issues",
+  "files": [
+    "src",
+    "index.d.ts"
+  ],
+  "types": "index.d.ts"
+}

@@ -1,0 +1,35 @@
+server:
+  url: "http://localhost:8080/run"
+  timeout: 90
+  batch_size: 10
+  lib: "@qvac/transcription-whispercpp"
+  version: "0.3.2"
+
+dataset:
+  dataset_type: "common_voice"
+  speaker_group: "clean"  # Not used for Common Voice
+  language: "arabic"
+  max_samples: 0  # 0 = use all samples from manifest
+  # Path to Common Voice manifest.json (relative to benchmarks/client/)
+  common_voice_manifest: "../../data/samples/arabic_test/manifest.json"
+
+wer:
+  enabled: true
+
+cer:
+  enabled: true
+
+aradiawer:
+  enabled: true  # Auto-applied when language is Arabic
+  min_score_threshold: 0.5  # Minimum threshold for semantic/syntactic scores
+
+model:
+  path: "../../examples/models/ggml-tiny.bin"
+  sample_rate: 16000
+  audio_format: "f32le"
+  vad: false
+  vad_model_path: ""
+  language: "ar"  # Arabic language code
+  streaming: false
+  streaming_chunk_size: 64000
+

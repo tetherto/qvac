@@ -1,0 +1,89 @@
+---
+title: Translation
+description: Text-to-text neural machine translation (NMT) — i.e., translate text between different languages.
+---
+
+## Overview
+
+Translation uses your choice of either [`nmt.cpp`](https://github.com/tetherto/qvac-lib-infer-nmtcpp) or [Bergamot](https://browser.mt) as inference engine. Load any supported model using `modelType: "nmt"`, and `modelConfig.engine: "Bergamot"` for Bergamot.
+
+Translation input is defined by:
+- `from: string`: source language id (e.g., "en")
+- `to: string`: target language id
+- `text: string | string[]`: text to be translated
+
+`translate()` returns an object containing `text` and when streaming is enabled, a `tokenStream` for real-time output.
+
+For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac-sdk/blob/dev/schemas/translation-config.ts).
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api/latest/loadModel)
+2. [`translate()`](/sdk/api/latest/translate)
+3. [`unloadModel()`](/sdk/api/latest/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/api/latest/).
+
+## Models
+
+You should load a model compatible with your chosen inference engine:
+- `nmt.cpp` (default): OPUS-MT or IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
+
+For models available as constants, see [Hyperdrive model index](https://github.com/tetherto/qvac-sdk/blob/main/models/hyperdrive/models.ts).
+
+## Example
+
+The following script shows an example of translation:
+
+<WrapCode>
+
+```js file=../dist/examples/translation.js title="translation.js" lineNumbers
+import {
+  loadModel,
+  translate,
+  unloadModel,
+  MARIAN_OPUS_EN_IT_Q0F32,
+} from "@qvac/sdk";
+
+try {
+  const modelId = await loadModel({
+    modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
+    modelType: "nmt",
+    modelConfig: {
+      from: "en",
+      to: "it",
+      temperature: 0.2,
+      norepeatngramsize: 3,
+      lengthpenalty: 1.2,
+    },
+    onProgress: (progress) => {
+      console.log(progress);
+    },
+  });
+
+  console.log(`✅ Model loaded: ${modelId}`);
+
+  const text = "Hello, how are you today?";
+  const result = translate({
+    modelId,
+    text,
+    modelType: "nmt",
+    stream: false,
+  });
+
+  const translatedText = await result.text;
+  console.log(`Translated text EN -> IT: ${text} -> "${translatedText}"`);
+
+  await unloadModel({ modelId });
+} catch (error) {
+  console.error("❌ Error:", error);
+  process.exit(1);
+}
+```
+</WrapCode>
+
+<Callout title="Tip" type="success">
+All examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/quickstart).
+</Callout>

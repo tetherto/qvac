@@ -1,0 +1,97 @@
+{
+  "name": "@qvac/llm-llamacpp",
+  "version": "0.8.7",
+  "description": "llama addon for qvac",
+  "addon": true,
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "standard --ignore \"addon/**\"",
+    "lint:fix": "standard --ignore \"addon/**\" --fix",
+    "quickstart": "node -e \"const fs=require('fs');const path=require('path');const {execSync}=require('child_process');const prebuilds=path.join(process.cwd(),'prebuilds');const source=path.join(process.cwd(),'node_modules','@qvac','llm-llamacpp','prebuilds');if(!fs.existsSync(prebuilds)){if(!fs.existsSync(source)){execSync('npm install @qvac/llm-llamacpp@latest',{stdio:'inherit'});}if(!fs.existsSync(source)){throw new Error('Prebuilds not found after install.');}fs.cpSync(source,prebuilds,{recursive:true});}execSync('bare examples/quickstart.js',{stdio:'inherit'});\"",
+    "update:quickstart-section": "node ./scripts/quickstart-testing/update_readme.js",
+    "test": "npm run test:integration",
+    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test:dts": "tsc -p tsconfig.dts.json",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "cd build/test/unit/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
+    "coverage:cpp:run": "cd build/test/unit/ && LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:summary": "cd build/test/unit && llvm-cov-19 report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
+    "test:all": "npm run test && npm run test:cpp",
+    "benchmarks": "./benchmarks/run-benchmarks.sh",
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
+  },
+  "standard": {
+    "ignore": [
+      "benchmarks/client/venv/"
+    ]
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "addon.js",
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "prebuilds",
+    "index.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-lib-infer-llamacpp-llm.git"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm/issues",
+  "homepage": "https://github.com/tetherto/qvac-lib-infer-llamacpp-llm#readme",
+  "devDependencies": {
+    "@babel/parser": "^7.28.0",
+    "@babel/traverse": "^7.28.0",
+    "@qvac/dl-filesystem": "^0.1.2",
+    "@qvac/dl-hyperdrive": "^0.1.1",
+    "@types/node": "^24.2.1",
+    "bare-buffer": "^3.4.2",
+    "bare-fs": "^4.5.1",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.16.5",
+    "cmake-bare": "1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "corestore": "^7.4.7",
+    "process": "npm:bare-node-process",
+    "standard": "^17.0.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@qvac/infer-base": "^0.2.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2"
+  },
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "peerDependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.1"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js",
+    "./addon.js": "./addon.js",
+    "./binding.js": "./binding.js"
+  },
+  "types": "index.d.ts"
+}

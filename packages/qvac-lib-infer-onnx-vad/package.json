@@ -1,0 +1,64 @@
+{
+  "name": "@tetherto/vad-onnx",
+  "version": "2.0.1",
+  "addon": true,
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "brittle-bare test/unit/*.test.js",
+    "test:integration": "brittle-bare test/integration/*.test.js",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && npx istanbul report html --include=coverage/unit/coverage-final.json",
+    "coverage:integration": "brittle-bare --coverage --cov-dir=coverage/integration test/integration/*.test.js && npx istanbul report html --include=coverage/integration/coverage-final.json",
+    "coverage": "brittle-bare --coverage --cov-dir=coverage/all test/unit/*.test.js test/integration/*.test.js && npx istanbul report html --include=coverage/all/coverage-final.json"
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "silerovad.js",
+    "prebuilds",
+    "index.d.ts",
+    "utils",
+    "prebuilds",
+    "model",
+    "lib"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js"
+  },
+  "repository": {
+    "type": "git"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "silero",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@tetherto/qvac-lib-dl-base": "1.0.2",
+    "bare-fs": "^3.0.2",
+    "bare-path": "^3.0.0",
+    "bare-stream": "^2.3.0",
+    "util": "npm:bare-utils@^1.5.1",
+    "brittle": "^3.16.3",
+    "istanbul": "^0.4.5",
+    "process": "npm:bare-process@^4.2.1",
+    "sinon": "^21.0.0",
+    "cmake-bare": "^1.5.2",
+    "standard": "^17.1.0",
+    "tty": "npm:bare-tty@^5.0.3"
+  },
+  "dependencies": {
+    "@tetherto/qvac-lib-error-base": "1.0.0",
+    "@tetherto/infer-onnx-base": "^2.0.0",
+    "os": "npm:bare-os@^3.6.1",
+    "cmake-vcpkg": "^1.0.2"
+  },
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-onnx-vad/issues",
+  "types": "index.d.ts"
+}

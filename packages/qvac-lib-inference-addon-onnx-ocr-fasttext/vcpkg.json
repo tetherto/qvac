@@ -1,0 +1,49 @@
+{
+  "name": "qvac-lib-inference-addon-onnx-ocr-fasttext",
+  "version": "0.1.13",
+  "dependencies": [
+    "qvac-lib-inference-addon-cpp",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": ["jpeg","png","tiff","webp","quirc" ]
+    },
+    {
+      "name": "onnxruntime",
+      "platform": "!(android | osx | ios | windows)"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["dml-ep"],
+      "platform": "windows"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["nnapi-ep"],
+      "platform": "android"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["coreml-ep"],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    }
+  ],
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

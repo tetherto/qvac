@@ -1,0 +1,56 @@
+name: On Merge - Test & Publish (Qvac-lib-decoder-audio)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-decoder-audio/**"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+
+jobs:
+  run-integration-tests:
+    uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
+    secrets: inherit
+    with:
+      workdir: "packages/qvac-lib-decoder-audio"
+
+  mobile-integration-tests:
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: "packages/qvac-lib-decoder-audio"
+
+  publish-npm:
+    needs: run-integration-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ inputs.tag || 'latest' }}
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: 'true'
+          workdir: "packages/qvac-lib-decoder-audio"
+

@@ -1,0 +1,53 @@
+---
+title: "deleteCache( )"
+titleStyle: code
+description: Deletes KV cache files.
+---
+
+```ts
+function deleteCache(params): Promise<{
+  success: boolean;
+}>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The delete cache parameters |
+
+### params
+
+#### Delete all caches
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| all | `true` | ✓ | Delete all cache files |
+
+#### Delete specific cache
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| kvCacheKey | `string` | ✓ | Cache key to delete |
+| modelId | `string` | ✗ | Optional model ID to delete only that model's cache |
+
+## Returns
+
+`Promise<{ success: boolean }>` — Promise resolving to success status
+
+| Field | Type | Description |
+| --- | --- | --- |
+| success | `boolean` | Whether the operation succeeded |
+
+## Example
+
+```typescript
+// Delete all caches
+await deleteCache({ all: true });
+
+// Delete entire cache key (all models)
+await deleteCache({ kvCacheKey: "my-session" });
+
+// Delete only specific model within cache key
+await deleteCache({ kvCacheKey: "my-session", modelId: "model-abc123" });
+```

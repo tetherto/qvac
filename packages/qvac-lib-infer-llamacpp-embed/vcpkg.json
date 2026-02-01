@@ -1,0 +1,41 @@
+{
+  "dependencies": [
+    {
+      "name": "llama-cpp",
+      "version>=": "7248.1.1#0"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "0.12.2"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build and run unit tests",
+      "dependencies": [
+        {
+          "name": "gtest"
+        }
+      ]
+    },
+    "vk-profiling": {
+      "description": "Force vk performance logging in llama-cpp",
+      "dependencies": [
+        {
+          "name": "llama-cpp",
+          "features": [
+            "force-profiler"
+          ]
+        }
+      ]
+    }
+  }
+}

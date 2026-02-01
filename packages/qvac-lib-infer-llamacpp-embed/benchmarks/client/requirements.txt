@@ -1,0 +1,7 @@
+mteb>=1.38.0
+sentence-transformers>=4.1.0
+huggingface-hub>=0.23.0
+numpy>=1.24.0
+httpx>=0.28.0
+pyyaml>=6.0.0
+tqdm>=4.65.0

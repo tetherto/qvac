@@ -1,0 +1,57 @@
+---
+title: "cancel( )"
+titleStyle: code
+description: Cancels an ongoing operation.
+---
+
+```ts
+function cancel(params): Promise<void>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The parameters for the cancellation |
+
+### params
+
+#### Cancel inference
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| operation | `"inference"` | ✓ | Operation type |
+| modelId | `string` | ✓ | Model identifier |
+
+#### Cancel download
+
+| Field | Type | Required? | Default | Description |
+| --- | --- | :---: | --- | --- |
+| operation | `"downloadAsset"` | ✓ | - | Operation type |
+| downloadKey | `string` | ✓ | - | Download key |
+| clearCache | `boolean` | ✗ | `false` | Whether to delete the partial file |
+
+## Returns
+
+`Promise<void>` — Resolves when the operation is cancelled.
+
+## Throws
+
+When the response type is invalid or when the cancellation fails
+
+## Example
+
+```ts
+// Cancel inference
+await cancel({ operation: "inference", modelId: "model-123" });
+```
+
+```ts
+// Pause download (preserves partial file for automatic resume)
+await cancel({ operation: "download", downloadKey: "download-key" });
+```
+
+```ts
+// Cancel download completely (deletes partial file)
+await cancel({ operation: "download", downloadKey: "download-key", clearCache: true });
+```

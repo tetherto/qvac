@@ -1,0 +1,267 @@
+[
+    {
+        "imagePath": "/test/images/basic_test.bmp",
+        "langList": [
+            "en"
+        ],
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    "tilted",
+                    "normal",
+                    "vertical"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true
+                },
+                "expectedOutput": [
+                    "tilted normal vertical"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/english.bmp",
+        "langList": [
+            "en"
+        ],
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    "Reduce your risk of coronavirus infection:",
+                    "Clean hands with soap and water",
+                    "or alcohol-based hand rub",
+                    "Cover nose and mouth when coughing and",
+                    "sneezing with tissue or flexed elbow",
+                    "Avoid close contact with anyone with",
+                    "cold or flu-like symptoms",
+                    "Thoroughly cook meat and eggs",
+                    "No unprotected contact with live wild",
+                    "farm animals",
+                    "World Health",
+                    "Organization"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true
+                },
+                "expectedOutput": [
+                    "Reduce your risk of coronavirus infection:",
+                    "Clean hands with soap and water or alcohol-based hand rub",
+                    "Cover nose and mouth when coughing and sneezing with tissue or flexed elbow",
+                    "Avoid close contact with anyone with cold or flu-like symptoms",
+                    "Thoroughly cook meat and eggs",
+                    "No unprotected contact with live wild farm animals World Health Organization"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/portuguese.bmp",
+        "langList": [
+            "pt"
+        ],
+        "timeout": 300,
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false,
+                    "boxMarginMultiplier": 0.05
+                },
+                "expectedOutput": [
+                    "então: rotina X",
+                    "resultados X função",
+                    "Situação",
+                    "Função",
+                    "Normal",
+                    "Ocorrência de Anomalia",
+                    "Elimina as anomalias crônicas, atacando",
+                    "Estabelece metas que",
+                    "as causas fundamentais (PDCA);",
+                    "Gerencial",
+                    "garantem a sobrevivência;",
+                    "Verifica as anomalias diariamente,",
+                    "Atinge metas   (PDCA).",
+                    "atuando de forma complementar:",
+                    "Relata as anomalias;",
+                    "Cumpre os procedimentos",
+                    "Operacional",
+                    "Conduz a análise de anomalia, atuando",
+                    "(SDCA) .",
+                    "nas causas imediatas.",
+                    "Fonte: Tabela de Nemoto: Adaptada de Gerenciamento da",
+                    "Rotina do Trabalho do Dia-a-Dia (Vicente Falconi)"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true,
+                    "boxMarginMultiplier": 0.05
+                },
+                "expectedOutput": [
+                    "então: rotina X resultados X função Situação Função Normal Ocorrência de Anomalia",
+                    "Elimina as anomalias crônicas, atacando as causas fundamentais (PDCA); Verifica as anomalias diariamente, atuando de forma complementar:",
+                    "Estabelece metas que garantem a sobrevivência; Atinge metas   (PDCA).",
+                    "Gerencial",
+                    "Relata as anomalias; Conduz a análise de anomalia, atuando nas causas imediatas.",
+                    "Cumpre os procedimentos (SDCA) .",
+                    "Operacional",
+                    "Fonte: Tabela de Nemoto: Adaptada de Gerenciamento da Rotina do Trabalho do Dia-a-Dia (Vicente Falconi)"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/french.bmp",
+        "langList": [
+            "fr"
+        ],
+        "timeout": 300,
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false,
+                    "boxMarginMultiplier": 0.05
+                },
+                "expectedOutput": [
+                    "Mairie du /\"",
+                    "Palais",
+                    "du",
+                    "LOUVRE",
+                    "LES ARTS DÉCORATIFS",
+                    "Musée du LOUVRE",
+                    "Théâtre",
+                    "du PALAIS-RoYAL"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true,
+                    "boxMarginMultiplier": 0.05
+                },
+                "expectedOutput": [
+                    "Mairie du /\"",
+                    "Palais du LOUVRE",
+                    "LES ARTS DÉCORATIFS",
+                    "Musée du LOUVRE",
+                    "Théâtre du PALAIS-RoYAL"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/korean.bmp",
+        "langList": [
+            "ko",
+            "en"
+        ],
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    "서울",
+                    "평 양",
+                    "Seoul",
+                    "Pyeongyang",
+                    "G6Km",
+                    "2O5Km"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true
+                },
+                "expectedOutput": [
+                    "서울 평 양 Seoul Pyeongyang G6Km 2O5Km"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/japanese.bmp",
+        "langList": [
+            "ja",
+            "en"
+        ],
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    "ポイ橋て禁止』",
+                    "NO LTTB",
+                    "清灘できれいな港区を",
+                    "園潜 区",
+                    "RNATo CTV"
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/chinese.bmp",
+        "langList": [
+            "ch_sim",
+            "en"
+        ],
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    "西",
+                    "愚园路",
+                    "东",
+                    "315",
+                    "309",
+                    "I",
+                    "Yuyuan",
+                    "Rd",
+                    "山",
+                    "JH "
+                ]
+            }
+        ]
+    },
+    {
+        "imagePath": "/test/images/thai.bmp",
+        "langList": [
+            "th"
+        ],
+        "timeout": 300,
+        "tests": [
+            {
+                "options": {
+                    "paragraph": false
+                },
+                "expectedOutput": [
+                    ".",
+                    " เส้นทางลัด",
+                    "เพชรบุรี"
+                ]
+            },
+            {
+                "options": {
+                    "paragraph": true
+                },
+                "expectedOutput": [
+                    ".",
+                    " เส้นทางลัด",
+                    "เพชรบุรี"
+                ]
+            }
+        ]
+    }
+]

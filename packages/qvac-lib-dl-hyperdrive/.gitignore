@@ -1,0 +1,10 @@
+node_modules
+
+# test files
+.npmrc
+package-lock.json
+coverage
+.idea
+.npmrc
+test/integration/all.js
+test/unit/all.js

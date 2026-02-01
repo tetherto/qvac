@@ -1,0 +1,26 @@
+# Translation Quality Evaluation Dependencies
+
+# Core evaluation
+sacrebleu>=2.0.0
+click>=8.0.0
+
+# OpusMT translator
+torch>=2.0.0
+transformers>=4.30.0
+sentencepiece>=0.1.99
+
+# NLLB translator
+mtdata>=0.4.0
+
+# Bergamot translator (specify version to avoid wrong package)
+bergamot>=0.4.5
+
+# Google Translate API
+requests>=2.28.0
+
+# COMET metric
+unbabel-comet>=2.2.6
+
+# Utilities
+tqdm>=4.65.0
+toolz>=0.12.0

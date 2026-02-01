@@ -1,0 +1,137 @@
+# Enabled groups:
+# - bugprone-*
+#   Common bug patterns and suspicious constructs
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#bugprone
+#
+# - clang-analyzer-*
+#   Clang Static Analyzer checks (null deref, leaks, dead code, etc.)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#clang-analyzer
+#
+# - cppcoreguidelines-*
+#   C++ Core Guidelines (safety & best practices)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#cppcoreguidelines
+#
+# - modernize-*
+#   C++11/14/17/20 modernization checks (nullptr, override, ranges, trailing return, etc.)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#modernize
+#
+# - performance-*
+#   Inefficiencies (copies, containers, algorithms, unnecessary temporaries)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#performance
+#
+# - readability-*
+#   Readability & consistency (naming, braces, identifiers, redundant control flow)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#readability
+#
+# - portability-simd-intrinsics
+#   Warns about use of non-portable SIMD intrinsics
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/portability/simd-intrinsics.html
+#
+# - misc-unused-parameters
+#   Warns on unused function parameters
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/misc/unused-parameters.html
+#
+# - misc-unused-using-decls
+#   Warns on unused using-declarations
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/misc/unused-using-decls.html
+#
+# - google-* (selected)
+#   Google C++ style checks (explicit constructor, default arguments, etc.)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#google
+#
+# - hicpp-* (selected)
+#   High Integrity C++ (HICPP) guidelines checks (exception base class, invalid moved access, no assembler, etc.)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/list.html#hicpp
+#
+# Disabled (noise for FFI/low-level code):
+# - hicpp-vararg
+#   Forbids use of C-style varargs (too noisy for FFI interop)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/hicpp/vararg.html
+#
+# - cppcoreguidelines-pro-type-vararg
+#   Same as above, bans varargs for type safety
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/pro-type-vararg.html
+#
+# - cppcoreguidelines-pro-type-union-access
+#   Warns on C-style union field access
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/pro-type-union-access.html
+#
+# - cppcoreguidelines-pro-bounds-array-to-pointer-decay
+#   Warns when arrays decay to pointers (common in C APIs)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines/pro-bounds-array-to-pointer-decay.html
+#
+# - modernize-use-trailing-return-type
+#   Enforces trailing return type (`auto f() -> T`) everywhere (purely stylistic, often too noisy)
+#   Docs: https://clang.llvm.org/extra/clang-tidy/checks/modernize/use-trailing-return-type.html
+
+
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  portability-simd-intrinsics,
+  misc-unused-parameters,
+  misc-unused-using-decls,
+  google-default-arguments,
+  google-explicit-constructor,
+  google-readability-braces-around-statements,
+  hicpp-exception-baseclass,
+  hicpp-invalid-access-moved,
+  hicpp-no-assembler,
+  hicpp-no-array-decay,
+  hicpp-avoid-c-arrays,
+  hicpp-use-auto,
+  -hicpp-vararg,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -modernize-use-trailing-return-type
+
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: '.*'
+
+ExcludeHeaderFilterRegex: 'build/_bare|build/_vcpkg'
+
+FormatStyle: file
+
+CheckOptions:
+  # Modernize tuning
+  - key: modernize-loop-convert.MinConfidence
+    value: reasonable
+  - key: modernize-use-trailing-return-type.IgnoreMacros
+    value: true
+  - key: modernize-use-auto.MinTypeNameLength
+    value: '5'                 # only suggest auto for longer type names
+  - key: modernize-use-const.IgnoreMacros
+    value: true
+
+  # Includes hygiene
+  - key: readability-include-order.IgnoreMainSourceFile
+    value: true
+
+  # Identifier naming (kept to well-supported options)
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack           # myFunction
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase           # MyClass
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack           # myVariable
+  - key: readability-identifier-naming.ParameterCase
+    value: camelBack           # myParam
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case          # my_namespace
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE          # MAX_SIZE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase           # EnumValue
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: '_'                 # myMember_
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: 'g_'                # g_myGlobal
+  - key: readability-identifier-naming.GlobalConstantPrefix
+    value: ''                  # myGlobalConstant

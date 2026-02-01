@@ -1,0 +1,8 @@
+node_modules
+package-lock.json
+.npmrc
+.idea/
+.npmrc
+.local-store
+models
+.test

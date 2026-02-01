@@ -1,0 +1,63 @@
+---
+title: "loggingStream( )"
+titleStyle: code
+description: Streams model logs in real-time.
+---
+
+```ts
+function loggingStream(params): AsyncGenerator<{
+  id: string;
+  level: "error" | "warn" | "info" | "debug" | "off";
+  message: string;
+  namespace: string;
+  timestamp: number;
+  type: "loggingStream";
+}>;
+```
+
+## Description
+
+Opens a logging stream to receive real-time logs.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | The arguments for the logging stream |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| id | `string` | ✓ | The unique identifier to stream logs for (model ID or SDK_LOG_ID) |
+
+## Returns
+
+`AsyncGenerator<object>` — AsyncGenerator yielding logging stream responses
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | `string` | Log identifier |
+| level | `"error" \| "warn" \| "info" \| "debug" \| "off"` | Log level |
+| message | `string` | Log message |
+| namespace | `string` | Log namespace |
+| timestamp | `number` | Timestamp |
+| type | `"loggingStream"` | Response type |
+
+## Throws
+
+When the response type is invalid or when the stream fails
+
+## Example
+
+```typescript
+// Open a logging stream for a model
+const logStream = loggingStream({ id: 'my-model-id' });
+
+// Or stream SDK server logs
+const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+
+for await (const logMessage of logStream) {
+  console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
+}
+```

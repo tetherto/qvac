@@ -1,0 +1,29 @@
+---
+title: Addons
+description: Reference for developers to pick and choose only the QVAC components they need for their use case.
+---
+
+## Overview
+
+Each addon is a [Bare module](https://bare.pears.com) that adds an inference engine to QVAC platform, enabling one or more AI tasks.
+
+_If you use the SDK, you **don’t need** to use addons directly._ The SDK is the canonical way to build with QVAC: it unifies all addon functionalities under a single interface, allows QVAC to run on JS runtimes beyond Bare, and provides out-of-the-box P2P connectivity.
+
+### When to use addons?
+
+You may choose to use addons directly **instead** of the SDK if your project meets all of the following criteria:
+- It runs exclusively on Bare.
+- It is already part of the Pear ecosystem **or** does not require P2P connectivity.
+
+## Catalog
+
+The following table lists all available addons for QVAC platform:
+
+| Package | AI Tasks | Description | Inference engine | Stability |
+| --- | --- | --- | --- | --- |
+| [`@qvac/llm-llamacpp`](/addons/llm-llamacpp) | Completion, multimodal | LLM inference for text generation and chat with support to images, and other media within a single conversation context. | [`llama.cpp`](https://github.com/ggml-org/llama.cpp) | stable |
+| [`@qvac/embed-llamacpp`](/addons/embed-llamacpp) | Text embeddings, RAG | Vector embedding generation for semantic search, clustering, and retrieval that seamlessly suppports retrieval-augmented generation workflow. | `llama.cpp` | stable |
+| [`@qvac/translation-nmtcpp`](/addons/translation-nmtcpp) | Translation | Text-to-text neural machine translation (NMT). | [Marian](https://marian-nmt.github.io) and [Bergamot](https://browser.mt) | stable |
+| [`@qvac/transcription-whispercpp`](/addons/transcription-whispercpp) | Transcription | Automatic speech recognition (ASR) for speech-to-text. | [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp) | stable |
+| [`@qvac/tts-onnx`](/addons/tts-onnx) | Text-to-speech | Speech synthesis for text-to-speech (TTS). | [ONNX Runtime](https://onnxruntime.ai) | stable |
+| [`@qvac/ocr-onnx`](/addons/ocr-onnx) | OCR | Optical character recognition (OCR) for extracting text from images. | ONNX runtime | stable |

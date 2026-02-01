@@ -1,0 +1,46 @@
+name: Dispatch on README (QVAC SDK)
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/qvac-sdk/README.md"
+    branches:
+      - main
+      - release-*
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.merged == true && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'release-'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect README change
+        id: changed
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          # Ensure the merge commit exists locally (in case of shallow clone)
+          git fetch --no-tags origin ${MERGE_SHA} --depth=2 || true
+          # List files in the merge commit and check for README.md
+          if git diff --name-only "${MERGE_SHA}^1" "${MERGE_SHA}" | grep -xq "packages/qvac-sdk/README.md"; then
+            echo "readme_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "readme_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Repository Dispatch
+        if: steps.changed.outputs.readme_changed == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.pat_token }}
+          repository: tetherto/qvac-docs
+
+          event-type: readme-changed
+          client-payload: >
+            {"repo_url":"https://github.com/${{ github.repository }}"}

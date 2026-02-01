@@ -1,0 +1,3483 @@
+Directory structure:
+└── holepunchto-mini-video-sharing-desktop/
+    ├── README.md
+    ├── desktop/
+    │   ├── index.html
+    │   ├── index.js
+    │   ├── input.css
+    │   ├── package.json
+    │   ├── .swcrc
+    │   ├── .swcrcdev
+    │   └── src/
+    │       ├── dev.js
+    │       ├── index.js
+    │       ├── root.jsx
+    │       ├── components/
+    │       │   └── app.jsx
+    │       └── hooks/
+    │           └── use-worker.js
+    └── worker/
+        ├── index.js
+        ├── mini-studio-room.js
+        ├── multi-writer-room.js
+        ├── package.json
+        ├── schema.js
+        └── spec/
+            ├── db/
+            │   ├── db.json
+            │   ├── index.js
+            │   └── messages.js
+            ├── dispatch/
+            │   ├── dispatch.json
+            │   ├── index.js
+            │   └── messages.js
+            ├── event/
+            │   ├── db.json
+            │   ├── index.js
+            │   └── messages.js
+            └── schema/
+                ├── index.js
+                └── schema.json
+
+================================================
+FILE: README.md
+================================================
+> **IMPORTANT:** Require **Pear v2**
+
+# Mini Video Sharing Desktop (aka Mini Studio)
+
+A mini video sharing desktop app where multiple members can share videos and comments below each video
+
+## Dev mode
+Start the first writer to create a room, and get the invite
+
+```shell
+cd worker
+npm i
+
+cd desktop
+npm i
+npm run dev
+```
+
+To start the second writer, clone this project into a separate dir, then run with an invite
+
+```shell
+cd worker
+npm i
+
+cd desktop
+npm i
+npm run dev -- -i <invite>
+```
+
+Add file or drag and drop to share videos
+
+## Production mode
+
+Stage and seed worker to get worker app link
+```shell
+cd worker
+npm i
+pear stage prod
+pear seed prod
+```
+
+Stage, seed desktop to get desktop app link
+```shell
+cd desktop
+npm i 
+npm run build  # must run
+pear stage prod
+pear seed prod
+```
+
+Run desktop app link with worker app link for the first writer to create a room, and get the invite
+```shell
+pear run pear://<desktop-app-link> pear://<worker-app-link>
+```
+
+Run the second writer on a different storage with the invite
+```shell
+pear run --tmp-store pear://<desktop-app-link> pear://<worker-app-link> --storage tmp/writer2 --invite <invite>
+```
+
+
+
+================================================
+FILE: desktop/index.html
+================================================
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyApp</title>
+  <link href="./output.css" rel="stylesheet">
+  <style>
+    #bar {
+      -webkit-app-region: drag;
+      height: 30px;
+      width: 100%;
+    }
+    pear-ctrl[data-platform=darwin] {
+      padding: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="bar"><pear-ctrl></pear-ctrl></div>
+  <div id="root"></div>
+  <script type="module" src="./build/src/index.js" defer></script>
+</body>
+
+</html>
+
+
+
+================================================
+FILE: desktop/index.js
+================================================
+/** @typedef {import('pear-interface')} */ /* global Pear */
+import Bridge from 'pear-bridge'
+import Runtime from 'pear-electron'
+
+const bridge = new Bridge()
+await bridge.ready()
+
+const runtime = new Runtime()
+const pipe = await runtime.start({ bridge })
+pipe.on('close', () => Pear.exit())
+
+// use pipe.write and pipe.on('data') to communicate with the UI process if needed
+
+
+
+================================================
+FILE: desktop/input.css
+================================================
+@import "tailwindcss";
+
+
+
+================================================
+FILE: desktop/package.json
+================================================
+{
+  "name": "mini-studio-desktop",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "index.js",
+  "pear": {
+    "pre": "pear-electron/pre",
+    "name": "mini-studio-desktop",
+    "links": {
+      "localhost": "http://127.0.0.1"
+    },
+    "stage": {
+      "ignore": [
+        ".git",
+        ".github",
+        ".gitignore",
+        ".swcrc",
+        ".swcrcdev",
+        "input.css",
+        "storage",
+        "tmp",
+        "README.md"
+      ]
+    },
+    "gui": {
+      "main": "index.html",
+      "width": 600,
+      "height": 800,
+      "minWidth": 500,
+      "backgroundColor": "#1F2430"
+    }
+  },
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "clean": "rm -rf build",
+    "build:swc": "swc src -d build --copy-files",
+    "build:swc:watch": "npm run build:swc -- --watch --config-file .swcrcdev",
+    "build:tailwind": "npx @tailwindcss/cli -i input.css -o output.css",
+    "build:tailwind:watch": "npm run build:tailwind -- --watch",
+    "build": "npm run build:tailwind && npm run build:swc",
+    "start": "pear run .",
+    "start:dev": "pear run -d .",
+    "dev": "npm run clean && npm run build && concurrently --passthrough-arguments --kill-others npm:build:tailwind:watch npm:build:swc:watch 'npm:start:dev -- {@}' --"
+  },
+  "dependencies": {
+    "pear-bridge": "^1.2.4",
+    "pear-electron": "^1.7.22",
+    "pear-pipe": "^1.0.5",
+    "pear-run": "^1.0.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@swc/cli": "^0.7.8",
+    "@swc/core": "^1.13.5",
+    "@tailwindcss/cli": "^4.1.14",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.2.1",
+    "pear-hotmods": "^1.0.4",
+    "pear-interface": "^1.1.0",
+    "react-refresh": "^0.18.0",
+    "standard": "^17.1.2",
+    "tailwindcss": "^4.1.14"
+  }
+}
+
+
+
+================================================
+FILE: desktop/.swcrc
+================================================
+[
+  {
+    "test": ".*\\.js$",
+    "jsc": {
+      "baseUrl":"./",
+      "paths": {
+         "@/*": ["src/*"]
+      },
+      "parser": {
+        "syntax": "ecmascript",
+      }
+    }
+  },
+  {
+    "test": ".*\\.jsx$",
+    "jsc": {
+      "baseUrl":"./",
+      "paths": {
+         "@/*": ["src/*"]
+      },
+      "parser": {
+        "syntax": "ecmascript",
+        "jsx": true
+      },
+      "transform": {
+        "react": {
+          "runtime": "automatic"
+        }
+      }
+    }
+  }
+]
+
+
+
+================================================
+FILE: desktop/.swcrcdev
+================================================
+[
+  {
+    "test": ".*\\.js$",
+    "jsc": {
+      "baseUrl":"./",
+      "paths": {
+         "@/*": ["src/*"]
+      },
+      "parser": {
+        "syntax": "ecmascript"
+      }
+    }
+  },
+  {
+    "test": ".*\\.jsx$",
+    "jsc": {
+      "baseUrl":"./",
+      "paths": {
+         "@/*": ["src/*"]
+      },
+      "parser": {
+        "syntax": "ecmascript",
+        "jsx": true
+      },
+      "transform": {
+        "react": {
+          "runtime": "automatic",
+          "development": true,
+          "refresh": true
+        }
+      }
+    }
+  }
+]
+
+
+
+================================================
+FILE: desktop/src/dev.js
+================================================
+import RefreshRuntime from 'react-refresh/runtime'
+import hotmods from 'pear-hotmods'
+
+RefreshRuntime.injectIntoGlobalHook(window)
+window.$RefreshReg$ = RefreshRuntime.register
+window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform
+
+const paths = ['/build']
+const debounceRefresh = debounce(RefreshRuntime.performReactRefresh)
+hotmods({ paths }, (reloads) => {
+  if (reloads.length) {
+    debounceRefresh()
+  }
+})
+
+function debounce (fn, delay = 100) {
+  let timer
+  return (...args) => {
+    clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), delay)
+  }
+}
+
+
+
+================================================
+FILE: desktop/src/index.js
+================================================
+/* global Pear */
+/** @typedef {import('pear-interface')} */
+
+const app = Pear.app || Pear.config // v1 compat
+const dev = app.dev && !app.key
+
+if (dev) {
+  console.log('####################')
+  console.log('# DEVELOPMENT MODE #')
+  console.log('####################')
+  import('./dev').then(() => import('./root'))
+} else {
+  import('./root')
+}
+
+// use pear-pipe with pipe.write and pipe.on('data') to communicate with the main process if needed
+
+
+
+================================================
+FILE: desktop/src/root.jsx
+================================================
+import { createRoot } from 'react-dom/client'
+
+import App from './components/app'
+
+createRoot(document.getElementById('root')).render(<App />)
+
+
+
+================================================
+FILE: desktop/src/components/app.jsx
+================================================
+import { useState } from 'react'
+import Runtime from 'pear-electron'
+
+import useWorker from '../hooks/use-worker'
+
+export default function App () {
+  const { addVideo, addMessage, clearError, invite, videos, messages, error } = useWorker()
+
+  const [input, setInput] = useState('')
+  const [playerId, setPlayerId] = useState()
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    onAddFiles(e.dataTransfer.files)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+  }
+
+  const handleSelect = (e) => {
+    for (const file of e.target.files) {
+      const filePath = Runtime.media.getPathForFile(file)
+      addVideo(filePath)
+    }
+  }
+
+  const onAddFiles = (files) => {
+    for (const file of files) {
+      const filePath = Runtime.media.getPathForFile(file)
+      addVideo(filePath)
+    }
+  }
+
+  const onSend = (videoId) => {
+    addMessage({ text: input, info: { videoId } })
+    setInput('')
+  }
+
+  return (
+    <div className='bg-blue-500 min-h-screen p-4'>
+      {error && (
+        <div className='bg-red-500 text-white p-2 flex items-center justify-between'>
+          <pre>{error}</pre>
+          <button className='cursor-pointer' onClick={() => clearError()}>X</button>
+        </div>
+      )}
+      <div className='mb-2 wrap-anywhere'>{`Invite: ${invite}`}</div>
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        className='border-2 border-dashed border-blue-500 p-2 mb-6 bg-white text-center'
+      >
+        <p>Drag and drop files here, or click to select</p>
+        <input
+          type='file'
+          multiple
+          className='hidden'
+          id='fileInput'
+          onChange={handleSelect}
+        />
+        <label htmlFor='fileInput' className='cursor-pointer text-blue-500 underline'>Browse files</label>
+      </div>
+      <div className='bg-white p-4 mb-4'>
+        <h2 className='text-lg font-bold mb-2'>Videos</h2>
+        <ul>
+          {videos.map((video) => {
+            const comments = messages.filter(msg => msg.info.videoId === video.id)
+            return (
+              <li key={video.id}>
+                <div key={video.id} className='border-b py-1 flex items-center gap-1'>
+                  <span className='flex-1'>{video.name}</span>
+                  <button
+                    className='bg-blue-500 text-white p-2'
+                    onClick={() => {
+                      console.log(video)
+                      setPlayerId(prev => prev === video.id ? undefined : video.id)
+                    }}
+                  >
+                    {playerId === video.id ? 'Stop' : 'Play'}
+                  </button>
+                </div>
+                {playerId === video.id && (
+                  <>
+                    <video className='mb-2 w-full' controls src={video.link} autoPlay />
+                    <div className='mb-2 flex'>
+                      <input
+                        type='text'
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        placeholder='Type a comment...'
+                        className='flex-1 p-2 border border-gray-300'
+                      />
+                      <button className='bg-white text-blue-500 px-4' onClick={() => onSend(video.id)}>Send</button>
+                    </div>
+                    <div className='border-b bg-white mb-4'>
+                      <h2 className='font-bold'>Comments ({comments.length})</h2>
+                      <ul>
+                        {comments.map((msg, idx) => (
+                          <li key={idx} className='border-b py-1'>{`${msg.text} ~ ${msg.info.username} ~ ${msg.info.at} ~ ${msg.id}`}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+
+
+================================================
+FILE: desktop/src/hooks/use-worker.js
+================================================
+/* global Pear */
+import { useEffect, useState } from 'react'
+import pearRun from 'pear-run'
+
+const app = Pear.app || Pear.config // v1 compat
+const dev = app.dev && !app.key
+
+const link = dev ? '../worker' : app.args[0]
+const args = dev ? app.args : app.args.slice(1)
+
+let pipe
+
+const useWorker = () => {
+  const [invite, setInvite] = useState('')
+  const [videos, setVideos] = useState([])
+  const [messages, setMessages] = useState([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!link) {
+      setError('Worker link is required')
+      return
+    }
+
+    pipe = pearRun(link)
+    pipe.on('data', (data) => {
+      const lines = Buffer.from(data).toString().split('\n')
+      for (let msg of lines) {
+        msg = msg.trim()
+        if (!msg) continue
+
+        const obj = parseMsg(msg)
+        if (obj.tag === 'invite') {
+          setInvite(obj.data)
+        } else if (obj.tag === 'videos') {
+          setVideos(obj.data)
+        } else if (obj.tag === 'messages') {
+          setMessages(obj.data)
+        } else if (obj.tag === 'error') {
+          setError(obj.data)
+        } else if (obj.tag === 'log') {
+          console.log(obj.data)
+        }
+      }
+    })
+
+    write('ready', args)
+
+    return () => pipe.end()
+  }, [])
+
+  useEffect(() => {
+    if (!invite) return
+
+    const intervalGetVideos = setInterval(() => write('get-videos', { noLog: true }), 1000)
+    const intervalGetMessages = setInterval(() => write('get-messages', { noLog: true }), 1000)
+    return () => {
+      clearInterval(intervalGetMessages)
+      clearInterval(intervalGetVideos)
+    }
+  }, [invite])
+
+  return {
+    addVideo: (filePath) => write('add-video', filePath),
+    addMessage: (message) => write('add-message', message),
+    clearError: () => setError(''),
+    invite,
+    videos,
+    messages,
+    error
+  }
+}
+
+function parseMsg (msg) {
+  try {
+    return JSON.parse(msg)
+  } catch (err) {
+    write('error', `Failed to parse message: ${msg}`)
+  }
+}
+
+function write (tag, data) {
+  if (pipe) pipe.write(JSON.stringify({ tag, data }) + '\n')
+  else console.log(tag, data)
+}
+
+export default useWorker
+
+
+
+================================================
+FILE: worker/index.js
+================================================
+/* global Pear */
+const process = require('process')
+const os = require('os')
+const { command, flag } = require('paparam')
+const goodbye = require('graceful-goodbye')
+const pearPipe = require('pear-pipe')
+
+const MiniStudioRoom = require('./mini-studio-room')
+
+const cmd = command('mini-studio',
+  flag('--storage|-s <storage>', 'Storage location'),
+  flag('--invite|-i <invite>', 'Room invite')
+)
+
+const pipe = pearPipe()
+
+/** @type {MiniStudioRoom | undefined} */
+let room
+
+if (!pipe) {
+  onData({ tag: 'ready', data: Pear.app.args })
+} else {
+  process.on('uncaughtException', (err) => {
+    write('error', `${err?.stack || err}`)
+    pipe.end()
+  })
+  process.on('unhandledRejection', (err) => {
+    write('error', `${err?.stack || err}`)
+    pipe.end()
+  })
+
+  pipe.on('error', (err) => onError(err))
+  pipe.on('close', () => onClose())
+  pipe.on('data', async (data) => {
+    const lines = data.toString().split('\n')
+    for (let msg of lines) {
+      msg = msg.trim()
+      if (!msg) continue
+
+      const obj = JSON.parse(msg)
+      await onData(obj)
+    }
+  })
+}
+
+async function onError () {
+  await room?.close()
+}
+
+async function onClose () {
+  await room?.close()
+}
+
+async function onData (obj) {
+  if (!obj.data?.noLog) write('log', obj)
+
+  if (obj.tag === 'ready') {
+    cmd.parse(obj.data)
+    if (!cmd.running) {
+      return
+    }
+
+    room = new MiniStudioRoom({ ...cmd.flags, write })
+    goodbye(() => room.close())
+    await room.ready()
+
+    write('invite', await room.createInvite())
+    return
+  }
+
+  if (!room) {
+    write('error', 'Room not found')
+    return
+  }
+  await room.ready()
+
+  if (obj.tag === 'get-videos') {
+    const videos = await room.getVideos()
+    write('videos', videos)
+  } else if (obj.tag === 'add-video') {
+    await room.addVideo(randomId(), obj.data, { ...os.userInfo(), at: new Date().toISOString() })
+  } else if (obj.tag === 'get-messages') {
+    const messages = await room.getMessages()
+    write('messages', messages)
+  } else if (obj.tag === 'add-message') {
+    await room.addMessage(randomId(), obj.data.text, { ...os.userInfo(), ...obj.data.info, at: new Date().toISOString() })
+  }
+}
+
+function randomId () {
+  return Math.random().toString(16).slice(2)
+}
+
+function write (tag, data) {
+  if (pipe) pipe.write(JSON.stringify({ tag, data }) + '\n')
+  else console.log(tag, data)
+}
+
+
+
+================================================
+FILE: worker/mini-studio-room.js
+================================================
+const fs = require('fs')
+const path = require('path')
+const idEnc = require('hypercore-id-encoding')
+const getMimeType = require('get-mime-type')
+const Hyperblobs = require('hyperblobs')
+const BlobServer = require('hypercore-blob-server')
+
+const MultiWriterDispatch = require('./spec/dispatch')
+const MultiWriterRoom = require('./multi-writer-room')
+
+class MiniStudioRoom extends MultiWriterRoom {
+  constructor (opts = {}) {
+    super({
+      ...opts,
+      dbNamespace: 'ministudio'
+    })
+
+    this.opts = opts
+    this.blobs = null
+    this.blobServer = null
+    this.blobsCores = {}
+  }
+
+  async _open () {
+    await super._open()
+
+    this.blobs = new Hyperblobs(this.store.get({ name: 'blobs' }))
+    await this.blobs.ready()
+
+    this.blobServer = new BlobServer(this.store.session())
+    await this.blobServer.listen()
+  }
+
+  async _close () {
+    await Promise.all(Object.values(this.blobsCores).map(core => core.close()))
+    await this.blobServer.close()
+    await this.blobs.close()
+    await super._close()
+  }
+
+  _addRouter () {
+    super._addRouter()
+
+    this.router.add(`@${this.dbNamespace}/add-video`, async (data, context) => {
+      await context.view.db.insert(`@${this.dbNamespace}/videos`, data)
+    })
+    this.router.add(`@${this.dbNamespace}/del-video`, async (data, context) => {
+      await context.view.db.delete(`@${this.dbNamespace}/videos`, { id: data.id })
+    })
+    this.router.add(`@${this.dbNamespace}/add-message`, async (data, context) => {
+      await context.view.db.insert(`@${this.dbNamespace}/messages`, data)
+    })
+    this.router.add(`@${this.dbNamespace}/del-message`, async (data, context) => {
+      await context.view.db.delete(`@${this.dbNamespace}/messages`, { id: data.id })
+    })
+  }
+
+  async getVideos ({ reverse = true, limit = 100 } = {}) {
+    const videos = await this.view.db.find(`@${this.dbNamespace}/videos`, { reverse, limit }).toArray()
+    for (const item of videos) {
+      if (!this.blobsCores[item.blob.key]) {
+        const blobsCore = this.store.get({ key: idEnc.decode(item.blob.key) })
+        this.blobsCores[item.blob.key] = blobsCore
+        await blobsCore.ready()
+        this.swarm.join(blobsCore.discoveryKey)
+      }
+    }
+    return videos.map(item => {
+      const link = this.blobServer.getLink(item.blob.key, { blob: item.blob, type: item.type })
+      return { ...item, link }
+    })
+  }
+
+  async addVideo (id, filePath, info) {
+    const name = path.basename(filePath)
+    const type = getMimeType(name)
+    if (!type || !type.startsWith('video/')) {
+      this.opts.write('error', 'Only video files are allowed')
+      return
+    }
+
+    const rs = fs.createReadStream(filePath)
+    const ws = this.blobs.createWriteStream()
+    await new Promise((resolve, reject) => {
+      ws.on('error', reject)
+      ws.on('close', resolve)
+      rs.pipe(ws)
+    })
+    const blob = { key: idEnc.normalize(this.blobs.core.key), ...ws.id }
+
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-video`, { id, name, type, blob, info })
+    )
+  }
+
+  async delVideo (id) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/del-video`, { id })
+    )
+  }
+
+  async getMessages ({ reverse = true, limit = 100 } = {}) {
+    return await this.view.db.find(`@${this.dbNamespace}/messages`, { reverse, limit }).toArray()
+  }
+
+  async addMessage (id, text, info) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-message`, { id, text, info })
+    )
+  }
+
+  async delMessage (id) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/del-message`, { id })
+    )
+  }
+}
+
+module.exports = MiniStudioRoom
+
+
+
+================================================
+FILE: worker/multi-writer-room.js
+================================================
+/**
+ * @typedef {{ db: HyperDB, event: HyperDB }} View
+ * @typedef {function(string, function(any, { view: View, base: Autobase }))} RouterAdd
+ */
+const rrp = require('resolve-reject-promise')
+const b4a = require('b4a')
+const z32 = require('z32')
+const ReadyResource = require('ready-resource')
+const Corestore = require('corestore')
+const Hyperswarm = require('hyperswarm')
+const Autobase = require('autobase')
+const HyperDB = require('hyperdb')
+const BlindPairing = require('blind-pairing')
+
+const MultiWriterDispatch = require('./spec/dispatch')
+const MultiWriterDb = require('./spec/db')
+const EventDb = require('./spec/event')
+
+class MultiWriterRoom extends ReadyResource {
+  constructor (opts = {}) {
+    super()
+
+    const storage = opts.storage || 'storage'
+    this.storage = storage
+
+    const bootstrap = opts.bootstrap
+    this.bootstrap = bootstrap
+
+    const store = opts.store || new Corestore(storage)
+    this.store = store
+
+    const swarm = opts.swarm || (() => {
+      const swarm = new Hyperswarm({ bootstrap })
+      swarm.on('connection', (conn) => store.replicate(conn))
+      return swarm
+    })()
+    this.swarm = swarm
+
+    this.dbNamespace = opts.dbNamespace || 'multiWriter'
+    /** @type {{ add: RouterAdd }} */
+    this.router = new MultiWriterDispatch.Router()
+    this._addRouter()
+
+    this.pairing = new BlindPairing(swarm)
+    this.invite = opts.invite
+
+    this.base = null
+    this.baseLocal = null
+    this.baseLocalKey = null
+    this.pairMember = null
+  }
+
+  async checkResume() {
+    await this.store.ready()
+
+    const baseLocal = Autobase.getLocalCore(this.store)
+    this.baseLocal = baseLocal
+    await baseLocal.ready()
+    this.baseLocalKey = baseLocal.key
+
+    const baseLocalLength = baseLocal.length
+    await baseLocal.close()
+
+    return !!baseLocalLength
+  }
+
+  async _open () {
+    const shouldResume = await this.checkResume()
+
+    let key
+    let encryptionKey
+    if (!shouldResume && this.invite) {
+      const res = await new Promise((resolve) => {
+        this.pairing.addCandidate({
+          invite: z32.decode(this.invite),
+          userData: this.baseLocalKey,
+          onadd: resolve
+        })
+      })
+      key = res.key
+      encryptionKey = res.encryptionKey
+    }
+
+    this.base = new Autobase(this.store, key, {
+      encrypt: true,
+      encryptionKey,
+      open: this._openBase.bind(this),
+      close: this._closeBase.bind(this),
+      apply: this._applyBase.bind(this)
+    })
+
+    const writable = rrp()
+    this.base.on('update', () => {
+      if (this.base.writable) writable.resolve()
+      if (!this.base._interrupting) this.emit('update')
+    })
+    await this.base.ready()
+    this.swarm.join(this.base.discoveryKey)
+
+    if (!this.base.writable) await writable.promise
+    this.view.db.core.download({ start: 0, end: -1 })
+    this.view.event.core.download({ start: 0, end: -1 })
+
+    this.view.event.watch(() => this.emit('new-event'))
+
+    this.pairMember = this.pairing.addMember({
+      discoveryKey: this.base.discoveryKey,
+      /** @type {function(import('blind-pairing-core').MemberRequest)} */
+      onadd: async (request) => {
+        const id = request.inviteId
+        const inv = await this.view.db.findOne(`@${this.dbNamespace}/invites`, {})
+        if (inv === null || !b4a.equals(inv.id, id)) {
+          return
+        }
+        request.open(inv.publicKey)
+        await this.addWriter(request.userData)
+        request.confirm({
+          key: this.base.key,
+          encryptionKey: this.base.encryptionKey
+        })
+      }
+    })
+  }
+
+  async _close () {
+    await this.pairMember?.close()
+    await this.baseLocal?.close()
+    await this.base?.close()
+    await this.pairing.close()
+    await this.swarm.destroy()
+    await this.store.close()
+  }
+
+  _openBase (store) {
+    const db = HyperDB.bee(store.get('view'), MultiWriterDb, { extension: false, autoUpdate: true })
+    const event = HyperDB.bee(store.get('event'), EventDb, { extension: false, autoUpdate: true })
+    return { db, event }
+  }
+
+  async _closeBase (view) {
+    await Promise.all([
+      view.db.close(),
+      view.event.close()
+    ])
+  }
+
+  async _applyBase (nodes, view, base) {
+    for (const node of nodes) {
+      await this.router.dispatch(node.value, { view, base })
+    }
+    await view.db.flush()
+    await view.event.flush()
+  }
+
+  _addRouter () {
+    this.router.add(`@${this.dbNamespace}/add-writer`, async (data, context) => {
+      await context.base.addWriter(data.key)
+    })
+    this.router.add(`@${this.dbNamespace}/add-invite`, async (data, context) => {
+      await context.view.db.insert(`@${this.dbNamespace}/invites`, data)
+    })
+    this.router.add(`@${this.dbNamespace}/del-invite`, async (data, context) => {
+      await context.view.db.delete(`@${this.dbNamespace}/invites`, { id: data.id })
+    })
+    this.router.add(`@${this.dbNamespace}/add-user`, async (data, context) => {
+      await context.view.db.insert(`@${this.dbNamespace}/users`, data)
+    })
+    this.router.add(`@${this.dbNamespace}/del-user`, async (data, context) => {
+      await context.view.db.delete(`@${this.dbNamespace}/users`, { id: data.id })
+    })
+    this.router.add(`@${this.dbNamespace}/add-event`, async (data, context) => {
+      await context.view.event.insert(`@${this.dbNamespace}/events`, data)
+    })
+    this.router.add(`@${this.dbNamespace}/del-event`, async (data, context) => {
+      await context.view.event.delete(`@${this.dbNamespace}/events`, { id: data.id })
+    })
+  }
+
+  /** @type {View} */
+  get view () {
+    return this.base.view
+  }
+
+  async addWriter (key) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-writer`, { key: b4a.isBuffer(key) ? key : b4a.from(key) })
+    )
+  }
+
+  async createInvite () {
+    const existing = await this.view.db.findOne(`@${this.dbNamespace}/invites`, {})
+    if (existing) {
+      return z32.encode(existing.invite)
+    }
+    const { id, invite, publicKey, expires } = BlindPairing.createInvite(this.base.key)
+    const record = { id, invite, publicKey, expires }
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-invite`, record)
+    )
+    return z32.encode(record.invite)
+  }
+
+  async deleteInvite () {
+    const existing = await this.view.db.findOne(`@${this.dbNamespace}/invites`, {})
+    if (existing) {
+      await this.base.append(MultiWriterDispatch.encode(`@${this.dbNamespace}/del-invite`, existing))
+    }
+  }
+
+  async getUsers () {
+    return await this.view.db.find(`@${this.dbNamespace}/users`, {}).toArray()
+  }
+
+  async addUser (id, info) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-user`, { id, info })
+    )
+  }
+
+  async delUser (id) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/del-user`, { id })
+    )
+  }
+
+  async addEvent (id, data) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/add-event`, { id, data })
+    )
+  }
+
+  async delEvent (id) {
+    await this.base.append(
+      MultiWriterDispatch.encode(`@${this.dbNamespace}/del-event`, { id })
+    )
+  }
+
+  async getEvents ({ reverse = true, limit = 100, gt, lt, gte, lte } = {}) {
+    return await this.view.event.find(`@${this.dbNamespace}/events`, { reverse, limit, gt, lt, gte, lte }).toArray()
+  }
+}
+
+module.exports = MultiWriterRoom
+
+
+
+================================================
+FILE: worker/package.json
+================================================
+{
+  "name": "mini-studio-worker",
+  "version": "0.0.1",
+  "main": "index.js",
+  "pear": {
+    "name": "mini-studio-worker",
+    "type": "terminal",
+    "stage": {
+      "ignore": [
+        ".git",
+        ".github",
+        ".gitignore",
+        "storage",
+        "tmp",
+        "README.md"
+      ]
+    }
+  },
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "db:gen": "node schema.js",
+    "start": "pear run .",
+    "dev": "pear run -d ."
+  },
+  "dependencies": {
+    "autobase": "^7.20.0",
+    "b4a": "^1.7.3",
+    "bare-fs": "^4.4.10",
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.1",
+    "blind-pairing": "^2.3.1",
+    "corestore": "^7.5.0",
+    "get-mime-type": "^2.0.2",
+    "graceful-goodbye": "^1.3.3",
+    "hyperblobs": "^2.8.0",
+    "hypercore-blob-server": "^1.12.0",
+    "hypercore-id-encoding": "^1.3.0",
+    "hyperdb": "^4.19.0",
+    "hyperdispatch": "^1.4.3",
+    "hyperschema": "^1.16.0",
+    "hyperswarm": "^4.14.2",
+    "paparam": "^1.8.6",
+    "pear-pipe": "^1.0.5",
+    "ready-resource": "^1.2.0",
+    "resolve-reject-promise": "^1.1.0",
+    "z32": "^1.1.0"
+  },
+  "devDependencies": {
+    "brittle": "^3.19.0",
+    "hyperdht": "^6.27.0",
+    "pear-interface": "^1.1.0",
+    "standard": "^17.1.2"
+  },
+  "imports": {
+    "fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "os": {
+      "bare": "bare-os",
+      "default": "os"
+    },
+    "path": {
+      "bare": "bare-path",
+      "default": "path"
+    },
+    "process": {
+      "bare": "bare-process",
+      "default": "process"
+    }
+  }
+}
+
+
+
+================================================
+FILE: worker/schema.js
+================================================
+const Hyperschema = require('hyperschema')
+const HyperdbBuilder = require('hyperdb/builder')
+const Hyperdispatch = require('hyperdispatch')
+
+const NAMESPACE = 'ministudio'
+
+const SCHEMA_DIR = './spec/schema'
+const DB_DIR = './spec/db'
+const EVENT_DIR = './spec/event'
+const DISPATCH_DIR = './spec/dispatch'
+
+const hyperSchema = Hyperschema.from(SCHEMA_DIR)
+const schema = hyperSchema.namespace(NAMESPACE)
+schema.register({
+  name: 'writers',
+  fields: [
+    { name: 'key', type: 'buffer', required: true }
+  ]
+})
+schema.register({
+  name: 'invites',
+  fields: [
+    { name: 'id', type: 'buffer', required: true },
+    { name: 'invite', type: 'buffer', required: true },
+    { name: 'publicKey', type: 'buffer', required: true },
+    { name: 'expires', type: 'int', required: true }
+  ]
+})
+schema.register({
+  name: 'users',
+  fields: [
+    { name: 'id', type: 'string', required: true },
+    { name: 'info', type: 'json' }
+  ]
+})
+schema.register({
+  name: 'videos',
+  fields: [
+    { name: 'id', type: 'string', required: true },
+    { name: 'name', type: 'string', required: true },
+    { name: 'type', type: 'string', required: true },
+    { name: 'blob', type: 'json', required: true },
+    { name: 'info', type: 'json' }
+  ]
+})
+schema.register({
+  name: 'messages',
+  fields: [
+    { name: 'id', type: 'string', required: true },
+    { name: 'text', type: 'string', required: true },
+    { name: 'info', type: 'json' }
+  ]
+})
+schema.register({
+  name: 'events',
+  fields: [
+    { name: 'id', type: 'string', required: true },
+    { name: 'data', type: 'json' }
+  ]
+})
+Hyperschema.toDisk(hyperSchema)
+
+const hyperdb = HyperdbBuilder.from(SCHEMA_DIR, DB_DIR)
+const db = hyperdb.namespace(NAMESPACE)
+db.collections.register({
+  name: 'writers',
+  schema: `@${NAMESPACE}/writers`,
+  key: ['key']
+})
+db.collections.register({
+  name: 'invites',
+  schema: `@${NAMESPACE}/invites`,
+  key: ['id']
+})
+db.collections.register({
+  name: 'users',
+  schema: `@${NAMESPACE}/users`,
+  key: ['id']
+})
+db.collections.register({
+  name: 'videos',
+  schema: `@${NAMESPACE}/videos`,
+  key: ['id']
+})
+db.collections.register({
+  name: 'messages',
+  schema: `@${NAMESPACE}/messages`,
+  key: ['id']
+})
+HyperdbBuilder.toDisk(hyperdb)
+
+const eventHyperdb = HyperdbBuilder.from(SCHEMA_DIR, EVENT_DIR)
+const eventDb = eventHyperdb.namespace(NAMESPACE)
+eventDb.collections.register({
+  name: 'events',
+  schema: `@${NAMESPACE}/events`,
+  key: ['id']
+})
+HyperdbBuilder.toDisk(eventHyperdb)
+
+const dispatch = Hyperdispatch.from(SCHEMA_DIR, DISPATCH_DIR, { offset: 0 })
+const multiWriterDispatch = dispatch.namespace(NAMESPACE)
+multiWriterDispatch.register({ name: 'add-writer', requestType: `@${NAMESPACE}/writers` })
+multiWriterDispatch.register({ name: 'add-invite', requestType: `@${NAMESPACE}/invites` })
+multiWriterDispatch.register({ name: 'del-invite', requestType: `@${NAMESPACE}/invites` })
+multiWriterDispatch.register({ name: 'add-user', requestType: `@${NAMESPACE}/users` })
+multiWriterDispatch.register({ name: 'del-user', requestType: `@${NAMESPACE}/users` })
+multiWriterDispatch.register({ name: 'add-video', requestType: `@${NAMESPACE}/videos` })
+multiWriterDispatch.register({ name: 'del-video', requestType: `@${NAMESPACE}/videos` })
+multiWriterDispatch.register({ name: 'add-message', requestType: `@${NAMESPACE}/messages` })
+multiWriterDispatch.register({ name: 'del-message', requestType: `@${NAMESPACE}/messages` })
+multiWriterDispatch.register({ name: 'add-event', requestType: `@${NAMESPACE}/events` })
+multiWriterDispatch.register({ name: 'del-event', requestType: `@${NAMESPACE}/events` })
+Hyperdispatch.toDisk(dispatch)
+
+
+
+================================================
+FILE: worker/spec/db/db.json
+================================================
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "writers",
+      "namespace": "ministudio",
+      "id": 0,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/writers",
+      "derived": false,
+      "key": [
+        "key"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "invites",
+      "namespace": "ministudio",
+      "id": 1,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/invites",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "users",
+      "namespace": "ministudio",
+      "id": 2,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/users",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "videos",
+      "namespace": "ministudio",
+      "id": 3,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/videos",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "messages",
+      "namespace": "ministudio",
+      "id": 4,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/messages",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    }
+  ]
+}
+
+
+================================================
+FILE: worker/spec/db/index.js
+================================================
+// This file is autogenerated by the hyperdb compiler
+/* eslint-disable camelcase */
+
+const { IndexEncoder, c } = require('hyperdb/runtime')
+const { version, getEncoding, setVersion } = require('./messages.js')
+
+// '@ministudio/writers' collection key
+const collection0_key = new IndexEncoder([
+  IndexEncoder.BUFFER
+], { prefix: 0 })
+
+function collection0_indexify (record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/writers' value encoding
+const collection0_enc = getEncoding('@ministudio/writers/hyperdb#0')
+
+// '@ministudio/writers' reconstruction function
+function collection0_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection0_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection0_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@ministudio/writers' key reconstruction function
+function collection0_reconstruct_key (keyBuf) {
+  const key = collection0_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@ministudio/writers'
+const collection0 = {
+  name: '@ministudio/writers',
+  id: 0,
+  encodeKey (record) {
+    const key = [record.key]
+    return collection0_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection0_key.encodeRange({
+      gt: gt ? collection0_indexify(gt) : null,
+      lt: lt ? collection0_indexify(lt) : null,
+      gte: gte ? collection0_indexify(gte) : null,
+      lte: lte ? collection0_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection0_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection0_reconstruct,
+  reconstructKey: collection0_reconstruct_key,
+  indexes: []
+}
+
+// '@ministudio/invites' collection key
+const collection1_key = new IndexEncoder([
+  IndexEncoder.BUFFER
+], { prefix: 1 })
+
+function collection1_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/invites' value encoding
+const collection1_enc = getEncoding('@ministudio/invites/hyperdb#1')
+
+// '@ministudio/invites' reconstruction function
+function collection1_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection1_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection1_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@ministudio/invites' key reconstruction function
+function collection1_reconstruct_key (keyBuf) {
+  const key = collection1_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@ministudio/invites'
+const collection1 = {
+  name: '@ministudio/invites',
+  id: 1,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection1_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection1_key.encodeRange({
+      gt: gt ? collection1_indexify(gt) : null,
+      lt: lt ? collection1_indexify(lt) : null,
+      gte: gte ? collection1_indexify(gte) : null,
+      lte: lte ? collection1_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection1_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection1_reconstruct,
+  reconstructKey: collection1_reconstruct_key,
+  indexes: []
+}
+
+// '@ministudio/users' collection key
+const collection2_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 2 })
+
+function collection2_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/users' value encoding
+const collection2_enc = getEncoding('@ministudio/users/hyperdb#2')
+
+// '@ministudio/users' reconstruction function
+function collection2_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection2_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection2_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@ministudio/users' key reconstruction function
+function collection2_reconstruct_key (keyBuf) {
+  const key = collection2_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@ministudio/users'
+const collection2 = {
+  name: '@ministudio/users',
+  id: 2,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection2_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection2_key.encodeRange({
+      gt: gt ? collection2_indexify(gt) : null,
+      lt: lt ? collection2_indexify(lt) : null,
+      gte: gte ? collection2_indexify(gte) : null,
+      lte: lte ? collection2_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection2_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection2_reconstruct,
+  reconstructKey: collection2_reconstruct_key,
+  indexes: []
+}
+
+// '@ministudio/videos' collection key
+const collection3_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 3 })
+
+function collection3_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/videos' value encoding
+const collection3_enc = getEncoding('@ministudio/videos/hyperdb#3')
+
+// '@ministudio/videos' reconstruction function
+function collection3_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection3_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection3_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@ministudio/videos' key reconstruction function
+function collection3_reconstruct_key (keyBuf) {
+  const key = collection3_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@ministudio/videos'
+const collection3 = {
+  name: '@ministudio/videos',
+  id: 3,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection3_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection3_key.encodeRange({
+      gt: gt ? collection3_indexify(gt) : null,
+      lt: lt ? collection3_indexify(lt) : null,
+      gte: gte ? collection3_indexify(gte) : null,
+      lte: lte ? collection3_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection3_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection3_reconstruct,
+  reconstructKey: collection3_reconstruct_key,
+  indexes: []
+}
+
+// '@ministudio/messages' collection key
+const collection4_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 4 })
+
+function collection4_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/messages' value encoding
+const collection4_enc = getEncoding('@ministudio/messages/hyperdb#4')
+
+// '@ministudio/messages' reconstruction function
+function collection4_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection4_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection4_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@ministudio/messages' key reconstruction function
+function collection4_reconstruct_key (keyBuf) {
+  const key = collection4_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@ministudio/messages'
+const collection4 = {
+  name: '@ministudio/messages',
+  id: 4,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection4_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection4_key.encodeRange({
+      gt: gt ? collection4_indexify(gt) : null,
+      lt: lt ? collection4_indexify(lt) : null,
+      gte: gte ? collection4_indexify(gte) : null,
+      lte: lte ? collection4_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection4_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection4_reconstruct,
+  reconstructKey: collection4_reconstruct_key,
+  indexes: []
+}
+
+const collections = [
+  collection0,
+  collection1,
+  collection2,
+  collection3,
+  collection4
+]
+
+const indexes = [
+]
+
+module.exports = { version, collections, indexes, resolveCollection, resolveIndex }
+
+function resolveCollection (name) {
+  switch (name) {
+    case '@ministudio/writers': return collection0
+    case '@ministudio/invites': return collection1
+    case '@ministudio/users': return collection2
+    case '@ministudio/videos': return collection3
+    case '@ministudio/messages': return collection4
+    default: return null
+  }
+}
+
+function resolveIndex (name) {
+  switch (name) {
+    default: return null
+  }
+}
+
+
+
+================================================
+FILE: worker/spec/db/messages.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @ministudio/writers
+const encoding0 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @ministudio/invites
+const encoding1 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @ministudio/users
+const encoding2 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/videos
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.type)
+    c.json.preencode(state, m.blob)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.type)
+    c.json.encode(state, m.blob)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.json.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      name: r1,
+      type: r2,
+      blob: r3,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/messages
+const encoding4 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.text)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.text)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      text: r1,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/events
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.data) c.json.preencode(state, m.data)
+  },
+  encode(state, m) {
+    const flags = m.data ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.data) c.json.encode(state, m.data)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      data: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/writers/hyperdb#0
+const encoding6 = {
+  preencode(state, m) {
+
+  },
+  encode(state, m) {
+
+  },
+  decode(state) {
+    return {
+      key: null
+    }
+  }
+}
+
+// @ministudio/invites/hyperdb#1
+const encoding7 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: null,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @ministudio/users/hyperdb#2
+const encoding8 = {
+  preencode(state, m) {
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/videos/hyperdb#3
+const encoding9 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.type)
+    c.json.preencode(state, m.blob)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.type)
+    c.json.encode(state, m.blob)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.json.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      name: r1,
+      type: r2,
+      blob: r3,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/messages/hyperdb#4
+const encoding10 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.text)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.text)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      text: r1,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@ministudio/writers':
+      return encoding0
+    case '@ministudio/invites':
+      return encoding1
+    case '@ministudio/users':
+      return encoding2
+    case '@ministudio/videos':
+      return encoding3
+    case '@ministudio/messages':
+      return encoding4
+    case '@ministudio/events':
+      return encoding5
+    case '@ministudio/writers/hyperdb#0':
+      return encoding6
+    case '@ministudio/invites/hyperdb#1':
+      return encoding7
+    case '@ministudio/users/hyperdb#2':
+      return encoding8
+    case '@ministudio/videos/hyperdb#3':
+      return encoding9
+    case '@ministudio/messages/hyperdb#4':
+      return encoding10
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: worker/spec/dispatch/dispatch.json
+================================================
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@ministudio/add-writer",
+      "requestType": "@ministudio/writers",
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@ministudio/add-invite",
+      "requestType": "@ministudio/invites",
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@ministudio/del-invite",
+      "requestType": "@ministudio/invites",
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@ministudio/add-user",
+      "requestType": "@ministudio/users",
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@ministudio/del-user",
+      "requestType": "@ministudio/users",
+      "version": 1
+    },
+    {
+      "id": 5,
+      "name": "@ministudio/add-video",
+      "requestType": "@ministudio/videos",
+      "version": 1
+    },
+    {
+      "id": 6,
+      "name": "@ministudio/del-video",
+      "requestType": "@ministudio/videos",
+      "version": 1
+    },
+    {
+      "id": 7,
+      "name": "@ministudio/add-message",
+      "requestType": "@ministudio/messages",
+      "version": 1
+    },
+    {
+      "id": 8,
+      "name": "@ministudio/del-message",
+      "requestType": "@ministudio/messages",
+      "version": 1
+    },
+    {
+      "id": 9,
+      "name": "@ministudio/add-event",
+      "requestType": "@ministudio/events",
+      "version": 1
+    },
+    {
+      "id": 10,
+      "name": "@ministudio/del-event",
+      "requestType": "@ministudio/events",
+      "version": 1
+    }
+  ]
+}
+
+
+================================================
+FILE: worker/spec/dispatch/index.js
+================================================
+// This file is autogenerated by the hyperdispatch compiler
+/* eslint-disable camelcase */
+
+const { c, b4a, assert } = require('hyperdispatch/runtime')
+const { version, getEncoding, setVersion } = require('./messages.js')
+
+const defaultVersion = version
+
+class Router {
+  constructor () {
+    this._handler0 = null
+    this._handler1 = null
+    this._handler2 = null
+    this._handler3 = null
+    this._handler4 = null
+    this._handler5 = null
+    this._handler6 = null
+    this._handler7 = null
+    this._handler8 = null
+    this._handler9 = null
+    this._handler10 = null
+
+    this._missing = 11
+  }
+
+  add (name, handler) {
+    switch (name) {
+      case '@ministudio/add-writer':
+        this._handler0 = handler
+        break
+      case '@ministudio/add-invite':
+        this._handler1 = handler
+        break
+      case '@ministudio/del-invite':
+        this._handler2 = handler
+        break
+      case '@ministudio/add-user':
+        this._handler3 = handler
+        break
+      case '@ministudio/del-user':
+        this._handler4 = handler
+        break
+      case '@ministudio/add-video':
+        this._handler5 = handler
+        break
+      case '@ministudio/del-video':
+        this._handler6 = handler
+        break
+      case '@ministudio/add-message':
+        this._handler7 = handler
+        break
+      case '@ministudio/del-message':
+        this._handler8 = handler
+        break
+      case '@ministudio/add-event':
+        this._handler9 = handler
+        break
+      case '@ministudio/del-event':
+        this._handler10 = handler
+        break
+      default:
+        throw new Error('Cannot register a handler for a nonexistent route: ' + name)
+    }
+    this._missing--
+  }
+
+  _checkAll () {
+    assert(this._handler0 !== null, 'Missing handler for "@ministudio/add-writer"')
+    assert(this._handler1 !== null, 'Missing handler for "@ministudio/add-invite"')
+    assert(this._handler2 !== null, 'Missing handler for "@ministudio/del-invite"')
+    assert(this._handler3 !== null, 'Missing handler for "@ministudio/add-user"')
+    assert(this._handler4 !== null, 'Missing handler for "@ministudio/del-user"')
+    assert(this._handler5 !== null, 'Missing handler for "@ministudio/add-video"')
+    assert(this._handler6 !== null, 'Missing handler for "@ministudio/del-video"')
+    assert(this._handler7 !== null, 'Missing handler for "@ministudio/add-message"')
+    assert(this._handler8 !== null, 'Missing handler for "@ministudio/del-message"')
+    assert(this._handler9 !== null, 'Missing handler for "@ministudio/add-event"')
+    assert(this._handler10 !== null, 'Missing handler for "@ministudio/del-event"')
+  }
+
+  async dispatch (message, context) {
+    if (this._missing > 0) {
+      this._checkAll()
+    }
+
+    setVersion(defaultVersion)
+
+    const op = b4a.isBuffer(message) ? decode(message) : message
+
+    switch (op.id) {
+      case 0:
+        return this._handler0(op.value, context)
+      case 1:
+        return this._handler1(op.value, context)
+      case 2:
+        return this._handler2(op.value, context)
+      case 3:
+        return this._handler3(op.value, context)
+      case 4:
+        return this._handler4(op.value, context)
+      case 5:
+        return this._handler5(op.value, context)
+      case 6:
+        return this._handler6(op.value, context)
+      case 7:
+        return this._handler7(op.value, context)
+      case 8:
+        return this._handler8(op.value, context)
+      case 9:
+        return this._handler9(op.value, context)
+      case 10:
+        return this._handler10(op.value, context)
+      default:
+        throw new Error('Handler not found for ID:' + op.id)
+    }
+  }
+}
+
+function encode (name, message, { version = defaultVersion } = {}) {
+  const state = { buffer: null, start: 0, end: 0 }
+
+  const route = getRouteByName(name)
+  setVersion(version)
+
+  c.uint.preencode(state, route.id)
+  route.enc.preencode(state, message)
+
+  state.buffer = b4a.allocUnsafe(state.end)
+  c.uint.encode(state, route.id)
+  route.enc.encode(state, message)
+
+  return state.buffer
+}
+
+function decode (buffer, { version = defaultVersion } = {}) {
+  const state = { buffer, start: 0, end: buffer.length }
+
+  const id = c.uint.decode(state)
+  const route = getRouteById(id)
+  setVersion(version)
+
+  const value = route.enc.decode(state)
+  return { id, name: route.name, value }
+}
+
+const route0 = {
+  name: '@ministudio/add-writer',
+  id: 0,
+  enc: getEncoding('@ministudio/writers')
+}
+
+const route1 = {
+  name: '@ministudio/add-invite',
+  id: 1,
+  enc: getEncoding('@ministudio/invites')
+}
+
+const route2 = {
+  name: '@ministudio/del-invite',
+  id: 2,
+  enc: getEncoding('@ministudio/invites')
+}
+
+const route3 = {
+  name: '@ministudio/add-user',
+  id: 3,
+  enc: getEncoding('@ministudio/users')
+}
+
+const route4 = {
+  name: '@ministudio/del-user',
+  id: 4,
+  enc: getEncoding('@ministudio/users')
+}
+
+const route5 = {
+  name: '@ministudio/add-video',
+  id: 5,
+  enc: getEncoding('@ministudio/videos')
+}
+
+const route6 = {
+  name: '@ministudio/del-video',
+  id: 6,
+  enc: getEncoding('@ministudio/videos')
+}
+
+const route7 = {
+  name: '@ministudio/add-message',
+  id: 7,
+  enc: getEncoding('@ministudio/messages')
+}
+
+const route8 = {
+  name: '@ministudio/del-message',
+  id: 8,
+  enc: getEncoding('@ministudio/messages')
+}
+
+const route9 = {
+  name: '@ministudio/add-event',
+  id: 9,
+  enc: getEncoding('@ministudio/events')
+}
+
+const route10 = {
+  name: '@ministudio/del-event',
+  id: 10,
+  enc: getEncoding('@ministudio/events')
+}
+
+function getRouteByName (name) {
+  switch (name) {
+    case '@ministudio/add-writer':
+      return route0
+    case '@ministudio/add-invite':
+      return route1
+    case '@ministudio/del-invite':
+      return route2
+    case '@ministudio/add-user':
+      return route3
+    case '@ministudio/del-user':
+      return route4
+    case '@ministudio/add-video':
+      return route5
+    case '@ministudio/del-video':
+      return route6
+    case '@ministudio/add-message':
+      return route7
+    case '@ministudio/del-message':
+      return route8
+    case '@ministudio/add-event':
+      return route9
+    case '@ministudio/del-event':
+      return route10
+    default:
+      throw new Error('Handler not found for name: ' + name)
+  }
+}
+
+function getRouteById (id) {
+  switch (id) {
+    case 0:
+      return route0
+    case 1:
+      return route1
+    case 2:
+      return route2
+    case 3:
+      return route3
+    case 4:
+      return route4
+    case 5:
+      return route5
+    case 6:
+      return route6
+    case 7:
+      return route7
+    case 8:
+      return route8
+    case 9:
+      return route9
+    case 10:
+      return route10
+    default:
+      throw new Error('Handler not found for ID: ' + id)
+  }
+}
+
+module.exports = {
+  version,
+  encode,
+  decode,
+  Router
+}
+
+
+
+================================================
+FILE: worker/spec/dispatch/messages.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @ministudio/writers
+const encoding0 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @ministudio/invites
+const encoding1 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @ministudio/users
+const encoding2 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/videos
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.type)
+    c.json.preencode(state, m.blob)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.type)
+    c.json.encode(state, m.blob)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.json.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      name: r1,
+      type: r2,
+      blob: r3,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/messages
+const encoding4 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.text)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.text)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      text: r1,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/events
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.data) c.json.preencode(state, m.data)
+  },
+  encode(state, m) {
+    const flags = m.data ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.data) c.json.encode(state, m.data)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      data: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@ministudio/writers':
+      return encoding0
+    case '@ministudio/invites':
+      return encoding1
+    case '@ministudio/users':
+      return encoding2
+    case '@ministudio/videos':
+      return encoding3
+    case '@ministudio/messages':
+      return encoding4
+    case '@ministudio/events':
+      return encoding5
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: worker/spec/event/db.json
+================================================
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "events",
+      "namespace": "ministudio",
+      "id": 0,
+      "type": 1,
+      "indexes": [],
+      "schema": "@ministudio/events",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    }
+  ]
+}
+
+
+================================================
+FILE: worker/spec/event/index.js
+================================================
+// This file is autogenerated by the hyperdb compiler
+/* eslint-disable camelcase */
+
+const { IndexEncoder, c } = require('hyperdb/runtime')
+const { version, getEncoding, setVersion } = require('./messages.js')
+
+// '@ministudio/events' collection key
+const collection0_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 0 })
+
+function collection0_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@ministudio/events' value encoding
+const collection0_enc = getEncoding('@ministudio/events/hyperdb#0')
+
+// '@ministudio/events' reconstruction function
+function collection0_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection0_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection0_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@ministudio/events' key reconstruction function
+function collection0_reconstruct_key (keyBuf) {
+  const key = collection0_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@ministudio/events'
+const collection0 = {
+  name: '@ministudio/events',
+  id: 0,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection0_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection0_key.encodeRange({
+      gt: gt ? collection0_indexify(gt) : null,
+      lt: lt ? collection0_indexify(lt) : null,
+      gte: gte ? collection0_indexify(gte) : null,
+      lte: lte ? collection0_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection0_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection0_reconstruct,
+  reconstructKey: collection0_reconstruct_key,
+  indexes: []
+}
+
+const collections = [
+  collection0
+]
+
+const indexes = [
+]
+
+module.exports = { version, collections, indexes, resolveCollection, resolveIndex }
+
+function resolveCollection (name) {
+  switch (name) {
+    case '@ministudio/events': return collection0
+    default: return null
+  }
+}
+
+function resolveIndex (name) {
+  switch (name) {
+    default: return null
+  }
+}
+
+
+
+================================================
+FILE: worker/spec/event/messages.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @ministudio/writers
+const encoding0 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @ministudio/invites
+const encoding1 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @ministudio/users
+const encoding2 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/videos
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.type)
+    c.json.preencode(state, m.blob)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.type)
+    c.json.encode(state, m.blob)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.json.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      name: r1,
+      type: r2,
+      blob: r3,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/messages
+const encoding4 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.text)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.text)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      text: r1,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/events
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.data) c.json.preencode(state, m.data)
+  },
+  encode(state, m) {
+    const flags = m.data ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.data) c.json.encode(state, m.data)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      data: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/events/hyperdb#0
+const encoding6 = {
+  preencode(state, m) {
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.data) c.json.preencode(state, m.data)
+  },
+  encode(state, m) {
+    const flags = m.data ? 1 : 0
+
+    c.uint.encode(state, flags)
+
+    if (m.data) c.json.encode(state, m.data)
+  },
+  decode(state) {
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      data: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@ministudio/writers':
+      return encoding0
+    case '@ministudio/invites':
+      return encoding1
+    case '@ministudio/users':
+      return encoding2
+    case '@ministudio/videos':
+      return encoding3
+    case '@ministudio/messages':
+      return encoding4
+    case '@ministudio/events':
+      return encoding5
+    case '@ministudio/events/hyperdb#0':
+      return encoding6
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: worker/spec/schema/index.js
+================================================
+// This file is autogenerated by the hyperschema compiler
+// Schema Version: 1
+/* eslint-disable camelcase */
+/* eslint-disable quotes */
+/* eslint-disable space-before-function-paren */
+
+const { c } = require('hyperschema/runtime')
+
+const VERSION = 1
+
+// eslint-disable-next-line no-unused-vars
+let version = VERSION
+
+// @ministudio/writers
+const encoding0 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @ministudio/invites
+const encoding1 = {
+  preencode(state, m) {
+    c.buffer.preencode(state, m.id)
+    c.buffer.preencode(state, m.invite)
+    c.buffer.preencode(state, m.publicKey)
+    c.int.preencode(state, m.expires)
+  },
+  encode(state, m) {
+    c.buffer.encode(state, m.id)
+    c.buffer.encode(state, m.invite)
+    c.buffer.encode(state, m.publicKey)
+    c.int.encode(state, m.expires)
+  },
+  decode(state) {
+    const r0 = c.buffer.decode(state)
+    const r1 = c.buffer.decode(state)
+    const r2 = c.buffer.decode(state)
+    const r3 = c.int.decode(state)
+
+    return {
+      id: r0,
+      invite: r1,
+      publicKey: r2,
+      expires: r3
+    }
+  }
+}
+
+// @ministudio/users
+const encoding2 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/videos
+const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.name)
+    c.string.preencode(state, m.type)
+    c.json.preencode(state, m.blob)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.name)
+    c.string.encode(state, m.type)
+    c.json.encode(state, m.blob)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const r3 = c.json.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      name: r1,
+      type: r2,
+      blob: r3,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/messages
+const encoding4 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.text)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.info) c.json.preencode(state, m.info)
+  },
+  encode(state, m) {
+    const flags = m.info ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.text)
+    c.uint.encode(state, flags)
+
+    if (m.info) c.json.encode(state, m.info)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      text: r1,
+      info: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+// @ministudio/events
+const encoding5 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 1 so always one byte
+
+    if (m.data) c.json.preencode(state, m.data)
+  },
+  encode(state, m) {
+    const flags = m.data ? 1 : 0
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.data) c.json.encode(state, m.data)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      data: (flags & 1) !== 0 ? c.json.decode(state) : null
+    }
+  }
+}
+
+function setVersion(v) {
+  version = v
+}
+
+function encode(name, value, v = VERSION) {
+  version = v
+  return c.encode(getEncoding(name), value)
+}
+
+function decode(name, buffer, v = VERSION) {
+  version = v
+  return c.decode(getEncoding(name), buffer)
+}
+
+function getEnum(name) {
+  switch (name) {
+    default:
+      throw new Error('Enum not found ' + name)
+  }
+}
+
+function getEncoding(name) {
+  switch (name) {
+    case '@ministudio/writers':
+      return encoding0
+    case '@ministudio/invites':
+      return encoding1
+    case '@ministudio/users':
+      return encoding2
+    case '@ministudio/videos':
+      return encoding3
+    case '@ministudio/messages':
+      return encoding4
+    case '@ministudio/events':
+      return encoding5
+    default:
+      throw new Error('Encoder not found ' + name)
+  }
+}
+
+function getStruct(name, v = VERSION) {
+  const enc = getEncoding(name)
+  return {
+    preencode(state, m) {
+      version = v
+      enc.preencode(state, m)
+    },
+    encode(state, m) {
+      version = v
+      enc.encode(state, m)
+    },
+    decode(state) {
+      version = v
+      return enc.decode(state)
+    }
+  }
+}
+
+const resolveStruct = getStruct // compat
+
+module.exports = {
+  resolveStruct,
+  getStruct,
+  getEnum,
+  getEncoding,
+  encode,
+  decode,
+  setVersion,
+  version
+}
+
+
+
+================================================
+FILE: worker/spec/schema/schema.json
+================================================
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "writers",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "invites",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "invite",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "publicKey",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "expires",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "info",
+          "type": "json",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "videos",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "type",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "blob",
+          "required": true,
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "info",
+          "type": "json",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "messages",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "text",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "info",
+          "type": "json",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "events",
+      "namespace": "ministudio",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "data",
+          "type": "json",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}
+
+

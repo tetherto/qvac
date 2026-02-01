@@ -1,0 +1,201 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@layer utilities {
+  :root.light {
+    --color-fd-background: hsl(0 0% 100%) !important;
+    --color-fd-popover: hsl(0 0% 100%) !important;
+    --color-fd-muted: hsl(0 0% 99.5%) !important;
+    --color-fd-card: hsl(0 0% 98.7%) !important;
+    --color-fd-secondary: hsl(0 0% 97.1%) !important;
+    --color-fd-border: hsla(0 0% 84% / 0.5) !important;
+    --color-fd-accent: hsla(0 0% 86% / 0.5) !important;
+    --color-fd-muted-foreground: hsl(0 0% 49.1%) !important;
+    --color-fd-popover-foreground: hsl(0 0% 19.1%) !important;
+  }
+}
+
+/* ===========================================
+   VIEWPORT ADJUSTMENTS - START
+   =========================================== */
+/* 1) Defines the "page spacing" in @theme */
+@theme {
+  --spacing-page: 1560px;
+}
+
+/* 2) Limits the maximum width of the Fumadocs UI layout */
+:root {
+  --fd-layout-width: var(--spacing-page);
+}
+
+/* 3) MORE breathing room between sidebar ↔ text ↔ ToC */
+@media (min-width: 1024px) {
+  #nd-page > article {
+    padding-inline: 3rem !important; /* 48px */
+  }
+}
+
+@media (min-width: 1280px) {
+  #nd-page > article {
+    padding-inline: 4rem !important; /* 64px */
+  }
+}
+
+/* ===========================================
+   VIEWPORT ADJUSTMENTS - END
+   =========================================== */
+
+
+/* ===========================================
+  INLINE CODE ADJUSTMENTS - START
+  =========================================== */
+@layer utilities {
+  /* Inline code: only adjusts the box (doesn't touch the font) */
+  .prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+    /* Light: a gray slightly darker than the background */
+    background: color-mix(in oklab, var(--color-fd-foreground) 5%, var(--color-fd-background));
+
+    /* very subtle border */
+    border-color: color-mix(in oklab, var(--color-fd-foreground) 10%, transparent);
+  }
+
+  /* Dark: "light-black" (lighter than the background) */
+  :is(.dark, [data-theme="dark"]) .prose
+    :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+    background: color-mix(in oklab, var(--color-fd-foreground) 14%, var(--color-fd-background));
+    border-color: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
+  }
+}
+
+@layer utilities {
+  .prose strong :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+    font-weight: inherit; /* or 600 */
+  }
+}
+
+.fd-title-code {
+  background: color-mix(in oklab, var(--color-fd-foreground) 5%, var(--color-fd-background));
+  border-color: color-mix(in oklab, var(--color-fd-foreground) 10%, transparent);
+}
+
+:is(.dark, [data-theme="dark"]) .fd-title-code {
+  background: color-mix(in oklab, var(--color-fd-foreground) 12%, var(--color-fd-background));
+  border-color: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
+}
+/* ===========================================
+   INLINE CODE ADJUSTMENTS - END
+   =========================================== */
+
+
+/* ===========================================
+  CODE BLOCK ADJUSTMENTS - START
+  =========================================== */
+@layer utilities {
+  :root.light figure.shiki {
+    background-color: #F6F8FA !important;
+  }
+
+  .fd-code-wrap :where(.fd-scroll-container) {
+    overflow-x: hidden !important;
+  }
+
+  .fd-code-wrap :where(pre.w-max) {
+    width: 100% !important;      /* mata width:max-content */
+    max-width: 100% !important;
+  }
+
+  .fd-code-wrap :where(pre.min-w-full) {
+    min-width: 0 !important;     /* mata min-width:100% */
+  }
+
+  .fd-code-wrap :where(pre) > code,
+  .fd-code-wrap :where(pre) :where(.line) {
+    white-space: pre-wrap !important;
+  }
+
+  .fd-code-wrap :where(pre) :where(code, .line, span) {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+}
+
+/* ===========================================
+  CODE BLOCK ADJUSTMENTS - END
+  =========================================== */
+
+/* ===========================================
+  COLOR PALLETTE - START
+  =========================================== */
+@layer utilities {
+  :root.dark {
+    --color-fd-primary: #16E3C1 !important;
+    --color-fd-primary-foreground: #05221d !important;
+    --color-fd-ring: #16E3C1 !important;
+  }
+  :root.light {
+    --color-fd-primary: #00AF92 !important;
+    --color-fd-primary-foreground: #062621 !important;
+    --color-fd-ring: #16E3C1 !important;
+  }
+}
+
+/* ===========================================
+  COLOR PALLETTE - END
+  =========================================== */
+
+/* ===========================================
+  CARD HOVER ADJUSTMENTS - START
+  =========================================== */
+@layer utilities {
+  :root.light [data-card="true"]:hover {
+    background-color: color-mix(
+      in oklab,
+      var(--color-fd-accent) 50%,
+      transparent
+    ) !important;
+  }
+}
+
+/* ===========================================
+  CARD HOVER ADJUSTMENTS - END
+  =========================================== */
+
+
+/* ===========================================
+  STEPS ADJUSMENTS - START
+  =========================================== */  
+@layer utilities {
+  /* A single local "token" to ensure circle and line are identical */
+  .fd-steps {
+    --qvac-step-accent: color-mix(
+      in oklab,
+      var(--color-fd-primary) 18%,
+      var(--color-fd-background)
+    );
+  }
+
+  /* circle */
+  .fd-steps > .fd-step::before {
+    border: 0 !important;
+    background-color: var(--qvac-step-accent) !important;
+    box-shadow: 0 0 0 2px var(--color-fd-background) !important;
+  }
+
+  .fd-steps {
+    border-left-color: var(--qvac-step-accent) !important;
+  }
+}
+
+/* ===========================================
+  STEPS ADJUSMENTS - END
+  =========================================== */
+
+
+/* Sidebar with same "page background" of Fumadocs */
+@layer utilities {
+  :root.light #nd-sidebar {
+    background-color: var(--color-fd-background) !important;
+  }
+}
+

@@ -1,0 +1,18 @@
+echo "🔍 Running pre-commit checks..."
+
+echo "🧹 Running linter..."
+if ! bun run lint; then
+  echo "❌ Linting failed!"
+  exit 1
+fi
+
+echo "📝 Checking code formatting..."
+if ! bun run format; then
+  echo "❌ Formatting check failed!"
+  exit 1
+fi
+
+echo "📦 Checking model registry..."
+npm run check-models:hook --silent 2>/dev/null
+
+echo "✅ All checks passed!"

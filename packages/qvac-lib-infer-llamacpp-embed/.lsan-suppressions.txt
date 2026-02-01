@@ -1,0 +1,14 @@
+# Suppress known leaks from external libraries
+# These are not leaks in our code but in system libraries and llama-cpp
+
+# D-Bus library leaks (initialized when Vulkan backend loads)
+leak:dbus_bus_register
+leak:dbus_connection_send_with_reply_and_block
+leak:dbus_pending_call_block
+leak:_dbus_message_loader_queue_messages
+leak:libdbus-1.so
+
+# GGML Vulkan backend leaks
+leak:ggml_backend_vk_reg_get_device
+leak:ggml-vulkan.cpp
+

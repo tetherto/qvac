@@ -1,0 +1,55 @@
+{
+  "name": "qvac-lib-inference-tts",
+  "version": "0.0.1",
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "0.12.2"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.3.0"
+    },
+    {
+      "name": "onnxruntime",
+      "platform": "!(android | ios | osx | windows)"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["dml-ep"],
+      "platform": "windows"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["coreml-ep"],
+      "platform": "ios | osx"
+    },
+    {
+      "name": "onnxruntime",
+      "features": ["nnapi-ep"],
+      "platform": "android"
+    },
+    "espeak-ng",
+    "piper-phonemize",
+    "fmt",
+    "spdlog",
+    {
+      "name": "piper",
+      "version>=": "1.2.0#2"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ]
+} 

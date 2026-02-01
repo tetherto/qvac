@@ -1,0 +1,86 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+import FilesystemDL from "@qvac/dl-filesystem";
+// This dependency is not installed by default. Please make sure to install it before running the example
+import TranscriptionWhispercpp from "@qvac/transcription-whispercpp";
+import fs from "bare-fs";
+import { Readable } from "bare-stream";
+// const wavFilePath = "/Users/marco/Downloads/decodedFile.raw";
+const dl = new FilesystemDL({
+    dirPath: "/Users/marco/Downloads/",
+});
+const args = {
+    loader: dl,
+    opts: {},
+};
+// Define model configuration with whisperConfig
+const hdConfig = {
+    modelFileName: "ggml-small.bin",
+    diskPath: "./models",
+    whisperConfig: {
+        mode: "caption",
+        output_format: "plaintext",
+        min_seconds: 2,
+        max_seconds: 120,
+        audio_format: "f32le", // decodedFile.raw contains 32-bit float samples
+    },
+};
+// Instantiate the specific Whisper model class
+const model = new TranscriptionWhispercpp(args, hdConfig);
+// Load the model weights and initialize
+await model.load();
+export async function transcribe(b64WavData) {
+    // Instantiate Hyperdrive Loader with the specific model key
+    // Decode base64 to buffer
+    const audioBuffer = Buffer.from(b64WavData, "base64");
+    // Write audio to file for testing
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `audio-${timestamp}.wav`;
+    const filepath = `/Users/marco/Downloads/${filename}`;
+    await fs.promises.writeFile(filepath, audioBuffer);
+    console.log(`Audio saved to: ${filepath}`);
+    // Extract raw PCM data from WAV file
+    // WAV header is typically 44 bytes, skip it to get raw PCM data
+    const wavHeaderSize = 44;
+    const pcmData = audioBuffer.subarray(wavHeaderSize);
+    console.log(`Audio buffer size: ${audioBuffer.length}, PCM data size: ${pcmData.length}`);
+    // Convert 16-bit PCM to 32-bit float (f32le format expected by Whisper)
+    const float32Array = new Float32Array(pcmData.length / 2);
+    for (let i = 0; i < float32Array.length; i++) {
+        // Read 16-bit signed integer and convert to float32 (-1.0 to 1.0 range)
+        const int16Value = pcmData.readInt16LE(i * 2);
+        float32Array[i] = int16Value / 32768.0; // Normalize to -1.0 to 1.0
+    }
+    // Convert Float32Array to Buffer
+    const float32Buffer = Buffer.from(float32Array.buffer);
+    console.log(`Converted to ${float32Array.length} float32 samples (${float32Buffer.length} bytes)`);
+    // Create a readable stream from the float32 buffer
+    // Sample rate is 16kHz, 32-bit float = 4 bytes per sample
+    const sampleRate = 16000;
+    const bytesPerSample = 4; // 32-bit float
+    const bytesPerSecond = sampleRate * bytesPerSample;
+    const audioStream = new Readable({
+        highWaterMark: bytesPerSecond, // 1 second of audio per chunk
+        read() {
+            // Push the entire buffer at once
+            this.push(float32Buffer);
+            this.push(null); // Signal end of stream
+        },
+    });
+    // Run transcription on the audio stream
+    const response = await model.run(audioStream);
+    // Process the transcription results as they arrive
+    let transcriptionText = "";
+    await response
+        .onUpdate((output) => {
+        console.log("Partial Transcription Response:", output);
+        transcriptionText += output.map((chunk) => chunk.text).join("");
+    })
+        .await();
+    console.log("Transcription completed.");
+    console.log(transcriptionText);
+    return transcriptionText;
+}

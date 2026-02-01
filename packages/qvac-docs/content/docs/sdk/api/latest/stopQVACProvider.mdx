@@ -1,0 +1,39 @@
+---
+title: "stopQVACProvider( )"
+titleStyle: code
+description: Stops a running provider service and leaves the specified topic.
+---
+
+```ts
+function stopQVACProvider(params): Promise<{
+  error?: string;
+  success: boolean;
+  type: "stopProvide";
+}>;
+```
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| params | `object` | ✓ | Stop provider configuration |
+
+### params
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| topic | `string` | ✓ | Topic to leave |
+
+## Returns
+
+`Promise<object>` — A promise that resolves to the stop provide response containing success status
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| success | `boolean` | ✓ | Whether the operation succeeded |
+| error | `string` | ✗ | Error message if failed |
+| type | `"stopProvide"` | ✓ | Response type |
+
+## Throws
+
+When the response type is not "stopProvide" or the request fails

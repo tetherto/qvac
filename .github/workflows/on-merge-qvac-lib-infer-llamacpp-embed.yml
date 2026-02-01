@@ -1,0 +1,138 @@
+name: On Merge Trigger (Qvac-lib-infer-llamacpp-embed)
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/qvac-lib-infer-llamacpp-embed/**"    
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        default: "dev"
+        type: choice
+        options:
+          - latest
+          - dev
+          
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+jobs:
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
+            fi
+          fi
+
+          gpr_tag="dev"
+          if [ "$ref_name" = "main" ]; then
+            gpr_tag="dev"
+          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="$ref_name"
+          fi
+
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
+  publish-main-gpr:
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_main == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+      publish_target: "gpr"
+
+  publish-feature-gpr:
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_feature == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+      publish_target: "gpr"
+
+  publish-tmp-gpr:
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_tmp == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
+      publish_target: "gpr"
+
+  publish-release-npm:
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_release == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml
+    secrets: inherit
+    with:
+      tag: "latest"
+      publish_target: "npm"
+
+  # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-llamacpp-embed.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-llamacpp-embed"

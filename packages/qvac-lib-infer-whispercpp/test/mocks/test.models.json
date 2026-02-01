@@ -1,0 +1,13 @@
+{
+  "weights": [
+    "0.bin",
+    "1.bin",
+    "2.bin",
+    "3.bin"
+  ],
+  "settings": [
+    "config.json"
+  ],
+  "modelFileName": "whisper-tiny.so",
+  "modelFilePath": "./mocks/whisper-tiny.so"
+}

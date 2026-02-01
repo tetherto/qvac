@@ -1,0 +1,33 @@
+{
+  "name": "@qvac/embed-llamacpp-benchmark-server",
+  "version": "0.1.0",
+  "description": "Benchmark server for EmbedLlamacpp addon",
+  "main": "index.js",
+  "scripts": {
+    "start": "bare index.js",
+    "lint": "standard",
+    "lint:fix": "standard --fix"
+  },
+  "files": [
+    "src"
+  ],
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "standard": "^17.1.2"
+  },
+  "dependencies": {
+    "@qvac/dl-filesystem": "^0.1.2",
+    "@qvac/dl-hyperdrive": "^0.1.1",
+    "@qvac/embed-llamacpp": "file:../../",
+    "bare-buffer": "^3.1.0",
+    "bare-fs": "^4.1.6",
+    "bare-http1": "^4.0.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.1",
+    "bare-url": "^2.1.6",
+    "corestore": "^7.4.5",
+    "hyperswarm": "^4.14.0",
+    "zod": "^3.24.4"
+  }
+}

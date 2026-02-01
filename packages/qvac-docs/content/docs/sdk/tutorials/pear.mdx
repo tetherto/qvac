@@ -1,0 +1,576 @@
+---
+title: Build a Pear app
+description: Hands-on tutorial on using QVAC SDK with Pear.
+---
+
+## What we'll build
+
+We'll build a minimal LLM chat desktop application using the following stack:
+- [**Pear**](https://pears.com) as the desktop runtime platform; and
+- **QVAC** to run LLM inference locally.
+
+By the end of this tutorial, you'll have built:
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+  <video
+    src="/screencasts/pear-tutorial-demo.webm"
+    controls
+    muted
+    autoPlay
+    playsInline
+    style={{ width: "50%", height: "auto" }}
+  />
+</div>
+
+## Prerequisites
+
+- npm $\geq$ v10.9
+- [Pear](https://docs.pears.com/guides/getting-started) $\geq$ v1.18
+- Linux/macOS (Windows with small adjustments)
+
+<Callout title="On Windows" type="info">
+Some commands are Bash‑specific. On Windows, use PowerShell/WSL or adapt them.
+</Callout>
+
+## Step 1: set up a Pear project
+
+Our application will consist of two parts, both running on Pear: 
+- **UI (Pear desktop)**: renders the chat and sends messages
+- **Engine (Pear terminal)**: run QVAC
+
+First, let's use the [Pear CLI to scaffold a minimal desktop app](https://docs.pears.com/guides/starting-a-pear-desktop-project) structure.
+
+<Steps>
+<Step>
+Create a new project:
+
+```bash
+# run on terminal
+mkdir qvac-pear-llm
+cd qvac-pear-llm
+pear init --yes
+```
+</Step>
+
+<Step>
+Run the app once to verify the scaffold:
+```bash
+pear run --dev .
+```
+</Step>
+</Steps>
+
+Confirm that a Pear window opens and renders the test page:
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+  <img
+    src="/screenshots/pear-window.png"
+    alt="Pear window"
+    style={{ width: "50%", height: "auto" }}
+  />
+</div>
+
+## Step 2: set up the engine
+
+In this step, we add a Pear terminal app to host the inference engine, then wire dependencies so it can run QVAC and communicate to the UI. We'll use the [Pear CLI again, to scaffold a terminal app](https://docs.pears.com/guides/starting-a-pear-terminal-project).
+
+<Steps>
+<Step>
+Create the engine:
+
+```bash
+mkdir engine
+cd engine
+pear init --yes --type terminal
+```
+</Step>
+
+<Step>
+Install dependencies in the engine:
+```bash
+npm i @qvac/sdk pear-pipe
+cd ..
+```
+</Step>
+
+<Step>
+Install the runner in the desktop app:
+```bash
+# in project root
+npm i pear-run
+```
+</Step>
+
+</Steps>
+
+The desktop UI will spawn the engine (Pear terminal process). The bridge between them comprises [`pear-run`](https://github.com/holepunchto/pear-run) (in parent) and [`pear-pipe`](https://github.com/holepunchto/pear-pipe) (in child), which acts as a duplex stream.
+
+## Step 3: add TypeScript support
+
+Pear scaffolds JavaScript files by default. We'll keep the code the same, but switch the file extensions to `.ts` and compile to `dist/` to add TypeScript support in our project.
+
+<Steps>
+<Step>
+Install TypeScript tooling in both packages:
+
+```bash
+# root
+npm i -D typescript @types/node
+
+# engine
+cd engine
+npm i -D typescript @types/node
+cd ..
+```
+</Step>
+
+<Step>
+Add build scripts and update the engine entrypoint:
+
+```bash
+# root
+npm pkg set scripts.build="tsc -p tsconfig.json"
+
+# engine
+cd engine
+npm pkg set scripts.build="tsc -p tsconfig.json"
+npm pkg set main="dist/index.js"
+cd ..
+```
+</Step>
+
+<Step>
+Create `tsconfig.json` at the project root:
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": false,
+    "noImplicitAny": false,
+    "noEmitOnError": false,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["app.ts"]
+}
+```
+</Step>
+
+<Step>
+Create `engine/tsconfig.json`:
+```json title="engine/tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": false,
+    "noImplicitAny": false,
+    "noEmitOnError": false,
+    "skipLibCheck": true,
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["index.ts"]
+}
+```
+</Step>
+
+<Step>
+Rename the scaffolded JS files to TS:
+
+```bash
+# in project root
+mv app.js app.ts
+mv engine/index.js engine/index.ts
+```
+</Step>
+
+<Step>
+Replace the entire contents of `index.html` with the following code, to load the compiled output:
+
+```html title="index.html" lineNumbers
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Reserve space for the Pear title bar. */
+    body {
+      --title-bar-height: 42px;
+      padding-top: var(--title-bar-height);
+    }
+    /* Custom draggable title bar styling. */
+    #bar {
+      background: rgba(55, 60, 72, 0.6);
+      backdrop-filter: blur(64px);
+      -webkit-app-region: drag;
+      height: var(--title-bar-height);
+      padding: 0;
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+      color: #FFF;
+      white-space: nowrap;
+      box-sizing: border-box;
+      position: fixed;
+      z-index: 2;
+      width: 100%;
+      left: 0;
+      top: 0;
+    }
+  </style>
+  <!-- Load the compiled UI bundle -->
+  <script type="module" src="./dist/app.js"></script>
+</head>
+<body>
+  <!-- Pear window controls -->
+  <div id="bar"><pear-ctrl></pear-ctrl></div>
+</body>
+</html>
+```
+</Step>
+
+</Steps>
+
+`index.html` is the Pear desktop shell: it defines the draggable title bar and loads the compiled UI bundle (`dist/app.ts`) so the app can render.
+
+## Step 4: implement the engine
+
+The engine runs in Pear terminal environment and streams tokens over a newline‑delimited JSON protocol.
+
+<Steps>
+<Step>
+
+Replace the entire contents of `engine/index.ts` with the following code:
+
+<WrapCode>
+
+```ts title="engine/index.ts" lineNumbers
+import pipeFactory from 'pear-pipe'
+import {
+  LLAMA_3_2_1B_INST_Q4_0,
+  loadModel,
+  unloadModel,
+  completion
+} from '@qvac/sdk'
+
+// Attach to the parent process pipe created by pear-run.
+const pipe = pipeFactory()
+if (!pipe || typeof pipe.write !== 'function') {
+  throw new Error('Pipe not attached. Start this engine via pear-run.')
+}
+
+// JSON lines helper (one JSON per line)
+function send(obj) {
+  try {
+    pipe.write(Buffer.from(JSON.stringify(obj) + '\n'))
+  } catch (e) {
+    console.error('[engine] pipe.write failed', e)
+  }
+}
+
+// Incremental input buffer + model handle.
+let buffer = ''
+let modelId = null
+
+// Load the model once and notify the UI when ready.
+async function ensureModel() {
+  if (modelId) return
+  modelId = await loadModel({
+    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+    modelType: 'llm',
+    modelConfig: {
+      device: 'cpu',
+      ctx_size: 2048
+    },
+    onProgress: (p) => send({ type: 'progress', progress: p })
+  })
+  send({ type: 'ready' })
+}
+
+// Run streaming completion and forward tokens to the UI.
+async function handleInfer(history) {
+  await ensureModel()
+
+  const result = completion({ modelId, history, stream: true })
+
+  // Failsafe if streaming never starts.
+  let gotToken = false
+  const noTokenTimer = setTimeout(() => {
+    if (!gotToken) {
+      send({ type: 'error', error: 'No tokens after 15s.' })
+    }
+  }, 15000)
+
+  try {
+    for await (const token of result.tokenStream) {
+      // First token toggles the failsafe.
+      if (!gotToken) gotToken = true
+      send({ type: 'token', token })
+    }
+    send({ type: 'done' })
+  } catch (e) {
+    send({ type: 'error', error: String(e?.message ?? e) })
+  } finally {
+    clearTimeout(noTokenTimer)
+  }
+}
+
+// Receive newline-delimited JSON commands from the UI.
+pipe.on('data', async (chunk) => {
+  buffer += chunk.toString('utf8')
+
+  while (true) {
+    const i = buffer.indexOf('\n')
+    if (i === -1) break
+    const line = buffer.slice(0, i).trim()
+    buffer = buffer.slice(i + 1)
+
+    if (!line) continue
+    let msg
+    try {
+      msg = JSON.parse(line)
+    } catch {
+      send({ type: 'error', error: 'Invalid JSON from parent.' })
+      continue
+    }
+
+    try {
+      // Commands: infer to generate, close to unload and exit.
+      if (msg.type === 'infer') {
+        await handleInfer(msg.history)
+      } else if (msg.type === 'close') {
+        if (modelId) await unloadModel({ modelId })
+        modelId = null
+        pipe.end()
+      }
+    } catch (e) {
+      send({ type: 'error', error: String(e?.message ?? e) })
+    }
+  }
+})
+
+// If the parent closes, exit too
+pipe.on('end', () => pipe.end())
+```
+</WrapCode>
+</Step>
+</Steps>
+
+`engine/index.ts` is the headless runtime: it runs QVAC in the Pear terminal process and streams tokens back to the UI over the pipe.
+
+## Step 5: implement the chat UI
+
+In this step, we create a minimal chat UI and connect it to the engine pipe for streaming responses. The UI runs in Pear desktop and launches the engine via `pear-run`. It streams JSON lines back into the chat.
+
+<Steps>
+<Step>
+Replace the entire contents of `app.ts` with the following code:
+<WrapCode>
+
+```ts title="app.ts" lineNumbers
+import run from 'pear-run'
+
+// Small DOM helper to build the UI without a framework.
+const el = (tag, props = {}, ...children) => {
+  const n = document.createElement(tag)
+  Object.assign(n, props)
+  for (const c of children) n.append(c)
+  return n
+}
+
+// Basic UI elements (messages, input, status).
+const messagesEl = el('div', { style: 'height: 70vh; overflow:auto; border:1px solid #ccc; padding:8px;' })
+const inputEl = el('input', { placeholder: 'Type a message...', style: 'width: 80%; padding:8px;' })
+const sendBtn = el('button', { innerText: 'Send', style: 'padding:8px; margin-left:8px;' })
+const statusEl = el('div', { style: 'margin: 8px 0; font-family: monospace; opacity: 0.8;' }, 'Starting…')
+
+// Apply simple styling and mount the UI.
+document.body.style.fontFamily = 'system-ui, sans-serif'
+document.body.style.color = '#fff'
+document.body.append(
+  statusEl,
+  messagesEl,
+  el('div', { style: 'margin-top: 8px;' }, inputEl, sendBtn)
+)
+
+// Chat history as role/content pairs.
+const history = []
+
+// In-progress assistant line + receive buffer for JSON lines.
+let assistantLine = null
+let rxBuf = ''
+
+// Normalize pipe chunks into Buffer so JSON decoding is consistent.
+function normalizeChunk(chunk) {
+  if (chunk == null) return null
+  if (globalThis.Buffer?.isBuffer?.(chunk)) return chunk
+  if (chunk instanceof Uint8Array) return Buffer.from(chunk)
+  if (Array.isArray(chunk)) return Buffer.from(chunk)
+  if (typeof chunk === 'string') return Buffer.from(chunk)
+  return Buffer.from(String(chunk))
+}
+
+// Start engine (Pear Terminal app) as subprocess.
+// Use absolute path from Pear config to avoid silent spawn failures.
+const baseDir = globalThis.Pear?.config?.dir
+const enginePath = baseDir
+  ? (baseDir.endsWith('/') ? `${baseDir}engine` : `${baseDir}/engine`)
+  : './engine'
+// Spawn the engine and get the IPC pipe.
+const pipe = run(enginePath)
+
+if (!pipe || typeof pipe.on !== 'function') {
+  statusEl.textContent = 'Engine pipe not available.'
+}
+
+// Surface engine lifecycle events in the UI.
+pipe.on('crash', ({ exitCode }) => {
+  statusEl.textContent = `Engine crashed (exit ${exitCode}).`
+})
+
+pipe.on('error', (err) => {
+  statusEl.textContent = `Engine pipe error: ${String(err?.message ?? err)}`
+})
+
+pipe.on('end', () => {
+  statusEl.textContent = 'Engine disconnected.'
+})
+
+// Decode newline-delimited JSON coming from the engine.
+function handleChunk(chunk) {
+  const buf = normalizeChunk(chunk)
+  if (!buf) return
+  rxBuf += buf.toString('utf8')
+  while (true) {
+    const i = rxBuf.indexOf('\n')
+    if (i === -1) break
+    const line = rxBuf.slice(0, i).trim()
+    rxBuf = rxBuf.slice(i + 1)
+    if (!line) continue
+
+    let msg
+    try { msg = JSON.parse(line) } catch { continue }
+
+    // Progress, tokens, and completion events update the UI.
+    if (msg.type === 'progress') {
+      statusEl.textContent = `Downloading… ${JSON.stringify(msg.progress)}`
+    }
+    if (msg.type === 'ready') {
+      statusEl.textContent = 'Model ready.'
+    }
+    if (msg.type === 'token') {
+      if (!assistantLine) {
+        assistantLine = el('div', {}, el('b', {}, 'Assistant: '), el('span', { innerText: '' }))
+        messagesEl.append(assistantLine)
+      }
+      const span = assistantLine.querySelector('span')
+      span.innerText += msg.token
+      messagesEl.scrollTop = messagesEl.scrollHeight
+    }
+    if (msg.type === 'done') {
+      const span = assistantLine?.querySelector('span')
+      const content = span?.innerText ?? ''
+      history.push({ role: 'assistant', content })
+      assistantLine = null
+      statusEl.textContent = 'Ready.'
+    }
+    if (msg.type === 'error') {
+      statusEl.textContent = `Engine error: ${msg.error}`
+    }
+  }
+}
+
+// Read from the pipe in multiple modes (data/readable/message).
+pipe.on('data', (chunk) => {
+  handleChunk(chunk)
+})
+
+pipe.on('readable', () => {
+  let chunk
+  while ((chunk = pipe.read()) !== null) {
+    handleChunk(chunk)
+  }
+})
+
+pipe.on('message', (msg) => {
+  if (msg) {
+    try {
+      handleChunk(msg)
+    } catch {}
+  }
+})
+
+// Append a user line to the chat area.
+function appendUser(text) {
+  messagesEl.append(el('div', {}, el('b', {}, 'You: '), text))
+  messagesEl.scrollTop = messagesEl.scrollHeight
+}
+
+// Send the full history to the engine for completion.
+function send() {
+  const text = inputEl.value.trim()
+  if (!text) return
+  inputEl.value = ''
+
+  appendUser(text)
+  history.push({ role: 'user', content: text })
+
+  statusEl.textContent = 'Thinking…'
+  pipe.write(Buffer.from(JSON.stringify({ type: 'infer', history }) + '\n'))
+}
+
+// UI events trigger send.
+sendBtn.onclick = send
+inputEl.onkeydown = (e) => { if (e.key === 'Enter') send() }
+
+// Cleanup: ask the engine to close and end the pipe.
+window.addEventListener('beforeunload', () => {
+  try { pipe.write(Buffer.from(JSON.stringify({ type: 'close' }) + '\n')) } catch {}
+  try { pipe.end() } catch {}
+})
+```
+</WrapCode>
+</Step>
+
+<Step>
+Compile TypeScript:
+
+```bash
+# root
+npm run build
+
+# engine
+cd engine
+npm run build
+cd ..
+```
+</Step>
+
+</Steps>
+
+`app.ts` is the UI entry point: it renders the chat interface, spawns the engine, and renders streamed tokens as they arrive.
+Now the UI can send history and render streaming output.
+
+## Task completed
+
+Run the app from the project root:
+```bash
+pear run --dev .
+```
+
+On the first run, the model may download from peers (watch the terminal for progress). Once it finishes, type a message and press **Enter** or click **Send** — the response should stream into the UI token by token:
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+  <img
+    src="/screenshots/pear-task-completed.png"
+    alt="Task completed"
+    style={{ width: "50%", height: "auto" }}
+  />
+</div>

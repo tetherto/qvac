@@ -1,0 +1,25 @@
+---
+title: "ping( )"
+titleStyle: code
+description: Sends a ping request to the server and returns the pong response.
+---
+
+```ts
+function ping(): Promise<{
+  number: number;
+  type: "pong";
+}>;
+```
+
+## Returns
+
+`Promise<{ number: number; type: "pong" }>` — A promise that resolves to a pong response containing a number.
+
+| Field | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| number | `number` | ✓ | Response number |
+| type | `"pong"` | ✓ | Response type |
+
+## Throws
+
+When the response type is not "pong".

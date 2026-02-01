@@ -1,0 +1,120 @@
+{
+  "name": "@qvac/transcription-whispercpp",
+  "version": "0.3.17",
+  "description": "transcription addon for qvac",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.0"
+  },
+  "scripts": {
+    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\"",
+    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"**/*.js\"",
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:integration:long": "brittle-bare test/integration/**/longES.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-whisper-core && bare-make install",
+    "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-whisper-core --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target test-whisper-core",
+    "coverage:cpp:summary": "cd build/addon/tests && llvm-cov-19 report ./test-whisper-core --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./test-whisper-core -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./test-whisper-core -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
+    "test:integration:multiple": "brittle-bare test/integration/**/multiple-transcriptions.test.js",
+    "test:integration:chunking": "brittle-bare test/integration/audio-ctx-chunking.test.js",
+    "test:integration:live-stream-simultion": "brittle-bare test/integration/live-stream-simulation.test.js",
+    "test:integration:corrupted-model": "brittle-bare test/integration/corrupted-model.test.js",
+    "test:integration:model-file-validation": "brittle-bare test/integration/model-file-validation.test.js",
+    "test:integration:accuracy": "brittle-bare test/integration/accuracy-multilang.test.js",
+    "test:unit:reload:esraw": "brittle-bare test/stand-alone/addon.reload.esraw.test.js",
+    "test:stand-alone:gpu": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
+    "test:stand-alone:gpu-speed": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
+    "test": "npm run test:unit && npm run test:integration && npm run test:integration:multiple && npm run test:integration:chunking && npm run test:integration:live-stream-simultion && npm run test:integration:corrupted-model && npm run test:integration:model-file-validation",
+    "test:dts": "tsc index.d.ts transcription-ffmpeg.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
+    "prepare:husky": "husky"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "configChecker.js",
+    "index.js",
+    "whisper.js",
+    "prebuilds",
+    "index.d.ts",
+    "lib",
+    "transcription-addon",
+    "test/mobile"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac-lib-infer-whispercpp.git"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "whisper",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac-lib-infer-whispercpp/issues",
+  "homepage": "https://github.com/tetherto/qvac-lib-infer-whispercpp#readme",
+  "devDependencies": {
+    "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-filesystem": "^0.1.0",
+    "@qvac/dl-hyperdrive": "^0.1.0",
+    "@types/node": "^22",
+    "bare-buffer": "^3.4.2",
+    "bare-fs": "^4.5.1",
+    "bare-tty": "^5.0.3",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "fs": "npm:bare-fs",
+    "husky": "^9.1.7",
+    "os": "npm:bare-os@^3.6.2",
+    "sinon": "^21.0.0",
+    "standard": "^17.1.2",
+    "tty": "npm:bare-node-tty",
+    "util": "npm:bare-utils@^1.5.1"
+  },
+  "dependencies": {
+    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.2.0",
+    "@qvac/logging": "^0.1.0",
+    "@qvac/util-transcription": "^0.1.4",
+    "bare-channel": "^5.2.2",
+    "bare-ffmpeg": "^1.0.0-32",
+    "bare-node-worker-threads": "^1.0.0",
+    "bare-path": "^3.0.0",
+    "bare-stream": "^2.7.0",
+    "bare-worker": "^4.1.0",
+    "path": "npm:bare-path",
+    "process": "npm:bare-process@^4.2.2",
+    "stream": "npm:bare-node-stream",
+    "worker_threads": "npm:bare-node-worker-threads@^1.0.0"
+  },
+  "peerDependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    "./transcription-addon": {
+      "types": "./transcription-addon/index.d.ts",
+      "default": "./transcription-addon/index.js"
+    },
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js",
+    "./binding.js": "./binding.js"
+  },
+  "types": "index.d.ts"
+}

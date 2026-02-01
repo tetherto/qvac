@@ -1,0 +1,34 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "0.12.2"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.3.0"
+    },
+    "sentencepiece",
+    "whisper-cpp",
+    "ssplit",
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    },
+    "bergamot-translator"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ]
+}
