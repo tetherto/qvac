@@ -1,7 +1,6 @@
 name: On PR Trigger (Qvac-lib-infer-llamacpp-llm)
 
 on:
-  # ✅ Safe PR validation path (no publishing)
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
@@ -10,8 +9,6 @@ on:
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
 
-  # ✅ Keep label-based "verify" path that needs secrets/publishing
-  # ⚠️ But DO NOT allow this on release-* PRs
   pull_request_target:
     types: [labeled]
     branches:
@@ -26,10 +23,6 @@ permissions:
   contents: write
   pull-requests: write
   packages: write
-
-concurrency:
-  group: pr-llm-llamacpp-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
 
 env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
