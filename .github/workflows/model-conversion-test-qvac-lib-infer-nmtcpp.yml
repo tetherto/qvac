@@ -140,7 +140,7 @@ jobs:
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -157,8 +157,9 @@ jobs:
 
           # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
           else
             # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
@@ -167,7 +168,11 @@ jobs:
 
       - name: Configure git
         shell: bash
-        run: git config --global --add url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install vcpkg
         run: |
