@@ -92,11 +92,7 @@ jobs:
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          ref_name="${{ github.ref_name }}"
-          qvac_registry="https://npm.pkg.github.com/"
-          if [[ "$ref_name" == release-* ]]; then
-            qvac_registry="https://registry.npmjs.org/"
-          fi
+          qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -228,11 +224,7 @@ jobs:
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          ref_name="${{ github.ref_name }}"
-          qvac_registry="https://npm.pkg.github.com/"
-          if [[ "$ref_name" == release-* ]]; then
-            qvac_registry="https://registry.npmjs.org/"
-          fi
+          qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
