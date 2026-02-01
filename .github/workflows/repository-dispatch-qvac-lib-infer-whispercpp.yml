@@ -3,6 +3,8 @@ name: Dispatch on README (Qvac-lib-infer-whispercpp)
 on:
   pull_request:
     types: [closed]
+    paths:
+      - "packages/qvac-lib-infer-whispercpp/**"
 
 env:
   WORKDIR: packages/qvac-lib-infer-whispercpp
