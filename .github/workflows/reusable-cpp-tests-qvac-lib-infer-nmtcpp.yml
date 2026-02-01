@@ -53,17 +53,16 @@ jobs:
           sudo apt install -y vulkan-sdk
 
       - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
         run: |
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://npm.pkg.github.com/
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
           //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           NPMRC
-          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
-            echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
-          fi
           GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
           git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
