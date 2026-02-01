@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - release-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
 
@@ -13,13 +14,22 @@ permissions:
   packages: write
 
 jobs:
-  prebuild:
+  prebuild-main:
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+    with:
+      publish_target: "gpr"
+
+  run-integration-tests:
+    needs: prebuild-main
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+
+  prebuild-release:
+    if: startsWith(github.ref_name, 'release-')
     uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
     secrets: inherit
     with:
       publish_target: "npm"
-
-  run-integration-tests:
-    needs: prebuild
-    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
-    secrets: inherit

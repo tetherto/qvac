@@ -104,7 +104,7 @@ jobs:
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
           workdir: ${{ env.PKG_DIR }}
 
@@ -165,8 +165,22 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
+  run-mobile-integration-tests:
+    needs: [changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+      )
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
   merge-guard:
-    needs: [changes, sanity-checks, prebuild, run-integration-tests]
+    needs: [changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
