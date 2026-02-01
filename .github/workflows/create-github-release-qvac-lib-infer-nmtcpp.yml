@@ -38,7 +38,7 @@ jobs:
         with:
           current_version: ${{ inputs.published_version }}
           prev_sha: ${{ inputs.prev_sha }}
-          package_json_path: ${{ inputs.workdir }}/package.json
+          workdir: ${{ inputs.workdir }}
 
       - name: Verify Release Notes
         if: steps.version.outputs.bumped == 'true'

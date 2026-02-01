@@ -41,7 +41,7 @@ jobs:
     if: needs.prebuild.result == 'success' && needs.prebuild.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-whispercpp.yml
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       published_version: ${{ needs.prebuild.outputs.published_version }}

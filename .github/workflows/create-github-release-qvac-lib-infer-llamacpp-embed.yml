@@ -1,4 +1,4 @@
-name: "create-github-release (Qvac-lib-infer-llamacpp-llm)"
+name: "Create GitHub Release (Qvac-lib-infer-llamacpp-embed)"
 
 on:
   workflow_call:
@@ -15,8 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
-
+        default: "packages/qvac-lib-infer-llamacpp-embed"
 permissions:
   contents: write
 
@@ -26,7 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,10 +37,10 @@ jobs:
         with:
           current_version: ${{ inputs.published_version }}
           prev_sha: ${{ inputs.prev_sha }}
+          workdir: ${{ inputs.workdir }}
 
       - name: Verify Release Notes
         if: steps.version.outputs.bumped == 'true'
-        working-directory: ${{ inputs.workdir }}
         run: |
           set -euo pipefail
           notes_path="release-notes/v${{ steps.version.outputs.current }}.md"
@@ -56,7 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.current }}
-          name: QVAC LLM Addon v${{ steps.version.outputs.current }}
-          body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
+          name: QVAC Embed Addon v${{ steps.version.outputs.current }}
+          body_path: release-notes/v${{ steps.version.outputs.current }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
