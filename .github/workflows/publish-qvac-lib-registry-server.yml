@@ -17,6 +17,17 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
+  release-pr-guard:
+    name: Release PR Guard
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-lib-dl-base
+      package-json-path: packages/qvac-lib-dl-base/package.json
+      changelog-path: packages/qvac-lib-dl-base/CHANGELOG.md
+
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
