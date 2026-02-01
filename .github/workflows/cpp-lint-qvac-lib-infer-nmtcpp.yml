@@ -133,10 +133,10 @@ jobs:
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=https://npm.pkg.github.com/
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
           NPMRC
 
       - name: Install npm dependencies
