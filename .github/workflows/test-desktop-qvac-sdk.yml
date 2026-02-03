@@ -142,6 +142,9 @@ jobs:
       - name: Ensure SDK types exist (build SDK if needed)
         shell: bash
         working-directory: ${{ env.WORKDIR }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -158,31 +161,41 @@ jobs:
 
           echo "⚠️ SDK types missing; building SDK to generate dist/*.d.ts"
 
-          # Build the SDK using whatever lockfile exists
+          cat > "${SDK_DIR}/.npmrc" <<NPMRC
+          always-auth=true
+          @tetherto:registry=https://npm.pkg.github.com/
+          @qvac:registry=https://npm.pkg.github.com/
+          registry=https://registry.npmjs.org/
+          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          NPMRC
+
+          # Force tools to use this exact config file
+          export NPM_CONFIG_USERCONFIG="${SDK_DIR}/.npmrc"
+
+          # Optional visibility without leaking secrets
+          echo "npm userconfig: ${NPM_CONFIG_USERCONFIG}"
+          echo "@qvac registry: $(npm config get @qvac:registry || true)"
+          echo "@tetherto registry: $(npm config get @tetherto:registry || true)"
+          echo "default registry: $(npm config get registry || true)"
+
           cd "${SDK_DIR}"
 
-          if [ -f bun.lock ] || [ -f bun.lockb ]; then
-            # Ensure bun exists on the runner (Node setup does not install bun)
-            if ! command -v bun >/dev/null 2>&1; then
-              echo "Installing bun..."
-              curl -fsSL https://bun.sh/install | bash
-              export BUN_INSTALL="$HOME/.bun"
-              export PATH="$BUN_INSTALL/bin:$PATH"
-            fi
-
-            bun install
-            bun run build
-          else
-            if [ -f package-lock.json ]; then
-              npm ci
-            else
-              npm install
-            fi
-            npm run build
+          # Install bun if needed
+          if ! command -v bun >/dev/null 2>&1; then
+            echo "Installing bun..."
+            curl -fsSL https://bun.sh/install | bash
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
           fi
+
+          # Bun install MUST see the registry config above
+          bun install --no-save
+          bun run build
 
           test -f "${TYPES_FILE}"
           echo "✅ SDK types generated"
+
 
       
       - name: Debug file dependency target
