@@ -9,14 +9,12 @@
 
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
-#include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
-using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
@@ -152,7 +150,7 @@ void MtmdLlmContext::tokenizeChat(
     const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
     bool isCacheLoaded) {
   common_chat_templates_inputs inputs;
-  std::string formattedChat;
+  common_chat_params formattedChat;
 
   bool isLastMessageFromUser = false;
   bool addSpecial = false;
@@ -181,12 +179,8 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format("[MtmdLlm] formatted prompt: %s\n", formattedChat.c_str()));
-
   mtmd_input_text text;
-  text.text = formattedChat.c_str();
+  text.text = formattedChat.prompt.c_str();
   text.add_special = addSpecial;
   text.parse_special = true;
 
@@ -214,7 +208,8 @@ bool MtmdLlmContext::evalMessage(
 
 bool MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools,
+    bool isCacheLoaded) {
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
 
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
@@ -423,6 +418,7 @@ bool MtmdLlmContext::generateResponse(
   if (nRemain == 0) {
     flushPendingUtf8ToCallback(outputCallback);
   }
+
   return true;
 }
 

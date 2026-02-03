@@ -7,10 +7,9 @@ const process = require('bare-process')
 const { downloadModel } = require('./utils')
 
 async function main () {
-  console.log('Native Logging Example: Demonstrates C++ addon logging integration')
-  console.log('==================================================================')
+  console.log('=== C++ Logger Example ===')
 
-  // 1. Setting up C++ logger - must be done before creating any addon instances
+  // IMPORTANT: Set up the logger FIRST, before creating any addon instances
   console.log('Setting up C++ logger...')
 
   setLogger((priority, message) => {
@@ -18,7 +17,8 @@ async function main () {
       0: 'ERROR',
       1: 'WARNING',
       2: 'INFO',
-      3: 'DEBUG'
+      3: 'DEBUG',
+      4: 'OFF'
     }
 
     const priorityName = priorityNames[priority] || 'UNKNOWN'
@@ -48,11 +48,12 @@ async function main () {
     modelName
   }
 
+  // 4. Create the `config` object
+  // an example of possible configuration
   const config = {
-    device: 'gpu',
-    gpu_layers: '99',
-    ctx_size: '1024',
-    verbosity: '2'
+    gpu_layers: '99', // number of model layers offloaded to GPU.
+    ctx_size: '1024', // context length
+    device: 'gpu' // must be specified: 'gpu' or 'cpu'
   }
 
   // 5. Loading model
@@ -80,23 +81,20 @@ async function main () {
       }
     ]
 
+    // 7. Run Inference
     const response = await model.run(prompt)
-    let fullResponse = ''
+    const buffer = []
 
     await response
       .onUpdate(data => {
         process.stdout.write(data)
-        fullResponse += data
+        buffer.push(data)
       })
       .await()
 
     console.log('\n')
-    console.log('Full response:\n', fullResponse)
+    console.log('Full response:\n', buffer.join(''))
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
-  } catch (error) {
-    const errorMessage = error?.message || error?.toString() || String(error)
-    console.error('Error occurred:', errorMessage)
-    console.error('Error details:', error)
   } finally {
     // 7. Cleaning up resources
     await model.unload()

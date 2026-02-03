@@ -5,7 +5,7 @@ const logger = require('./utils/logger')
 const ApiError = require('./utils/ApiError')
 const { HTTP_METHODS, ERRORS } = require('./utils/constants')
 const { runAddon } = require('./services/runAddon')
-const { modelManager } = require('./services/modelManager')
+const { getModelStatus } = require('./services/p2pModelLoader')
 const { URL } = require('bare-url')
 const { parseJson, formatZodError } = require('./utils/helper')
 const { ZodError } = require('zod')
@@ -51,6 +51,7 @@ const logErrorDetails = (req, res, method, url, host, body) => {
   if (statusCode >= 400) {
     const contentLength = res.getHeader('content-length') || '(unknown)'
     const userAgent = req.headers['user-agent'] || ''
+    const query = req.query ? JSON.stringify(req.query) : ''
 
     const log = [
       '[API]',
@@ -61,6 +62,7 @@ const logErrorDetails = (req, res, method, url, host, body) => {
       host,
       '-',
       userAgent,
+      `Query: ${query ? JSON.stringify(query) : ''}`,
       `Body: ${body ? JSON.stringify(body) : ''}`
     ].join(' ')
     logger.error(log)
@@ -92,48 +94,35 @@ const handleRequest = async (req, res) => {
     }
   }
 
-  logger.debug(`[${requestId}] Request body: ${JSON.stringify(body)}`)
+  logger.info(`[${requestId}] Request body: ${JSON.stringify(body)}`)
   res.setHeader('Content-Type', 'application/json')
 
   try {
     if (pathname === '/' && method === HTTP_METHODS.GET) {
       logger.info(`[${requestId}] Handling health check request`)
       return res.end(JSON.stringify({
-        message: 'LlamaCpp Benchmark Server is running'
+        message: 'LLama Addon Benchmark Server is running'
       }))
     }
-
     if (pathname === '/status' && method === HTTP_METHODS.GET) {
       logger.info(`[${requestId}] Handling status request`)
-      const status = modelManager.getStatus()
+      const status = getModelStatus()
       return res.end(JSON.stringify({
         message: 'Model Status',
         status
       }))
     }
-
     if (pathname === '/run' && method === HTTP_METHODS.POST) {
       logger.info(`[${requestId}] Received run request`)
-
       const result = await runAddon(body)
-
       logger.info(`[${requestId}] Completed run request for ${result.outputs.length} inputs`)
       return res.end(JSON.stringify({
         data: result
       }))
     }
-
     throw new ApiError(404, ERRORS.ROUTE_NOT_FOUND)
   } catch (error) {
-    logger.error(`[${requestId}] Error handling request:`, {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-      code: error.code,
-      status: error.status,
-      toString: String(error),
-      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
-    })
+    logger.error(`[${requestId}] Error handling request: ${error}`)
     handleError(error, res)
   } finally {
     res.on('finish', () => {

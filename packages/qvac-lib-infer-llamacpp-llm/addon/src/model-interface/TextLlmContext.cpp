@@ -1,7 +1,6 @@
 #include "TextLlmContext.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 
 #include <llama.h>
@@ -11,13 +10,10 @@
 #include "common/common.h"
 #include "common/log.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
-#include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/Qwen3ReasoningUtils.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
-using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-identifier-naming,readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
@@ -211,10 +207,6 @@ void TextLlmContext::tokenizeChat(
   }
   prompt = getPrompt(tmpls_.get(), inputs);
 
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format("[TextLlm] formatted prompt: %s\n", prompt.c_str()));
-
   if (!prompt.empty()) {
     inputTokens = common_tokenize(lctx_, prompt, addSpecial, true);
   } else {
@@ -260,7 +252,8 @@ bool TextLlmContext::evalMessage(
 
 bool TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools,
+    bool isCacheLoaded) {
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
@@ -424,7 +417,6 @@ bool TextLlmContext::generateResponse(
     flushPendingUtf8ToCallback(outputCallback);
     return true;
   }
-
   while (nRemain != 0) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
@@ -486,6 +478,7 @@ bool TextLlmContext::generateResponse(
   if (nRemain == 0) {
     flushPendingUtf8ToCallback(outputCallback);
   }
+
   return true;
 }
 
@@ -564,7 +557,6 @@ llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
 
   return tokensToRemove;
 }
-
 bool TextLlmContext::handleQwen3ReasoningEOS(
     llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
     llama_pos& nPast,

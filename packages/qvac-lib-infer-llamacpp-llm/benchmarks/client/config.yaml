@@ -1,0 +1,22 @@
+server:
+  temperature: 0.7
+  top_p: 0.9
+  context_window_size: 8000
+  prefill_chunk_size: 1024
+  max_tokens: 500
+  lib: "@tetherto/qvac-lib-inference-addon-mlc-llama-3_2_1b-q4f16_1"
+
+model_config:
+  gpu_layers: "99"
+  ctx_size: "10240"
+  temp: "0.7"
+  top_p: "0.9"
+  n_predict: '2000'
+
+benchmark:
+  num_samples: 1000
+  datasets:
+    - gsm8k
+    - mmlu
+    - squad
+    - arc

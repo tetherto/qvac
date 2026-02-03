@@ -1,10 +1,11 @@
-import BaseInference, {
-  ReportProgressCallback
-} from '@qvac/infer-base/WeightsProvider/BaseInference'
-import type { QvacResponse } from '@qvac/infer-base'
-import type QvacLogger from '@qvac/logging'
+/// <reference types="node" />
 
-export type NumericLike = number | `${number}`
+import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference'
+import WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider'
+import type QvacResponse from '@qvac/response'
+import type Logger from '@qvac/logging'
+
+type NumericLike = number | string
 
 export interface Loader {
   ready(): Promise<void>
@@ -15,24 +16,6 @@ export interface Loader {
     opts: { diskPath: string; progressReporter?: unknown }
   ): Promise<{ await(): Promise<void> }>
   getFileSize?(path: string): Promise<number>
-}
-
-export interface AddonMessage {
-  type: 'text'
-  input: string
-}
-export interface AddonMediaMessage {
-  type: 'media'
-  content: Uint8Array
-}
-export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
-
-export interface Addon {
-  loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
-  activate(): Promise<void>
-  runJob(messages: AddonRunJobMessage[]): Promise<boolean>
-  cancel(): Promise<void>
-  unload(): Promise<void>
 }
 
 export interface LlamaConfig {
@@ -60,84 +43,116 @@ export interface LlamaConfig {
 
 export interface LlmLlamacppArgs {
   loader: Loader
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
-  diskPath?: string
+  logger?: Logger
+  opts?: Record<string, any>
+  diskPath: string
   modelName: string
   projectionModel?: string
-  modelPath?: string
-  modelConfig?: Record<string, string>
 }
 
-export interface UserTextMessage {
-  role: 'system' | 'assistant' | 'user' | 'tool' | 'session' | string
-  content: string
-  type?: undefined
-  [key: string]: any
+export interface AddonTextMessage {
+  type: 'text'
+  input: string
 }
 
-export interface UserMediaMessage {
-  role: 'user'
+export interface AddonMediaMessage {
   type: 'media'
   content: Uint8Array
 }
 
-export interface ChatFunctionDefinition {
-  type: 'function'
-  name: string
-  description?: string
-  parameters?: Record<string, any>
+export type AddonRunJobMessage = AddonTextMessage | AddonMediaMessage
+
+export interface FinetuningParams {
+  trainDatasetDir: string
+  evalDatasetDir: string
+  outputParametersDir: string
+  numberOfEpochs?: number
+  learningRate?: number
+  lrMin?: number
+  lrScheduler?: string
+  warmupRatio?: number
+  warmupSteps?: number
+  loraRank?: number
+  loraAlpha?: number
+  loraModules?: string
+  loraDropout?: number
+  loraInitStd?: number
+  outputAdapterPath?: string
+  weightDecay?: number
+  checkpointSaveSteps?: number
+  checkpointSaveDir?: string
+  resumeFromCheckpoint?: string
+  autoResume?: boolean
+  assistantLossOnly?: boolean
+  chatTemplatePath?: string
+  contextLength?: number
+  batchSize?: number
+  microBatchSize?: number
 }
 
-export type Message =
-  | UserTextMessage
-  | UserMediaMessage
-  | ChatFunctionDefinition
-
-export interface DownloadWeightsOptions {
-  closeLoader?: boolean
+export interface Addon {
+  loadWeights(data: {
+    filename: string
+    chunk: Uint8Array | null
+    completed: boolean
+  }): Promise<void>
+  activate(): Promise<void>
+  runJob(messages: AddonRunJobMessage[]): Promise<boolean>
+  cancel(jobId?: number): Promise<void>
+  unload(): Promise<void>
+  finetune?(params?: FinetuningParams): Promise<void>
+  status?(): Promise<string>
+  pause?(): Promise<void>
 }
 
-export interface DownloadResult {
-  filePath: string | null
-  error: boolean
-  completed: boolean
+export type ProgressReportCallback = (bytes: number) => void
+
+export interface Message {
+  role: 'system' | 'user' | 'assistant' | 'tool' | string
+  content: string
+  type?: 'media'
 }
 
-export default class LlmLlamacpp extends BaseInference {
-  protected addon: Addon
+declare class LlmLlamacpp extends BaseInference {
+  protected readonly _config: Record<string, any>
+  protected readonly _diskPath: string
+  protected readonly _modelName: string
+  protected _defaultFinetuneParams: FinetuningParams | null
+  protected addon!: Addon
+  protected weightsProvider: WeightsProvider
 
-  constructor(args: LlmLlamacppArgs, config: LlamaConfig)
+  constructor(
+    args: LlmLlamacppArgs,
+    config: LlamaConfig,
+    finetuningParams?: FinetuningParams | null
+  )
 
-  _load(
+  protected _load(
     closeLoader?: boolean,
-    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
+    onDownloadProgress?: ProgressReportCallback
   ): Promise<void>
 
-  load(
-    closeLoader?: boolean,
-    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
-  ): Promise<void>
+  protected _createAddon(
+    configurationParams: {
+      path: string
+      projectionPath: string
+      config: LlamaConfig
+    },
+    finetuningParams?: FinetuningParams | null
+  ): Addon
 
-  downloadWeights(
-    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
-    opts?: DownloadWeightsOptions
-  ): Promise<Record<string, DownloadResult>>
-
-  _downloadWeights(
-    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
-    opts?: DownloadWeightsOptions
-  ): Promise<Record<string, DownloadResult>>
-
-  _runInternal(prompt: Message[]): Promise<QvacResponse>
+  protected _runInternal(prompt: Message[]): Promise<QvacResponse>
 
   run(prompt: Message[]): Promise<QvacResponse>
-
-  unload(): Promise<void>
-
   cancel(): Promise<void>
-
-  getApiDefinition(): string
+  unload(): Promise<void>
+  finetune(finetuningOptions?: FinetuningParams): Promise<{ status: string }>
+  pauseFinetune(): Promise<void>
+  resumeFinetune(): Promise<void>
+  protected _waitForFinetuneCompletion(options?: {
+    pollIntervalMs?: number
+    timeoutMs?: number
+  }): Promise<string>
 }
 
-export { ReportProgressCallback, QvacResponse }
+export = LlmLlamacpp

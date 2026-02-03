@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,8 +8,7 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
-#include "CacheManager.hpp"
-#include "LlamaLazyInitializeBackend.hpp"
+#include "LlamaFinetuningHelpers.hpp"
 #include "LlmContext.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
@@ -31,8 +29,8 @@ public:
 
   /**
    * The Constructor for llama model.
-   * @param modelPath - path to the model file.
-   * @param projectionPath - path to the projector file.
+   * @param model_path - path to the model file.
+   * @param projectorPath - path to the projector file.
    * @param configFilemap - map of configuration files.
    */
   LlamaModel(
@@ -88,12 +86,12 @@ public:
   /**
    * Initialize backend (llama.cpp setup).
    */
-  void initializeBackend(const std::string& backendsDir = "");
+  void initializeBackend();
 
-  /**
-   * Check if model is loaded.
-   */
-  bool isLoaded();
+    /**
+     * Check if model is loaded.
+     */
+    bool isLoaded();
 
   /**
    * Ensure model is initialized
@@ -101,6 +99,21 @@ public:
   void waitForLoadInitialization() final {
     initLoader_.waitForLoadInitialization();
   }
+
+  /**
+   * Access the underlying llama context pointer.
+   */
+  llama_context* getContext();
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel();
+
+  /**
+   * Access the mutable common parameters associated with the active context.
+   */
+  common_params& getCommonParams();
 
   /**
    * The Runtime stats method. It outputs the runtime infernce stats per job.
@@ -123,6 +136,32 @@ private:
     bool shouldResetAfterInference = false;
   };
   ResolvedPrompt resolveChatAndTools(const std::string& input);
+
+public:
+  /**
+   * Finetune the model using LoRA.
+   *
+   * @param params - finetuning parameters
+   * @param logCallback - callback function for logging messages
+   * @param allowResumeFromPause - if true, resume from latest pause checkpoint
+   */
+  void finetune(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      std::function<void(const std::string&)> logCallback = {},
+      bool allowResumeFromPause = false);
+
+  /**
+   * Request pause of finetuning (sets pause flag in checkpoint state).
+   * Returns true if pause was requested, false if not finetuning.
+   */
+  bool requestPause();
+
+  /**
+   * Clear pause request flag (for resume).
+   */
+  void clearPauseRequest();
+
+private:
 
   /**
    * The Common params parse method. It parses the common params.
@@ -195,4 +234,43 @@ private:
   // configuration values parsed from configFilemap
   llama_pos configuredNDiscarded_ = 0;
   std::optional<CacheManager> cacheManager_;
+  // Finetuning private methods
+  void validateFinetuningParams(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  ggml_opt_dataset_t prepareTrainingDataset(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  void initializeLoraAdapter(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      uint32_t targetModules, llama_adapter_lora*& adapter);
+  llama_finetuning_helpers::LoraLrSchedulerState createLrScheduler(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      int64_t totalSteps);
+  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  initializeCheckpointing(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      llama_adapter_lora* adapter,
+      llama_finetuning_helpers::LoraLrSchedulerState* scheduler,
+      std::function<void(const std::string&)> logFn);
+  void configureOptimizer(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      llama_adapter_lora* adapter,
+      llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
+      llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
+      bool loadOptimizerState = false);
+  void executeTrainingLoop(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      ggml_opt_dataset_t dataset, int64_t trainSplit,
+      llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
+      llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
+      std::function<void(const std::string&)> logCallback,
+      uint32_t startEpoch = 0, bool resumingFromPause = false);
+  void saveLoraAdapter(
+      llama_adapter_lora* adapter,
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+
+  // Finetuning state
+  llama_finetuning_helpers::TrainingCheckpointState* currentCheckpointState_ =
+      nullptr;
+  bool optimizerInitialized_ =
+      false; // Track if optimizer has been initialized for this context
 };

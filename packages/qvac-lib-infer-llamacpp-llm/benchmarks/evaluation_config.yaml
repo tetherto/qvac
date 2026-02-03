@@ -1,0 +1,19 @@
+
+addons:
+  - name: "llama-3_2_1b-q4f16_1"
+    lib: "@tetherto/qvac-lib-inference-addon-mlc-llama-3_2_1b-q4f16_1"
+    description: "Llama 3.2 1B model with Q4F16 quantization"
+    parameters:
+      max_tokens: 500
+      temperature: 0.7
+      top_p: 0.9
+      num_return_sequences: 1
+      context_window_size: 32768 # 32K tokens
+      prefill_chunk_size: 8096
+    tasks:
+      squad:
+        on: true
+        samples: 100
+      arc:
+        on: true
+        samples: 100

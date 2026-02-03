@@ -149,6 +149,17 @@ public:
   virtual llama_context* getCtx() = 0;
 
   /**
+   * The get model method. It returns the underlying llama_model pointer.
+   */
+  virtual llama_model* getModel() = 0;
+
+  /**
+   * The get params method. It returns a reference to the common parameters
+   * associated with this context.
+   */
+  virtual common_params& getParams() = 0;
+
+  /**
    * The get nPast method. It returns the nPast.
    *
    * @return - the nPast.
