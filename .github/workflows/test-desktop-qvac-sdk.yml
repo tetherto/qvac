@@ -139,7 +139,7 @@ jobs:
           fi
           npm install -g bare bare-make
       
-      - name: Debug file: dependency target
+      - name: Debug file dependency target
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
