@@ -138,6 +138,21 @@ jobs:
             npm install
           fi
           npm install -g bare bare-make
+      
+      - name: Debug file: dependency target
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+          echo "PWD=$(pwd)"
+          echo "file target listing (..):"
+          ls -la ..
+          echo "SDK package.json (..):"
+          cat ../package.json | head -n 40
+          echo "node_modules/@qvac:"
+          ls -la node_modules/@qvac || true
+          npm ls @qvac/sdk || true
+
 
       - name: Build project
         working-directory: ${{ env.WORKDIR }}
