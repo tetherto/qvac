@@ -17,19 +17,22 @@ prefix[tags]?: subject
 - `fix` - Bug fixes
 - `doc` - Documentation changes
 - `test` - Test additions or modifications
-- `mod` - Model-related changes
 - `chore` - Maintenance tasks
 - `infra` - CI/CD, tooling, infrastructure
 
 **Allowed tags (optional, cannot be combined):**
 - `[api]` - API changes (non-breaking)
 - `[bc]` - Breaking changes (including breaking API changes)
+- `[mod]` - Model changes (requires Models section with Added/Removed subsections)
+- `[notask]` - (PRs) allows omitting the ticket in the title
+- `[skiplog]` - skip changelog generation for the PR
 
 **Examples:**
 - `feat: add RAG support for LanceDB`
 - `fix[api]: fix completion stream error handling`
 - `doc: update installation instructions`
 - `feat[bc]: redesign loadModel signature`
+- `feat[mod]: add new whisper and llama models`
 - `chore: update dependencies`
 - `infra: add PR validation workflow`
 
@@ -42,11 +45,14 @@ TICKET prefix[tags]: subject
 
 Where TICKET follows the pattern: `PROJECT-123` (e.g., `QVAC-123`, `SDK-456`)
 
+Use `[notask]` when omitting the ticket: `prefix[notask]: subject`.
+
 **Examples:**
 - `QVAC-123 feat: add RAG support for LanceDB`
 - `QVAC-456 fix[api]: fix completion stream error handling`
 - `QVAC-789 doc: update installation instructions`
 - `QVAC-101 feat[bc]: redesign loadModel signature`
+- `QVAC-202 feat[mod]: add new whisper and llama models`
 
 ## Required PR Body Content
 
@@ -93,6 +99,22 @@ Where TICKET follows the pattern: `PROJECT-123` (e.g., `QVAC-123`, `SDK-456`)
   ```
   ````
 
+**When using `[mod]` tag:**
+- MUST include a Models section with at least one subsection: Added models or Removed models
+- Each subsection MUST contain a fenced code block listing model constant names (one per line)
+- Delete empty subsections instead of using `(none)`
+- Example:
+  ````
+  ## 📦 Models
+  
+  ### Added models
+  
+  ```
+  WHISPER_LARGE_V3_Q5_K
+  LLAMA_3_8B_INST_Q4_K_M
+  ```
+  ````
+
 ## Validation
 
 - Commit messages are validated via Husky commit-msg hook
@@ -111,6 +133,6 @@ Where TICKET follows the pattern: `PROJECT-123` (e.g., `QVAC-123`, `SDK-456`)
 - **ALWAYS** include the colon (`:`) after the prefix and tags
 - **ALWAYS** use lowercase for prefix
 - **ALWAYS** use lowercase for subject (sentence case, not title case)
-- Tags must be in square brackets: `[bc]` or `[api]` (cannot be combined)
+- Tags must be in square brackets: `[api]`, `[bc]`, `[mod]`, `[notask]`, `[skiplog]` (cannot be combined)
 - PR titles MUST start with a ticket number in format: `PROJECT-123`
-- When creating PRs with `[bc]` or `[api]` tags, ALWAYS remind the user about required code examples in the PR body
+- When creating PRs with `[bc]`, `[api]`, or `[mod]` tags, ALWAYS remind the user about required sections in the PR body

@@ -35,7 +35,11 @@ import {
 } from "./logging-stream";
 import { ttsRequestSchema, ttsResponseSchema } from "./text-to-speech";
 import { errorResponseSchema } from "./error";
-import { ragRequestSchema, ragResponseSchema } from "./rag";
+import {
+  ragRequestSchema,
+  ragResponseSchema,
+  ragProgressUpdateSchema,
+} from "./rag";
 import {
   deleteCacheRequestSchema,
   deleteCacheResponseSchema,
@@ -44,6 +48,7 @@ import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
 } from "./get-model-info";
+import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 
 export const requestSchema = z.union([
   pingRequestSchema,
@@ -62,6 +67,7 @@ export const requestSchema = z.union([
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
+  ocrStreamRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -81,8 +87,10 @@ export const responseSchema = z.discriminatedUnion("type", [
   stopProvideResponseSchema,
   errorResponseSchema,
   ragResponseSchema,
+  ragProgressUpdateSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
+  ocrStreamResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

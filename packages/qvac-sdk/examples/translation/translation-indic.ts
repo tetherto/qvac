@@ -17,6 +17,7 @@ try {
       console.log(progress);
     },
     modelConfig: {
+      engine: "IndicTrans",
       from: "eng_Latn",
       to: "hin_Deva",
     },

@@ -74,7 +74,7 @@ export function registerLoggingStream(
       try {
         streamHandler(log.level, log.namespace, log.message);
       } catch (error) {
-        console.error(`Error flushing buffered log for ID ${id}:`, error);
+        console.error(`Error flushing buffered log for ID ${id}:`, error); // fallback (avoid recursion)
       }
     }
     logBuffer.delete(id);
@@ -120,7 +120,7 @@ export function sendLogToStreams(
       try {
         streamHandler(level, namespace, message);
       } catch (error) {
-        console.error(`Error sending log to stream for ID ${id}:`, error);
+        console.error(`Error sending log to stream for ID ${id}:`, error); // fallback (avoid recursion)
       }
     }
   } else if (isBuffering) {
@@ -176,6 +176,6 @@ export function clearAllLoggingStreams() {
   bufferingTimeouts.clear();
 
   if (count > 0) {
-    console.log(`🧹 Cleared logging streams for ${count} ID(s)`);
+    console.log(`🧹 Cleared logging streams for ${count} ID(s)`); // fallback (avoid recursion)
   }
 }

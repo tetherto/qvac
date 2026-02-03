@@ -1,5 +1,5 @@
 import type { TtsRequest, TtsResponse } from "@/schemas";
-import { textToSpeech } from "@/server/bare/addons/tts";
+import { textToSpeech } from "@/server/bare/addons/onnx-tts";
 
 export async function* handleTextToSpeech(
   request: TtsRequest,

@@ -1,11 +1,12 @@
 import process from "bare-process";
+import { isBareKit } from "which-runtime";
 import {
   createBareKitRPCServer,
   createIPCClient,
 } from "@/server/rpc/create-server";
 import { z } from "zod";
 import { destroySwarm } from "@/server/bare/hyperswarm";
-import { closeAllRagInstances } from "@/server/bare/rag-hyperdb/rag-manager";
+import { closeAllRagInstances } from "@/server/bare/rag-hyperdb";
 import { cleanupDownloads } from "@/server/rpc/handlers/load-model/download-manager";
 import { unloadAllModels } from "@/server/bare/registry/model-registry";
 import {
@@ -50,6 +51,11 @@ const defaultHomeDir =
   process.env["HOME"] || process.env["USERPROFILE"] || "/tmp";
 let envConfig = { HOME_DIR: defaultHomeDir };
 let hasRPCConfig = false;
+
+if (isBareKit && process.argv[0]) {
+  logger.info("Running in BareKit mode");
+  envConfig["HOME_DIR"] = process.argv[0];
+}
 
 // Try to parse any argument as JSON config (fail gracefully)
 if (process.argv[2]) {
@@ -127,7 +133,7 @@ function clearLoggers() {
 // Centralized cleanup for graceful shutdown
 let isShuttingDown = false;
 
-const shutdownHandler = async () => {
+async function shutdownHandler() {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
@@ -147,7 +153,7 @@ const shutdownHandler = async () => {
   }
 
   process.exit(0);
-};
+}
 
 process.once("SIGTERM", () => void shutdownHandler());
 process.once("SIGINT", () => void shutdownHandler());

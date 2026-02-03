@@ -1,0 +1,94 @@
+---
+alwaysApply: false
+---
+# Generate Human-Readable Changelog
+
+When the user asks to generate a presentable changelog for a version, follow these steps:
+
+## Step 1: Identify Version
+
+If not specified, check the current version from `package.json` or ask the user.
+
+## Step 2: Read Source Files
+
+Read all files from `changelog/{VERSION}/`:
+- `CHANGELOG.md` - Main changelog entries
+- `breaking.md` - Breaking changes with migration guides  
+- `api.md` - API changes with code examples
+- `models.md` - Model additions/removals with constant names
+
+## Step 3: Generate CHANGELOG_LLM.md
+
+Create `changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines:
+
+### Format Requirements
+
+1. **Title**: `# QVAC SDK v{VERSION} Release Notes`
+
+2. **NPM Link**: Add `📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{VERSION}` right after the title
+
+3. **Introduction**: Write a brief 2-3 sentence summary of what this release brings
+
+4. **Sections**: Transform each section into narrative prose:
+   - **Breaking Changes**: Lead with impact, explain what changed and why, provide clear migration steps with before/after code
+   - **New APIs**: Describe what's possible now, show practical usage examples
+   - **Features**: Explain benefits in user terms, not just what was added
+   - **Bug Fixes**: Describe what was broken and how it's fixed
+   - **Model Changes**: List added/removed models with their constant names, grouped by type (LLM, embedding, whisper, etc.)
+   - **Other sections**: Summarize briefly
+
+5. **Style Guidelines**:
+   - Use complete sentences, not bullet fragments
+   - Lead with benefits/impact
+   - Group related changes together
+   - Add context where helpful (why this matters)
+   - Keep code examples clean and commented
+   - Remove internal jargon, make it accessible
+   - **Do NOT include PR links or references to the original CHANGELOG.md** — this is a standalone document
+   - **Skip entries with no informational value** — generic entries like "Updated models" or "Bumped dependencies" without specific details should be omitted
+
+### Example Transformation
+
+**Original (CHANGELOG.md):**
+```markdown
+- Replace setConfig client API with config file. (see PR [#269](...)) - See [breaking changes](./breaking.md)
+```
+
+**Transformed (CHANGELOG_LLM.md):**
+```markdown
+### Configuration is Now File-Based
+
+The SDK now uses a config file instead of the `setConfig()` API. This means simpler initialization—just create a `qvac.config.json` in your project root and the SDK handles the rest.
+
+**Before:**
+```typescript
+import { setConfig, loadModel } from "@qvac/sdk";
+
+await setConfig({ cacheDirectory: "/custom/cache/path" });
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
+```
+
+**After:**
+```json
+// qvac.config.json
+{ "cacheDirectory": "/custom/cache/path" }
+```
+
+```typescript
+import { loadModel } from "@qvac/sdk";
+
+// Config loads automatically!
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
+```
+```
+
+## Step 4: Output Location
+
+Save the file to: `changelog/{VERSION}/CHANGELOG_LLM.md`
+
+## Execution
+
+To run this rule, tell me something like:
+- "Generate presentable changelog for 0.5.0"
+- "Create CHANGELOG_LLM.md for current version"
+- "Make the changelog human-readable"

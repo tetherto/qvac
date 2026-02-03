@@ -39,12 +39,9 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
     }
 
     try {
-      // Truncate incompatible RPC clients for mobile (keep only rpc-client.js and expo-rpc-client.js)
-      const rpcClientsToTruncate = [
-        "node-rpc-client.js",
-        "bare-rpc-client.js",
-        "bare-client.js",
-      ];
+      // Truncate incompatible RPC clients for mobile
+      // Keep: rpc-client.js, expo-rpc-client.js, bare-client.js (needed for worker bundle)
+      const rpcClientsToTruncate = ["node-rpc-client.js"];
 
       const truncatedContent =
         "// This RPC client is not available in mobile environments";
@@ -66,9 +63,16 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
         }
       }
 
+      // Copy bare imports configuration for bare-pack
+      const bareImportsSource = path.join(qvacSdkPath, "bare-imports.json");
+      const importsMapPath = path.join(qvacSdkPath, "dist", "imports.json");
+      if (fs.existsSync(bareImportsSource)) {
+        fs.copyFileSync(bareImportsSource, importsMapPath);
+        console.log("🔧 QVAC: Copied bare-imports.json for mobile bundle");
+      }
+
       // Remove optional modules from the bundle
       const optionalModules = [
-        "crypto",
         "expo-file-system",
         "react-native-bare-kit",
         "@qvac/sdk/worker.mobile.bundle",
@@ -76,10 +80,35 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       const deferFlags = optionalModules
         .map((mod) => `--defer "${mod}"`)
         .join(" ");
-      // Generate the bundle using bun bare-pack with the current project's dependencies
-      // We use the project root as working directory so bare-pack uses the user's node_modules
+
+      // Detect bare-pack version (v1.x uses --target, v2.x uses --host)
+      let platformFlag = "--host";
+      try {
+        const versionOutput = execSync(
+          `npx bare-pack --version "${workerPath}"`,
+          { cwd: projectRoot, encoding: "utf-8" },
+        ).trim();
+        const versionMatch = versionOutput.match(/v?(\d+)\./);
+        const majorVersion =
+          versionMatch && versionMatch[1] ? parseInt(versionMatch[1], 10) : 2;
+        if (majorVersion < 2) {
+          platformFlag = "--target";
+        }
+      } catch (error) {
+        throw new Error(
+          `Failed to detect bare-pack version. Ensure bare-pack is installed: npm install bare-pack`,
+          { cause: error },
+        );
+      }
+
+      const platforms = ["android-arm64", "ios-arm64", "ios-arm64-simulator"];
+      const platformFlags = platforms
+        .map((p) => `${platformFlag} ${p}`)
+        .join(" ");
+
+      // Generate the bundle using bare-pack with the current project's dependencies
       execSync(
-        `cd "${projectRoot}" && npx bare-pack --target android-arm64 --target ios-arm64 --target ios-arm64-simulator --linked ${deferFlags} --out "${outputPath}" "${workerPath}"`,
+        `cd "${projectRoot}" && npx bare-pack ${platformFlags} --linked --imports "${importsMapPath}" ${deferFlags} --out "${outputPath}" "${workerPath}"`,
         { stdio: "inherit", cwd: projectRoot },
       );
 

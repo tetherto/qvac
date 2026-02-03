@@ -3,7 +3,7 @@ import type {
   TranslateResponse,
   TranslationStats,
 } from "@/schemas";
-import { translate } from "@/server/bare/addons/translation";
+import { translate } from "@/server/bare/addons/nmtcpp-translation";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -11,20 +11,11 @@ const logger = getServerLogger();
 export async function* handleTranslate(
   request: TranslateRequest,
 ): AsyncGenerator<TranslateResponse> {
-  const { modelId, text, stream, modelType } = request;
-  const from = request.modelType === "llm" ? request.from : undefined;
-  const to = request.modelType === "llm" ? request.to : undefined;
-  const context = request.modelType === "llm" ? request.context : undefined;
   try {
-    const generator = translate({
-      modelId,
-      text,
-      from,
-      to: to!,
-      stream,
-      modelType,
-      context,
-    });
+    // Remove the 'type' field from request and pass the rest to translate
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { type, ...translateParams } = request;
+    const generator = translate(translateParams);
     let stats: TranslationStats | undefined;
     let done = false;
     let buffer = "";
@@ -38,7 +29,7 @@ export async function* handleTranslate(
       } else {
         buffer += result.value;
 
-        if (stream) {
+        if (translateParams.stream) {
           yield {
             type: "translate" as const,
             token: result.value,

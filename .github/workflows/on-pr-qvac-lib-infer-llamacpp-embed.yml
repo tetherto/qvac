@@ -46,6 +46,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'

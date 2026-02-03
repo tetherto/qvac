@@ -11,6 +11,17 @@ export { translate } from "./translate";
 export { cancel } from "./cancel";
 export { startQVACProvider } from "./provide";
 export { stopQVACProvider } from "./stop-provider";
-export { ragSaveEmbeddings, ragSearch, ragDeleteEmbeddings } from "./rag";
+export {
+  ragChunk,
+  ragIngest,
+  ragSaveEmbeddings,
+  ragSearch,
+  ragDeleteEmbeddings,
+  ragReindex,
+  ragListWorkspaces,
+  ragCloseWorkspace,
+  ragDeleteWorkspace,
+} from "./rag";
 export { textToSpeech } from "./text-to-speech";
 export { getModelInfo } from "./get-model-info";
+export { ocr } from "./ocr";

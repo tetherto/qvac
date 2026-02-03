@@ -1,5 +1,5 @@
 import type { EmbedRequest, EmbedResponse } from "@/schemas";
-import { embed } from "@/server/bare/addons/llamacpp";
+import { embed } from "@/server/bare/addons/llamacpp-embedding";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();

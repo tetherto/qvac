@@ -1,11 +1,18 @@
-import type { WhisperConfig, ModelType } from "@/schemas";
+import {
+  type WhisperConfig,
+  type ModelTypeInput,
+  normalizeModelType,
+  ModelType,
+} from "@/schemas";
 
 export function transformConfigForReload(
-  modelType: ModelType,
+  modelType: ModelTypeInput,
   config: unknown,
 ) {
-  switch (modelType) {
-    case "whisper": {
+  const canonicalType = normalizeModelType(modelType);
+
+  switch (canonicalType) {
+    case ModelType.whispercppTranscription: {
       const whisperConfig = config as WhisperConfig;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { contextParams, miscConfig, ...whisperParams } = whisperConfig;
@@ -14,10 +21,10 @@ export function transformConfigForReload(
         ...(miscConfig && { miscConfig }),
       };
     }
-    case "llm":
-    case "embeddings":
-    case "nmt":
-    case "tts":
+    case ModelType.llamacppCompletion:
+    case ModelType.llamacppEmbedding:
+    case ModelType.nmtcppTranslation:
+    case ModelType.onnxTts:
       // Return as-is for now
       return config;
     default:

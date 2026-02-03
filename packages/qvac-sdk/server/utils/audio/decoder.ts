@@ -68,12 +68,12 @@ export async function decodeAudioToStream(
           }
         }
       })
-      .onError((errorMessage: string) => {
+      .onError((error: Error) => {
         if (!hasEnded) {
           hasEnded = true;
           clearTimeout(timeoutId);
           setImmediate(() => void decoder.unload());
-          outputStream.destroy(new Error(errorMessage));
+          outputStream.destroy(error);
         }
       });
 

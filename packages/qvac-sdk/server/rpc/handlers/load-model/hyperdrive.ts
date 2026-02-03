@@ -1,4 +1,8 @@
-import type { ModelProgressUpdate, HyperdriveDownloadEntry } from "@/schemas";
+import type {
+  ModelProgressUpdate,
+  HyperdriveDownloadEntry,
+  ShardFileMetadata,
+} from "@/schemas";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import Corestore from "corestore";
@@ -16,8 +20,9 @@ import {
   getShardPath,
   checkShardCompleteness,
   calculateFileChecksum,
+  extractTensorsFromShards,
+  calculatePercentage,
 } from "@/server/utils";
-import type { ShardMetadata } from "@/server/utils/shard-utils";
 import { getModelBySrc } from "@/models/hyperdrive";
 import {
   getActiveDownload,
@@ -402,8 +407,7 @@ async function downloadAndValidateFile(
           type: "modelProgress" as const,
           downloaded: cappedDownloaded,
           total: totalBytes,
-          percentage:
-            totalBytes > 0 ? (cappedDownloaded / totalBytes) * 100 : 0,
+          percentage: calculatePercentage(cappedDownloaded, totalBytes),
           downloadKey: progressContext.downloadKey,
         };
 
@@ -527,7 +531,7 @@ function createManagedDownload(
 async function downloadShardedFilesToFilesystem(
   hyperdriveKey: string,
   firstShardFileName: string,
-  shardMetadata: readonly ShardMetadata[],
+  shardMetadata: readonly ShardFileMetadata[],
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
@@ -588,6 +592,8 @@ async function downloadShardedFilesToFilesystem(
         },
       });
     }
+
+    await extractTensorsFromShards(shardDir, firstShardFileName);
 
     return getShardPath(hyperdriveKey, allFiles[0]!);
   }
@@ -652,8 +658,10 @@ async function downloadShardedFilesToFilesystem(
               shardName: file,
               overallDownloaded,
               overallTotal,
-              overallPercentage:
-                overallTotal > 0 ? (overallDownloaded / overallTotal) * 100 : 0,
+              overallPercentage: calculatePercentage(
+                overallDownloaded,
+                overallTotal,
+              ),
             },
           });
         }
@@ -720,6 +728,8 @@ async function downloadShardedFilesToFilesystem(
         },
       });
     }
+
+    await extractTensorsFromShards(shardDir, firstShardFileName);
 
     // Delete corestore directory after successful download (only when not seeding)
     if (!seed) {

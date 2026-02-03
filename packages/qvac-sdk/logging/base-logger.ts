@@ -53,11 +53,11 @@ export function createBaseLogger(
         const result = transport(level, namespace, message);
         if (result instanceof Promise) {
           result.catch((error: unknown) => {
-            console.error(`Transport error in ${namespace}:`, error);
+            console.error(`Transport error in ${namespace}:`, error); // fallback (avoid recursion)
           });
         }
       } catch (error: unknown) {
-        console.error(`Transport error in ${namespace}:`, error);
+        console.error(`Transport error in ${namespace}:`, error); // fallback (avoid recursion)
       }
     }
   };

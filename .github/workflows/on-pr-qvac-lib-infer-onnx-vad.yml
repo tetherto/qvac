@@ -125,6 +125,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
 
   cpp-lint:
     needs: [context, sanity-checks]

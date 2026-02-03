@@ -106,7 +106,7 @@ async function findConfigFile(
  * 3. SDK defaults
  */
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
-  const configPath = process.env["QVAC_CONFIG_PATH"];
+  const configPath = process.env["QVAC_CONFIG_PATH"] as string | undefined;
 
   if (configPath) {
     const normalizedPath = path.resolve(configPath);

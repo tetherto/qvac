@@ -49,6 +49,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
     uses: ./.github/workflows/cpp-tests-llm.yml

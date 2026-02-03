@@ -47,6 +47,6 @@ export async function unloadModel(params: UnloadModelParams) {
     logger.info(
       "🧹 No models or providers active, automatically closing RPC connection...",
     );
-    await close();
+    close();
   }
 }

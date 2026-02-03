@@ -1,7 +1,36 @@
 import { z } from "zod";
 
-// Marian model languages
-const MARIAN_LANGUAGES = ["en", "de", "es", "it", "ru", "ja"] as const;
+// Marian/Opus model languages
+export const MARIAN_LANGUAGES = ["en", "de", "es", "it", "ru", "ja"] as const;
+
+// Bergamot supports many more language pairs
+export const BERGAMOT_LANGUAGES = [
+  "en",
+  "ar",
+  "bg",
+  "ca",
+  "cs",
+  "de",
+  "es",
+  "et",
+  "fi",
+  "fr",
+  "hu",
+  "is",
+  "it",
+  "ja",
+  "ko",
+  "lt",
+  "lv",
+  "nl",
+  "pl",
+  "pt",
+  "ru",
+  "sk",
+  "sl",
+  "uk",
+  "zh",
+] as const;
 
 // IndicTrans2 model languages
 export const INDICTRANS_LANGUAGES = [
@@ -33,16 +62,19 @@ export const INDICTRANS_LANGUAGES = [
   "urd_Arab", // Urdu
 ] as const;
 
+// Union of all NMT languages (for general type usage)
 export const NMT_LANGUAGES = [
   ...MARIAN_LANGUAGES,
+  ...BERGAMOT_LANGUAGES,
   ...INDICTRANS_LANGUAGES,
 ] as const;
 
-export const nmtConfigBaseSchema = z.object({
+export const NMT_ENGINES = ["Opus", "Bergamot", "IndicTrans"] as const;
+export type NmtEngine = (typeof NMT_ENGINES)[number];
+
+// Common generation parameters (without language fields)
+const nmtGenerationParamsSchema = z.object({
   mode: z.enum(["full"]).optional(),
-  from: z.enum(NMT_LANGUAGES),
-  to: z.enum(NMT_LANGUAGES),
-  // Generation parameters (lowercase to match addon expectations)
   beamsize: z.number().optional(),
   lengthpenalty: z.number().optional(),
   maxlength: z.number().optional(),
@@ -53,6 +85,38 @@ export const nmtConfigBaseSchema = z.object({
   topp: z.number().optional(),
 });
 
+// Opus engine config (Marian-based) - supports MARIAN_LANGUAGES
+const opusConfigSchema = nmtGenerationParamsSchema.extend({
+  engine: z.literal("Opus"),
+  from: z.enum(MARIAN_LANGUAGES),
+  to: z.enum(MARIAN_LANGUAGES),
+});
+
+// Bergamot engine config - supports BERGAMOT_LANGUAGES
+const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
+  engine: z.literal("Bergamot"),
+  from: z.enum(BERGAMOT_LANGUAGES),
+  to: z.enum(BERGAMOT_LANGUAGES),
+  srcVocabPath: z.string().optional(),
+  dstVocabPath: z.string().optional(),
+  normalize: z.number().optional(),
+});
+
+// IndicTrans engine config - supports INDICTRANS_LANGUAGES
+const indicTransConfigSchema = nmtGenerationParamsSchema.extend({
+  engine: z.literal("IndicTrans"),
+  from: z.enum(INDICTRANS_LANGUAGES),
+  to: z.enum(INDICTRANS_LANGUAGES),
+});
+
+// Discriminated union of all engine configs
+export const nmtConfigBaseSchema = z.discriminatedUnion("engine", [
+  opusConfigSchema,
+  bergamotConfigSchema,
+  indicTransConfigSchema,
+]);
+
+// Apply defaults via transform
 export const nmtConfigSchema = nmtConfigBaseSchema.transform((data) => ({
   ...data,
   mode: data.mode ?? "full",
@@ -66,5 +130,8 @@ export const nmtConfigSchema = nmtConfigBaseSchema.transform((data) => ({
   topp: data.topp ?? 1.0,
 }));
 
+export type MarianLanguage = (typeof MARIAN_LANGUAGES)[number];
+export type BergamotLanguage = (typeof BERGAMOT_LANGUAGES)[number];
+export type IndicTransLanguage = (typeof INDICTRANS_LANGUAGES)[number];
 export type NmtLanguage = (typeof NMT_LANGUAGES)[number];
 export type NmtConfig = z.infer<typeof nmtConfigSchema>;

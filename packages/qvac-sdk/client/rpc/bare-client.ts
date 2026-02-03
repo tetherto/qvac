@@ -1,4 +1,12 @@
-import type { Request, Response, QvacConfig } from "@/schemas";
+import type {
+  Request,
+  Response,
+  QvacConfig,
+  RuntimeContext,
+  CanonicalModelType,
+} from "@/schemas";
+import { normalizeModelType } from "@/schemas";
+import os from "bare-os";
 import { handlers } from "@/server/rpc/handlers";
 import {
   RPCNoHandlerError,
@@ -6,6 +14,8 @@ import {
 } from "@/utils/errors-client";
 import { initializeConfig } from "@/client/init-hooks";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
+import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
+import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
 
 // Handler function types
@@ -14,22 +24,44 @@ type Handler =
   | ((req: Request) => AsyncGenerator<Response>);
 
 // Get the handler for a request type
-const getHandler = (type: string): Handler | undefined => {
+function getHandler(type: string): Handler | undefined {
   const handler = handlers[type as keyof typeof handlers];
   return typeof handler === "function" ? (handler as Handler) : undefined;
-};
+}
 
-export async function send<T extends Request>(request: T): Promise<Response> {
+function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
+  if (request.type !== "loadModel" || !("modelSrc" in request)) {
+    return request;
+  }
+
+  let canonicalType: CanonicalModelType;
+  try {
+    canonicalType = normalizeModelType(
+      request.modelType as Parameters<typeof normalizeModelType>[0],
+    );
+  } catch {
+    return request;
+  }
+
+  const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
+  const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
+
+  return { ...request, modelConfig: configWithDefaults } as T;
+}
+
+async function send<T extends Request>(request: T): Promise<Response> {
   if (request.type === "ping") {
     return { type: "pong", number: Math.random() * 100 };
   }
 
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
-  return (await handler(request)) as Response;
+
+  const processedRequest = applyDeviceDefaultsToLoadModel(request);
+  return (await handler(processedRequest)) as Response;
 }
 
-export async function* stream<T extends Request>(request: T) {
+async function* stream<T extends Request>(request: T) {
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -39,6 +71,8 @@ export async function* stream<T extends Request>(request: T) {
     "withProgress" in request &&
     request.withProgress
   ) {
+    const processedRequest = applyDeviceDefaultsToLoadModel(request);
+
     async function* streamWithProgress() {
       const queue: Response[] = [];
       let done = false;
@@ -47,7 +81,7 @@ export async function* stream<T extends Request>(request: T) {
         req: Request,
         callback: (update: Response) => void,
       ) => Promise<Response>;
-      loadModelHandler(request, (update) => queue.push(update))
+      loadModelHandler(processedRequest, (update) => queue.push(update))
         .then((final) => {
           queue.push(final);
           done = true;
@@ -137,8 +171,17 @@ const createMockRPCRequest = () => {
         requestData.type === "__init_config"
       ) {
         try {
-          const configData = requestData as { type: string; config: unknown };
-          setSDKConfig(configData.config as QvacConfig);
+          const initData = requestData as {
+            type: string;
+            config: unknown;
+            runtimeContext?: RuntimeContext;
+          };
+          if (initData.config) {
+            setSDKConfig(initData.config as QvacConfig);
+          }
+          if (initData.runtimeContext) {
+            setRuntimeContext(initData.runtimeContext);
+          }
           return Buffer.from(JSON.stringify({ success: true }));
         } catch (error) {
           return Buffer.from(
@@ -177,9 +220,17 @@ export async function getRPC() {
 
   // Initialize config once on first call
   if (!configInitialized) {
-    await initializeConfig(mockRPC, resolveConfig);
+    const runtimeContext: RuntimeContext = {
+      runtime: "bare",
+      platform: os.platform() as "darwin" | "linux" | "win32",
+    };
+    await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;
   }
 
   return mockRPC;
+}
+
+export function close() {
+  // noop
 }

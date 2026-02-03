@@ -5,6 +5,8 @@ import {
   type ReloadConfigOptions,
   loadModelOptionsToRequestSchema,
   reloadConfigOptionsToRequestSchema,
+  isModelTypeAlias,
+  normalizeModelType,
 } from "@/schemas";
 import {
   ModelLoadFailedError,
@@ -143,6 +145,14 @@ export async function loadModel(
   options: LoadModelOptions | ReloadConfigOptions,
 ): Promise<string> {
   const isReloadConfig = "modelId" in options && !("modelSrc" in options);
+
+  // Warn about deprecated alias usage
+  if (!isReloadConfig && isModelTypeAlias(options.modelType)) {
+    const canonical = normalizeModelType(options.modelType);
+    logger.warn(
+      `Model type "${options.modelType}" is an alias and will be deprecated. Use "${canonical}" instead.`,
+    );
+  }
 
   const request = isReloadConfig
     ? reloadConfigOptionsToRequestSchema.parse(options)

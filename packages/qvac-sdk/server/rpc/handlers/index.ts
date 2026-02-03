@@ -13,6 +13,7 @@ import { cancelHandler } from "./cancelHandler";
 import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
+import { handleOCRStream } from "./ocr-stream";
 
 export const handlers = {
   completionStream: handleCompletionStream,
@@ -30,4 +31,5 @@ export const handlers = {
   cancel: cancelHandler,
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
+  ocrStream: handleOCRStream,
 };

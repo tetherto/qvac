@@ -2,7 +2,7 @@ import type {
   TranscribeStreamRequest,
   TranscribeStreamResponse,
 } from "@/schemas";
-import { transcribeStream } from "@/server/bare/addons/whispercpp";
+import { transcribeStream } from "@/server/bare/addons/whispercpp-transcription";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();

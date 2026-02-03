@@ -32,6 +32,9 @@ export const SDK_SERVER_ERROR_CODES = {
   TEXT_TO_SPEECH_FAILED: 52409,
   CONFIG_RELOAD_NOT_SUPPORTED: 52410,
   MODEL_TYPE_MISMATCH: 52411,
+  OCR_FAILED: 52412,
+  IMAGE_FILE_NOT_FOUND: 52413,
+  INVALID_IMAGE_INPUT: 52414,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -40,6 +43,12 @@ export const SDK_SERVER_ERROR_CODES = {
   RAG_UNKNOWN_OPERATION: 52803,
   RAG_HYPERDB_FAILED: 52804,
   RAG_WORKSPACE_MODEL_MISMATCH: 52805,
+  RAG_WORKSPACE_NOT_FOUND: 52806,
+  RAG_WORKSPACE_IN_USE: 52807,
+  RAG_WORKSPACE_CLOSE_FAILED: 52808,
+  RAG_LIST_WORKSPACES_FAILED: 52809,
+  RAG_CHUNK_FAILED: 52810,
+  RAG_WORKSPACE_NOT_OPEN: 52811,
 
   // Download/Resource Errors (53,000-53,199)
   FILE_NOT_FOUND: 53000,
@@ -52,6 +61,11 @@ export const SDK_SERVER_ERROR_CODES = {
   DOWNLOAD_ASSET_FAILED: 53007,
   SEEDING_NOT_SUPPORTED: 53008,
   HYPERDRIVE_DOWNLOAD_FAILED: 53009,
+  INVALID_SHARD_URL_PATTERN: 53010,
+  ARCHIVE_EXTRACTION_FAILED: 53011,
+  ARCHIVE_UNSUPPORTED_TYPE: 53012,
+  ARCHIVE_MISSING_SHARDS: 53013,
+  PARTIAL_DOWNLOAD_OFFLINE: 53014,
 
   // Cache Operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -194,6 +208,20 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (expectedType: string, providedType: string) =>
       `Model type mismatch: expected "${expectedType}", got "${providedType}"`,
   },
+  [SDK_SERVER_ERROR_CODES.OCR_FAILED]: {
+    name: "OCR_FAILED",
+    message: (details?: string) =>
+      `OCR operation failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.IMAGE_FILE_NOT_FOUND]: {
+    name: "IMAGE_FILE_NOT_FOUND",
+    message: (filePath: string) =>
+      `Image file not found or not accessible: ${filePath}`,
+  },
+  [SDK_SERVER_ERROR_CODES.INVALID_IMAGE_INPUT]: {
+    name: "INVALID_IMAGE_INPUT",
+    message: "Invalid image input type provided",
+  },
 
   // RAG Operations (52,800-52,999)
   [SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED]: {
@@ -223,6 +251,34 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "RAG_WORKSPACE_MODEL_MISMATCH",
     message: (workspace: string, existingModelId: string, newModelId: string) =>
       `Workspace "${workspace}" is configured for model "${existingModelId}", but you're trying to use model "${newModelId}". Use a different workspace or the same model`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_FOUND]: {
+    name: "RAG_WORKSPACE_NOT_FOUND",
+    message: (workspace: string) => `RAG workspace not found: ${workspace}`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_IN_USE]: {
+    name: "RAG_WORKSPACE_IN_USE",
+    message: (workspace: string) =>
+      `RAG workspace '${workspace}' is currently in use. Close it first.`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED]: {
+    name: "RAG_WORKSPACE_CLOSE_FAILED",
+    message: (details?: string) =>
+      `Failed to close RAG workspace${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_LIST_WORKSPACES_FAILED]: {
+    name: "RAG_LIST_WORKSPACES_FAILED",
+    message: (details?: string) =>
+      `Failed to list RAG workspaces${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_CHUNK_FAILED]: {
+    name: "RAG_CHUNK_FAILED",
+    message: (details?: string) =>
+      `Failed to chunk documents${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN]: {
+    name: "RAG_WORKSPACE_NOT_OPEN",
+    message: (workspace: string) => `RAG workspace '${workspace}' is not open`,
   },
 
   // Download/Resource Errors (53,000-53,199)
@@ -267,6 +323,31 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.HYPERDRIVE_DOWNLOAD_FAILED]: {
     name: "HYPERDRIVE_DOWNLOAD_FAILED",
     message: (details: string) => `Hyperdrive download failed: ${details}`,
+  },
+  [SDK_SERVER_ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
+    name: "INVALID_SHARD_URL_PATTERN",
+    message: (url: string) =>
+      `URL does not contain a valid sharded model pattern: ${url}`,
+  },
+  [SDK_SERVER_ERROR_CODES.ARCHIVE_EXTRACTION_FAILED]: {
+    name: "ARCHIVE_EXTRACTION_FAILED",
+    message: (archivePath: string) =>
+      `Failed to extract archive: ${archivePath}`,
+  },
+  [SDK_SERVER_ERROR_CODES.ARCHIVE_UNSUPPORTED_TYPE]: {
+    name: "ARCHIVE_UNSUPPORTED_TYPE",
+    message: (archivePath: string) =>
+      `Unsupported archive type: ${archivePath}`,
+  },
+  [SDK_SERVER_ERROR_CODES.ARCHIVE_MISSING_SHARDS]: {
+    name: "ARCHIVE_MISSING_SHARDS",
+    message: (missingFile: string) =>
+      `Archive is missing required shard file: ${missingFile}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PARTIAL_DOWNLOAD_OFFLINE]: {
+    name: "PARTIAL_DOWNLOAD_OFFLINE",
+    message: (url: string, downloadedBytes: string) =>
+      `Cannot resume partial download (${downloadedBytes} bytes downloaded) - unable to connect. URL: ${url}`,
   },
 
   // Cache Operations (53,200-53,349)

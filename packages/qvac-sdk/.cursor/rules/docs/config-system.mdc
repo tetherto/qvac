@@ -24,9 +24,8 @@ The SDK uses **immutable configuration loaded at initialization**:
 │                                                              │
 │  1. RPC Client Initialization (getRPC())                    │
 │     ├─► client/rpc/node-rpc-client.ts                       │
-│     ├─► client/rpc/bare-rpc-client.ts                       │
 │     ├─► client/rpc/expo-rpc-client.ts                       │
-│     └─► client/rpc/bare-client.ts (mock for testing)        │
+│     └─► client/rpc/bare-client.ts        │
 │                                                              │
 │  2. Config Resolution (initializeConfig)                    │
 │     ├─► client/init-hooks.ts                                │

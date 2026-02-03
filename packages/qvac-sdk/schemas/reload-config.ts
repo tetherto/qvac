@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { whisperConfigSchema } from "./whispercpp-config";
+import { whisperModelTypeSchema } from "./model-types";
 
 export const modelIdSchema = z
   .string()
@@ -8,7 +9,7 @@ export const modelIdSchema = z
 export const reloadConfigOptionsSchema = z.union([
   z.object({
     modelId: modelIdSchema,
-    modelType: z.literal("whisper"),
+    modelType: whisperModelTypeSchema,
     modelConfig: whisperConfigSchema.partial().strict(),
   }),
 ]);
@@ -17,13 +18,13 @@ export const reloadConfigOptionsToRequestSchema = z.union([
   z
     .object({
       modelId: modelIdSchema,
-      modelType: z.literal("whisper"),
+      modelType: whisperModelTypeSchema,
       modelConfig: whisperConfigSchema.partial().strict(),
     })
     .transform((data) => ({
       type: "loadModel" as const,
       modelId: data.modelId,
-      modelType: "whisper" as const,
+      modelType: data.modelType,
       modelConfig: data.modelConfig as z.infer<typeof whisperConfigSchema>,
     })),
 ]);
@@ -40,11 +41,12 @@ const reloadConfigRequestBaseSchema = z.object({
 
 export const reloadConfigWhisperRequestSchema =
   reloadConfigRequestBaseSchema.extend({
-    modelType: z.literal("whisper"),
+    modelType: whisperModelTypeSchema,
     modelConfig: whisperConfigSchema.partial(),
   });
 
-export const reloadConfigRequestSchema = z.discriminatedUnion("modelType", [
+// Using z.union since modelType accepts multiple values
+export const reloadConfigRequestSchema = z.union([
   reloadConfigWhisperRequestSchema,
 ]);
 

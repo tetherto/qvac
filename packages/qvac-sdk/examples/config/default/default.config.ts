@@ -1,0 +1,6 @@
+export default {
+  loggerLevel: "info",
+  loggerConsoleOutput: true,
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+};

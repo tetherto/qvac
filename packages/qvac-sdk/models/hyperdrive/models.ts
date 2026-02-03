@@ -6,7 +6,7 @@ export type HyperdriveItem = {
   hyperdriveKey: string;
   hyperbeeKey: string;
   modelId: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr";
   expectedSize: number;
   sha256Checksum: string;
   shardMetadata?: readonly {
@@ -24,163 +24,10 @@ export type ModelConstant = {
   hyperbeeKey: string;
   expectedSize: number;
   sha256Checksum: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr";
 };
 
 export const models = [
-  {
-    name: "EMBEDDINGGEMMA_300M_BF16",
-    hyperdriveKey:
-      "cb18d3fe8774ae03bdc0e8c9559371201e76fdb38e1a3f0cfbc700214d50c5b3",
-    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:BF16:1.0.0",
-    modelId: "embeddinggemma-300M-BF16.gguf",
-    addon: "embeddings",
-    expectedSize: 612429792,
-    sha256Checksum:
-      "95a1f284251f78a1409a9c9e52dd4026c2180b13a90a5ede2a878bb8141fba08",
-  },
-  {
-    name: "EMBEDDINGGEMMA_300M_F32",
-    hyperdriveKey:
-      "97a3547f93ead75ebd0365cb784a68cd177c63c3a0aa94650fffc54c13c44b13",
-    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:F32:1.0.0",
-    modelId: "embeddinggemma-300M-F32.gguf",
-    addon: "embeddings",
-    expectedSize: 1217982432,
-    sha256Checksum:
-      "a3125072128fc76d1c1d8d19f7b095c7e3bfbf00594dcf8a8bd3bcb334935d57",
-  },
-  {
-    name: "EMBEDDINGGEMMA_300M_Q4_0",
-    hyperdriveKey:
-      "7eb0441fdc5074ceb02168822da8fef91de7f547cd71240bd36ea964816ab059",
-    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:q4_0:1.0.0",
-    modelId: "embeddinggemma-300m-Q4_0.gguf",
-    addon: "embeddings",
-    expectedSize: 277852192,
-    sha256Checksum:
-      "edc6015cb15694c27be7d1d33f1bc015db9a358ff51ed524628c027504907ba9",
-  },
-  {
-    name: "EMBEDDINGGEMMA_300M_Q8_0",
-    hyperdriveKey:
-      "304b3543f89f2d3f204b9638ad8e3ea0f237033b0e4d04c416a43e5921df4180",
-    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:q8_0:1.0.0",
-    modelId: "embeddinggemma-300M-Q8_0.gguf",
-    addon: "embeddings",
-    expectedSize: 328577056,
-    sha256Checksum:
-      "a0f7b4e13c397a6e1b32c2de75b1f65a14c92ec524d5f674d94a4290a1c4969b",
-  },
-  {
-    name: "GTE_LARGE_FP16",
-    hyperdriveKey:
-      "94a6920d40270f7cb84c6f895831aa21403d17cd39c139f4e4b86dc521e70771",
-    hyperbeeKey: "embedding:gte-large-gguf:bert:::fp16:1.0.0",
-    modelId: "gte-large_fp16.gguf",
-    addon: "embeddings",
-    expectedSize: 669603712,
-    sha256Checksum:
-      "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb",
-  },
-  {
-    name: "GTE_LARGE_335M_FP16_SHARD",
-    hyperdriveKey:
-      "53c6eb0ec6eeeb81348591b8d17e150f15f8d71e9ac4e39cd93ec498e65668a1",
-    hyperbeeKey: "embedding:gte-large:bert::335M:fp16:1.0.0:shard",
-    modelId: "gte-large_fp16-00001-of-00005.gguf",
-    addon: "embeddings",
-    expectedSize: 669613286,
-    sha256Checksum:
-      "81c871b0433ed75adb4b1888f4396248c0a587f509f45050b2b65de9b8e86a3b",
-    shardMetadata: [
-      {
-        filename: "gte-large_fp16-00001-of-00005.gguf",
-        expectedSize: 156815424,
-        sha256Checksum:
-          "81c871b0433ed75adb4b1888f4396248c0a587f509f45050b2b65de9b8e86a3b",
-      },
-      {
-        filename: "gte-large_fp16-00002-of-00005.gguf",
-        expectedSize: 159721216,
-        sha256Checksum:
-          "da7f5a2e0ba4f6769599cb7d2735f19a8022eb065973d7584081cf67617a064d",
-      },
-      {
-        filename: "gte-large_fp16-00003-of-00005.gguf",
-        expectedSize: 159737792,
-        sha256Checksum:
-          "d95b830af36d2dfa1d4c7c156ac59be767a5f9b5d37288533d3add7a90ec3822",
-      },
-      {
-        filename: "gte-large_fp16-00004-of-00005.gguf",
-        expectedSize: 159721120,
-        sha256Checksum:
-          "6def2c28f1b6314403a39c54250d870333d273e31446717f8670a4e1d5861d20",
-      },
-      {
-        filename: "gte-large_fp16-00005-of-00005.gguf",
-        expectedSize: 33608768,
-        sha256Checksum:
-          "f5ff10900f675900a1838536746d23ccc6adcfed074f89f7a4ac4d3167401d08",
-      },
-      {
-        filename: "gte-large_fp16.tensors.txt",
-        expectedSize: 8966,
-        sha256Checksum:
-          "d2142d8ae97857656b227fef6733ea46e82da3b7546cd944dec88ba280aadfeb",
-      },
-    ],
-  },
-  {
-    name: "GTE_LARGE_335M_Q2_K_SHARD",
-    hyperdriveKey:
-      "598c2e43a6dd9b2604544b1f15e56825529bd83e2c6c9fbfa1a9e2ac8e1540aa",
-    hyperbeeKey: "embedding:gte-large:bert::335M:Q2_K:1.0.0:shard",
-    modelId: "gte-large.Q2_K-00001-of-00005.gguf",
-    addon: "embeddings",
-    expectedSize: 144237382,
-    sha256Checksum:
-      "b9d640ee803b42867d00fd6480b2036175f21542174be2691855acd058a87cb1",
-    shardMetadata: [
-      {
-        filename: "gte-large.Q2_K-00001-of-00005.gguf",
-        expectedSize: 34954912,
-        sha256Checksum:
-          "b9d640ee803b42867d00fd6480b2036175f21542174be2691855acd058a87cb1",
-      },
-      {
-        filename: "gte-large.Q2_K-00002-of-00005.gguf",
-        expectedSize: 33753504,
-        sha256Checksum:
-          "830468bc6047fc2f2586cfefa1ffca33bedded1844bb6124e49d3912386dff26",
-      },
-      {
-        filename: "gte-large.Q2_K-00003-of-00005.gguf",
-        expectedSize: 33753504,
-        sha256Checksum:
-          "8ddfab17a79f3f82f3f8fa74a9ea1b167159314784a97be1330b87bf58891d37",
-      },
-      {
-        filename: "gte-large.Q2_K-00004-of-00005.gguf",
-        expectedSize: 33753408,
-        sha256Checksum:
-          "f435cf6c0c31078172828fb539df77a8f87e65257e1adec2ec7cd76207c08cef",
-      },
-      {
-        filename: "gte-large.Q2_K-00005-of-00005.gguf",
-        expectedSize: 8013088,
-        sha256Checksum:
-          "b53d3a8d4eff8ced8667df9d725afbcda04a07d34e13d1ba55c57fbd6980b3b6",
-      },
-      {
-        filename: "gte-large.Q2_K.tensors.txt",
-        expectedSize: 8966,
-        sha256Checksum:
-          "d2142d8ae97857656b227fef6733ea46e82da3b7546cd944dec88ba280aadfeb",
-      },
-    ],
-  },
   {
     name: "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     hyperdriveKey:
@@ -280,6 +127,17 @@ export const models = [
     ],
   },
   {
+    name: "GPT_OSS_20B_INST_Q4_K_M",
+    hyperdriveKey:
+      "82819525fdf0ae05bdacfa3c4fc595f3208609135db20f8832d57a6abcab2ce7",
+    hyperbeeKey: "generation:gpt-oss:instruct::20B:Q4_K_M:1.0.0",
+    modelId: "gpt-oss-20b-Q4_K_M.gguf",
+    addon: "llm",
+    expectedSize: 11624759488,
+    sha256Checksum:
+      "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
+  },
+  {
     name: "LASER_DOLPHIN_2_6_2X7B_INST_Q2_K",
     hyperdriveKey:
       "bd40e4bfae48b5bf436d1b0b447ae26e4c384aebe101a5e7df6ae71c919dadf1",
@@ -292,6 +150,28 @@ export const models = [
       "35a4fa1142dbacb42656f7a9e7ae59e3ae8b3b8f6ee370e64e5e1023ddd19510",
   },
   {
+    name: "LFM_2_5_1_2B_INST_Q4_0",
+    hyperdriveKey:
+      "885ed4e5f04986a77524d1ab4a1f42c6bb2208e7fdef42771d2d3c7a4464926b",
+    hyperbeeKey: "generation:lfm:instruct:2.5:1.2B:q4_0:1.0.0",
+    modelId: "LFM2.5-1.2B-Instruct-Q4_0.gguf",
+    addon: "llm",
+    expectedSize: 695751488,
+    sha256Checksum:
+      "2ea801949d760cdf1a2cc04a54262c22c3c0c54f0769d57760c9adeb0e59233f",
+  },
+  {
+    name: "LFM_2_5_1_2B_INST_Q4_K_M",
+    hyperdriveKey:
+      "f41503e44a2c0a537d9a9665984cb2d87eb2216e6301e898ffea60f5ce6c904d",
+    hyperbeeKey: "generation:lfm:instruct:2.5:1.2B:q4_k_m:1.0.0",
+    modelId: "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
+    addon: "llm",
+    expectedSize: 730895168,
+    sha256Checksum:
+      "b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5",
+  },
+  {
     name: "LLAMA_3_2_1B_INST_Q4_0",
     hyperdriveKey:
       "95d4c2770d31b8e2c27d21745601b225caa3d3eace4fa99244ed38dbc30d9cfb",
@@ -301,6 +181,18 @@ export const models = [
     expectedSize: 773025824,
     sha256Checksum:
       "66bfbb2d48bdb77cd56bd03ef820deff3c4a74b1a09de3b917ae13e72c1a70c2",
+  },
+  {
+    name: "LLAMA_TOOL_CALLING_3_2_1B_INST_Q4_K",
+    hyperdriveKey:
+      "5f992f02048b624785eda1007dde4fd33985d88250f96af92ed219386f0e050d",
+    hyperbeeKey:
+      "generation:llama-tool-calling:instruct:3.2:1B:Q4_K:1.0.0:tool-calling-v2",
+    modelId: "llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+    addon: "llm",
+    expectedSize: 807691648,
+    sha256Checksum:
+      "406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7",
   },
   {
     name: "LLAMA_3_2_1B_INST_Q4_0_SHARD",
@@ -642,6 +534,17 @@ export const models = [
     ],
   },
   {
+    name: "QWEN_3_4B_INST_Q4_K_M",
+    hyperdriveKey:
+      "85cf9b6f63a1a91f495e16609a10cee640961304502587b9b313aee78e660a41",
+    hyperbeeKey: "generation:qwen:instruct:3:4B:Q4_K_M:1.0.0",
+    modelId: "Qwen3-4B-Q4_K_M.gguf",
+    addon: "llm",
+    expectedSize: 2497281312,
+    sha256Checksum:
+      "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+  },
+  {
     name: "QWEN_3_4B_INST_Q4_SHARD",
     hyperdriveKey:
       "0f13704f5c35f93b29e5489eedb6e2cc3ada9ede2e1e573073761cd27ef06db3",
@@ -689,6 +592,17 @@ export const models = [
           "4168384d4ab9eb0d773b31da5f8cd13747e3a45f3bbcff14485a5cc7679e7ed4",
       },
     ],
+  },
+  {
+    name: "QWEN_3_8B_INST_Q4_K_M",
+    hyperdriveKey:
+      "bb9954271780d9b96442b57032ea993d2c92d28987ba5da43159f89289a190ed",
+    hyperbeeKey: "generation:qwen:instruct:3:8B:Q4_K_M:1.0.0",
+    modelId: "Qwen3-8B-Q4_K_M.gguf",
+    addon: "llm",
+    expectedSize: 5027783488,
+    sha256Checksum:
+      "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
   },
   {
     name: "QWEN2_5_OMNI_3B_MULTIMODAL",
@@ -918,6 +832,544 @@ export const models = [
     expectedSize: 108785184,
     sha256Checksum:
       "921dc7e259f308e5b027111fa185efcbf33db13f6e35749ddf7f5cdb60ef520b",
+  },
+  {
+    name: "EMBEDDINGGEMMA_300M_BF16",
+    hyperdriveKey:
+      "cb18d3fe8774ae03bdc0e8c9559371201e76fdb38e1a3f0cfbc700214d50c5b3",
+    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:BF16:1.0.0",
+    modelId: "embeddinggemma-300M-BF16.gguf",
+    addon: "embeddings",
+    expectedSize: 612429792,
+    sha256Checksum:
+      "95a1f284251f78a1409a9c9e52dd4026c2180b13a90a5ede2a878bb8141fba08",
+  },
+  {
+    name: "EMBEDDINGGEMMA_300M_F32",
+    hyperdriveKey:
+      "97a3547f93ead75ebd0365cb784a68cd177c63c3a0aa94650fffc54c13c44b13",
+    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:F32:1.0.0",
+    modelId: "embeddinggemma-300M-F32.gguf",
+    addon: "embeddings",
+    expectedSize: 1217982432,
+    sha256Checksum:
+      "a3125072128fc76d1c1d8d19f7b095c7e3bfbf00594dcf8a8bd3bcb334935d57",
+  },
+  {
+    name: "EMBEDDINGGEMMA_300M_Q4_0",
+    hyperdriveKey:
+      "7eb0441fdc5074ceb02168822da8fef91de7f547cd71240bd36ea964816ab059",
+    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:q4_0:1.0.0",
+    modelId: "embeddinggemma-300m-Q4_0.gguf",
+    addon: "embeddings",
+    expectedSize: 277852192,
+    sha256Checksum:
+      "edc6015cb15694c27be7d1d33f1bc015db9a358ff51ed524628c027504907ba9",
+  },
+  {
+    name: "EMBEDDINGGEMMA_300M_Q8_0",
+    hyperdriveKey:
+      "304b3543f89f2d3f204b9638ad8e3ea0f237033b0e4d04c416a43e5921df4180",
+    hyperbeeKey: "embedding:embeddinggemma:embed:1:300M:q8_0:1.0.0",
+    modelId: "embeddinggemma-300M-Q8_0.gguf",
+    addon: "embeddings",
+    expectedSize: 328577056,
+    sha256Checksum:
+      "a0f7b4e13c397a6e1b32c2de75b1f65a14c92ec524d5f674d94a4290a1c4969b",
+  },
+  {
+    name: "GTE_LARGE_FP16",
+    hyperdriveKey:
+      "94a6920d40270f7cb84c6f895831aa21403d17cd39c139f4e4b86dc521e70771",
+    hyperbeeKey: "embedding:gte-large-gguf:bert:::fp16:1.0.0",
+    modelId: "gte-large_fp16.gguf",
+    addon: "embeddings",
+    expectedSize: 669603712,
+    sha256Checksum:
+      "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb",
+  },
+  {
+    name: "GTE_LARGE_335M_FP16_SHARD",
+    hyperdriveKey:
+      "53c6eb0ec6eeeb81348591b8d17e150f15f8d71e9ac4e39cd93ec498e65668a1",
+    hyperbeeKey: "embedding:gte-large:bert::335M:fp16:1.0.0:shard",
+    modelId: "gte-large_fp16-00001-of-00005.gguf",
+    addon: "embeddings",
+    expectedSize: 669613286,
+    sha256Checksum:
+      "81c871b0433ed75adb4b1888f4396248c0a587f509f45050b2b65de9b8e86a3b",
+    shardMetadata: [
+      {
+        filename: "gte-large_fp16-00001-of-00005.gguf",
+        expectedSize: 156815424,
+        sha256Checksum:
+          "81c871b0433ed75adb4b1888f4396248c0a587f509f45050b2b65de9b8e86a3b",
+      },
+      {
+        filename: "gte-large_fp16-00002-of-00005.gguf",
+        expectedSize: 159721216,
+        sha256Checksum:
+          "da7f5a2e0ba4f6769599cb7d2735f19a8022eb065973d7584081cf67617a064d",
+      },
+      {
+        filename: "gte-large_fp16-00003-of-00005.gguf",
+        expectedSize: 159737792,
+        sha256Checksum:
+          "d95b830af36d2dfa1d4c7c156ac59be767a5f9b5d37288533d3add7a90ec3822",
+      },
+      {
+        filename: "gte-large_fp16-00004-of-00005.gguf",
+        expectedSize: 159721120,
+        sha256Checksum:
+          "6def2c28f1b6314403a39c54250d870333d273e31446717f8670a4e1d5861d20",
+      },
+      {
+        filename: "gte-large_fp16-00005-of-00005.gguf",
+        expectedSize: 33608768,
+        sha256Checksum:
+          "f5ff10900f675900a1838536746d23ccc6adcfed074f89f7a4ac4d3167401d08",
+      },
+      {
+        filename: "gte-large_fp16.tensors.txt",
+        expectedSize: 8966,
+        sha256Checksum:
+          "d2142d8ae97857656b227fef6733ea46e82da3b7546cd944dec88ba280aadfeb",
+      },
+    ],
+  },
+  {
+    name: "GTE_LARGE_335M_Q2_K_SHARD",
+    hyperdriveKey:
+      "598c2e43a6dd9b2604544b1f15e56825529bd83e2c6c9fbfa1a9e2ac8e1540aa",
+    hyperbeeKey: "embedding:gte-large:bert::335M:Q2_K:1.0.0:shard",
+    modelId: "gte-large.Q2_K-00001-of-00005.gguf",
+    addon: "embeddings",
+    expectedSize: 144237382,
+    sha256Checksum:
+      "b9d640ee803b42867d00fd6480b2036175f21542174be2691855acd058a87cb1",
+    shardMetadata: [
+      {
+        filename: "gte-large.Q2_K-00001-of-00005.gguf",
+        expectedSize: 34954912,
+        sha256Checksum:
+          "b9d640ee803b42867d00fd6480b2036175f21542174be2691855acd058a87cb1",
+      },
+      {
+        filename: "gte-large.Q2_K-00002-of-00005.gguf",
+        expectedSize: 33753504,
+        sha256Checksum:
+          "830468bc6047fc2f2586cfefa1ffca33bedded1844bb6124e49d3912386dff26",
+      },
+      {
+        filename: "gte-large.Q2_K-00003-of-00005.gguf",
+        expectedSize: 33753504,
+        sha256Checksum:
+          "8ddfab17a79f3f82f3f8fa74a9ea1b167159314784a97be1330b87bf58891d37",
+      },
+      {
+        filename: "gte-large.Q2_K-00004-of-00005.gguf",
+        expectedSize: 33753408,
+        sha256Checksum:
+          "f435cf6c0c31078172828fb539df77a8f87e65257e1adec2ec7cd76207c08cef",
+      },
+      {
+        filename: "gte-large.Q2_K-00005-of-00005.gguf",
+        expectedSize: 8013088,
+        sha256Checksum:
+          "b53d3a8d4eff8ced8667df9d725afbcda04a07d34e13d1ba55c57fbd6980b3b6",
+      },
+      {
+        filename: "gte-large.Q2_K.tensors.txt",
+        expectedSize: 8966,
+        sha256Checksum:
+          "d2142d8ae97857656b227fef6733ea46e82da3b7546cd944dec88ba280aadfeb",
+      },
+    ],
+  },
+  {
+    name: "BERGAMOT_AREN",
+    hyperdriveKey:
+      "152125b9e579de7897bffddc2756a712f1c8e6fcbda162d1a821aab135c8ad7e",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:aren",
+    modelId: "model.aren.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "7b7af0282dc5f4d8805b9a298c2fa828967e3f09ca10f1942ebeea0b2cfc12fa",
+  },
+  {
+    name: "BERGAMOT_AREN_VOCAB",
+    hyperdriveKey:
+      "152125b9e579de7897bffddc2756a712f1c8e6fcbda162d1a821aab135c8ad7e",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:aren",
+    modelId: "vocab.aren.spm",
+    addon: "nmt",
+    expectedSize: 860035,
+    sha256Checksum:
+      "51b4ee3f828d10015464523d0b4f5a6c086b0b2a9bde716a581001cf6c260366",
+  },
+  {
+    name: "BERGAMOT_CSEN",
+    hyperdriveKey:
+      "41df2dadab7db9a8258d1520ae5815601f5690e0d96ab1e61f931427a679d32d",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:csen",
+    modelId: "model.csen.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "c815273b31074492eaab0ccd78d33d7ac16f94088707ab2492abaedcb9ee0b75",
+  },
+  {
+    name: "BERGAMOT_CSEN_VOCAB",
+    hyperdriveKey:
+      "41df2dadab7db9a8258d1520ae5815601f5690e0d96ab1e61f931427a679d32d",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:csen",
+    modelId: "vocab.csen.spm",
+    addon: "nmt",
+    expectedSize: 815154,
+    sha256Checksum:
+      "ee4b8ce15c8e1237c5f7a2d04741341beb0a5d5c09820f7ec08f13ee2b212755",
+  },
+  {
+    name: "BERGAMOT_ENAR",
+    hyperdriveKey:
+      "c9ae647365e18d8c51eb21c47721544ee3daaaec375913e5ccb7a8d11d493a0c",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enar",
+    modelId: "model.enar.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "ae659d7045fc2e5d6ba50583586a5d94ee4358d92c019847e37b57a0e627faa8",
+  },
+  {
+    name: "BERGAMOT_ENAR_VOCAB",
+    hyperdriveKey:
+      "c9ae647365e18d8c51eb21c47721544ee3daaaec375913e5ccb7a8d11d493a0c",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enar",
+    modelId: "vocab.enar.spm",
+    addon: "nmt",
+    expectedSize: 863591,
+    sha256Checksum:
+      "8d93c54aa5e2044c416ec680b5ff9af0227bd698521666e8b1a1ea1b041fbae8",
+  },
+  {
+    name: "BERGAMOT_ENCS",
+    hyperdriveKey:
+      "c7ccfc55618925351f32b00265375c66309240af9e90f0baf7f460ebc5ba34de",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:encs",
+    modelId: "model.encs.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "1d7855f91c3e2b8ef79fbea62707d46ceb8a1ad01834ef6dd500f32a7006cc2c",
+  },
+  {
+    name: "BERGAMOT_ENES",
+    hyperdriveKey:
+      "bf46f9b51d04f5619eea1988499d81cd65268d9b0a60bea0fb647859ffe98a3c",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enes",
+    modelId: "model.enes.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "3b1c399511c01c84c36fae5c0524df44096288efdc8236e182b5c97d7ad2244c",
+  },
+  {
+    name: "BERGAMOT_ENES_VOCAB",
+    hyperdriveKey:
+      "bf46f9b51d04f5619eea1988499d81cd65268d9b0a60bea0fb647859ffe98a3c",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enes",
+    modelId: "vocab.enes.spm",
+    addon: "nmt",
+    expectedSize: 816054,
+    sha256Checksum:
+      "5ae254fa9b15aa182e70fd2a6186b1333c63a29a48043a9224c6aa4fcac058ad",
+  },
+  {
+    name: "BERGAMOT_ENFR",
+    hyperdriveKey:
+      "0a4f388c0449b7774043e5ba8a1a2f735dc22a0a8e01d8bcd593e28db2909abf",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enfr",
+    modelId: "model.enfr.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "6322e296d4fecfe395a8d5723da4ec37ecbe6d7613bb1dfcf4b28e2a47498b68",
+  },
+  {
+    name: "BERGAMOT_ENFR_VOCAB",
+    hyperdriveKey:
+      "0a4f388c0449b7774043e5ba8a1a2f735dc22a0a8e01d8bcd593e28db2909abf",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enfr",
+    modelId: "vocab.enfr.spm",
+    addon: "nmt",
+    expectedSize: 814404,
+    sha256Checksum:
+      "783abf3abe075afdf8d85d233994bef2c3a064e935ab1bed946820aff6ac002a",
+  },
+  {
+    name: "BERGAMOT_ENIT",
+    hyperdriveKey:
+      "a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enit",
+    modelId: "model.enit.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 17140899,
+    sha256Checksum:
+      "3d7bbc4d7977e10b35f53faa79f5d5de8211f4f04baed9e7cd9dee1dcceda917",
+  },
+  {
+    name: "BERGAMOT_ENIT_VOCAB",
+    hyperdriveKey:
+      "a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enit",
+    modelId: "vocab.enit.spm",
+    addon: "nmt",
+    expectedSize: 812781,
+    sha256Checksum:
+      "603f3349657c3deb9736a0c567452d102a5a03c377dfdf1d32c428608f2cff1b",
+  },
+  {
+    name: "BERGAMOT_ENJA",
+    hyperdriveKey:
+      "ac0b883d176ea3b1d304790efe2d4e4e640a474b7796244c92496fb9d660f29d",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enja",
+    modelId: "model.enja.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 43849787,
+    sha256Checksum:
+      "59ae659f9bb63e4f81f474fe3c03d3f4499434b5f9e779fab7c12a45f31fd562",
+  },
+  {
+    name: "BERGAMOT_ENJA_SRCVOCAB",
+    hyperdriveKey:
+      "ac0b883d176ea3b1d304790efe2d4e4e640a474b7796244c92496fb9d660f29d",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enja",
+    modelId: "srcvocab.enja.spm",
+    addon: "nmt",
+    expectedSize: 796275,
+    sha256Checksum:
+      "970c98d174fc01e0339fbabbf45af36a4be3f26f819ec1a5ea1189f71e091889",
+  },
+  {
+    name: "BERGAMOT_ENJA_TRGVOCAB",
+    hyperdriveKey:
+      "ac0b883d176ea3b1d304790efe2d4e4e640a474b7796244c92496fb9d660f29d",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enja",
+    modelId: "trgvocab.enja.spm",
+    addon: "nmt",
+    expectedSize: 827144,
+    sha256Checksum:
+      "3b3d9f8f3a034d98d0a476f1794fa79c01e4e98a967ceb6777a66ba2d03ec1e1",
+  },
+  {
+    name: "BERGAMOT_ENPT",
+    hyperdriveKey:
+      "21f12262b8b0440b814f2e57e8224d0921c6cf09e1da0238a4e83789b57ab34f",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enpt",
+    modelId: "model.enpt.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "07892fd2544ee79dcb643615d8f2debb9793fae16842e87c328e27a3dd26a770",
+  },
+  {
+    name: "BERGAMOT_ENPT_VOCAB",
+    hyperdriveKey:
+      "21f12262b8b0440b814f2e57e8224d0921c6cf09e1da0238a4e83789b57ab34f",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enpt",
+    modelId: "vocab.enpt.spm",
+    addon: "nmt",
+    expectedSize: 816726,
+    sha256Checksum:
+      "d9f46182823d5bbc84201252b2dfcac28f63e561f0ec827ed858f241864c9def",
+  },
+  {
+    name: "BERGAMOT_ENRU",
+    hyperdriveKey:
+      "404279d9716f31913cdb385bef81e940019134b577ed64ae3333b80da75a80bf",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enru",
+    modelId: "model.enru.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "184cb5cda528eeefc0f75f5d0035d787b71d74af135e3c5608d01ae02ecfb920",
+  },
+  {
+    name: "BERGAMOT_ENRU_VOCAB",
+    hyperdriveKey:
+      "404279d9716f31913cdb385bef81e940019134b577ed64ae3333b80da75a80bf",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enru",
+    modelId: "vocab.enru.spm",
+    addon: "nmt",
+    expectedSize: 904455,
+    sha256Checksum:
+      "56ee63e14e8cb926c394242adc3ed7cc602644c3d33058cff2ce2959d52a6258",
+  },
+  {
+    name: "BERGAMOT_ENZH",
+    hyperdriveKey:
+      "15d484200acea8b19b7eeffd5a96b218c3c437afbed61bfef39dafbae6edfec0",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enzh",
+    modelId: "model.enzh.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 43849787,
+    sha256Checksum:
+      "4e5accc141373565ddc8fa1565bceaa8d0c3482a82cab8131c719ebcc6c2157c",
+  },
+  {
+    name: "BERGAMOT_ENZH_SRCVOCAB",
+    hyperdriveKey:
+      "15d484200acea8b19b7eeffd5a96b218c3c437afbed61bfef39dafbae6edfec0",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enzh",
+    modelId: "srcvocab.enzh.spm",
+    addon: "nmt",
+    expectedSize: 806952,
+    sha256Checksum:
+      "bd9b65504acc6d9726dd281f7defc2adb7c2c22d0688fe2f84697de25197c8c5",
+  },
+  {
+    name: "BERGAMOT_ENZH_TRGVOCAB",
+    hyperdriveKey:
+      "15d484200acea8b19b7eeffd5a96b218c3c437afbed61bfef39dafbae6edfec0",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:enzh",
+    modelId: "trgvocab.enzh.spm",
+    addon: "nmt",
+    expectedSize: 772004,
+    sha256Checksum:
+      "aded6993c36e440284d11cec3f6b8aef9c0e43188a772d80be342a713adf223d",
+  },
+  {
+    name: "BERGAMOT_ESEN",
+    hyperdriveKey:
+      "c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:esen",
+    modelId: "model.esen.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 17140755,
+    sha256Checksum:
+      "4b6b7f451094aaa447d012658af158ffc708fc8842dde2f871a58404f5457fe0",
+  },
+  {
+    name: "BERGAMOT_ESEN_VOCAB",
+    hyperdriveKey:
+      "c3e983c8db3f64faeef8eaf1da9ea4aeb8d5c020529f83957d63c19ed7710651",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:esen",
+    modelId: "vocab.esen.spm",
+    addon: "nmt",
+    expectedSize: 825463,
+    sha256Checksum:
+      "909b1eea1face0d7f90a474fe29a8c0fef8d104b6e41e65616f864c964ba8845",
+  },
+  {
+    name: "BERGAMOT_FREN",
+    hyperdriveKey:
+      "7a9b38b0c4637b2eab9c11387b8c3f254db64da47cc5a7eecda66513176f7757",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:fren",
+    modelId: "model.fren.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "15f997bc0d13808b0b0fbd0786e684a3c8a52adcd8071844b76123fdacbf2b90",
+  },
+  {
+    name: "BERGAMOT_ITEN",
+    hyperdriveKey:
+      "3b4be93d19dd9e9e6ee38b528684028ac03c7776563bc0e5ca668b76b0964480",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:iten",
+    modelId: "model.iten.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "21b70978ce2f3b4da7a06b5de86a09abe3acd30b9eee1b2ebb3582b9bad790bf",
+  },
+  {
+    name: "BERGAMOT_ITEN_VOCAB",
+    hyperdriveKey:
+      "3b4be93d19dd9e9e6ee38b528684028ac03c7776563bc0e5ca668b76b0964480",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:iten",
+    modelId: "vocab.iten.spm",
+    addon: "nmt",
+    expectedSize: 812724,
+    sha256Checksum:
+      "3ef0211d4ae6db21440892f180f2019fe2bfc110a330ffa9d2eca9665e4f2bc5",
+  },
+  {
+    name: "BERGAMOT_JAEN",
+    hyperdriveKey:
+      "85012ed3c3ff5c2bfe49faa60ebafb86306e6f2a97f49796374d3069f505bfd3",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:jaen",
+    modelId: "model.jaen.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 43977787,
+    sha256Checksum:
+      "3a603e20bfe1be86071913f9e23ab5129075bc0a8490151020ac4821e4f17302",
+  },
+  {
+    name: "BERGAMOT_JAEN_VOCAB",
+    hyperdriveKey:
+      "85012ed3c3ff5c2bfe49faa60ebafb86306e6f2a97f49796374d3069f505bfd3",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:jaen",
+    modelId: "vocab.jaen.spm",
+    addon: "nmt",
+    expectedSize: 1443222,
+    sha256Checksum:
+      "5cb217758bae05877bb3f0c2f612e4e7c1e4cb03c10db11f4a47098d7ae62919",
+  },
+  {
+    name: "BERGAMOT_PTEN",
+    hyperdriveKey:
+      "a5da4ee5f5817033dee6ed4489d1d3cadcf3d61e99fd246da7e0143c4b7439a4",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:pten",
+    modelId: "model.pten.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 31561787,
+    sha256Checksum:
+      "7b854f1ec5a485dd33efd7c1bc01dd7d5a57f566957c5e47722af333f0ce9157",
+  },
+  {
+    name: "BERGAMOT_RUEN",
+    hyperdriveKey:
+      "dad7f99c8d8c17233bcfa005f789a0df29bb4ae3116381bdb2a63ffc32c97dfe",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:ruen",
+    modelId: "model.ruen.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 17141051,
+    sha256Checksum:
+      "b1d85c13cfbb05e1d326dd6f0fb5ef270a2011b547450260f96567a93f446c94",
+  },
+  {
+    name: "BERGAMOT_RUEN_VOCAB",
+    hyperdriveKey:
+      "dad7f99c8d8c17233bcfa005f789a0df29bb4ae3116381bdb2a63ffc32c97dfe",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:ruen",
+    modelId: "vocab.ruen.spm",
+    addon: "nmt",
+    expectedSize: 905257,
+    sha256Checksum:
+      "93bdc941b16e523695c319f74778bca9fd8b75a25ad75020cdc98aef74cdc0fc",
+  },
+  {
+    name: "BERGAMOT_ZHEN",
+    hyperdriveKey:
+      "17eb4c3fcd23ac3c93cbe62f08ecb81d70f561f563870ea42494214d6886dd66",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:zhen",
+    modelId: "model.zhen.intgemm.alphas.bin",
+    addon: "nmt",
+    expectedSize: 43977787,
+    sha256Checksum:
+      "5cd149601802fc8a18124a1c1306144dbbedc058630c4ddb2d53aa76fa9c7c06",
+  },
+  {
+    name: "BERGAMOT_ZHEN_VOCAB",
+    hyperdriveKey:
+      "17eb4c3fcd23ac3c93cbe62f08ecb81d70f561f563870ea42494214d6886dd66",
+    hyperbeeKey: "translation:bergamot:nmt::::1.0.0:zhen",
+    modelId: "vocab.zhen.spm",
+    addon: "nmt",
+    expectedSize: 1359697,
+    sha256Checksum:
+      "dff594318ab7d8b7b60b844ab98ebe6b932ae8045fab15235404c787715965b3",
   },
   {
     name: "MARIAN_EN_HI_INDIC_200M_Q0F32",
@@ -1745,6 +2197,116 @@ export const models = [
       "1d38b1178e5863e141b666501e2edad273dca4c8f85ee03843f0bb9e7ffaf407",
   },
   {
+    name: "OCR_CRAFT_ENGLISH_DETECTOR",
+    hyperdriveKey:
+      "6fccf9d6aaeaf3251bbcb1bc363787def7e2cae4e92b52a5e665e906263b5d6b",
+    hyperbeeKey: "ocr:craft:recognizer::::1.0.0:english",
+    modelId: "detector_craft.onnx",
+    addon: "ocr",
+    expectedSize: 83058594,
+    sha256Checksum:
+      "0ca3aed5da83250025bc01eb3ad1fc21482d3cee814fae22343de13c221e02e9",
+  },
+  {
+    name: "OCR_CRAFT_ENGLISH_RECOGNIZER",
+    hyperdriveKey:
+      "6fccf9d6aaeaf3251bbcb1bc363787def7e2cae4e92b52a5e665e906263b5d6b",
+    hyperbeeKey: "ocr:craft:recognizer::::1.0.0:english",
+    modelId: "recognizer_english.onnx",
+    addon: "ocr",
+    expectedSize: 15143612,
+    sha256Checksum:
+      "d962883812953aaafd165f2a815aa0fb95ff9c35d29807e6ceae7dd4cd5c64aa",
+  },
+  {
+    name: "OCR_CRAFT_LATIN_RECOGNIZER",
+    hyperdriveKey:
+      "6418f508dc832ce1b5e595c9eb5690b4252318d84c08888c5826ce95ee4ccb0d",
+    hyperbeeKey: "ocr:craft:recognizer::::2.0.0:latin",
+    modelId: "recognizer_latin.onnx",
+    addon: "ocr",
+    expectedSize: 15405775,
+    sha256Checksum:
+      "5ecb59080cd7a087091ff4f56c87659f243be2a84d35dab716ea0e56da182b16",
+  },
+  {
+    name: "OCR_CRAFT_LATIN_RECOGNIZER_1",
+    hyperdriveKey:
+      "03d712abb026bc390cfe803fb851a1b4a581c31c5b9335ef6294333bbeb60043",
+    hyperbeeKey: "ocr:craft:recognizer:::rec_512:1.0.0:latin",
+    modelId: "recognizer_latin.onnx",
+    addon: "ocr",
+    expectedSize: 15411868,
+    sha256Checksum:
+      "5dfcc50a6b2a237d62bd160f1b578a65e5cf445ff30c7a8b2fddec30bbde2098",
+  },
+  {
+    name: "OCR_CRAFT_JAPANESE_DETECTOR",
+    hyperdriveKey:
+      "3899620942044db4cdd4bc51b34aa36e3ce564e1820afcbe78f8dd30039f6ec9",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:japanese",
+    modelId: "detector_craft.onnx",
+    addon: "ocr",
+    expectedSize: 20846609,
+    sha256Checksum:
+      "99fc94e7c1cb76d701e434fcb709f00be0826e898f1efa69f445cc6d3794e166",
+  },
+  {
+    name: "OCR_CRAFT_JAPANESE_RECOGNIZER",
+    hyperdriveKey:
+      "3899620942044db4cdd4bc51b34aa36e3ce564e1820afcbe78f8dd30039f6ec9",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:japanese",
+    modelId: "recognizer_japanese.onnx",
+    addon: "ocr",
+    expectedSize: 4405212,
+    sha256Checksum:
+      "ebbb9d5b172f7ba2b5eb50f61d82910c221079d6cfbead0197a0adaef19e95ed",
+  },
+  {
+    name: "OCR_CRAFT_KOREAN_RECOGNIZER",
+    hyperdriveKey:
+      "0e329d281adf12be904f0a79ecddc0a60845adbc8a2d2e9304493d9e9adb3aa6",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:korean",
+    modelId: "recognizer_korean.onnx",
+    addon: "ocr",
+    expectedSize: 4091650,
+    sha256Checksum:
+      "141cc40f5591c317177d56a2d5c0301f54f0a1a2ea3b3efee1d2b587d2599933",
+  },
+  {
+    name: "OCR_CRAFT_LATIN_RECOGNIZER_2",
+    hyperdriveKey:
+      "2a1ce7b654ca50a9503bed5cc19b5767e542db7c7e2803f0ce332adfbfac6407",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:latin",
+    modelId: "recognizer_latin.onnx",
+    addon: "ocr",
+    expectedSize: 3920831,
+    sha256Checksum:
+      "3d80081058b45a7eaccf8c19e65eda635cdfda19cbfcb485ebf4d73f796b5faa",
+  },
+  {
+    name: "OCR_CRAFT_THAI_RECOGNIZER",
+    hyperdriveKey:
+      "08334df5eb79df625e932f6e872fe8c5956865908af1a17737174d81bde5ce40",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:thai",
+    modelId: "recognizer_thai.onnx",
+    addon: "ocr",
+    expectedSize: 54006886,
+    sha256Checksum:
+      "8c208a4ab4d70e6eadbbc1377d615f1a7b342f9556627f10ea506ff5433fdd53",
+  },
+  {
+    name: "OCR_CRAFT_ZH_SIM_RECOGNIZER",
+    hyperdriveKey:
+      "87c223f271504ab6c064e01005a59735f1837f478cbeacd1ba9f35f44f03e184",
+    hyperbeeKey: "ocr:craft:recognizer:::uint8:1.0.0:zh_sim",
+    modelId: "recognizer_zh_sim.onnx",
+    addon: "ocr",
+    expectedSize: 5576253,
+    sha256Checksum:
+      "77d947e7e1c18c214e6b9fa30f4d9888ac926de8caefac20ce1df6e864fc5c37",
+  },
+  {
     name: "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM",
     hyperdriveKey:
       "69581b1431e3abceec7708187922025dec6ccccd291c9e804679fd21371ccd1b",
@@ -2219,8 +2781,8 @@ export const models = [
 
 // Individual model constants for direct import/use with loadModel
 // These contain all metadata and can be used directly: loadModel({ modelSrc: WHISPER_TINY, ... })
-export const EMBEDDINGGEMMA_300M_BF16 = {
-  name: "EMBEDDINGGEMMA_300M_BF16",
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD = {
+  name: "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
   src: `pear://${models[0].hyperdriveKey}/${models[0].modelId}`,
   modelId: models[0].modelId,
   hyperdriveKey: models[0].hyperdriveKey,
@@ -2230,8 +2792,8 @@ export const EMBEDDINGGEMMA_300M_BF16 = {
   addon: models[0].addon,
 } as const;
 
-export const EMBEDDINGGEMMA_300M_F32 = {
-  name: "EMBEDDINGGEMMA_300M_F32",
+export const DOLPHIN_MIXTRAL_2X7B_MOE_Q4_K_SHARD = {
+  name: "DOLPHIN_MIXTRAL_2X7B_MOE_Q4_K_SHARD",
   src: `pear://${models[1].hyperdriveKey}/${models[1].modelId}`,
   modelId: models[1].modelId,
   hyperdriveKey: models[1].hyperdriveKey,
@@ -2241,8 +2803,8 @@ export const EMBEDDINGGEMMA_300M_F32 = {
   addon: models[1].addon,
 } as const;
 
-export const EMBEDDINGGEMMA_300M_Q4_0 = {
-  name: "EMBEDDINGGEMMA_300M_Q4_0",
+export const GPT_OSS_20B_INST_Q4_K_M = {
+  name: "GPT_OSS_20B_INST_Q4_K_M",
   src: `pear://${models[2].hyperdriveKey}/${models[2].modelId}`,
   modelId: models[2].modelId,
   hyperdriveKey: models[2].hyperdriveKey,
@@ -2252,8 +2814,8 @@ export const EMBEDDINGGEMMA_300M_Q4_0 = {
   addon: models[2].addon,
 } as const;
 
-export const EMBEDDINGGEMMA_300M_Q8_0 = {
-  name: "EMBEDDINGGEMMA_300M_Q8_0",
+export const LASER_DOLPHIN_2_6_2X7B_INST_Q2_K = {
+  name: "LASER_DOLPHIN_2_6_2X7B_INST_Q2_K",
   src: `pear://${models[3].hyperdriveKey}/${models[3].modelId}`,
   modelId: models[3].modelId,
   hyperdriveKey: models[3].hyperdriveKey,
@@ -2263,8 +2825,8 @@ export const EMBEDDINGGEMMA_300M_Q8_0 = {
   addon: models[3].addon,
 } as const;
 
-export const GTE_LARGE_FP16 = {
-  name: "GTE_LARGE_FP16",
+export const LFM_2_5_1_2B_INST_Q4_0 = {
+  name: "LFM_2_5_1_2B_INST_Q4_0",
   src: `pear://${models[4].hyperdriveKey}/${models[4].modelId}`,
   modelId: models[4].modelId,
   hyperdriveKey: models[4].hyperdriveKey,
@@ -2274,8 +2836,8 @@ export const GTE_LARGE_FP16 = {
   addon: models[4].addon,
 } as const;
 
-export const GTE_LARGE_335M_FP16_SHARD = {
-  name: "GTE_LARGE_335M_FP16_SHARD",
+export const LFM_2_5_1_2B_INST_Q4_K_M = {
+  name: "LFM_2_5_1_2B_INST_Q4_K_M",
   src: `pear://${models[5].hyperdriveKey}/${models[5].modelId}`,
   modelId: models[5].modelId,
   hyperdriveKey: models[5].hyperdriveKey,
@@ -2285,8 +2847,8 @@ export const GTE_LARGE_335M_FP16_SHARD = {
   addon: models[5].addon,
 } as const;
 
-export const GTE_LARGE_335M_Q2_K_SHARD = {
-  name: "GTE_LARGE_335M_Q2_K_SHARD",
+export const LLAMA_3_2_1B_INST_Q4_0 = {
+  name: "LLAMA_3_2_1B_INST_Q4_0",
   src: `pear://${models[6].hyperdriveKey}/${models[6].modelId}`,
   modelId: models[6].modelId,
   hyperdriveKey: models[6].hyperdriveKey,
@@ -2296,8 +2858,8 @@ export const GTE_LARGE_335M_Q2_K_SHARD = {
   addon: models[6].addon,
 } as const;
 
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD = {
-  name: "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
+export const LLAMA_TOOL_CALLING_3_2_1B_INST_Q4_K = {
+  name: "LLAMA_TOOL_CALLING_3_2_1B_INST_Q4_K",
   src: `pear://${models[7].hyperdriveKey}/${models[7].modelId}`,
   modelId: models[7].modelId,
   hyperdriveKey: models[7].hyperdriveKey,
@@ -2307,8 +2869,8 @@ export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD = {
   addon: models[7].addon,
 } as const;
 
-export const DOLPHIN_MIXTRAL_2X7B_MOE_Q4_K_SHARD = {
-  name: "DOLPHIN_MIXTRAL_2X7B_MOE_Q4_K_SHARD",
+export const LLAMA_3_2_1B_INST_Q4_0_SHARD = {
+  name: "LLAMA_3_2_1B_INST_Q4_0_SHARD",
   src: `pear://${models[8].hyperdriveKey}/${models[8].modelId}`,
   modelId: models[8].modelId,
   hyperdriveKey: models[8].hyperdriveKey,
@@ -2318,8 +2880,8 @@ export const DOLPHIN_MIXTRAL_2X7B_MOE_Q4_K_SHARD = {
   addon: models[8].addon,
 } as const;
 
-export const LASER_DOLPHIN_2_6_2X7B_INST_Q2_K = {
-  name: "LASER_DOLPHIN_2_6_2X7B_INST_Q2_K",
+export const MEDGEMMA_4B_IT_Q4_1 = {
+  name: "MEDGEMMA_4B_IT_Q4_1",
   src: `pear://${models[9].hyperdriveKey}/${models[9].modelId}`,
   modelId: models[9].modelId,
   hyperdriveKey: models[9].hyperdriveKey,
@@ -2329,8 +2891,8 @@ export const LASER_DOLPHIN_2_6_2X7B_INST_Q2_K = {
   addon: models[9].addon,
 } as const;
 
-export const LLAMA_3_2_1B_INST_Q4_0 = {
-  name: "LLAMA_3_2_1B_INST_Q4_0",
+export const MEDGEMMA_4B_IT_Q4_1_SHARD = {
+  name: "MEDGEMMA_4B_IT_Q4_1_SHARD",
   src: `pear://${models[10].hyperdriveKey}/${models[10].modelId}`,
   modelId: models[10].modelId,
   hyperdriveKey: models[10].hyperdriveKey,
@@ -2340,8 +2902,8 @@ export const LLAMA_3_2_1B_INST_Q4_0 = {
   addon: models[10].addon,
 } as const;
 
-export const LLAMA_3_2_1B_INST_Q4_0_SHARD = {
-  name: "LLAMA_3_2_1B_INST_Q4_0_SHARD",
+export const MEDGEMMA_4B_IT_Q8_0 = {
+  name: "MEDGEMMA_4B_IT_Q8_0",
   src: `pear://${models[11].hyperdriveKey}/${models[11].modelId}`,
   modelId: models[11].modelId,
   hyperdriveKey: models[11].hyperdriveKey,
@@ -2351,8 +2913,8 @@ export const LLAMA_3_2_1B_INST_Q4_0_SHARD = {
   addon: models[11].addon,
 } as const;
 
-export const MEDGEMMA_4B_IT_Q4_1 = {
-  name: "MEDGEMMA_4B_IT_Q4_1",
+export const MEDGEMMA_4B_IT_Q8_1_SHARD = {
+  name: "MEDGEMMA_4B_IT_Q8_1_SHARD",
   src: `pear://${models[12].hyperdriveKey}/${models[12].modelId}`,
   modelId: models[12].modelId,
   hyperdriveKey: models[12].hyperdriveKey,
@@ -2362,8 +2924,8 @@ export const MEDGEMMA_4B_IT_Q4_1 = {
   addon: models[12].addon,
 } as const;
 
-export const MEDGEMMA_4B_IT_Q4_1_SHARD = {
-  name: "MEDGEMMA_4B_IT_Q4_1_SHARD",
+export const MIXTRAL_V0_1_8X7B_MOE_Q4_K_M_SHARD = {
+  name: "MIXTRAL_V0_1_8X7B_MOE_Q4_K_M_SHARD",
   src: `pear://${models[13].hyperdriveKey}/${models[13].modelId}`,
   modelId: models[13].modelId,
   hyperdriveKey: models[13].hyperdriveKey,
@@ -2373,8 +2935,8 @@ export const MEDGEMMA_4B_IT_Q4_1_SHARD = {
   addon: models[13].addon,
 } as const;
 
-export const MEDGEMMA_4B_IT_Q8_0 = {
-  name: "MEDGEMMA_4B_IT_Q8_0",
+export const QWEN_3_0_6B_INST_Q4_SHARD = {
+  name: "QWEN_3_0_6B_INST_Q4_SHARD",
   src: `pear://${models[14].hyperdriveKey}/${models[14].modelId}`,
   modelId: models[14].modelId,
   hyperdriveKey: models[14].hyperdriveKey,
@@ -2384,8 +2946,8 @@ export const MEDGEMMA_4B_IT_Q8_0 = {
   addon: models[14].addon,
 } as const;
 
-export const MEDGEMMA_4B_IT_Q8_1_SHARD = {
-  name: "MEDGEMMA_4B_IT_Q8_1_SHARD",
+export const QWEN_3_1_7B_INST_Q4 = {
+  name: "QWEN_3_1_7B_INST_Q4",
   src: `pear://${models[15].hyperdriveKey}/${models[15].modelId}`,
   modelId: models[15].modelId,
   hyperdriveKey: models[15].hyperdriveKey,
@@ -2395,8 +2957,8 @@ export const MEDGEMMA_4B_IT_Q8_1_SHARD = {
   addon: models[15].addon,
 } as const;
 
-export const MIXTRAL_V0_1_8X7B_MOE_Q4_K_M_SHARD = {
-  name: "MIXTRAL_V0_1_8X7B_MOE_Q4_K_M_SHARD",
+export const QWEN_3_1_7B_INST_Q4_SHARD = {
+  name: "QWEN_3_1_7B_INST_Q4_SHARD",
   src: `pear://${models[16].hyperdriveKey}/${models[16].modelId}`,
   modelId: models[16].modelId,
   hyperdriveKey: models[16].hyperdriveKey,
@@ -2406,8 +2968,8 @@ export const MIXTRAL_V0_1_8X7B_MOE_Q4_K_M_SHARD = {
   addon: models[16].addon,
 } as const;
 
-export const QWEN_3_0_6B_INST_Q4_SHARD = {
-  name: "QWEN_3_0_6B_INST_Q4_SHARD",
+export const QWEN_3_4B_INST_Q4_K_M = {
+  name: "QWEN_3_4B_INST_Q4_K_M",
   src: `pear://${models[17].hyperdriveKey}/${models[17].modelId}`,
   modelId: models[17].modelId,
   hyperdriveKey: models[17].hyperdriveKey,
@@ -2417,8 +2979,8 @@ export const QWEN_3_0_6B_INST_Q4_SHARD = {
   addon: models[17].addon,
 } as const;
 
-export const QWEN_3_1_7B_INST_Q4 = {
-  name: "QWEN_3_1_7B_INST_Q4",
+export const QWEN_3_4B_INST_Q4_SHARD = {
+  name: "QWEN_3_4B_INST_Q4_SHARD",
   src: `pear://${models[18].hyperdriveKey}/${models[18].modelId}`,
   modelId: models[18].modelId,
   hyperdriveKey: models[18].hyperdriveKey,
@@ -2428,8 +2990,8 @@ export const QWEN_3_1_7B_INST_Q4 = {
   addon: models[18].addon,
 } as const;
 
-export const QWEN_3_1_7B_INST_Q4_SHARD = {
-  name: "QWEN_3_1_7B_INST_Q4_SHARD",
+export const QWEN_3_8B_INST_Q4_K_M = {
+  name: "QWEN_3_8B_INST_Q4_K_M",
   src: `pear://${models[19].hyperdriveKey}/${models[19].modelId}`,
   modelId: models[19].modelId,
   hyperdriveKey: models[19].hyperdriveKey,
@@ -2439,8 +3001,8 @@ export const QWEN_3_1_7B_INST_Q4_SHARD = {
   addon: models[19].addon,
 } as const;
 
-export const QWEN_3_4B_INST_Q4_SHARD = {
-  name: "QWEN_3_4B_INST_Q4_SHARD",
+export const QWEN2_5_OMNI_3B_MULTIMODAL = {
+  name: "QWEN2_5_OMNI_3B_MULTIMODAL",
   src: `pear://${models[20].hyperdriveKey}/${models[20].modelId}`,
   modelId: models[20].modelId,
   hyperdriveKey: models[20].hyperdriveKey,
@@ -2450,8 +3012,8 @@ export const QWEN_3_4B_INST_Q4_SHARD = {
   addon: models[20].addon,
 } as const;
 
-export const QWEN2_5_OMNI_3B_MULTIMODAL = {
-  name: "QWEN2_5_OMNI_3B_MULTIMODAL",
+export const MMPROJ_QWEN2_5_OMNI_3B_MULTIMODAL = {
+  name: "MMPROJ_QWEN2_5_OMNI_3B_MULTIMODAL",
   src: `pear://${models[21].hyperdriveKey}/${models[21].modelId}`,
   modelId: models[21].modelId,
   hyperdriveKey: models[21].hyperdriveKey,
@@ -2461,8 +3023,8 @@ export const QWEN2_5_OMNI_3B_MULTIMODAL = {
   addon: models[21].addon,
 } as const;
 
-export const MMPROJ_QWEN2_5_OMNI_3B_MULTIMODAL = {
-  name: "MMPROJ_QWEN2_5_OMNI_3B_MULTIMODAL",
+export const QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
+  name: "QWEN3_VL_1_2B_MULTIMODAL_Q4_K",
   src: `pear://${models[22].hyperdriveKey}/${models[22].modelId}`,
   modelId: models[22].modelId,
   hyperdriveKey: models[22].hyperdriveKey,
@@ -2472,8 +3034,8 @@ export const MMPROJ_QWEN2_5_OMNI_3B_MULTIMODAL = {
   addon: models[22].addon,
 } as const;
 
-export const QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
-  name: "QWEN3_VL_1_2B_MULTIMODAL_Q4_K",
+export const MMPROJ_QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
+  name: "MMPROJ_QWEN3_VL_1_2B_MULTIMODAL_Q4_K",
   src: `pear://${models[23].hyperdriveKey}/${models[23].modelId}`,
   modelId: models[23].modelId,
   hyperdriveKey: models[23].hyperdriveKey,
@@ -2483,8 +3045,8 @@ export const QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
   addon: models[23].addon,
 } as const;
 
-export const MMPROJ_QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
-  name: "MMPROJ_QWEN3_VL_1_2B_MULTIMODAL_Q4_K",
+export const QWEN3_0_6B_INST = {
+  name: "QWEN3_0_6B_INST",
   src: `pear://${models[24].hyperdriveKey}/${models[24].modelId}`,
   modelId: models[24].modelId,
   hyperdriveKey: models[24].hyperdriveKey,
@@ -2494,8 +3056,8 @@ export const MMPROJ_QWEN3_VL_1_2B_MULTIMODAL_Q4_K = {
   addon: models[24].addon,
 } as const;
 
-export const QWEN3_0_6B_INST = {
-  name: "QWEN3_0_6B_INST",
+export const QWEN3_4B_INST_Q4 = {
+  name: "QWEN3_4B_INST_Q4",
   src: `pear://${models[25].hyperdriveKey}/${models[25].modelId}`,
   modelId: models[25].modelId,
   hyperdriveKey: models[25].hyperdriveKey,
@@ -2505,8 +3067,8 @@ export const QWEN3_0_6B_INST = {
   addon: models[25].addon,
 } as const;
 
-export const QWEN3_4B_INST_Q4 = {
-  name: "QWEN3_4B_INST_Q4",
+export const QWEN3_600M_INST_Q4 = {
+  name: "QWEN3_600M_INST_Q4",
   src: `pear://${models[26].hyperdriveKey}/${models[26].modelId}`,
   modelId: models[26].modelId,
   hyperdriveKey: models[26].hyperdriveKey,
@@ -2516,8 +3078,8 @@ export const QWEN3_4B_INST_Q4 = {
   addon: models[26].addon,
 } as const;
 
-export const QWEN3_600M_INST_Q4 = {
-  name: "QWEN3_600M_INST_Q4",
+export const SALAMANDRATA_2B_INST_Q4 = {
+  name: "SALAMANDRATA_2B_INST_Q4",
   src: `pear://${models[27].hyperdriveKey}/${models[27].modelId}`,
   modelId: models[27].modelId,
   hyperdriveKey: models[27].hyperdriveKey,
@@ -2527,8 +3089,8 @@ export const QWEN3_600M_INST_Q4 = {
   addon: models[27].addon,
 } as const;
 
-export const SALAMANDRATA_2B_INST_Q4 = {
-  name: "SALAMANDRATA_2B_INST_Q4",
+export const SALAMANDRATA_2B_INST_Q4_SHARD = {
+  name: "SALAMANDRATA_2B_INST_Q4_SHARD",
   src: `pear://${models[28].hyperdriveKey}/${models[28].modelId}`,
   modelId: models[28].modelId,
   hyperdriveKey: models[28].hyperdriveKey,
@@ -2538,8 +3100,8 @@ export const SALAMANDRATA_2B_INST_Q4 = {
   addon: models[28].addon,
 } as const;
 
-export const SALAMANDRATA_2B_INST_Q4_SHARD = {
-  name: "SALAMANDRATA_2B_INST_Q4_SHARD",
+export const SALAMANDRATA_2B_INST_Q8 = {
+  name: "SALAMANDRATA_2B_INST_Q8",
   src: `pear://${models[29].hyperdriveKey}/${models[29].modelId}`,
   modelId: models[29].modelId,
   hyperdriveKey: models[29].hyperdriveKey,
@@ -2549,8 +3111,8 @@ export const SALAMANDRATA_2B_INST_Q4_SHARD = {
   addon: models[29].addon,
 } as const;
 
-export const SALAMANDRATA_2B_INST_Q8 = {
-  name: "SALAMANDRATA_2B_INST_Q8",
+export const SALAMANDRATA_2B_INST_Q8_SHARD = {
+  name: "SALAMANDRATA_2B_INST_Q8_SHARD",
   src: `pear://${models[30].hyperdriveKey}/${models[30].modelId}`,
   modelId: models[30].modelId,
   hyperdriveKey: models[30].hyperdriveKey,
@@ -2560,8 +3122,8 @@ export const SALAMANDRATA_2B_INST_Q8 = {
   addon: models[30].addon,
 } as const;
 
-export const SALAMANDRATA_2B_INST_Q8_SHARD = {
-  name: "SALAMANDRATA_2B_INST_Q8_SHARD",
+export const SMOLVLM2_2_500M_MULTIMODAL_F16 = {
+  name: "SMOLVLM2_2_500M_MULTIMODAL_F16",
   src: `pear://${models[31].hyperdriveKey}/${models[31].modelId}`,
   modelId: models[31].modelId,
   hyperdriveKey: models[31].hyperdriveKey,
@@ -2571,8 +3133,8 @@ export const SALAMANDRATA_2B_INST_Q8_SHARD = {
   addon: models[31].addon,
 } as const;
 
-export const SMOLVLM2_2_500M_MULTIMODAL_F16 = {
-  name: "SMOLVLM2_2_500M_MULTIMODAL_F16",
+export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_F16 = {
+  name: "MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_F16",
   src: `pear://${models[32].hyperdriveKey}/${models[32].modelId}`,
   modelId: models[32].modelId,
   hyperdriveKey: models[32].hyperdriveKey,
@@ -2582,8 +3144,8 @@ export const SMOLVLM2_2_500M_MULTIMODAL_F16 = {
   addon: models[32].addon,
 } as const;
 
-export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_F16 = {
-  name: "MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_F16",
+export const SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
+  name: "SMOLVLM2_2_500M_MULTIMODAL_Q8_0",
   src: `pear://${models[33].hyperdriveKey}/${models[33].modelId}`,
   modelId: models[33].modelId,
   hyperdriveKey: models[33].hyperdriveKey,
@@ -2593,8 +3155,8 @@ export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_F16 = {
   addon: models[33].addon,
 } as const;
 
-export const SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
-  name: "SMOLVLM2_2_500M_MULTIMODAL_Q8_0",
+export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
+  name: "MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0",
   src: `pear://${models[34].hyperdriveKey}/${models[34].modelId}`,
   modelId: models[34].modelId,
   hyperdriveKey: models[34].hyperdriveKey,
@@ -2604,8 +3166,8 @@ export const SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
   addon: models[34].addon,
 } as const;
 
-export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
-  name: "MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0",
+export const EMBEDDINGGEMMA_300M_BF16 = {
+  name: "EMBEDDINGGEMMA_300M_BF16",
   src: `pear://${models[35].hyperdriveKey}/${models[35].modelId}`,
   modelId: models[35].modelId,
   hyperdriveKey: models[35].hyperdriveKey,
@@ -2615,8 +3177,8 @@ export const MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0 = {
   addon: models[35].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_200M_Q0F32 = {
-  name: "MARIAN_EN_HI_INDIC_200M_Q0F32",
+export const EMBEDDINGGEMMA_300M_F32 = {
+  name: "EMBEDDINGGEMMA_300M_F32",
   src: `pear://${models[36].hyperdriveKey}/${models[36].modelId}`,
   modelId: models[36].modelId,
   hyperdriveKey: models[36].hyperdriveKey,
@@ -2626,8 +3188,8 @@ export const MARIAN_EN_HI_INDIC_200M_Q0F32 = {
   addon: models[36].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_200M_Q0F32 = {
-  name: "MARIAN_HI_EN_INDIC_200M_Q0F32",
+export const EMBEDDINGGEMMA_300M_Q4_0 = {
+  name: "EMBEDDINGGEMMA_300M_Q4_0",
   src: `pear://${models[37].hyperdriveKey}/${models[37].modelId}`,
   modelId: models[37].modelId,
   hyperdriveKey: models[37].hyperdriveKey,
@@ -2637,8 +3199,8 @@ export const MARIAN_HI_EN_INDIC_200M_Q0F32 = {
   addon: models[37].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_320M_Q0F32 = {
-  name: "MARIAN_HI_HI_INDIC_320M_Q0F32",
+export const EMBEDDINGGEMMA_300M_Q8_0 = {
+  name: "EMBEDDINGGEMMA_300M_Q8_0",
   src: `pear://${models[38].hyperdriveKey}/${models[38].modelId}`,
   modelId: models[38].modelId,
   hyperdriveKey: models[38].hyperdriveKey,
@@ -2648,8 +3210,8 @@ export const MARIAN_HI_HI_INDIC_320M_Q0F32 = {
   addon: models[38].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_1B_Q0F16 = {
-  name: "MARIAN_EN_HI_INDIC_1B_Q0F16",
+export const GTE_LARGE_FP16 = {
+  name: "GTE_LARGE_FP16",
   src: `pear://${models[39].hyperdriveKey}/${models[39].modelId}`,
   modelId: models[39].modelId,
   hyperdriveKey: models[39].hyperdriveKey,
@@ -2659,8 +3221,8 @@ export const MARIAN_EN_HI_INDIC_1B_Q0F16 = {
   addon: models[39].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_1B_Q0F16 = {
-  name: "MARIAN_HI_EN_INDIC_1B_Q0F16",
+export const GTE_LARGE_335M_FP16_SHARD = {
+  name: "GTE_LARGE_335M_FP16_SHARD",
   src: `pear://${models[40].hyperdriveKey}/${models[40].modelId}`,
   modelId: models[40].modelId,
   hyperdriveKey: models[40].hyperdriveKey,
@@ -2670,8 +3232,8 @@ export const MARIAN_HI_EN_INDIC_1B_Q0F16 = {
   addon: models[40].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_1B_Q0F16 = {
-  name: "MARIAN_HI_HI_INDIC_1B_Q0F16",
+export const GTE_LARGE_335M_Q2_K_SHARD = {
+  name: "GTE_LARGE_335M_Q2_K_SHARD",
   src: `pear://${models[41].hyperdriveKey}/${models[41].modelId}`,
   modelId: models[41].modelId,
   hyperdriveKey: models[41].hyperdriveKey,
@@ -2681,8 +3243,8 @@ export const MARIAN_HI_HI_INDIC_1B_Q0F16 = {
   addon: models[41].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_1B_Q0F32 = {
-  name: "MARIAN_EN_HI_INDIC_1B_Q0F32",
+export const BERGAMOT_AREN = {
+  name: "BERGAMOT_AREN",
   src: `pear://${models[42].hyperdriveKey}/${models[42].modelId}`,
   modelId: models[42].modelId,
   hyperdriveKey: models[42].hyperdriveKey,
@@ -2692,8 +3254,8 @@ export const MARIAN_EN_HI_INDIC_1B_Q0F32 = {
   addon: models[42].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_1B_Q0F32 = {
-  name: "MARIAN_HI_EN_INDIC_1B_Q0F32",
+export const BERGAMOT_AREN_VOCAB = {
+  name: "BERGAMOT_AREN_VOCAB",
   src: `pear://${models[43].hyperdriveKey}/${models[43].modelId}`,
   modelId: models[43].modelId,
   hyperdriveKey: models[43].hyperdriveKey,
@@ -2703,8 +3265,8 @@ export const MARIAN_HI_EN_INDIC_1B_Q0F32 = {
   addon: models[43].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_1B_Q0F32 = {
-  name: "MARIAN_HI_HI_INDIC_1B_Q0F32",
+export const BERGAMOT_CSEN = {
+  name: "BERGAMOT_CSEN",
   src: `pear://${models[44].hyperdriveKey}/${models[44].modelId}`,
   modelId: models[44].modelId,
   hyperdriveKey: models[44].hyperdriveKey,
@@ -2714,8 +3276,8 @@ export const MARIAN_HI_HI_INDIC_1B_Q0F32 = {
   addon: models[44].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
-  name: "MARIAN_EN_HI_INDIC_1B_Q4_0",
+export const BERGAMOT_CSEN_VOCAB = {
+  name: "BERGAMOT_CSEN_VOCAB",
   src: `pear://${models[45].hyperdriveKey}/${models[45].modelId}`,
   modelId: models[45].modelId,
   hyperdriveKey: models[45].hyperdriveKey,
@@ -2725,8 +3287,8 @@ export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
   addon: models[45].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
-  name: "MARIAN_HI_EN_INDIC_1B_Q4_0",
+export const BERGAMOT_ENAR = {
+  name: "BERGAMOT_ENAR",
   src: `pear://${models[46].hyperdriveKey}/${models[46].modelId}`,
   modelId: models[46].modelId,
   hyperdriveKey: models[46].hyperdriveKey,
@@ -2736,8 +3298,8 @@ export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
   addon: models[46].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
-  name: "MARIAN_HI_HI_INDIC_1B_Q4_0",
+export const BERGAMOT_ENAR_VOCAB = {
+  name: "BERGAMOT_ENAR_VOCAB",
   src: `pear://${models[47].hyperdriveKey}/${models[47].modelId}`,
   modelId: models[47].modelId,
   hyperdriveKey: models[47].hyperdriveKey,
@@ -2747,8 +3309,8 @@ export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
   addon: models[47].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_200M_Q0F16 = {
-  name: "MARIAN_EN_HI_INDIC_200M_Q0F16",
+export const BERGAMOT_ENCS = {
+  name: "BERGAMOT_ENCS",
   src: `pear://${models[48].hyperdriveKey}/${models[48].modelId}`,
   modelId: models[48].modelId,
   hyperdriveKey: models[48].hyperdriveKey,
@@ -2758,8 +3320,8 @@ export const MARIAN_EN_HI_INDIC_200M_Q0F16 = {
   addon: models[48].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_200M_Q0F16 = {
-  name: "MARIAN_HI_EN_INDIC_200M_Q0F16",
+export const BERGAMOT_ENES = {
+  name: "BERGAMOT_ENES",
   src: `pear://${models[49].hyperdriveKey}/${models[49].modelId}`,
   modelId: models[49].modelId,
   hyperdriveKey: models[49].hyperdriveKey,
@@ -2769,8 +3331,8 @@ export const MARIAN_HI_EN_INDIC_200M_Q0F16 = {
   addon: models[49].addon,
 } as const;
 
-export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
-  name: "MARIAN_EN_HI_INDIC_200M_Q4_0",
+export const BERGAMOT_ENES_VOCAB = {
+  name: "BERGAMOT_ENES_VOCAB",
   src: `pear://${models[50].hyperdriveKey}/${models[50].modelId}`,
   modelId: models[50].modelId,
   hyperdriveKey: models[50].hyperdriveKey,
@@ -2780,8 +3342,8 @@ export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
   addon: models[50].addon,
 } as const;
 
-export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
-  name: "MARIAN_HI_EN_INDIC_200M_Q4_0",
+export const BERGAMOT_ENFR = {
+  name: "BERGAMOT_ENFR",
   src: `pear://${models[51].hyperdriveKey}/${models[51].modelId}`,
   modelId: models[51].modelId,
   hyperdriveKey: models[51].hyperdriveKey,
@@ -2791,8 +3353,8 @@ export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
   addon: models[51].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_320M_Q0F16 = {
-  name: "MARIAN_HI_HI_INDIC_320M_Q0F16",
+export const BERGAMOT_ENFR_VOCAB = {
+  name: "BERGAMOT_ENFR_VOCAB",
   src: `pear://${models[52].hyperdriveKey}/${models[52].modelId}`,
   modelId: models[52].modelId,
   hyperdriveKey: models[52].hyperdriveKey,
@@ -2802,8 +3364,8 @@ export const MARIAN_HI_HI_INDIC_320M_Q0F16 = {
   addon: models[52].addon,
 } as const;
 
-export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
-  name: "MARIAN_HI_HI_INDIC_320M_Q4_0",
+export const BERGAMOT_ENIT = {
+  name: "BERGAMOT_ENIT",
   src: `pear://${models[53].hyperdriveKey}/${models[53].modelId}`,
   modelId: models[53].modelId,
   hyperdriveKey: models[53].hyperdriveKey,
@@ -2813,8 +3375,8 @@ export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
   addon: models[53].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_IT = {
-  name: "MARIAN_OPUS_EN_IT",
+export const BERGAMOT_ENIT_VOCAB = {
+  name: "BERGAMOT_ENIT_VOCAB",
   src: `pear://${models[54].hyperdriveKey}/${models[54].modelId}`,
   modelId: models[54].modelId,
   hyperdriveKey: models[54].hyperdriveKey,
@@ -2824,8 +3386,8 @@ export const MARIAN_OPUS_EN_IT = {
   addon: models[54].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_FR_Q0F16 = {
-  name: "MARIAN_OPUS_DE_FR_Q0F16",
+export const BERGAMOT_ENJA = {
+  name: "BERGAMOT_ENJA",
   src: `pear://${models[55].hyperdriveKey}/${models[55].modelId}`,
   modelId: models[55].modelId,
   hyperdriveKey: models[55].hyperdriveKey,
@@ -2835,8 +3397,8 @@ export const MARIAN_OPUS_DE_FR_Q0F16 = {
   addon: models[55].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_FR_Q0F16 = {
-  name: "MARIAN_OPUS_EN_FR_Q0F16",
+export const BERGAMOT_ENJA_SRCVOCAB = {
+  name: "BERGAMOT_ENJA_SRCVOCAB",
   src: `pear://${models[56].hyperdriveKey}/${models[56].modelId}`,
   modelId: models[56].modelId,
   hyperdriveKey: models[56].hyperdriveKey,
@@ -2846,8 +3408,8 @@ export const MARIAN_OPUS_EN_FR_Q0F16 = {
   addon: models[56].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_PT_Q0F16 = {
-  name: "MARIAN_OPUS_EN_PT_Q0F16",
+export const BERGAMOT_ENJA_TRGVOCAB = {
+  name: "BERGAMOT_ENJA_TRGVOCAB",
   src: `pear://${models[57].hyperdriveKey}/${models[57].modelId}`,
   modelId: models[57].modelId,
   hyperdriveKey: models[57].hyperdriveKey,
@@ -2857,8 +3419,8 @@ export const MARIAN_OPUS_EN_PT_Q0F16 = {
   addon: models[57].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_FR_Q0F16 = {
-  name: "MARIAN_OPUS_ES_FR_Q0F16",
+export const BERGAMOT_ENPT = {
+  name: "BERGAMOT_ENPT",
   src: `pear://${models[58].hyperdriveKey}/${models[58].modelId}`,
   modelId: models[58].modelId,
   hyperdriveKey: models[58].hyperdriveKey,
@@ -2868,8 +3430,8 @@ export const MARIAN_OPUS_ES_FR_Q0F16 = {
   addon: models[58].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_DE_Q0F16 = {
-  name: "MARIAN_OPUS_FR_DE_Q0F16",
+export const BERGAMOT_ENPT_VOCAB = {
+  name: "BERGAMOT_ENPT_VOCAB",
   src: `pear://${models[59].hyperdriveKey}/${models[59].modelId}`,
   modelId: models[59].modelId,
   hyperdriveKey: models[59].hyperdriveKey,
@@ -2879,8 +3441,8 @@ export const MARIAN_OPUS_FR_DE_Q0F16 = {
   addon: models[59].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_EN_Q0F16 = {
-  name: "MARIAN_OPUS_FR_EN_Q0F16",
+export const BERGAMOT_ENRU = {
+  name: "BERGAMOT_ENRU",
   src: `pear://${models[60].hyperdriveKey}/${models[60].modelId}`,
   modelId: models[60].modelId,
   hyperdriveKey: models[60].hyperdriveKey,
@@ -2890,8 +3452,8 @@ export const MARIAN_OPUS_FR_EN_Q0F16 = {
   addon: models[60].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_ES_Q0F16 = {
-  name: "MARIAN_OPUS_FR_ES_Q0F16",
+export const BERGAMOT_ENRU_VOCAB = {
+  name: "BERGAMOT_ENRU_VOCAB",
   src: `pear://${models[61].hyperdriveKey}/${models[61].modelId}`,
   modelId: models[61].modelId,
   hyperdriveKey: models[61].hyperdriveKey,
@@ -2901,8 +3463,8 @@ export const MARIAN_OPUS_FR_ES_Q0F16 = {
   addon: models[61].addon,
 } as const;
 
-export const MARIAN_OPUS_PT_EN_Q0F16 = {
-  name: "MARIAN_OPUS_PT_EN_Q0F16",
+export const BERGAMOT_ENZH = {
+  name: "BERGAMOT_ENZH",
   src: `pear://${models[62].hyperdriveKey}/${models[62].modelId}`,
   modelId: models[62].modelId,
   hyperdriveKey: models[62].hyperdriveKey,
@@ -2912,8 +3474,8 @@ export const MARIAN_OPUS_PT_EN_Q0F16 = {
   addon: models[62].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_EN_Q0F32 = {
-  name: "MARIAN_OPUS_DE_EN_Q0F32",
+export const BERGAMOT_ENZH_SRCVOCAB = {
+  name: "BERGAMOT_ENZH_SRCVOCAB",
   src: `pear://${models[63].hyperdriveKey}/${models[63].modelId}`,
   modelId: models[63].modelId,
   hyperdriveKey: models[63].hyperdriveKey,
@@ -2923,8 +3485,8 @@ export const MARIAN_OPUS_DE_EN_Q0F32 = {
   addon: models[63].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_ES_Q0F32 = {
-  name: "MARIAN_OPUS_DE_ES_Q0F32",
+export const BERGAMOT_ENZH_TRGVOCAB = {
+  name: "BERGAMOT_ENZH_TRGVOCAB",
   src: `pear://${models[64].hyperdriveKey}/${models[64].modelId}`,
   modelId: models[64].modelId,
   hyperdriveKey: models[64].hyperdriveKey,
@@ -2934,8 +3496,8 @@ export const MARIAN_OPUS_DE_ES_Q0F32 = {
   addon: models[64].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_FR_Q0F32 = {
-  name: "MARIAN_OPUS_DE_FR_Q0F32",
+export const BERGAMOT_ESEN = {
+  name: "BERGAMOT_ESEN",
   src: `pear://${models[65].hyperdriveKey}/${models[65].modelId}`,
   modelId: models[65].modelId,
   hyperdriveKey: models[65].hyperdriveKey,
@@ -2945,8 +3507,8 @@ export const MARIAN_OPUS_DE_FR_Q0F32 = {
   addon: models[65].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_IT_Q0F32 = {
-  name: "MARIAN_OPUS_DE_IT_Q0F32",
+export const BERGAMOT_ESEN_VOCAB = {
+  name: "BERGAMOT_ESEN_VOCAB",
   src: `pear://${models[66].hyperdriveKey}/${models[66].modelId}`,
   modelId: models[66].modelId,
   hyperdriveKey: models[66].hyperdriveKey,
@@ -2956,8 +3518,8 @@ export const MARIAN_OPUS_DE_IT_Q0F32 = {
   addon: models[66].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_DE_Q0F32 = {
-  name: "MARIAN_OPUS_EN_DE_Q0F32",
+export const BERGAMOT_FREN = {
+  name: "BERGAMOT_FREN",
   src: `pear://${models[67].hyperdriveKey}/${models[67].modelId}`,
   modelId: models[67].modelId,
   hyperdriveKey: models[67].hyperdriveKey,
@@ -2967,8 +3529,8 @@ export const MARIAN_OPUS_EN_DE_Q0F32 = {
   addon: models[67].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_ES_Q0F32 = {
-  name: "MARIAN_OPUS_EN_ES_Q0F32",
+export const BERGAMOT_ITEN = {
+  name: "BERGAMOT_ITEN",
   src: `pear://${models[68].hyperdriveKey}/${models[68].modelId}`,
   modelId: models[68].modelId,
   hyperdriveKey: models[68].hyperdriveKey,
@@ -2978,8 +3540,8 @@ export const MARIAN_OPUS_EN_ES_Q0F32 = {
   addon: models[68].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_FR_Q0F32 = {
-  name: "MARIAN_OPUS_EN_FR_Q0F32",
+export const BERGAMOT_ITEN_VOCAB = {
+  name: "BERGAMOT_ITEN_VOCAB",
   src: `pear://${models[69].hyperdriveKey}/${models[69].modelId}`,
   modelId: models[69].modelId,
   hyperdriveKey: models[69].hyperdriveKey,
@@ -2989,8 +3551,8 @@ export const MARIAN_OPUS_EN_FR_Q0F32 = {
   addon: models[69].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_IT_Q0F32 = {
-  name: "MARIAN_OPUS_EN_IT_Q0F32",
+export const BERGAMOT_JAEN = {
+  name: "BERGAMOT_JAEN",
   src: `pear://${models[70].hyperdriveKey}/${models[70].modelId}`,
   modelId: models[70].modelId,
   hyperdriveKey: models[70].hyperdriveKey,
@@ -3000,8 +3562,8 @@ export const MARIAN_OPUS_EN_IT_Q0F32 = {
   addon: models[70].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_PT_Q0F32 = {
-  name: "MARIAN_OPUS_EN_PT_Q0F32",
+export const BERGAMOT_JAEN_VOCAB = {
+  name: "BERGAMOT_JAEN_VOCAB",
   src: `pear://${models[71].hyperdriveKey}/${models[71].modelId}`,
   modelId: models[71].modelId,
   hyperdriveKey: models[71].hyperdriveKey,
@@ -3011,8 +3573,8 @@ export const MARIAN_OPUS_EN_PT_Q0F32 = {
   addon: models[71].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_DE_Q0F32 = {
-  name: "MARIAN_OPUS_ES_DE_Q0F32",
+export const BERGAMOT_PTEN = {
+  name: "BERGAMOT_PTEN",
   src: `pear://${models[72].hyperdriveKey}/${models[72].modelId}`,
   modelId: models[72].modelId,
   hyperdriveKey: models[72].hyperdriveKey,
@@ -3022,8 +3584,8 @@ export const MARIAN_OPUS_ES_DE_Q0F32 = {
   addon: models[72].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_EN_Q0F32 = {
-  name: "MARIAN_OPUS_ES_EN_Q0F32",
+export const BERGAMOT_RUEN = {
+  name: "BERGAMOT_RUEN",
   src: `pear://${models[73].hyperdriveKey}/${models[73].modelId}`,
   modelId: models[73].modelId,
   hyperdriveKey: models[73].hyperdriveKey,
@@ -3033,8 +3595,8 @@ export const MARIAN_OPUS_ES_EN_Q0F32 = {
   addon: models[73].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_FR_Q0F32 = {
-  name: "MARIAN_OPUS_ES_FR_Q0F32",
+export const BERGAMOT_RUEN_VOCAB = {
+  name: "BERGAMOT_RUEN_VOCAB",
   src: `pear://${models[74].hyperdriveKey}/${models[74].modelId}`,
   modelId: models[74].modelId,
   hyperdriveKey: models[74].hyperdriveKey,
@@ -3044,8 +3606,8 @@ export const MARIAN_OPUS_ES_FR_Q0F32 = {
   addon: models[74].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_IT_Q0F32 = {
-  name: "MARIAN_OPUS_ES_IT_Q0F32",
+export const BERGAMOT_ZHEN = {
+  name: "BERGAMOT_ZHEN",
   src: `pear://${models[75].hyperdriveKey}/${models[75].modelId}`,
   modelId: models[75].modelId,
   hyperdriveKey: models[75].hyperdriveKey,
@@ -3055,8 +3617,8 @@ export const MARIAN_OPUS_ES_IT_Q0F32 = {
   addon: models[75].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_DE_Q0F32 = {
-  name: "MARIAN_OPUS_FR_DE_Q0F32",
+export const BERGAMOT_ZHEN_VOCAB = {
+  name: "BERGAMOT_ZHEN_VOCAB",
   src: `pear://${models[76].hyperdriveKey}/${models[76].modelId}`,
   modelId: models[76].modelId,
   hyperdriveKey: models[76].hyperdriveKey,
@@ -3066,8 +3628,8 @@ export const MARIAN_OPUS_FR_DE_Q0F32 = {
   addon: models[76].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_EN_Q0F32 = {
-  name: "MARIAN_OPUS_FR_EN_Q0F32",
+export const MARIAN_EN_HI_INDIC_200M_Q0F32 = {
+  name: "MARIAN_EN_HI_INDIC_200M_Q0F32",
   src: `pear://${models[77].hyperdriveKey}/${models[77].modelId}`,
   modelId: models[77].modelId,
   hyperdriveKey: models[77].hyperdriveKey,
@@ -3077,8 +3639,8 @@ export const MARIAN_OPUS_FR_EN_Q0F32 = {
   addon: models[77].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_ES_Q0F32 = {
-  name: "MARIAN_OPUS_FR_ES_Q0F32",
+export const MARIAN_HI_EN_INDIC_200M_Q0F32 = {
+  name: "MARIAN_HI_EN_INDIC_200M_Q0F32",
   src: `pear://${models[78].hyperdriveKey}/${models[78].modelId}`,
   modelId: models[78].modelId,
   hyperdriveKey: models[78].hyperdriveKey,
@@ -3088,8 +3650,8 @@ export const MARIAN_OPUS_FR_ES_Q0F32 = {
   addon: models[78].addon,
 } as const;
 
-export const MARIAN_OPUS_IT_DE_Q0F32 = {
-  name: "MARIAN_OPUS_IT_DE_Q0F32",
+export const MARIAN_HI_HI_INDIC_320M_Q0F32 = {
+  name: "MARIAN_HI_HI_INDIC_320M_Q0F32",
   src: `pear://${models[79].hyperdriveKey}/${models[79].modelId}`,
   modelId: models[79].modelId,
   hyperdriveKey: models[79].hyperdriveKey,
@@ -3099,8 +3661,8 @@ export const MARIAN_OPUS_IT_DE_Q0F32 = {
   addon: models[79].addon,
 } as const;
 
-export const MARIAN_OPUS_IT_EN_Q0F32 = {
-  name: "MARIAN_OPUS_IT_EN_Q0F32",
+export const MARIAN_EN_HI_INDIC_1B_Q0F16 = {
+  name: "MARIAN_EN_HI_INDIC_1B_Q0F16",
   src: `pear://${models[80].hyperdriveKey}/${models[80].modelId}`,
   modelId: models[80].modelId,
   hyperdriveKey: models[80].hyperdriveKey,
@@ -3110,8 +3672,8 @@ export const MARIAN_OPUS_IT_EN_Q0F32 = {
   addon: models[80].addon,
 } as const;
 
-export const MARIAN_OPUS_IT_ES_Q0F32 = {
-  name: "MARIAN_OPUS_IT_ES_Q0F32",
+export const MARIAN_HI_EN_INDIC_1B_Q0F16 = {
+  name: "MARIAN_HI_EN_INDIC_1B_Q0F16",
   src: `pear://${models[81].hyperdriveKey}/${models[81].modelId}`,
   modelId: models[81].modelId,
   hyperdriveKey: models[81].hyperdriveKey,
@@ -3121,8 +3683,8 @@ export const MARIAN_OPUS_IT_ES_Q0F32 = {
   addon: models[81].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_FR_Q4_0 = {
-  name: "MARIAN_OPUS_DE_FR_Q4_0",
+export const MARIAN_HI_HI_INDIC_1B_Q0F16 = {
+  name: "MARIAN_HI_HI_INDIC_1B_Q0F16",
   src: `pear://${models[82].hyperdriveKey}/${models[82].modelId}`,
   modelId: models[82].modelId,
   hyperdriveKey: models[82].hyperdriveKey,
@@ -3132,8 +3694,8 @@ export const MARIAN_OPUS_DE_FR_Q4_0 = {
   addon: models[82].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_FR_Q4_0 = {
-  name: "MARIAN_OPUS_EN_FR_Q4_0",
+export const MARIAN_EN_HI_INDIC_1B_Q0F32 = {
+  name: "MARIAN_EN_HI_INDIC_1B_Q0F32",
   src: `pear://${models[83].hyperdriveKey}/${models[83].modelId}`,
   modelId: models[83].modelId,
   hyperdriveKey: models[83].hyperdriveKey,
@@ -3143,8 +3705,8 @@ export const MARIAN_OPUS_EN_FR_Q4_0 = {
   addon: models[83].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_PT_Q4_0 = {
-  name: "MARIAN_OPUS_EN_PT_Q4_0",
+export const MARIAN_HI_EN_INDIC_1B_Q0F32 = {
+  name: "MARIAN_HI_EN_INDIC_1B_Q0F32",
   src: `pear://${models[84].hyperdriveKey}/${models[84].modelId}`,
   modelId: models[84].modelId,
   hyperdriveKey: models[84].hyperdriveKey,
@@ -3154,8 +3716,8 @@ export const MARIAN_OPUS_EN_PT_Q4_0 = {
   addon: models[84].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_FR_Q4_0 = {
-  name: "MARIAN_OPUS_ES_FR_Q4_0",
+export const MARIAN_HI_HI_INDIC_1B_Q0F32 = {
+  name: "MARIAN_HI_HI_INDIC_1B_Q0F32",
   src: `pear://${models[85].hyperdriveKey}/${models[85].modelId}`,
   modelId: models[85].modelId,
   hyperdriveKey: models[85].hyperdriveKey,
@@ -3165,8 +3727,8 @@ export const MARIAN_OPUS_ES_FR_Q4_0 = {
   addon: models[85].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_DE_Q4_0 = {
-  name: "MARIAN_OPUS_FR_DE_Q4_0",
+export const MARIAN_EN_HI_INDIC_1B_Q4_0 = {
+  name: "MARIAN_EN_HI_INDIC_1B_Q4_0",
   src: `pear://${models[86].hyperdriveKey}/${models[86].modelId}`,
   modelId: models[86].modelId,
   hyperdriveKey: models[86].hyperdriveKey,
@@ -3176,8 +3738,8 @@ export const MARIAN_OPUS_FR_DE_Q4_0 = {
   addon: models[86].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_EN_Q4_0 = {
-  name: "MARIAN_OPUS_FR_EN_Q4_0",
+export const MARIAN_HI_EN_INDIC_1B_Q4_0 = {
+  name: "MARIAN_HI_EN_INDIC_1B_Q4_0",
   src: `pear://${models[87].hyperdriveKey}/${models[87].modelId}`,
   modelId: models[87].modelId,
   hyperdriveKey: models[87].hyperdriveKey,
@@ -3187,8 +3749,8 @@ export const MARIAN_OPUS_FR_EN_Q4_0 = {
   addon: models[87].addon,
 } as const;
 
-export const MARIAN_OPUS_FR_ES_Q4_0 = {
-  name: "MARIAN_OPUS_FR_ES_Q4_0",
+export const MARIAN_HI_HI_INDIC_1B_Q4_0 = {
+  name: "MARIAN_HI_HI_INDIC_1B_Q4_0",
   src: `pear://${models[88].hyperdriveKey}/${models[88].modelId}`,
   modelId: models[88].modelId,
   hyperdriveKey: models[88].hyperdriveKey,
@@ -3198,8 +3760,8 @@ export const MARIAN_OPUS_FR_ES_Q4_0 = {
   addon: models[88].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_RU_Q0F16 = {
-  name: "MARIAN_OPUS_EN_RU_Q0F16",
+export const MARIAN_EN_HI_INDIC_200M_Q0F16 = {
+  name: "MARIAN_EN_HI_INDIC_200M_Q0F16",
   src: `pear://${models[89].hyperdriveKey}/${models[89].modelId}`,
   modelId: models[89].modelId,
   hyperdriveKey: models[89].hyperdriveKey,
@@ -3209,8 +3771,8 @@ export const MARIAN_OPUS_EN_RU_Q0F16 = {
   addon: models[89].addon,
 } as const;
 
-export const MARIAN_OPUS_RU_EN_Q0F16 = {
-  name: "MARIAN_OPUS_RU_EN_Q0F16",
+export const MARIAN_HI_EN_INDIC_200M_Q0F16 = {
+  name: "MARIAN_HI_EN_INDIC_200M_Q0F16",
   src: `pear://${models[90].hyperdriveKey}/${models[90].modelId}`,
   modelId: models[90].modelId,
   hyperdriveKey: models[90].hyperdriveKey,
@@ -3220,8 +3782,8 @@ export const MARIAN_OPUS_RU_EN_Q0F16 = {
   addon: models[90].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_RU_Q0F32 = {
-  name: "MARIAN_OPUS_EN_RU_Q0F32",
+export const MARIAN_EN_HI_INDIC_200M_Q4_0 = {
+  name: "MARIAN_EN_HI_INDIC_200M_Q4_0",
   src: `pear://${models[91].hyperdriveKey}/${models[91].modelId}`,
   modelId: models[91].modelId,
   hyperdriveKey: models[91].hyperdriveKey,
@@ -3231,8 +3793,8 @@ export const MARIAN_OPUS_EN_RU_Q0F32 = {
   addon: models[91].addon,
 } as const;
 
-export const MARIAN_OPUS_RU_EN_Q0F32 = {
-  name: "MARIAN_OPUS_RU_EN_Q0F32",
+export const MARIAN_HI_EN_INDIC_200M_Q4_0 = {
+  name: "MARIAN_HI_EN_INDIC_200M_Q4_0",
   src: `pear://${models[92].hyperdriveKey}/${models[92].modelId}`,
   modelId: models[92].modelId,
   hyperdriveKey: models[92].hyperdriveKey,
@@ -3242,8 +3804,8 @@ export const MARIAN_OPUS_RU_EN_Q0F32 = {
   addon: models[92].addon,
 } as const;
 
-export const MARIAN_OPUS_AR_EN_Q4_0 = {
-  name: "MARIAN_OPUS_AR_EN_Q4_0",
+export const MARIAN_HI_HI_INDIC_320M_Q0F16 = {
+  name: "MARIAN_HI_HI_INDIC_320M_Q0F16",
   src: `pear://${models[93].hyperdriveKey}/${models[93].modelId}`,
   modelId: models[93].modelId,
   hyperdriveKey: models[93].hyperdriveKey,
@@ -3253,8 +3815,8 @@ export const MARIAN_OPUS_AR_EN_Q4_0 = {
   addon: models[93].addon,
 } as const;
 
-export const MARIAN_OPUS_DE_EN_Q4_0 = {
-  name: "MARIAN_OPUS_DE_EN_Q4_0",
+export const MARIAN_HI_HI_INDIC_320M_Q4_0 = {
+  name: "MARIAN_HI_HI_INDIC_320M_Q4_0",
   src: `pear://${models[94].hyperdriveKey}/${models[94].modelId}`,
   modelId: models[94].modelId,
   hyperdriveKey: models[94].hyperdriveKey,
@@ -3264,8 +3826,8 @@ export const MARIAN_OPUS_DE_EN_Q4_0 = {
   addon: models[94].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_AR_Q4_0 = {
-  name: "MARIAN_OPUS_EN_AR_Q4_0",
+export const MARIAN_OPUS_EN_IT = {
+  name: "MARIAN_OPUS_EN_IT",
   src: `pear://${models[95].hyperdriveKey}/${models[95].modelId}`,
   modelId: models[95].modelId,
   hyperdriveKey: models[95].hyperdriveKey,
@@ -3275,8 +3837,8 @@ export const MARIAN_OPUS_EN_AR_Q4_0 = {
   addon: models[95].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_DE_Q4_0 = {
-  name: "MARIAN_OPUS_EN_DE_Q4_0",
+export const MARIAN_OPUS_DE_FR_Q0F16 = {
+  name: "MARIAN_OPUS_DE_FR_Q0F16",
   src: `pear://${models[96].hyperdriveKey}/${models[96].modelId}`,
   modelId: models[96].modelId,
   hyperdriveKey: models[96].hyperdriveKey,
@@ -3286,8 +3848,8 @@ export const MARIAN_OPUS_EN_DE_Q4_0 = {
   addon: models[96].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_ES_Q4_0 = {
-  name: "MARIAN_OPUS_EN_ES_Q4_0",
+export const MARIAN_OPUS_EN_FR_Q0F16 = {
+  name: "MARIAN_OPUS_EN_FR_Q0F16",
   src: `pear://${models[97].hyperdriveKey}/${models[97].modelId}`,
   modelId: models[97].modelId,
   hyperdriveKey: models[97].hyperdriveKey,
@@ -3297,8 +3859,8 @@ export const MARIAN_OPUS_EN_ES_Q4_0 = {
   addon: models[97].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_IT_Q4_0 = {
-  name: "MARIAN_OPUS_EN_IT_Q4_0",
+export const MARIAN_OPUS_EN_PT_Q0F16 = {
+  name: "MARIAN_OPUS_EN_PT_Q0F16",
   src: `pear://${models[98].hyperdriveKey}/${models[98].modelId}`,
   modelId: models[98].modelId,
   hyperdriveKey: models[98].hyperdriveKey,
@@ -3308,8 +3870,8 @@ export const MARIAN_OPUS_EN_IT_Q4_0 = {
   addon: models[98].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_JA_Q4_0 = {
-  name: "MARIAN_OPUS_EN_JA_Q4_0",
+export const MARIAN_OPUS_ES_FR_Q0F16 = {
+  name: "MARIAN_OPUS_ES_FR_Q0F16",
   src: `pear://${models[99].hyperdriveKey}/${models[99].modelId}`,
   modelId: models[99].modelId,
   hyperdriveKey: models[99].hyperdriveKey,
@@ -3319,8 +3881,8 @@ export const MARIAN_OPUS_EN_JA_Q4_0 = {
   addon: models[99].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_ROA_Q4_0 = {
-  name: "MARIAN_OPUS_EN_ROA_Q4_0",
+export const MARIAN_OPUS_FR_DE_Q0F16 = {
+  name: "MARIAN_OPUS_FR_DE_Q0F16",
   src: `pear://${models[100].hyperdriveKey}/${models[100].modelId}`,
   modelId: models[100].modelId,
   hyperdriveKey: models[100].hyperdriveKey,
@@ -3330,8 +3892,8 @@ export const MARIAN_OPUS_EN_ROA_Q4_0 = {
   addon: models[100].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_RU_Q4_0 = {
-  name: "MARIAN_OPUS_EN_RU_Q4_0",
+export const MARIAN_OPUS_FR_EN_Q0F16 = {
+  name: "MARIAN_OPUS_FR_EN_Q0F16",
   src: `pear://${models[101].hyperdriveKey}/${models[101].modelId}`,
   modelId: models[101].modelId,
   hyperdriveKey: models[101].hyperdriveKey,
@@ -3341,8 +3903,8 @@ export const MARIAN_OPUS_EN_RU_Q4_0 = {
   addon: models[101].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_ZH_Q4_0 = {
-  name: "MARIAN_OPUS_EN_ZH_Q4_0",
+export const MARIAN_OPUS_FR_ES_Q0F16 = {
+  name: "MARIAN_OPUS_FR_ES_Q0F16",
   src: `pear://${models[102].hyperdriveKey}/${models[102].modelId}`,
   modelId: models[102].modelId,
   hyperdriveKey: models[102].hyperdriveKey,
@@ -3352,8 +3914,8 @@ export const MARIAN_OPUS_EN_ZH_Q4_0 = {
   addon: models[102].addon,
 } as const;
 
-export const MARIAN_OPUS_ES_EN_Q4_0 = {
-  name: "MARIAN_OPUS_ES_EN_Q4_0",
+export const MARIAN_OPUS_PT_EN_Q0F16 = {
+  name: "MARIAN_OPUS_PT_EN_Q0F16",
   src: `pear://${models[103].hyperdriveKey}/${models[103].modelId}`,
   modelId: models[103].modelId,
   hyperdriveKey: models[103].hyperdriveKey,
@@ -3363,8 +3925,8 @@ export const MARIAN_OPUS_ES_EN_Q4_0 = {
   addon: models[103].addon,
 } as const;
 
-export const MARIAN_OPUS_IT_EN_Q4_0 = {
-  name: "MARIAN_OPUS_IT_EN_Q4_0",
+export const MARIAN_OPUS_DE_EN_Q0F32 = {
+  name: "MARIAN_OPUS_DE_EN_Q0F32",
   src: `pear://${models[104].hyperdriveKey}/${models[104].modelId}`,
   modelId: models[104].modelId,
   hyperdriveKey: models[104].hyperdriveKey,
@@ -3374,8 +3936,8 @@ export const MARIAN_OPUS_IT_EN_Q4_0 = {
   addon: models[104].addon,
 } as const;
 
-export const MARIAN_OPUS_JA_EN_Q4_0 = {
-  name: "MARIAN_OPUS_JA_EN_Q4_0",
+export const MARIAN_OPUS_DE_ES_Q0F32 = {
+  name: "MARIAN_OPUS_DE_ES_Q0F32",
   src: `pear://${models[105].hyperdriveKey}/${models[105].modelId}`,
   modelId: models[105].modelId,
   hyperdriveKey: models[105].hyperdriveKey,
@@ -3385,8 +3947,8 @@ export const MARIAN_OPUS_JA_EN_Q4_0 = {
   addon: models[105].addon,
 } as const;
 
-export const MARIAN_OPUS_ROA_EN_Q4_0 = {
-  name: "MARIAN_OPUS_ROA_EN_Q4_0",
+export const MARIAN_OPUS_DE_FR_Q0F32 = {
+  name: "MARIAN_OPUS_DE_FR_Q0F32",
   src: `pear://${models[106].hyperdriveKey}/${models[106].modelId}`,
   modelId: models[106].modelId,
   hyperdriveKey: models[106].hyperdriveKey,
@@ -3396,8 +3958,8 @@ export const MARIAN_OPUS_ROA_EN_Q4_0 = {
   addon: models[106].addon,
 } as const;
 
-export const MARIAN_OPUS_RU_EN_Q4_0 = {
-  name: "MARIAN_OPUS_RU_EN_Q4_0",
+export const MARIAN_OPUS_DE_IT_Q0F32 = {
+  name: "MARIAN_OPUS_DE_IT_Q0F32",
   src: `pear://${models[107].hyperdriveKey}/${models[107].modelId}`,
   modelId: models[107].modelId,
   hyperdriveKey: models[107].hyperdriveKey,
@@ -3407,8 +3969,8 @@ export const MARIAN_OPUS_RU_EN_Q4_0 = {
   addon: models[107].addon,
 } as const;
 
-export const MARIAN_OPUS_ZH_EN_Q4_0 = {
-  name: "MARIAN_OPUS_ZH_EN_Q4_0",
+export const MARIAN_OPUS_EN_DE_Q0F32 = {
+  name: "MARIAN_OPUS_EN_DE_Q0F32",
   src: `pear://${models[108].hyperdriveKey}/${models[108].modelId}`,
   modelId: models[108].modelId,
   hyperdriveKey: models[108].hyperdriveKey,
@@ -3418,8 +3980,8 @@ export const MARIAN_OPUS_ZH_EN_Q4_0 = {
   addon: models[108].addon,
 } as const;
 
-export const MARIAN_OPUS_EN_JA_Q4F16_1 = {
-  name: "MARIAN_OPUS_EN_JA_Q4F16_1",
+export const MARIAN_OPUS_EN_ES_Q0F32 = {
+  name: "MARIAN_OPUS_EN_ES_Q0F32",
   src: `pear://${models[109].hyperdriveKey}/${models[109].modelId}`,
   modelId: models[109].modelId,
   hyperdriveKey: models[109].hyperdriveKey,
@@ -3429,8 +3991,8 @@ export const MARIAN_OPUS_EN_JA_Q4F16_1 = {
   addon: models[109].addon,
 } as const;
 
-export const MARIAN_OPUS_JA_EN_Q4F16_1 = {
-  name: "MARIAN_OPUS_JA_EN_Q4F16_1",
+export const MARIAN_OPUS_EN_FR_Q0F32 = {
+  name: "MARIAN_OPUS_EN_FR_Q0F32",
   src: `pear://${models[110].hyperdriveKey}/${models[110].modelId}`,
   modelId: models[110].modelId,
   hyperdriveKey: models[110].hyperdriveKey,
@@ -3440,8 +4002,8 @@ export const MARIAN_OPUS_JA_EN_Q4F16_1 = {
   addon: models[110].addon,
 } as const;
 
-export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM = {
-  name: "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM",
+export const MARIAN_OPUS_EN_IT_Q0F32 = {
+  name: "MARIAN_OPUS_EN_IT_Q0F32",
   src: `pear://${models[111].hyperdriveKey}/${models[111].modelId}`,
   modelId: models[111].modelId,
   hyperdriveKey: models[111].hyperdriveKey,
@@ -3451,8 +4013,8 @@ export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM = {
   addon: models[111].addon,
 } as const;
 
-export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG = {
-  name: "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG",
+export const MARIAN_OPUS_EN_PT_Q0F32 = {
+  name: "MARIAN_OPUS_EN_PT_Q0F32",
   src: `pear://${models[112].hyperdriveKey}/${models[112].modelId}`,
   modelId: models[112].modelId,
   hyperdriveKey: models[112].hyperdriveKey,
@@ -3462,8 +4024,8 @@ export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG = {
   addon: models[112].addon,
 } as const;
 
-export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM = {
-  name: "TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM",
+export const MARIAN_OPUS_ES_DE_Q0F32 = {
+  name: "MARIAN_OPUS_ES_DE_Q0F32",
   src: `pear://${models[113].hyperdriveKey}/${models[113].modelId}`,
   modelId: models[113].modelId,
   hyperdriveKey: models[113].hyperdriveKey,
@@ -3473,8 +4035,8 @@ export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM = {
   addon: models[113].addon,
 } as const;
 
-export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM_CONFIG = {
-  name: "TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM_CONFIG",
+export const MARIAN_OPUS_ES_EN_Q0F32 = {
+  name: "MARIAN_OPUS_ES_EN_Q0F32",
   src: `pear://${models[114].hyperdriveKey}/${models[114].modelId}`,
   modelId: models[114].modelId,
   hyperdriveKey: models[114].hyperdriveKey,
@@ -3484,8 +4046,8 @@ export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM_CONFIG = {
   addon: models[114].addon,
 } as const;
 
-export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM = {
-  name: "TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM",
+export const MARIAN_OPUS_ES_FR_Q0F32 = {
+  name: "MARIAN_OPUS_ES_FR_Q0F32",
   src: `pear://${models[115].hyperdriveKey}/${models[115].modelId}`,
   modelId: models[115].modelId,
   hyperdriveKey: models[115].hyperdriveKey,
@@ -3495,8 +4057,8 @@ export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM = {
   addon: models[115].addon,
 } as const;
 
-export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM_CONFIG = {
-  name: "TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM_CONFIG",
+export const MARIAN_OPUS_ES_IT_Q0F32 = {
+  name: "MARIAN_OPUS_ES_IT_Q0F32",
   src: `pear://${models[116].hyperdriveKey}/${models[116].modelId}`,
   modelId: models[116].modelId,
   hyperdriveKey: models[116].hyperdriveKey,
@@ -3506,8 +4068,8 @@ export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM_CONFIG = {
   addon: models[116].addon,
 } as const;
 
-export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM = {
-  name: "TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM",
+export const MARIAN_OPUS_FR_DE_Q0F32 = {
+  name: "MARIAN_OPUS_FR_DE_Q0F32",
   src: `pear://${models[117].hyperdriveKey}/${models[117].modelId}`,
   modelId: models[117].modelId,
   hyperdriveKey: models[117].hyperdriveKey,
@@ -3517,8 +4079,8 @@ export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM = {
   addon: models[117].addon,
 } as const;
 
-export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM_CONFIG = {
-  name: "TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM_CONFIG",
+export const MARIAN_OPUS_FR_EN_Q0F32 = {
+  name: "MARIAN_OPUS_FR_EN_Q0F32",
   src: `pear://${models[118].hyperdriveKey}/${models[118].modelId}`,
   modelId: models[118].modelId,
   hyperdriveKey: models[118].hyperdriveKey,
@@ -3528,8 +4090,8 @@ export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM_CONFIG = {
   addon: models[118].addon,
 } as const;
 
-export const VAD_SILERO_5_1_2 = {
-  name: "VAD_SILERO_5_1_2",
+export const MARIAN_OPUS_FR_ES_Q0F32 = {
+  name: "MARIAN_OPUS_FR_ES_Q0F32",
   src: `pear://${models[119].hyperdriveKey}/${models[119].modelId}`,
   modelId: models[119].modelId,
   hyperdriveKey: models[119].hyperdriveKey,
@@ -3539,8 +4101,8 @@ export const VAD_SILERO_5_1_2 = {
   addon: models[119].addon,
 } as const;
 
-export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16 = {
-  name: "WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16",
+export const MARIAN_OPUS_IT_DE_Q0F32 = {
+  name: "MARIAN_OPUS_IT_DE_Q0F32",
   src: `pear://${models[120].hyperdriveKey}/${models[120].modelId}`,
   modelId: models[120].modelId,
   hyperdriveKey: models[120].hyperdriveKey,
@@ -3550,8 +4112,8 @@ export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16 = {
   addon: models[120].addon,
 } as const;
 
-export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_Q8_0 = {
-  name: "WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_Q8_0",
+export const MARIAN_OPUS_IT_EN_Q0F32 = {
+  name: "MARIAN_OPUS_IT_EN_Q0F32",
   src: `pear://${models[121].hyperdriveKey}/${models[121].modelId}`,
   modelId: models[121].modelId,
   hyperdriveKey: models[121].hyperdriveKey,
@@ -3561,32 +4123,30 @@ export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_Q8_0 = {
   addon: models[121].addon,
 } as const;
 
-export const WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_F16 =
-  {
-    name: "WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_F16",
-    src: `pear://${models[122].hyperdriveKey}/${models[122].modelId}`,
-    modelId: models[122].modelId,
-    hyperdriveKey: models[122].hyperdriveKey,
-    hyperbeeKey: models[122].hyperbeeKey,
-    expectedSize: models[122].expectedSize,
-    sha256Checksum: models[122].sha256Checksum,
-    addon: models[122].addon,
-  } as const;
+export const MARIAN_OPUS_IT_ES_Q0F32 = {
+  name: "MARIAN_OPUS_IT_ES_Q0F32",
+  src: `pear://${models[122].hyperdriveKey}/${models[122].modelId}`,
+  modelId: models[122].modelId,
+  hyperdriveKey: models[122].hyperdriveKey,
+  hyperbeeKey: models[122].hyperbeeKey,
+  expectedSize: models[122].expectedSize,
+  sha256Checksum: models[122].sha256Checksum,
+  addon: models[122].addon,
+} as const;
 
-export const WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_Q8_0 =
-  {
-    name: "WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_Q8_0",
-    src: `pear://${models[123].hyperdriveKey}/${models[123].modelId}`,
-    modelId: models[123].modelId,
-    hyperdriveKey: models[123].hyperdriveKey,
-    hyperbeeKey: models[123].hyperbeeKey,
-    expectedSize: models[123].expectedSize,
-    sha256Checksum: models[123].sha256Checksum,
-    addon: models[123].addon,
-  } as const;
+export const MARIAN_OPUS_DE_FR_Q4_0 = {
+  name: "MARIAN_OPUS_DE_FR_Q4_0",
+  src: `pear://${models[123].hyperdriveKey}/${models[123].modelId}`,
+  modelId: models[123].modelId,
+  hyperdriveKey: models[123].hyperdriveKey,
+  hyperbeeKey: models[123].hyperbeeKey,
+  expectedSize: models[123].expectedSize,
+  sha256Checksum: models[123].sha256Checksum,
+  addon: models[123].addon,
+} as const;
 
-export const WHISPER_FRENCH_TINY_F16 = {
-  name: "WHISPER_FRENCH_TINY_F16",
+export const MARIAN_OPUS_EN_FR_Q4_0 = {
+  name: "MARIAN_OPUS_EN_FR_Q4_0",
   src: `pear://${models[124].hyperdriveKey}/${models[124].modelId}`,
   modelId: models[124].modelId,
   hyperdriveKey: models[124].hyperdriveKey,
@@ -3596,8 +4156,8 @@ export const WHISPER_FRENCH_TINY_F16 = {
   addon: models[124].addon,
 } as const;
 
-export const WHISPER_FRENCH_TINY_Q8_0 = {
-  name: "WHISPER_FRENCH_TINY_Q8_0",
+export const MARIAN_OPUS_EN_PT_Q4_0 = {
+  name: "MARIAN_OPUS_EN_PT_Q4_0",
   src: `pear://${models[125].hyperdriveKey}/${models[125].modelId}`,
   modelId: models[125].modelId,
   hyperdriveKey: models[125].hyperdriveKey,
@@ -3607,8 +4167,8 @@ export const WHISPER_FRENCH_TINY_Q8_0 = {
   addon: models[125].addon,
 } as const;
 
-export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_F16 = {
-  name: "WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_F16",
+export const MARIAN_OPUS_ES_FR_Q4_0 = {
+  name: "MARIAN_OPUS_ES_FR_Q4_0",
   src: `pear://${models[126].hyperdriveKey}/${models[126].modelId}`,
   modelId: models[126].modelId,
   hyperdriveKey: models[126].hyperdriveKey,
@@ -3618,8 +4178,8 @@ export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_F16 = {
   addon: models[126].addon,
 } as const;
 
-export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_Q8_0 = {
-  name: "WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_Q8_0",
+export const MARIAN_OPUS_FR_DE_Q4_0 = {
+  name: "MARIAN_OPUS_FR_DE_Q4_0",
   src: `pear://${models[127].hyperdriveKey}/${models[127].modelId}`,
   modelId: models[127].modelId,
   hyperdriveKey: models[127].hyperdriveKey,
@@ -3629,8 +4189,8 @@ export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_Q8_0 = {
   addon: models[127].addon,
 } as const;
 
-export const WHISPER_GERMAN_TINY_F16 = {
-  name: "WHISPER_GERMAN_TINY_F16",
+export const MARIAN_OPUS_FR_EN_Q4_0 = {
+  name: "MARIAN_OPUS_FR_EN_Q4_0",
   src: `pear://${models[128].hyperdriveKey}/${models[128].modelId}`,
   modelId: models[128].modelId,
   hyperdriveKey: models[128].hyperdriveKey,
@@ -3640,8 +4200,8 @@ export const WHISPER_GERMAN_TINY_F16 = {
   addon: models[128].addon,
 } as const;
 
-export const WHISPER_GERMAN_TINY_Q8_0 = {
-  name: "WHISPER_GERMAN_TINY_Q8_0",
+export const MARIAN_OPUS_FR_ES_Q4_0 = {
+  name: "MARIAN_OPUS_FR_ES_Q4_0",
   src: `pear://${models[129].hyperdriveKey}/${models[129].modelId}`,
   modelId: models[129].modelId,
   hyperdriveKey: models[129].hyperdriveKey,
@@ -3651,32 +4211,30 @@ export const WHISPER_GERMAN_TINY_Q8_0 = {
   addon: models[129].addon,
 } as const;
 
-export const WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_F16 =
-  {
-    name: "WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_F16",
-    src: `pear://${models[130].hyperdriveKey}/${models[130].modelId}`,
-    modelId: models[130].modelId,
-    hyperdriveKey: models[130].hyperdriveKey,
-    hyperbeeKey: models[130].hyperbeeKey,
-    expectedSize: models[130].expectedSize,
-    sha256Checksum: models[130].sha256Checksum,
-    addon: models[130].addon,
-  } as const;
+export const MARIAN_OPUS_EN_RU_Q0F16 = {
+  name: "MARIAN_OPUS_EN_RU_Q0F16",
+  src: `pear://${models[130].hyperdriveKey}/${models[130].modelId}`,
+  modelId: models[130].modelId,
+  hyperdriveKey: models[130].hyperdriveKey,
+  hyperbeeKey: models[130].hyperbeeKey,
+  expectedSize: models[130].expectedSize,
+  sha256Checksum: models[130].sha256Checksum,
+  addon: models[130].addon,
+} as const;
 
-export const WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_Q8_0 =
-  {
-    name: "WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_Q8_0",
-    src: `pear://${models[131].hyperdriveKey}/${models[131].modelId}`,
-    modelId: models[131].modelId,
-    hyperdriveKey: models[131].hyperdriveKey,
-    hyperbeeKey: models[131].hyperbeeKey,
-    expectedSize: models[131].expectedSize,
-    sha256Checksum: models[131].sha256Checksum,
-    addon: models[131].addon,
-  } as const;
+export const MARIAN_OPUS_RU_EN_Q0F16 = {
+  name: "MARIAN_OPUS_RU_EN_Q0F16",
+  src: `pear://${models[131].hyperdriveKey}/${models[131].modelId}`,
+  modelId: models[131].modelId,
+  hyperdriveKey: models[131].hyperdriveKey,
+  hyperbeeKey: models[131].hyperbeeKey,
+  expectedSize: models[131].expectedSize,
+  sha256Checksum: models[131].sha256Checksum,
+  addon: models[131].addon,
+} as const;
 
-export const WHISPER_ITALIAN_TINY_F16 = {
-  name: "WHISPER_ITALIAN_TINY_F16",
+export const MARIAN_OPUS_EN_RU_Q0F32 = {
+  name: "MARIAN_OPUS_EN_RU_Q0F32",
   src: `pear://${models[132].hyperdriveKey}/${models[132].modelId}`,
   modelId: models[132].modelId,
   hyperdriveKey: models[132].hyperdriveKey,
@@ -3686,8 +4244,8 @@ export const WHISPER_ITALIAN_TINY_F16 = {
   addon: models[132].addon,
 } as const;
 
-export const WHISPER_ITALIAN_TINY_Q8_0 = {
-  name: "WHISPER_ITALIAN_TINY_Q8_0",
+export const MARIAN_OPUS_RU_EN_Q0F32 = {
+  name: "MARIAN_OPUS_RU_EN_Q0F32",
   src: `pear://${models[133].hyperdriveKey}/${models[133].modelId}`,
   modelId: models[133].modelId,
   hyperdriveKey: models[133].hyperdriveKey,
@@ -3697,8 +4255,8 @@ export const WHISPER_ITALIAN_TINY_Q8_0 = {
   addon: models[133].addon,
 } as const;
 
-export const WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_F16 = {
-  name: "WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_F16",
+export const MARIAN_OPUS_AR_EN_Q4_0 = {
+  name: "MARIAN_OPUS_AR_EN_Q4_0",
   src: `pear://${models[134].hyperdriveKey}/${models[134].modelId}`,
   modelId: models[134].modelId,
   hyperdriveKey: models[134].hyperdriveKey,
@@ -3708,20 +4266,19 @@ export const WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_F16 = {
   addon: models[134].addon,
 } as const;
 
-export const WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_Q8_0 =
-  {
-    name: "WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_Q8_0",
-    src: `pear://${models[135].hyperdriveKey}/${models[135].modelId}`,
-    modelId: models[135].modelId,
-    hyperdriveKey: models[135].hyperdriveKey,
-    hyperbeeKey: models[135].hyperbeeKey,
-    expectedSize: models[135].expectedSize,
-    sha256Checksum: models[135].sha256Checksum,
-    addon: models[135].addon,
-  } as const;
+export const MARIAN_OPUS_DE_EN_Q4_0 = {
+  name: "MARIAN_OPUS_DE_EN_Q4_0",
+  src: `pear://${models[135].hyperdriveKey}/${models[135].modelId}`,
+  modelId: models[135].modelId,
+  hyperdriveKey: models[135].hyperdriveKey,
+  hyperbeeKey: models[135].hyperbeeKey,
+  expectedSize: models[135].expectedSize,
+  sha256Checksum: models[135].sha256Checksum,
+  addon: models[135].addon,
+} as const;
 
-export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_F16 = {
-  name: "WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_F16",
+export const MARIAN_OPUS_EN_AR_Q4_0 = {
+  name: "MARIAN_OPUS_EN_AR_Q4_0",
   src: `pear://${models[136].hyperdriveKey}/${models[136].modelId}`,
   modelId: models[136].modelId,
   hyperdriveKey: models[136].hyperdriveKey,
@@ -3731,8 +4288,8 @@ export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_F16 = {
   addon: models[136].addon,
 } as const;
 
-export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_Q8_0 = {
-  name: "WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_Q8_0",
+export const MARIAN_OPUS_EN_DE_Q4_0 = {
+  name: "MARIAN_OPUS_EN_DE_Q4_0",
   src: `pear://${models[137].hyperdriveKey}/${models[137].modelId}`,
   modelId: models[137].modelId,
   hyperdriveKey: models[137].hyperdriveKey,
@@ -3742,8 +4299,8 @@ export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_Q8_0 = {
   addon: models[137].addon,
 } as const;
 
-export const WHISPER_NORWEGIAN_TINY = {
-  name: "WHISPER_NORWEGIAN_TINY",
+export const MARIAN_OPUS_EN_ES_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ES_Q4_0",
   src: `pear://${models[138].hyperdriveKey}/${models[138].modelId}`,
   modelId: models[138].modelId,
   hyperdriveKey: models[138].hyperdriveKey,
@@ -3753,8 +4310,8 @@ export const WHISPER_NORWEGIAN_TINY = {
   addon: models[138].addon,
 } as const;
 
-export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_F16 = {
-  name: "WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_F16",
+export const MARIAN_OPUS_EN_IT_Q4_0 = {
+  name: "MARIAN_OPUS_EN_IT_Q4_0",
   src: `pear://${models[139].hyperdriveKey}/${models[139].modelId}`,
   modelId: models[139].modelId,
   hyperdriveKey: models[139].hyperdriveKey,
@@ -3764,8 +4321,8 @@ export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_F16 = {
   addon: models[139].addon,
 } as const;
 
-export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_Q8_0 = {
-  name: "WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_Q8_0",
+export const MARIAN_OPUS_EN_JA_Q4_0 = {
+  name: "MARIAN_OPUS_EN_JA_Q4_0",
   src: `pear://${models[140].hyperdriveKey}/${models[140].modelId}`,
   modelId: models[140].modelId,
   hyperdriveKey: models[140].hyperdriveKey,
@@ -3775,8 +4332,8 @@ export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_Q8_0 = {
   addon: models[140].addon,
 } as const;
 
-export const WHISPER_PORTUGUESE_TINY_F16 = {
-  name: "WHISPER_PORTUGUESE_TINY_F16",
+export const MARIAN_OPUS_EN_ROA_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ROA_Q4_0",
   src: `pear://${models[141].hyperdriveKey}/${models[141].modelId}`,
   modelId: models[141].modelId,
   hyperdriveKey: models[141].hyperdriveKey,
@@ -3786,8 +4343,8 @@ export const WHISPER_PORTUGUESE_TINY_F16 = {
   addon: models[141].addon,
 } as const;
 
-export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
-  name: "WHISPER_PORTUGUESE_TINY_Q8_0",
+export const MARIAN_OPUS_EN_RU_Q4_0 = {
+  name: "MARIAN_OPUS_EN_RU_Q4_0",
   src: `pear://${models[142].hyperdriveKey}/${models[142].modelId}`,
   modelId: models[142].modelId,
   hyperdriveKey: models[142].hyperdriveKey,
@@ -3797,8 +4354,8 @@ export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
   addon: models[142].addon,
 } as const;
 
-export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_F16 = {
-  name: "WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_F16",
+export const MARIAN_OPUS_EN_ZH_Q4_0 = {
+  name: "MARIAN_OPUS_EN_ZH_Q4_0",
   src: `pear://${models[143].hyperdriveKey}/${models[143].modelId}`,
   modelId: models[143].modelId,
   hyperdriveKey: models[143].hyperdriveKey,
@@ -3808,8 +4365,8 @@ export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_F16 = {
   addon: models[143].addon,
 } as const;
 
-export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_Q8_0 = {
-  name: "WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_Q8_0",
+export const MARIAN_OPUS_ES_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ES_EN_Q4_0",
   src: `pear://${models[144].hyperdriveKey}/${models[144].modelId}`,
   modelId: models[144].modelId,
   hyperdriveKey: models[144].hyperdriveKey,
@@ -3819,8 +4376,8 @@ export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_Q8_0 = {
   addon: models[144].addon,
 } as const;
 
-export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_F16 = {
-  name: "WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_F16",
+export const MARIAN_OPUS_IT_EN_Q4_0 = {
+  name: "MARIAN_OPUS_IT_EN_Q4_0",
   src: `pear://${models[145].hyperdriveKey}/${models[145].modelId}`,
   modelId: models[145].modelId,
   hyperdriveKey: models[145].hyperdriveKey,
@@ -3830,8 +4387,8 @@ export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_F16 = {
   addon: models[145].addon,
 } as const;
 
-export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_Q8_0 = {
-  name: "WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_Q8_0",
+export const MARIAN_OPUS_JA_EN_Q4_0 = {
+  name: "MARIAN_OPUS_JA_EN_Q4_0",
   src: `pear://${models[146].hyperdriveKey}/${models[146].modelId}`,
   modelId: models[146].modelId,
   hyperdriveKey: models[146].hyperdriveKey,
@@ -3841,8 +4398,8 @@ export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_Q8_0 = {
   addon: models[146].addon,
 } as const;
 
-export const WHISPER_SPANISH_TINY_F16 = {
-  name: "WHISPER_SPANISH_TINY_F16",
+export const MARIAN_OPUS_ROA_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ROA_EN_Q4_0",
   src: `pear://${models[147].hyperdriveKey}/${models[147].modelId}`,
   modelId: models[147].modelId,
   hyperdriveKey: models[147].hyperdriveKey,
@@ -3852,8 +4409,8 @@ export const WHISPER_SPANISH_TINY_F16 = {
   addon: models[147].addon,
 } as const;
 
-export const WHISPER_SPANISH_TINY_Q8_0 = {
-  name: "WHISPER_SPANISH_TINY_Q8_0",
+export const MARIAN_OPUS_RU_EN_Q4_0 = {
+  name: "MARIAN_OPUS_RU_EN_Q4_0",
   src: `pear://${models[148].hyperdriveKey}/${models[148].modelId}`,
   modelId: models[148].modelId,
   hyperdriveKey: models[148].hyperdriveKey,
@@ -3863,8 +4420,8 @@ export const WHISPER_SPANISH_TINY_Q8_0 = {
   addon: models[148].addon,
 } as const;
 
-export const WHISPER_LARGE_3 = {
-  name: "WHISPER_LARGE_3",
+export const MARIAN_OPUS_ZH_EN_Q4_0 = {
+  name: "MARIAN_OPUS_ZH_EN_Q4_0",
   src: `pear://${models[149].hyperdriveKey}/${models[149].modelId}`,
   modelId: models[149].modelId,
   hyperdriveKey: models[149].hyperdriveKey,
@@ -3874,8 +4431,8 @@ export const WHISPER_LARGE_3 = {
   addon: models[149].addon,
 } as const;
 
-export const WHISPER_SMALL_Q8 = {
-  name: "WHISPER_SMALL_Q8",
+export const MARIAN_OPUS_EN_JA_Q4F16_1 = {
+  name: "MARIAN_OPUS_EN_JA_Q4F16_1",
   src: `pear://${models[150].hyperdriveKey}/${models[150].modelId}`,
   modelId: models[150].modelId,
   hyperdriveKey: models[150].hyperdriveKey,
@@ -3885,8 +4442,8 @@ export const WHISPER_SMALL_Q8 = {
   addon: models[150].addon,
 } as const;
 
-export const WHISPER_TINY = {
-  name: "WHISPER_TINY",
+export const MARIAN_OPUS_JA_EN_Q4F16_1 = {
+  name: "MARIAN_OPUS_JA_EN_Q4F16_1",
   src: `pear://${models[151].hyperdriveKey}/${models[151].modelId}`,
   modelId: models[151].modelId,
   hyperdriveKey: models[151].hyperdriveKey,
@@ -3894,6 +4451,572 @@ export const WHISPER_TINY = {
   expectedSize: models[151].expectedSize,
   sha256Checksum: models[151].sha256Checksum,
   addon: models[151].addon,
+} as const;
+
+export const OCR_CRAFT_ENGLISH_DETECTOR = {
+  name: "OCR_CRAFT_ENGLISH_DETECTOR",
+  src: `pear://${models[152].hyperdriveKey}/${models[152].modelId}`,
+  modelId: models[152].modelId,
+  hyperdriveKey: models[152].hyperdriveKey,
+  hyperbeeKey: models[152].hyperbeeKey,
+  expectedSize: models[152].expectedSize,
+  sha256Checksum: models[152].sha256Checksum,
+  addon: models[152].addon,
+} as const;
+
+export const OCR_CRAFT_ENGLISH_RECOGNIZER = {
+  name: "OCR_CRAFT_ENGLISH_RECOGNIZER",
+  src: `pear://${models[153].hyperdriveKey}/${models[153].modelId}`,
+  modelId: models[153].modelId,
+  hyperdriveKey: models[153].hyperdriveKey,
+  hyperbeeKey: models[153].hyperbeeKey,
+  expectedSize: models[153].expectedSize,
+  sha256Checksum: models[153].sha256Checksum,
+  addon: models[153].addon,
+} as const;
+
+export const OCR_CRAFT_LATIN_RECOGNIZER = {
+  name: "OCR_CRAFT_LATIN_RECOGNIZER",
+  src: `pear://${models[154].hyperdriveKey}/${models[154].modelId}`,
+  modelId: models[154].modelId,
+  hyperdriveKey: models[154].hyperdriveKey,
+  hyperbeeKey: models[154].hyperbeeKey,
+  expectedSize: models[154].expectedSize,
+  sha256Checksum: models[154].sha256Checksum,
+  addon: models[154].addon,
+} as const;
+
+export const OCR_CRAFT_LATIN_RECOGNIZER_1 = {
+  name: "OCR_CRAFT_LATIN_RECOGNIZER_1",
+  src: `pear://${models[155].hyperdriveKey}/${models[155].modelId}`,
+  modelId: models[155].modelId,
+  hyperdriveKey: models[155].hyperdriveKey,
+  hyperbeeKey: models[155].hyperbeeKey,
+  expectedSize: models[155].expectedSize,
+  sha256Checksum: models[155].sha256Checksum,
+  addon: models[155].addon,
+} as const;
+
+export const OCR_CRAFT_JAPANESE_DETECTOR = {
+  name: "OCR_CRAFT_JAPANESE_DETECTOR",
+  src: `pear://${models[156].hyperdriveKey}/${models[156].modelId}`,
+  modelId: models[156].modelId,
+  hyperdriveKey: models[156].hyperdriveKey,
+  hyperbeeKey: models[156].hyperbeeKey,
+  expectedSize: models[156].expectedSize,
+  sha256Checksum: models[156].sha256Checksum,
+  addon: models[156].addon,
+} as const;
+
+export const OCR_CRAFT_JAPANESE_RECOGNIZER = {
+  name: "OCR_CRAFT_JAPANESE_RECOGNIZER",
+  src: `pear://${models[157].hyperdriveKey}/${models[157].modelId}`,
+  modelId: models[157].modelId,
+  hyperdriveKey: models[157].hyperdriveKey,
+  hyperbeeKey: models[157].hyperbeeKey,
+  expectedSize: models[157].expectedSize,
+  sha256Checksum: models[157].sha256Checksum,
+  addon: models[157].addon,
+} as const;
+
+export const OCR_CRAFT_KOREAN_RECOGNIZER = {
+  name: "OCR_CRAFT_KOREAN_RECOGNIZER",
+  src: `pear://${models[158].hyperdriveKey}/${models[158].modelId}`,
+  modelId: models[158].modelId,
+  hyperdriveKey: models[158].hyperdriveKey,
+  hyperbeeKey: models[158].hyperbeeKey,
+  expectedSize: models[158].expectedSize,
+  sha256Checksum: models[158].sha256Checksum,
+  addon: models[158].addon,
+} as const;
+
+export const OCR_CRAFT_LATIN_RECOGNIZER_2 = {
+  name: "OCR_CRAFT_LATIN_RECOGNIZER_2",
+  src: `pear://${models[159].hyperdriveKey}/${models[159].modelId}`,
+  modelId: models[159].modelId,
+  hyperdriveKey: models[159].hyperdriveKey,
+  hyperbeeKey: models[159].hyperbeeKey,
+  expectedSize: models[159].expectedSize,
+  sha256Checksum: models[159].sha256Checksum,
+  addon: models[159].addon,
+} as const;
+
+export const OCR_CRAFT_THAI_RECOGNIZER = {
+  name: "OCR_CRAFT_THAI_RECOGNIZER",
+  src: `pear://${models[160].hyperdriveKey}/${models[160].modelId}`,
+  modelId: models[160].modelId,
+  hyperdriveKey: models[160].hyperdriveKey,
+  hyperbeeKey: models[160].hyperbeeKey,
+  expectedSize: models[160].expectedSize,
+  sha256Checksum: models[160].sha256Checksum,
+  addon: models[160].addon,
+} as const;
+
+export const OCR_CRAFT_ZH_SIM_RECOGNIZER = {
+  name: "OCR_CRAFT_ZH_SIM_RECOGNIZER",
+  src: `pear://${models[161].hyperdriveKey}/${models[161].modelId}`,
+  modelId: models[161].modelId,
+  hyperdriveKey: models[161].hyperdriveKey,
+  hyperbeeKey: models[161].hyperbeeKey,
+  expectedSize: models[161].expectedSize,
+  sha256Checksum: models[161].sha256Checksum,
+  addon: models[161].addon,
+} as const;
+
+export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM = {
+  name: "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM",
+  src: `pear://${models[162].hyperdriveKey}/${models[162].modelId}`,
+  modelId: models[162].modelId,
+  hyperdriveKey: models[162].hyperdriveKey,
+  hyperbeeKey: models[162].hyperbeeKey,
+  expectedSize: models[162].expectedSize,
+  sha256Checksum: models[162].sha256Checksum,
+  addon: models[162].addon,
+} as const;
+
+export const TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG = {
+  name: "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG",
+  src: `pear://${models[163].hyperdriveKey}/${models[163].modelId}`,
+  modelId: models[163].modelId,
+  hyperdriveKey: models[163].hyperdriveKey,
+  hyperbeeKey: models[163].hyperbeeKey,
+  expectedSize: models[163].expectedSize,
+  sha256Checksum: models[163].sha256Checksum,
+  addon: models[163].addon,
+} as const;
+
+export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM = {
+  name: "TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM",
+  src: `pear://${models[164].hyperdriveKey}/${models[164].modelId}`,
+  modelId: models[164].modelId,
+  hyperdriveKey: models[164].hyperdriveKey,
+  hyperbeeKey: models[164].hyperbeeKey,
+  expectedSize: models[164].expectedSize,
+  sha256Checksum: models[164].sha256Checksum,
+  addon: models[164].addon,
+} as const;
+
+export const TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM_CONFIG = {
+  name: "TTS_PIPER_PAOLA_IT_IT_ONNX_MEDIUM_CONFIG",
+  src: `pear://${models[165].hyperdriveKey}/${models[165].modelId}`,
+  modelId: models[165].modelId,
+  hyperdriveKey: models[165].hyperdriveKey,
+  hyperbeeKey: models[165].hyperbeeKey,
+  expectedSize: models[165].expectedSize,
+  sha256Checksum: models[165].sha256Checksum,
+  addon: models[165].addon,
+} as const;
+
+export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM = {
+  name: "TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM",
+  src: `pear://${models[166].hyperdriveKey}/${models[166].modelId}`,
+  modelId: models[166].modelId,
+  hyperdriveKey: models[166].hyperdriveKey,
+  hyperbeeKey: models[166].hyperbeeKey,
+  expectedSize: models[166].expectedSize,
+  sha256Checksum: models[166].sha256Checksum,
+  addon: models[166].addon,
+} as const;
+
+export const TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM_CONFIG = {
+  name: "TTS_PIPER_SHARVARD_ES_ES_ONNX_MEDIUM_CONFIG",
+  src: `pear://${models[167].hyperdriveKey}/${models[167].modelId}`,
+  modelId: models[167].modelId,
+  hyperdriveKey: models[167].hyperdriveKey,
+  hyperbeeKey: models[167].hyperbeeKey,
+  expectedSize: models[167].expectedSize,
+  sha256Checksum: models[167].sha256Checksum,
+  addon: models[167].addon,
+} as const;
+
+export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM = {
+  name: "TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM",
+  src: `pear://${models[168].hyperdriveKey}/${models[168].modelId}`,
+  modelId: models[168].modelId,
+  hyperdriveKey: models[168].hyperdriveKey,
+  hyperbeeKey: models[168].hyperbeeKey,
+  expectedSize: models[168].expectedSize,
+  sha256Checksum: models[168].sha256Checksum,
+  addon: models[168].addon,
+} as const;
+
+export const TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM_CONFIG = {
+  name: "TTS_PIPER_THORSTEN_DE_DE_ONNX_MEDIUM_CONFIG",
+  src: `pear://${models[169].hyperdriveKey}/${models[169].modelId}`,
+  modelId: models[169].modelId,
+  hyperdriveKey: models[169].hyperdriveKey,
+  hyperbeeKey: models[169].hyperbeeKey,
+  expectedSize: models[169].expectedSize,
+  sha256Checksum: models[169].sha256Checksum,
+  addon: models[169].addon,
+} as const;
+
+export const VAD_SILERO_5_1_2 = {
+  name: "VAD_SILERO_5_1_2",
+  src: `pear://${models[170].hyperdriveKey}/${models[170].modelId}`,
+  modelId: models[170].modelId,
+  hyperdriveKey: models[170].hyperdriveKey,
+  hyperbeeKey: models[170].hyperbeeKey,
+  expectedSize: models[170].expectedSize,
+  sha256Checksum: models[170].sha256Checksum,
+  addon: models[170].addon,
+} as const;
+
+export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16 = {
+  name: "WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16",
+  src: `pear://${models[171].hyperdriveKey}/${models[171].modelId}`,
+  modelId: models[171].modelId,
+  hyperdriveKey: models[171].hyperdriveKey,
+  hyperbeeKey: models[171].hyperbeeKey,
+  expectedSize: models[171].expectedSize,
+  sha256Checksum: models[171].sha256Checksum,
+  addon: models[171].addon,
+} as const;
+
+export const WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_Q8_0 = {
+  name: "WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_Q8_0",
+  src: `pear://${models[172].hyperdriveKey}/${models[172].modelId}`,
+  modelId: models[172].modelId,
+  hyperdriveKey: models[172].hyperdriveKey,
+  hyperbeeKey: models[172].hyperbeeKey,
+  expectedSize: models[172].expectedSize,
+  sha256Checksum: models[172].sha256Checksum,
+  addon: models[172].addon,
+} as const;
+
+export const WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_F16 =
+  {
+    name: "WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_F16",
+    src: `pear://${models[173].hyperdriveKey}/${models[173].modelId}`,
+    modelId: models[173].modelId,
+    hyperdriveKey: models[173].hyperdriveKey,
+    hyperbeeKey: models[173].hyperbeeKey,
+    expectedSize: models[173].expectedSize,
+    sha256Checksum: models[173].sha256Checksum,
+    addon: models[173].addon,
+  } as const;
+
+export const WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_Q8_0 =
+  {
+    name: "WHISPER_FRENCH_BASE_PERSONALIZEDREFRIGERATOR_WHISPER_BASE_FR_Q8_0",
+    src: `pear://${models[174].hyperdriveKey}/${models[174].modelId}`,
+    modelId: models[174].modelId,
+    hyperdriveKey: models[174].hyperdriveKey,
+    hyperbeeKey: models[174].hyperbeeKey,
+    expectedSize: models[174].expectedSize,
+    sha256Checksum: models[174].sha256Checksum,
+    addon: models[174].addon,
+  } as const;
+
+export const WHISPER_FRENCH_TINY_F16 = {
+  name: "WHISPER_FRENCH_TINY_F16",
+  src: `pear://${models[175].hyperdriveKey}/${models[175].modelId}`,
+  modelId: models[175].modelId,
+  hyperdriveKey: models[175].hyperdriveKey,
+  hyperbeeKey: models[175].hyperbeeKey,
+  expectedSize: models[175].expectedSize,
+  sha256Checksum: models[175].sha256Checksum,
+  addon: models[175].addon,
+} as const;
+
+export const WHISPER_FRENCH_TINY_Q8_0 = {
+  name: "WHISPER_FRENCH_TINY_Q8_0",
+  src: `pear://${models[176].hyperdriveKey}/${models[176].modelId}`,
+  modelId: models[176].modelId,
+  hyperdriveKey: models[176].hyperdriveKey,
+  hyperbeeKey: models[176].hyperbeeKey,
+  expectedSize: models[176].expectedSize,
+  sha256Checksum: models[176].sha256Checksum,
+  addon: models[176].addon,
+} as const;
+
+export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_F16 = {
+  name: "WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_F16",
+  src: `pear://${models[177].hyperdriveKey}/${models[177].modelId}`,
+  modelId: models[177].modelId,
+  hyperdriveKey: models[177].hyperdriveKey,
+  hyperbeeKey: models[177].hyperbeeKey,
+  expectedSize: models[177].expectedSize,
+  sha256Checksum: models[177].sha256Checksum,
+  addon: models[177].addon,
+} as const;
+
+export const WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_Q8_0 = {
+  name: "WHISPER_GERMAN_BASE_AWARE_AI_WHISPER_BASE_GERMAN_Q8_0",
+  src: `pear://${models[178].hyperdriveKey}/${models[178].modelId}`,
+  modelId: models[178].modelId,
+  hyperdriveKey: models[178].hyperdriveKey,
+  hyperbeeKey: models[178].hyperbeeKey,
+  expectedSize: models[178].expectedSize,
+  sha256Checksum: models[178].sha256Checksum,
+  addon: models[178].addon,
+} as const;
+
+export const WHISPER_GERMAN_TINY_F16 = {
+  name: "WHISPER_GERMAN_TINY_F16",
+  src: `pear://${models[179].hyperdriveKey}/${models[179].modelId}`,
+  modelId: models[179].modelId,
+  hyperdriveKey: models[179].hyperdriveKey,
+  hyperbeeKey: models[179].hyperbeeKey,
+  expectedSize: models[179].expectedSize,
+  sha256Checksum: models[179].sha256Checksum,
+  addon: models[179].addon,
+} as const;
+
+export const WHISPER_GERMAN_TINY_Q8_0 = {
+  name: "WHISPER_GERMAN_TINY_Q8_0",
+  src: `pear://${models[180].hyperdriveKey}/${models[180].modelId}`,
+  modelId: models[180].modelId,
+  hyperdriveKey: models[180].hyperdriveKey,
+  hyperbeeKey: models[180].hyperbeeKey,
+  expectedSize: models[180].expectedSize,
+  sha256Checksum: models[180].sha256Checksum,
+  addon: models[180].addon,
+} as const;
+
+export const WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_F16 =
+  {
+    name: "WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_F16",
+    src: `pear://${models[181].hyperdriveKey}/${models[181].modelId}`,
+    modelId: models[181].modelId,
+    hyperdriveKey: models[181].hyperdriveKey,
+    hyperbeeKey: models[181].hyperbeeKey,
+    expectedSize: models[181].expectedSize,
+    sha256Checksum: models[181].sha256Checksum,
+    addon: models[181].addon,
+  } as const;
+
+export const WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_Q8_0 =
+  {
+    name: "WHISPER_ITALIAN_BASE_GUSTAVV_ANDRZEJEWSKI_DISTIL_WHISPER_BASE_IT_Q8_0",
+    src: `pear://${models[182].hyperdriveKey}/${models[182].modelId}`,
+    modelId: models[182].modelId,
+    hyperdriveKey: models[182].hyperdriveKey,
+    hyperbeeKey: models[182].hyperbeeKey,
+    expectedSize: models[182].expectedSize,
+    sha256Checksum: models[182].sha256Checksum,
+    addon: models[182].addon,
+  } as const;
+
+export const WHISPER_ITALIAN_TINY_F16 = {
+  name: "WHISPER_ITALIAN_TINY_F16",
+  src: `pear://${models[183].hyperdriveKey}/${models[183].modelId}`,
+  modelId: models[183].modelId,
+  hyperdriveKey: models[183].hyperdriveKey,
+  hyperbeeKey: models[183].hyperbeeKey,
+  expectedSize: models[183].expectedSize,
+  sha256Checksum: models[183].sha256Checksum,
+  addon: models[183].addon,
+} as const;
+
+export const WHISPER_ITALIAN_TINY_Q8_0 = {
+  name: "WHISPER_ITALIAN_TINY_Q8_0",
+  src: `pear://${models[184].hyperdriveKey}/${models[184].modelId}`,
+  modelId: models[184].modelId,
+  hyperdriveKey: models[184].hyperdriveKey,
+  hyperbeeKey: models[184].hyperbeeKey,
+  expectedSize: models[184].expectedSize,
+  sha256Checksum: models[184].sha256Checksum,
+  addon: models[184].addon,
+} as const;
+
+export const WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_F16 = {
+  name: "WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_F16",
+  src: `pear://${models[185].hyperdriveKey}/${models[185].modelId}`,
+  modelId: models[185].modelId,
+  hyperdriveKey: models[185].hyperdriveKey,
+  hyperbeeKey: models[185].hyperbeeKey,
+  expectedSize: models[185].expectedSize,
+  sha256Checksum: models[185].sha256Checksum,
+  addon: models[185].addon,
+} as const;
+
+export const WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_Q8_0 =
+  {
+    name: "WHISPER_JAPANESE_TINY_TINY_CHEELI03_WHISPER_TINY_JA_PUCT_4K_Q8_0",
+    src: `pear://${models[186].hyperdriveKey}/${models[186].modelId}`,
+    modelId: models[186].modelId,
+    hyperdriveKey: models[186].hyperdriveKey,
+    hyperbeeKey: models[186].hyperbeeKey,
+    expectedSize: models[186].expectedSize,
+    sha256Checksum: models[186].sha256Checksum,
+    addon: models[186].addon,
+  } as const;
+
+export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_F16 = {
+  name: "WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_F16",
+  src: `pear://${models[187].hyperdriveKey}/${models[187].modelId}`,
+  modelId: models[187].modelId,
+  hyperdriveKey: models[187].hyperdriveKey,
+  hyperbeeKey: models[187].hyperbeeKey,
+  expectedSize: models[187].expectedSize,
+  sha256Checksum: models[187].sha256Checksum,
+  addon: models[187].addon,
+} as const;
+
+export const WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_Q8_0 = {
+  name: "WHISPER_JAPANESE_BASE_BYGREENCN_WHISPER_BASE_JA_Q8_0",
+  src: `pear://${models[188].hyperdriveKey}/${models[188].modelId}`,
+  modelId: models[188].modelId,
+  hyperdriveKey: models[188].hyperdriveKey,
+  hyperbeeKey: models[188].hyperbeeKey,
+  expectedSize: models[188].expectedSize,
+  sha256Checksum: models[188].sha256Checksum,
+  addon: models[188].addon,
+} as const;
+
+export const WHISPER_NORWEGIAN_TINY = {
+  name: "WHISPER_NORWEGIAN_TINY",
+  src: `pear://${models[189].hyperdriveKey}/${models[189].modelId}`,
+  modelId: models[189].modelId,
+  hyperdriveKey: models[189].hyperdriveKey,
+  hyperbeeKey: models[189].hyperbeeKey,
+  expectedSize: models[189].expectedSize,
+  sha256Checksum: models[189].sha256Checksum,
+  addon: models[189].addon,
+} as const;
+
+export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_F16 = {
+  name: "WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_F16",
+  src: `pear://${models[190].hyperdriveKey}/${models[190].modelId}`,
+  modelId: models[190].modelId,
+  hyperdriveKey: models[190].hyperdriveKey,
+  hyperbeeKey: models[190].hyperbeeKey,
+  expectedSize: models[190].expectedSize,
+  sha256Checksum: models[190].sha256Checksum,
+  addon: models[190].addon,
+} as const;
+
+export const WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_Q8_0 = {
+  name: "WHISPER_PORTUGUESE_BASE_MARIANA_COELHO_9_WHISPER_BASE_PT_Q8_0",
+  src: `pear://${models[191].hyperdriveKey}/${models[191].modelId}`,
+  modelId: models[191].modelId,
+  hyperdriveKey: models[191].hyperdriveKey,
+  hyperbeeKey: models[191].hyperbeeKey,
+  expectedSize: models[191].expectedSize,
+  sha256Checksum: models[191].sha256Checksum,
+  addon: models[191].addon,
+} as const;
+
+export const WHISPER_PORTUGUESE_TINY_F16 = {
+  name: "WHISPER_PORTUGUESE_TINY_F16",
+  src: `pear://${models[192].hyperdriveKey}/${models[192].modelId}`,
+  modelId: models[192].modelId,
+  hyperdriveKey: models[192].hyperdriveKey,
+  hyperbeeKey: models[192].hyperbeeKey,
+  expectedSize: models[192].expectedSize,
+  sha256Checksum: models[192].sha256Checksum,
+  addon: models[192].addon,
+} as const;
+
+export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
+  name: "WHISPER_PORTUGUESE_TINY_Q8_0",
+  src: `pear://${models[193].hyperdriveKey}/${models[193].modelId}`,
+  modelId: models[193].modelId,
+  hyperdriveKey: models[193].hyperdriveKey,
+  hyperbeeKey: models[193].hyperbeeKey,
+  expectedSize: models[193].expectedSize,
+  sha256Checksum: models[193].sha256Checksum,
+  addon: models[193].addon,
+} as const;
+
+export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_F16 = {
+  name: "WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_F16",
+  src: `pear://${models[194].hyperdriveKey}/${models[194].modelId}`,
+  modelId: models[194].modelId,
+  hyperdriveKey: models[194].hyperdriveKey,
+  hyperbeeKey: models[194].hyperbeeKey,
+  expectedSize: models[194].expectedSize,
+  sha256Checksum: models[194].sha256Checksum,
+  addon: models[194].addon,
+} as const;
+
+export const WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_Q8_0 = {
+  name: "WHISPER_RUSSIAN_TINY_TINY_YAROSLAV0530_WHISPER_TINY_RU_Q8_0",
+  src: `pear://${models[195].hyperdriveKey}/${models[195].modelId}`,
+  modelId: models[195].modelId,
+  hyperdriveKey: models[195].hyperdriveKey,
+  hyperbeeKey: models[195].hyperbeeKey,
+  expectedSize: models[195].expectedSize,
+  sha256Checksum: models[195].sha256Checksum,
+  addon: models[195].addon,
+} as const;
+
+export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_F16 = {
+  name: "WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_F16",
+  src: `pear://${models[196].hyperdriveKey}/${models[196].modelId}`,
+  modelId: models[196].modelId,
+  hyperdriveKey: models[196].hyperdriveKey,
+  hyperbeeKey: models[196].hyperbeeKey,
+  expectedSize: models[196].expectedSize,
+  sha256Checksum: models[196].sha256Checksum,
+  addon: models[196].addon,
+} as const;
+
+export const WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_Q8_0 = {
+  name: "WHISPER_RUSSIAN_BASE_CHEELI03_WHISPER_BASE_RUS_8_Q8_0",
+  src: `pear://${models[197].hyperdriveKey}/${models[197].modelId}`,
+  modelId: models[197].modelId,
+  hyperdriveKey: models[197].hyperdriveKey,
+  hyperbeeKey: models[197].hyperbeeKey,
+  expectedSize: models[197].expectedSize,
+  sha256Checksum: models[197].sha256Checksum,
+  addon: models[197].addon,
+} as const;
+
+export const WHISPER_SPANISH_TINY_F16 = {
+  name: "WHISPER_SPANISH_TINY_F16",
+  src: `pear://${models[198].hyperdriveKey}/${models[198].modelId}`,
+  modelId: models[198].modelId,
+  hyperdriveKey: models[198].hyperdriveKey,
+  hyperbeeKey: models[198].hyperbeeKey,
+  expectedSize: models[198].expectedSize,
+  sha256Checksum: models[198].sha256Checksum,
+  addon: models[198].addon,
+} as const;
+
+export const WHISPER_SPANISH_TINY_Q8_0 = {
+  name: "WHISPER_SPANISH_TINY_Q8_0",
+  src: `pear://${models[199].hyperdriveKey}/${models[199].modelId}`,
+  modelId: models[199].modelId,
+  hyperdriveKey: models[199].hyperdriveKey,
+  hyperbeeKey: models[199].hyperbeeKey,
+  expectedSize: models[199].expectedSize,
+  sha256Checksum: models[199].sha256Checksum,
+  addon: models[199].addon,
+} as const;
+
+export const WHISPER_LARGE_3 = {
+  name: "WHISPER_LARGE_3",
+  src: `pear://${models[200].hyperdriveKey}/${models[200].modelId}`,
+  modelId: models[200].modelId,
+  hyperdriveKey: models[200].hyperdriveKey,
+  hyperbeeKey: models[200].hyperbeeKey,
+  expectedSize: models[200].expectedSize,
+  sha256Checksum: models[200].sha256Checksum,
+  addon: models[200].addon,
+} as const;
+
+export const WHISPER_SMALL_Q8 = {
+  name: "WHISPER_SMALL_Q8",
+  src: `pear://${models[201].hyperdriveKey}/${models[201].modelId}`,
+  modelId: models[201].modelId,
+  hyperdriveKey: models[201].hyperdriveKey,
+  hyperbeeKey: models[201].hyperbeeKey,
+  expectedSize: models[201].expectedSize,
+  sha256Checksum: models[201].sha256Checksum,
+  addon: models[201].addon,
+} as const;
+
+export const WHISPER_TINY = {
+  name: "WHISPER_TINY",
+  src: `pear://${models[202].hyperdriveKey}/${models[202].modelId}`,
+  modelId: models[202].modelId,
+  hyperdriveKey: models[202].hyperdriveKey,
+  hyperbeeKey: models[202].hyperbeeKey,
+  expectedSize: models[202].expectedSize,
+  sha256Checksum: models[202].sha256Checksum,
+  addon: models[202].addon,
 } as const;
 
 // Helper function to get model by name

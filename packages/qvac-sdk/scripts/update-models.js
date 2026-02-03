@@ -11,14 +11,31 @@ const HYPERBEE_KEY =
 const OUTPUT_FILE = fileURLToPath(
   new URL("../models/hyperdrive/models.ts", import.meta.url),
 );
+const HISTORY_DIR = fileURLToPath(
+  new URL("../models/history", import.meta.url),
+);
 
+// Maps hyperbee category to canonical model type (engine-usecase format)
+// Used internally in script for logic (extractMainModel, generateExportName)
 const ADDON_MAP = {
-  generation: "llm",
-  transcription: "whisper",
-  embedding: "embeddings",
-  translation: "nmt",
+  generation: "llamacpp-completion",
+  transcription: "whispercpp-transcription",
+  embedding: "llamacpp-embedding",
+  translation: "nmtcpp-translation",
+  vad: "vad", // VAD stays as-is (special case, not a model type)
+  tts: "onnx-tts",
+  ocr: "onnx-ocr",
+};
+
+// Maps canonical to alias for output in models.ts (backward compat)
+const CANONICAL_TO_ALIAS = {
+  "llamacpp-completion": "llm",
+  "whispercpp-transcription": "whisper",
+  "llamacpp-embedding": "embeddings",
+  "nmtcpp-translation": "nmt",
   vad: "vad",
-  tts: "tts",
+  "onnx-tts": "tts",
+  "onnx-ocr": "ocr",
 };
 
 const detectShardedModel = (filename) => {
@@ -38,7 +55,45 @@ const detectShardedModel = (filename) => {
   return { isSharded: false };
 };
 
-const extractMainModel = (driveMetadata, addon) => {
+const extractMainModel = (driveMetadata, addon, hyperbeeKey) => {
+  // Special handling for bergamot translation models
+  if (addon === "nmtcpp-translation" && hyperbeeKey?.includes("bergamot")) {
+    const modelFiles = driveMetadata.filter(
+      (f) =>
+        f.filename.startsWith("model.") &&
+        f.filename.endsWith(".intgemm.alphas.bin"),
+    );
+    const vocabFiles = driveMetadata.filter(
+      (f) =>
+        f.filename.endsWith(".spm") &&
+        (f.filename.startsWith("vocab.") ||
+          f.filename.startsWith("srcvocab.") ||
+          f.filename.startsWith("trgvocab.")),
+    );
+
+    const results = [];
+
+    // Add each model file as a separate entry
+    modelFiles.forEach((modelFile) => {
+      results.push({
+        modelId: modelFile.filename,
+        expectedSize: modelFile.expectedSize,
+        sha256Checksum: modelFile.checksum || "",
+      });
+    });
+
+    // Add each vocab file as a separate entry
+    vocabFiles.forEach((vocabFile) => {
+      results.push({
+        modelId: vocabFile.filename,
+        expectedSize: vocabFile.expectedSize,
+        sha256Checksum: vocabFile.checksum || "",
+      });
+    });
+
+    return results;
+  }
+
   let modelFiles = driveMetadata.filter(
     (f) =>
       f.filename.endsWith(".gguf") ||
@@ -110,9 +165,18 @@ const extractMainModel = (driveMetadata, addon) => {
     ];
   }
 
+  // for OCR models (multiple onnx files: detector + recognizer)
+  if (addon === "onnx-ocr" && modelFiles.length >= 2) {
+    return modelFiles.map((f) => ({
+      modelId: f.filename,
+      expectedSize: f.expectedSize,
+      sha256Checksum: f.checksum,
+    }));
+  }
+
   // for TTS models (onnx + config.json)
   if (
-    addon === "tts" &&
+    addon === "onnx-tts" &&
     modelFiles.length === 1 &&
     modelFiles[0].filename.endsWith(".onnx")
   ) {
@@ -168,10 +232,10 @@ const extractMainModel = (driveMetadata, addon) => {
   return [];
 };
 
-const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
+const generateExportName = ({ modelId, hyperbeeKey, usedNames, addon }) => {
   // hyperbeeKey format: function:name:type:version:size:quant:internal:other
   const parts = hyperbeeKey.split(":");
-  const [addon, modelName, type, version, size, quant] = parts;
+  const [functionField, modelName, type, version, size, quant] = parts;
 
   const cleanPart = (p) => {
     if (!p) return "";
@@ -186,7 +250,7 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
 
   let name = "";
 
-  if (addon === "transcription") {
+  if (addon === "whispercpp-transcription") {
     // WHISPER models: WHISPER_[language_]<type>_<version>_<quant>
     const nameParts = [type, version, quant].filter((p) => p && p !== "");
 
@@ -202,15 +266,35 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
     }
 
     name = `WHISPER_${nameParts.map(cleanPart).join("_")}`;
-  } else if (addon === "vad") {
+  } else if (functionField === "vad") {
     // VAD models: VAD_<type>_<version>
     // Use type (e.g., "silero") instead of full name to avoid redundancy
     const nameParts = [type || modelName, version].filter((p) => p && p !== "");
     name = `VAD_${nameParts.map(cleanPart).join("_")}`;
-  } else if (addon === "translation") {
+  } else if (functionField === "translation") {
     const langPair = parts[parts.length - 1];
 
-    if (modelName.includes("indictrans")) {
+    if (modelName.includes("bergamot")) {
+      // BERGAMOT: Handle both model and vocab files
+      const modelMatch = modelId.match(
+        /^model\.([^.]+)\.intgemm\.alphas\.bin$/,
+      );
+      if (modelMatch) {
+        const bergamotLangPair = modelMatch[1];
+        name = `BERGAMOT_${cleanPart(bergamotLangPair.replace("-", "_"))}`;
+      } else if (modelId.endsWith(".spm")) {
+        // Handle vocab files
+        const vocabMatch = modelId.match(
+          /^(vocab|srcvocab|trgvocab)\.([^.]+)\.spm$/,
+        );
+        if (vocabMatch) {
+          const [, vocabType, bergamotLangPair] = vocabMatch;
+          const vocabPrefix =
+            vocabType === "vocab" ? "VOCAB" : vocabType.toUpperCase();
+          name = `BERGAMOT_${cleanPart(bergamotLangPair.replace("-", "_"))}_${vocabPrefix}`;
+        }
+      }
+    } else if (modelName.includes("indictrans")) {
       // INDICTRANS: MARIAN_<lang-pair>_INDIC_<size>_<quant>
       name = `MARIAN_${cleanPart(langPair.replace("-", "_"))}_INDIC_${cleanPart(size)}_${cleanPart(quant)}`;
     } else if (modelName.includes("marian")) {
@@ -219,7 +303,7 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
       const prefix = hasOpus ? "MARIAN_OPUS" : "MARIAN";
       name = `${prefix}_${cleanPart(langPair.replace("-", "_"))}_${cleanPart(quant)}`;
     }
-  } else if (addon === "generation") {
+  } else if (functionField === "generation") {
     // LLM models: <name>_<version>_<size>_<type>_<quant>
     const nameParts = [modelName, version, size, type, quant].filter(
       (p) => p && p !== "",
@@ -228,11 +312,11 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
     if (modelId.includes("mmproj")) {
       name = "MMPROJ_" + name;
     }
-  } else if (addon === "embedding") {
+  } else if (functionField === "embedding") {
     // Embeddings: <name>_<size>_<quant>
     const nameParts = [modelName, size, quant].filter((p) => p && p !== "");
     name = nameParts.map(cleanPart).join("_");
-  } else if (addon === "tts") {
+  } else if (functionField === "tts") {
     // TTS models: TTS_<name>_<language>_<type>
     const language = parts[parts.length - 1];
     const nameParts = [modelName, language, type].filter((p) => p && p !== "");
@@ -240,6 +324,22 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames }) => {
     if (modelId.includes("config.json")) {
       name = name + "_CONFIG";
     }
+  } else if (addon === "onnx-ocr") {
+    // OCR models: OCR_<name>_<language>_<DETECTOR|RECOGNIZER>
+    // Extract type from filename instead of hyperbeeKey since files have different types
+    const language = parts[parts.length - 1];
+    let fileType = "";
+
+    if (modelId.includes("detector")) {
+      fileType = "DETECTOR";
+    } else if (modelId.includes("recognizer")) {
+      fileType = "RECOGNIZER";
+    }
+
+    const nameParts = [modelName, language, fileType].filter(
+      (p) => p && p !== "",
+    );
+    name = `OCR_${nameParts.map(cleanPart).join("_")}`;
   } else {
     // Generic fallback
     const nameParts = [modelName, type, version, size, quant].filter(
@@ -274,18 +374,24 @@ const generateFileContent = (models) => {
     name: generateExportName({
       modelId: m.modelId,
       hyperbeeKey: m.hyperbeeKey,
+      addon: m.addon,
       usedNames,
     }),
   }));
 
+  return generateFileContentWithNames(modelsWithNames);
+};
+
+const generateFileContentWithNames = (modelsWithNames) => {
   const entries = modelsWithNames
     .map((m) => {
+      const addonAlias = CANONICAL_TO_ALIAS[m.addon] || m.addon;
       let entry = `  {
     name: "${m.name}",
     hyperdriveKey: "${m.hyperdriveKey}",
     hyperbeeKey: "${m.hyperbeeKey}",
     modelId: "${m.modelId}",
-    addon: "${m.addon}",
+    addon: "${addonAlias}",
     expectedSize: ${m.expectedSize},
     sha256Checksum: "${m.sha256Checksum}"`;
 
@@ -321,7 +427,7 @@ export type HyperdriveItem = {
   hyperdriveKey: string;
   hyperbeeKey: string;
   modelId: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr";
   expectedSize: number;
   sha256Checksum: string;
   shardMetadata?: readonly { filename: string; expectedSize: number; sha256Checksum: string }[];
@@ -335,7 +441,7 @@ export type ModelConstant = {
   hyperbeeKey: string;
   expectedSize: number;
   sha256Checksum: string;
-  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr";
 };
 
 export const models = [
@@ -379,10 +485,10 @@ const collectModels = async (options = {}) => {
     });
 
     for await (const { key, value } of db.createReadStream()) {
-      const addon = ADDON_MAP[value.tags.function];
+      const addon = ADDON_MAP[value.tags?.function];
       if (!addon || !value.driveMetadata) continue;
 
-      const metadataArr = extractMainModel(value.driveMetadata, addon);
+      const metadataArr = extractMainModel(value.driveMetadata, addon, key);
       if (metadataArr.length === 0) continue;
 
       metadataArr.forEach((metadata) => {
@@ -451,19 +557,24 @@ const loadCurrentModels = () => {
       return [];
     }
 
-    // Extract model entries using a more robust regex
+    // Extract model entries using a more robust regex that captures all fields
     const modelsArrayContent = modelsMatch[1];
     const models = [];
 
-    // Match each model object in the array
+    // Match each model object in the array with all fields
     const modelRegex =
-      /\{[^}]+name:\s*"([^"]+)"[^}]+hyperbeeKey:\s*"([^"]+)"[^}]+\}/g;
+      /\{\s*name:\s*"([^"]+)",\s*hyperdriveKey:\s*"([^"]+)",\s*hyperbeeKey:\s*"([^"]+)",\s*modelId:\s*"([^"]+)",\s*addon:\s*"([^"]+)",\s*expectedSize:\s*(\d+),\s*sha256Checksum:\s*"([^"]*)"/g;
     let match;
 
     while ((match = modelRegex.exec(modelsArrayContent)) !== null) {
       models.push({
         name: match[1],
-        hyperbeeKey: match[2],
+        hyperdriveKey: match[2],
+        hyperbeeKey: match[3],
+        modelId: match[4],
+        addon: match[5],
+        expectedSize: parseInt(match[6], 10),
+        sha256Checksum: match[7],
       });
     }
 
@@ -482,12 +593,65 @@ const formatSize = (bytes) => {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 };
 
-const compareModels = (remoteModels, currentModels) => {
-  const currentKeys = new Set(currentModels.map((m) => m.hyperbeeKey));
-  const remoteKeys = new Set(remoteModels.map((m) => m.hyperbeeKey));
+const getCommitHash = (short = false) => {
+  try {
+    const cmd = short ? "git rev-parse --short HEAD" : "git rev-parse HEAD";
+    return execSync(cmd, { encoding: "utf-8" }).trim();
+  } catch (error) {
+    throw new Error("Git is required to generate history file", {
+      cause: error,
+    });
+  }
+};
 
-  const added = remoteModels.filter((m) => !currentKeys.has(m.hyperbeeKey));
-  const removed = currentModels.filter((m) => !remoteKeys.has(m.hyperbeeKey));
+const createHistoryFile = (added, removed, currentModels) => {
+  if (added.length === 0 && removed.length === 0) {
+    return null;
+  }
+
+  if (!fs.existsSync(HISTORY_DIR)) {
+    fs.mkdirSync(HISTORY_DIR, { recursive: true });
+  }
+
+  const shortHash = getCommitHash(true);
+  const fullHash = getCommitHash(false);
+  const timestamp = new Date().toISOString();
+  const filename = `${shortHash}.txt`;
+  const filepath = `${HISTORY_DIR}/${filename}`;
+
+  let content = `commit=${fullHash}\n`;
+  content += `timestamp=${timestamp}\n`;
+  content += `previous_count=${currentModels.length}\n`;
+  content += `new_count=${currentModels.length + added.length - removed.length}\n`;
+  content += `\n`;
+
+  if (added.length > 0) {
+    content += `[added]\n`;
+    added.forEach((m) => {
+      content += `${m.name}\n`;
+    });
+    content += `\n`;
+  }
+
+  if (removed.length > 0) {
+    content += `[removed]\n`;
+    removed.forEach((m) => {
+      content += `${m.name}\n`;
+    });
+  }
+
+  fs.writeFileSync(filepath, content);
+  return filepath;
+};
+
+const compareModels = (remoteModels, currentModels) => {
+  // Use composite key: hyperbeeKey + modelId to handle multi-file models correctly
+  const makeKey = (m) => `${m.hyperbeeKey}:${m.modelId}`;
+  const currentKeys = new Set(currentModels.map(makeKey));
+  const remoteKeys = new Set(remoteModels.map(makeKey));
+
+  const added = remoteModels.filter((m) => !currentKeys.has(makeKey(m)));
+  const removed = currentModels.filter((m) => !remoteKeys.has(makeKey(m)));
 
   return { added, removed };
 };
@@ -586,21 +750,85 @@ const checkOnly = async (nonBlocking = false, showDuplicates = false) => {
 };
 
 const updateModels = async (showDuplicates = false) => {
-  const models = await collectModels({ showDuplicates });
+  // Load current models to preserve existing names
+  const currentModels = loadCurrentModels();
+  const currentModelMap = new Map(
+    currentModels.map((m) => [`${m.hyperbeeKey}:${m.modelId}`, m]),
+  );
 
-  models.sort(
+  // Collect remote models
+  const remoteModels = await collectModels({ showDuplicates });
+
+  // Compare to find added/removed
+  const { added, removed } = compareModels(remoteModels, currentModels);
+
+  // Build final models list preserving existing names
+  const usedNames = new Set();
+  const finalModels = remoteModels.map((remote) => {
+    const key = `${remote.hyperbeeKey}:${remote.modelId}`;
+    const existing = currentModelMap.get(key);
+
+    if (existing) {
+      // Preserve existing name, but update other fields from remote
+      usedNames.add(existing.name);
+      return {
+        ...remote,
+        name: existing.name,
+      };
+    }
+
+    // New model - generate name
+    const name = generateExportName({
+      modelId: remote.modelId,
+      hyperbeeKey: remote.hyperbeeKey,
+      addon: remote.addon,
+      usedNames,
+    });
+    return {
+      ...remote,
+      name,
+    };
+  });
+
+  finalModels.sort(
     (a, b) =>
       a.addon.localeCompare(b.addon) ||
       a.hyperbeeKey.localeCompare(b.hyperbeeKey),
   );
 
-  fs.writeFileSync(OUTPUT_FILE, generateFileContent(models));
+  // Generate names for added models (for history file)
+  const usedNamesForAdded = new Set();
+  const addedWithNames = added.map((m) => ({
+    ...m,
+    name: generateExportName({
+      modelId: m.modelId,
+      hyperbeeKey: m.hyperbeeKey,
+      addon: m.addon,
+      usedNames: usedNamesForAdded,
+    }),
+  }));
+
+  // Write the models file
+  fs.writeFileSync(OUTPUT_FILE, generateFileContentWithNames(finalModels));
 
   try {
     execSync(`npx prettier --write "${OUTPUT_FILE}"`, { stdio: "pipe" });
   } catch {}
 
-  console.log(`✅ Generated ${models.length} models → ${OUTPUT_FILE}`);
+  console.log(`✅ Generated ${finalModels.length} models → ${OUTPUT_FILE}`);
+
+  // Create history file if there are changes
+  if (added.length > 0 || removed.length > 0) {
+    const historyFile = createHistoryFile(
+      addedWithNames,
+      removed,
+      currentModels,
+    );
+    if (historyFile) {
+      console.log(`📜 Created history file → ${historyFile}`);
+      console.log(`   Added: ${added.length}, Removed: ${removed.length}`);
+    }
+  }
 };
 
 const main = async () => {

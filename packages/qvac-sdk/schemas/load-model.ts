@@ -1,22 +1,37 @@
 import { z } from "zod";
-import { llmConfigSchema, embedConfigSchema } from "./llamacpp-config";
+import {
+  llmConfigBaseSchema,
+  embedConfigBaseSchema,
+  type LlmConfig,
+  type EmbedConfig,
+} from "./llamacpp-config";
 import { whisperConfigSchema } from "./whispercpp-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import { ttsConfigSchema } from "./text-to-speech";
+import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
   modelInputToNameSchema,
 } from "./model-src-utils";
+import {
+  llmModelTypeSchema,
+  whisperModelTypeSchema,
+  embeddingsModelTypeSchema,
+  nmtModelTypeSchema,
+  ttsModelTypeSchema,
+  ocrModelTypeSchema,
+  ModelType,
+} from "./model-types";
 import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
 const loadModelOptionsBaseSchema = z.union([
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.literal("llm"),
-    modelConfig: llmConfigSchema.partial().strict().optional(),
+    modelType: llmModelTypeSchema,
+    modelConfig: llmConfigBaseSchema.strict().optional(),
     seed: z.boolean().optional(),
     projectionModelSrc: modelSrcInputSchema.optional(),
     delegate: delegateSchema,
@@ -24,7 +39,7 @@ const loadModelOptionsBaseSchema = z.union([
   }),
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.literal("whisper"),
+    modelType: whisperModelTypeSchema,
     modelConfig: whisperConfigSchema.partial().strict().optional(),
     seed: z.boolean().optional(),
     vadModelSrc: modelSrcInputSchema.optional(),
@@ -32,24 +47,34 @@ const loadModelOptionsBaseSchema = z.union([
   }),
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.literal("embeddings"),
-    modelConfig: embedConfigSchema.partial().strict().optional(),
+    modelType: embeddingsModelTypeSchema,
+    modelConfig: embedConfigBaseSchema.strict().optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.literal("nmt"),
+    modelType: nmtModelTypeSchema,
     modelConfig: nmtConfigSchema,
+    srcVocabSrc: modelSrcInputSchema.optional(),
+    dstVocabSrc: modelSrcInputSchema.optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.literal("tts"),
+    modelType: ttsModelTypeSchema,
     modelConfig: ttsConfigSchema,
     configSrc: modelSrcInputSchema,
     eSpeakDataPath: z.string(),
+    seed: z.boolean().optional(),
+    delegate: delegateSchema,
+  }),
+  z.object({
+    modelSrc: modelSrcInputSchema,
+    modelType: ocrModelTypeSchema,
+    modelConfig: ocrConfigSchema.partial().strict().optional(),
+    detectorModelSrc: modelSrcInputSchema.optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -66,8 +91,8 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.literal("llm"),
-      modelConfig: llmConfigSchema.partial().strict().optional(),
+      modelType: llmModelTypeSchema,
+      modelConfig: llmConfigBaseSchema.strict().optional(),
       seed: z.boolean().optional(),
       projectionModelSrc: modelSrcInputSchema.optional(),
       delegate: delegateSchema,
@@ -77,10 +102,10 @@ export const loadModelOptionsToRequestSchema = z.union([
     })
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: "llm" as const,
+      modelType: ModelType.llamacppCompletion,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<typeof llmConfigSchema>,
+      modelConfig: (data.modelConfig ?? {}) as LlmConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -91,7 +116,7 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.literal("whisper"),
+      modelType: whisperModelTypeSchema,
       modelConfig: whisperConfigSchema.partial().strict().optional(),
       seed: z.boolean().optional(),
       vadModelSrc: modelSrcInputSchema.optional(),
@@ -101,7 +126,7 @@ export const loadModelOptionsToRequestSchema = z.union([
     })
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: "whisper" as const,
+      modelType: ModelType.whispercppTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}) as z.infer<
@@ -117,8 +142,8 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.literal("embeddings"),
-      modelConfig: embedConfigSchema.partial().strict().optional(),
+      modelType: embeddingsModelTypeSchema,
+      modelConfig: embedConfigBaseSchema.strict().optional(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
@@ -126,12 +151,10 @@ export const loadModelOptionsToRequestSchema = z.union([
     })
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: "embeddings" as const,
+      modelType: ModelType.llamacppEmbedding,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<
-        typeof embedConfigSchema
-      >,
+      modelConfig: (data.modelConfig ?? {}) as EmbedConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -139,8 +162,10 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.literal("nmt"),
+      modelType: nmtModelTypeSchema,
       modelConfig: nmtConfigSchema,
+      srcVocabSrc: modelSrcInputSchema.optional(),
+      dstVocabSrc: modelSrcInputSchema.optional(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
@@ -148,10 +173,16 @@ export const loadModelOptionsToRequestSchema = z.union([
     })
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: "nmt" as const,
+      modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: data.modelConfig,
+      srcVocabSrc: data.srcVocabSrc
+        ? modelInputToSrcSchema.parse(data.srcVocabSrc)
+        : undefined,
+      dstVocabSrc: data.dstVocabSrc
+        ? modelInputToSrcSchema.parse(data.dstVocabSrc)
+        : undefined,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -159,7 +190,7 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.literal("tts"),
+      modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
       configSrc: modelSrcInputSchema,
       eSpeakDataPath: z.string(),
@@ -170,7 +201,7 @@ export const loadModelOptionsToRequestSchema = z.union([
     })
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: "tts" as const,
+      modelType: ModelType.onnxTts,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: data.modelConfig,
@@ -179,6 +210,30 @@ export const loadModelOptionsToRequestSchema = z.union([
       delegate: data.delegate,
       configSrc: modelInputToSrcSchema.parse(data.configSrc),
       eSpeakDataPath: data.eSpeakDataPath,
+    })),
+  z
+    .object({
+      modelSrc: modelSrcInputSchema,
+      modelType: ocrModelTypeSchema,
+      modelConfig: ocrConfigSchema.partial().strict().optional(),
+      detectorModelSrc: modelSrcInputSchema.optional(),
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.onnxOcr,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: (data.modelConfig ?? {}) as z.infer<typeof ocrConfigSchema>,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+      detectorModelSrc: data.detectorModelSrc
+        ? modelInputToSrcSchema.parse(data.detectorModelSrc)
+        : undefined,
     })),
 ]);
 
@@ -189,47 +244,58 @@ const commonModelConfigSchema = z.object({
   projectionModelSrc: z.string().optional(),
   vadModelSrc: z.string().optional(),
   configSrc: z.string().optional(),
+  detectorModelSrc: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
   delegate: delegateSchema,
 });
 
-// Request schemas for each model type
+// Request schemas for each model type (use canonical types since transforms normalize)
+// Use base schemas (no defaults) for client-side validation.
+// Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal("llm"),
-  modelConfig: llmConfigSchema,
+  modelType: z.literal(ModelType.llamacppCompletion),
+  modelConfig: llmConfigBaseSchema,
 });
 
 export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal("whisper"),
-  modelConfig: whisperConfigSchema,
+  modelType: z.literal(ModelType.whispercppTranscription),
+  modelConfig: whisperConfigSchema, // whisper has no defaults
 });
 
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal("embeddings"),
-  modelConfig: embedConfigSchema,
+  modelType: z.literal(ModelType.llamacppEmbedding),
+  modelConfig: embedConfigBaseSchema,
 });
 
 export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal("nmt"),
-  modelConfig: nmtConfigSchema,
+  modelType: z.literal(ModelType.nmtcppTranslation),
+  modelConfig: nmtConfigSchema, // nmt has no defaults
+  srcVocabSrc: z.string().optional(),
+  dstVocabSrc: z.string().optional(),
 });
 
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal("tts"),
-  modelConfig: ttsConfigSchema,
+  modelType: z.literal(ModelType.onnxTts),
+  modelConfig: ttsConfigSchema, // tts has no defaults
   configSrc: z.string(),
   eSpeakDataPath: z.string(),
 });
 
-// Union of all load model request types
+export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.onnxOcr),
+  modelConfig: ocrConfigSchema, // ocr has no defaults
+});
+
+// Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
-  .discriminatedUnion("modelType", [
+  .union([
     loadLlmModelRequestSchema,
     loadWhisperModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
+    loadOcrModelRequestSchema,
   ])
   .transform((data) => ({
     ...data,
@@ -286,6 +352,7 @@ export const loadModelServerParamsSchema = z.object({
   vadModelPath: z.string().optional(),
   ttsConfigModelPath: z.string().optional(),
   eSpeakDataPath: z.string().optional(),
+  detectorModelPath: z.string().optional(),
   modelName: z.string().optional(),
 });
 

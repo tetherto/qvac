@@ -11,7 +11,8 @@ import { handleLoadModelDelegated } from "@/server/rpc/handlers/load-model-deleg
 import { handleCompletionStreamDelegated } from "@/server/rpc/handlers/completion-stream-delegated";
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
-import type { QvacConfig } from "@/schemas";
+import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
+import type { QvacConfig, RuntimeContext } from "@/schemas";
 import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
@@ -24,6 +25,7 @@ import { handleRag } from "@/server/rpc/handlers/rag";
 import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
+import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import type RPC from "bare-rpc";
 import {
   sendErrorResponse,
@@ -33,6 +35,8 @@ import {
   NoDataReceivedError,
   UnknownRequestTypeError,
 } from "@/utils/errors-client";
+import { normalizeModelType, type CanonicalModelType } from "@/schemas";
+import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 
 export type BareRPCRequest = {
   data: Buffer;
@@ -60,8 +64,17 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       jsonData.type === "__init_config"
     ) {
       try {
-        const configData = jsonData as { type: string; config: unknown };
-        setSDKConfig(configData.config as QvacConfig);
+        const initData = jsonData as {
+          type: string;
+          config: unknown;
+          runtimeContext?: RuntimeContext;
+        };
+        if (initData.config) {
+          setSDKConfig(initData.config as QvacConfig);
+        }
+        if (initData.runtimeContext) {
+          setRuntimeContext(initData.runtimeContext);
+        }
         req.reply(JSON.stringify({ success: true }), "utf-8");
       } catch (error) {
         req.reply(
@@ -75,7 +88,8 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       return;
     }
 
-    const request: Request = requestSchema.parse(jsonData);
+    const processedData = applyDeviceDefaultsToRequest(jsonData);
+    const request: Request = requestSchema.parse(processedData);
 
     switch (request.type) {
       case "downloadAsset": {
@@ -266,11 +280,35 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       }
 
       case "rag": {
-        try {
-          const response = await handleRag(request);
-          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
-        } catch (error) {
-          sendErrorResponse(req, error);
+        // Only ingest, saveEmbeddings, and reindex support progress
+        const supportsProgress =
+          request.operation === "ingest" ||
+          request.operation === "saveEmbeddings" ||
+          request.operation === "reindex";
+        const withProgress = supportsProgress && request.withProgress;
+
+        if (withProgress) {
+          const stream = req.createResponseStream();
+          try {
+            const response = await handleRag(request, (update) => {
+              const data = JSON.stringify(responseSchema.parse(update));
+              stream.write(data + "\n", "utf-8");
+            });
+
+            // Send final response
+            const data = JSON.stringify(responseSchema.parse(response));
+            stream.write(data + "\n", "utf-8");
+            stream.end();
+          } catch (error) {
+            sendStreamErrorResponse(stream, error);
+          }
+        } else {
+          try {
+            const response = await handleRag(request);
+            req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+          } catch (error) {
+            sendErrorResponse(req, error);
+          }
         }
         break;
       }
@@ -310,6 +348,21 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
         break;
       }
 
+      case "ocrStream": {
+        const stream = req.createResponseStream();
+        try {
+          for await (const response of handleOCRStream(request)) {
+            const validatedResponse = responseSchema.parse(response);
+            const data = JSON.stringify(validatedResponse);
+            stream.write(data + "\n", "utf-8");
+          }
+          stream.end();
+        } catch (error) {
+          sendStreamErrorResponse(stream, error);
+        }
+        break;
+      }
+
       default: {
         throw new UnknownRequestTypeError();
       }
@@ -317,4 +370,46 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   } catch (error) {
     sendErrorResponse(req, error);
   }
+}
+
+/**
+ * Apply device-specific config defaults to loadModel requests before schema parsing.
+ * This ensures device defaults are applied before schema defaults.
+ *
+ * Priority: User config > Device defaults > Schema defaults
+ */
+function applyDeviceDefaultsToRequest(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+
+  const obj = data as Record<string, unknown>;
+  const requestType = obj["type"];
+
+  // Only process loadModel requests (not reload config which uses modelId)
+  if (
+    requestType !== "loadModel" ||
+    !obj["modelType"] ||
+    !("modelSrc" in obj)
+  ) {
+    return data;
+  }
+
+  // Normalize model type to canonical form
+  let canonicalType: CanonicalModelType;
+  try {
+    canonicalType = normalizeModelType(
+      obj["modelType"] as Parameters<typeof normalizeModelType>[0],
+    );
+  } catch {
+    // Invalid model type, let schema validation handle it
+    return data;
+  }
+
+  // Apply device defaults and full schema defaults to modelConfig
+  const rawConfig = (obj["modelConfig"] as Record<string, unknown>) ?? {};
+  const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
+
+  return {
+    ...obj,
+    modelConfig: configWithDefaults,
+  };
 }

@@ -21,7 +21,6 @@ const PREFIX_EMOJIS = {
   fix: "🐞",
   doc: "📘",
   test: "🧪",
-  mod: "📦",
   chore: "🧹",
   infra: "⚙️",
 };
@@ -29,6 +28,7 @@ const PREFIX_EMOJIS = {
 const TAG_EMOJIS = {
   api: "🔌",
   bc: "💥",
+  mod: "📦",
 };
 
 /**
@@ -86,6 +86,24 @@ function getPackageVersion(branch) {
     return pkg.version;
   } catch (error) {
     console.error(`Failed to get version from ${branch}`);
+    throw error;
+  }
+}
+
+/**
+ * Get package.json version from local working directory
+ * @returns {string}
+ */
+function getLocalPackageVersion() {
+  try {
+    const content = fs.readFileSync(
+      path.join(process.cwd(), "package.json"),
+      "utf8",
+    );
+    const pkg = JSON.parse(content);
+    return pkg.version;
+  } catch (error) {
+    console.error("Failed to get version from local package.json");
     throw error;
   }
 }
@@ -238,6 +256,61 @@ function extractBeforeAfter(text) {
 }
 
 /**
+ * Extract model names from a code block content
+ * @param {string} codeBlock - The code block including backticks
+ * @returns {string[]}
+ */
+function extractModelNames(codeBlock) {
+  // Remove the backticks and any language identifier
+  const content = codeBlock.replace(/```\w*\n?/g, "").replace(/```/g, "");
+
+  // Split by newlines and filter out empty lines and "(none)" markers
+  return content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        line.toLowerCase() !== "(none)" &&
+        line.toLowerCase() !== "none" &&
+        !line.startsWith("//") &&
+        !line.startsWith("#"),
+    );
+}
+
+/**
+ * Extract models section from PR body
+ * @param {string} body - The PR body
+ * @returns {{ added: string[], removed: string[] } | null}
+ */
+function extractModelsSection(body) {
+  if (!body) return null;
+
+  // Check for Models section
+  const modelsSectionMatch = body.match(
+    /##\s*(?:📦\s*)?Models\s*\n([\s\S]*?)(?=\n##\s|$)/i,
+  );
+  if (!modelsSectionMatch) return null;
+
+  const modelsSection = modelsSectionMatch[1];
+
+  // Extract Added models subsection
+  const addedMatch = modelsSection.match(
+    /###\s*Added\s*(?:models)?\s*\n[\s\S]*?(```[\s\S]*?```)/i,
+  );
+
+  // Extract Removed models subsection
+  const removedMatch = modelsSection.match(
+    /###\s*Removed\s*(?:models)?\s*\n[\s\S]*?(```[\s\S]*?```)/i,
+  );
+
+  const added = addedMatch ? extractModelNames(addedMatch[1]) : [];
+  const removed = removedMatch ? extractModelNames(removedMatch[1]) : [];
+
+  return { added, removed };
+}
+
+/**
  * Capitalize first letter of string
  * @param {string} str
  * @returns {string}
@@ -252,9 +325,15 @@ function capitalize(str) {
  * @param {object} pr - PR metadata with parsed title
  * @param {boolean} hasBreakingMd - Whether breaking.md exists
  * @param {boolean} hasApiMd - Whether api.md exists
+ * @param {boolean} hasModelsMd - Whether models.md exists
  * @returns {string}
  */
-function generateChangelogEntry(pr, hasBreakingMd = false, hasApiMd = false) {
+function generateChangelogEntry(
+  pr,
+  hasBreakingMd = false,
+  hasApiMd = false,
+  hasModelsMd = false,
+) {
   const { parsed } = pr;
   const subject = capitalize(parsed.subject);
 
@@ -267,6 +346,9 @@ function generateChangelogEntry(pr, hasBreakingMd = false, hasApiMd = false) {
   }
   if (parsed.tags.includes("api") && hasApiMd) {
     links.push("[API changes](./api.md)");
+  }
+  if (parsed.tags.includes("mod") && hasModelsMd) {
+    links.push("[model changes](./models.md)");
   }
 
   if (links.length > 0) {
@@ -293,14 +375,18 @@ function generateChangelogFiles(version, prs) {
   const grouped = {};
   const breakingChanges = [];
   const apiChanges = [];
+  const modelChanges = [];
 
   for (const pr of prs) {
     const { parsed } = pr;
 
-    // Classify: PRs with [api] tag go to API section, otherwise use prefix
+    // Classify: PRs with [api] tag go to API section, PRs with [mod] tag go to models section
     let classification = parsed.prefix;
     if (parsed.tags.includes("api")) {
       classification = "api";
+    }
+    if (parsed.tags.includes("mod")) {
+      classification = "mod";
     }
 
     if (!grouped[classification]) {
@@ -315,24 +401,28 @@ function generateChangelogFiles(version, prs) {
     if (parsed.tags.includes("api")) {
       apiChanges.push(pr);
     }
+    if (parsed.tags.includes("mod")) {
+      modelChanges.push(pr);
+    }
   }
 
   // Check if we'll generate detail files
   const hasBreakingMd = breakingChanges.length > 0;
   const hasApiMd = apiChanges.length > 0;
+  const hasModelsMd = modelChanges.length > 0;
 
   // Generate main CHANGELOG.md
   let changelog = `# Changelog v${version}\n\n`;
   changelog += `Release Date: ${new Date().toISOString().split("T")[0]}\n\n`;
 
-  // Add sections in order
+  // Add sections in order: Features, API, Fixes, then the rest
   const sections = [
     { key: "feat", title: "✨ Features" },
-    { key: "fix", title: "🐞 Fixes" },
     { key: "api", title: "🔌 API" },
+    { key: "fix", title: "🐞 Fixes" },
+    { key: "mod", title: "📦 Models" },
     { key: "doc", title: "📘 Docs" },
     { key: "test", title: "🧪 Tests" },
-    { key: "mod", title: "📦 Models" },
     { key: "chore", title: "🧹 Chores" },
     { key: "infra", title: "⚙️ Infrastructure" },
   ];
@@ -341,7 +431,9 @@ function generateChangelogFiles(version, prs) {
     if (grouped[section.key] && grouped[section.key].length > 0) {
       changelog += `## ${section.title}\n\n`;
       for (const pr of grouped[section.key]) {
-        changelog += generateChangelogEntry(pr, hasBreakingMd, hasApiMd) + "\n";
+        changelog +=
+          generateChangelogEntry(pr, hasBreakingMd, hasApiMd, hasModelsMd) +
+          "\n";
       }
       changelog += "\n";
     }
@@ -395,6 +487,63 @@ function generateChangelogFiles(version, prs) {
     fs.writeFileSync(path.join(changelogDir, "api.md"), apiMd);
     console.log(`✅ Generated ${changelogDir}/api.md`);
   }
+
+  // Generate models.md if there are model changes
+  if (modelChanges.length > 0) {
+    // Aggregate model changes across all PRs
+    const allAdded = new Set();
+    const allRemoved = new Set();
+
+    for (const pr of modelChanges) {
+      const models = extractModelsSection(pr.body);
+      if (models) {
+        models.added.forEach((m) => allAdded.add(m));
+        models.removed.forEach((m) => allRemoved.add(m));
+      }
+    }
+
+    // Cancel out: if a model is both added and removed, remove from both sets
+    for (const model of allAdded) {
+      if (allRemoved.has(model)) {
+        allAdded.delete(model);
+        allRemoved.delete(model);
+      }
+    }
+
+    // Sort alphabetically
+    const addedList = [...allAdded].sort();
+    const removedList = [...allRemoved].sort();
+
+    let modelsMd = `# 📦 Model Changes v${version}\n\n`;
+
+    if (addedList.length > 0) {
+      modelsMd += `## Added Models\n\n`;
+      modelsMd += "```\n";
+      modelsMd += addedList.join("\n") + "\n";
+      modelsMd += "```\n\n";
+    }
+
+    if (removedList.length > 0) {
+      modelsMd += `## Removed Models\n\n`;
+      modelsMd += "```\n";
+      modelsMd += removedList.join("\n") + "\n";
+      modelsMd += "```\n\n";
+    }
+
+    if (addedList.length === 0 && removedList.length === 0) {
+      modelsMd += "_No net model changes in this release._\n";
+    }
+
+    // Add PR references
+    modelsMd += `---\n\n`;
+    modelsMd += `### Related PRs\n\n`;
+    for (const pr of modelChanges) {
+      modelsMd += `- [#${pr.number}](${pr.url}) - ${capitalize(pr.parsed.subject)}\n`;
+    }
+
+    fs.writeFileSync(path.join(changelogDir, "models.md"), modelsMd);
+    console.log(`✅ Generated ${changelogDir}/models.md`);
+  }
 }
 
 /**
@@ -411,38 +560,37 @@ async function main() {
     process.exit(1);
   }
 
-  const devBranch = "origin/dev";
   const mainBranch = "origin/main";
 
-  // Fetch latest changes
-  console.log("📥 Fetching latest changes...");
+  // Fetch latest changes from main (to compare against)
+  console.log("📥 Fetching latest main...");
   try {
-    git("fetch origin dev main");
+    git("fetch origin main");
   } catch (error) {
-    console.error("❌ Failed to fetch branches");
+    console.error("❌ Failed to fetch main branch");
     process.exit(1);
   }
 
-  // Get versions
+  // Get versions - local dev vs remote main
   console.log("📦 Checking versions...");
-  const devVersion = getPackageVersion(devBranch);
+  const devVersion = getLocalPackageVersion();
   const mainVersion = getPackageVersion(mainBranch);
 
-  console.log(`  Dev version: ${devVersion}`);
+  console.log(`  Local version: ${devVersion}`);
   console.log(`  Main version: ${mainVersion}`);
 
   if (compareVersions(devVersion, mainVersion) <= 0) {
     console.error(
-      `❌ Dev version (${devVersion}) must be greater than main version (${mainVersion})`,
+      `❌ Local version (${devVersion}) must be greater than main version (${mainVersion})`,
     );
     process.exit(1);
   }
 
   console.log("✅ Version check passed\n");
 
-  // Get PR numbers
+  // Get PR numbers (compare HEAD against origin/main)
   console.log("🔍 Finding merged PRs...");
-  const prNumbers = getPRNumbers(devBranch, mainBranch);
+  const prNumbers = getPRNumbers("HEAD", mainBranch);
 
   if (prNumbers.length === 0) {
     console.log("No PRs found to generate changelog");

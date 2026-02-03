@@ -1,4 +1,4 @@
-import type { QvacConfig } from "@/schemas";
+import type { QvacConfig, RuntimeContext } from "@/schemas";
 import {
   getClientLogger,
   setGlobalLogLevel,
@@ -16,61 +16,78 @@ interface RPCClient {
   request(command: number): any;
 }
 
-/**
- * Loads configuration from file and sends it to the worker during initialization.
- * Config is loaded once and becomes immutable on the worker side.
- *
- * @param rpc - The RPC client instance
- * @param resolveConfig - Runtime-specific config resolver function
- */
-export async function initializeConfig(
-  rpc: RPCClient,
-  resolveConfig: ResolveConfigFn,
-) {
-  const config = await resolveConfig();
-
-  if (!config) {
-    // No config found - worker will use defaults
-    return;
-  }
-
-  // Apply logger settings on client
+function applyClientLoggerSettings(config: QvacConfig) {
   if (config.loggerLevel !== undefined) {
     setGlobalLogLevel(config.loggerLevel);
   }
   if (config.loggerConsoleOutput !== undefined) {
     setGlobalConsoleOutput(config.loggerConsoleOutput);
   }
+}
 
-  logger.info("📦 Initializing config:", config);
+async function sendInitMessage(
+  rpc: RPCClient,
+  config: QvacConfig | undefined,
+  runtimeContext: RuntimeContext | undefined,
+) {
+  const initMessage = {
+    type: "__init_config",
+    config,
+    runtimeContext,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const req = rpc.request(1);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  req.send(JSON.stringify(initMessage), "utf8");
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  const response = await req.reply("utf8");
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+  const parsed = JSON.parse(response.toString()) as {
+    success: boolean;
+    error?: string;
+  };
+
+  if (!parsed.success) {
+    throw new Error(parsed.error ?? "Unknown error");
+  }
+}
+
+/**
+ * Initializes SDK configuration and runtime context.
+ * Config is loaded once and becomes immutable on the worker side.
+ *
+ * @param rpc - The RPC client instance
+ * @param resolveConfig - Runtime-specific config resolver function
+ * @param runtimeContext - Optional runtime context (platform, device info)
+ */
+export async function initializeConfig(
+  rpc: RPCClient,
+  resolveConfig: ResolveConfigFn,
+  runtimeContext?: RuntimeContext,
+) {
+  const config = await resolveConfig();
+
+  // Nothing to initialize
+  if (!config && !runtimeContext) {
+    return;
+  }
+
+  // Apply client-side logger settings
+  if (config) {
+    applyClientLoggerSettings(config);
+    logger.info("📦 Initializing SDK config");
+  }
+
+  if (runtimeContext) {
+    logger.info("📱 Runtime context:", runtimeContext);
+  }
 
   try {
-    // Send config to worker via internal init message
-    // This bypasses the normal RPC flow since it's part of initialization
-    const initMessage = {
-      type: "__init_config",
-      config,
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const req = rpc.request(1);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    req.send(JSON.stringify(initMessage), "utf8");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const response = await req.reply("utf8");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
-    const parsed = JSON.parse(response.toString()) as {
-      success: boolean;
-      error?: string;
-    };
-
-    if (!parsed.success) {
-      logger.error("❌ Failed to initialize config:", parsed.error);
-    } else {
-      logger.info("✅ Config successfully initialized");
-    }
+    await sendInitMessage(rpc, config, runtimeContext);
+    logger.info("✅ Initialization complete");
   } catch (error) {
-    logger.error("❌ Error initializing config:", error);
+    logger.error("❌ Initialization failed:", error);
   }
 }
 

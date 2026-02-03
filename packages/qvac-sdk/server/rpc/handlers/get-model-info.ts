@@ -16,6 +16,7 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { getShardPath } from "@/server/utils/cache";
 import { ModelNotFoundError } from "@/utils/errors-server";
+import { normalizeModelType } from "@/schemas/model-types";
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[];
@@ -24,9 +25,9 @@ type CacheStatusResult = {
   cachedAt?: Date;
 };
 
-export const handleGetModelInfo = async (
+export async function handleGetModelInfo(
   request: GetModelInfoRequest,
-): Promise<GetModelInfoResponse> => {
+): Promise<GetModelInfoResponse> {
   const { name } = request;
 
   const catalogEntry: HyperdriveItem | undefined = models.find(
@@ -79,6 +80,12 @@ export const handleGetModelInfo = async (
 
   const isLoaded = loadedInstances.length > 0;
 
+  // Normalize addon from alias to canonical (vad passes through as-is)
+  const normalizedAddon =
+    catalogEntry.addon === "vad"
+      ? ("vad" as const)
+      : normalizeModelType(catalogEntry.addon);
+
   const modelInfo: ModelInfo = {
     name: catalogEntry.name,
     modelId: catalogEntry.modelId,
@@ -86,7 +93,7 @@ export const handleGetModelInfo = async (
     hyperbeeKey: catalogEntry.hyperbeeKey,
     expectedSize: catalogEntry.expectedSize,
     sha256Checksum: catalogEntry.sha256Checksum,
-    addon: catalogEntry.addon,
+    addon: normalizedAddon,
 
     isCached,
     isLoaded,
@@ -102,7 +109,7 @@ export const handleGetModelInfo = async (
     type: "getModelInfo",
     modelInfo,
   };
-};
+}
 
 async function handleShardedModel(
   hyperdriveKey: string,
@@ -125,14 +132,18 @@ async function handleShardedModel(
 
     try {
       const stats = await fsPromises.stat(shardPath);
-      shardIsCached = stats.isFile();
-      if (shardIsCached) {
+      const fileExists = stats.isFile();
+      if (fileExists) {
         shardActualSize = stats.size;
         shardCachedAt = stats.mtime;
-        totalActualSize += stats.size;
-
-        if (!latestCachedAt || stats.mtime > latestCachedAt) {
-          latestCachedAt = stats.mtime;
+        shardIsCached = stats.size === shard.expectedSize;
+        if (shardIsCached) {
+          totalActualSize += stats.size;
+          if (!latestCachedAt || stats.mtime > latestCachedAt) {
+            latestCachedAt = stats.mtime;
+          }
+        } else {
+          allShardsCached = false;
         }
       } else {
         allShardsCached = false;
@@ -184,10 +195,11 @@ async function handleSingleFileModel(
 
   try {
     const stats = await fsPromises.stat(filePath);
-    fileIsCached = stats.isFile();
-    if (fileIsCached) {
+    const fileExists = stats.isFile();
+    if (fileExists) {
       fileActualSize = stats.size;
       fileCachedAt = stats.mtime;
+      fileIsCached = stats.size === expectedSize;
     }
   } catch {
     fileIsCached = false;

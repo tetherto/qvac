@@ -22,49 +22,62 @@ If you manage to solve a problem by removing code, that gives you double points 
 - [Question Every Requirement](https://www.youtube.com/watch?v=hhuaVsOAMFc) - On avoiding the trap of optimizing things that shouldn't exist
 - [Code Reduction as Quality Predictor](https://www.youtube.com/watch?v=Rpaat8WFqxY) - Evidence that reducing code is the best predictor of codebase quality
 
-## 💡 Contributing tips
+## ✅ Contribution rules
 
-### 🛡️ Tip 1: Never break user space
+- **Never break user space.** Do not change exposed APIs unless adding user-facing capability or simplification. Do not adjust APIs to solve internal implementation issues.
+- **Keep changes surgical.** Each PR solves exactly one problem or delivers one feature. If you find related work, open/link separate PRs. Localize complexity instead of spreading risk.
+- **Enforce type safety.** No `any` on the client; server-side coercion only when necessary for Bare types. Avoid `unknown` unless required for RPC bridges. Avoid `@ts-ignore` or eslint disables except in rare, justified cases.
+- **Keep client portable.** All platform-specific logic belongs on Bare/server. The client should remain an RPC client that can be ported to other environments.
+- **Prefer the simplest solution.** After implementing, ask if it can be simpler. Delete code when it clarifies behavior.
 
-**Never change the exposed API unless we're adding something that improves the UX.**
+## 🚀 Quickstart (fast lane)
 
-This can be a simplification or an additional function that allows users to use new functionality. But we don't break the API just because we can't figure things out internally. We don't change the API just to solve an implementation problem.
+- `nvm use` and `bun install`
+- Run `bun lint` then `bun test` before opening a PR (husky hooks will enforce these on commit)
+- Keep PRs focused on one change; draft early if work is in progress
+- Follow commit format `prefix[tags]?: subject` (e.g., `fix: tighten cache validation`)
 
-### 🔬 Tip 2: Keep pull requests surgical and laser-focused
+## 🛣️ Contribution lanes
 
-**Each PR should solve exactly one problem or implement exactly one feature.**
+- **Small change fast lane:** Typos, docs tweaks, minor refactors/tests. Fork, install, lint/test, open a PR.
+- **Feature/bug lane:** For behavioral changes, add a short design note in the PR description (problem, approach, alternatives) and include tests.
 
-If you discover related issues while working, create separate PRs. Keep PRs small and reviewable.
+## 🏷️ Issues and labels
 
-Prefer isolating complexity in separate modules/folders rather than spreading potentially breaking changes across the codebase.
+- Look for `good first issue` or `help wanted`.
+- Comment to claim an issue; add a brief plan if work is non-trivial.
+- If you find related issues while working, open or link them instead of expanding scope.
 
-### 🔒 Tip 3: Strict type safety
+## 🆘 Asking for help
 
-**Zero tolerance for type safety violations.**
+- Use Discussions/Issues for blocking questions.
+- Include platform/runtime, version info, reproduction steps, logs, and what you already tried.
 
-- Never use `any` on the client
-- On the server, use type coercion only with common sense (Bare runtime has bad/non-existent type definitions)
-- Never use `unknown` unless it's clearly necessary (e.g., RPC bridges where type coercion is required)
-- Never use `@ts-ignore`, ESLint disable directives, or similar unless extremely necessary
+## ✅ Pull request requirements
 
-### 🌐 Tip 4: No platform-specific code in the client
+- Lint and tests pass (`bun lint`, `bun test`).
+- PR covers exactly one problem/feature; related items go to separate PRs.
+- Commit message follows `prefix[tags]?: subject`; PR title follows the ticket format with tags when applicable.
+- Add tests for any behavior change (or explain why not).
+- Note breaking or API-affecting changes with `[bc]` or `[api]` tags and include required code examples in the PR body.
 
-**The client is made to run on any platform that allows JavaScript.**
+## 🧪 Testing expectations
 
-Any platform-specific functionality is done on Bare (server-side). The client should be essentially just an RPC client that can be ported to different languages. All logic requiring standard library or platform-specific features goes on the server.
+- New features and bug fixes need at least one test.
+- Prefer small, focused tests over broad fixtures.
+- Keep tests platform-aware: client code must stay portable; server/Bare code can use Bare-specific utilities.
 
-### ✂️ Tip 5: Simplify, simplify, simplify
+## 📐 Design notes and decisions
 
-**When you're done implementing a feature or bug fix, always question whether you can do it in a simpler way.**
+- For changes with material design impact, add a short note (problem, options considered, decision).
+- Keep dependencies minimal; prefer builtin/bare equivalents before adding libraries.
+- Favor function-based, low-abstraction solutions; delete code when it simplifies behavior.
 
-Use AI tools to review your implementation. Look for patterns that can be eliminated or merged. After implementing, always ask: "Can this be simpler?"
+## 🧾 Developer Certificate of Origin (DCO)
 
-## 🔄 Development workflow
+We require a DCO 1.1 sign-off on every commit. By signing off you certify that you wrote the code or otherwise have the right to pass it on under the license.
 
-**Before Starting:** Understand the problem completely, plan your approach, open a draft PR with your implementation plan.
-
-**During Development:** Write minimal code that solves the problem, maintain type safety, test with existing examples.
-
-## ❓ Questions?
-
-When in doubt: Look at existing code for patterns, ask AI tools for guidance on simplification, open a draft PR early for feedback, keep it simple.
+- Add a `Signed-off-by: Your Name <your.email@example.com>` line to every commit. The simplest way is `git commit -s ...`.
+- The sign-off name and email must match the commit author and reflect your real identity.
+- If you amend or rebase, keep the sign-off lines intact (`git commit --amend --no-edit -s`).
+- For co-authored work, each author should add their own `Signed-off-by` line.

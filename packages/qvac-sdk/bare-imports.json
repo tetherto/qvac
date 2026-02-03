@@ -1,0 +1,35 @@
+{
+  "#rpc": {
+    "react-native": "./dist/client/rpc/expo-rpc-client.js",
+    "bare": "./dist/client/rpc/bare-client.js",
+    "default": "./dist/client/rpc/node-rpc-client.js"
+  },
+  "child_process": {
+    "bare": "bare-subprocess",
+    "default": "child_process"
+  },
+  "crypto": {
+    "bare": "bare-crypto",
+    "default": "crypto"
+  },
+  "fs": {
+    "bare": "bare-fs",
+    "default": "fs"
+  },
+  "os": {
+    "bare": "bare-os",
+    "default": "os"
+  },
+  "path": {
+    "bare": "bare-path",
+    "default": "path"
+  },
+  "process": {
+    "bare": "bare-process",
+    "default": "process"
+  },
+  "readline": {
+    "bare": "bare-readline",
+    "default": "readline"
+  }
+}

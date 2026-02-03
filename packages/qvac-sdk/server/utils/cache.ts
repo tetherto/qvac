@@ -2,13 +2,13 @@ import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { getEnv } from "@/server/worker";
 import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
-import type { ShardMetadata } from "@/server/utils/shard-utils";
+import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-export const getCacheDir = (subDir: string): string => {
+export function getCacheDir(subDir: string): string {
   const homeDir = getEnv().HOME_DIR;
   const cacheDir = path.join(homeDir, ".qvac", subDir);
   try {
@@ -21,9 +21,9 @@ export const getCacheDir = (subDir: string): string => {
   }
 
   return cacheDir;
-};
+}
 
-export const getModelsCacheDir = (): string => {
+export function getModelsCacheDir(): string {
   const configuredDir = getConfiguredCacheDir();
 
   try {
@@ -36,11 +36,11 @@ export const getModelsCacheDir = (): string => {
   }
 
   return configuredDir;
-};
+}
 
-export const getKVCacheDir = (): string => {
+export function getKVCacheDir(): string {
   return getCacheDir("kv-cache");
-};
+}
 
 /**
  * Get cache directory for sharded model
@@ -81,7 +81,7 @@ export function getShardPath(
 export async function checkShardCompleteness(
   hyperdriveKey: string,
   shardFilenames: readonly string[],
-  shardMetadata: readonly ShardMetadata[],
+  shardMetadata: readonly ShardFileMetadata[],
 ): Promise<number[]> {
   const invalidIndices: number[] = [];
 

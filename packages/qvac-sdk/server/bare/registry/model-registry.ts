@@ -1,12 +1,12 @@
-import type EventEmitter from "events";
 import {
   ModelAlreadyRegisteredError,
   ModelNotFoundError,
   ModelIsDelegatedError,
 } from "@/utils/errors-server";
 import type FilesystemDL from "@qvac/dl-filesystem";
-import type { ModelType } from "@/schemas";
+import type { CanonicalModelType } from "@/schemas";
 import { getServerLogger } from "@/logging";
+import type BaseInference from "@qvac/infer-base";
 
 const logger = getServerLogger();
 
@@ -14,30 +14,11 @@ interface AddonInterface {
   cancel(jobId?: string): Promise<void>;
 }
 
-// TODO: this common interface is a hack to work around the lack of proper typedefs from addons
-export interface AnyModel {
-  load(...args: unknown[]): Promise<void>;
-  run(input: unknown): Promise<
-    EventEmitter & {
-      onUpdate(callback: (data: string) => void): {
-        await: () => Promise<void>;
-      };
-      onUpdate(callback: (data: { outputArray: Int16Array }) => void): {
-        await: () => Promise<void>;
-      };
-      onError(callback: (error: Error) => void): void;
-      onUpdate(callback: (data: Array<{ text: string }>) => void): {
-        await: () => Promise<void>;
-      };
-      cancel(): Promise<void>;
-      iterate(): AsyncIterableIterator<string | Array<{ text: string }>>;
-      await(): Promise<void>;
-    }
-  >;
+// BaseInference provides: load, run (returns QvacResponse), unload, destroy, pause, unpause, stop, status
+export type AnyModel = Omit<BaseInference, "addon"> & {
   reload?(config: unknown): Promise<void>;
-  unload?(): Promise<void>;
-  addon?: AddonInterface; // Just included for the cancel method, should be removed when cancel is included directly on the model
-}
+  addon?: AddonInterface;
+};
 
 interface DelegateOptions {
   topic: string;
@@ -50,7 +31,7 @@ interface LocalOptions {
   path: string;
   loadedAt: Date;
   config: unknown;
-  modelType: ModelType;
+  modelType: CanonicalModelType;
   name?: string | undefined;
   loader: FilesystemDL;
 }
@@ -72,7 +53,7 @@ export function registerModel(
         model: AnyModel;
         path: string;
         config: unknown;
-        modelType: ModelType;
+        modelType: CanonicalModelType;
         loader: FilesystemDL;
         name?: string | undefined;
       }

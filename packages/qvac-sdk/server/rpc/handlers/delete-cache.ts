@@ -1,5 +1,5 @@
 import type { DeleteCacheRequest, DeleteCacheResponse } from "@/schemas";
-import { deleteCache as deleteCacheUtil } from "@/server/bare/addons/llamacpp/kv-cache-utils";
+import { deleteCache as deleteCacheUtil } from "@/server/bare/addons/llamacpp-completion";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();

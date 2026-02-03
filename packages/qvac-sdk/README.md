@@ -135,11 +135,12 @@ try {
 - Translation: between different languages.
 - Text-to-Speech: TTS via ONNX.
 - Multimodal: via [`llama.cpp`] — i.e., process and understand multiple types of media within the same conversation context.
-- RAG: out-of-the-box retrieval-augmented generation workflow.
+- RAG: retrieval-augmented generation with progress streaming, cancellation, and workspace management.
 - Delegated inference: perform peer-to-peer edge inference via Holepunch stack.
 
 ### Utilities
 
+- Configuration: customize SDK behavior via config files (`qvac.config.json`, `.js`, or `.ts`).
 - Logging: visibility into what's happening inside your models during loading, inference, and other operations.
 - Download Lifecycle: pause and resume model downloads.
 - Blind Relays: establish peer connections through NAT/firewalls by routing traffic through relay nodes.
@@ -180,11 +181,19 @@ bun run examples/path/to/example.ts
 ### Embeddings
 
 - Single and batch embeddings: [`examples/embed-hyperdrive.ts`](examples/embed-hyperdrive.ts)
-- RAG with HyperDB: [`examples/rag/rag-hyperdb.ts`](examples/rag/rag-hyperdb.ts)
-- RAG with workspaces: [`examples/rag/rag-hyperdb-workspaces.ts`](examples/rag/rag-hyperdb-workspaces.ts) _(Demonstrates workspace isolation and chunking)_
-- RAG with LanceDB (desktop only): [`examples/rag/rag-lancedb.ts`](examples/rag/rag-lancedb.ts)
-- RAG with ChromaDB (desktop only): [`examples/rag/rag-chromadb.ts`](examples/rag/rag-chromadb.ts) _(Note: Requires ChromaDB server running)_
-- RAG with SQLite-Vector (desktop only): [`examples/rag/rag-sqlite.ts`](examples/rag/rag-sqlite.ts) _(Note: Uses SQLite-Vector WASM)_
+
+**RAG with HyperDB** (cross-platform):
+
+- Ingest (full pipeline): [`examples/rag/rag-hyperdb/ingest.ts`](examples/rag/rag-hyperdb/ingest.ts)
+- Segregated pipeline: [`examples/rag/rag-hyperdb/pipeline.ts`](examples/rag/rag-hyperdb/pipeline.ts) _(Segregated flow: chunk → embed → save)_
+- Workspaces: [`examples/rag/rag-hyperdb/workspaces.ts`](examples/rag/rag-hyperdb/workspaces.ts) _(Workspace lifecycle: list, close, delete)_
+- Cancellation: [`examples/rag/rag-hyperdb/cancellation.ts`](examples/rag/rag-hyperdb/cancellation.ts) _(progress + cancel)_
+
+**RAG with other backends** (desktop only):
+
+- LanceDB: [`examples/rag/rag-lancedb.ts`](examples/rag/rag-lancedb.ts)
+- ChromaDB: [`examples/rag/rag-chromadb.ts`](examples/rag/rag-chromadb.ts) _(requires ChromaDB server)_
+- SQLite-Vector: [`examples/rag/rag-sqlite.ts`](examples/rag/rag-sqlite.ts) _(SQLite-Vector WASM)_
 
 ### Translation
 
@@ -232,6 +241,29 @@ for await (const log of loggingStream({ id: modelId })) {
 - Log streaming: [`examples/logging-streaming.ts`](examples/logging-streaming.ts)
 - Log with custom file transport: [`examples/logging-file-transport.ts`](examples/logging-file-transport.ts)
 
+### Configuration
+
+Customize SDK behavior using a config file. The SDK auto-discovers `qvac.config.{json,js,ts}` in your project root, or you can specify a path via `QVAC_CONFIG_PATH` environment variable.
+
+**Supported formats:**
+
+- `qvac.config.json` - JSON format
+- `qvac.config.js` - JavaScript with `export default`
+- `qvac.config.ts` - TypeScript with `export default`
+
+**Available options:**
+
+| Option                    | Type       | Default          | Description                                         |
+| ------------------------- | ---------- | ---------------- | --------------------------------------------------- |
+| `cacheDirectory`          | `string`   | `~/.qvac/models` | Where models and assets are stored                  |
+| `swarmRelays`             | `string[]` | `[]`             | Hyperswarm relay public keys for P2P                |
+| `loggerLevel`             | `string`   | `"info"`         | Log level: `"error"`, `"warn"`, `"info"`, `"debug"` |
+| `loggerConsoleOutput`     | `boolean`  | `true`           | Enable/disable console output                       |
+| `httpDownloadConcurrency` | `number`   | `3`              | Max concurrent HTTP downloads for sharded models    |
+| `httpConnectionTimeoutMs` | `number`   | `10000`          | HTTP connection timeout in milliseconds             |
+
+- Config usage example: [`examples/default-config-usage.ts`](examples/default-config-usage.ts)
+
 ### Download Lifecycle
 
 - Pause and resume download: [`examples/download-with-cancel.ts`](examples/download-with-cancel.ts)
@@ -241,18 +273,23 @@ for await (const log of loggingStream({ id: modelId })) {
 Blind relays help establish peer connections through NAT/firewalls by routing traffic through relay nodes.
 
 - Model downloads via Hyperdrive: [`examples/download-with-blind-relays.ts`](./examples/download-with-blind-relays.ts)
-- Delegated inference: You can reuse the same pattern for delegated inference by calling `setConfig({ swarmRelays: [...relayPublicKeys] })` before starting your provider/consumer.
+- Delegated inference: You can reuse the same pattern for delegated inference by adding `swarmRelays` to your config file before starting your provider/consumer.
 
 > [!NOTE]
 > The examples use mock relay keys. For real deployments, you **must** use your own relay servers or trusted public relays.
 
 ### Sharded Models
 
-- Load sharded models from Hyperdrive: [`examples/llamacpp-sharded.ts`](examples/llamacpp-sharded.ts)
-- Load models from local filesystem: [`examples/llamacpp-filesystem.ts`](examples/llamacpp-filesystem.ts)
+Sharded models are split into multiple files following the pattern: `<name>-00001-of-0000X.<ext>`. The SDK automatically downloads and loads all parts with detailed progress tracking.
 
-> [!NOTE]
-> Sharded models automatically download all parts sequentially with detailed progress tracking per shard. For local sharded models, pass the path to the first shard file (e.g., `model-00001-of-00005.gguf`), and remaining shards will be loaded automatically.
+**Supported formats:**
+
+- Archives (`.tar`, `.tar.gz`, `.tgz`): HTTP or local with automatic extraction
+- HTTP sharded URL: pass the download URL of any shard and the SDK will fetch the remaining shards
+- Hyperdrive: use any sharded Hyperdrive model source
+- Local shards: pass the path to any shard file. _(Note: All shards must be in the same directory)_
+
+See: [`examples/llamacpp-sharded.ts`](examples/llamacpp-sharded.ts)
 
 ## Basic flow
 

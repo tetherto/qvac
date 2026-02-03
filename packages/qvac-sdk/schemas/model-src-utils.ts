@@ -1,13 +1,8 @@
 import { z } from "zod";
+import { modelTypeInputSchema } from "./model-types";
 
-export const MODEL_TYPES = [
-  "llm",
-  "whisper",
-  "embeddings",
-  "nmt",
-  "tts",
-] as const;
-export type ModelType = (typeof MODEL_TYPES)[number];
+// Addon field accepts model type inputs plus "vad"
+const addonSchema = z.union([modelTypeInputSchema, z.literal("vad")]);
 
 export const modelDescriptorSchema = z.object({
   src: z.string(),
@@ -17,7 +12,7 @@ export const modelDescriptorSchema = z.object({
   hyperbeeKey: z.string().optional(),
   expectedSize: z.number().optional(),
   sha256Checksum: z.string().optional(),
-  addon: z.enum([...MODEL_TYPES, "vad"]).optional(),
+  addon: addonSchema.optional(),
 });
 
 export const modelSrcInputSchema = z.union([z.string(), modelDescriptorSchema]);

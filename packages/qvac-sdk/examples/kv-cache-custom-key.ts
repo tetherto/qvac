@@ -23,7 +23,7 @@ try {
     modelConfig: {
       device: "gpu",
       ctx_size: 2048,
-      verbosity: VERBOSITY.ERROR,
+      verbosity: VERBOSITY.DEBUG,
     },
   });
 
@@ -105,6 +105,31 @@ try {
 
   console.log(
     `\n   Stats: TTFT=${stats3?.timeToFirstToken}ms, CacheTokens=${stats3?.cacheTokens}\n`,
+  );
+
+  // Prompt 4: Go back to session-a to trigger flush of session-b
+  console.log(
+    '\n📝 Prompt 4: "What is 5+5?" with cache key "session-a" (BACK TO FIRST)',
+  );
+  console.log(
+    "   Status: This should trigger session-b to be flushed to disk\n",
+  );
+
+  const result4 = completion({
+    modelId,
+    history: [systemPromptMessage, { role: "user", content: "What is 5+5?" }],
+    stream: true,
+    kvCache: "session-a", // Back to session-a!
+  });
+
+  console.log("   Response: ");
+  for await (const token of result4.tokenStream) {
+    process.stdout.write(token);
+  }
+
+  const stats4 = await result4.stats;
+  console.log(
+    `\n   Stats: TTFT=${stats4?.timeToFirstToken}ms, CacheTokens=${stats4?.cacheTokens}\n`,
   );
 
   // Summary
