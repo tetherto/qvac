@@ -230,7 +230,6 @@ jobs:
           set -eu
 
           {
-            echo "always-auth=true"
             echo "registry=https://registry.npmjs.org/"
             echo "@qvac:registry=https://registry.npmjs.org/"
             echo "@tetherto:registry=https://npm.pkg.github.com/"

@@ -77,7 +77,6 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/

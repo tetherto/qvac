@@ -77,7 +77,6 @@ jobs:
         working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}

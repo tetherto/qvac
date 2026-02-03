@@ -126,7 +126,6 @@ jobs:
 
           # addon repo root
           cat > "${GITHUB_WORKSPACE}/${ADDON_REPO_DIR}/.npmrc" <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -137,7 +136,6 @@ jobs:
           # addon package workdir (critical for 'run under inputs.workdir')
           mkdir -p "${GITHUB_WORKSPACE}/${ADDON_WORKDIR}"
           cat > "${GITHUB_WORKSPACE}/${ADDON_WORKDIR}/.npmrc" <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -147,7 +145,6 @@ jobs:
 
           # test-framework
           cat > "${GITHUB_WORKSPACE}/test-framework/.npmrc" <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
