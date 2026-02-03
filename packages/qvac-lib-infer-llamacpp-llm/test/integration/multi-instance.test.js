@@ -152,22 +152,17 @@ test('Unloading one instance does not affect another generating instance', {
   const chunks = []
   let unloadedInstance2 = false
 
-  await new Promise((resolve, reject) => {
-    response1
-      .onUpdate(async data => {
-        chunks.push(data)
-        if (!unloadedInstance2 && chunks.length >= 3) {
-          unloadedInstance2 = true
-          await addon2.unload()
-          await loader2.close()
-          t.pass('unloaded instance 2 while instance 1 is generating')
-        }
-      })
-      .onError(reject)
-      .await()
-      .then(resolve)
-      .catch(reject)
-  })
+  await response1
+    .onUpdate(data => {
+      chunks.push(data)
+      if (!unloadedInstance2 && chunks.length >= 3) {
+        unloadedInstance2 = true
+        addon2.unload()
+          .then(() => loader2.close())
+          .then(() => t.pass('unloaded instance 2 while instance 1 is generating'))
+      }
+    })
+    .await()
 
   const output1 = chunks.join('').trim()
   t.ok(output1.length > 0, 'instance 1 completed generation after instance 2 was unloaded')
@@ -198,24 +193,22 @@ test('Multiple load/unload cycles on one instance while another generates', {
   let cyclesCompleted = 0
   const NUM_CYCLES = 3
 
-  await new Promise((resolve, reject) => {
-    response1
-      .onUpdate(async data => {
-        chunks.push(data)
-        if (cyclesCompleted < NUM_CYCLES && chunks.length % 10 === 0) {
-          const { addon: addon2, loader: loader2 } = await createInstance(modelName, dirPath)
-          await addon2.load()
-          await addon2.unload()
-          await loader2.close()
-          cyclesCompleted++
-          t.pass(`load/unload cycle ${cyclesCompleted} completed while instance 1 generates`)
-        }
-      })
-      .onError(reject)
-      .await()
-      .then(resolve)
-      .catch(reject)
-  })
+  await response1
+    .onUpdate(data => {
+      chunks.push(data)
+      if (cyclesCompleted < NUM_CYCLES && chunks.length % 10 === 0) {
+        cyclesCompleted++
+        const cycleNum = cyclesCompleted
+        createInstance(modelName, dirPath)
+          .then(({ addon: addon2, loader: loader2 }) =>
+            addon2.load()
+              .then(() => addon2.unload())
+              .then(() => loader2.close())
+          )
+          .then(() => t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`))
+      }
+    })
+    .await()
 
   const output1 = chunks.join('').trim()
   t.ok(output1.length > 0, 'instance 1 completed generation')
