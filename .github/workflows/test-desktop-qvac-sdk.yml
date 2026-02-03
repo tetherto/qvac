@@ -138,6 +138,52 @@ jobs:
             npm install
           fi
           npm install -g bare bare-make
+
+      - name: Ensure SDK types exist (build SDK if needed)
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+
+          SDK_DIR="$(cd .. && pwd)"
+          TYPES_FILE="${SDK_DIR}/dist/index.d.ts"
+
+          echo "SDK_DIR=${SDK_DIR}"
+          echo "Checking for SDK types at: ${TYPES_FILE}"
+
+          if [ -f "${TYPES_FILE}" ]; then
+            echo "✅ SDK types already present"
+            exit 0
+          fi
+
+          echo "⚠️ SDK types missing; building SDK to generate dist/*.d.ts"
+
+          # Build the SDK using whatever lockfile exists
+          cd "${SDK_DIR}"
+
+          if [ -f bun.lock ] || [ -f bun.lockb ]; then
+            # Ensure bun exists on the runner (Node setup does not install bun)
+            if ! command -v bun >/dev/null 2>&1; then
+              echo "Installing bun..."
+              curl -fsSL https://bun.sh/install | bash
+              export BUN_INSTALL="$HOME/.bun"
+              export PATH="$BUN_INSTALL/bin:$PATH"
+            fi
+
+            bun install
+            bun run build
+          else
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+            npm run build
+          fi
+
+          test -f "${TYPES_FILE}"
+          echo "✅ SDK types generated"
+
       
       - name: Debug file dependency target
         shell: bash
