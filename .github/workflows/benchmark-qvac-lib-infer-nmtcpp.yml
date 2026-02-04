@@ -1,4 +1,4 @@
-name: Translation Quality Evaluation (Qvac-lib-infer-nmtcpp)
+name: Benchmark (NMTCPP)
 
 on:
   workflow_dispatch:

@@ -1,0 +1,213 @@
+name: "🐛 SDK Bug Report"
+description: "Report a bug or unexpected behavior in the SDK"
+title: "[Bug]: "
+labels: ["bug", "triage", "SDK"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before submitting
+
+        - Search existing issues to avoid duplicates
+        - Ensure you're using a supported SDK version
+        - Check the [documentation](https://docs.qvac.tether.io/) for correct usage
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "🐛 Bug Description"
+      description: "A clear and concise description of what the bug is."
+      placeholder: "Describe what happened vs. what you expected to happen."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: "🔄 Steps to Reproduce"
+      description: "Minimal steps to reproduce the behavior. The more specific, the faster we can help."
+      placeholder: |
+        1. Initialize SDK with `...`
+        2. Call `loadModel(...)` with params `...`
+        3. Execute `...`
+        4. See error
+
+        ```typescript
+        // Minimal code to reproduce
+        import { init, loadModel } from "@qvac/sdk";
+
+        const sdk = await init();
+        const modelId = await loadModel("...");
+        // Bug occurs here
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "✅ Expected Behavior"
+      description: "What did you expect to happen?"
+      placeholder: "The model should load successfully and return a valid modelId."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "❌ Actual Behavior"
+      description: "What actually happened?"
+      placeholder: "The SDK throws an error after 30 seconds with message '...'"
+    validations:
+      required: true
+
+  - type: textarea
+    id: stacktrace
+    attributes:
+      label: "📜 Stack Trace / Error Output"
+      description: "Full error message and stack trace (auto-formatted as code)."
+      render: shell
+      placeholder: |
+        Error: ModelLoadFailedError [52201]: Failed to load model
+            at loadModel (/node_modules/@qvac/sdk/dist/index.js:123:45)
+            at async main (/app/index.ts:10:5)
+        Caused by: Error: ENOENT: no such file or directory
+            at Object.openSync (fs.js:476:3)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: "💻 Platform / OS"
+      description: "What platform are you running on?"
+      options:
+        - "macOS (Apple Silicon)"
+        - "macOS (Intel)"
+        - "Linux (x64)"
+        - "Linux (ARM64)"
+        - "Windows (x64)"
+        - "iOS (Expo)"
+        - "Android (Expo)"
+        - "Other (specify in additional context)"
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: "🖥️ OS Version"
+      description: "Specific OS version (e.g., macOS 14.2, Ubuntu 22.04, Windows 11)"
+      placeholder: "macOS 14.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: "⚙️ Runtime Environment"
+      description: "What runtime are you using?"
+      options:
+        - "Node.js"
+        - "Bun"
+        - "Expo (React Native)"
+        - "Bare"
+        - "Other (specify in additional context)"
+    validations:
+      required: true
+
+  - type: input
+    id: runtime-version
+    attributes:
+      label: "📦 Runtime Version"
+      description: "Version of your runtime (e.g., Node 20.10.0, Bun 1.1.0)"
+      placeholder: "Node 20.10.0"
+    validations:
+      required: true
+
+  - type: input
+    id: sdk-version
+    attributes:
+      label: "🏷️ SDK Version"
+      description: "Version of @qvac/sdk you're using"
+      placeholder: "0.5.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: "📋 Relevant Dependencies"
+      description: "List relevant dependency versions (if applicable)"
+      render: json
+      placeholder: |
+        {
+          "@qvac/sdk": "0.5.0",
+          "typescript": "5.3.0",
+          "other-relevant-package": "1.2.3"
+        }
+    validations:
+      required: false
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: "🔁 Frequency"
+      description: "How often does this bug occur?"
+      options:
+        - "Always (100%)"
+        - "Often (>50%)"
+        - "Sometimes (<50%)"
+        - "Rarely (<10%)"
+        - "Once (unable to reproduce)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "🔥 Severity"
+      description: "How severe is the impact?"
+      options:
+        - "Critical - Complete blocker, no workaround"
+        - "High - Major functionality broken"
+        - "Medium - Feature impaired but workaround exists"
+        - "Low - Minor inconvenience"
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: "🩹 Workaround"
+      description: "If you found a workaround, please share it."
+      placeholder: "Describe any workaround you've found..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "📎 Additional Context"
+      description: "Any other context, screenshots, logs, or configuration details?"
+      placeholder: |
+        - SDK config used
+        - Model being loaded
+        - Network conditions
+        - Screenshots/recordings
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "✅ Checklist"
+      description: "Please confirm the following:"
+      options:
+        - label: "I have searched existing issues for duplicates"
+          required: true
+        - label: "I have included a minimal reproduction"
+          required: true
+        - label: "I am using a supported SDK version"
+          required: true
+

@@ -1,4 +1,4 @@
-name: "cpp-tests (Qvac-lib-infer-llamacpp-llm)"
+name: CPP Tests (LLM)
 
 on:
   workflow_dispatch:

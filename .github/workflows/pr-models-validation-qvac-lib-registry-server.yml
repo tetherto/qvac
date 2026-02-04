@@ -7,7 +7,7 @@
 # - Trigger: push to main with paths: ['data/models.prod.json']
 # - Secrets: QVAC_AUTOBASE_KEY_PROD, QVAC_REGISTRY_CORE_KEY_PROD, separate writer keys
 
-name: PR Validation and Staging Sync (Qvac-lib-registry-server)
+name: PR Validation and Staging Sync (Registry-server)
 
 on:
   pull_request_target:
@@ -111,6 +111,15 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
+
+      - name: Configure npm for private packages
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}

@@ -1,4 +1,4 @@
-name: Unpublish GPR Package Versions (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Unpublish GPR (OCR)
 on:
   pull_request:
     types:

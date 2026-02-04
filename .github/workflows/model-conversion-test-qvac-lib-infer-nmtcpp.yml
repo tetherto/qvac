@@ -1,4 +1,4 @@
-name: Model Conversion Test (Qvac-lib-infer-nmtcpp)
+name: Model Conversion Test (NMTCPP)
 
 on:
   workflow_call:

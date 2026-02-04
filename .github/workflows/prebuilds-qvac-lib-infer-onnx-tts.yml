@@ -1,4 +1,4 @@
-name: "Prebuilds (TTS)"
+name: Prebuilds (TTS)
 
 on:
   push:

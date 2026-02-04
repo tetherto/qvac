@@ -1,4 +1,4 @@
-name: Unpublish GPR Package Versions (Qvac-lib-infer-nmtcpp)
+name: Unpublish GPR (NMTCPP)
 
 on:
   workflow_dispatch:

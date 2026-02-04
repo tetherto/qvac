@@ -1,4 +1,4 @@
-name: "Benchmark (Qvac-lib-infer-llamacpp-embed)"
+name: Benchmark (Embed)
 
 on:
   workflow_dispatch:

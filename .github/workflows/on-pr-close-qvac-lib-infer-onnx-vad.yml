@@ -1,4 +1,4 @@
-name: Unpublish GPR Package Versions (Qvac-lib-infer-onnx-vad)
+name: Unpublish GPR (VAD)
 on:
   pull_request:
     types:

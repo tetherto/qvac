@@ -1,4 +1,4 @@
-name: Benchmark  (Qvac-lib-infer-whispercpp)
+name: Benchmark (Whispercpp)
 
 on:
   workflow_dispatch:

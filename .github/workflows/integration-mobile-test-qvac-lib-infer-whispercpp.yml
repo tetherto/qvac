@@ -1,4 +1,4 @@
-name: Run Mobile Integration Tests (Qvac-lib-infer-whispercpp)
+name: Mobile Integration Tests (Whispercpp)
 
 on:
   workflow_call:

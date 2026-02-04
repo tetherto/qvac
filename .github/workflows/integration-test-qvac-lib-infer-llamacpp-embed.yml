@@ -1,28 +1,13 @@
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: Integration Tests (Embed)
+name: Integration Tests (EMBED)
 
 on:
   workflow_call:
     inputs:
       ref:
-        description: "Git ref to checkout"
+        description: "ref"
         type: string
-        required: false
       repository:
-        description: "Repository to checkout"
         type: string
-        required: false
-      prebuild_package:
-        description: "Optional NPM package containing prebuilds (e.g. @qvac/embed-llamacpp@1.0.0). If empty, workflow downloads artifacts."
-        type: string
-        required: false
-        default: ""
-      workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
-
   workflow_dispatch:
     inputs:
       ref:
@@ -34,14 +19,6 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/embed-llamacpp@1.0.0)"
         type: string
         required: true
-      workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-llamacpp-embed)"
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
-
-env:
-  NODE_VERSION: "lts/*"
 
 jobs:
   run-integration-tests:
@@ -50,10 +27,15 @@ jobs:
     permissions:
       contents: read
       packages: read
+
+    env:
+      WORKDIR: packages/qvac-lib-infer-llamacpp-embed
+
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
           - os: ubuntu-22.04
             platform: linux
             arch: x64
@@ -84,7 +66,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: lts/*
 
       - name: Linux glibcxx
         if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
@@ -98,26 +80,26 @@ jobs:
         shell: powershell
         run: git config --system core.longpaths true
 
-      - name: Checkout monorepo
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
-          echo "Writing .npmrc in workdir: ${{ inputs.workdir }}"
-          mkdir -p "${{ inputs.workdir }}"
-          cat > "${{ inputs.workdir }}/.npmrc" <<NPMRC
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -125,37 +107,42 @@ jobs:
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
+          # Optional: make private git deps work without prompting
           if [ -n "${GIT_PAT:-}" ]; then
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
           else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           fi
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path "${{ inputs.workdir }}" | Out-Null
+          echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
+          echo "Writing .npmrc for dual registry install…"
           @"
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
           //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
-          "@ | Out-File -FilePath "${{ inputs.workdir }}\.npmrc" -Encoding utf8
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
 
+          # Optional: make private git deps work without prompting
           if ($env:GIT_PAT) {
             git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
           } else {
             git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           }
+        shell: powershell
 
       - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
           npm install -g bare bare-make
@@ -164,85 +151,107 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@v4
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
-        working-directory: ${{ inputs.workdir }}
         run: |
-          set -eu
           PACKAGE="${{ inputs.prebuild_package }}"
           echo "Downloading $PACKAGE from npm..."
 
-          if ! npm pack "$PACKAGE"; then
+          # Download package from npm with error handling
+          if ! npm pack $PACKAGE; then
             echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
             exit 1
           fi
 
+          # Extract the tarball
           tar -xzf *.tgz
 
+          # Validate prebuilds directory exists
           if [ ! -d "package/prebuilds" ]; then
             echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
             exit 1
           fi
 
-          rm -rf ./prebuilds 2>/dev/null || true
+          # Move prebuilds to expected location
           mv package/prebuilds ./prebuilds
 
+          # Cleanup
           rm -rf package *.tgz
-          echo "Prebuilds downloaded:"
+
+          echo "Prebuilds downloaded from npm successfully"
           ls -la prebuilds/
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
         shell: powershell
-        working-directory: ${{ inputs.workdir }}
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
+
           echo "Downloading $PACKAGE from npm..."
+
+          # Download package from npm with error handling
           npm pack $PACKAGE
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-
-          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
-          if (-not $TARBALL) { exit 1 }
-
-          tar -xzf $TARBALL
-
-          if (-not (Test-Path "package/prebuilds")) {
-            echo "ERROR: No prebuilds directory found in package"
+          if ($LASTEXITCODE -ne 0) {
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
             exit 1
           }
 
-          if (Test-Path "prebuilds") { Remove-Item -Recurse -Force prebuilds }
+          # Find the downloaded tarball
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) {
+            echo "ERROR: Could not find downloaded tarball"
+            exit 1
+          }
+
+          echo "Extracting $TARBALL..."
+          tar -xzf $TARBALL
+
+          # Validate prebuilds directory exists
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          }
+
+          # Move prebuilds to expected location
           Move-Item package/prebuilds ./prebuilds
 
+          # Cleanup
           Remove-Item -Recurse -Force package
           Remove-Item $TARBALL
 
+          echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
       - name: Print run state
-        working-directory: ${{ inputs.workdir }}
         shell: bash
+        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "node version: $(node -v)"
           echo "npm version: $(npm -v)"
           echo "bare version: $(bare -v)"
           echo "bare-make version: $(bare-make --version)"
-          npm list || true
-          npm config list || true
+          npm list
+          npm config list
         continue-on-error: true
 
-      - name: Install gh cli for Linux runners (if needed)
+      - name: Install gh cli for ai-run-linux-gpu
         if: ${{ matrix.platform == 'linux' }}
         shell: bash
         run: |
           (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
             && sudo mkdir -p -m 755 /etc/apt/keyrings \
-            && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+                  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
             && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
             && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
             && sudo apt update \
@@ -250,31 +259,35 @@ jobs:
           gh --version
         continue-on-error: true
 
-      - name: Print run state (files)
-        working-directory: ${{ inputs.workdir }}
+      - name: Print run state
         shell: bash
+        working-directory: ${{ env.WORKDIR }}
         run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
           ls -la model/marian/vulkan/en-it/ || true
-          (command -v tree >/dev/null && tree model/marian/vulkan/en-it/ || true)
+          tree model/marian/vulkan/en-it/ || true
           ls -la prebuilds || true
-          (command -v tree >/dev/null && tree prebuilds || true)
+          tree prebuilds || true
         continue-on-error: true
 
       - name: Linux - install dependencies
-        if: ${{ matrix.platform == 'linux' || matrix.platform == 'android' }}
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Windows - Install Vulkan
         if: ${{ matrix.platform == 'win32' }}
-        shell: powershell
-        timeout-minutes: 40
         run: |
           $ProgressPreference = 'SilentlyContinue'
           Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+        shell: powershell
+        timeout-minutes: 40
 
       - name: Run integration test
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}

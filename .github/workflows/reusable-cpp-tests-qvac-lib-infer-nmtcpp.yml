@@ -1,4 +1,4 @@
-name: C++ Tests with Coverage (QVAC Lib Infer NMTCpp)
+name: C++ Tests with Coverage (NMTCPP)
 
 on:
   workflow_call:

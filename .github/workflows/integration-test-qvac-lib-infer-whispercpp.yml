@@ -7,32 +7,12 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
         required: true
         type: string
-      workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
-        required: true
-        default: "packages/qvac-lib-infer-whispercpp"
-        type: string
-
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
-        required: false
       repository:
-        type: string
-        required: false
-
-      # Optional here to preserve existing conditional logic safely
-      prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/transcription-whispercpp@1.0.0)"
-        required: false
-        type: string
-
-      workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)"
-        required: false
-        default: "packages/qvac-lib-infer-whispercpp"
         type: string
 
 jobs:
@@ -41,19 +21,19 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir }}
-      PREBUILD_PACKAGE: ${{ inputs.prebuild_package || github.event.inputs.prebuild_package || '' }}
-      REPO_DIR: repo
+      WORKDIR: packages/qvac-lib-infer-whispercpp
+
     permissions:
       contents: read
       packages: read
+
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
           - os: ubuntu-22.04
             platform: linux
             arch: x64
@@ -78,7 +58,7 @@ jobs:
 
       - name: Windows - enable git long paths
         if: ${{ matrix.platform == 'win32' }}
-        shell: bash
+        shell: powershell
         run: git config --system core.longpaths true
 
       - name: Checkout code
@@ -87,15 +67,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ env.REPO_DIR }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
-        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
@@ -117,26 +96,26 @@ jobs:
           fi
 
       - name: Install NPM dependencies
-        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
         run: |
           npm install
           npm install -g bare bare-make
 
       - name: Download prebuilds from artifact
-        if: ${{ env.PREBUILD_PACKAGE == '' }}
+        if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@v4
         with:
-          path: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}/prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
 
       - name: Download prebuilds from package
-        if: ${{ env.PREBUILD_PACKAGE != '' }}
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
-        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
         run: |
           mkdir -p prebuilds
-          npm pack "${PREBUILD_PACKAGE}" --pack-destination /tmp
-          rm -rf /tmp/package || true
+          npm pack "${{ inputs.prebuild_package }}" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
@@ -177,17 +156,16 @@ jobs:
           brew install --quiet openblas lapack fftw
 
       - name: Run integration test
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
-        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
         run: |
           npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Print run state
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
-        if: always()
-        working-directory: ${{ env.REPO_DIR }}/${{ env.WORKDIR }}
         run: |
           ls -la prebuilds || true
           tree prebuilds || true
