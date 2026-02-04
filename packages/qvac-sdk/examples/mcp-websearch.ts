@@ -10,12 +10,7 @@
  * Run with: bun run examples/mcp-websearch.ts
  */
 
-import {
-  completion,
-  loadModel,
-  unloadModel,
-  QWEN_3_1_7B_INST_Q4,
-} from "@/index";
+import { completion, loadModel, unloadModel, QWEN3_1_7B_Q4 } from "@/index";
 
 // MCP SDK is a user-installed optional dependency
 // Install with: bun add @modelcontextprotocol/sdk
@@ -109,7 +104,7 @@ try {
   // ============================================================
   console.log("2️⃣  Loading model...");
   const modelId = await loadModel({
-    modelSrc: QWEN_3_1_7B_INST_Q4,
+    modelSrc: QWEN3_1_7B_Q4,
     modelType: "llm",
     modelConfig: {
       ctx_size: 4096,

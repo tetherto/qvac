@@ -14,6 +14,11 @@ import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
 import { handleOCRStream } from "./ocr-stream";
+import {
+  handleQvacModelRegistryList,
+  handleQvacModelRegistrySearch,
+  handleQvacModelRegistryGetModel,
+} from "./registry";
 
 export const handlers = {
   completionStream: handleCompletionStream,
@@ -32,4 +37,7 @@ export const handlers = {
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
   ocrStream: handleOCRStream,
+  qvacModelRegistryList: handleQvacModelRegistryList,
+  qvacModelRegistrySearch: handleQvacModelRegistrySearch,
+  qvacModelRegistryGetModel: handleQvacModelRegistryGetModel,
 };

@@ -22,6 +22,7 @@ import {
   ModelNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { OCR_OCR_DETECTOR } from "@/models/hyperdrive";
 
 const logger = getServerLogger();
 
@@ -85,7 +86,26 @@ export async function handleLoadModel(
     }
 
     let ttsConfigModelPath: string | undefined;
-    if (configSrc) {
+    if (canonicalModelType === ModelType.onnxTts) {
+      if (configSrc) {
+        ttsConfigModelPath = await resolveModelPath(
+          configSrc,
+          progressCallback,
+          seed,
+        );
+      } else if (modelSrc.startsWith("registry://")) {
+        // Registry: config is the model path + ".json"
+        // e.g., registry://hf/path/model.onnx -> registry://hf/path/model.onnx.json
+        const derivedConfigSrc = `${modelSrc}.json`;
+        logger.info(`Auto-deriving TTS config from: ${derivedConfigSrc}`);
+        ttsConfigModelPath = await resolveModelPath(
+          derivedConfigSrc,
+          progressCallback,
+          seed,
+        );
+      }
+    } else if (configSrc) {
+      // For non-TTS models, still resolve configSrc if provided
       ttsConfigModelPath = await resolveModelPath(
         configSrc,
         progressCallback,
@@ -93,7 +113,7 @@ export async function handleLoadModel(
       );
     }
 
-    // For OCR models: use provided detectorModelSrc or auto-derive from same hyperdrive key
+    // For OCR models: use provided detectorModelSrc or auto-derive
     let detectorModelPath: string | undefined;
     if (canonicalModelType === ModelType.onnxOcr) {
       if (detectorModelSrc) {
@@ -107,6 +127,12 @@ export async function handleLoadModel(
         const derivedDetectorSrc = `pear://${key}/${OCR_DETECTOR_FILENAME}`;
         detectorModelPath = await resolveModelPath(
           derivedDetectorSrc,
+          progressCallback,
+          seed,
+        );
+      } else if (modelSrc.startsWith("registry://")) {
+        detectorModelPath = await resolveModelPath(
+          OCR_OCR_DETECTOR,
           progressCallback,
           seed,
         );

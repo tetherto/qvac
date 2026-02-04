@@ -2,8 +2,8 @@ import {
   loadModel,
   textToSpeech,
   unloadModel,
-  TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM,
-  TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG,
+  TTS_PIPER_VOICES_4,
+  TTS_PIPER_VOICES_5,
 } from "@qvac/sdk";
 import { writeFileSync, unlinkSync } from "fs";
 import { spawnSync } from "child_process";
@@ -21,9 +21,9 @@ if (!eSpeakDataPath) {
 
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM,
+    modelSrc: TTS_PIPER_VOICES_4,
     modelType: "tts",
-    configSrc: TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG,
+    configSrc: TTS_PIPER_VOICES_5,
     eSpeakDataPath,
     modelConfig: {
       language: "en",

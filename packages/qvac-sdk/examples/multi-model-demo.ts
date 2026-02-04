@@ -2,13 +2,13 @@ import {
   completion,
   LLAMA_3_2_1B_INST_Q4_0,
   loadModel,
-  QWEN_3_1_7B_INST_Q4,
+  QWEN3_1_7B_Q4,
   unloadModel,
 } from "@qvac/sdk";
 
 try {
   const alice = await loadModel({
-    modelSrc: QWEN_3_1_7B_INST_Q4,
+    modelSrc: QWEN3_1_7B_Q4,
     modelType: "llm",
     modelConfig: {
       ctx_size: 4096,

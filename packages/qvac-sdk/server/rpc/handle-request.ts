@@ -26,6 +26,11 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
+import {
+  handleQvacModelRegistryList,
+  handleQvacModelRegistrySearch,
+  handleQvacModelRegistryGetModel,
+} from "@/server/rpc/handlers/registry";
 import type RPC from "bare-rpc";
 import {
   sendErrorResponse,
@@ -359,6 +364,36 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
           stream.end();
         } catch (error) {
           sendStreamErrorResponse(stream, error);
+        }
+        break;
+      }
+
+      case "qvacModelRegistryList": {
+        try {
+          const response = await handleQvacModelRegistryList();
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
+        }
+        break;
+      }
+
+      case "qvacModelRegistrySearch": {
+        try {
+          const response = await handleQvacModelRegistrySearch(request);
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
+        }
+        break;
+      }
+
+      case "qvacModelRegistryGetModel": {
+        try {
+          const response = await handleQvacModelRegistryGetModel(request);
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
         }
         break;
       }

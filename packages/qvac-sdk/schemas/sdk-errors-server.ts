@@ -61,11 +61,12 @@ export const SDK_SERVER_ERROR_CODES = {
   DOWNLOAD_ASSET_FAILED: 53007,
   SEEDING_NOT_SUPPORTED: 53008,
   HYPERDRIVE_DOWNLOAD_FAILED: 53009,
-  INVALID_SHARD_URL_PATTERN: 53010,
-  ARCHIVE_EXTRACTION_FAILED: 53011,
-  ARCHIVE_UNSUPPORTED_TYPE: 53012,
-  ARCHIVE_MISSING_SHARDS: 53013,
-  PARTIAL_DOWNLOAD_OFFLINE: 53014,
+  REGISTRY_DOWNLOAD_FAILED: 53010,
+  INVALID_SHARD_URL_PATTERN: 53011,
+  ARCHIVE_EXTRACTION_FAILED: 53012,
+  ARCHIVE_UNSUPPORTED_TYPE: 53013,
+  ARCHIVE_MISSING_SHARDS: 53014,
+  PARTIAL_DOWNLOAD_OFFLINE: 53015,
 
   // Cache Operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -85,6 +86,10 @@ export const SDK_SERVER_ERROR_CODES = {
   // RPC/Delegation (Server-side) (53,700-53,899)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
+
+  // QVAC Model Registry Operations (53,900-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53900,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -324,6 +329,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "HYPERDRIVE_DOWNLOAD_FAILED",
     message: (details: string) => `Hyperdrive download failed: ${details}`,
   },
+  [SDK_SERVER_ERROR_CODES.REGISTRY_DOWNLOAD_FAILED]: {
+    name: "REGISTRY_DOWNLOAD_FAILED",
+    message: (details: string) => `Registry download failed: ${details}`,
+  },
   [SDK_SERVER_ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
     name: "INVALID_SHARD_URL_PATTERN",
     message: (url: string) =>
@@ -406,6 +415,14 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "DELEGATE_CONNECTION_FAILED",
     message: (details: string) =>
       `Failed to connect to delegated provider: ${details}`,
+  },
+
+  // QVAC Model Registry Operations (53,900-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED]: {
+    name: "QVAC_MODEL_REGISTRY_QUERY_FAILED",
+    message: (details?: string) =>
+      `QVAC model registry query failed${details ? `: ${details}` : ""}`,
   },
 };
 

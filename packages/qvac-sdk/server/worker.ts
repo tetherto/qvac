@@ -9,6 +9,7 @@ import { destroySwarm } from "@/server/bare/hyperswarm";
 import { closeAllRagInstances } from "@/server/bare/rag-hyperdb";
 import { cleanupDownloads } from "@/server/rpc/handlers/load-model/download-manager";
 import { unloadAllModels } from "@/server/bare/registry/model-registry";
+import { closeRegistryClient } from "@/server/bare/registry/registry-client";
 import {
   clearAllLoggingStreams,
   startLogBuffering,
@@ -146,6 +147,7 @@ async function shutdownHandler() {
       closeAllRagInstances(),
       cleanupDownloads(),
       unloadAllModels(),
+      closeRegistryClient(),
     ]);
     logger.info("✅ Cleanup completed successfully");
   } catch (error) {
