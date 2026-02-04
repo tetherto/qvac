@@ -1,4 +1,4 @@
-name: Benchmark (Qvac-lib-infer-onnx-tts)
+name: Benchmark (TTS)
 
 on:
   workflow_dispatch:

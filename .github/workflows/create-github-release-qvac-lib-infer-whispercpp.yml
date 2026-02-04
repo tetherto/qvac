@@ -1,4 +1,4 @@
-name: "Create GitHub Release (Qvac-lib-infer-whispercpp)"
+name: Create GitHub Release (Whispercpp)
 
 on:
   workflow_call:

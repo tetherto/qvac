@@ -1,4 +1,4 @@
-name: Run Mobile Integration Tests
+name: Mobile Integration Tests (TTS)
 
 on:
   workflow_call:

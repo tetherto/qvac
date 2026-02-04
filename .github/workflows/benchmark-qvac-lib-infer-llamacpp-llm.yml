@@ -1,4 +1,4 @@
-name: "Benchmark Suite (Qvac-lib-infer-llamacpp-llm)"
+name: Benchmark (LLM)
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Delete NPM Versions (qvac-lib-infer-llamacpp-embed)
+name: Delete NPM Versions (Embed)
 
 on:
   pull_request:

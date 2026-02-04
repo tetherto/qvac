@@ -1,4 +1,4 @@
-name: Run Mobile Integration Tests (Qvac-lib-infer-llamacpp-embed)
+name: Mobile Integration Tests (Embed)
 on:
   workflow_call:
     inputs:
@@ -1072,7 +1072,7 @@ jobs:
           echo "Run Name: $RUN_NAME"
           
           RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}" \
             --device-pool-arn "$POOL_ARN" \
             --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
             --name "$RUN_NAME" \

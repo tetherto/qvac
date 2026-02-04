@@ -1,4 +1,4 @@
-name: "Prebuilds (Embed)"
+name: Prebuilds (Embed)
 
 on:
   workflow_dispatch:

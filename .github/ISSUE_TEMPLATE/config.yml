@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💬 Discussions"
+    url: https://github.com/tether/qvac/discussions
+    about: "Ask questions, share ideas, or discuss Qvac usage"
+  - name: "📖 Documentation"
+    url: https://docs.qvac.tether.io/
+    about: "Check the docs before opening an issue"
+

@@ -1,4 +1,4 @@
-name: Create GitHub Release (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Create GitHub Release (OCR)
 
 on:
   workflow_call:

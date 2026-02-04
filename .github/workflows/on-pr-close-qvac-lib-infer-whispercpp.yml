@@ -1,4 +1,4 @@
-name: Delete NPM Versions (Qvac-lib-infer-whispercpp)
+name: Delete NPM Versions (Whispercpp)
 
 on:
   pull_request:

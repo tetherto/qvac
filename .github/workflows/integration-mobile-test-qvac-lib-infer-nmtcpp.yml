@@ -1,4 +1,4 @@
-name: Run Mobile Integration Tests (Qvac-lib-infer-nmtcpp)
+name: Mobile Integration Tests (NMTCPP)
 
 on:
   workflow_call:
