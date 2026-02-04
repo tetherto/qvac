@@ -13,12 +13,19 @@ export {
   embed,
   translate,
   cancel,
+  ragChunk,
+  ragIngest,
   ragSaveEmbeddings,
   ragSearch,
   ragDeleteEmbeddings,
+  ragReindex,
+  ragListWorkspaces,
+  ragCloseWorkspace,
+  ragDeleteWorkspace,
   textToSpeech,
   getModelInfo,
   loggingStream,
+  ocr,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -36,6 +43,15 @@ export {
   type CompletionParams,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
+  type RagReindexResult,
+  type RagEmbeddedDoc,
+  type RagDoc,
+  type RagWorkspaceInfo,
+  type RagCloseWorkspaceParams,
+  type RagDeleteWorkspaceParams,
+  type RagIngestStage,
+  type RagReindexStage,
+  type RagSaveStage,
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES,
   type QvacConfig,
@@ -46,9 +62,15 @@ export {
   toolSchema,
   type McpClient,
   type McpClientInput,
+  type OCRClientParams,
+  type OCRTextBlock,
+  type OCROptions,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
+
+// Model types - canonical naming with backward-compatible aliases
+export { PUBLIC_MODEL_TYPES as MODEL_TYPES } from "./schemas";
 
 // Hyperdrive model constants
 export * from "./models/hyperdrive";

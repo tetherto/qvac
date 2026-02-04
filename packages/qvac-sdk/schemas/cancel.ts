@@ -18,9 +18,15 @@ const cancelDownloadParamsSchema = z.object({
   clearCache: z.boolean().optional(),
 });
 
+const cancelRagParamsSchema = z.object({
+  operation: z.literal("rag"),
+  workspace: z.string().optional(),
+});
+
 const cancelParamsSchema = z.discriminatedUnion("operation", [
   cancelInferenceParamsSchema,
   cancelDownloadParamsSchema,
+  cancelRagParamsSchema,
 ]);
 
 export const cancelRequestSchema = z.intersection(

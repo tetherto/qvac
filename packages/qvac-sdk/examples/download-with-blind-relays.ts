@@ -1,12 +1,10 @@
 // Set config path before importing SDK - the SDK loads config during initialization
 // This example uses a config file that defines blind relay public keys for improved P2P connectivity
 // Blind relays help establish connections through NAT/firewalls by acting as intermediaries
-import { getConfigPath } from "./config/config-path.js";
 
-process.env["QVAC_CONFIG_PATH"] = getConfigPath(
-  import.meta.url,
-  "qvac.config.json",
-);
+const configDir = import.meta.dirname ?? process.cwd();
+process.env["QVAC_CONFIG_PATH"] =
+  `${configDir}/config/blind-relay/blind-relay.config.js`;
 
 import {
   downloadAsset,
@@ -69,7 +67,7 @@ try {
     `Blind relays helped establish peer connections through NAT/firewalls\n`,
   );
 
-  await close();
+  close();
 } catch (error) {
   console.error("❌ Error:", error);
   console.log(`\nIf download failed, check the relay public keys in:`);

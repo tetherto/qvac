@@ -1,22 +1,19 @@
 name: On PR Trigger (Qvac-lib-infer-llamacpp-llm)
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
       - release-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
-
-  pull_request_target:
-    types: [labeled]
-    branches:
-      - main
-    paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
-
   workflow_dispatch:
+  
   workflow_call:
 
 permissions:
@@ -49,6 +46,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
     uses: ./.github/workflows/cpp-tests-llm.yml
@@ -79,7 +77,6 @@ jobs:
         working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}

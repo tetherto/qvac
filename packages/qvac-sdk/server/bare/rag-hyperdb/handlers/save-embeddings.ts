@@ -1,26 +1,33 @@
-import { getRagInstance } from "@/server/bare/rag-hyperdb/rag-manager";
-import { embed } from "@/server/bare/addons/llamacpp";
+import { getRagDbAdapter } from "@/server/bare/rag-hyperdb/rag-workspace-manager";
 import {
+  ragSaveEmbeddingsParamsSchema,
   type RagSaveEmbeddingsParams,
-  ragSaveEmbeddingsOperationSchema,
 } from "@/schemas";
-import type { SaveEmbeddingsOpts } from "@qvac/rag";
+import type { SaveEmbeddingsOpts, SaveStage } from "@qvac/rag";
 
-export async function saveEmbeddings(params: RagSaveEmbeddingsParams) {
-  const { modelId, documents, chunk, chunkOpts, workspace } =
-    ragSaveEmbeddingsOperationSchema.parse(params);
+interface SaveEmbeddingsHandlerOptions {
+  onProgress?: (stage: SaveStage, current: number, total: number) => void;
+  signal?: AbortSignal;
+}
 
-  const embeddingFunction = async (text: string) => {
-    return await embed({ modelId, text });
-  };
+export async function saveEmbeddings(
+  params: RagSaveEmbeddingsParams,
+  options?: SaveEmbeddingsHandlerOptions,
+) {
+  const { documents, progressInterval, workspace } =
+    ragSaveEmbeddingsParamsSchema.parse(params);
 
-  const rag = await getRagInstance(modelId, embeddingFunction, workspace);
-
-  const saveOpts: SaveEmbeddingsOpts = { chunk };
-  if (chunkOpts) {
-    saveOpts.chunkOpts = chunkOpts;
+  if (documents.length === 0) {
+    return [];
   }
 
-  const result = await rag.saveEmbeddings(documents, saveOpts);
-  return result;
+  const dbAdapter = await getRagDbAdapter(workspace);
+
+  const saveOpts: SaveEmbeddingsOpts = {
+    progressInterval,
+    onProgress: options?.onProgress,
+    signal: options?.signal,
+  };
+
+  return await dbAdapter.saveEmbeddings(documents, saveOpts);
 }

@@ -1,6 +1,7 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.5.0",
+  "version": "0.6.0",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,7 +17,15 @@
       "require": "./dist/server/worker.js"
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
-    "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js"
+    "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
+    "./models": "./dist/models/hyperdrive/models.js"
+  },
+  "imports": {
+    "#rpc": {
+      "react-native": "./dist/client/rpc/expo-rpc-client.js",
+      "bare": "./dist/client/rpc/bare-client.js",
+      "default": "./dist/client/rpc/node-rpc-client.js"
+    }
   },
   "expo": {
     "plugins": [
@@ -24,6 +33,7 @@
     ]
   },
   "files": [
+    "bare-imports.json",
     "dist/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
@@ -32,6 +42,7 @@
     "!**/bun.lock"
   ],
   "scripts": {
+    "test:unit": "bun run scripts/run-unit-tests.ts",
     "lint": "eslint . --max-warnings=0 && bun run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint:fix": "eslint . --fix",
@@ -46,7 +57,7 @@
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
-    "bare:example": "./scripts/run-with-bare.sh",
+    "bare:example": "bare ./scripts/bare-bootstrap.js",
     "docs_api:website": "typedoc --out ./docs/api/website --entryPoints index.ts --entryPointStrategy expand --readme none",
     "docs_api:markdown": "typedoc --plugin typedoc-plugin-markdown --out ./docs/api/markdown --entryPoints index.ts --entryPointStrategy expand --readme none && sed -i '1,4d' ./docs/api/markdown/README.md",
     "docs_api": "bun run docs_api:website && bun run docs_api:markdown",
@@ -58,18 +69,20 @@
     "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
   },
   "dependencies": {
-    "@qvac/decoder-audio": "^0.3.0",
-    "@qvac/dl-filesystem": "^0.1.2",
-    "@qvac/embed-llamacpp": "^0.7.5",
-    "@qvac/error": "^0.1.0",
+    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/dl-filesystem": "^0.2.0",
+    "@qvac/embed-llamacpp": "^0.10.3",
+    "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.0",
-    "@qvac/llm-llamacpp": "^0.5.6",
+    "@qvac/llm-llamacpp": "^0.8.5",
     "@qvac/logging": "^0.1.0",
-    "@qvac/rag": "^0.2.1",
-    "@qvac/transcription-whispercpp": "^0.3.8",
-    "@qvac/translation-nmtcpp": "^0.1.13",
-    "@qvac/tts-onnx": "^0.2.8",
+    "@qvac/ocr-onnx": "^0.1.5",
+    "@qvac/rag": "^0.4.2",
+    "@qvac/transcription-whispercpp": "^0.3.17",
+    "@qvac/translation-nmtcpp": "^0.3.6",
+    "@qvac/tts-onnx": "^0.2.13",
     "fast-safe-stringify": "2.1.1",
+    "which-runtime": "^1.3.2",
     "zod": "^4.0.17"
   },
   "devDependencies": {
@@ -79,20 +92,23 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
     "@types/node": "^24.2.1",
+    "@types/tar-stream": "^3.1.4",
     "bare-pack": "^1.5.1",
     "bare-readline": "^1.2.0",
+    "brittle": "^3.19.1",
     "chromadb": "^3.0.14",
     "eslint": "^9.33.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.30.0",
     "eslint-plugin-react": "^7.37.5",
     "expo": "^54.0.0",
+    "expo-device": "^8.0.0",
     "expo-file-system": "^19.0.15",
     "globals": "^16.3.0",
     "husky": "^9.1.7",
     "hyperdb": "^4.16.1",
     "prettier": "^3.6.2",
-    "react-native-bare-kit": "^0.11.4",
+    "react-native-bare-kit": "^0.11.5",
     "remark-cli": "^12.0.1",
     "remark-code-import": "^1.2.0",
     "remark-frontmatter": "^5.0.0",
@@ -122,17 +138,23 @@
     "bare-runtime": "^1.24.2",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^5.2.1",
+    "bare-zlib": "^1.3.1",
     "corestore": "^7.4.5",
     "events": "^3.3.0",
+    "expo-device": "^8.0.0",
     "expo-file-system": "^19.0.15",
     "hyperdb": "^4.19.0",
     "hyperdrive": "^13.0.1",
     "hyperswarm": "^4.12.1",
     "llm-splitter": "~0.2.0",
-    "react-native-bare-kit": "^0.11.4"
+    "react-native-bare-kit": "^0.11.5",
+    "tar-stream": "^3.1.7"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "expo-device": {
       "optional": true
     },
     "expo-file-system": {
@@ -142,5 +164,8 @@
       "optional": true
     }
   },
-  "patchedDependencies": {}
+  "patchedDependencies": {},
+  "overrides": {
+    "@qvac/dl-hyperdrive": "^0.2.0"
+  }
 }

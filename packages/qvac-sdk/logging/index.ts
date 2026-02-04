@@ -21,3 +21,4 @@ export {
   createAddonLoggerCallback,
   clearAllAddonLoggers,
 } from "./addon";
+export { summarizeRequest } from "./utils";

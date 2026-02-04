@@ -11,6 +11,7 @@ import { RPCRequestNotSentError } from "@/utils/errors-client";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
+import type { RuntimeContext } from "@/schemas";
 
 const logger = getClientLogger();
 
@@ -68,7 +69,12 @@ async function ensureRPC(): Promise<RPC> {
   });
 
   const rpc = await rpcPromise;
-  await initializeConfig(rpc, resolveConfig);
+
+  const runtimeContext: RuntimeContext = {
+    runtime: "node",
+    platform: process.platform as "darwin" | "linux" | "win32",
+  };
+  await initializeConfig(rpc, resolveConfig, runtimeContext);
 
   return rpc;
 }

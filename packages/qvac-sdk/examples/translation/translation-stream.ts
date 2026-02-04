@@ -10,6 +10,7 @@ try {
     modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
     modelType: "nmt",
     modelConfig: {
+      engine: "Opus",
       from: "en",
       to: "it",
     },

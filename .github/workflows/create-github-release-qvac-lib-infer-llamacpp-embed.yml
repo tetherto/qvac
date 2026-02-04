@@ -55,6 +55,6 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.current }}
           name: QVAC Embed Addon v${{ steps.version.outputs.current }}
-          body_path: release-notes/v${{ steps.version.outputs.current }}.md
+          body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -31,7 +31,15 @@ export const modelInfoSchema = z.object({
   hyperbeeKey: z.string(),
   expectedSize: z.number(),
   sha256Checksum: z.string(),
-  addon: z.enum(["llm", "whisper", "embeddings", "nmt", "vad", "tts"]),
+  addon: z.enum([
+    "llamacpp-completion",
+    "whispercpp-transcription",
+    "llamacpp-embedding",
+    "nmtcpp-translation",
+    "vad",
+    "onnx-tts",
+    "onnx-ocr",
+  ]),
 
   isCached: z.boolean(),
   isLoaded: z.boolean(),

@@ -20,6 +20,9 @@ jobs:
   release-pr-guard:
     name: Release PR Guard
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    permissions:
+      pull-requests: write
+      contents: read
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -144,12 +147,12 @@ jobs:
 
       - name: Configure npm for package registries
         shell: bash
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.PKG_DIR }}/client
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.PAT_TOKEN }}" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client

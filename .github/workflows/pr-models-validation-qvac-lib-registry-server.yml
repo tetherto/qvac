@@ -139,6 +139,15 @@ jobs:
           cache-dependency-path: |
             ${{ env.PKG_DIR }}/package-lock.json
             ${{ env.PKG_DIR }}/client/package-lock.json
+      
+      - name: Configure npm for private packages
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
@@ -159,15 +168,6 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm run test:integration
-
-      - name: Configure npm for private packages
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
       - name: Lint and test client
         working-directory: ${{ env.PKG_DIR }}/client
@@ -215,11 +215,6 @@ jobs:
           cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
-      - name: Install dependencies
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: npm ci
-
       - name: Configure npm for private packages
         shell: bash
         working-directory: ${{ env.PKG_DIR }}
@@ -228,6 +223,11 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client
@@ -268,19 +268,19 @@ jobs:
           cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
-      - name: Install server dependencies
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: npm ci
-
       - name: Configure npm for private packages
         shell: bash
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.PKG_DIR }}/client
         run: |
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Install server dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm ci
 
       - name: Install client dependencies
         working-directory: ${{ env.PKG_DIR }}/client

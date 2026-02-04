@@ -1,6 +1,8 @@
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 import {
   translateResponseSchema,
+  normalizeModelType,
+  ModelType,
   type TranslateRequest,
   type TranslateClientParams,
   type TranslationStats,
@@ -53,26 +55,25 @@ export function translate(params: TranslateClientParams): {
   stats: Promise<TranslationStats | undefined>;
   text: Promise<string>;
 } {
-  let sourceLanguage = params.modelType === "llm" ? params.from : undefined;
+  const canonicalModelType = normalizeModelType(params.modelType);
+  const isLlm = canonicalModelType === ModelType.llamacppCompletion;
 
-  if (!sourceLanguage) {
-    const modelType = params.modelType;
+  let sourceLanguage = isLlm ? (params as { from?: string }).from : undefined;
 
-    if (modelType === "llm") {
-      const detected = detectOne(params.text);
-      if (detected.code === "und" || detected.language === "Undetermined") {
-        throw new TranslationFailedError(
-          "Could not detect the source language. Please specify the 'from' parameter explicitly.",
-        );
-      }
-      sourceLanguage = detected.language;
+  if (!sourceLanguage && isLlm) {
+    const detected = detectOne(params.text as string);
+    if (detected.code === "und" || detected.language === "Undetermined") {
+      throw new TranslationFailedError(
+        "Could not detect the source language. Please specify the 'from' parameter explicitly.",
+      );
     }
+    sourceLanguage = detected.language;
   }
 
   const request: TranslateRequest = {
     type: "translate",
     ...params,
-    ...(params.modelType === "llm" && {
+    ...(isLlm && {
       from: sourceLanguage,
     }),
   } as TranslateRequest;

@@ -88,13 +88,13 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         shell: bash
+        working-directory: ${{ inputs.workdir }}
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
           qvac_registry="https://registry.npmjs.org/"
-          cat > .npmrc <<NPMRC
-          always-auth=true
+          cat > ~/.npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/

@@ -315,6 +315,42 @@ export class ModelTypeMismatchError extends QvacErrorBase {
   }
 }
 
+export class OCRFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.OCR_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ImageFileNotFoundError extends QvacErrorBase {
+  constructor(filePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.IMAGE_FILE_NOT_FOUND,
+        [filePath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class InvalidImageInputError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INVALID_IMAGE_INPUT,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== RAG Operation Errors ==============
 
 export class RAGSaveFailedError extends QvacErrorBase {
@@ -495,6 +531,66 @@ export class HyperdriveDownloadFailedError extends QvacErrorBase {
   }
 }
 
+export class InvalidShardUrlPatternError extends QvacErrorBase {
+  constructor(url: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INVALID_SHARD_URL_PATTERN,
+        [url],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ArchiveExtractionFailedError extends QvacErrorBase {
+  constructor(archivePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ARCHIVE_EXTRACTION_FAILED,
+        [archivePath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ArchiveUnsupportedTypeError extends QvacErrorBase {
+  constructor(archivePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ARCHIVE_UNSUPPORTED_TYPE,
+        [archivePath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class ArchiveMissingShardsError extends QvacErrorBase {
+  constructor(missingFile: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ARCHIVE_MISSING_SHARDS,
+        [missingFile],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PartialDownloadOfflineError extends QvacErrorBase {
+  constructor(url: string, downloadedBytes: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PARTIAL_DOWNLOAD_OFFLINE,
+        [url, String(downloadedBytes)],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Cache Operation Errors ==============
 
 export class DeleteCacheFailedError extends QvacErrorBase {
@@ -610,6 +706,42 @@ export class RAGWorkspaceModelMismatchError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_MODEL_MISMATCH,
         [workspace, existingModelId, newModelId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGWorkspaceNotFoundError extends QvacErrorBase {
+  constructor(workspace: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_FOUND,
+        [workspace],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGWorkspaceInUseError extends QvacErrorBase {
+  constructor(workspace: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_IN_USE,
+        [workspace],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGWorkspaceNotOpenError extends QvacErrorBase {
+  constructor(workspace: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_NOT_OPEN,
+        [workspace],
         cause,
       ),
     );

@@ -11,6 +11,7 @@ export default [
       "eslint.config.*",
       "scripts/**/*.mjs",
       "tests-qvac/**",
+      "test/**",
     ],
   },
 
@@ -47,8 +48,8 @@ export default [
       },
     },
     rules: {
-      // Enable so file-level disables are respected (prevents unused-disable warnings)
-      "import/no-unresolved": "error",
+      // Ignore Node.js subpath imports which the resolver can't handle
+      "import/no-unresolved": ["error", { ignore: ["^#"] }],
 
       // Absolutely no `any`
       "@typescript-eslint/no-explicit-any": "error",

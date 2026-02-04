@@ -23,10 +23,11 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  packages: read
 
 jobs:
   desktop-tests:
-    uses: tetherto/qvac-devops/.github/workflows/test-desktop.yml@monorepo_update
+    uses: ./.github/workflows/test-desktop-qvac-sdk.yml
     with:
       working-directory: "packages/qvac-sdk/tests-qvac"
       platforms: '["ai-run-linux-gpu", "macos-latest-xlarge", "ai-run-windows-gpu"]'
@@ -38,3 +39,4 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

@@ -1,2 +1,6 @@
 docs/typedoc.jsonc
 changelog/
+test/mocks/*
+SECURITY.md
+.github
+*.mdx

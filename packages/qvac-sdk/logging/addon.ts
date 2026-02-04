@@ -11,17 +11,36 @@ const PRIORITY_TO_LEVEL: Record<number, LogLevel> = {
   4: "debug",
 };
 
-// Track ALL loggers per namespace: Map<namespace, Set<Logger>>
-const addonLoggers = new Map<string, Set<Logger>>();
+const ADDON_LOGGERS_KEY = Symbol.for("@qvac/sdk:addon-loggers");
+const MODEL_LOGGERS_KEY = Symbol.for("@qvac/sdk:model-loggers");
 
-// Track modelId → { namespace, logger } for cleanup on unload
-const modelLoggers = new Map<string, { namespace: string; logger: Logger }>();
+type AddonLoggersMap = Map<string, Set<Logger>>;
+type ModelLoggersMap = Map<string, { namespace: string; logger: Logger }>;
+
+function getAddonLoggers(): AddonLoggersMap {
+  const global = globalThis as { [ADDON_LOGGERS_KEY]?: AddonLoggersMap };
+  if (!global[ADDON_LOGGERS_KEY]) {
+    global[ADDON_LOGGERS_KEY] = new Map();
+  }
+  return global[ADDON_LOGGERS_KEY];
+}
+
+function getModelLoggers(): ModelLoggersMap {
+  const global = globalThis as { [MODEL_LOGGERS_KEY]?: ModelLoggersMap };
+  if (!global[MODEL_LOGGERS_KEY]) {
+    global[MODEL_LOGGERS_KEY] = new Map();
+  }
+  return global[MODEL_LOGGERS_KEY];
+}
 
 export function registerAddonLogger(
   modelId: string,
   namespace: string,
   logger: Logger,
 ) {
+  const addonLoggers = getAddonLoggers();
+  const modelLoggers = getModelLoggers();
+
   if (!addonLoggers.has(namespace)) {
     addonLoggers.set(namespace, new Set());
   }
@@ -30,6 +49,9 @@ export function registerAddonLogger(
 }
 
 export function unregisterAddonLogger(modelId: string) {
+  const addonLoggers = getAddonLoggers();
+  const modelLoggers = getModelLoggers();
+
   const entry = modelLoggers.get(modelId);
   if (entry) {
     addonLoggers.get(entry.namespace)?.delete(entry.logger);
@@ -57,7 +79,7 @@ function routeLog(logger: Logger, level: string, message: string) {
 
 export function createAddonLoggerCallback(namespace: string) {
   return (priority: number, message: string) => {
-    const loggers = addonLoggers.get(namespace);
+    const loggers = getAddonLoggers().get(namespace);
     if (!loggers || loggers.size === 0) return;
 
     const level = PRIORITY_TO_LEVEL[priority] ?? "debug";
@@ -68,6 +90,6 @@ export function createAddonLoggerCallback(namespace: string) {
 }
 
 export function clearAllAddonLoggers() {
-  addonLoggers.clear();
-  modelLoggers.clear();
+  getAddonLoggers().clear();
+  getModelLoggers().clear();
 }

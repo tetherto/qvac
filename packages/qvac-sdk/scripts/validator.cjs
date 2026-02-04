@@ -12,15 +12,7 @@
  * Single source of truth for allowed prefixes
  * To add a new prefix, just add it to this array - regex patterns are built automatically
  */
-const ALLOWED_PREFIXES = [
-  "feat",
-  "fix",
-  "doc",
-  "test",
-  "mod",
-  "chore",
-  "infra",
-];
+const ALLOWED_PREFIXES = ["feat", "fix", "doc", "test", "chore", "infra"];
 
 /**
  * Single source of truth for allowed tags
@@ -29,8 +21,9 @@ const ALLOWED_PREFIXES = [
  * Special tags:
  * - [notask]: Allows PR title to omit the ticket number (e.g., "feat[notask]: quick fix")
  * - [skiplog]: PR will be skipped by changelog generator
+ * - [mod]: Model changes - requires Models section with Added/Removed subsections
  */
-const ALLOWED_TAGS = ["bc", "api", "notask", "skiplog"];
+const ALLOWED_TAGS = ["bc", "api", "notask", "skiplog", "mod"];
 
 /**
  * Validation exceptions - commits that should skip format validation
@@ -134,6 +127,43 @@ function hasBeforeAfterExamples(body) {
   // Check for // old and // new style comments in code blocks
   const oldNewPattern = /\/\/\s*old[\s\S]*?\/\/\s*new/i;
   return oldNewPattern.test(body);
+}
+
+/**
+ * Check if body contains valid Models section with Added and/or Removed subsections
+ * At least one subsection with content must be present
+ * @param {string} body - The PR body
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function hasModelsSection(body) {
+  // Check for Models section header (## 📦 Models or ## Models)
+  const modelsSectionPattern = /##\s*(?:📦\s*)?Models\s*\n/i;
+  if (!modelsSectionPattern.test(body)) {
+    return {
+      valid: false,
+      error: "Missing '## Models' or '## 📦 Models' section header",
+    };
+  }
+
+  // Check for Added models subsection with code block
+  const addedPattern = /###\s*Added\s*(?:models)?\s*\n[\s\S]*?```[\s\S]*?```/i;
+  const hasAdded = addedPattern.test(body);
+
+  // Check for Removed models subsection with code block
+  const removedPattern =
+    /###\s*Removed\s*(?:models)?\s*\n[\s\S]*?```[\s\S]*?```/i;
+  const hasRemoved = removedPattern.test(body);
+
+  // At least one subsection must be present
+  if (!hasAdded && !hasRemoved) {
+    return {
+      valid: false,
+      error:
+        "Must include at least one subsection (### Added models or ### Removed models) with a fenced code block",
+    };
+  }
+
+  return { valid: true };
 }
 
 /**
@@ -302,6 +332,30 @@ function validatePR(title, body) {
         };
       }
     }
+
+    if (tags.includes("mod")) {
+      const modelsResult = hasModelsSection(trimmedBody);
+      if (!modelsResult.valid) {
+        return {
+          valid: false,
+          error:
+            `PRs with [mod] tag must include a Models section.\n` +
+            `Required structure (at least one subsection required):\n` +
+            `  ## 📦 Models\n` +
+            `  ### Added models\n` +
+            `  \`\`\`\n` +
+            `  MODEL_CONSTANT_NAME\n` +
+            `  \`\`\`\n\n` +
+            `Error: ${modelsResult.error}`,
+        };
+      }
+    }
+  } else if (tags.includes("mod")) {
+    // Body is required for [mod] tag
+    return {
+      valid: false,
+      error: `PRs with [mod] tag must include a Models section in the body.`,
+    };
   }
 
   return {
@@ -379,6 +433,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     validateCommit,
     validatePR,
+    hasModelsSection,
     ALLOWED_PREFIXES,
     ALLOWED_TAGS,
   };

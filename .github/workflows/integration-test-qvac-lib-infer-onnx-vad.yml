@@ -96,7 +96,6 @@ jobs:
 
           # Ensure private @tetherto packages resolve to GitHub Packages (not npmjs)
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/

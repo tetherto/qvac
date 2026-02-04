@@ -20,6 +20,8 @@ const configRegistry: QvacConfig = {
   swarmRelays: undefined,
   loggerLevel: undefined,
   loggerConsoleOutput: undefined,
+  httpDownloadConcurrency: undefined,
+  deviceDefaults: undefined,
 };
 
 let configIsSet = false;
@@ -83,6 +85,23 @@ export function setSDKConfig(config: QvacConfig) {
     setGlobalConsoleOutput(config.loggerConsoleOutput);
     logger.info(
       `Console output ${config.loggerConsoleOutput ? "enabled" : "disabled"}`,
+    );
+  }
+
+  if (
+    config.httpDownloadConcurrency !== undefined &&
+    config.httpDownloadConcurrency !== null
+  ) {
+    configRegistry.httpDownloadConcurrency = config.httpDownloadConcurrency;
+    logger.info(
+      `HTTP download concurrency set to: ${config.httpDownloadConcurrency}`,
+    );
+  }
+
+  if (config.deviceDefaults !== undefined && config.deviceDefaults !== null) {
+    configRegistry.deviceDefaults = config.deviceDefaults;
+    logger.info(
+      `✅ Device defaults configured: ${config.deviceDefaults.length} pattern(s)`,
     );
   }
 

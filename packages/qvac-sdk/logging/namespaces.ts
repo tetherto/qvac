@@ -4,6 +4,7 @@ export const ADDON_NAMESPACES = {
   WHISPERCPP: "whispercpp",
   TTS: "tts",
   NMTCPP: "nmtcpp",
+  RAG_HYPERDB: "rag:hyperdb",
 } as const;
 
 export type AddonNamespace =

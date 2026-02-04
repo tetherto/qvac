@@ -173,7 +173,6 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -293,12 +292,27 @@ jobs:
           echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'win32' }}
-        name: Install vulkan in windows
+        name: Install Vulkan SDK (Windows)
+        shell: powershell
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+
+          # Use a stable URL (latest) but download with BITS (more reliable than Invoke-WebRequest)
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+          $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+
+          # Some environments need TLS 1.2 explicitly
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          Write-Host "Downloading Vulkan SDK from $url to $out"
+          Start-BitsTransfer -Source $url -Destination $out
+
+          Write-Host "Installing Vulkan SDK..."
+          & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android

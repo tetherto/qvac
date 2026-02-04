@@ -121,7 +121,6 @@ jobs:
             qvac_registry="https://registry.npmjs.org/"
           fi
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
@@ -132,7 +131,6 @@ jobs:
           # Configure test-framework registry (always npmjs for public @qvac deps)
           cd $GITHUB_WORKSPACE/test-framework
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -177,7 +175,6 @@ jobs:
 
           # Force @qvac registry to npmjs for manual downloads (project-level)
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}

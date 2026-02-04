@@ -46,6 +46,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
@@ -54,6 +55,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-infer-llamacpp-embed
 
   cpp-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
@@ -76,18 +78,20 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: |
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
           NPMRC
 
       - name: Install dependencies
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm install
 
       - name: Type declaration check
+        working-directory: packages/qvac-lib-infer-llamacpp-embed
         run: npm run test:dts
 
   prebuild:

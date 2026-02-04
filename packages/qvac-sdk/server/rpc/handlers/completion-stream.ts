@@ -4,7 +4,7 @@ import type {
   CompletionStats,
   ToolCall,
 } from "@/schemas";
-import { completion } from "@/server/bare/addons/llamacpp";
+import { completion } from "@/server/bare/addons/llamacpp-completion";
 
 export async function* handleCompletionStream(
   request: CompletionStreamRequest,

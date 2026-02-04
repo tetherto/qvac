@@ -1,5 +1,5 @@
 // RAG executor
-import { ragSaveEmbeddings } from "@qvac/sdk";
+import { ragIngest } from "@qvac/sdk";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
@@ -61,8 +61,8 @@ export class RagExecutor {
         content = p.documentContent || "";
       }
 
-      // Save embeddings (chunks and embeds the document)
-      const result = await ragSaveEmbeddings({
+      // Ingest documents (chunks, embeds, and saves to RAG storage)
+      const result = await ragIngest({
         modelId: embeddingModelId,
         workspace: p.workspace,
         documents: content,
@@ -73,8 +73,8 @@ export class RagExecutor {
         },
       });
 
-      // Result is an object - just check it's truthy
-      const resultStr = result ? "success" : "failed";
+      // Result contains processed array and droppedIndices - check processed is truthy
+      const resultStr = result.processed.length > 0 ? "success" : "failed";
       return ValidationHelpers.validate(resultStr, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

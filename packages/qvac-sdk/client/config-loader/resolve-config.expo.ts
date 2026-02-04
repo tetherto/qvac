@@ -42,9 +42,9 @@ async function loadJsonConfig(filePath: string): Promise<QvacConfig> {
  */
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   // Check environment variable first
-  const configPath =
+  const configPath: string | undefined =
     typeof process !== "undefined"
-      ? process.env?.["QVAC_CONFIG_PATH"]
+      ? (process.env?.["QVAC_CONFIG_PATH"] as string | undefined)
       : undefined;
 
   if (configPath) {

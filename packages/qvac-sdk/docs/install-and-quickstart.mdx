@@ -1,0 +1,146 @@
+---
+title: Install and quickstart
+description: Supported platforms, installation instructions, and minimal runnable example using the JS/TS SDK.
+---
+
+## Supported platforms
+
+### JS runtimes
+
+- Node.js $\geq$ v22.17
+- Bare $\geq$ v1.24
+- Hermes $\geq$ v0.13
+
+### OS
+
+- macOS
+- Linux with GLIBC >= v2.38
+- Windows
+- iOS
+- Android
+
+## Installation
+
+```bash
+npm install @qvac/sdk
+```
+
+### Expo
+
+1. Peer dependencies:
+
+```bash
+npm i expo-file-system react-native-bare-kit
+```
+
+2. On Android, bump `minSdkVersion` to 29, by adding `ext { minSdkVersion=29 }` to `android/build.gradle` or using `expo-build-properties`.
+
+3. Add the QVAC Expo plugin to `app.json`:
+
+```js
+export default {
+  expo: {
+    plugins: ["@qvac/sdk/expo-plugin"],
+  },
+};
+```
+
+4. Prebuild your project to generate the native files:
+
+```bash
+npx expo prebuild
+```
+
+5. Build and run it on a **physical device**:
+
+```bash
+npx expo run:ios --device
+# or
+npx expo run:android --device
+```
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>
+
+## Flow
+
+Before you can use a model, you need to load it from some location into memory. Flow for performing AI inference:
+
+1. Load one model by calling function `loadModel()`.
+2. Perform inference and other use cases by calling the appropriate functions from SDK API — e.g., `completion()`.
+3. After finishing using the model, call `unloadModel()` to release computer resources.
+
+## Quickstart
+
+<Steps>
+
+<Step>
+Create the examples workspace:
+```bash
+  mkdir qvac-examples
+  cd qvac-examples
+  npm init -y && npm pkg set type=module
+```
+</Step>
+
+<Step>
+Install the SDK:
+```bash
+  npm install @qvac/sdk
+```
+</Step>
+
+<Step>
+Create the quickstart script:
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+```js file=../dist/examples/quickstart.js title="quickstart.js" lineNumbers
+
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+```ts file=../examples/quickstart.ts title="quickstart.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+</Step>
+
+<Step>
+*(Optional)* If you want to run TypeScript directly, install the required dev dependencies:
+```bash
+  npm i -D tsx typescript
+```
+</Step>
+
+<Step>
+Run the quickstart script:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+```bash
+node quickstart.js
+```    
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+```bash
+  npx tsx quickstart.ts
+```
+</Tab>
+</Tabs>
+</Step>
+
+</Steps>
+
+<Callout title="Tip" type="success">
+  All examples throughout this documentation are self-contained runnable scripts. Use `qvac-examples` workspace to store and run them as you explore the guides.
+</Callout>

@@ -1,7 +1,7 @@
 name: On PR Trigger (Qvac-lib-infer-whispercpp)
 
 on:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - synchronize
@@ -50,6 +50,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains( github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-whispercpp
 
   release-notes-check:
     uses: ./.github/workflows/release-notes-check-qvac-lib-infer-whispercpp.yml

@@ -2,7 +2,7 @@ import { type GetModelInfoRequest, type GetModelInfoParams } from "@/schemas";
 import { send } from "@/client/rpc/rpc-client";
 import { InvalidResponseError } from "@/utils/errors-client";
 
-export const getModelInfo = async (params: GetModelInfoParams) => {
+export async function getModelInfo(params: GetModelInfoParams) {
   const request: GetModelInfoRequest = {
     type: "getModelInfo",
     name: params.name,
@@ -14,4 +14,4 @@ export const getModelInfo = async (params: GetModelInfoParams) => {
   }
 
   return response.modelInfo;
-};
+}

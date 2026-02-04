@@ -123,7 +123,6 @@ jobs:
           cd "${{ env.ADDON_DIR }}"
           qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
@@ -134,7 +133,6 @@ jobs:
           # Configure test-framework registry
           cd "${GITHUB_WORKSPACE}/${{ env.TEST_FRAMEWORK_DIR }}"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/

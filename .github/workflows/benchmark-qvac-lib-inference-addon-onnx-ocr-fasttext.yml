@@ -94,7 +94,6 @@ jobs:
           set -eu
           qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
@@ -225,7 +224,6 @@ jobs:
         run: |
           qvac_registry="https://registry.npmjs.org/"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/

@@ -176,7 +176,6 @@ jobs:
           set -euo pipefail
 
           cat > "$HOME/.npmrc" <<NPMRC
-          always-auth=true
 
           # GitHub Packages for @tetherto/*
           @tetherto:registry=https://npm.pkg.github.com

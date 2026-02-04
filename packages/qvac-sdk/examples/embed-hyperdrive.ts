@@ -15,6 +15,10 @@ try {
     onProgress: (progress) => {
       console.log(progress);
     },
+    modelConfig: {
+      gpuLayers: 99,
+      device: "gpu",
+    },
   });
 
   console.log("\n📝 Example 1: Single Text Embedding");

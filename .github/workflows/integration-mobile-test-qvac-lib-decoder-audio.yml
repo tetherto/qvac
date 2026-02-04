@@ -127,7 +127,6 @@ jobs:
           # Configure addon registry (package dir inside monorepo)
           cd "addon/${WORKDIR}"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -138,7 +137,6 @@ jobs:
           # Configure test-framework registry
           cd "${GITHUB_WORKSPACE}/test-framework"
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/

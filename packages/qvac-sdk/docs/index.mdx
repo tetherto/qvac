@@ -1,42 +1,58 @@
 ---
 title: QVAC SDK
-description: The canonical entry point to develop AI applications with QVAC.
+description: Use the JS/TS SDK to build local AI applications and systems.
 ---
 
-# QVAC SDK
+## Overview
 
-**QVAC SDK** is the canonical entry point to develop AI applications with QVAC.
+The JS SDK is cross-platform, type-safe, and exposes all QVAC capabilities through a unified interface.
 
-Written in TypeScript, it provides all QVAC capabilities through a unified interface, while also abstracting away the complexity of running your application in a JavaScript runtime other than Bare.
+### Key features
 
-## Installation
+- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
+- **Cross-platform:** consistent behavior across platforms and JS runtime environments — write code once, run it everywhere.
+- **Type-safe:** typed JS API.
 
-[**Get started:**](/docs/sdk/get-started) installation requirements and procedures on all supported platforms, and usage example.
+## Installation and quickstart
+
+<Card href="/sdk/install-and-quickstart" title="Install and run a quickstart script">
+  Supported platforms, installation instructions, and minimal runnable example using the JS/TS SDK.
+</Card>
 
 ## Functionalities
 
 ### AI tasks
 
-- [**Completion:**](/docs/sdk/completion) LLM inference via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
-- [**Transcription:**](/docs/sdk/transcription) speech-to-text (ASR) via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp).
-- [**Text embeddings:**](/docs/sdk/text-embeddings) via `llama.cpp`.
-- [**Translation:**](/docs/sdk/translation) translate text between different languages.
-- [**Text-to-Speech:**](/docs/sdk/text-to-speech) TTS via ONNX.
-- [**Multimodal:**](/docs/sdk/multimodal) Multimodal via [`llama.cpp`] — i.e., process and understand multiple types of media within the same conversation context.
-- [**RAG:**](/docs/sdk/rag) out-of-the-box retrieval-augmented generation workflow.
-- [**Delegated inference:**](/docs/sdk/delegated-inference) perform peer-to-peer inference delegation via Holepunch stack, enabling resource sharing.
+* [**Completion:**](/sdk/completion) LLM inference via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
+* [**Transcription:**](/sdk/transcription) speech-to-text (ASR) via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp).
+* [**Text embeddings:**](/sdk/text-embeddings) via `llama.cpp`.
+* [**Translation:**](/sdk/translation) translate text between different languages.
+* [**Text-to-Speech:**](/sdk/text-to-speech) TTS via ONNX.
+* [**Multimodal:**](/sdk/multimodal) Multimodal via `llama.cpp` — i.e., process and understand multiple types of media within the same conversation context.
+* [**RAG:**](/sdk/rag) out-of-the-box retrieval-augmented generation workflow.
+* [**Delegated inference:**](/sdk/delegated-inference) perform peer-to-peer inference delegation via Holepunch stack, enabling resource sharing.
 
 ### Utilities
 
-- [**Logging:**](/docs/sdk/logging) out-of-the-box logging from model to your client.
-- [**Download Lifecycle:**](/docs/sdk/download-lifecycle) pause and resume model downloads.
-- [**Blind relays:**](/docs/sdk/logging) establish peer connections through NAT/firewalls by routing traffic via relay nodes.
-- [**Sharded models:**](/docs/sdk/sharded-models) download a model that is sharded into multiple parts.
+* [**Logging:**](/sdk/logging) out-of-the-box logging from model to your client.
+* [**Download Lifecycle:**](/sdk/download-lifecycle) pause and resume model downloads.
+* [**Blind relays:**](/sdk/logging) establish peer connections through NAT/firewalls by routing traffic via relay nodes.
+* [**Sharded models:**](/sdk/sharded-models) download a model that is sharded into multiple parts.
 
 ## API
 
-See [**API reference**](/docs/sdk/api).
+<Card href="/sdk/api" title="API reference">
+  `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+</Card>
 
 ## How it works
 
-[**How it works:**](/docs/sdk/how-it-works) what happens under the hood when you use QVAC SDK in your application.
+<Card href="/sdk/how-it-works" title="How it works">
+  Understand what happens under the hood when you use QVAC SDK in your
+  application
+</Card>
+
+## Other resources
+
+- [Source code at GitHub](https://github.com/tetherto/qvac-sdk)
+- [Package at NPM](https://www.npmjs.com/package/@qvac/sdk)

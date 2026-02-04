@@ -88,6 +88,18 @@ export class InvalidToolSchemaError extends QvacErrorBase {
   }
 }
 
+export class OCRFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.OCR_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== RPC Communication Errors ==============
 
 export class RPCNoHandlerError extends QvacErrorBase {
@@ -352,6 +364,18 @@ export class CancelFailedError extends QvacErrorBase {
   }
 }
 
+export class RAGChunkFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_CHUNK_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 export class RAGSaveFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
@@ -381,6 +405,30 @@ export class RAGDeleteFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_DELETE_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGCloseWorkspaceFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RAGListWorkspacesFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RAG_LIST_WORKSPACES_FAILED,
         details ? [details] : undefined,
         cause,
       ),

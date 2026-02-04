@@ -1,17 +1,18 @@
 import {
   loadModelServerParamsSchema,
+  ModelType,
   type EmbedConfig,
   type LlmConfig,
   type LoadModelServerParams,
   type WhisperConfig,
+  type OCRConfig,
 } from "@/schemas";
-import {
-  createEmbeddingsModel,
-  createLlmModel,
-} from "@/server/bare/addons/llamacpp";
-import { createNmtModel } from "@/server/bare/addons/translation";
-import { createTtsModel } from "@/server/bare/addons/tts";
-import { createWhisperModel } from "@/server/bare/addons/whispercpp";
+import { createLlmModel } from "@/server/bare/addons/llamacpp-completion";
+import { createEmbeddingsModel } from "@/server/bare/addons/llamacpp-embedding";
+import { createNmtModel } from "@/server/bare/addons/nmtcpp-translation";
+import { createTtsModel } from "@/server/bare/addons/onnx-tts";
+import { createWhisperModel } from "@/server/bare/addons/whispercpp-transcription";
+import { createOCRModel } from "@/server/bare/addons/onnx-ocr";
 import {
   isModelLoaded,
   registerModel,
@@ -21,9 +22,14 @@ import {
   startLogBuffering,
   stopLogBufferingWithTimeout,
 } from "@/server/bare/registry/logging-stream-registry";
-import { detectShardedModel, generateShardFilenames } from "@/server/utils";
+import {
+  detectShardedModel,
+  generateShardFilenames,
+  validateShardedModelCache,
+} from "@/server/utils";
 import {
   ESpeakDataPathRequiredError,
+  ModelLoadFailedError,
   UnknownModelTypeError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
@@ -45,6 +51,7 @@ export async function loadModel(params: LoadModelServerParams) {
     vadModelPath,
     ttsConfigModelPath,
     eSpeakDataPath,
+    detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
   const { modelConfig, modelType } = options;
@@ -61,20 +68,15 @@ export async function loadModel(params: LoadModelServerParams) {
   const isShardedModel = shardInfo.isSharded;
 
   if (isShardedModel) {
-    // For sharded models, validate all required files exist
+    // For sharded models, validate all shards and tensors.txt exist
     const shardDir = path.dirname(modelPath);
-    const allRequiredFiles = generateShardFilenames(modelFileName);
+    const isValid = await validateShardedModelCache(shardDir, modelFileName);
 
-    for (const shardFile of allRequiredFiles) {
-      const shardPath = path.join(shardDir, shardFile);
-      try {
-        await fsPromises.access(shardPath);
-      } catch (error) {
-        throw new ModelFileNotFoundError(
-          `${shardFile}. Expected ${allRequiredFiles.length} files (shards + companion files) in ${shardDir}`,
-          error,
-        );
-      }
+    if (!isValid) {
+      const numberedShards = generateShardFilenames(modelFileName);
+      throw new ModelFileNotFoundError(
+        `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`,
+      );
     }
   } else {
     // For non-sharded models, validate single file exists
@@ -98,7 +100,7 @@ export async function loadModel(params: LoadModelServerParams) {
 
   let result: { model: AnyModel; loader: FilesystemDL };
   switch (modelType) {
-    case "llm":
+    case ModelType.llamacppCompletion:
       result = createLlmModel(
         modelId,
         modelPath,
@@ -106,7 +108,7 @@ export async function loadModel(params: LoadModelServerParams) {
         projectionModelPath,
       );
       break;
-    case "whisper":
+    case ModelType.whispercppTranscription:
       result = createWhisperModel(
         modelId,
         modelPath,
@@ -114,7 +116,7 @@ export async function loadModel(params: LoadModelServerParams) {
         vadModelPath,
       );
       break;
-    case "embeddings":
+    case ModelType.llamacppEmbedding:
       result = createEmbeddingsModel(
         modelId,
         modelPath,
@@ -122,11 +124,11 @@ export async function loadModel(params: LoadModelServerParams) {
       );
       break;
 
-    case "nmt":
+    case ModelType.nmtcppTranslation:
       result = createNmtModel(modelId, modelPath, modelConfig);
       break;
 
-    case "tts":
+    case ModelType.onnxTts:
       if (!eSpeakDataPath) {
         throw new ESpeakDataPathRequiredError();
       }
@@ -139,8 +141,23 @@ export async function loadModel(params: LoadModelServerParams) {
       );
       break;
 
+    case ModelType.onnxOcr:
+      if (!detectorModelPath) {
+        throw new ModelLoadFailedError(
+          "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
+        );
+      }
+      // modelPath is the recognizer, detectorModelPath is auto-derived
+      result = createOCRModel(
+        modelId,
+        detectorModelPath,
+        modelPath,
+        modelConfig as OCRConfig,
+      );
+      break;
+
     default:
-      // Should never happen
+      // Should never happen - normalizeModelType validates input
       throw new UnknownModelTypeError(modelType);
   }
 

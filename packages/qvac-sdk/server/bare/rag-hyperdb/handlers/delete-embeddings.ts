@@ -1,19 +1,21 @@
-import { getRagInstance } from "@/server/bare/rag-hyperdb/rag-manager";
-import { embed } from "@/server/bare/addons/llamacpp";
 import {
+  getRagDbAdapter,
+  hasRagWorkspaceStorage,
+} from "@/server/bare/rag-hyperdb/rag-workspace-manager";
+import {
+  ragDeleteEmbeddingsParamsSchema,
   type RagDeleteEmbeddingsParams,
-  ragDeleteEmbeddingsOperationSchema,
 } from "@/schemas";
+import { RAGDeleteFailedError } from "@/utils/errors-server";
 
 export async function deleteEmbeddings(params: RagDeleteEmbeddingsParams) {
-  const { modelId, ids, workspace } =
-    ragDeleteEmbeddingsOperationSchema.parse(params);
+  const { ids, workspace } = ragDeleteEmbeddingsParamsSchema.parse(params);
 
-  const embeddingFunction = async (text: string) => {
-    return await embed({ modelId, text });
-  };
+  if (!hasRagWorkspaceStorage(workspace)) {
+    throw new RAGDeleteFailedError("workspace is not initialized");
+  }
 
-  const rag = await getRagInstance(modelId, embeddingFunction, workspace);
-  const success = await rag.deleteEmbeddings(ids);
-  return success;
+  const dbAdapter = await getRagDbAdapter(workspace);
+
+  await dbAdapter.deleteEmbeddings(ids);
 }
