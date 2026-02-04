@@ -32,6 +32,10 @@ on:
 
 run-name: Delete NPM Versions (whispercpp) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   print-context-trigger:
     runs-on: ubuntu-latest

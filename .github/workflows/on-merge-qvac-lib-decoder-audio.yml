@@ -19,6 +19,9 @@ on:
 
 jobs:
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:

@@ -29,6 +29,11 @@ on:
         type: boolean
         default: true
 run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   print-context:
     runs-on: ubuntu-latest

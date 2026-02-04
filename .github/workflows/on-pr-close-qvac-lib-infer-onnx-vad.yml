@@ -1,7 +1,4 @@
 name: Unpublish GPR Package Versions (Qvac-lib-infer-onnx-vad)
-permissions:
-  contents: read
-  packages: write
 on:
   pull_request:
     types:
@@ -34,6 +31,10 @@ on:
 
 run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   print-context:
     runs-on: ubuntu-latest
