@@ -1,0 +1,336 @@
+---
+description: Model Constants and Model Source Union Type
+globs:
+  - packages/qvac-sdk/**
+alwaysApply: false
+---
+
+# Model Constants and Model Source
+
+## Overview
+
+Model constants are now rich objects containing all metadata, not just URI strings. This provides better TypeScript support, eliminates the need for helper functions, and maintains backward compatibility.
+
+## Model Constants Structure
+
+Model constants are objects with complete metadata:
+
+```typescript
+export const WHISPER_TINY = {
+  name: "WHISPER_TINY",
+  src: `pear://${models[96].hyperdriveKey}/${models[96].modelId}`,
+  modelId: models[96].modelId,
+  hyperdriveKey: models[96].hyperdriveKey,
+  hyperbeeKey: models[96].hyperbeeKey,
+  expectedSize: models[96].expectedSize,
+  sha256Checksum: models[96].sha256Checksum,
+  addon: models[96].addon,
+} as const;
+
+export type ModelConstant = {
+  name: string;
+  src: string;
+  modelId: string;
+  hyperdriveKey: string;
+  hyperbeeKey: string;
+  expectedSize: number;
+  sha256Checksum: string;
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+};
+```
+
+### Before vs After
+
+**Before:**
+```typescript
+// Simple string
+export const WHISPER_TINY = `pear://key/model.bin` as const;
+
+// Usage - need helper functions
+const model = getModelBySrc(modelId, hyperdriveKey);
+console.log(model.expectedSize); // Had to look up separately
+```
+
+**After:**
+```typescript
+// Rich object
+export const WHISPER_TINY = {
+  name: "WHISPER_TINY",
+  src: "pear://key/model.bin",
+  modelId: "model.bin",
+  expectedSize: 75628544,
+  // ... all metadata
+} as const;
+
+// Usage - direct access
+console.log(WHISPER_TINY.name);         // "WHISPER_TINY"
+console.log(WHISPER_TINY.expectedSize); // 75628544
+console.log(WHISPER_TINY.addon);        // "whisper"
+```
+
+## Model Source Union Type
+
+APIs now accept both strings and objects with a `src` property for backward compatibility:
+
+```typescript
+// Model descriptor schema
+export const modelDescriptorSchema = z.object({
+  src: z.string(),
+  name: z.string().optional(),
+  modelId: z.string().optional(),
+  hyperdriveKey: z.string().optional(),
+  hyperbeeKey: z.string().optional(),
+  expectedSize: z.number().optional(),
+  sha256Checksum: z.string().optional(),
+  addon: z.enum(["llm", "whisper", "embeddings", "nmt", "vad", "tts"]).optional(),
+});
+
+// Union of string or object
+export const modelSrcInputSchema = z.union([z.string(), modelDescriptorSchema]);
+
+export type ModelDescriptor = z.infer<typeof modelDescriptorSchema>;
+export type ModelSrcInput = z.infer<typeof modelSrcInputSchema>;
+```
+
+### Usage Examples
+
+All these work:
+
+```typescript
+// String (backward compatible)
+await loadModel({ 
+  modelSrc: "pear://key/model.gguf", 
+  modelType: "whisper" 
+});
+
+// Object constant (recommended)
+await loadModel({ 
+  modelSrc: WHISPER_TINY, 
+  modelType: "whisper" 
+});
+
+// Extract src string if needed
+await loadModel({ 
+  modelSrc: WHISPER_TINY.src, 
+  modelType: "whisper" 
+});
+```
+
+### Applied To
+
+The `modelSrcInputSchema` is used in:
+- `loadModelOptionsSchema` - `modelSrc`, `projectionModelSrc`, `vadModelSrc`, `configSrc`
+- `downloadAssetOptionsSchema` - `assetSrc`
+- `downloadAssetRequestSchema` - `assetSrc`
+
+## Model Source Transform Schemas
+
+Located in `schemas/model-src-utils.ts` - all utilities are Zod transform schemas for consistent validation and extraction:
+
+```typescript
+/**
+ * Schema that transforms ModelSrcInput to its src string
+ * Usage: modelInputToSrcSchema.parse(modelSrc)
+ */
+export const modelInputToSrcSchema = modelSrcInputSchema.transform(
+  (modelSrc) => {
+    return typeof modelSrc === "string" ? modelSrc : modelSrc.src;
+  },
+);
+
+/**
+ * Schema that transforms ModelSrcInput to its optional name
+ * Usage: modelInputToNameSchema.parse(modelSrc)
+ */
+export const modelInputToNameSchema = modelSrcInputSchema.transform(
+  (modelSrc) => {
+    if (typeof modelSrc === "object" && "name" in modelSrc) {
+      return typeof modelSrc.name === "string" ? modelSrc.name : undefined;
+    }
+    return undefined;
+  },
+);
+```
+
+### Usage
+
+**Using transform schemas directly:**
+
+```typescript
+import { modelInputToSrcSchema, modelInputToNameSchema } from "@/schemas";
+
+// Extract src string - validates and transforms
+const modelSrcStr = modelInputToSrcSchema.parse(modelSrc);
+
+// Extract optional name - validates and transforms
+const modelName = modelInputToNameSchema.parse(modelSrc);
+```
+
+**Real-world examples:**
+
+```typescript
+// In server/rpc/handlers/load-model/resolve.ts
+const srcString = modelInputToSrcSchema.parse(modelSrc);
+
+// In client/api/load-model.ts
+const modelId = response.modelId ?? modelInputToSrcSchema.parse(options.modelSrc);
+
+// In server/rpc/handlers/download-asset.ts
+return {
+  type: "downloadAsset",
+  success: true,
+  assetId: modelInputToSrcSchema.parse(assetSrc),
+};
+
+// In server/rpc/handlers/load-model.ts - Extract both src and name separately
+const parsedSrc = modelInputToSrcSchema.parse(modelSrc);
+const parsedName = modelInputToNameSchema.parse(modelSrc);
+
+await loadModel({
+  modelId,
+  modelPath,
+  options: request,
+  projectionModelPath,
+  vadModelPath,
+  ttsConfigModelPath,
+  eSpeakDataPath,
+  modelName: parsedName,
+});
+```
+
+**Benefits of Zod transform schemas:**
+- ✅ Direct `.parse()` usage - idiomatic Zod pattern
+- ✅ Runtime validation ensures type safety
+- ✅ Automatic error messages for invalid input
+- ✅ Single source of truth for validation logic
+- ✅ Composable with other Zod schemas
+- ✅ Type inference works seamlessly
+
+**Files using these utilities:**
+- `client/api/load-model.ts` - Uses `modelInputToSrcSchema.parse()`
+- `client/api/download-asset.ts` - Uses `modelInputToSrcSchema.parse()`
+- `server/rpc/handlers/load-model.ts` - Uses both `modelInputToSrcSchema.parse()` and `modelInputToNameSchema.parse()`
+- `server/rpc/handlers/load-model/resolve.ts` - Uses `modelInputToSrcSchema.parse()`
+- `server/rpc/handlers/load-model-delegated.ts` - Uses `modelInputToSrcSchema.parse()`
+- `server/rpc/handlers/download-asset.ts` - Uses `modelInputToSrcSchema.parse()`
+
+## Model Registry Integration
+
+The model name is stored in the registry when loading with object constants:
+
+```typescript
+// server/bare/registry/model-registry.ts
+export type LocalOptions = {
+  path: string;
+  config?: unknown;
+  loadedAt: Date;
+  name?: string; // Optional model name for identification
+};
+
+// When registering a model
+registerModel(modelId, {
+  local: {
+    path: cachePath,
+    config,
+    loadedAt: new Date(),
+    name: modelName, // Extracted from modelSrc
+  },
+});
+```
+
+This enables better identification in `getModelInfo` API.
+
+## Code Generation
+
+The `scripts/update-models.js` script generates `models/hyperdrive/models.ts`:
+
+### Generated Structure
+
+```typescript
+export type HyperdriveItem = {
+  name: string;
+  hyperdriveKey: string;
+  hyperbeeKey: string;
+  modelId: string;
+  addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts";
+  expectedSize: number;
+  sha256Checksum: string;
+};
+
+export const models = [
+  // Array of all models
+] as const satisfies readonly HyperdriveItem[];
+
+// Individual model constants
+export const WHISPER_TINY = {
+  name: "WHISPER_TINY",
+  src: `pear://${models[96].hyperdriveKey}/${models[96].modelId}`,
+  modelId: models[96].modelId,
+  hyperdriveKey: models[96].hyperdriveKey,
+  hyperbeeKey: models[96].hyperbeeKey,
+  expectedSize: models[96].expectedSize,
+  sha256Checksum: models[96].sha256Checksum,
+  addon: models[96].addon,
+} as const;
+
+// Helper function
+export function getModelByName(name: string): HyperdriveItem | undefined {
+  return models.find((model) => model.name === name);
+}
+```
+
+### Name Generation
+
+Unique names are generated from `hyperbeeKey` components:
+- Split by `/` and take last two parts
+- Convert to uppercase with underscores
+- Add counter suffix for duplicates
+- Examples: `WHISPER_TINY`, `LLAMA_3_2_1B_INST_Q4_0`
+
+### Running Generation
+
+```bash
+bun run scripts/update-models.js
+```
+
+## Benefits
+
+1. **No helper functions needed** - All metadata directly accessible
+2. **Better TypeScript support** - Full autocomplete for all properties
+3. **Backward compatible** - Accepts both strings and objects
+4. **Cleaner code** - No need for separate lookups
+5. **Type safety** - `ModelSrc` union type ensures correctness
+6. **Centralized parsing** - Utility functions prevent code duplication
+
+## Migration Guide
+
+### Existing String-Based Code
+
+No migration needed! String-based usage still works:
+
+```typescript
+// This still works exactly the same
+await loadModel({
+  modelSrc: "pear://key/model.gguf",
+  modelType: "whisper",
+});
+```
+
+### Adopting New Features
+
+To use the new object-based constants:
+
+```typescript
+import { WHISPER_TINY } from "qvac-sdk";
+
+// Use constant directly
+await loadModel({
+  modelSrc: WHISPER_TINY,
+  modelType: "whisper",
+});
+
+// Access metadata
+console.log(WHISPER_TINY.name);         // "WHISPER_TINY"
+console.log(WHISPER_TINY.expectedSize); // 75628544
+console.log(WHISPER_TINY.addon);        // "whisper"
+```

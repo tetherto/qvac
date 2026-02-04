@@ -1,0 +1,347 @@
+---
+description: when basic autobase examples not enough or blind-peer usage involved
+globs:
+  - packages/qvac-lib-registry-server/**
+alwaysApply: false
+---
+# Autobase + HyperDB Multi-Writer Architecture
+
+## Overview
+
+Multi-writer distributed database using Autobase with HyperDB view layer, event sourcing patterns, and peer discovery.
+
+**Reference Priority:**
+1. **Primary**: `@hyperdb-autobase-learnings.md` - Comprehensive multi-writer patterns, deployment procedures, RPC setup
+2. **Secondary**: `@holepunchto-autopass-8a5edab282632443.txt` - Detailed implementation with blind pairing/peering patterns
+
+Consult the primary reference first for multi-writer setup, Autobase patterns, and production deployment. Use the secondary reference only when you need specific blind pairing/peering implementation details not covered in the primary reference.
+
+## Core Architecture
+
+### 1. Autobase Configuration
+
+```javascript
+this.base = new Autobase(this.store, key, {
+  wakeup,
+  encrypt: true,
+  encryptionKey,
+  open(store) {
+    return HyperDB.bee(store.get('view'), dbSpec, {
+      extension: false,
+      autoUpdate: true
+    })
+  },
+  apply: this._apply.bind(this)
+})
+```
+
+**Key points:**
+- `open` returns HyperDB.bee instance with compiled spec
+- `apply` processes append-only log entries into materialized view
+- `wakeup` enables efficient peer coordination
+- Encryption enabled by default for security
+
+### 2. Router-Based Apply Function
+
+```javascript
+async _apply(nodes, view, base) {
+  for (const node of nodes) {
+    await this.router.dispatch(node.value, { view, base })
+  }
+  await view.flush()
+}
+```
+
+**Pattern:**
+- Iterate through nodes from autobase
+- Dispatch encoded operations to handlers
+- Router decodes and routes to registered handler
+- Flush view after batch processing
+
+### 3. Router Setup with Hyperdispatch
+
+```javascript
+this.router = new Router() // from compiled spec
+
+this.router.add('@namespace/operation', async (data, context) => {
+  await context.view.insert('@namespace/collection', data)
+})
+
+this.router.add('@namespace/delete-op', async (data, context) => {
+  await context.view.delete('@namespace/collection', { key: data.key })
+})
+```
+
+**Context object:**
+- `context.view` - HyperDB instance for queries/mutations
+- `context.base` - Autobase instance for writer management
+
+### 4. Blind Pairing Pattern
+
+**Creator (inviter):**
+```javascript
+// Create invite
+const inv = await pass.createInvite()
+console.log('Share this:', inv) // z32-encoded
+
+// Setup member handler
+this.pairing = new BlindPairing(this.swarm)
+this.member = this.pairing.addMember({
+  discoveryKey: this.base.discoveryKey,
+  onadd: async (candidate) => {
+    const inv = await this.base.view.findOne('@namespace/invite', {})
+    if (inv && b4a.equals(inv.id, candidate.inviteId)) {
+      candidate.open(inv.publicKey)
+      await this.addWriter(candidate.userData) // userData = writer key
+      candidate.confirm({ key: this.base.key, encryptionKey: this.base.encryptionKey })
+      await this.deleteInvite()
+    }
+  }
+})
+```
+
+**Joiner (candidate):**
+```javascript
+this.pairing = new BlindPairing(this.swarm)
+const core = Autobase.getLocalCore(this.store)
+await core.ready()
+
+this.candidate = this.pairing.addCandidate({
+  invite: z32.decode(inviteString),
+  userData: core.key, // Send local writer key
+  onadd: async (result) => {
+    // Receive base key and encryption key
+    this.pass = new Autopass(this.store, {
+      swarm: this.swarm,
+      key: result.key,
+      encryptionKey: result.encryptionKey,
+      wakeup: this.wakeup
+    })
+  }
+})
+```
+
+### 5. Blind Peering (Mirrors)
+
+For read-only mirrors that sync without write access:
+
+```javascript
+const mirrors = [/* array of mirror keys */]
+this.peering = new BlindPeering(this.swarm, this.store, {
+  wakeup: this.base.wakeupProtocol,
+  autobaseMirrors: mirrors
+})
+this.peering.addAutobaseBackground(this.base)
+```
+
+## Schema Build Pipeline
+
+### Step 1: Define Schema (schema.js)
+
+```javascript
+const schema = Hyperschema.from('./spec/schema')
+const ns = schema.namespace('myapp')
+
+ns.register({
+  name: 'record',
+  compact: false,
+  fields: [
+    { name: 'key', type: 'string', required: true },
+    { name: 'value', type: 'string', required: false }
+  ]
+})
+
+Hyperschema.toDisk(schema)
+```
+
+### Step 2: Define Collections (schema.js)
+
+```javascript
+const dbTemplate = HyperdbBuilder.from('./spec/schema', './spec/db')
+const collections = dbTemplate.namespace('myapp')
+
+collections.register({
+  name: 'records',
+  schema: '@myapp/record',
+  key: ['key']
+})
+
+HyperdbBuilder.toDisk(dbTemplate)
+```
+
+### Step 3: Define Dispatch Routes (schema.js)
+
+```javascript
+const dispatch = Hyperdispatch.from('./spec/schema', './spec/hyperdispatch')
+const routes = dispatch.namespace('myapp')
+
+routes.register({
+  name: 'put',
+  requestType: '@myapp/record'
+})
+
+routes.register({
+  name: 'del',
+  requestType: '@myapp/delete'
+})
+
+Hyperdispatch.toDisk(dispatch)
+```
+
+### Step 4: Use Compiled Specs
+
+```javascript
+const { Router, encode, decode } = require('./spec/hyperdispatch')
+const dbSpec = require('./spec/db')
+
+// In autobase config
+open(store) {
+  return HyperDB.bee(store.get('view'), dbSpec, {
+    extension: false,
+    autoUpdate: true
+  })
+}
+
+// To append operations
+await this.base.append(encode('@myapp/put', { key, value }))
+```
+
+## Common Operations
+
+### Append Data
+
+```javascript
+async add(key, value) {
+  await this.base.append(encode('@namespace/put', { key, value }))
+}
+```
+
+### Query Data
+
+```javascript
+async get(key) {
+  return await this.base.view.get('@namespace/records', { key })
+}
+
+list() {
+  return this.base.view.find('@namespace/records', {})
+}
+```
+
+### Writer Management
+
+```javascript
+async addWriter(key) {
+  await this.base.append(encode('@namespace/add-writer', {
+    key: b4a.isBuffer(key) ? key : b4a.from(key)
+  }))
+}
+
+async removeWriter(key) {
+  await this.base.append(encode('@namespace/remove-writer', {
+    key: b4a.isBuffer(key) ? key : b4a.from(key)
+  }))
+}
+```
+
+## Hyperswarm Integration
+
+```javascript
+this.swarm = new Hyperswarm({
+  keyPair: await this.store.createKeyPair('hyperswarm'),
+  bootstrap: opts.bootstrap // optional testnet
+})
+
+this.swarm.on('connection', (connection, peerInfo) => {
+  this.base.replicate(connection)
+})
+
+this.swarm.join(this.base.discoveryKey)
+```
+
+## Suspend/Resume Pattern
+
+```javascript
+async suspend() {
+  if (this.swarm) {
+    await this.pairing.suspend()
+    await this.swarm.suspend()
+    await this.store.suspend()
+  }
+}
+
+async resume() {
+  if (this.swarm) {
+    await this.store.resume()
+    await this.swarm.resume()
+    await this.pairing.resume()
+  }
+}
+```
+
+## Key Dependencies
+
+- `autobase` - Multi-writer append-only log with causal ordering
+- `hyperdb` - Materialized view layer with collections and indexes
+- `hyperschema` - Schema definition and encoding
+- `hyperdispatch` - Operation routing and dispatch
+- `blind-pairing` - Secure peer discovery via invite codes
+- `blind-peering` - Read-only mirror synchronization
+- `hyperswarm` - P2P networking and discovery
+- `protomux-wakeup` - Efficient peer coordination
+- `corestore` - Hypercore storage management (requires v7+)
+
+## Important Notes
+
+- **Corestore 7 required**: Uses RocksDB for atomicity
+- **Encryption by default**: Always use `encrypt: true` with `encryptionKey`
+- **Flush after apply**: Call `await view.flush()` after batch operations
+- **Update events**: Listen to `base.on('update', ...)` for changes
+- **Writer locality**: Use `Autobase.getLocalCore()` to get writer key before opening base
+- **Invite lifecycle**: Delete invite after successful pairing
+- **Bootstrap**: Optional DHT bootstrap for testnet isolation
+
+## Testing Pattern
+
+```javascript
+const testnet = require('hyperdht/testnet')
+const tn = await testnet(10, t)
+
+const pass = new MyApp(new Corestore(dir), {
+  bootstrap: tn.bootstrap
+})
+```
+
+## When to Use This Pattern
+
+Use autopass pattern when you need:
+- Multi-writer distributed database
+- Secure peer discovery without central coordination
+- Materialized view of append-only operations
+- Encrypted multi-writer collaboration
+- Read-only mirrors for data distribution
+- Schema-based operation validation
+- Type-safe operation dispatch
+
+## References
+
+### Primary Reference: hyperdb-autobase-learnings.md
+Comprehensive guide covering:
+- Multi-writer deployment procedures (3-writer setup)
+- Autobase service implementation patterns
+- Hyperdispatch router setup
+- RPC layer (server and client)
+- CLI implementation
+- Testing multi-writer scenarios
+- Operational considerations and disaster recovery
+- Load balancing with RPC client pool
+
+### Secondary Reference: holepunchto-autopass-8a5edab282632443.txt
+Detailed implementation for blind pairing/peering specifics:
+- `index.js` - AutopassPairer and Autopass classes
+- `schema.js` - Complete schema build pipeline
+- `spec/db/index.js` - Generated collection encoders
+- `spec/hyperdispatch/index.js` - Generated router with handlers
+- `test.js` - Blind pairing test patterns
+- Invite lifecycle management
+- Read-only mirror configuration
