@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: On PR Trigger (OCR)
 
 on:
   pull_request_target:

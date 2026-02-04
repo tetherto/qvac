@@ -1,4 +1,4 @@
-name: Run Integration Tests (Qvac-lib-decoder-audio)
+name: Integration Tests (Decoder-audio)
 
 on:
   workflow_call:

@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-infer-whispercpp)
+name: On PR Trigger (Whispercpp)
 
 on:
   pull_request_target:

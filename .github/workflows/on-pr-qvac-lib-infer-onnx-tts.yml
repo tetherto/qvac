@@ -1,4 +1,4 @@
-name: On PR Trigger (qvac-lib-infer-onnx-tts)
+name: On PR Trigger (TTS)
 
 on:
   pull_request_target:

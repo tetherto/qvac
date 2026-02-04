@@ -1,4 +1,4 @@
-name: OCR Quality Benchmark (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Benchmark (OCR)
 
 on:
   workflow_dispatch:

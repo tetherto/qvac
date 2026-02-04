@@ -1,4 +1,4 @@
-name: Run Integration Tests (Qvac-lib-infer-onnx-tts)
+name: Integration Tests (TTS)
 
 on:
   workflow_dispatch:

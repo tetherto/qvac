@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-decoder-audio)
+name: On PR Trigger (Decoder-audio)
 
 on:
   pull_request_target:

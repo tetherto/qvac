@@ -1,4 +1,4 @@
-name: Unpublish GPR Package Versions (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Unpublish GPR (OCR)
 on:
   pull_request:
     types:
@@ -29,6 +29,11 @@ on:
         type: boolean
         default: true
 run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   print-context:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-name: Benchmark Models on Version Publish (Qvac-lib-infer-nmtcpp)
+name: Benchmark on Publish (NMTCPP)
 
 on:
   release:

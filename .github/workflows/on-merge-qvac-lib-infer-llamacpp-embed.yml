@@ -1,4 +1,4 @@
-name: On Merge Trigger (Qvac-lib-infer-llamacpp-embed)
+name: On Merge Trigger (Embed)
 
 on:
   push:

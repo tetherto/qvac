@@ -1,4 +1,4 @@
-name: Release Notes Check
+name: Release Notes Check (Decoder-audio)
 
 on:
   workflow_call:

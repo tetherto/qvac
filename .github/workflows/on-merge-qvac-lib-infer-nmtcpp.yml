@@ -1,4 +1,4 @@
-name: On Merge to Main (Qvac-lib-infer-nmtcpp)
+name: On Merge Trigger (NMTCPP)
 
 on:
   push:

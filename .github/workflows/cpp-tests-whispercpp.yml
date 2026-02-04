@@ -1,4 +1,4 @@
-name: C++ Tests & Coverage (Qvac-lib-infer-whispercpp)
+name: CPP Tests(Whispercpp)
 
 on:
   workflow_call:

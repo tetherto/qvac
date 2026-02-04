@@ -1,4 +1,4 @@
-name: On Merge Trigger (Qvac-lib-infer-llamacpp-llm)
+name: On Merge Trigger (LLM)
 
 on:
   push:

@@ -1,0 +1,351 @@
+---
+description: Error handling guidelines for the QVAC SDK
+globs:
+  - packages/qvac-sdk/client/**/*.ts
+  - packages/qvac-sdk/server/**/*.ts
+  - packages/qvac-sdk/schemas/**/*.ts
+  - packages/qvac-sdk/utils/**/*.ts
+alwaysApply: false
+---
+
+# Error Handling Guidelines
+
+## Strict Client/Server Error Separation
+
+**This SDK has a strict separation between client-side and server-side errors:**
+
+- **Client Errors** (`@/utils/errors-client`): Used in client code (RPC client, API wrappers, tool helpers, etc.)
+- **Server Errors** (`@/utils/errors-server`): Used in server code (Bare worker, RPC handlers, model operations, etc.)
+
+This separation ensures:
+1. Clear boundaries between client and server responsibilities
+2. Proper error handling across the RPC boundary
+3. Consistent error codes within each domain
+
+## Use Structured Error Classes
+
+**ALWAYS use the structured error classes** from the appropriate location instead of plain `Error`:
+
+```typescript
+// ❌ NEVER do this
+throw new Error("Model not found");
+throw new Error(`Failed to load model: ${modelId}`);
+
+// ✅ ALWAYS do this - Client code
+import { InvalidResponseError } from "@/utils/errors-client";
+throw new InvalidResponseError("loadModel");
+
+// ✅ ALWAYS do this - Server code
+import { ModelNotFoundError, ModelLoadFailedError } from "@/utils/errors-server";
+throw new ModelNotFoundError(modelId);
+throw new ModelLoadFailedError(details);
+```
+
+## Error Class Naming Convention
+
+All error classes:
+- End with `Error` suffix (e.g., `ModelNotFoundError`)
+- Extend `QvacErrorBase` from `@qvac/error`
+- Are defined in:
+  - **Client errors**: `/utils/errors-client.ts` (codes 50,001-52,000)
+  - **Server errors**: `/utils/errors-server.ts` (codes 52,001-54,000)
+- Public API errors are exported from the main `index.ts`
+
+## Error Chaining - Preserve Original Errors
+
+**ALWAYS preserve the original error** using the `cause` parameter when catching and re-throwing:
+
+```typescript
+// ❌ NEVER lose the original error
+try {
+  await fs.readdir(modelDir);
+} catch (error) {
+  throw new ModelFileLocateFailedError(modelType, modelPath);
+}
+
+// ✅ ALWAYS preserve the original error
+try {
+  await fs.readdir(modelDir);
+} catch (error) {
+  throw new ModelFileLocateFailedError(modelType, modelPath, error);
+  // The original error is accessible via .cause property
+}
+```
+
+## Error Constructor Patterns
+
+### Simple Errors (no details)
+```typescript
+throw new InvalidOperationError();
+throw new StreamEndedError();
+```
+
+### Errors with Context
+```typescript
+throw new ModelNotFoundError(modelId);
+throw new InvalidResponseError("embed");
+throw new HTTPError(status, statusText);
+```
+
+### Errors with Details and Cause
+```typescript
+throw new ModelLoadFailedError(details, cause);
+throw new EmbedFailedError(response.error, cause);
+```
+
+## Available Error Categories
+
+### Client-Side Errors (50,001-52,000)
+
+Located in `@/utils/errors-client`
+
+#### Response Validation (50,001-50,199)
+- `InvalidResponseError` - Invalid response type
+- `InvalidOperationError` - Invalid operation
+- `StreamEndedError` - Stream ended unexpectedly
+- `NoDataReceivedError` - No data received
+- `InvalidAudioChunkError` - Invalid audio chunk
+- `InvalidToolsArrayError` - Invalid tools array
+- `InvalidToolSchemaError` - Invalid tool schema
+
+#### RPC Communication (50,200-50,399)
+- `RPCNoHandlerError` - No handler found
+- `RPCRequestNotSentError` - Request not sent
+- `RPCResponseStreamNotCreatedError` - Response stream not created
+- `RPCConnectionFailedError` - Connection failed
+- `UnknownRequestTypeError` - Unknown request type
+
+#### Provider/Delegation (50,400-50,599)
+- `ProviderStartFailedError` - Provider start failed
+- `ProviderStopFailedError` - Provider stop failed
+- `DelegateNoFinalResponseError` - No final response
+- `DelegateProviderError` - Delegated provider error
+- `DelegateConnectionFailedError` - Connection failed
+
+#### Build/Bundle (50,600-50,799)
+- `SDKNotFoundInNodeModulesError` - SDK not found
+- `WorkerFileNotFoundError` - Worker file not found
+
+#### Client-Side Operation Wrappers (50,800-52,000)
+Client-side wrappers for server operations (reference server error codes but thrown on client):
+- `ModelUnloadFailedError`
+- `EmbedFailedError`
+- `TranscriptionFailedError`
+- `TranslationFailedError`
+- `CancelFailedError`
+- `RAGSaveFailedError`
+- `RAGSearchFailedError`
+- `RAGDeleteFailedError`
+- `DownloadAssetFailedError`
+- `DownloadCancelledError`
+- `ChecksumValidationFailedError`
+- `HTTPError`
+- `ModelLoadFailedError`
+- `DeleteCacheFailedError`
+- `InvalidDeleteCacheParamsError`
+- `SetConfigFailedError`
+
+### Server-Side Errors (52,001-54,000)
+
+Located in `@/utils/errors-server`
+
+#### Model Registry (52,001-52,199)
+- `ModelAlreadyRegisteredError` - Already registered
+- `ModelNotFoundError` - Model not found
+- `ModelNotLoadedError` - Model not loaded
+- `ModelIsDelegatedError` - Model is delegated
+- `UnknownModelTypeError` - Unknown type
+
+#### Model Loading (52,200-52,399)
+- `ModelLoadFailedError` - Load failed
+- `ModelFileNotFoundError` - File not found
+- `ModelFileNotFoundInDirError` - File not in directory
+- `ModelFileLocateFailedError` - Failed to locate
+- `ProjectionModelRequiredError` - Projection model required
+- `VADModelRequiredError` - VAD model required
+- `TTSConfigModelRequiredError` - TTS config required
+- `ESpeakDataPathRequiredError` - eSpeak path required
+
+#### Model Operations (52,400-52,799)
+- `ModelUnloadFailedError` - Unload failed
+- `EmbedFailedError` - Embedding failed
+- `EmbedNoEmbeddingsError` - No embeddings returned
+- `TranscriptionFailedError` - Transcription failed
+- `AudioFileNotFoundError` - Audio file not found
+- `TranslationFailedError` - Translation failed
+- `CompletionFailedError` - Completion failed
+- `AttachmentNotFoundError` - Attachment not found
+- `CancelFailedError` - Cancel failed
+- `TextToSpeechFailedError` - TTS failed
+
+#### RAG Operations (52,800-52,999)
+- `RAGSaveFailedError` - Save failed
+- `RAGSearchFailedError` - Search failed
+- `RAGDeleteFailedError` - Delete failed
+- `RAGUnknownOperationError` - Unknown operation
+- `RAGHyperDBFailedError` - HyperDB operation failed
+- `RAGWorkspaceModelMismatchError` - Workspace model mismatch
+
+#### Download/Resources (53,000-53,199)
+- `FileNotFoundError` - File not found
+- `DownloadCancelledError` - Download cancelled
+- `ChecksumValidationFailedError` - Checksum failed
+- `HTTPError` - HTTP error
+- `NoResponseBodyError` - No response body
+- `ResponseBodyNotReadableError` - Body not readable
+- `NoBlobFoundError` - No blob found
+- `DownloadAssetFailedError` - Asset download failed
+- `SeedingNotSupportedError` - Seeding not supported
+- `HyperdriveDownloadFailedError` - Hyperdrive download failed
+
+#### Cache Operations (53,200-53,349)
+- `DeleteCacheFailedError` - Delete cache failed
+- `InvalidDeleteCacheParamsError` - Invalid params
+- `CacheDirNotAbsoluteError` - Not absolute path
+- `CacheDirNotWritableError` - Not writable
+
+#### Config Operations (53,350-53,499)
+- `SetConfigFailedError` - Set config failed
+
+#### System/Runtime (53,500-53,699)
+- `FFmpegNotAvailableError` - FFmpeg not available
+- `AudioPlayerFailedError` - Audio player failed
+- `InvalidAudioChunkError` - Invalid audio chunk
+
+#### RPC/Delegation (Server-side) (53,700-53,899)
+- `DelegateNoFinalResponseError` - No final response
+- `DelegateConnectionFailedError` - Connection failed
+
+## Adding New Error Types
+
+If you need a new error type:
+
+1. **Determine if it's a client or server error**:
+   - Client: RPC client, API wrappers, tool helpers, UI-related
+   - Server: Bare worker, model operations, file system, RAG operations
+
+2. **Add error code** to the appropriate schema:
+   - Client: `SDK_CLIENT_ERROR_CODES` in `/schemas/sdk-errors-client.ts` (50,001-52,000)
+   - Server: `SDK_SERVER_ERROR_CODES` in `/schemas/sdk-errors-server.ts` (52,001-54,000)
+
+3. **Add error definition** to `errorDefinitions` in the same file
+
+4. **Create error class** in the appropriate file:
+   - Client: `/utils/errors-client.ts`
+   - Server: `/utils/errors-server.ts`
+
+```typescript
+// Client error example
+export class MyNewClientError extends QvacErrorBase {
+  constructor(param1: string, param2?: string, cause?: unknown) {
+    super(createErrorOptions(
+      SDK_CLIENT_ERROR_CODES.MY_NEW_ERROR,
+      param2 ? [param1, param2] : [param1],
+      cause
+    ));
+  }
+}
+
+// Server error example
+export class MyNewServerError extends QvacErrorBase {
+  constructor(param1: string, param2?: string, cause?: unknown) {
+    super(createErrorOptions(
+      SDK_SERVER_ERROR_CODES.MY_NEW_ERROR,
+      param2 ? [param1, param2] : [param1],
+      cause
+    ));
+  }
+}
+```
+
+5. **Export from main index** if it's a public API error
+
+**Important**: Never mix client and server error codes or classes!
+
+## Catching Errors
+
+```typescript
+// Client-side error handling
+import { InvalidResponseError, SDK_CLIENT_ERROR_CODES } from "@qvac/sdk";
+
+try {
+  const response = await send(request);
+} catch (error) {
+  // Check by instance
+  if (error instanceof InvalidResponseError) {
+    console.log("Invalid response!");
+  }
+  
+  // Check by error code (50,001 = INVALID_RESPONSE_TYPE)
+  if (error.code === SDK_CLIENT_ERROR_CODES.INVALID_RESPONSE_TYPE) {
+    console.log("Invalid response!");
+  }
+  
+  // Access the original error
+  if (error.cause) {
+    console.log("Original error:", error.cause);
+  }
+}
+
+// Server-side error handling
+import { ModelNotFoundError, SDK_SERVER_ERROR_CODES } from "@/utils/errors-server";
+
+try {
+  const model = getModel(modelId);
+} catch (error) {
+  // Check by instance
+  if (error instanceof ModelNotFoundError) {
+    console.log("Model not found!");
+  }
+  
+  // Check by error code (52,002 = MODEL_NOT_FOUND)
+  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND) {
+    console.log("Model not found!");
+  }
+  
+  // Access the original error
+  if (error.cause) {
+    console.log("Original error:", error.cause);
+  }
+}
+```
+
+## Error Code Ranges
+
+**SDK Error Codes: 50,001-54,000**
+
+- **50,001-52,000**: Client-side errors (2,000 codes)
+  - 50,001-50,199: Response Validation
+  - 50,200-50,399: RPC Communication
+  - 50,400-50,599: Provider/Delegation
+  - 50,600-50,799: Build/Bundle
+  - 50,800-52,000: Client-side Operation Wrappers (1,200 codes for future growth)
+
+- **52,001-54,000**: Server-side errors (2,000 codes)
+  - 52,001-52,199: Model Registry
+  - 52,200-52,399: Model Loading
+  - 52,400-52,799: Model Operations (400 codes)
+  - 52,800-52,999: RAG Operations
+  - 53,000-53,199: Download/Resources
+  - 53,200-53,349: Cache Operations
+  - 53,350-53,499: Config Operations
+  - 53,500-53,699: System/Runtime
+  - 53,700-53,899: RPC/Delegation (Server-side)
+  - 53,900-54,000: Reserved for future use
+
+## Key Principles
+
+1. ✅ **ALWAYS** use structured error classes, never plain `Error`
+2. ✅ **ALWAYS** preserve original errors via `cause` parameter
+3. ✅ **ALWAYS** provide meaningful error details (IDs, paths, etc.)
+4. ✅ **ALWAYS** import from the correct location:
+   - Client code: `@/utils/errors-client`
+   - Server code: `@/utils/errors-server`
+5. ✅ **ALWAYS** use codes from the correct constant:
+   - Client: `SDK_CLIENT_ERROR_CODES`
+   - Server: `SDK_SERVER_ERROR_CODES`
+6. ✅ **ALWAYS** respect the client/server error separation
+7. ❌ **NEVER** throw plain `Error` objects in SDK code
+8. ❌ **NEVER** lose the original error when re-throwing
+9. ❌ **NEVER** use string concatenation for error messages - let the error class handle it
+10. ❌ **NEVER** mix client and server error classes or codes

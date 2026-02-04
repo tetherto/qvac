@@ -1,4 +1,4 @@
-name: Run Mobile Integration Tests (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Mobile Integration Tests (OCR)
 
 on:
   workflow_call:

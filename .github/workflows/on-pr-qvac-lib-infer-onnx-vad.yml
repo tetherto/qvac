@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-infer-onnx-vad)
+name: On PR Trigger (VAD)
 
 on:
   pull_request_target:
