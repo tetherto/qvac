@@ -982,6 +982,7 @@ void LlamaModel::finetune(
             llama_finetuning_helpers::resolveAdapterOutputPath(params);
         logCallback("LoRA adapter saved to: " + adapterPath);
         logCallback("Finetune completed successfully");
+        logCallback(R"({"type":"FinetuneComplete","status":"IDLE"})");
       }
     }
   } catch (const std::exception& ex) {
@@ -989,6 +990,7 @@ void LlamaModel::finetune(
     currentCheckpointState_ = nullptr;
     if (logCallback) {
       logCallback(std::string{"Finetune error: "} + ex.what());
+      logCallback(R"({"type":"FinetuneComplete","status":"ERROR"})");
     }
     throw;
   }
