@@ -188,6 +188,17 @@ class LlmLlamacpp extends BaseInference {
     // This is called directly from _addonOutputCallback, so we MUST override it here
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
+      // Event-based finetuning completion: detect FinetuneComplete from C++
+      if (typeof data === 'string') {
+        try {
+          const obj = JSON.parse(data)
+          if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
+            this._finetuneCompletionResolve(obj.status)
+            return
+          }
+        } catch (_) { /* not JSON, continue */ }
+      }
+
       // For LogMsg events, use original logger (these come from C++, not BaseInference)
       if (eventType === 'LogMsg') {
         const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
@@ -324,67 +335,83 @@ class LlmLlamacpp extends BaseInference {
     }
 
     return this._withExclusiveRun(async () => {
-      this.logger?.info?.('Calling addon.finetune()...')
-      await this.addon.finetune(params)
-      this.logger?.info?.('addon.finetune() returned, waiting for completion...')
-      const finalStatus = await this._waitForFinetuneCompletion()
-      this.logger?.info?.(`Finetuning completed with status: ${finalStatus}`)
-      return { status: finalStatus }
+      let resolveCompletion
+      this._finetuneCompletionPromise = new Promise((resolve) => {
+        resolveCompletion = resolve
+      })
+      this._finetuneCompletionResolve = resolveCompletion
+      try {
+        this.logger?.info?.('Calling addon.finetune()...')
+        await this.addon.finetune(params)
+        this.logger?.info?.('addon.finetune() returned, waiting for completion...')
+        const finalStatus = await this._waitForFinetuneCompletion()
+        this.logger?.info?.(`Finetuning completed with status: ${finalStatus}`)
+        return { status: finalStatus }
+      } finally {
+        this._finetuneCompletionResolve = null
+      }
     })
   }
 
   async _waitForFinetuneCompletion ({ pollIntervalMs = 500, timeoutMs = 100000000000 } = {}) {
-    const deadline = Date.now() + timeoutMs
-    let sawFinetuneState = false
-    let sawPausedState = false
+    const fallbackPolling = async () => {
+      const deadline = Date.now() + timeoutMs
+      let sawFinetuneState = false
+      let sawPausedState = false
 
-    while (Date.now() <= deadline) {
-      const status = await this.addon.status()
-      if (status === 'FINETUNING') {
-        sawFinetuneState = true
-        // If we saw PAUSED before and now see FINETUNING, training has resumed
-        // Reset the paused flag since we're training again
-        if (sawPausedState) {
-          sawPausedState = false
-        }
-      } else if (status === 'PAUSED') {
-        sawPausedState = true
-        // Continue waiting - training may resume
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-        continue
-      } else if (sawFinetuneState) {
-        // We've seen FINETUNING before
-        if (status === 'IDLE') {
-          // If we saw PAUSED before, training might resume, so wait a bit longer
+      while (Date.now() <= deadline) {
+        const status = await this.addon.status()
+        if (status === 'FINETUNING') {
+          sawFinetuneState = true
+          // If we saw PAUSED before and now see FINETUNING, training has resumed
+          // Reset the paused flag since we're training again
           if (sawPausedState) {
-            // Wait a bit to see if training resumes
-            await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 2))
-            const nextStatus = await this.addon.status()
-            // If status is still IDLE after waiting, training is truly complete
-            if (nextStatus === 'IDLE') {
-              return status
-            }
-            // Otherwise, status changed (likely to FINETUNING from resume), continue
-            continue
+            sawPausedState = false
           }
-          // No pause was seen, training is complete
+        } else if (status === 'PAUSED') {
+          sawPausedState = true
+          // Continue waiting - training may resume
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+          continue
+        } else if (sawFinetuneState) {
+          // We've seen FINETUNING before
+          if (status === 'IDLE') {
+            // If we saw PAUSED before, training might resume, so wait a bit longer
+            if (sawPausedState) {
+              // Wait a bit to see if training resumes
+              await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 2))
+              const nextStatus = await this.addon.status()
+              // If status is still IDLE after waiting, training is truly complete
+              if (nextStatus === 'IDLE') {
+                return status
+              }
+              // Otherwise, status changed (likely to FINETUNING from resume), continue
+              continue
+            }
+            // No pause was seen, training is complete
+            return status
+          }
+          // Return on other terminal states (ERROR, etc.)
+          return status
+        } else if (status === 'IDLE' && !sawFinetuneState) {
+          // Training hasn't started yet, keep waiting
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+          continue
+        } else if (status !== 'LOADING') {
+          // Other states (ERROR, etc.) - return immediately
           return status
         }
-        // Return on other terminal states (ERROR, etc.)
-        return status
-      } else if (status === 'IDLE' && !sawFinetuneState) {
-        // Training hasn't started yet, keep waiting
+
         await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-        continue
-      } else if (status !== 'LOADING') {
-        // Other states (ERROR, etc.) - return immediately
-        return status
       }
 
-      await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+      throw new Error('Time out')
     }
 
-    throw new Error('Time out')
+    return Promise.race([
+      this._finetuneCompletionPromise,
+      fallbackPolling()
+    ])
   }
 
   /**
