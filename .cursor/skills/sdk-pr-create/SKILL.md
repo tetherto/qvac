@@ -56,78 +56,12 @@ Infer first, ask only if uncertain:
 - If test files modified → "Unit tests added/updated for X"
 - If no tests → ASK what manual testing was done
 
-## PR Title Format
+## Format References
 
-```
-TICKET prefix[tags]: subject
-```
+- **PR title format**: See `.cursor/rules/sdk/commit-and-pr-format.mdc`
+- **PR body template**: See `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 
-- TICKET: `QVAC-123`, `SDK-456`, etc.
-- prefix: `feat`, `fix`, `doc`, `test`, `chore`, `infra`
-- tags (optional): `[api]`, `[bc]`, `[mod]`, `[notask]`, `[skiplog]`
-- subject: lowercase, sentence case
-
-Use `[notask]` when omitting ticket: `prefix[notask]: subject`
-
-## PR Description Template
-
-Fill in based on the diff analysis:
-
-```markdown
-**Note**: be concise and prefer bullet points.
-
-## 🎯 What problem does this PR solve?
-
-- [User-facing issue, bug, or need - NOT implementation details]
-
-## 📝 How does it solve it?
-
-- [High-level approach, key design decisions]
-
-## 🧪 How was it tested?
-
-**Delete this section if not applicable.**
-
-- [Actual test scenarios: OS, edge cases, etc.]
-
-## 💥 Breaking Changes
-
-**Required for PRs with `[bc]` tag. Delete this section if not applicable.**
-
-**BEFORE:**
-```typescript
-// old code example
-```
-
-**AFTER:**
-```typescript
-// new code example
-```
-
-## 🔌 API Changes
-
-**Required for PRs with `[api]` tag. Delete this section if not applicable.**
-
-```typescript
-// new API usage example
-```
-
-## 📦 Models
-
-**Required for PRs with `[mod]` tag. Delete this section if not applicable.**
-
-### Added models
-
-```
-MODEL_CONSTANT_NAME
-```
-
-### Removed models
-
-```
-OLD_MODEL_CONSTANT
-```
-```
+Fill template sections based on the diff analysis. Delete sections that don't apply.
 
 ## Output Format
 
