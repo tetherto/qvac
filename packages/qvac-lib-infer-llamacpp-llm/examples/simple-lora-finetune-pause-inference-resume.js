@@ -5,8 +5,106 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
+const https = require('bare-https')
+
+const MODEL = {
+  name: 'Qwen3-0.6B-Q8_0.gguf',
+  url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
+}
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function downloadFile (url, dest) {
+  return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    const req = https.request(url, response => {
+      if ([301, 302, 307, 308].includes(response.statusCode)) {
+        file.destroy()
+        fs.unlink(dest, (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
+
+          let redirectUrl = response.headers.location
+          if (redirectUrl.startsWith('/')) {
+            const originalUrl = new URL(url)
+            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+          }
+
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve)
+            .catch(safeReject)
+        })
+        return
+      }
+
+      if (response.statusCode !== 200) {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
+        return
+      }
+
+      response.on('error', (err) => {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+
+      file.on('close', () => {
+        safeResolve()
+      })
+    })
+
+    req.on('error', err => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    req.end()
+  })
+}
+
+async function ensureModel ({ modelName, downloadUrl }) {
+  const modelDir = path.resolve('./models')
+
+  const modelPath = path.join(modelDir, modelName)
+
+  if (fs.existsSync(modelPath)) {
+    const stats = fs.statSync(modelPath)
+    console.log(`Found ${modelName}: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+    return [modelName, modelDir]
+  }
+
+  fs.mkdirSync(modelDir, { recursive: true })
+  console.log(`Downloading test model ${modelName}...`)
+
+  await downloadFile(downloadUrl, modelPath)
+
+  const stats = fs.statSync(modelPath)
+  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  return [modelName, modelDir]
+}
 
 async function getStatus (model) {
   if (model.addon) {
@@ -57,7 +155,7 @@ function findPauseCheckpoint (checkpointDir) {
 
 async function runInference (client, description, messages) {
   console.log(`\n${'='.repeat(60)}`)
-  console.log(`Running inference: ${description}`)
+  console.log(`🔮 Starting inference: ${description}`)
   console.log(`${'='.repeat(60)}`)
   console.log('Prompt:', messages[messages.length - 1].content)
   console.log('\nResponse:')
@@ -67,21 +165,73 @@ async function runInference (client, description, messages) {
     process.stdout.write(token)
   }).await()
   console.log('\n')
+  console.log(`✅ Inference completed: ${description}`)
 }
 
 async function main () {
-  const baseModelPath = './models/Qwen3_0.6B.Q8_0.gguf'
-  const trainDatasetPath = './models/train_HF.jsonl'
+  const [modelName, modelDir] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+
+  const trainDatasetPath = './models/small_train_HF.jsonl'
   const evalDatasetPath = './models/eval_HF.jsonl'
 
-  const loader = new FilesystemDL({ dirPath: path.dirname(baseModelPath) })
+  const loader = new FilesystemDL({ dirPath: modelDir })
+
+  // Store original console methods to restore later
+  const originalConsoleLog = console.log
+  const originalConsoleInfo = console.info
+  const originalConsoleWarn = console.warn
+
+  // Helper to check if message should be suppressed
+  const shouldSuppressMessage = (args) => {
+    const message = args.join(' ')
+    return message && message.includes('No response found for job')
+  }
+
+  // Override console methods to filter out "No response found for job" messages
+  console.log = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleLog.apply(console, args)
+  }
+
+  console.info = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleInfo.apply(console, args)
+  }
+
+  // CRITICAL: BaseInference uses logger.warn() for "No response found for job"
+  console.warn = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleWarn.apply(console, args)
+  }
+
+  // Create a filtered logger that suppresses "No response found for job" messages
+  const filteredLogger = {
+    info: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleInfo.apply(console, args)
+    },
+    log: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleLog.apply(console, args)
+    },
+    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    warn: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleWarn.apply(console, args)
+    },
+    error: console.error.bind(console),
+    debug: console.debug.bind(console)
+  }
 
   const args = {
     loader,
     opts: { stats: true },
-    logger: console,
-    diskPath: path.dirname(baseModelPath),
-    modelName: path.basename(baseModelPath)
+    logger: filteredLogger,
+    diskPath: modelDir,
+    modelName
   }
 
   const config = {
@@ -99,9 +249,6 @@ async function main () {
     console.log('Loading model...')
     client = new LlamaClient(args, config)
 
-    // Override the _outputCallback to capture C++ log messages
-    console.log('[JS] Setting up log message capture...')
-
     // Store original _createAddon if it exists
     const originalCreateAddon = client._createAddon?.bind(client)
 
@@ -110,10 +257,16 @@ async function main () {
       client._createAddon = function (configurationParams, finetuningParams) {
         const originalOutputCb = this._outputCallback?.bind(this)
         this._outputCallback = function (instance, eventType, jobId, data, extra) {
+          // Filter out "No response found for job" messages that interfere with progress bar
+          const dataStr = typeof data === 'string' ? data : (data?.message || JSON.stringify(data) || '')
+          if (dataStr && dataStr.includes('No response found for job')) {
+            return // Suppress these messages during finetuning - don't call originalOutputCb
+          }
+
           if (eventType === 'LogMsg') {
-            const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+            const logMsg = dataStr
             logMessages.push(logMsg)
-            console.log(`[C++ LOG] ${logMsg}`)
+            console.log(logMsg)
           }
           if (originalOutputCb) {
             return originalOutputCb(instance, eventType, jobId, data, extra)
@@ -186,9 +339,9 @@ async function main () {
     await waitForStatus(client, 'FINETUNING', { pollIntervalMs: 200, timeoutMs: 30000 })
     console.log('✅ Training started\n')
 
-    // Wait a bit to let some training happen
-    console.log('Training for 8 seconds...')
-    await sleep(8000)
+    // Wait 1 minute 30 seconds before pausing
+    console.log('Training for 90 seconds (1 minute 30 seconds) before pausing...')
+    await sleep(90000)
 
     const statusBeforePause = await getStatus(client)
     console.log(`Status before pause: ${statusBeforePause}\n`)
@@ -255,10 +408,10 @@ async function main () {
         lora: loraAdapterPath
       }
 
-      console.log('Loading model with LoRA adapter for inference...')
+      console.log('🔮 Preparing inference 1: Loading model with LoRA adapter...')
       inferenceClientWithLora = new LlamaClient(args, inferenceConfigWithLora)
       await inferenceClientWithLora.load()
-      console.log('Model with LoRA adapter loaded successfully\n')
+      console.log('✅ Model with LoRA adapter loaded successfully\n')
 
       await runInference(inferenceClientWithLora, 'Paused checkpoint with LoRA adapters', inferenceMessages)
     } finally {
@@ -284,10 +437,10 @@ async function main () {
         // Note: No 'lora' parameter - using base model only
       }
 
-      console.log('Loading base model for inference (no LoRA adapters)...')
+      console.log('🔮 Preparing inference 2: Loading base model (no LoRA adapters)...')
       inferenceClientBase = new LlamaClient(args, inferenceConfigBase)
       await inferenceClientBase.load()
-      console.log('Base model loaded successfully\n')
+      console.log('✅ Base model loaded successfully\n')
 
       await runInference(inferenceClientBase, 'Base model without LoRA adapters', inferenceMessages)
     } finally {
@@ -352,6 +505,11 @@ async function main () {
     console.error('Stack:', error.stack)
     process.exit(1)
   } finally {
+    // Restore original console methods
+    console.log = originalConsoleLog
+    console.info = originalConsoleInfo
+    console.warn = originalConsoleWarn
+
     if (client) {
       try {
         console.log('\nCleaning up...')

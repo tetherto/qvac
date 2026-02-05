@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
@@ -506,8 +508,11 @@ void optEpochCallback(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
+  const bool isFinalBatch = (ibatch == ibatchMax - 1);
+  
   ggml_opt_epoch_callback_progress_bar(
       train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+  std::fflush(stdout);
 
   if (!train) {
     return;
@@ -517,16 +522,17 @@ void optEpochCallback(
   if (state == nullptr) {
     return;
   }
+  
+  // Check if pause checkpoint is already saved before any state modifications
+  bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
+  bool shouldExitAlreadySet = state->shouldExit.load();
+  if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
+    return;
+  }
 
   // Handle mid-epoch resume: verify we're starting from the correct batch
-  // NOTE: With the modified llama_opt_epoch that supports resume_from_batch
-  // parameter, batches before the resume point are actually skipped (not
-  // processed), so we should start processing from the correct batch. This
-  // verification ensures the resume is working correctly.
   if (state->skippingBatches && state->batchOffsetWithinEpoch >= 0) {
-    // We're resuming mid-epoch, verify we're starting from the correct batch
     if (ibatch == state->batchOffsetWithinEpoch) {
-      // We've reached the resume point, stop skipping flag
       state->skippingBatches = false;
       if (state->logFn) {
         std::ostringstream resumeMsg;
@@ -535,8 +541,6 @@ void optEpochCallback(
         state->logFn(resumeMsg.str());
       }
     } else if (ibatch < state->batchOffsetWithinEpoch) {
-      // This shouldn't happen if resume_from_batch is working correctly,
-      // but log a warning if it does
       if (state->logFn) {
         std::ostringstream warnMsg;
         warnMsg << "Warning: Processing batch " << (ibatch + 1)
@@ -544,14 +548,11 @@ void optEpochCallback(
                 << (state->batchOffsetWithinEpoch + 1);
         state->logFn(warnMsg.str());
       }
-      // Don't update state for unexpected batches
       return;
     }
   }
 
-  // Increment step counter (for both pause and periodic checkpoints)
-  // Increment BEFORE checking pause so globalStep reflects the batch we just
-  // processed
+  // Increment step counter before checking pause so globalStep reflects the batch we just processed
   state->globalStep += 1;
 
   // Verify first batch after resume matches expected batch
@@ -568,32 +569,23 @@ void optEpochCallback(
     }
   }
 
-  // Check for pause request
-  if (state->pauseRequested.load()) {
-    // Save pause checkpoint only once per pause request
-    if (!state->pauseCheckpointSaved.load()) {
-      // CRITICAL: Request immediate stop after current batch using new early
-      // exit API This ensures training stops immediately after this batch, not
-      // after entire epoch Call this before saving checkpoint to ensure clean
-      // state
+  bool pauseRequestedValue = state->pauseRequested.load();
+  
+  if (pauseRequestedValue) {
+    bool checkpointAlreadySaved = state->pauseCheckpointSaved.load();
+    
+    if (!checkpointAlreadySaved) {
       if (state->ctx != nullptr) {
         llama_opt_request_stop(state->ctx);
       }
 
-      // Save pause checkpoint
       if (savePauseCheckpoint(optCtx, *state)) {
-        // Mark checkpoint as saved to prevent multiple saves
         state->pauseCheckpointSaved.store(true);
-
-        // Signal training loop to exit
-        // Note: We do NOT call llama_opt_cleanup() here because the callback
-        // is called from within llama_opt_epoch(), which is still using the
-        // optimizer context. Cleanup will be done after the training loop
-        // exits.
         state->shouldExit.store(true);
+        
         if (state->logFn) {
           std::ostringstream pauseMsg;
-          pauseMsg << "Training paused at batch " << ibatch << "/" << ibatchMax
+          pauseMsg << "Training paused at batch " << (ibatch + 1) << "/" << ibatchMax
                    << " | epoch " << (state->currentEpoch + 1)
                    << " | Checkpoint saved at: "
                    << state->pauseCheckpointPath.string();
@@ -605,20 +597,34 @@ void optEpochCallback(
         }
       }
     }
-    return; // Exit callback - no further batches in this epoch will be
-            // processed
+    return;
   }
 
-  // Regular periodic checkpointing
   if (state->checkpointInterval <= 0) {
+    if (isFinalBatch) {
+      ggml_opt_epoch_callback_progress_bar(
+          train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+      std::fflush(stdout);
+    }
     return;
   }
 
   if (state->globalStep % state->checkpointInterval != 0) {
+    if (isFinalBatch) {
+      ggml_opt_epoch_callback_progress_bar(
+          train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+      std::fflush(stdout);
+    }
     return;
   }
 
   saveCheckpoint(optCtx, *state);
+  
+  if (isFinalBatch) {
+    ggml_opt_epoch_callback_progress_bar(
+        train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+    std::fflush(stdout);
+  }
 }
 
 // Wrapper function that uses global state (for compatibility with callback
@@ -653,14 +659,6 @@ void clearGlobalCheckpointState() { gTrainingCheckpointState = nullptr; }
 std::string resolveAdapterOutputPath(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
   namespace fs = std::filesystem;
-  if (!params.outputAdapterPath.empty()) {
-    const fs::path explicitPath(params.outputAdapterPath);
-    if (explicitPath.has_parent_path()) {
-      fs::create_directories(explicitPath.parent_path());
-    }
-    return explicitPath.string();
-  }
-
   fs::path base(params.outputParametersDir);
   if (base.empty()) {
     base = fs::path("finetuned-model");

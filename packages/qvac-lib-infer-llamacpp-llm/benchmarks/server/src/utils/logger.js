@@ -1,5 +1,7 @@
 'use strict'
 
+const process = require('bare-process')
+
 const levels = {
   debug: 'DEBUG',
   info: 'INFO',

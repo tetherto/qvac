@@ -5,8 +5,106 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
+const https = require('bare-https')
+
+const MODEL = {
+  name: 'Qwen3-0.6B-Q8_0.gguf',
+  url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
+}
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function downloadFile (url, dest) {
+  return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    const req = https.request(url, response => {
+      if ([301, 302, 307, 308].includes(response.statusCode)) {
+        file.destroy()
+        fs.unlink(dest, (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
+
+          let redirectUrl = response.headers.location
+          if (redirectUrl.startsWith('/')) {
+            const originalUrl = new URL(url)
+            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+          }
+
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve)
+            .catch(safeReject)
+        })
+        return
+      }
+
+      if (response.statusCode !== 200) {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
+        return
+      }
+
+      response.on('error', (err) => {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+
+      file.on('close', () => {
+        safeResolve()
+      })
+    })
+
+    req.on('error', err => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    req.end()
+  })
+}
+
+async function ensureModel ({ modelName, downloadUrl }) {
+  const modelDir = path.resolve('./models')
+
+  const modelPath = path.join(modelDir, modelName)
+
+  if (fs.existsSync(modelPath)) {
+    const stats = fs.statSync(modelPath)
+    console.log(`Found ${modelName}: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+    return [modelName, modelDir]
+  }
+
+  fs.mkdirSync(modelDir, { recursive: true })
+  console.log(`Downloading test model ${modelName}...`)
+
+  await downloadFile(downloadUrl, modelPath)
+
+  const stats = fs.statSync(modelPath)
+  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  return [modelName, modelDir]
+}
 
 async function getStatus (model) {
   if (model.addon) {
@@ -24,7 +122,7 @@ async function waitForStatus (model, expected, { pollIntervalMs = 200, timeoutMs
         return current
       }
     } catch (error) {
-      console.log(`Status check failed: ${error.message}, retrying...`)
+      // Retry silently
     }
     await sleep(pollIntervalMs)
   }
@@ -32,18 +130,69 @@ async function waitForStatus (model, expected, { pollIntervalMs = 200, timeoutMs
 }
 
 async function main () {
-  const baseModelPath = './models/Qwen3_0.6B.Q8_0.gguf'
-  const trainDatasetPath = './models/train_HF.jsonl'
+  const [modelName, modelDir] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+
+  const trainDatasetPath = './models/small_train_HF.jsonl'
   const evalDatasetPath = './models/eval_HF.jsonl'
 
-  const loader = new FilesystemDL({ dirPath: path.dirname(baseModelPath) })
+  const loader = new FilesystemDL({ dirPath: modelDir })
+
+  // Store original console methods to restore later
+  const originalConsoleLog = console.log
+  const originalConsoleInfo = console.info
+  const originalConsoleWarn = console.warn
+
+  // Helper to check if message should be suppressed
+  const shouldSuppressMessage = (args) => {
+    const message = args.join(' ')
+    return message && message.includes('No response found for job')
+  }
+
+  // Override console methods to filter out "No response found for job" messages
+  console.log = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleLog.apply(console, args)
+  }
+
+  console.info = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleInfo.apply(console, args)
+  }
+
+  // CRITICAL: BaseInference uses logger.warn() for "No response found for job"
+  console.warn = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleWarn.apply(console, args)
+  }
+
+  // Create a filtered logger that suppresses "No response found for job" messages
+  const filteredLogger = {
+    info: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleInfo.apply(console, args)
+    },
+    log: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleLog.apply(console, args)
+    },
+    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    warn: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleWarn.apply(console, args)
+    },
+    error: console.error.bind(console),
+    debug: console.debug.bind(console)
+  }
 
   const args = {
     loader,
     opts: { stats: true },
-    logger: console,
-    diskPath: path.dirname(baseModelPath),
-    modelName: path.basename(baseModelPath)
+    logger: filteredLogger,
+    diskPath: modelDir,
+    modelName
   }
 
   const config = {
@@ -54,31 +203,26 @@ async function main () {
   }
 
   let client
-  const logMessages = []
 
   try {
     console.log('=== Multiple Pause/Resume Finetuning Test ===\n')
     console.log('Loading model...')
     client = new LlamaClient(args, config)
 
-    // Override the _outputCallback to capture C++ log messages
-    // Note: _outputCallback is set during _createAddon, so we need to override it after load
-    // But we can set up a wrapper that will be used
-    console.log('[JS] Setting up log message capture...')
-
     // Store original _createAddon if it exists
     const originalCreateAddon = client._createAddon?.bind(client)
 
-    // Override _createAddon to intercept the output callback
+    // Override _createAddon to filter out unwanted log messages
     if (originalCreateAddon) {
       client._createAddon = function (configurationParams, finetuningParams) {
         const originalOutputCb = this._outputCallback?.bind(this)
         this._outputCallback = function (instance, eventType, jobId, data, extra) {
-          if (eventType === 'LogMsg') {
-            const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
-            logMessages.push(logMsg)
-            console.log(`[C++ LOG] ${logMsg}`)
+          // Filter out "No response found for job" messages
+          const dataStr = typeof data === 'string' ? data : (data?.message || JSON.stringify(data) || '')
+          if (dataStr && dataStr.includes('No response found for job')) {
+            return // Suppress these messages
           }
+          
           if (originalOutputCb) {
             return originalOutputCb(instance, eventType, jobId, data, extra)
           }
@@ -140,37 +284,21 @@ async function main () {
 
     // Start finetuning (non-blocking)
     console.log('🚀 Starting finetuning...')
-    console.log('[JS] Calling client.finetune()...')
     const finetuneTask = client.finetune(finetuneOptions)
-    console.log('[JS] client.finetune() returned, task:', finetuneTask)
 
     // Wait for training to start
-    console.log('Waiting for training to start...')
-    // Check status a few times to see what's happening
-    for (let i = 0; i < 5; i++) {
-      await sleep(500)
-      await getStatus(client)
-    }
     await waitForStatus(client, 'FINETUNING', { pollIntervalMs: 200, timeoutMs: 30000 })
     console.log('✅ Training started\n')
 
-    // Helper function to verify pause checkpoint was created
-    async function verifyPauseCheckpoint (checkpointDir, pauseNumber) {
-      console.log(`Verifying pause checkpoint #${pauseNumber} was created...`)
-      let checkpointFound = false
+    // Helper function to get pause step number from checkpoint directory
+    async function getPauseStepNumber (checkpointDir) {
       const maxRetries = 10
       const retryDelayMs = 500
 
       for (let retry = 0; retry < maxRetries; retry++) {
         try {
-          if (!fs.existsSync(checkpointDir)) {
-            if (retry === maxRetries - 1) {
-              console.log(`⚠️  Checkpoint directory does not exist: ${checkpointDir}`)
-            }
-          } else {
-            // Find the latest pause checkpoint directory
+          if (fs.existsSync(checkpointDir)) {
             const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
-            let latestCheckpoint = null
             let latestStep = -1
 
             for (const entry of entries) {
@@ -182,135 +310,100 @@ async function main () {
                   const step = parseInt(stepStr, 10)
                   if (!isNaN(step) && step > latestStep) {
                     latestStep = step
-                    latestCheckpoint = dirName
                   }
                 }
               }
             }
 
-            if (latestCheckpoint) {
-              const pauseCheckpointPathVerify = path.join(checkpointDir, latestCheckpoint)
-              // Check for key files to ensure checkpoint is complete
-              const metadataPath = path.join(pauseCheckpointPathVerify, 'metadata.json')
-              if (fs.existsSync(metadataPath)) {
-                console.log(`✅ Pause checkpoint #${pauseNumber} directory exists: ${pauseCheckpointPathVerify}`)
-                console.log(`✅ Pause checkpoint #${pauseNumber} metadata file exists`)
-                checkpointFound = true
-                break
-              }
+            if (latestStep >= 0) {
+              return latestStep
             }
           }
         } catch (err) {
-          if (retry === maxRetries - 1) {
-            console.log(`⚠️  Could not verify pause checkpoint #${pauseNumber}: ${err.message}`)
-          }
+          // Continue retrying
         }
 
-        if (!checkpointFound && retry < maxRetries - 1) {
+        if (retry < maxRetries - 1) {
           await sleep(retryDelayMs)
         }
       }
 
-      if (!checkpointFound) {
-        console.log(`⚠️  No pause checkpoint #${pauseNumber} directory found after ${maxRetries} retries (checkpoint may still be saving)`)
-      }
-      console.log('')
-      return checkpointFound
+      return null
     }
 
-    // Multiple pause/resume cycles demonstration
-    // Increased training gaps to allow more progress between pauses
-    const pauseResumeCycles = [
-      { trainSeconds: 15, pauseSeconds: 3, description: 'First pause/resume cycle' },
-      { trainSeconds: 12, pauseSeconds: 2, description: 'Second pause/resume cycle' },
-      { trainSeconds: 10, pauseSeconds: 2, description: 'Third pause/resume cycle' }
-    ]
+    // Multiple pause/resume cycles: train 90s -> pause -> wait 10s -> resume -> train 90s -> repeat
+    const trainSeconds = 90
+    const resumeWaitSeconds = 10
+    const numberOfCycles = 2
 
-    for (let cycle = 0; cycle < pauseResumeCycles.length; cycle++) {
-      const { trainSeconds, pauseSeconds, description } = pauseResumeCycles[cycle]
-      const pauseNumber = cycle + 1
-
+    for (let cycle = 1; cycle <= numberOfCycles; cycle++) {
       console.log(`\n${'='.repeat(60)}`)
-      console.log(`Cycle ${pauseNumber}: ${description}`)
+      console.log(`Pause/Resume Cycle ${cycle}`)
       console.log(`${'='.repeat(60)}\n`)
 
-      // Wait a bit to let some training happen
-      console.log(`Training for ${trainSeconds} seconds...`)
+      // Train for 1 minute 30 seconds
+      console.log(`Training for ${trainSeconds} seconds (1 minute 30 seconds)...`)
       await sleep(trainSeconds * 1000)
 
-      const statusBeforePause = await getStatus(client)
-      console.log(`Status before pause #${pauseNumber}: ${statusBeforePause}\n`)
-
       // Pause finetuning
-      console.log(`⏸️  Pausing finetuning (pause #${pauseNumber})...`)
+      console.log(`⏸️  Pausing finetuning (cycle ${cycle})...`)
       await client.pauseFinetune()
 
       // Wait for status to change to PAUSED
-      console.log(`Waiting for status to change to PAUSED (pause #${pauseNumber})...`)
       await waitForStatus(client, 'PAUSED', { pollIntervalMs: 200, timeoutMs: 15000 })
-      console.log(`✅ Finetuning is now PAUSED (pause #${pauseNumber})\n`)
+      
+      // Get and log the step number at which finetuning was paused
+      const pauseStep = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
+      if (pauseStep !== null) {
+        console.log(`✅ Finetuning paused at step ${pauseStep} (cycle ${cycle})\n`)
+      } else {
+        console.log(`✅ Finetuning is now PAUSED (cycle ${cycle})\n`)
+      }
 
-      // Verify pause checkpoint was created
-      await verifyPauseCheckpoint(finetuneOptions.checkpointSaveDir, pauseNumber)
+      // Store the pause step for resume logging (checkpoint gets cleared after resume)
+      const resumeCheckpointStep = pauseStep
 
-      // Keep it paused for a bit
-      console.log(`Keeping finetuning paused for ${pauseSeconds} seconds...`)
-      await sleep(pauseSeconds * 1000)
+      // Wait 10 seconds before resuming
+      await sleep(resumeWaitSeconds * 1000)
+
+      // Verify checkpoint still exists before resuming
+      const checkpointBeforeResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
+      if (resumeCheckpointStep !== null && checkpointBeforeResume !== resumeCheckpointStep) {
+        console.log(`⚠️  Warning: Expected checkpoint step ${resumeCheckpointStep} but found ${checkpointBeforeResume} before resume (cycle ${cycle})`)
+      }
 
       // Resume finetuning
-      console.log(`▶️  Resuming finetuning (resume #${pauseNumber})...`)
+      console.log(`▶️  Resuming finetuning (cycle ${cycle})...`)
+      if (resumeCheckpointStep !== null) {
+        console.log(`   Expected to resume from checkpoint step ${resumeCheckpointStep}`)
+      }
       await client.resumeFinetune()
 
       // Wait for status to change back to FINETUNING
-      console.log(`Waiting for status to change to FINETUNING (resume #${pauseNumber})...`)
       await waitForStatus(client, 'FINETUNING', { pollIntervalMs: 200, timeoutMs: 15000 })
-      console.log(`✅ Finetuning has RESUMED (resume #${pauseNumber})\n`)
-
-      // Wait a bit more to see training continue
-      console.log(`Training for 5 seconds after resume #${pauseNumber}...`)
-      await sleep(5000)
+      
+      // Verify checkpoint was cleared after resume (it should be)
+      const checkpointAfterResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
+      if (checkpointAfterResume !== null) {
+        console.log(`⚠️  Warning: Checkpoint still exists after resume at step ${checkpointAfterResume} (cycle ${cycle})`)
+      }
+      
+      if (resumeCheckpointStep !== null) {
+        // Training resumes from checkpoint at step X and continues from step X+1
+        const resumeFromStep = resumeCheckpointStep + 1
+        console.log(`✅ Finetuning has RESUMED from checkpoint step ${resumeCheckpointStep}, continuing from step ${resumeFromStep} (cycle ${cycle})\n`)
+      } else {
+        console.log(`✅ Finetuning has RESUMED (cycle ${cycle})\n`)
+      }
     }
 
     console.log(`\n${'='.repeat(60)}`)
     console.log('All pause/resume cycles completed')
     console.log(`${'='.repeat(60)}\n`)
 
-    // Continue training for a bit more to ensure progress
-    console.log('Training for another 10 seconds...')
-    await sleep(10000)
-
     // Wait for completion
-    console.log('Waiting for finetuning to complete...')
     const finetuneResult = await finetuneTask
     console.log('\n✅ Finetune completed:', finetuneResult)
-
-    const finalStatus = await getStatus(client)
-    console.log(`Final status: ${finalStatus}`)
-
-    // Verify pause checkpoint was cleared after completion
-    try {
-      const checkpointDir = finetuneOptions.checkpointSaveDir
-      if (!fs.existsSync(checkpointDir)) {
-        console.log('✅ Pause checkpoint was cleared after completion')
-      } else {
-        // Check if any pause checkpoint directories exist
-        const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
-        const hasPauseCheckpoint = entries.some(entry => {
-          if (entry.isDirectory()) {
-            return entry.name.startsWith('pause_checkpoint_step_')
-          }
-          return false
-        })
-
-        if (!hasPauseCheckpoint) {
-          console.log('✅ Pause checkpoint was cleared after completion')
-        } else {
-          console.log('⚠️  Pause checkpoint still exists (may be normal if training was paused at end)')
-        }
-      }
-    } catch (err) {
-      // Ignore errors
-    }
 
     console.log('\n=== Test Complete ===')
   } catch (error) {
@@ -318,11 +411,14 @@ async function main () {
     console.error('Stack:', error.stack)
     process.exit(1)
   } finally {
+    // Restore original console methods
+    console.log = originalConsoleLog
+    console.info = originalConsoleInfo
+    console.warn = originalConsoleWarn
+
     if (client) {
       try {
-        console.log('\nCleaning up...')
         await client.unload()
-        console.log('Model unloaded')
       } catch (unloadErr) {
         console.error('Failed to unload model during cleanup:', unloadErr)
       }

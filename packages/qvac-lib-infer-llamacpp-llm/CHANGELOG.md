@@ -1,12 +1,13 @@
 # Changelog
+## [1.0.0] - 2025-12-15
 
-## [0.8.1] - 2025-01-15
-### Changed
-- Cleaned up package.json by removing unused packages and scripts
+- Use new addon-cpp architecture for simplified Js Addon creation and usage.
+- Use AddonCpp on CLI executable (to mimick JsAddon behavior/usage).
 
-## [0.8.0] - 2025-01-15
-### Changed 
-- Upgraded llm fabric to 7248.1.0, which containes new Vulkan implementation improvements (VMA, shaders).
+### Breaking
+
+- Remove uncessary _state, transitionCb and bindings (status, pause)
+- Remove job queue
 
 ## [0.7.1] - 2025-01-14
 ### Added
