@@ -384,6 +384,7 @@ In the QVAC ecosystem, a model registry is simply a Hyperbee that stores Hyperdr
 
 ## Other examples
 
+-   [Finetuning](docs/finetuning.md) – Guide to LoRA finetuning: API, dataset format, and examples.
 -   [SalamandraTA](examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
 -   [Multimodal](examples/multiModal.js) – Demonstrates how to run multimodal inference.
 -   [Multi-Cache](examples/multiCache.js) – Demonstrates session handling and caching capabilities.
@@ -391,6 +392,9 @@ In the QVAC ecosystem, a model registry is simply a Hyperbee that stores Hyperdr
 -   [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
 -   [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
 -   [Tool Calling](examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [LoRA Finetuning](examples/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](examples/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 
 ## Benchmarking
 

@@ -12,6 +12,7 @@ This document describes how to use the LoRA (Low-Rank Adaptation) finetuning fea
 - [How It Works](#how-it-works)
 - [JavaScript API](#javascript-api)
 - [Finetuning Parameters](#finetuning-parameters)
+- [Implementation Notes](#implementation-notes)
 - [Dataset Format](#dataset-format)
 - [Examples](#examples)
 - [Checkpoints and Output](#checkpoints-and-output)
@@ -39,7 +40,7 @@ The library supports **LoRA finetuning** of GGUF models. LoRA trains small adapt
 1. **Model loading**: Load a base GGUF model (e.g., Qwen3-0.6B-Q8_0.gguf) with `model.load()`.
 2. **Dataset preparation**: Training data is read from JSONL (chat format) or plain text files.
 3. **LoRA adapter**: A LoRA adapter is initialized and attached to the model. Only the specified modules (e.g., attention, FFN) are trained.
-4. **Training loop**: The optimizer runs for the configured number of epochs. Progress is streamed to stdout.
+4. **Training loop**: The optimizer runs for the configured number of epochs. Progress is streamed to stdout (e.g. `data=X/Y loss=...` where X/Y is current batch / total batches per epoch).
 5. **Output**: The trained LoRA adapter is saved to `outputParametersDir` (e.g., `./finetuned-model-direct/trained-lora-adapter.gguf`).
 
 ### Training Modes
@@ -124,8 +125,8 @@ const status = await model.status()
 | `numberOfEpochs` | number | Yes | — | Number of training epochs |
 | `learningRate` | number | Yes | — | Initial learning rate (e.g., 1e-5) |
 | `contextLength` | number | No | ctx_size/2 | Training sequence length |
-| `microBatchSize` | number | No | 1 | Micro-batch size |
-| `batchSize` | number | No | 0 | Batch size (0 = derived) |
+| `microBatchSize` | number | No | 1 | Samples per optimizer step (messages per batch in SFT). Adjusted to gcd(datasetSampleCount, requested) if needed. For 256 samples, valid values: 1, 2, 4, 8, 16, 32, 64, 128, 256. |
+| `batchSize` | number | No | 0 | **Unused** in the current implementation. Only `microBatchSize` controls batch size. |
 | `assistantLossOnly` | boolean | No | false | Use SFT (chat) mode; if false, causal mode |
 | `loraModules` | string | No | attn_q,k,v,o | Comma-separated target modules |
 | `loraRank` | number | No | 8 | LoRA rank |
@@ -137,8 +138,21 @@ const status = await model.status()
 | `chatTemplatePath` | string | No | `""` | Path to chat template (for SFT) |
 | `lrScheduler` | string | No | `"constant"` | `"constant"`, `"cosine"`, or `"linear"` |
 | `lrMin` | number | No | 0 | Minimum learning rate (for cosine/linear) |
-| `warmupRatio` | number | No | 0 | Warmup ratio (0–1) |
+| `warmupRatio` | number | No | 0 | Warmup ratio (0–1). Requires `warmupRatioSet: true` to take effect. |
+| `warmupRatioSet` | boolean | No | false | When true, warmup steps = `warmupRatio × totalSteps`. |
+| `warmupStepsSet` | boolean | No | false | When true, use `warmupSteps` directly instead of ratio. |
+| `warmupSteps` | number | No | 0 | Explicit warmup steps (used when `warmupStepsSet: true`). |
 | `weightDecay` | number | No | 0 | Weight decay |
+
+---
+
+## Implementation Notes
+
+| Parameter | Status |
+|-----------|--------|
+| `batchSize` | **Unused** — only `microBatchSize` controls the batch size. |
+| `warmupRatio` | Requires `warmupRatioSet: true` to take effect; otherwise warmup is disabled. |
+| `evalDatasetDir` | When different from `trainDatasetDir`, disables the 5% validation split. The eval file content is not used for evaluation. |
 
 ---
 
@@ -214,8 +228,8 @@ async function main() {
     lrMin: 1e-8,
     lrScheduler: 'cosine',
     warmupRatio: 0.1,
+    warmupRatioSet: true,
     contextLength: 128,
-    batchSize: 128,
     microBatchSize: 128,
     loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down',
     assistantLossOnly: true,
