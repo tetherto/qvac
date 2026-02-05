@@ -1,11 +1,20 @@
 ---
 name: sdk-pr-create
-description: Generate PR descriptions for SDK pod packages following template and format rules. Use when creating PRs for qvac-sdk, qvac-docs, qvac-lib-rag, qvac-lib-logging, or qvac-lib-error-base.
+description: Generate PR descriptions for SDK pod packages following template and format rules.
 ---
 
 # SDK Pod PR Creation
 
 Generate PR titles and descriptions for SDK pod packages, following the team's template and format rules.
+
+## When to use this skill
+
+**Applies to SDK pod packages** as defined in `.cursor/rules/sdk/sdk-pod-packages.mdc`.
+
+**Use when:**
+- Creating a PR for any SDK pod package
+- User asks to generate PR description
+- User invokes `/sdk-pr-create`
 
 ## Workflow
 
@@ -184,5 +193,6 @@ Before outputting the PR description, verify:
 
 ## References
 
-- Template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
+- SDK pod packages: `.cursor/rules/sdk/sdk-pod-packages.mdc`
+- PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
