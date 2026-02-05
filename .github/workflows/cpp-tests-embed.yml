@@ -145,6 +145,7 @@ jobs:
           Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          echo "C:\VulkanSDK\Bin" >> $Env:GITHUB_PATH
 
       - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg on macOS
