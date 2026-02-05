@@ -50,6 +50,7 @@ export {
   modelTypeInputSchema,
   modelTypeSchema,
   normalizeModelType,
+  isCanonicalModelType,
   isModelTypeAlias,
   // Per-model-type schemas for discriminated unions
   llmModelTypeSchema,
@@ -68,3 +69,5 @@ export {
   type TtsModelTypeInput,
   type OcrModelTypeInput,
 } from "./model-types";
+// Plugin system
+export * from "./plugin";

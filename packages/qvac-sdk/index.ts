@@ -26,6 +26,8 @@ export {
   getModelInfo,
   loggingStream,
   ocr,
+  invokePlugin,
+  invokePluginStream,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -65,6 +67,15 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  definePlugin,
+  defineHandler,
+  type QvacPlugin,
+  type PluginHandlerDefinition,
+  type CreateModelParams,
+  type PluginModelResult,
+  type PluginLogging,
+  type PluginInvokeRequest,
+  type PluginInvokeResponse,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
