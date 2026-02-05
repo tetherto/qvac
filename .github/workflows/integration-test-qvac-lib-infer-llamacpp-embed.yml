@@ -296,8 +296,10 @@ jobs:
           dir C:\VulkanSDK
           echo "=== Vulkan Bin contents ==="
           dir C:\VulkanSDK\Bin
+          echo "=== Vulkan runtime (vulkan-1.dll) location ==="
+          Get-ChildItem -Path C:\Windows\System32 -Filter "vulkan*.dll" -ErrorAction SilentlyContinue
           echo "=== Running vulkaninfo ==="
-          C:\VulkanSDK\Bin\vulkaninfo.exe --summary
+          C:\VulkanSDK\Bin\vulkaninfoSDK.exe --summary
         shell: powershell
         continue-on-error: true
 
