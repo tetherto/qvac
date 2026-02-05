@@ -21,7 +21,6 @@ This library simplifies running Large Language Models (LLMs) within QVAC runtime
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
 - [Glossary](#glossary)
-- [Resources](#resources)
 - [License](#license)
 
 ## Supported platforms
@@ -47,7 +46,7 @@ Install [Bare](#glossary) Runtime:
 ```bash
 npm install -g bare-runtime
 ```
-Note : Make sure the Bare version is `>= 1.17.3`. Check this using : 
+Note : Make sure the Bare version is `>= 1.19.0`. Check this using : 
 
 ```bash
 bare -v
@@ -78,7 +77,7 @@ npm install @qvac/llm-llamacpp@latest
 ```
 Or install a specific known stable version:
 ```bash
-npm install @qvac/llm-llamacpp@0.0.1-dev
+npm install @qvac/llm-llamacpp@0.6.0
 ```
 
 ## Building from Source
@@ -133,7 +132,8 @@ The `args` obj contains the following properties:
 
 ### 4. Create the `config` obj
 
-The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.
+The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
+*All parameters must by strings.*
 
 ```js
 // an example of possible configuration
@@ -144,19 +144,27 @@ const config = {
 }
 ```
 
-| Parameter      | Range / Type                                   | Default                                                    |
-|----------------|------------------------------------------------|------------------------------------------------------------|
-| temp           | 0.00 – 2.00                                    | 0.8                                                        |
-| top_p          | 0 – 1                                          | 0.9                                                        |
-| top_k          | 0 – 128                                        | 40                                                         |
-| predict        | 1 – Infinity<br>(-1 = Infinity, -2 = until context filled) | -1                                             |
-| ctx_size       | 0 – model-dependent                            | 4096 (0 = loaded from model)                               |
-| system_prompt  | string                                         | "You are a helpful, respectful and honest assistant."      |
-| seed           | integer                                        | -1 = random                                                |
-| lora           | string                                         | Path to gguf adapter                                       |
-| gpu_layers     | integer                                        | 0                                                          |
-| no_mmap        | bool                                           | "" - to disable                                            |
-| device         | string                                         |                                                            |
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| system_prompt     | string                                      | —                            | System prompt to prepend to conversations             |
+| lora              | string                                      | —                            | Path to LoRA adapter file                             |
+| temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
+| top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |
+| top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
+| predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
+| seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
+| no_mmap           | "" (passing empty string sets the flag)     | —                            | Disable memory mapping for model loading              |
+| reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
+| repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
+| presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
+| frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
+| tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+| n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 
 
 ### 5. Create Model Instance
@@ -282,10 +290,14 @@ npm install hyperswarm corestore @qvac/dl-hyperdrive @qvac/llm-llamacpp bare-pro
 
 const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const LlmLlamacpp = require('../index')
 const process = require('bare-process')
 
 async function main () {
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
+
+  // 1. Initializing data loader
   const store = new Corestore('./store')
   const hdStore = store.namespace('hd')
 
@@ -295,6 +307,7 @@ async function main () {
     store: hdStore
   })
 
+  // 2. Configuring model settings
   const args = {
     loader: hdDL,
     opts: { stats: true },
@@ -305,24 +318,30 @@ async function main () {
 
   const config = {
     device: 'gpu',
-    // Force GPU: (very large number of gpu-layers)
     gpu_layers: '999',
     ctx_size: '1024'
   }
 
+  // 3. Loading model
   await hdDL.ready()
   const model = new LlmLlamacpp(args, config)
   const closeLoader = true
+  let totalProgress = 0
   const reportProgressCallback = (report) => {
-    if (typeof report === 'object') {
-      console.log(
-        `${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
       )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
     }
   }
   await model.load(closeLoader, reportProgressCallback)
 
   try {
+    // 4. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -356,7 +375,9 @@ async function main () {
     console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
+    // 5. Cleaning up resources
     await store.close()
+    await hdDL.close()
     await model.unload()
   }
 }
@@ -392,11 +413,19 @@ See [docs/](./docs) for a detailed explanation of the architecture and data flow
 
 ## Benchmarking
 
-We maintain a comprehensive benchmarking suite for evaluating the performance of our LLM-based addons across a diverse range of reasoning, comprehension, and knowledge tasks. This benchmarking helps compare model quality, efficiency, and behavior across variants and configurations.
+Comprehensive benchmarking suite for evaluating **@qvac/llm-llamacpp addon** (native C++ GGUF) on reasoning, comprehension, and knowledge tasks. Supports single-model evaluation and comparative analysis vs **HuggingFace Transformers** (Python).
 
-### Benchmark Results
+**Supported Datasets:**
+- **SQuAD** (Reading Comprehension) - F1 Score
+- **ARC** (Scientific Reasoning) - Accuracy
+- **MMLU** (Knowledge) - Accuracy
+- **GSM8K** (Math Reasoning) - Accuracy
 
-For detailed benchmark results covering all LLM addons, see our [LLM Benchmark Results Summary](./benchmarks/client/benchmarking_results/results.md).
+```bash
+# Single model evaluation
+npm run benchmarks -- \
+  --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" \
+  --samples 10
 
 # Compare addon vs transformers
 npm run benchmarks -- \
@@ -407,10 +436,7 @@ npm run benchmarks -- \
   --samples 10
 ```
 
-  * **SQuAD EM / F1**: Measures reading comprehension and answer accuracy
-  * **ARC Accuracy**: Assesses scientific reasoning via multiple-choice questions
-  * **MMLU Accuracy**: Gauges subject matter understanding across 57 domains
-  * **GSM8K (0-shot) Accuracy**: Evaluates math reasoning without demonstrations
+**Platform Support**: Unix/Linux/macOS (bash), Windows (PowerShell, Git Bash)
 
 **→ For detailed guide, see [benchmarks/README.md](./benchmarks/README.md)**
 
@@ -425,11 +451,6 @@ These tests validate the native implementation and help catch issues early in de
 ## Glossary
 
 • **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
-
-## Resources
-
-*   PoC Repo: [tetherto/qvac-llm-poc](https://github.com/tetherto/qvac-llm-poc)
-*   Pear app (Desktop): TBD
 
 ## License
 

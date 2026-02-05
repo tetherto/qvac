@@ -1,3 +1,5 @@
+const path = require('bare-path')
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -7,18 +9,23 @@ class LlamaInterface {
    * @param {Object} configurationParams - all the required configuration for inference setup
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
    */
-  constructor (binding, configurationParams, outputCb, transitionCb = null, finetuningParams = null) {
+  constructor (binding, configurationParams, outputCb) {
     this._binding = binding
-    const args = [
+
+    if (!configurationParams.config) {
+      configurationParams.config = {}
+    }
+
+    if (!configurationParams.config.backendsDir) {
+      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
+    }
+
+    this._handle = this._binding.createInstance(
       this,
       configurationParams,
       outputCb,
-      transitionCb ?? null
-    ]
-    if (finetuningParams !== null && finetuningParams !== undefined) {
-      args.push(finetuningParams)
-    }
-    this._handle = this._binding.createInstance(...args)
+      null
+    )
   }
 
   /**

@@ -1,4 +1,0 @@
-{
-  "weights": ["1.bin", "2.bin"],
-  "settings": ["conf.json", "mlc-chat-config.json", "generation_config.json"]
-}

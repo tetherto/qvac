@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
@@ -13,6 +14,8 @@
 #include <string>
 #include <system_error>
 #include <vector>
+#include <chrono>
+#include <thread>
 
 #include <common/arg.h>
 #include <common/chat.h>
@@ -37,16 +40,6 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
-
-static bool isFileInitialized(const std::filesystem::path& path) {
-  std::error_code errorCode;
-  auto size = std::filesystem::file_size(path, errorCode);
-  if (errorCode) {
-    // file doesn't exist
-    return false;
-  }
-  return size != 0;
-}
 
 static std::vector<std::string> split(const std::string& str, char delimiter) {
   auto trim = [](const std::string& str) -> std::string {
@@ -106,7 +99,15 @@ void LlamaModel::init(
   // Set verbosity level
   setVerbosityLevel(configFilemap);
 
-  initializeBackend();
+  {
+    std::string backendsDir;
+    if (auto backendsDirIt = configFilemap.find("backendsDir");
+        backendsDirIt != configFilemap.end()) {
+      backendsDir = backendsDirIt->second;
+      configFilemap.erase(backendsDirIt);
+    }
+    initializeBackend(backendsDir);
+  }
 
   common_params params;
   commonParamsParse(modelPath, configFilemap, params);
@@ -139,13 +140,12 @@ void LlamaModel::init(
   }
 }
 
-void LlamaModel::initializeBackend() {
+void LlamaModel::initializeBackend(const std::string& backendsDir) {
   if (!backendsHandle_.has_value()) {
     llama_log_set(llamaLogCallback, nullptr);
-    backendsHandle_.emplace();
+    backendsHandle_.emplace(backendsDir);
   }
 }
-
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
@@ -738,11 +738,11 @@ void LlamaModel::finetune(
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
+    std::string errorMsg = "Finetune error: model/context not available. Call activate() first.";
     if (logCallback) {
-      logCallback("ERROR: Finetune error: model/context not available. Call "
-                  "activate() first.");
+      logCallback("ERROR: " + errorMsg);
     }
-    return;
+    throw std::runtime_error(errorMsg);
   }
 
   try {
@@ -823,9 +823,6 @@ void LlamaModel::finetune(
 
     auto schedulerState = createLrScheduler(params, totalSteps);
 
-    // Check for pause checkpoint before initializing adapter
-    // Only resume from pause checkpoint if explicitly allowed (i.e., when
-    // resuming, not fresh start)
     CheckpointMetadata resumeMeta{};
     bool resumingFromPause = false;
     std::filesystem::path checkpointDir =
@@ -833,19 +830,13 @@ void LlamaModel::finetune(
             ? std::filesystem::path{"./checkpoints"}
             : std::filesystem::path{params.checkpointSaveDir};
 
-    // Find the latest pause checkpoint (for logging or resuming)
     std::filesystem::path pausePath;
 
-    // Only check for pause checkpoint if we're explicitly resuming
-    // This prevents automatically resuming from old checkpoints on fresh
-    // training runs
     if (allowResumeFromPause) {
-      // Find the latest pause checkpoint (highest step number)
       pausePath =
           llama_finetuning_helpers::findLatestPauseCheckpoint(checkpointDir);
 
       if (!pausePath.empty() && pauseCheckpointExists(checkpointDir)) {
-        // Load metadata to get saved parameters
         const auto metadataPath = pausePath / "metadata.json";
         if (parseCheckpointMetadata(metadataPath, resumeMeta)) {
           resumingFromPause = true;
@@ -866,14 +857,11 @@ void LlamaModel::finetune(
       }
     }
 
-    // Initialize adapter - use saved parameters if resuming, otherwise use
-    // provided params
     uint32_t targetModules = resumingFromPause
                                  ? resumeMeta.targetModules
                                  : parseLoraModules(params.loraModules);
     llama_adapter_lora* adapter = nullptr;
     if (resumingFromPause) {
-      // Recreate adapter with saved parameters
       llama_lora_training_params loraParams{
           targetModules,
           static_cast<int32_t>(resumeMeta.loraRank),
@@ -886,7 +874,6 @@ void LlamaModel::finetune(
             "LoRA training initialization failed when resuming");
       }
 
-      // Verify checkpoint adapter file exists
       const auto adapterPath = pausePath / "model.gguf";
       if (!std::filesystem::exists(adapterPath)) {
         std::string errorMsg =
@@ -902,36 +889,29 @@ void LlamaModel::finetune(
     std::unique_ptr<llama_adapter_lora, decltype(&llama_adapter_lora_free)>
         adapterPtr(adapter, llama_adapter_lora_free);
 
+    // Clear any previously paused checkpoint state when starting/resuming training
+    pausedCheckpointState_.reset();
+    currentCheckpointState_ = nullptr;
+
     auto checkpointState = initializeCheckpointing(
         params, adapterPtr.get(), &schedulerState, logCallback);
 
     if (checkpointState) {
-      // Note: pauseCheckpointPath is set dynamically when saving based on
-      // globalStep It's not set here because we don't know the step until we're
-      // actually saving
-
-      // Restore state from checkpoint if resuming
       if (resumingFromPause) {
         checkpointState->globalStep = resumeMeta.globalStep;
         checkpointState->currentEpoch = resumeMeta.epoch;
         if (checkpointState->scheduler) {
           checkpointState->scheduler->currentStep = resumeMeta.currentStep;
         }
-        // Set expected first batch for verification
         checkpointState->expectedFirstBatchAfterResume =
             resumeMeta.globalStep + 1;
         checkpointState->firstBatchAfterResumeLogged = false;
 
-        // Calculate batch offset within epoch for mid-epoch resume
-        // globalStep is 1-indexed (incremented after each batch)
-        // So if we paused at globalStep = 8, we processed 8 batches total
-        // If stepsPerEpoch = 3, then:
-        //   - Epoch 0: batches 0,1,2 → globalStep 1,2,3
-        //   - Epoch 1: batches 0,1,2 → globalStep 4,5,6
-        //   - Epoch 2: batch 0 → globalStep 7, batch 1 → globalStep 8 (pause)
-        // So batchOffset = (globalStep - 1) % stepsPerEpoch = 7 % 3 = 1
-        // This means we should resume from batch 1 (0-indexed) in the epoch
         const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
+        // Calculate batch offset within epoch for mid-epoch resume
+        // globalStep is incremented AFTER processing each batch, so if globalStep = 7,
+        // we've processed batches 0-6 and should resume from batch 7 (0-indexed)
+        // Using (globalStep - 1) % stepsPerEpoch to match original branch logic
         const int64_t batchOffset = (resumeMeta.globalStep - 1) % stepsPerEpoch;
         checkpointState->batchOffsetWithinEpoch = batchOffset;
         checkpointState->skippingBatches = (batchOffset > 0);
@@ -958,7 +938,6 @@ void LlamaModel::finetune(
       logCallback("Checkpoint loaded successfully");
     }
 
-    // Clear pause checkpoint after successful resume (all state loaded)
     if (resumingFromPause && checkpointState) {
       clearPauseCheckpoint(checkpointState->checkpointDir);
     }
@@ -978,17 +957,24 @@ void LlamaModel::finetune(
         resumingFromPause ? resumeMeta.epoch : 0,
         resumingFromPause);
 
-    // Check if training was paused (not completed normally)
     bool wasPaused = checkpointState && checkpointState->shouldExit.load() &&
                      checkpointState->pauseCheckpointSaved.load();
 
     if (checkpointState) {
       clearGlobalCheckpointState();
-      currentCheckpointState_ = nullptr;
+      if (wasPaused) {
+        // CRITICAL: Transfer ownership to member variable to prevent destruction
+        // The checkpointState unique_ptr will go out of scope, but we need to keep
+        // the object alive so status() can detect PAUSED state
+        pausedCheckpointState_ = std::move(checkpointState);
+        // currentCheckpointState_ already points to the object (set at line 935)
+        // and will remain valid because pausedCheckpointState_ owns it
+      } else {
+        currentCheckpointState_ = nullptr;
+        pausedCheckpointState_.reset(); // Clear any previously paused state
+      }
     }
 
-    // Only save adapter and log completion if training completed normally (not
-    // paused) When paused, the adapter is already saved in the pause checkpoint
     if (!wasPaused) {
       saveLoraAdapter(adapterPtr.get(), params);
 
@@ -1020,6 +1006,14 @@ void LlamaModel::validateFinetuningParams(
 
   if (params.loraRank <= 0) {
     throw std::runtime_error("LoRA rank must be greater than zero");
+  }
+
+  if (params.loraAlpha <= 0.0) {
+    throw std::runtime_error("LoRA alpha must be greater than zero");
+  }
+
+  if (params.loraInitStd < 0.0) {
+    throw std::runtime_error("LoRA init_std must be non-negative");
   }
 
   if (params.learningRate <= 0.0) {
@@ -1092,7 +1086,13 @@ void LlamaModel::initializeLoraAdapter(
 
   adapter = llama_lora_training_init(ctx, mdl, &loraParams);
   if (adapter == nullptr) {
-    throw std::runtime_error("LoRA training initialization failed");
+    std::string errorMsg = "LoRA training initialization failed. Parameters: "
+                           "targetModules=" + std::to_string(targetModules) +
+                           ", loraRank=" + std::to_string(params.loraRank) +
+                           ", loraAlpha=" + std::to_string(params.loraAlpha) +
+                           ", loraDropout=" + std::to_string(params.loraDropout) +
+                           ", loraInitStd=" + std::to_string(params.loraInitStd);
+    throw std::runtime_error(errorMsg);
   }
 }
 
@@ -1140,8 +1140,6 @@ LlamaModel::initializeCheckpointing(
     std::function<void(const std::string&)> logFn) {
   using namespace llama_finetuning_helpers;
 
-  // Always create checkpoint state for pause/resume support, even if periodic
-  // checkpointing is disabled
   bool periodicCheckpointingEnabled = params.checkpointSaveSteps > 0;
 
   llama_context* ctx = getContext();
@@ -1169,8 +1167,6 @@ LlamaModel::initializeCheckpointing(
   checkpointState->loraAlpha = static_cast<float>(params.loraAlpha);
   checkpointState->targetModules = parseLoraModules(params.loraModules);
   checkpointState->globalStep = 0;
-  // pauseCheckpointPath is set dynamically when saving based on globalStep
-  // No need to set it here
 
   std::error_code dirErr;
   std::filesystem::create_directories(checkpointState->checkpointDir, dirErr);
@@ -1225,15 +1221,8 @@ void LlamaModel::configureOptimizer(
   optParams.get_opt_pars_ud = &scheduler;
   optParams.optimizer_type = GGML_OPT_OPTIMIZER_TYPE_ADAMW;
 
-  // Set checkpoint path if loading optimizer state
-  // Use the checkpoint directory path (not just optimizer.gguf) as llama.cpp
-  // may load both optimizer and adapter state from the checkpoint directory
-  // CRITICAL: Keep checkpointPathStr in scope until after llama_opt_init()
-  // returns to ensure the string pointer remains valid (llama.cpp may copy it,
-  // but we keep it alive to be safe)
   std::string checkpointPathStr;
   if (loadOptimizerState && checkpointState) {
-    // Find the latest pause checkpoint to load from
     const auto checkpointPath =
         llama_finetuning_helpers::findLatestPauseCheckpoint(
             checkpointState->checkpointDir);
@@ -1247,8 +1236,6 @@ void LlamaModel::configureOptimizer(
       if (std::filesystem::exists(optimizerPath)) {
         // Log will be done by caller's logCallback if available
       } else {
-        // This is a warning - optimizer state might not be available
-        // but we'll still try to initialize
       }
     } else {
       optParams.checkpoint_path = nullptr;
@@ -1261,24 +1248,10 @@ void LlamaModel::configureOptimizer(
 
   optParams.assistant_loss_only = params.assistantLossOnly;
 
-  // Clean up any existing optimizer context before initializing
-  // This is necessary when resuming from pause, as the optimizer context
-  // from the previous session may still exist. llama_opt_cleanup() is
-  // idempotent and safe to call even if no optimizer context exists.
-  //
-  // After cleanup, llama_opt_init() can safely create a new optimizer context
-  // and load the optimizer state from checkpoint if loadOptimizerState is true.
   llama_opt_cleanup(ctx);
 
-  // Initialize optimizer with the configured parameters
-  // If loadOptimizerState is true and checkpoint_path is set, llama_opt_init()
-  // will automatically load both optimizer state and adapter weights from the
-  // checkpoint.
-  // NOTE: checkpointPathStr must remain in scope during this call to ensure
-  // the string pointer passed to llama_opt_init() remains valid
   llama_opt_init(ctx, mdl, optParams);
-  optimizerInitialized_ =
-      true; // Track initialization state (for debugging/logging)
+  optimizerInitialized_ = true;
 }
 
 void LlamaModel::executeTrainingLoop(
@@ -1302,11 +1275,9 @@ void LlamaModel::executeTrainingLoop(
       trainResult(trainResultRaw, ggml_opt_result_free);
 
   const int64_t idataSplit = trainSplit;
-  // Enable callback if checkpointing is enabled (periodic or pause/resume)
   bool checkpointEnabled = checkpointState != nullptr;
 
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
-    // Check if we should exit (pause was requested and checkpoint saved)
     if (checkpointState && checkpointState->shouldExit.load()) {
       if (logCallback) {
         logCallback("Training paused");
@@ -1325,13 +1296,12 @@ void LlamaModel::executeTrainingLoop(
       checkpointState->currentEpoch = static_cast<int32_t>(epoch);
     }
 
-    // Calculate batch offset for mid-epoch resume
-    // If resuming mid-epoch, pass the batch offset to llama_opt_epoch to skip
-    // batches before the resume point. Otherwise, pass -1 to start from
-    // beginning.
     int64_t resumeFromBatch = -1;
+    // Only resume from a specific batch offset for the epoch where we paused
+    // Subsequent epochs should start from batch 0
     if (resumingFromPause && checkpointState &&
-        checkpointState->batchOffsetWithinEpoch > 0) {
+        checkpointState->batchOffsetWithinEpoch > 0 &&
+        epoch == startEpoch) {
       resumeFromBatch = checkpointState->batchOffsetWithinEpoch;
     }
 
@@ -1346,7 +1316,16 @@ void LlamaModel::executeTrainingLoop(
         nullptr,
         resumeFromBatch);
 
-    // Check again after epoch completes (or early exit)
+    // Print newline after epoch completes (callback is called before final batch completes)
+    if (!checkpointState || !checkpointState->shouldExit.load()) {
+      if (checkpointEnabled) {
+        std::cout << "\r";
+        std::cout.flush();
+      }
+      std::cout << std::endl;
+      std::cout.flush();
+    }
+
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
     }
@@ -1362,18 +1341,11 @@ void LlamaModel::executeTrainingLoop(
     ggml_opt_result_reset(trainResult.get());
   }
 
-  // Clean up optimizer context if training was paused
-  // This must be done AFTER the training loop exits, not in the callback,
-  // because the callback is called from within llama_opt_epoch() which
-  // is still using the optimizer context.
   if (checkpointState && checkpointState->shouldExit.load() &&
       checkpointState->pauseCheckpointSaved.load()) {
-    // Training was paused and checkpoint was saved - clean up optimizer context
-    // This frees the optimizer memory and allows reinitialization on resume
     llama_opt_cleanup(ctx);
   }
 
-  // Clear pause checkpoint on successful completion
   if (checkpointState && !checkpointState->shouldExit.load()) {
     clearPauseCheckpoint(checkpointState->checkpointDir);
   }
@@ -1393,59 +1365,56 @@ void LlamaModel::saveLoraAdapter(
   if (!llama_lora_save_adapter(adapter, adapterPath.c_str(), mdl)) {
     throw std::runtime_error("Unable to save LoRA adapter to " + adapterPath);
   }
-
-  // Note: Log message is handled by caller (finetune method)
 }
 
 bool LlamaModel::requestPause() {
-  if (currentCheckpointState_ != nullptr) {
-    currentCheckpointState_->pauseRequested.store(true);
-
-    // CRITICAL: Request immediate stop after current batch using new early exit
-    // API This ensures training stops immediately, not after entire epoch
-    // completes
-    llama_context* ctx = getContext();
-    if (ctx != nullptr) {
-      llama_opt_request_stop(ctx);
+  // Wait briefly for checkpoint state initialization if training is starting
+  // This handles the race condition where pause() is called immediately after resume()
+  constexpr int maxRetries = 30;  // 3 seconds total (30 * 100ms)
+  constexpr auto retryInterval = std::chrono::milliseconds(100);
+  
+  for (int retry = 0; retry < maxRetries; ++retry) {
+    if (currentCheckpointState_ != nullptr) {
+      currentCheckpointState_->pauseRequested.store(true);
+      
+      llama_context* ctx = getContext();
+      if (ctx != nullptr) {
+        llama_opt_request_stop(ctx);
+      }
+      
+      return true;
     }
-
-    // Note: We don't reset optimizerInitialized_ here anymore.
-    // The optimizer context will be cleaned up after saving the checkpoint
-    // (in optEpochCallback), and will be reinitialized on resume.
-    return true;
-  }
-
-  // If currentCheckpointState_ is null, try to get it from global state as
-  // fallback This handles the case where pause() is called before
-  // checkpointState is fully initialized
-  auto* globalState = llama_finetuning_helpers::getGlobalCheckpointState();
-  if (globalState != nullptr) {
-    globalState->pauseRequested.store(true);
-    llama_context* ctx = getContext();
-    if (ctx != nullptr) {
-      llama_opt_request_stop(ctx);
+    
+    auto* globalState = llama_finetuning_helpers::getGlobalCheckpointState();
+    if (globalState != nullptr) {
+      globalState->pauseRequested.store(true);
+      
+      llama_context* ctx = getContext();
+      if (ctx != nullptr) {
+        llama_opt_request_stop(ctx);
+      }
+      
+      return true;
     }
-    return true;
+    
+    llama_context* ctx = getContext();
+    if (ctx != nullptr && retry < maxRetries - 1) {
+      std::this_thread::sleep_for(retryInterval);
+    } else {
+      break;
+    }
   }
-
+  
   return false;
 }
 
 void LlamaModel::clearPauseRequest() {
-  if (currentCheckpointState_ != nullptr) {
-    currentCheckpointState_->pauseRequested.store(false);
-    currentCheckpointState_->shouldExit.store(false);
-    currentCheckpointState_->pauseCheckpointSaved.store(
-        false); // Reset flag for next pause
+  pausedCheckpointState_.reset();
+  currentCheckpointState_ = nullptr;
 
-    // CRITICAL: Reset the stop flag before resuming training
-    // This clears the early exit flag set by llama_opt_request_stop()
-    // While the flag auto-resets at start of each epoch, explicitly resetting
-    // ensures clean state and is recommended best practice
-    llama_context* ctx = getContext();
-    if (ctx != nullptr) {
-      llama_opt_reset_stop(ctx);
-    }
+  llama_context* ctx = getContext();
+  if (ctx != nullptr) {
+    llama_opt_reset_stop(ctx);
   }
 }
 #endif // STANDALONE_TEST_BUILD

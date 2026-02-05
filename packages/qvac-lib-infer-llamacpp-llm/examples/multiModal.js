@@ -34,11 +34,10 @@ async function main () {
     projectionModel
   }
 
-  // an example of possible configuration
   const config = {
-    gpu_layers: '99', // number of model layers offloaded to GPU.
-    ctx_size: '2048', // context length
-    device: 'gpu'
+    device: 'gpu',
+    gpu_layers: '99',
+    ctx_size: '2048'
   }
 
   // 4. Loading model
@@ -53,10 +52,6 @@ async function main () {
     // 6. First inference with image buffer
     const messages1 = [
       {
-        role: 'session',
-        content: 'cache0.bin'
-      },
-      {
         role: 'system',
         content: 'You are a helpful, respectful and honest assistant.'
       },
@@ -67,49 +62,27 @@ async function main () {
       },
       {
         role: 'user',
-        content: 'what is this file about?'
+        content: 'what is in the image?'
       }
     ]
 
-    console.log('\n\n')
-    const response = await model.run(messages1)
-    const buffer = []
-    await response
+    const response1 = await model.run(messages1)
+    let fullResponse1 = ''
+
+    await response1
       .onUpdate(data => {
         process.stdout.write(data)
-        buffer.push(data)
+        fullResponse1 += data
       })
       .await()
 
     console.log('\n')
-    console.log('Full response:\n', buffer.join(''))
-    console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+    console.log('Full response:\n', fullResponse1)
+    console.log(`Inference stats: ${JSON.stringify(response1.stats)}`)
     console.log('\n')
 
-    // 7. Second inference with image file path
+    // 6. Second inference with image file path
     const messages2 = [
-      {
-        role: 'user',
-        content: 'what i asked you before? answer shortly'
-      }
-    ]
-
-    console.log('\n\n')
-    const response2 = await model.run(messages2)
-    const buffer2 = []
-
-    await response2
-      .onUpdate(data => {
-        process.stdout.write(data)
-        buffer2.push(data)
-      })
-      .await()
-
-    const messages3 = [
-      {
-        role: 'session',
-        content: 'cache1.bin'
-      },
       {
         role: 'system',
         content: 'You are a helpful, respectful and honest assistant.'
@@ -121,44 +94,28 @@ async function main () {
       },
       {
         role: 'user',
-        content: 'what is this file about?'
+        content: 'what is in the image?'
       }
     ]
 
-    console.log('\n\n')
-    const response3 = await model.run(messages3)
-    const buffer3 = []
+    const response2 = await model.run(messages2)
+    let fullResponse2 = ''
 
-    await response3
+    await response2
       .onUpdate(data => {
         process.stdout.write(data)
-        buffer3.push(data)
-      })
-      .await()
-
-    const messages4 = [
-      {
-        role: 'session',
-        content: 'cache0.bin'
-      },
-      {
-        role: 'user',
-        content: 'what i asked you before? answer shortly'
-      }
-    ]
-
-    console.log('\n\n')
-    const response4 = await model.run(messages4)
-    const buffer4 = []
-
-    await response4
-      .onUpdate(data => {
-        process.stdout.write(data)
-        buffer4.push(data)
+        fullResponse2 += data
       })
       .await()
 
     console.log('\n')
+    console.log('Full response:\n', fullResponse2)
+    console.log(`Inference stats: ${JSON.stringify(response2.stats)}`)
+    console.log('\n')
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
   } finally {
     // 8. Cleaning up resources
     await model.unload()
@@ -166,4 +123,11 @@ async function main () {
   }
 }
 
-main().catch(console.error)
+main().catch(error => {
+  console.error('Fatal error in main function:', {
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  })
+  process.exit(1)
+})

@@ -128,6 +128,62 @@ class LlmLlamacpp extends BaseInference {
       configurationParams
     )
     const binding = require('./binding')
+    
+    // Create a filtered logger that suppresses "No response found for job" messages
+    // This prevents BaseInference from logging these messages during finetuning
+    // BaseInference's _outputCallback logs "No response found for job" when it receives
+    // Output events during finetuning (which doesn't create job responses)
+    const originalLogger = this.logger
+    const originalInfo = originalLogger && typeof originalLogger.info === 'function' 
+      ? originalLogger.info.bind(originalLogger) 
+      : null
+    
+    // Helper to check if message should be suppressed
+    const shouldSuppressMessage = (args) => {
+      const message = args.map(arg => {
+        if (typeof arg === 'string') return arg
+        if (arg && typeof arg === 'object') {
+          if (arg.message && typeof arg.message === 'string') return arg.message
+          return JSON.stringify(arg)
+        }
+        return String(arg)
+      }).join(' ')
+      return message && message.includes('No response found for job')
+    }
+
+    // Create filtered logger that wraps BOTH info and warn methods
+    // BaseInference uses logger.warn() for "No response found for job" messages
+    const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
+    Object.assign(filteredLogger, originalLogger)
+    
+    const originalWarn = originalLogger && typeof originalLogger.warn === 'function'
+      ? originalLogger.warn.bind(originalLogger)
+      : null
+    
+    filteredLogger.info = (...args) => {
+      if (shouldSuppressMessage(args)) {
+        return // Suppress these messages
+      }
+      if (originalInfo) {
+        return originalInfo.apply(originalLogger, args)
+      }
+    }
+    
+    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    filteredLogger.warn = (...args) => {
+      if (shouldSuppressMessage(args)) {
+        return // Suppress these messages
+      }
+      if (originalWarn) {
+        return originalWarn.apply(originalLogger, args)
+      }
+    }
+    
+    // Replace logger to filter BaseInference's internal logging
+    // Store original for LogMsg events from C++
+    const originalLoggerRef = this.logger
+    this.logger = filteredLogger
+    
     const transitionCb = this.logger && typeof this.logger.info === 'function'
       ? this.logger.info.bind(this.logger)
       : null
@@ -304,22 +360,48 @@ class LlmLlamacpp extends BaseInference {
   async _waitForFinetuneCompletion ({ pollIntervalMs = 500, timeoutMs = 100000000000 } = {}) {
     const deadline = Date.now() + timeoutMs
     let sawFinetuneState = false
+    let sawPausedState = false
 
     while (Date.now() <= deadline) {
       const status = await this.addon.status()
       if (status === 'FINETUNING') {
         sawFinetuneState = true
-      } else if (sawFinetuneState) {
-        // Only return on terminal states (IDLE = completion, not PAUSED)
-        // PAUSED is a temporary state - training can resume, so keep waiting
-        if (status === 'PAUSED') {
-          // Continue waiting - training may resume
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-          continue
+        // If we saw PAUSED before and now see FINETUNING, training has resumed
+        // Reset the paused flag since we're training again
+        if (sawPausedState) {
+          sawPausedState = false
         }
-        // Return on other terminal states (IDLE, ERROR, etc.)
+      } else if (status === 'PAUSED') {
+        sawPausedState = true
+        // Continue waiting - training may resume
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+        continue
+      } else if (sawFinetuneState) {
+        // We've seen FINETUNING before
+        if (status === 'IDLE') {
+          // If we saw PAUSED before, training might resume, so wait a bit longer
+          if (sawPausedState) {
+            // Wait a bit to see if training resumes
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 2))
+            const nextStatus = await this.addon.status()
+            // If status is still IDLE after waiting, training is truly complete
+            if (nextStatus === 'IDLE') {
+              return status
+            }
+            // Otherwise, status changed (likely to FINETUNING from resume), continue
+            continue
+          }
+          // No pause was seen, training is complete
+          return status
+        }
+        // Return on other terminal states (ERROR, etc.)
         return status
+      } else if (status === 'IDLE' && !sawFinetuneState) {
+        // Training hasn't started yet, keep waiting
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+        continue
       } else if (status !== 'LOADING') {
+        // Other states (ERROR, etc.) - return immediately
         return status
       }
 

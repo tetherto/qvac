@@ -4,6 +4,8 @@
 
 #include <llama.h>
 
+#include "../utils/ChatTemplateUtils.hpp"
+#include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -112,6 +114,7 @@ public:
   /**
    * The reset state method. It resets the context.
    *
+   * @param resetStats - whether to reset performance statistics
    */
   void resetState(bool resetStats) override;
 

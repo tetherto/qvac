@@ -29,7 +29,6 @@ async function main () {
 
   const config = {
     device: 'gpu',
-    // Force GPU: (very large number of gpu-layers)
     gpu_layers: '999',
     ctx_size: '1024'
   }
@@ -72,6 +71,10 @@ async function main () {
     console.log('\n')
     console.log('Full response:\n', fullResponse)
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
   } finally {
     // 6. Cleaning up resources
     await model.unload()

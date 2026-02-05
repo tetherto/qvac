@@ -2,45 +2,83 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
+const os = require('bare-os')
 const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
 const FilesystemDL = require('@qvac/dl-filesystem')
 
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
     const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
     const req = https.request(url, response => {
       // Handle redirects (added 307, 308 for Windows model download)
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
-        fs.unlink(dest, () => { }) // Clean up partial file
+        // Wait for unlink to complete before recursive call (fixes Windows race condition)
+        fs.unlink(dest, (unlinkErr) => {
+          // Ignore ENOENT - file may not exist yet
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
 
-        let redirectUrl = response.headers.location
-        // Handle relative redirects
-        if (redirectUrl.startsWith('/')) {
-          const originalUrl = new URL(url)
-          redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
-        }
+          let redirectUrl = response.headers.location
+          // Handle relative redirects
+          if (redirectUrl.startsWith('/')) {
+            const originalUrl = new URL(url)
+            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+          }
 
-        return downloadFile(redirectUrl, dest)
-          .then(resolve)
-          .catch(reject)
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve)
+            .catch(safeReject)
+        })
+        return
       }
+
       if (response.statusCode !== 200) {
         file.destroy()
-        fs.unlink(dest, () => { })
-        return reject(new Error(`Download failed: ${response.statusCode}`))
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
+        return
       }
-      response.pipe(file)
-      file.on('finish', () => {
+
+      response.on('error', (err) => {
         file.destroy()
-        resolve()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+
+      // Wait for 'close' event to ensure data is fully flushed to disk (important on Windows)
+      file.on('close', () => {
+        safeResolve()
       })
     })
+
     req.on('error', err => {
       file.destroy()
-      fs.unlink(dest, () => reject(err))
+      fs.unlink(dest, () => safeReject(err))
     })
+
     req.end()
   })
 }
@@ -69,71 +107,106 @@ async function ensureModelPath ({ modelName, downloadUrl }) {
   return path.join(modelDir, downloadedModelName)
 }
 
-async function testTextWithSettings (t, requestedModelName, downloadUrl, settings) {
-  const timeout = 600_000
-  t.timeout(timeout)
+/**
+ * Get path to a media file - works on both desktop and mobile
+ * On mobile, media files must be in testAssets/
+ * On desktop, media files are in addon root /media/
+ *
+ * @param {string} filename - Name of the media file (e.g., 'elephant.jpg')
+ * @returns {string} - Full path to the media file
+ *
+ * @example
+ * const imagePath = getMediaPath('elephant.jpg')
+ * const imageBytes = fs.readFileSync(imagePath)
+ */
+function getMediaPath (filename) {
+  // Mobile environment - use asset loading from testAssets
+  const isMobile = os.platform() === 'ios' || os.platform() === 'android'
+  if (isMobile && global.assetPaths) {
+    const projectPath = `../../testAssets/${filename}`
 
-  const [modelName, dirPath] = await ensureModel({ modelName: requestedModelName, downloadUrl })
-  const modelPath = path.join(dirPath, modelName)
-  t.ok(fs.existsSync(modelPath), 'Model file should exist')
-
-  class TestLogger {
-    error (...msgs) {
-      console.error(msgs)
+    if (global.assetPaths[projectPath]) {
+      const resolvedPath = global.assetPaths[projectPath].replace('file://', '')
+      return resolvedPath
     }
+    // Asset not found in manifest
+    throw new Error(`Asset not found in testAssets: ${filename}. Make sure ${filename} is in testAssets/ directory and rebuild the app.`)
+  }
 
-    warn (...msgs) {
-      console.warn(msgs)
-    }
+  // Desktop environment - use media directory at addon root
+  return path.resolve(__dirname, '../../media', filename)
+}
 
-    debug (...msgs) {
-      console.log(msgs)
-    }
+/**
+ * Factory to create a shared onOutput handler and expose collected state.
+ * Used in tests to capture and track LLM output events.
+ *
+ * @param {object} t - Test instance
+ * @param {object} [logger=console] - Logger instance with a `log` method
+ * @returns {{
+ *   onOutput: (addon: object, event: string, jobId: string, output: string, error: string) => void,
+ *   outputText: Object<string, string>,
+ *   generatedText: string,
+ *   jobCompleted: boolean,
+ *   timeToFirstToken: number | null,
+ *   stats: object | null,
+ *   setStartTime: (time: number) => void
+ * }} An object containing:
+ *   - `onOutput` - Callback to handle addon output events ('Output', 'Error', 'JobEnded')
+ *   - `outputText` - Map of jobId to accumulated output text
+ *   - `generatedText` - All generated text concatenated
+ *   - `jobCompleted` - Flag indicating if the job has finished
+ *   - `timeToFirstToken` - Time to first token in milliseconds
+ *   - `stats` - Stats object from the job
+ *   - `setStartTime` - Function to set the start time for timeToFirstToken calculation
+ *
+ * @example
+ * const collector = makeOutputCollector(t)
+ * addon.setOnOutputCb(collector.onOutput)
+ * // ... run inference ...
+ * console.log(collector.generatedText)
+ */
+function makeOutputCollector (t, logger = console) {
+  const outputText = {}
+  let jobCompleted = false
+  let generatedText = ''
+  let timeToFirstToken = null
+  let startTime = null
+  let stats = null
 
-    info (...msgs) {
-      console.log(msgs)
+  function onOutput (addon, event, jobId, output, error) {
+    if (event === 'Output') {
+      if (!outputText[jobId]) {
+        outputText[jobId] = ''
+        // Record time to first token (manual fallback)
+        if (startTime && timeToFirstToken === null) {
+          timeToFirstToken = Date.now() - startTime
+        }
+      }
+      outputText[jobId] += output
+      generatedText += output
+    } else if (event === 'Error') {
+      t.fail(`Job ${jobId} error: ${error}`)
+    } else if (event === 'JobEnded') {
+      // Capture stats from the data parameter (output is actually the data/stats object in JobEnded)
+      stats = output
+      logger.log(`Job ${jobId} completed. Output: "${outputText[jobId]}"`)
+      if (stats) {
+        logger.log(`Job ${jobId} stats: ${JSON.stringify(stats)}`)
+      }
+      jobCompleted = true
     }
   }
 
-  const diskPath = path.join('test', 'model')
-  const loader = new FilesystemDL({ dirPath: diskPath })
-  const logger = new TestLogger()
-  const inference = new LlmLlamacpp({
-    modelName,
-    loader,
-    logger,
-    diskPath,
-    projectionPath: '',
-    opts: { stats: true }
-  }, settings)
-  await inference.load()
-
-  const status = await inference.status()
-  t.ok(['LOADING', 'IDLE', 'LISTENING'].includes(status), 'Addon should have valid initial status')
-
-  const messages = [
-    {
-      role: 'system',
-      content: 'You are a helpful assistant.'
-    },
-    {
-      role: 'user',
-      content: 'Hello my name is to build tests.'
-    }
-  ]
-  const response = await inference.run(messages)
-  const generatedText = await response._finishPromise
-  t.ok(generatedText.length > 0, 'Should generate some text output')
-  t.ok(response.stats.TPS > 0, 'Should generate token per second stats')
-  console.log('Generated text:', generatedText.join(''))
-  console.log('Generated stats:', response.stats)
-
-  t.teardown(async () => {
-    await loader.close()
-    await inference.addon.destroyInstance()
-  })
-
-  return response.stats
+  return {
+    onOutput,
+    outputText,
+    get generatedText () { return generatedText },
+    get jobCompleted () { return jobCompleted },
+    get timeToFirstToken () { return timeToFirstToken },
+    get stats () { return stats },
+    setStartTime (time) { startTime = time }
+  }
 }
 
 function getDefaultTextModel () {
@@ -438,6 +511,8 @@ async function verifyFinalStatus (t, model, result = null) {
 module.exports = {
   ensureModel,
   ensureModelPath,
+  getMediaPath,
+  makeOutputCollector,
   testTextWithSettings,
   getDefaultTextModel,
   getFinetuneModel,

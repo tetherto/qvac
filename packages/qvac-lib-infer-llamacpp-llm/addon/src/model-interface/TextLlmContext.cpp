@@ -1,6 +1,7 @@
 #include "TextLlmContext.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 #include <llama.h>
@@ -10,10 +11,13 @@
 #include "common/common.h"
 #include "common/log.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/Qwen3ReasoningUtils.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
+using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-identifier-naming,readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
@@ -334,7 +338,8 @@ bool TextLlmContext::evalMessageWithTools(
     }
     bool isLastToken = (tokenIndex == nTokens);
     if (isLastToken) {
-      textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
+      textBatch->logits[textBatch->n_tokens - 1] =
+          static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     int ret = llama_decode(lctx_, *textBatch);
@@ -478,7 +483,6 @@ bool TextLlmContext::generateResponse(
   if (nRemain == 0) {
     flushPendingUtf8ToCallback(outputCallback);
   }
-
   return true;
 }
 

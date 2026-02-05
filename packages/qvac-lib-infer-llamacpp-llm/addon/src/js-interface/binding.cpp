@@ -1,7 +1,6 @@
 #include <bare.h>
 
 #include "../addon/AddonJs.hpp"
-
 js_value_t*
 qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
 
@@ -21,8 +20,11 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("runJob", qvac_lib_inference_addon_llama::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
-  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("activate", qvac_lib_inference_addon_llama::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
+  V("finetune", qvac_lib_inference_addon_llama::finetune)
+  V("pause", qvac_lib_inference_addon_llama::pause)
+  V("status", qvac_lib_inference_addon_llama::status)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)

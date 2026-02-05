@@ -15,7 +15,46 @@ If you want to build the addon from source instead of using pre-built packages, 
    npm install -g bare-make
    ```
 
-3. **Platform-specific requirements**:
+3. **Install vcpkg and set VCPKG_ROOT**:
+   
+   This project uses vcpkg for dependency management. You need to install vcpkg and set the `VCPKG_ROOT` environment variable.
+   Cloning the repo ensures you get the exact vcpkg version (2025.12.12) that this project uses:
+   
+   - **macOS/Linux**:
+     ```bash
+     # Clone vcpkg (use a location outside the project directory)
+     cd ~
+     git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+     cd vcpkg
+     
+     # Bootstrap vcpkg
+     ./bootstrap-vcpkg.sh
+     
+     # Set VCPKG_ROOT environment variable (add to your ~/.zshrc or ~/.bashrc for persistence)
+     export VCPKG_ROOT=$(pwd)
+     ```
+   
+   - **Windows**:
+     ```powershell
+     # Clone vcpkg (use a location outside the project directory)
+     cd C:\
+     git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+     cd vcpkg
+     
+     # Bootstrap vcpkg
+     .\bootstrap-vcpkg.bat
+     
+     # Set VCPKG_ROOT environment variable (for current session)
+     $env:VCPKG_ROOT = (Get-Location).Path
+     
+     # To make it persistent, add it to System Environment Variables or your PowerShell profile
+     ```
+   
+   You can verify it's set by running:
+     - macOS/Linux: `echo $VCPKG_ROOT`
+     - Windows: `echo $env:VCPKG_ROOT`
+
+4. **Platform-specific requirements**:
    - **macOS**: 
      - Xcode Command Line Tools
      - Apple clang version >= 15.0.0 (LLVM compiler is not supported at the moment)
@@ -69,9 +108,6 @@ For more control over the build process, you can run the commands individually:
 # Generate build files (with optional flags)
 bare-make generate
 
-# For building with BERT model support (used in tests)
-bare-make generate -D BUILD_BERT_MODEL=ON
-
 # Build the addon
 bare-make build
 
@@ -79,24 +115,41 @@ bare-make build
 bare-make install
 ```
 
-## Cross-compilation
+## Building for Different Platforms
 
-To build for different platforms/architectures:
+
+Native builds (building for the same platform you're running on) work out of the box.
+
+Cross-compilation:
 
 ```bash
-# Example: Build for Linux ARM64
-bare-make generate --platform linux --arch arm64
+# Example: Build for Android
+bare-make generate --platform android --arch arm64
 bare-make build
 bare-make install
 
-# Example: Build for Windows x64
-bare-make generate --platform win32 --arch x64
+# Example: Build for iOS
+bare-make generate --platform ios --arch arm64
 bare-make build
 bare-make install
 ```
 
+**Important:** When switching between different platforms or architectures, you should clean the build directory first to avoid configuration conflicts:
+
+```bash
+# Clean build directory before switching platforms
+rm -rf build
+bare-make generate --platform <new-platform> --arch <new-arch>
+bare-make build
+bare-make install
+```
+
+**Supported platforms:** `linux`, `win32`, `darwin`, `android`, `ios`  
+**Supported architectures:** `x64`, `arm64`
+
 ## Troubleshooting Build Issues
 
+- **VCPKG_ROOT env var must be set**: Make sure you've installed vcpkg and set the `VCPKG_ROOT` environment variable to point to your vcpkg installation directory. See the "Install vcpkg and set VCPKG_ROOT" section above.
 - **CMake cannot find cmake-bare**: Make sure you installed `bare` (not `bare-runtime`). The `bare` package includes the necessary CMake configuration files.
 - **Android cross-compilation fails with "Could NOT find Vulkan (missing: glslc)"**: Install Vulkan shader compiler tools with `brew install shaderc` on macOS.
 - **Build is targeting wrong platform**: If you're switching between platforms (e.g., from macOS to iOS, or between different architectures) and the build is still targeting the previous platform, clean the build directory first: `rm -rf build` before running `bare-make generate` again.
