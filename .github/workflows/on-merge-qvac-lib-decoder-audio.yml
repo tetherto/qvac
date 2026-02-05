@@ -46,7 +46,7 @@ jobs:
     needs: run-integration-tests
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - name: Checkout repository
