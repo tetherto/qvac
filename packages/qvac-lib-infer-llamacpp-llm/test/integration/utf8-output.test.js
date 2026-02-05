@@ -88,5 +88,7 @@ test('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     releaseLogger()
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 })

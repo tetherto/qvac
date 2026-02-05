@@ -55,6 +55,8 @@ async function setupReasoningModel (t, toolsEnabled) {
     } catch (err) {
       // Ignore cleanup errors
     }
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   })
 
   return { inference, loader }

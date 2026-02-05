@@ -56,5 +56,7 @@ test('llm addon can run MoE models [dolphin-mixtral-2x7b]', { timeout: 1_800_000
     specLogger.release()
     await inference.unload().catch(() => {})
     await loader.close().catch(() => {})
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 })

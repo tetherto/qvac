@@ -79,6 +79,8 @@ test('filesystem loader can run inference end-to-end', { timeout: 600_000, skip:
   } finally {
     await addon.unload().catch(() => {})
     await loader.close().catch(() => {})
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 })
 
@@ -125,6 +127,8 @@ test('model unload is clean and idempotent', { timeout: 600_000 }, async t => {
     })
   } finally {
     await loader.close().catch(() => {})
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 })
 
@@ -197,12 +201,7 @@ async function runHyperdriveTest (t) {
     await hdDL.close().catch(() => {})
     await store.close().catch(() => {})
     loggerHandle.release()
+    // Brief delay for C++ async cleanup (prevents exit code 139)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 }
-
-// Keep event loop alive briefly to let pending async operations complete
-// This prevents C++ destructors from running while async cleanup is still happening
-// which can cause segfaults (exit code 139)
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})
