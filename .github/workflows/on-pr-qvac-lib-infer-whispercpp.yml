@@ -37,7 +37,7 @@ jobs:
       github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
       package-slug: qvac-lib-infer-whispercpp
-      package-json-path: packages/packages/qvac-lib-infer-whispercpp/package.json
+      package-json-path: packages/qvac-lib-infer-whispercpp/package.json
       changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
 
   sanity-checks:
@@ -69,7 +69,7 @@ jobs:
 
   cpp-tests-coverage:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-tests-whisper.cpp.yml
+    uses: ./.github/workflows/cpp-tests-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
