@@ -4,7 +4,10 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { Readable } from "bare-stream";
 import fs from "bare-fs";
-import { needsDecoding, decodeAudioToStream } from "@/server/utils";
+import {
+  needsDecoding,
+  decodeAudioToStream,
+} from "@/server/utils/audio/decoder";
 import {
   type TranscribeParams,
   type WhisperConfig,
