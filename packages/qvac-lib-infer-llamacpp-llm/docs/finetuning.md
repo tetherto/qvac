@@ -67,7 +67,7 @@ Default (when `loraModules` is empty): attention Q, K, V, O only.
 
 ### `finetune(finetuningOptions?)`
 
-Starts finetuning. If the model is not loaded, it will be loaded first. Finetuning runs exclusively (no concurrent inference).
+Starts finetuning. If the model is not loaded, it will be loaded first. Finetuning runs exclusively (no concurrent inference). Completion is event-driven: the promise resolves when the C++ backend emits a completion event (no polling).
 
 ```js
 const result = await model.finetune(finetuningOptions)
@@ -75,17 +75,19 @@ const result = await model.finetune(finetuningOptions)
 ```
 
 - **Parameters**: `finetuningOptions` — object with [finetuning parameters](#finetuning-parameters). If omitted, uses params passed at construction or from a previous call.
-- **Returns**: `Promise<{ status: string }>` — resolves when training completes. `status` is typically `'IDLE'` on success.
+- **Returns**: `Promise<{ status: string }>` — resolves when training completes. `status` is typically `'IDLE'` on success, `'ERROR'` on failure.
 
 **Related example:** [examples/simple-lora-finetune.js](../examples/simple-lora-finetune.js) — Run with: `bare examples/simple-lora-finetune.js`
 
 ### `pauseFinetune()`
 
-Pauses finetuning and saves a checkpoint to `checkpointSaveDir`. The checkpoint can be used to resume later. Pause is applied after the current batch completes.
+Pauses finetuning and saves a checkpoint to `checkpointSaveDir`. The checkpoint can be used to resume later. Pause is applied after the current batch completes. **The promise resolves only after the pause checkpoint has been saved** (event-driven; no polling).
 
 ```js
 await model.pauseFinetune()
 ```
+
+If called when not finetuning, returns immediately without waiting.
 
 **Related example:** [examples/simple-lora-finetune-pause-resume.js](../examples/simple-lora-finetune-pause-resume.js) — Run with: `bare examples/simple-lora-finetune-pause-resume.js`
 
@@ -112,6 +114,8 @@ Returns the current model/addon status. During finetuning you may see:
 ```js
 const status = await model.status()
 ```
+
+**Note:** The library uses event-based completion internally; `finetune()` and `pauseFinetune()` do not poll `status()`. Use `status()` for diagnostics or when you need to wait for a specific state (e.g., before pausing).
 
 ---
 
@@ -147,6 +151,15 @@ const status = await model.status()
 ---
 
 ## Implementation Notes
+
+### Event-Based Completion
+
+Finetuning completion and pause detection use events from the C++ backend rather than polling:
+
+- **`finetune()`** — Resolves when a `FinetuneComplete` event is received (status `IDLE` or `ERROR`).
+- **`pauseFinetune()`** — Resolves when a `FinetunePaused` event is received (after the checkpoint is saved). If training completes or errors before the pause checkpoint is saved, the promise still resolves.
+
+### Parameter Notes
 
 | Parameter | Status |
 |-----------|--------|
@@ -259,18 +272,18 @@ For multiple pause/resume cycles, see [examples/simple-lora-finetune-multiple-pa
 // Start finetuning (returns a Promise)
 const finetuneTask = model.finetune(finetuneOptions)
 
-// Wait until status is FINETUNING
+// Wait until status is FINETUNING (optional; ensures training has started)
 while ((await model.status()) !== 'FINETUNING') {
   await new Promise(r => setTimeout(r, 200))
 }
 
-// Pause (saves checkpoint to checkpointSaveDir)
+// Pause (blocks until checkpoint is saved)
 await model.pauseFinetune()
 
 // Later: resume from checkpoint
 await model.resumeFinetune()
 
-// Wait for status to return to FINETUNING
+// Wait for status to return to FINETUNING (optional; ensures resume has started)
 while ((await model.status()) !== 'FINETUNING') {
   await new Promise(r => setTimeout(r, 200))
 }

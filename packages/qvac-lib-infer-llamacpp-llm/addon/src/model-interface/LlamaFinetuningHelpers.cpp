@@ -522,15 +522,13 @@ void optEpochCallback(
   if (state == nullptr) {
     return;
   }
-  
-  // Check if pause checkpoint is already saved before any state modifications
+
   bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
   bool shouldExitAlreadySet = state->shouldExit.load();
   if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
     return;
   }
 
-  // Handle mid-epoch resume: verify we're starting from the correct batch
   if (state->skippingBatches && state->batchOffsetWithinEpoch >= 0) {
     if (ibatch == state->batchOffsetWithinEpoch) {
       state->skippingBatches = false;
@@ -552,10 +550,8 @@ void optEpochCallback(
     }
   }
 
-  // Increment step counter before checking pause so globalStep reflects the batch we just processed
   state->globalStep += 1;
 
-  // Verify first batch after resume matches expected batch
   if (state->expectedFirstBatchAfterResume >= 0 && state->logFn) {
     if (!state->firstBatchAfterResumeLogged) {
       if (state->globalStep == state->expectedFirstBatchAfterResume) {
@@ -590,6 +586,7 @@ void optEpochCallback(
                    << " | Checkpoint saved at: "
                    << state->pauseCheckpointPath.string();
           state->logFn(pauseMsg.str());
+          state->logFn(R"({"type":"FinetunePaused"})");
         }
       } else {
         if (state->logFn) {

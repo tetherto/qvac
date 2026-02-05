@@ -20,7 +20,7 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  pause(): Promise<void>
+  pause(): Promise<boolean>
   stop(): Promise<void>
   status(): Promise<string>
   append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>

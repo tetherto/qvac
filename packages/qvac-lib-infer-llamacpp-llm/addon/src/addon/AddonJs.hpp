@@ -168,12 +168,9 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         "Finetuning parameters not provided and not stored");
   }
 
-  // CRITICAL: Store params back so they're available for resume via activate()
-  // take() removes them from storage, but we need them available for resume
   qvac_lib_inference_addon_llama_detail::put(
       instance.addonCpp.get(), params);
 
-  // Capture outputQueue pointer for thread-safe logging
   auto* outputQueue = instance.addonCpp->outputQueue.get();
   auto enqueueLog = [outputQueue](const string& message) {
     if (outputQueue != nullptr) {
@@ -182,20 +179,14 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   };
 
   bool allowResume = shouldResumeFromPause.exchange(false);
-  
-  // Run finetune in a separate thread to avoid blocking JavaScript event loop
-  // This allows pause() to be called from JavaScript while finetuning is running
+
   std::thread finetuneThread([llamaModel, params, enqueueLog, allowResume]() {
     try {
       llamaModel->finetune(params, enqueueLog, allowResume);
     } catch (const std::exception& e) {
-      // Log error to stderr as fallback
       std::cerr << "[ERROR] Finetuning thread exception: " << e.what() << std::endl;
     }
   });
-  
-  // Detach the thread so it runs independently
-  // The thread will complete when finetune() returns (either normally or when paused)
   finetuneThread.detach();
 
   return nullptr;
@@ -223,10 +214,10 @@ inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
         "Model not available or not a LlamaModel");
   }
 
-  llamaModel->requestPause();
+  bool didPause = llamaModel->requestPause();
   shouldResumeFromPause.store(false);
 
-  return nullptr;
+  return js::Boolean::create(env, didPause);
 }
 JSCATCH
 

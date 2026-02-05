@@ -62,9 +62,10 @@ class LlamaInterface {
 
   /**
    * Pause finetuning
+   * @returns {Promise<boolean>} true if pause was requested, false if not finetuning
    */
   async pause () {
-    this._binding.pause(this._handle)
+    return this._binding.pause(this._handle)
   }
 
   /**

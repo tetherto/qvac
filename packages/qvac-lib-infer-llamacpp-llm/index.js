@@ -184,50 +184,49 @@ class LlmLlamacpp extends BaseInference {
       ? this.logger.info.bind(this.logger)
       : null
 
-    // Override _outputCallback to intercept BaseInference's logging
-    // This is called directly from _addonOutputCallback, so we MUST override it here
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
-      // Event-based finetuning completion: detect FinetuneComplete from C++
       if (typeof data === 'string') {
         try {
           const obj = JSON.parse(data)
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
             this._finetuneCompletionResolve(obj.status)
+            if ((obj.status === 'IDLE' || obj.status === 'ERROR') && this._finetunePausedResolve) {
+              this._finetunePausedResolve()
+            }
             return
           }
-        } catch (_) { /* not JSON, continue */ }
+          if (obj?.type === 'FinetunePaused' && this._finetunePausedResolve) {
+            this._finetunePausedResolve()
+            let resolvePaused
+            this._finetunePausedPromise = new Promise((resolve) => {
+              resolvePaused = resolve
+            })
+            this._finetunePausedResolve = resolvePaused
+            return
+          }
+        } catch (_) {}
       }
 
-      // For LogMsg events, use original logger (these come from C++, not BaseInference)
       if (eventType === 'LogMsg') {
         const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
         originalLoggerRef?.info?.(logMsg)
-        // Don't call originalOutputCb for LogMsg to avoid duplicate logging
         return
       }
-      
-      // For Output events during finetuning, check if this is progress bar output
-      // If so, print directly and skip BaseInference's job routing
+
       if (eventType === 'Output' && typeof data === 'string') {
         const dataStr = data
-        // Check if this is finetuning progress bar output
         if (dataStr.includes('data=') && (dataStr.includes('loss=') || dataStr.includes('train:'))) {
-          // This is finetuning progress output - print it directly to stdout
-          // Bypass BaseInference's job routing to avoid "No response found for job" messages
           process.stdout.write(dataStr)
           return
         }
       }
-      
-      // For all other events, call BaseInference's _outputCallback
-      // The filtered logger will suppress "No response found for job" messages
+
       if (originalOutputCb) {
         return originalOutputCb(instance, eventType, jobId, data, extra)
       }
     }
-    
-    // Also create wrappedOutputCb for LlamaInterface constructor (though it may not be used)
+
     const wrappedOutputCb = this._outputCallback
 
     return new LlamaInterface(
@@ -336,10 +335,15 @@ class LlmLlamacpp extends BaseInference {
 
     return this._withExclusiveRun(async () => {
       let resolveCompletion
+      let resolvePaused
       this._finetuneCompletionPromise = new Promise((resolve) => {
         resolveCompletion = resolve
       })
       this._finetuneCompletionResolve = resolveCompletion
+      this._finetunePausedPromise = new Promise((resolve) => {
+        resolvePaused = resolve
+      })
+      this._finetunePausedResolve = resolvePaused
       try {
         this.logger?.info?.('Calling addon.finetune()...')
         await this.addon.finetune(params)
@@ -349,69 +353,24 @@ class LlmLlamacpp extends BaseInference {
         return { status: finalStatus }
       } finally {
         this._finetuneCompletionResolve = null
+        this._finetunePausedResolve = null
       }
     })
   }
 
-  async _waitForFinetuneCompletion ({ pollIntervalMs = 500, timeoutMs = 100000000000 } = {}) {
-    const fallbackPolling = async () => {
-      const deadline = Date.now() + timeoutMs
-      let sawFinetuneState = false
-      let sawPausedState = false
-
-      while (Date.now() <= deadline) {
-        const status = await this.addon.status()
-        if (status === 'FINETUNING') {
-          sawFinetuneState = true
-          // If we saw PAUSED before and now see FINETUNING, training has resumed
-          // Reset the paused flag since we're training again
-          if (sawPausedState) {
-            sawPausedState = false
-          }
-        } else if (status === 'PAUSED') {
-          sawPausedState = true
-          // Continue waiting - training may resume
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-          continue
-        } else if (sawFinetuneState) {
-          // We've seen FINETUNING before
-          if (status === 'IDLE') {
-            // If we saw PAUSED before, training might resume, so wait a bit longer
-            if (sawPausedState) {
-              // Wait a bit to see if training resumes
-              await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 2))
-              const nextStatus = await this.addon.status()
-              // If status is still IDLE after waiting, training is truly complete
-              if (nextStatus === 'IDLE') {
-                return status
-              }
-              // Otherwise, status changed (likely to FINETUNING from resume), continue
-              continue
-            }
-            // No pause was seen, training is complete
-            return status
-          }
-          // Return on other terminal states (ERROR, etc.)
-          return status
-        } else if (status === 'IDLE' && !sawFinetuneState) {
-          // Training hasn't started yet, keep waiting
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-          continue
-        } else if (status !== 'LOADING') {
-          // Other states (ERROR, etc.) - return immediately
-          return status
-        }
-
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-      }
-
-      throw new Error('Time out')
+  async _waitForFinetuneCompletion ({ timeoutMs = 100000000000 } = {}) {
+    let timeoutId
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Time out')), timeoutMs)
+    })
+    try {
+      return await Promise.race([
+        this._finetuneCompletionPromise,
+        timeoutPromise
+      ])
+    } finally {
+      clearTimeout(timeoutId)
     }
-
-    return Promise.race([
-      this._finetuneCompletionPromise,
-      fallbackPolling()
-    ])
   }
 
   /**
@@ -422,7 +381,13 @@ class LlmLlamacpp extends BaseInference {
     if (!this.addon) {
       throw new Error('Addon not initialized')
     }
-    await this.addon.pause()
+    const didPause = await this.addon.pause()
+    if (!didPause) {
+      return
+    }
+    if (this._finetunePausedPromise) {
+      await this._finetunePausedPromise
+    }
   }
 
   /**
