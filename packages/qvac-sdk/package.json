@@ -16,9 +16,41 @@
       "import": "./dist/server/worker.js",
       "require": "./dist/server/worker.js"
     },
+    "./llamacpp-completion/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+    },
+    "./llamacpp-embedding/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+    },
+    "./whispercpp-transcription/plugin": {
+      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+    },
+    "./nmtcpp-translation/plugin": {
+      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+    },
+    "./onnx-tts/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-tts/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-tts/plugin.js"
+    },
+    "./onnx-ocr/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-ocr/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-ocr/plugin.js"
+    },
+    "./plugin-utils": {
+      "types": "./dist/schemas/plugin.d.ts",
+      "import": "./dist/schemas/plugin.js"
+    },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
-    "./models": "./dist/models/hyperdrive/models.js"
+    "./models": "./dist/models/hyperdrive/models.js",
+    "./electron-builder": {
+      "require": "./electron-builder/index.cjs"
+    },
+    "./dist/*": "./dist/*"
   },
   "imports": {
     "#rpc": {
@@ -35,6 +67,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -93,7 +126,7 @@
     "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
     "@types/node": "^24.2.1",
     "@types/tar-stream": "^3.1.4",
-    "bare-pack": "^1.5.1",
+    "bare-pack": "^2.0.0",
     "bare-readline": "^1.2.0",
     "brittle": "^3.19.1",
     "chromadb": "^3.0.14",
