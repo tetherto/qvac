@@ -35,8 +35,6 @@ jobs:
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
     secrets: inherit
-    permissions:
-      pull-requests: write
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
