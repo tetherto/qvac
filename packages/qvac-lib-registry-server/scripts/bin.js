@@ -14,7 +14,7 @@ const fs = require('fs')
 
 const RegistryService = require('../lib/registry-service')
 const RegistryConfig = require('../lib/config')
-const { AUTOBASE_NAMESPACE } = require('@tetherto/qvac-registry-schema')
+const { AUTOBASE_NAMESPACE } = require('@tetherto/qvac-registry-schema-mono')
 
 const DEFAULT_STORAGE = './corestore'
 const DEFAULT_WRITER_STORAGE = './writer-storage'

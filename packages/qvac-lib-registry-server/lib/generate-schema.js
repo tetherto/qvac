@@ -1,6 +1,6 @@
 'use strict'
 
-const { QVAC_MAIN_REGISTRY } = require('@tetherto/qvac-registry-schema')
+const { QVAC_MAIN_REGISTRY } = require('@tetherto/qvac-registry-schema-mono')
 
 module.exports = function generateQVACRegistrySchema (schema) {
   schema.register({
