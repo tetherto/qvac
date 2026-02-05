@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "llama-cpp",
-      "version>=": "7248.1.1#0"
+      "version>=": "7248.1.2#0"
     },
     {
       "name": "opencl",
