@@ -406,6 +406,11 @@ bare index.js
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [Finetuning](docs/finetuning.md) – Guide to LoRA finetuning: API, dataset format, and examples.
+-   [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using `@qvac/dl-filesystem`.
+-   [LoRA Finetuning](./examples/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](./examples/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 
 ## Architecture
 
