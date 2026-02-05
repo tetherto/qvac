@@ -962,15 +962,10 @@ void LlamaModel::finetune(
     if (checkpointState) {
       clearGlobalCheckpointState();
       if (wasPaused) {
-        // CRITICAL: Transfer ownership to member variable to prevent destruction
-        // The checkpointState unique_ptr will go out of scope, but we need to keep
-        // the object alive so status() can detect PAUSED state
         pausedCheckpointState_ = std::move(checkpointState);
-        // currentCheckpointState_ already points to the object (set at line 935)
-        // and will remain valid because pausedCheckpointState_ owns it
       } else {
         currentCheckpointState_ = nullptr;
-        pausedCheckpointState_.reset(); // Clear any previously paused state
+        pausedCheckpointState_.reset();
       }
     }
 
@@ -1369,9 +1364,7 @@ void LlamaModel::saveLoraAdapter(
 }
 
 bool LlamaModel::requestPause() {
-  // Wait briefly for checkpoint state initialization if training is starting
-  // This handles the race condition where pause() is called immediately after resume()
-  constexpr int maxRetries = 30;  // 3 seconds total (30 * 100ms)
+  constexpr int maxRetries = 30;
   constexpr auto retryInterval = std::chrono::milliseconds(100);
   
   for (int retry = 0; retry < maxRetries; ++retry) {

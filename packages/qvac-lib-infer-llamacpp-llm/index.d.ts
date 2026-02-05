@@ -51,7 +51,7 @@ export interface Addon {
   runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
   cancel(): Promise<void>
   status?(): Promise<string>
-  pause?(): Promise<void>
+  pause?(): Promise<boolean>
   finetune?(params?: FinetuningParams): Promise<void>
   unload(): Promise<void>
 }

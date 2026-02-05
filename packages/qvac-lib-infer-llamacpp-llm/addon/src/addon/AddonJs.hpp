@@ -158,7 +158,6 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   // Keep params available for resume attempts via activate().
   qvac_lib_inference_addon_llama_detail::put(instance.addonCpp.get(), params);
 
-  // Capture outputQueue pointer for thread-safe logging
   auto* outputQueue = instance.addonCpp->outputQueue.get();
   auto enqueueLog = [outputQueue](const string& message) {
     if (outputQueue != nullptr) {
@@ -203,9 +202,9 @@ inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
         "Model not available or not a LlamaModel");
   }
 
-  llamaModel->requestPause();
+  bool didPause = llamaModel->requestPause();
   shouldResumeFromPause.store(false);
-  return nullptr;
+  return js::Boolean::create(env, didPause);
 }
 JSCATCH
 
