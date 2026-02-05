@@ -1,4 +1,4 @@
-name: Build Prebuilds (Qvac-lib-infer-nmtcpp)
+name: Prebuilds (NMTCPP)
 
 on:
   push:

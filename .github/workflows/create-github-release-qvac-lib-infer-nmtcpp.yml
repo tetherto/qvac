@@ -1,4 +1,4 @@
-name: Create GitHub Release (Qvac-lib-infer-nmtcpp)
+name: Create GitHub Release (NMTCPP)
 
 on:
   workflow_call:

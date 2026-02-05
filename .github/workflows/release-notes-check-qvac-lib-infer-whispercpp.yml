@@ -1,4 +1,4 @@
-name: Release Notes Check (Qvac-lib-infer-whispercpp)
+name: Release Notes Check (Whispercpp)
 
 on:
   workflow_call:

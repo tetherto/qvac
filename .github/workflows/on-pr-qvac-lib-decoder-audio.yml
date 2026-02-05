@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-decoder-audio)
+name: On PR Trigger (Decoder-audio)
 
 on:
   pull_request_target:
@@ -14,6 +14,11 @@ on:
       - "packages/qvac-lib-decoder-audio/**"
   workflow_dispatch:
   workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
 
 jobs:
   release-pr-guard:

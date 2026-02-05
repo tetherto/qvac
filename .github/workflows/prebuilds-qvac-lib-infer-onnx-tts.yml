@@ -1,4 +1,4 @@
-name: "Prebuilds (Qvac-lib-infer-onnx-tts)"
+name: Prebuilds (TTS)
 
 on:
   push:

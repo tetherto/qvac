@@ -1,4 +1,4 @@
-name: On Merge to Main (Qvac-lib-infer-onnx-tts)
+name: On Merge Trigger (TTS)
 
 on:
   push:

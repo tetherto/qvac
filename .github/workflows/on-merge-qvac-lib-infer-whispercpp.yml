@@ -1,4 +1,4 @@
-name: On Merge Trigger (Qvac-lib-infer-whispercpp)
+name: On Merge Trigger (Whispercpp)
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: "Create GitHub Release (Qvac-lib-infer-llamacpp-embed)"
+name: Create GitHub Release (Embed)
 
 on:
   workflow_call:

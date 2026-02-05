@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-infer-llamacpp-embed)
+name: On PR Trigger (Embed)
 
 on:
   pull_request_target:

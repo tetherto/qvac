@@ -1,4 +1,4 @@
-name: On Merge - Test & Publish (Qvac-lib-decoder-audio)
+name: On Merge Trigger (Decoder-audio)
 
 on:
   push:
@@ -17,8 +17,16 @@ on:
           - latest
           - dev
 
+permissions:
+  contents: read
+  pull-requests: write
+  packages: write
+
 jobs:
   run-integration-tests:
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
@@ -27,8 +35,6 @@ jobs:
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
     secrets: inherit
-    permissions:
-      pull-requests: write
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
@@ -38,7 +44,7 @@ jobs:
     needs: run-integration-tests
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
     steps:
       - name: Checkout repository

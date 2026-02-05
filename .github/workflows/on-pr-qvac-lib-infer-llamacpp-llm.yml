@@ -1,4 +1,4 @@
-name: On PR Trigger (Qvac-lib-infer-llamacpp-llm)
+name: On PR Trigger (LLM)
 
 on:
   pull_request_target:

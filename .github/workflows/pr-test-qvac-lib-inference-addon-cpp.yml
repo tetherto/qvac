@@ -1,4 +1,4 @@
-name: Test pipeline for PRs (Qvac-lib-inference-addon-cpp)
+name: Test pipeline for PRs (Inference-addon-cpp)
 
 permissions:
   contents: read

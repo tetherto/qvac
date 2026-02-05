@@ -1,4 +1,4 @@
-name: Run C++ Tests (Qvac-lib-infer-llamacpp-embed)
+name: CPP Tests (Embed)
 
 on:
   workflow_call:

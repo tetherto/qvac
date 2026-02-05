@@ -1,4 +1,4 @@
-name: "prebuilds (Qvac-lib-inference-addon-onnx-ocr-fasttext)"
+name: "Prebuilds (OCR)"
 
 on:
   push:

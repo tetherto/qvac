@@ -1,4 +1,4 @@
-name: "prebuilds (Qvac-lib-infer-onnx-vad)"
+name: "Prebuilds (VAD)"
 
 on:
   workflow_call:

@@ -1,4 +1,4 @@
-name: "prebuilds (Qvac-lib-infer-whispercpp)"
+name: "Prebuilds (Whispercpp)"
 
 on:
   workflow_dispatch:

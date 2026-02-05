@@ -1,4 +1,4 @@
-name: Dispatch on README (Qvac-lib-infer-whispercpp)
+name: Dispatch on README (Whispercpp)
 
 on:
   pull_request:

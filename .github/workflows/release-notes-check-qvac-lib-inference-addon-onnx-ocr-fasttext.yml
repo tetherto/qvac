@@ -1,4 +1,4 @@
-name: Release Notes Check (Qvac-lib-inference-addon-onnx-ocr-fasttext)
+name: Release Notes Check (OCR)
 
 on:
   pull_request_target:

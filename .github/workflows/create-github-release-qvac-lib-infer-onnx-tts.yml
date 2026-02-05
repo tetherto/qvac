@@ -1,4 +1,4 @@
-name: Create GitHub Release (Qvac-lib-infer-onnx-tts)
+name: Create GitHub Release (TTS)
 
 on:
   workflow_call:

@@ -1,4 +1,4 @@
-name: Release Notes Check (Qvac-lib-infer-llamacpp-embed)
+name: Release Notes Check (Embed)
 
 on:
   pull_request:
