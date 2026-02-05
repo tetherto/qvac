@@ -1,18 +1,10 @@
 import {
   loadModelServerParamsSchema,
   ModelType,
-  type EmbedConfig,
-  type LlmConfig,
+  normalizeModelType,
   type LoadModelServerParams,
-  type WhisperConfig,
-  type OCRConfig,
+  type CanonicalModelType,
 } from "@/schemas";
-import { createLlmModel } from "@/server/bare/addons/llamacpp-completion";
-import { createEmbeddingsModel } from "@/server/bare/addons/llamacpp-embedding";
-import { createNmtModel } from "@/server/bare/addons/nmtcpp-translation";
-import { createTtsModel } from "@/server/bare/addons/onnx-tts";
-import { createWhisperModel } from "@/server/bare/addons/whispercpp-transcription";
-import { createOCRModel } from "@/server/bare/addons/onnx-ocr";
 import {
   isModelLoaded,
   registerModel,
@@ -30,11 +22,12 @@ import {
 import {
   ESpeakDataPathRequiredError,
   ModelLoadFailedError,
-  UnknownModelTypeError,
+  PluginNotFoundError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError,
 } from "@/utils/errors-server";
+import { getPlugin } from "@/server/plugins";
 import type FilesystemDL from "@qvac/dl-filesystem";
 import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
@@ -54,7 +47,10 @@ export async function loadModel(params: LoadModelServerParams) {
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
-  const { modelConfig, modelType } = options;
+  const { modelConfig, modelType: rawModelType } = options;
+
+  // Normalize modelType to canonical form (handles aliases and custom types)
+  const modelType = normalizeModelType(rawModelType);
 
   // Check if model is already loaded
   if (isModelLoaded(modelId)) {
@@ -98,68 +94,37 @@ export async function loadModel(params: LoadModelServerParams) {
     }
   }
 
-  let result: { model: AnyModel; loader: FilesystemDL };
-  switch (modelType) {
-    case ModelType.llamacppCompletion:
-      result = createLlmModel(
-        modelId,
-        modelPath,
-        modelConfig as LlmConfig,
-        projectionModelPath,
-      );
-      break;
-    case ModelType.whispercppTranscription:
-      result = createWhisperModel(
-        modelId,
-        modelPath,
-        modelConfig as WhisperConfig,
-        vadModelPath,
-      );
-      break;
-    case ModelType.llamacppEmbedding:
-      result = createEmbeddingsModel(
-        modelId,
-        modelPath,
-        modelConfig as EmbedConfig,
-      );
-      break;
-
-    case ModelType.nmtcppTranslation:
-      result = createNmtModel(modelId, modelPath, modelConfig);
-      break;
-
-    case ModelType.onnxTts:
-      if (!eSpeakDataPath) {
-        throw new ESpeakDataPathRequiredError();
-      }
-      result = createTtsModel(
-        modelId,
-        modelPath,
-        modelConfig,
-        ttsConfigModelPath!,
-        eSpeakDataPath,
-      );
-      break;
-
-    case ModelType.onnxOcr:
-      if (!detectorModelPath) {
-        throw new ModelLoadFailedError(
-          "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
-        );
-      }
-      // modelPath is the recognizer, detectorModelPath is auto-derived
-      result = createOCRModel(
-        modelId,
-        detectorModelPath,
-        modelPath,
-        modelConfig as OCRConfig,
-      );
-      break;
-
-    default:
-      // Should never happen - normalizeModelType validates input
-      throw new UnknownModelTypeError(modelType);
+  // Model-type-specific validation
+  if (modelType === ModelType.onnxTts && !eSpeakDataPath) {
+    throw new ESpeakDataPathRequiredError();
   }
+  if (modelType === ModelType.onnxOcr && !detectorModelPath) {
+    throw new ModelLoadFailedError(
+      "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
+    );
+  }
+
+  const plugin = getPlugin(modelType);
+  if (!plugin) {
+    throw new PluginNotFoundError(modelType);
+  }
+
+  // Build artifacts map for plugin
+  const artifacts: Record<string, string> = {};
+  if (projectionModelPath)
+    artifacts["projectionModelPath"] = projectionModelPath;
+  if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
+  if (ttsConfigModelPath) artifacts["ttsConfigModelPath"] = ttsConfigModelPath;
+  if (eSpeakDataPath) artifacts["eSpeakDataPath"] = eSpeakDataPath;
+  if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
+
+  const result = plugin.createModel({
+    modelId,
+    modelPath,
+    modelConfig: modelConfig as Record<string, unknown>,
+    modelName,
+    artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
+  }) as { model: AnyModel; loader: FilesystemDL };
 
   logger.info(`${modelType}: Loading model ${modelId}...`);
 
@@ -174,7 +139,7 @@ export async function loadModel(params: LoadModelServerParams) {
     model: result.model,
     path: modelPath,
     config: modelConfig,
-    modelType,
+    modelType: modelType as CanonicalModelType,
     name: modelName,
     loader: result.loader,
   });
