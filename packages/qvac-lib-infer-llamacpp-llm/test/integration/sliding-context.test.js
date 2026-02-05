@@ -85,6 +85,11 @@ async function setupModel (t, overrides = {}) {
     throw err
   }
 
+  // Clear any late C++ log callbacks from previous tests that arrived during model setup.
+  // model.load() is a long async operation that yields many times, guaranteeing all
+  // pending callbacks from prior tests have been processed by this point.
+  specLogger.logs.length = 0
+
   t.teardown(async () => {
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
