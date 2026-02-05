@@ -129,6 +129,22 @@ class QVACRegistryClient extends ReadyResource {
     return this.db.findModelsByQuantization(query).toArray()
   }
 
+  /**
+   * Find models with optional filters.
+   * Uses the database's findBy method for efficient indexed queries.
+   * @param {Object} params - Filter parameters
+   * @param {string} [params.name] - Filter by name (partial match)
+   * @param {string} [params.engine] - Filter by engine (exact match)
+   * @param {string} [params.quantization] - Filter by quantization (partial match)
+   * @param {boolean} [params.includeDeprecated=false] - Include deprecated models
+   * @returns {Promise<Array>} Array of matching models
+   */
+  async findBy (params = {}) {
+    await this.ready()
+    this.logger.debug('findBy called', { params })
+    return this.db.findBy(params)
+  }
+
   _validateString (value, name) {
     if (typeof value !== 'string' || value.length === 0) {
       throw new Error(`Invalid ${name}: ${value}`)
