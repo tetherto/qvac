@@ -1,7 +1,7 @@
 'use strict'
 
 const { getEnv } = require('../utils/env')
-const { ENV_KEYS } = require('@tetherto/qvac-registry-schema')
+const { ENV_KEYS } = require('@tetherto/qvac-registry-schema-mono')
 const Logger = require('./logger')
 const os = require('os')
 const path = require('path')
