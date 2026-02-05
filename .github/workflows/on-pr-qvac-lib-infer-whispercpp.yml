@@ -66,6 +66,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests-coverage:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
