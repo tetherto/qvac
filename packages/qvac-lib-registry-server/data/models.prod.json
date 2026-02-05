@@ -2152,26 +2152,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx",
-    "deprecated": true,
-    "replacedBy": "s3://tether-ai-dev/qvac_models_compiled/ocr/uint8/2026-01-04/detector_craft.onnx",
-    "deprecationReason": "Superseded by new version",
     "engine": "@qvac/ocr-onnx",
     "description": "CRAFT text detector",
-    "quantization": "",
-    "params": "",
-    "license": "Apache-2.0",
-    "tags": [
-      "ocr",
-      "recognizer",
-      "craft",
-      "english"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/uint8/2026-01-04/detector_craft.onnx",
-    "engine": "@qvac/ocr-onnx",
-    "description": "CRAFT text detector (updated)",
     "quantization": "",
     "params": "",
     "license": "Apache-2.0",
