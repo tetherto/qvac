@@ -401,8 +401,9 @@ async function executeScenario (t, scenario) {
     }
     await loader.close().catch(() => {})
     specLogger.release()
-    // Brief delay for C++ async cleanup (prevents exit code 139)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
+    // (prevents exit code 139 from uv_close not completing before process exit)
+    setTimeout(() => {}, 500)
   }
 }
 

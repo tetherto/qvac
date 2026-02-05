@@ -79,8 +79,9 @@ test('filesystem loader can run inference end-to-end', { timeout: 600_000, skip:
   } finally {
     await addon.unload().catch(() => {})
     await loader.close().catch(() => {})
-    // Brief delay for C++ async cleanup (prevents exit code 139)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
+    // (prevents exit code 139 from uv_close not completing before process exit)
+    setTimeout(() => {}, 500)
   }
 })
 
@@ -127,8 +128,9 @@ test('model unload is clean and idempotent', { timeout: 600_000 }, async t => {
     })
   } finally {
     await loader.close().catch(() => {})
-    // Brief delay for C++ async cleanup (prevents exit code 139)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
+    // (prevents exit code 139 from uv_close not completing before process exit)
+    setTimeout(() => {}, 500)
   }
 })
 
@@ -201,7 +203,8 @@ async function runHyperdriveTest (t) {
     await hdDL.close().catch(() => {})
     await store.close().catch(() => {})
     loggerHandle.release()
-    // Brief delay for C++ async cleanup (prevents exit code 139)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
+    // (prevents exit code 139 from uv_close not completing before process exit)
+    setTimeout(() => {}, 500)
   }
 }
