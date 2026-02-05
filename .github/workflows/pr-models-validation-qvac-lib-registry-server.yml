@@ -112,6 +112,15 @@ jobs:
           cache: "npm"
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
+      - name: Configure npm for private packages
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
       - name: Install dependencies
         working-directory: ${{ env.PKG_DIR }}
         shell: bash

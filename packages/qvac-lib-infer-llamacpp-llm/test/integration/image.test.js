@@ -1,12 +1,13 @@
 'use strict'
-// test/integration/image.test.js
+
 const test = require('brittle')
-const { LlamaInterface } = require('../../addon.js')
 const fs = require('bare-fs')
-const { ensureModelPath, getMediaPath, makeOutputCollector } = require('./utils')
-const { attachSpecLogger } = require('./spec-logger')
-const binding = require('../../binding')
 const os = require('bare-os')
+const FilesystemDL = require('@qvac/dl-filesystem')
+
+const LlmLlamacpp = require('../../index.js')
+const { ensureModel, getMediaPath } = require('./utils')
+const { attachSpecLogger } = require('./spec-logger')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -30,7 +31,6 @@ const MULTIMODAL_MODEL_CONFIG = {
 
 const TEST_CONSTANTS = {
   timeout: 900_000, // 15 minutes
-  maxWaitSeconds: 1000,
   defaultPrompt: 'Describe the image briefly in one sentence.'
 }
 
@@ -70,88 +70,77 @@ function getConfig (device) {
 /**
  * Sets up a multimodal addon with LLM and projection models
  * @param {Object} t - Test instance
- * @param {Function} onOutput - Output callback function
  * @param {string} device - Device to use ('cpu' or 'gpu')
- * @returns {Promise<{addon: LlamaInterface, llmModelPath: string, projModelPath: string}>}
+ * @returns {Promise<{addon: LlmLlamacpp, loader: FilesystemDL, llmModelPath: string, projModelPath: string}>}
  */
-async function setupMultimodalAddon (t, onOutput, device = 'gpu') {
-  const llmModelPath = await ensureModelPath(MULTIMODAL_MODEL_CONFIG.llmModel)
+async function setupMultimodalAddon (t, device = 'gpu') {
+  const [llmModelName, llmDirPath] = await ensureModel(MULTIMODAL_MODEL_CONFIG.llmModel)
+  const llmModelPath = `${llmDirPath}/${llmModelName}`
   t.ok(fs.existsSync(llmModelPath), 'LLM model file should exist')
 
-  const projModelPath = await ensureModelPath(MULTIMODAL_MODEL_CONFIG.projModel)
+  const [projModelName] = await ensureModel(MULTIMODAL_MODEL_CONFIG.projModel)
+  const projModelPath = `${llmDirPath}/${projModelName}`
   t.ok(fs.existsSync(projModelPath), 'Projection model file should exist')
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })
+  const loader = new FilesystemDL({ dirPath: llmDirPath })
 
-  const addon = new LlamaInterface(
-    binding,
-    {
-      path: llmModelPath,
-      projectionPath: projModelPath,
-      config: getConfig(device)
-    },
-    onOutput
-  )
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName: llmModelName,
+    diskPath: llmDirPath,
+    projectionModel: projModelName,
+    logger: console,
+    opts: { stats: true }
+  }, getConfig(device))
+
+  await addon.load()
 
   const status = await addon.status()
   t.ok(['LOADING', 'IDLE', 'LISTENING'].includes(status), 'Addon should have valid initial status')
 
   t.teardown(async () => {
     specLogger.release()
-    await addon.destroyInstance()
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
   })
 
-  return { addon, llmModelPath, projModelPath }
+  return { addon, loader, llmModelPath, projModelPath }
 }
 
 /**
- * Waits for a job to complete and tracks performance metrics
- * @param {LlamaInterface} addon - Addon instance
- * @param {Object} collector - Output collector with jobCompleted property and stats
- * @param {number} maxWaitSeconds - Maximum seconds to wait
- * @returns {Promise<{totalTime: number, stats: Object}>} Performance metrics including total time and stats from addon
- */
-async function waitForJobCompletion (addon, collector, maxWaitSeconds = TEST_CONSTANTS.maxWaitSeconds) {
-  const startTime = Date.now()
-  for (let i = 0; i < maxWaitSeconds; i++) {
-    const currentStatus = await addon.status()
-    if (currentStatus === 'IDLE' && collector.jobCompleted) {
-      break
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
-  const totalTime = Date.now() - startTime
-
-  return {
-    totalTime,
-    stats: collector.stats || {}
-  }
-}
-
-/**
- * Describes an image using the addon
- * @param {LlamaInterface} addon - Addon instance
+ * Describes an image using the addon and collects performance metrics
+ * @param {LlmLlamacpp} addon - Addon instance
  * @param {string} imageFilePath - Path to the image file
- * @param {Object} collector - Output collector to track timing
  * @param {string} prompt - Custom prompt for image description
- * @returns {Promise<void>}
+ * @returns {Promise<{generatedText: string, totalTime: number, stats: Object}>}
  */
-async function describeImage (addon, imageFilePath, collector, prompt = TEST_CONSTANTS.defaultPrompt) {
+async function describeImage (addon, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
-  await addon.append({ type: 'media', input: imageBytes })
 
   const messages = [
     { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', type: 'media', content: '' },
+    { role: 'user', type: 'media', content: imageBytes },
     { role: 'user', content: prompt }
   ]
 
-  await addon.append({ type: 'text', input: JSON.stringify(messages) })
-  await addon.append({ type: 'end of job' })
+  const startTime = Date.now()
+  const response = await addon.run(messages)
+  const chunks = []
 
-  // Set start time just before activation
-  collector.setStartTime(Date.now())
-  await addon.activate()
+  await response
+    .onUpdate(data => {
+      chunks.push(data)
+    })
+    .await()
+
+  const totalTime = Date.now() - startTime
+
+  return {
+    generatedText: chunks.join(''),
+    totalTime,
+    stats: response.stats || {}
+  }
 }
 
 /**
@@ -179,11 +168,10 @@ function checkKeywordsInText (text, keywords) {
  * @param {string} label - Test label (e.g., '[GPU]')
  * @param {number} totalTime - Total execution time in milliseconds
  * @param {Object} stats - Statistics object from addon
- * @param {Object} collector - Output collector for fallback values
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, totalTime, stats, collector) {
-  const ttft = stats.TTFT || collector.timeToFirstToken || 0
+function formatPerformanceMetrics (label, totalTime, stats) {
+  const ttft = stats.TTFT || 0
   const tps = stats.TPS || 0
   const generatedTokens = stats.generatedTokens || 0
   const promptTokens = stats.promptTokens || 0
@@ -233,30 +221,33 @@ for (const testCase of imageTestCases) {
       const label = `[${deviceConfig.id.toUpperCase()}]`
 
       // Setup test infrastructure
-      const collector = makeOutputCollector(t)
-      const { onOutput } = collector
-      const { addon } = await setupMultimodalAddon(t, onOutput, deviceConfig.device)
+      const { addon } = await setupMultimodalAddon(t, deviceConfig.device)
 
       // Verify image file exists
       const imageFilePath = getMediaPath(testCase.imageFile)
       t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
 
       // Run image description inference
-      await describeImage(addon, imageFilePath, collector, TEST_CONSTANTS.defaultPrompt)
-      const { totalTime, stats } = await waitForJobCompletion(addon, collector)
+      const { generatedText, totalTime, stats } = await describeImage(addon, imageFilePath, TEST_CONSTANTS.defaultPrompt)
 
       // Log output and statistics
-      t.comment(`${label} Output: ${JSON.stringify(collector.outputText, null, 2)}`)
-      t.comment(`${label} Generated text: ${collector.generatedText}`)
+      t.comment(`${label} Generated text: ${generatedText}`)
       t.comment(`${label} Stats from addon: ${JSON.stringify(stats, null, 2)}`)
-      t.comment(formatPerformanceMetrics(label, totalTime, stats, collector))
+      t.comment(formatPerformanceMetrics(label, totalTime, stats))
 
       // Assertions: Content recognition
-      const { foundKeywords, hasMatch } = checkKeywordsInText(collector.generatedText, testCase.keywords)
+      const { foundKeywords, hasMatch } = checkKeywordsInText(generatedText, testCase.keywords)
       t.ok(hasMatch,
         `${label} Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
         `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
-        `Full output: "${collector.generatedText}"`)
+        `Full output: "${generatedText}"`)
     }
   })
 }
+
+// Keep event loop alive briefly to let pending async operations complete
+// This prevents C++ destructors from running while async cleanup is still happening
+// which can cause segfaults (exit code 139)
+setImmediate(() => {
+  setTimeout(() => {}, 500)
+})

@@ -15,6 +15,11 @@ on:
   workflow_dispatch:
   workflow_call:
 
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
+
 jobs:
   release-pr-guard:
     name: Release PR Guard

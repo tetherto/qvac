@@ -82,6 +82,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Verify addon directory exists

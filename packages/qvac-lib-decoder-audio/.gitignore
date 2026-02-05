@@ -9,3 +9,4 @@ coverage
 # Generated example outputs
 example/*.raw
 example/*.wav
+!example/sample.wav
