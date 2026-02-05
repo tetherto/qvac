@@ -16,7 +16,10 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { getShardPath } from "@/server/utils/cache";
 import { ModelNotFoundError } from "@/utils/errors-server";
-import { normalizeModelType } from "@/schemas/model-types";
+import {
+  normalizeModelType,
+  isCanonicalModelType,
+} from "@/schemas/model-types";
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[];
@@ -80,11 +83,17 @@ export async function handleGetModelInfo(
 
   const isLoaded = loadedInstances.length > 0;
 
-  // Normalize addon from alias to canonical (vad passes through as-is)
-  const normalizedAddon =
+  // Normalize addon from alias to canonical (vad and custom types pass through as-is)
+  const normalizedAddonString =
     catalogEntry.addon === "vad"
-      ? ("vad" as const)
+      ? "vad"
       : normalizeModelType(catalogEntry.addon);
+
+  const normalizedAddon: ModelInfo["addon"] = isCanonicalModelType(
+    normalizedAddonString,
+  )
+    ? normalizedAddonString
+    : (normalizedAddonString as ModelInfo["addon"]);
 
   const modelInfo: ModelInfo = {
     name: catalogEntry.name,

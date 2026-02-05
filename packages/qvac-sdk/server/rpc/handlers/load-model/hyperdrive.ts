@@ -11,7 +11,7 @@ import Hyperdrive from "hyperdrive";
 import type { Entry } from "hyperdrive";
 import { type Readable, type Writable } from "bare-stream";
 import { AbortController, type AbortSignal } from "bare-abort-controller";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import {
   getModelsCacheDir,
   generateShortHash,
