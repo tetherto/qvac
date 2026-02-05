@@ -6,7 +6,9 @@ const printModelStatus = (info: ModelInfo, label: string) => {
   console.log(`\n${label}`);
   console.log(`   Model Name: ${info.name}`);
   console.log(`   Model ID: ${info.modelId}`);
-  console.log(`   Hyperdrive Key: ${info.hyperdriveKey.substring(0, 16)}...`);
+  console.log(
+    `   Blob Core Key: ${info.blobCoreKey?.substring(0, 16) || "N/A"}...`,
+  );
   console.log(
     `   Expected Size: ${(info.expectedSize / 1024 / 1024).toFixed(2)} MB`,
   );

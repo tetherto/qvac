@@ -5,7 +5,7 @@ import type {
   LoadedInstance,
   CacheFileInfo,
 } from "@/schemas";
-import { models, type HyperdriveItem } from "@/models/hyperdrive/models";
+import { models, type RegistryItem } from "@/models/hyperdrive/models";
 import {
   getAllModelIds,
   getModelEntry,
@@ -16,7 +16,6 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { getShardPath } from "@/server/utils/cache";
 import { ModelNotFoundError } from "@/utils/errors-server";
-import { normalizeModelType } from "@/schemas/model-types";
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[];
@@ -30,7 +29,7 @@ export async function handleGetModelInfo(
 ): Promise<GetModelInfoResponse> {
   const { name } = request;
 
-  const catalogEntry: HyperdriveItem | undefined = models.find(
+  const catalogEntry: RegistryItem | undefined = models.find(
     (m) => m.name === name,
   );
 
@@ -40,14 +39,13 @@ export async function handleGetModelInfo(
     );
   }
 
+  const cacheKey = generateShortHash(catalogEntry.registryPath);
+
   const cacheStatus =
     catalogEntry.shardMetadata && catalogEntry.shardMetadata.length > 0
-      ? await handleShardedModel(
-          catalogEntry.hyperdriveKey,
-          catalogEntry.shardMetadata,
-        )
+      ? await handleShardedModel(cacheKey, catalogEntry.shardMetadata)
       : await handleSingleFileModel(
-          catalogEntry.hyperdriveKey,
+          catalogEntry.registryPath,
           catalogEntry.modelId,
           catalogEntry.expectedSize,
           catalogEntry.sha256Checksum,
@@ -80,20 +78,21 @@ export async function handleGetModelInfo(
 
   const isLoaded = loadedInstances.length > 0;
 
-  // Normalize addon from alias to canonical (vad passes through as-is)
-  const normalizedAddon =
-    catalogEntry.addon === "vad"
-      ? ("vad" as const)
-      : normalizeModelType(catalogEntry.addon);
-
   const modelInfo: ModelInfo = {
     name: catalogEntry.name,
     modelId: catalogEntry.modelId,
-    hyperdriveKey: catalogEntry.hyperdriveKey,
-    hyperbeeKey: catalogEntry.hyperbeeKey,
+    registryPath: catalogEntry.registryPath,
+    registrySource: catalogEntry.registrySource,
+    blobCoreKey: catalogEntry.blobCoreKey,
+    blobBlockOffset: catalogEntry.blobBlockOffset,
+    blobBlockLength: catalogEntry.blobBlockLength,
+    blobByteOffset: catalogEntry.blobByteOffset,
+    engine: catalogEntry.engine,
+    quantization: catalogEntry.quantization,
+    params: catalogEntry.params,
     expectedSize: catalogEntry.expectedSize,
     sha256Checksum: catalogEntry.sha256Checksum,
-    addon: normalizedAddon,
+    addon: catalogEntry.addon,
 
     isCached,
     isLoaded,
@@ -112,11 +111,13 @@ export async function handleGetModelInfo(
 }
 
 async function handleShardedModel(
-  hyperdriveKey: string,
+  cacheKey: string,
   shardMetadata: readonly {
     filename: string;
     expectedSize: number;
     sha256Checksum: string;
+    blobCoreKey?: string;
+    blobIndex?: number;
   }[],
 ): Promise<CacheStatusResult> {
   const cacheFiles: CacheFileInfo[] = [];
@@ -125,7 +126,7 @@ async function handleShardedModel(
   let latestCachedAt: Date | undefined;
 
   for (const shard of shardMetadata) {
-    const shardPath = getShardPath(hyperdriveKey, shard.filename);
+    const shardPath = getShardPath(cacheKey, shard.filename);
     let shardIsCached = false;
     let shardActualSize: number | undefined;
     let shardCachedAt: Date | undefined;
@@ -180,13 +181,14 @@ async function handleShardedModel(
 }
 
 async function handleSingleFileModel(
-  hyperdriveKey: string,
+  registryPath: string,
   modelId: string,
   expectedSize: number,
   sha256Checksum: string,
 ): Promise<CacheStatusResult> {
   const cacheDir = getConfiguredCacheDir();
-  const sourceHash = generateShortHash(`${hyperdriveKey}/${modelId}`);
+  // Use registryPath for hash to match download logic in registry.ts
+  const sourceHash = generateShortHash(registryPath);
   const filePath = path.join(cacheDir, `${sourceHash}_${modelId}`);
 
   let fileIsCached = false;

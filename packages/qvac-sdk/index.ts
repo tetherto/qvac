@@ -26,6 +26,14 @@ export {
   getModelInfo,
   loggingStream,
   ocr,
+  qvacModelRegistryList,
+  qvacModelRegistrySearch,
+  qvacModelRegistryFindByEngine,
+  qvacModelRegistryFindByName,
+  qvacModelRegistryFindByQuantization,
+  qvacModelRegistryFindByModelType,
+  qvacModelRegistryGetModel,
+  type QvacModelRegistrySearchParams,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -65,12 +73,14 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  type QvacModelRegistryEntry,
+  type QvacModelRegistryEntryAddon,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
 
 // Model types - canonical naming with backward-compatible aliases
-export { PUBLIC_MODEL_TYPES as MODEL_TYPES } from "./schemas";
+export { MODEL_TYPES } from "./schemas";
 
 // Hyperdrive model constants
 export * from "./models/hyperdrive";

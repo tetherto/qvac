@@ -1,15 +1,16 @@
-import { loadModel, translate, unloadModel, BERGAMOT_ENFR } from "@qvac/sdk";
+// NOTE: Bergamot models are not yet in the registry
+// This example uses OPUS en->de model to demonstrate batch translation
+import { loadModel, translate, unloadModel, OPUS_EN_DE_Q4_0 } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({
-    modelSrc: BERGAMOT_ENFR,
+    modelSrc: OPUS_EN_DE_Q4_0,
     modelType: "nmt",
     modelConfig: {
-      engine: "Bergamot",
+      engine: "Opus",
       from: "en",
-      to: "fr",
+      to: "de",
       beamsize: 1,
-      normalize: 1,
       temperature: 0.2,
       norepeatngramsize: 3,
       lengthpenalty: 1.2,
@@ -19,7 +20,7 @@ try {
     },
   });
 
-  console.log(`✅ Bergamot model loaded: ${modelId}`);
+  console.log(`✅ Model loaded: ${modelId}`);
 
   // Test with array of texts for batch processing
   const texts = [

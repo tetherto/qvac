@@ -1,5 +1,6 @@
 import { QvacErrorBase } from "@qvac/error";
 import { SDK_CLIENT_ERROR_CODES } from "@/schemas/sdk-errors-client";
+import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
 import { createErrorOptions } from "./errors-base";
 
 // ============== Response Validation Errors ==============
@@ -302,8 +303,6 @@ export class ConfigValidationFailedError extends QvacErrorBase {
 // These are used by client API to throw errors based on server responses
 // They reference server error codes but are thrown on client side
 
-import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
-
 export class ModelUnloadFailedError extends QvacErrorBase {
   constructor(modelId?: string, cause?: unknown) {
     super(
@@ -525,6 +524,22 @@ export class SetConfigFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.SET_CONFIG_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== QVAC Model Registry Operation Errors ==============
+// Registry client errors (19,001-20,000) are re-thrown directly from @tetherto/qvac-lib-registry-client
+// Only SDK-specific errors are defined here
+
+export class QvacModelRegistryQueryFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED,
         details ? [details] : undefined,
         cause,
       ),

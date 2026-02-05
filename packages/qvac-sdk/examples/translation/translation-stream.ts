@@ -1,13 +1,8 @@
-import {
-  loadModel,
-  translate,
-  MARIAN_OPUS_EN_IT_Q0F32,
-  unloadModel,
-} from "@qvac/sdk";
+import { loadModel, translate, unloadModel, OPUS_EN_IT_Q4_0 } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({
-    modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
+    modelSrc: OPUS_EN_IT_Q4_0,
     modelType: "nmt",
     modelConfig: {
       engine: "Opus",

@@ -1,6 +1,7 @@
-import { models } from "@/models/hyperdrive/models";
+import { models, getModelByPath } from "@/models/hyperdrive/models";
 import {
   hyperdriveUrlSchema,
+  registryUrlSchema,
   SUPPORTED_ARCHIVE_EXTENSIONS,
   type ModelProgressUpdate,
 } from "@/schemas";
@@ -14,6 +15,7 @@ import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
+import { downloadModelFromRegistry } from "./registry";
 import {
   ModelLoadFailedError,
   ModelNotFoundError,
@@ -105,10 +107,30 @@ export async function resolveModelPath(
   let actualModelSrc = srcString;
 
   if (srcString.startsWith("pear://")) {
-    const { key, path } = hyperdriveUrlSchema.parse(srcString);
+    const { key, path: pathValue } = hyperdriveUrlSchema.parse(srcString);
     hyperdriveKey = key;
-    actualModelSrc = path;
+    actualModelSrc = pathValue;
   }
+
+  // Handle registry:// URLs
+  if (srcString.startsWith("registry://")) {
+    const { registryPath, registrySource } = registryUrlSchema.parse(srcString);
+    logger.info(`Loading from registry: ${registryPath}`);
+
+    // Look up model metadata for checksum validation
+    const modelMetadata = getModelByPath(registryPath);
+    const expectedChecksum = modelMetadata?.sha256Checksum;
+
+    const actualPath = await downloadModelFromRegistry(
+      registryPath,
+      registrySource,
+      progressCallback,
+      expectedChecksum,
+    );
+    logger.info(`Loaded Model to ${actualPath}`);
+    return actualPath;
+  }
+
   let actualPath: string;
 
   // Validate seeding is only used with hyperdrive models

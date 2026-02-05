@@ -2,7 +2,7 @@ import {
   close,
   loadModel,
   ocr,
-  OCR_CRAFT_LATIN_RECOGNIZER_1,
+  OCR_OCR_RECOGNIZER,
   unloadModel,
 } from "@qvac/sdk";
 import path from "path";
@@ -14,9 +14,8 @@ const imagePath =
 
 try {
   console.log("🚀 Loading OCR model...");
-  // Only need to pass the recognizer - detector is auto-derived from same hyperdrive key
   const modelId = await loadModel({
-    modelSrc: OCR_CRAFT_LATIN_RECOGNIZER_1,
+    modelSrc: OCR_OCR_RECOGNIZER,
     modelType: "ocr",
     modelConfig: {
       langList: ["en"],
@@ -57,7 +56,9 @@ try {
   console.log("\n🔄 Unloading model...");
   await unloadModel({ modelId, clearStorage: false });
   console.log("✅ Model unloaded successfully.");
+  process.exit(0);
 } catch (error) {
-  console.error("❌ Error during OCR processing:", error);
+  console.error("❌ Error:", error);
   close();
+  process.exit(1);
 }

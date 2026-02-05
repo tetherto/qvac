@@ -5,7 +5,7 @@ import {
   unloadModel,
   type ToolCall,
   type CompletionStats,
-  QWEN_3_1_7B_INST_Q4,
+  QWEN3_1_7B_Q4,
 } from "@/index";
 
 // Define Zod schemas for tool parameters
@@ -41,7 +41,7 @@ const tools = [
 try {
   // Load model from provided file path with tools support enabled
   const modelId = await loadModel({
-    modelSrc: QWEN_3_1_7B_INST_Q4,
+    modelSrc: QWEN3_1_7B_Q4,
     modelType: "llm",
     modelConfig: {
       ctx_size: 4096,

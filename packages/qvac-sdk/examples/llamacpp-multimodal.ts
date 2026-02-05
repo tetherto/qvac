@@ -1,8 +1,8 @@
 import {
   completion,
   loadModel,
-  SMOLVLM2_2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0,
+  SMOLVLM2_500M_VIDEO_INST_Q8_0,
+  MMPROJ_SMOLVLM2_500M_VIDEO_INST_Q8_0,
   unloadModel,
 } from "@qvac/sdk";
 
@@ -19,9 +19,9 @@ try {
 
   // Load the main model with projection in a single step
   const modelId = await loadModel({
-    modelSrc: SMOLVLM2_2_500M_MULTIMODAL_Q8_0,
+    modelSrc: SMOLVLM2_500M_VIDEO_INST_Q8_0,
     modelType: "llm",
-    projectionModelSrc: MMPROJ_SMOLVLM2_2_500M_MULTIMODAL_Q8_0,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_VIDEO_INST_Q8_0,
     modelConfig: {
       ctx_size: 1024,
     },

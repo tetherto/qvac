@@ -1,20 +1,21 @@
-import { loadModel, translate, unloadModel, BERGAMOT_ENFR } from "@qvac/sdk";
+// NOTE: Bergamot models are not yet in the registry
+// This example uses OPUS en->de model as a substitute
+import { loadModel, translate, unloadModel, OPUS_EN_DE_Q4_0 } from "@qvac/sdk";
 
 try {
-  // Bergamot models automatically derive vocabulary files from the model source
-  // when using pear:// URLs. You can still override them explicitly if needed:
+  // Vocabulary files are automatically derived from the model source.
+  // You can still override them explicitly if needed:
   // - srcVocabSrc: source vocabulary file (optional)
   // - dstVocabSrc: target vocabulary file (optional)
 
   const modelId = await loadModel({
-    modelSrc: BERGAMOT_ENFR,
+    modelSrc: OPUS_EN_DE_Q4_0,
     modelType: "nmt",
     modelConfig: {
-      engine: "Bergamot",
+      engine: "Opus",
       from: "en",
-      to: "fr",
+      to: "de",
       beamsize: 1,
-      normalize: 1,
       temperature: 0.2,
       norepeatngramsize: 3,
       lengthpenalty: 1.2,
@@ -24,9 +25,9 @@ try {
     },
   });
 
-  console.log(`✅ Bergamot model loaded: ${modelId}`);
+  console.log(`✅ Model loaded: ${modelId}`);
 
-  const text = "This is a test of the Bergamot translation model.";
+  const text = "This is a test of the translation model.";
   const result = translate({
     modelId,
     text,
@@ -35,7 +36,7 @@ try {
   });
 
   const translatedText = await result.text;
-  console.log(`Translated text EN -> FR: ${text} -> "${translatedText}"`);
+  console.log(`Translated text EN -> DE: ${text} -> "${translatedText}"`);
 
   await unloadModel({ modelId });
 } catch (error) {
