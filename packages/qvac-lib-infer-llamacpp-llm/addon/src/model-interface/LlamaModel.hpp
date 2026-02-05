@@ -31,7 +31,6 @@ public:
   LlamaModel& operator=(const LlamaModel&) = delete;
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
-
   LlamaModel(
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);

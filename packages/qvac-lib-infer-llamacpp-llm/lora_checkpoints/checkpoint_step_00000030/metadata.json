@@ -1,0 +1,6 @@
+epoch=1
+lora_rank=8
+lora_alpha=16.000000
+target_modules=127
+global_step=30
+current_step=31

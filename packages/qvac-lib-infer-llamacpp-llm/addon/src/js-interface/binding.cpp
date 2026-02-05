@@ -1,6 +1,7 @@
 #include <bare.h>
 
 #include "../addon/AddonJs.hpp"
+
 js_value_t*
 qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
 

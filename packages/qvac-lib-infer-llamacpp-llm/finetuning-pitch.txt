@@ -1,0 +1,43 @@
+PITCH: LoRA finetuning for qvac-lib-infer-llamacpp-llm
+======================================================
+
+1. Problem (What do we want to do and why.)
+------------------------------------------------
+Support LoRA finetuning of GGUF models from JS: in-process, with pause/resume and a clear API (load, run, cancel) consistent with inference.
+
+2. Solution (How we plan to solve it.)
+------------------------------------------------
+From the app: call model.finetune(opts) to start; you get a handle and use handle.await() for the result (COMPLETED / PAUSED / ERROR). Call model.cancel() to pause; call model.finetune() again with no args to resume from the saved checkpoint. Under the hood, finetune is submitted as a job (same queue as inference); the native addon runs the training loop and completion is signaled the same way as inference (process return value queued, then queueJobEnded).
+
+API (input / output) by layer:
+
+  JS – app-facing (LlmLlamacpp, index.js)
+    finetune(opts?)  IN: opts with outputParametersDir, numberOfEpochs, learningRate, trainDatasetDir, validation. To resume: call finetune() with no args.  OUT: handle; handle.await() -> Promise<{ status: 'COMPLETED'|'PAUSED'|'ERROR' }>
+    cancel()         IN: -.  OUT: Promise<void>. If finetune is running: pauses and saves checkpoint. Else: cancels inference.
+
+  JS – addon interface (LlamaInterface, addon.js)
+    finetune(params?)  IN: instance handle, optional params (for resume the caller passes stored params).  OUT: Promise; completion via same queue as inference (status string then JobEnded).
+    cancel()          IN: handle.  OUT: Promise.
+
+  C++-JS binding (bridge from JS to native)
+    finetune(env, info)  IN: handle, params object.  OUT: -. Submits a job (Prompt with finetuningParams); result via job queue (same as inference).
+    cancel(env, info)   IN: handle.  OUT: Promise. If finetune running: requestPause() then wait until checkpoint saved; else cancel inference job.
+
+  C++ (LlamaModel)
+    process(any)         IN: Prompt. If it has finetuningParams, runs finetune.  OUT: for finetune the status string ("COMPLETED"|"PAUSED"|"ERROR"); JobRunner queues it then queueJobEnded(), same as inference.
+    finetune(params)     IN: params.  OUT: "COMPLETED" | "PAUSED" | "ERROR".
+    requestPause()       – ask the training loop to stop and set the pause flag; returns true if finetune was running.
+    waitUntilFinetuningPauseComplete() – block until the loop has saved the checkpoint and finished pausing.
+    isFinetuneRunning()  – true if a finetune is active; binding uses it to choose pause path vs cancel-inference.
+
+Flow (start): model.finetune(opts) -> LlamaInterface -> binding -> runJob(Prompt) -> LlamaModel::process -> LlamaModel::finetune -> training -> process returns status -> JobRunner queueResult(status), queueJobEnded() -> handle.await() resolves.
+
+Pause: model.cancel() -> binding calls requestPause() and waits until the training loop has saved a checkpoint -> handle.await() resolves with "PAUSED". Resume: model.finetune() (no args) -> same path as start; C++ sees the checkpoint and continues from it.
+
+3. Risks (What risks we foresee and how to mitigate.)
+------------------------------------------------
+- Model running on non-supporting GPU devices. Mitigation: prefer Vulkan over OpenCL on Adreno (e.g. when OpenCL is unsupported or unstable).
+- Finetuning runs long and blocks or starves other work. Mitigation: run finetune in the same async job queue as inference (runJob), so it is non-blocking from JS; allow pause via cancel() and document that very long runs should use checkpointSaveDir and resume.
+- Pause checkpoint format or directory layout changes. Mitigation: version metadata in checkpoint (metadata.json) and document the layout; on resume, validate and clear incompatible checkpoints.
+- Parameter mismatches (e.g. loraRank) between runs cause subtle bugs. Mitigation: validate FinetuningParameters in C++; when resuming, load target modules and hyperparams from checkpoint metadata and ignore conflicting JS params for the resume path.
+- Out-of-memory during training. Mitigation: document contextLength / microBatchSize and dataset size limits; recommend smaller context or batch for low-memory devices.

@@ -445,7 +445,7 @@ npm run benchmarks -- \
 Integration tests are located in [`test/integration/`](./test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
 These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
-Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.
 These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary

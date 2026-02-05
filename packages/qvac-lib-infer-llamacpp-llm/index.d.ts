@@ -48,8 +48,8 @@ export interface FinetuningParams {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  runJob(data: { type: 'text' | 'media'; input?: string; content?: Uint8Array }): Promise<unknown>
-  cancel(jobId?: number): Promise<void>
+  runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
+  cancel(): Promise<void>
   status?(): Promise<string>
   pause?(): Promise<void>
   finetune?(params?: FinetuningParams): Promise<void>
@@ -101,7 +101,6 @@ declare class LlmLlamacpp extends BaseInference {
     config: LlamaConfig,
     finetuningParams?: FinetuningParams | null
   )
-
   _load(
     closeLoader?: boolean,
     onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
@@ -109,7 +108,7 @@ declare class LlmLlamacpp extends BaseInference {
 
   _runInternal(prompt: Message[]): Promise<QvacResponse>
   run(prompt: Message[]): Promise<QvacResponse>
-  cancel(jobId?: number): Promise<void>
+  cancel(): Promise<void>
   unload(): Promise<void>
   finetune(options?: FinetuningParams): Promise<{ status: string }>
   pauseFinetune(): Promise<void>

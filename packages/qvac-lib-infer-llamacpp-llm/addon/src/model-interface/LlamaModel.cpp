@@ -138,7 +138,6 @@ void LlamaModel::init(
           this->resetState(resetStats);
         });
   }
-}
 
 void LlamaModel::initializeBackend(const std::string& backendsDir) {
   if (!backendsHandle_.has_value()) {

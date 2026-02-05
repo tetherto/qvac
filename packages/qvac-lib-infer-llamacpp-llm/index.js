@@ -184,16 +184,30 @@ class LlmLlamacpp extends BaseInference {
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
     
-    const transitionCb = this.logger && typeof this.logger.info === 'function'
-      ? this.logger.info.bind(this.logger)
-      : null
+    // Override _outputCallback to intercept BaseInference's logging for finetuning
+    const originalOutputCb = this._outputCallback?.bind(this)
+    this._outputCallback = (instance, eventType, jobId, data, extra) => {
+      if (eventType === 'LogMsg') {
+        const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+        originalLoggerRef?.info?.(logMsg)
+        return
+      }
+      if (eventType === 'Output' && typeof data === 'string') {
+        const dataStr = data
+        if (dataStr.includes('data=') && (dataStr.includes('loss=') || dataStr.includes('train:'))) {
+          process.stdout.write(dataStr)
+          return
+        }
+      }
+      if (originalOutputCb) {
+        return originalOutputCb(instance, eventType, jobId, data, extra)
+      }
+    }
 
     return new LlamaInterface(
       binding,
       configurationParams,
-      this._addonOutputCallback.bind(this),
-      transitionCb,
-      finetuningParams
+      this._addonOutputCallback.bind(this)
     )
   }
 

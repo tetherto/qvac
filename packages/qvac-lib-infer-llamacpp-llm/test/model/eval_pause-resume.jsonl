@@ -1,0 +1,8 @@
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 2+2?"},{"role":"assistant","content":"2+2 equals 4."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is the capital of France?"},{"role":"assistant","content":"The capital of France is Paris."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Hello, how are you?"},{"role":"assistant","content":"Hello! I am doing well, thank you for asking."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What color is the sky?"},{"role":"assistant","content":"The sky is typically blue on a clear day."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Name a planet."},{"role":"assistant","content":"Earth is a planet in our solar system."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 3 times 4?"},{"role":"assistant","content":"3 times 4 equals 12."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is the opposite of hot?"},{"role":"assistant","content":"The opposite of hot is cold."}]}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"How many days in a week?"},{"role":"assistant","content":"There are 7 days in a week."}]}

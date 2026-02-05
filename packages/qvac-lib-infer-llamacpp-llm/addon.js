@@ -47,11 +47,11 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel current task
+   * Cancel current inference job
    */
-  async cancel (jobId) {
+  async cancel () {
     if (!this._handle) return
-    await this._binding.cancel(this._handle, jobId)
+    await this._binding.cancel(this._handle)
   }
 
   /**
@@ -68,16 +68,6 @@ class LlamaInterface {
   }
 
   /**
-   * Return addon status when native binding provides support.
-   */
-  async status () {
-    if (typeof this._binding.status !== 'function') {
-      return 'UNKNOWN'
-    }
-    return this._binding.status(this._handle)
-  }
-
-  /**
    * Request training pause when native binding provides support.
    */
   async pause () {
@@ -88,10 +78,19 @@ class LlamaInterface {
   }
 
   /**
-   * Adds new input to the processing queue.
-   * @param {Object} data
-   * @param {String} data.type
-   * @param {String} data.input
+   * Return addon status when native binding provides support.
+   * @returns {String} Current status (IDLE, FINETUNING, PAUSED, UNKNOWN)
+   */
+  async status () {
+    if (typeof this._binding.status !== 'function') {
+      return 'UNKNOWN'
+    }
+    return this._binding.status(this._handle)
+  }
+
+  /**
+   * Run one inference job with an array of message objects.
+   * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
    */
   async runJob (data) {
     return this._binding.runJob(this._handle, data)

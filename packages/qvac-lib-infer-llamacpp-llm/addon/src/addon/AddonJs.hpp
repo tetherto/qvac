@@ -158,6 +158,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   // Keep params available for resume attempts via activate().
   qvac_lib_inference_addon_llama_detail::put(instance.addonCpp.get(), params);
 
+  // Capture outputQueue pointer for thread-safe logging
   auto* outputQueue = instance.addonCpp->outputQueue.get();
   auto enqueueLog = [outputQueue](const string& message) {
     if (outputQueue != nullptr) {
@@ -166,7 +167,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   };
 
   bool allowResume = shouldResumeFromPause.exchange(false);
-
+  // Run finetune in a separate thread to avoid blocking JavaScript event loop
   std::thread finetuneThread([llamaModel, params, enqueueLog, allowResume]() {
     try {
       llamaModel->finetune(params, enqueueLog, allowResume);
@@ -244,7 +245,6 @@ JSCATCH
 
 inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
-
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
