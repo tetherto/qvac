@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "qvac": "./scripts/qvac-cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -68,6 +71,8 @@
     "bare-imports.json",
     "dist/**/*",
     "expo/plugins/patches/**/*",
+    "scripts/bundle-sdk.js",
+    "scripts/qvac-cli.js",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -99,7 +104,8 @@
     "update-models": "node ./scripts/update-models.js",
     "changelog:generate": "node ./scripts/changelog-generate.cjs && prettier --write changelog",
     "docs:gen-pages": "remark \"docs/*.mdx\" --output .docs-build",
-    "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
+    "docs:gen-api": "typedoc --options docs/typedoc.jsonc",
+    "bundle:sdk": "node ./scripts/bundle-sdk.js"
   },
   "dependencies": {
     "@qvac/decoder-audio": "^0.3.3",
