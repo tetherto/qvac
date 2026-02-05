@@ -37,7 +37,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      std::vector<common_chat_msg> chatMsgs, bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs,
+      bool isCacheLoaded) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -49,8 +50,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessageWithTools(
-      std::vector<common_chat_msg> chatMsgs,
-      std::vector<common_chat_tool> tools, bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded) override;
 
   /**
    * The generate response method. It generates the response.
@@ -59,7 +60,7 @@ public:
    * @return - true if successful, false if context overflow.
    */
   bool generateResponse(
-      std::function<void(const std::string&)> outputCallback) override;
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -180,7 +181,6 @@ private:
      *
     */
     void init_vision_context();
-
 
     common_init_result llama_init;
     mtmd::context_ptr ctx_vision;

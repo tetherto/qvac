@@ -1,34 +1,30 @@
 {
-  "name": "tetherto/qvac-lib-inference-addon-mlc-llama-3_2_1b-q4f16_1-benchmark-server",
-  "version": "0.2.1",
+  "name": "@qvac/llamacpp-benchmark-server",
+  "version": "0.1.0",
+  "description": "Benchmark server for LlamaCpp addon",
   "main": "index.js",
   "scripts": {
+    "start": "bare index.js",
     "lint": "standard",
-    "lint:fix": "standard --fix",
-    "start": "bare index.js"
+    "lint:fix": "standard --fix"
   },
   "files": [
     "src"
   ],
   "author": "Tether",
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-mlc-marian/issues",
   "devDependencies": {
-    "@tetherto/qvac-lib-dl-base": "1.0.2",
-    "@tetherto/qvac-lib-dl-hyperdrive": "1.1.1",
     "standard": "^17.1.2"
   },
   "dependencies": {
-    "@tetherto/llm-llamacpp": "^2.3.1",
-    "@tetherto/qvac-lib-inference-addon-mlc-base": "^2.1.0",
-    "@tetherto/qvac-lib-manager-inference": "2.0.0",
-    "@tetherto/qvac-lib-response": "1.0.1",
-    "bare-buffer": "3.1.4",
+    "@qvac/llm-llamacpp": "file:../../",
+    "bare-buffer": "^3.1.0",
     "bare-http1": "^4.0.2",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.1",
     "bare-url": "^2.1.6",
     "corestore": "^7.4.5",
+    "hyperswarm": "^4.14.0",
     "require-asset": "^1.1.0",
     "zod": "^3.24.4"
   }

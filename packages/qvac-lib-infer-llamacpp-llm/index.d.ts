@@ -1,189 +1,149 @@
-/// <reference types="node" />
+import BaseInference, {
+  ReportProgressCallback
+} from '@qvac/infer-base/WeightsProvider/BaseInference'
+import type { QvacResponse } from '@qvac/infer-base'
+import type QvacLogger from '@qvac/logging'
 
-import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference';
-import WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider';
-import type QvacResponse from '@qvac/response';
-import type Logger  from '@qvac/logging';
-import type Loader  from '@qvac/dl-base';
-import type { Readable } from 'stream';
+export type NumericLike = number | `${number}`
 
-/**
- * Loader interface provides the methods required by LlmLlamacpp to fetch and manage streams.
- */
 export interface Loader {
-  /** Prepare the loader for operations */
-  ready(): Promise<void>;
-  /** Clean up or close any underlying resources */
-  close(): Promise<void>;
-  /** Obtain a readable stream for the specified path */
-  getStream(path: string): Promise<Readable>;
-  /** (Optional) Retrieve the size of a remote file in bytes */
-  getFileSize?(path: string): Promise<number>;
+  ready(): Promise<void>
+  close(): Promise<void>
+  getStream(path: string): Promise<AsyncIterable<Uint8Array>>
+  download(
+    path: string,
+    opts: { diskPath: string; progressReporter?: unknown }
+  ): Promise<{ await(): Promise<void> }>
+  getFileSize?(path: string): Promise<number>
 }
 
-/**
- * Arguments required to construct an instance of LlmLlamacpp
- */
-export interface LlmLlamacppArgs {
-  /** External loader instance */
-  loader: Loader;
-  /** Optional structured logger */
-  logger?: Logger;
-  /** Optional inference options */
-  opts?: Record<string, any>;
-  /** Disk directory where model files are stored */
-  diskPath: string;
-  /** Name of the model directory or file */
-  modelName: string;
-  /** Name of the projection model directory or file */
-  projectionModel?: string;
-}
-
-/** Literal indicating end-of-input for the LLM job */
-export type EndOfInput = 'end of job';
-
-/** Input types accepted by the Llama addon */
-export type AppendInput =
-  | { type: 'text'; input: string }
-  | { type: 'media'; input: Uint8Array }
-  | { type: EndOfInput };
-
-/** Minimal interface for the native addon controlling the LLM */
 export interface Addon {
-  activate(): Promise<void>;
-  append(input: AppendInput): Promise<number>;
-  cancel(jobId: number): Promise<void>;
-  finetune(params?: FinetuningParams): Promise<void>;
-  status(): Promise<string>;
+  loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
+  activate(): Promise<void>
+  pause(): Promise<void>
+  stop(): Promise<void>
+  status(): Promise<string>
+  append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>
+  cancel(jobId?: number): Promise<void>
+  destroyInstance(): Promise<void>
+  unload(): Promise<void>
 }
 
-/** Callback invoked with the number of bytes processed during downloads */
-export type ProgressReportCallback = (bytes: number) => void;
-
-export interface FinetuningParams {
-  trainDatasetDir: string;
-  evalDatasetDir: string;
-  outputParametersDir: string;
-  numberOfEpochs?: number;
-  learningRate?: number;
-  lrMin?: number;
-  lrScheduler?: string;
-  warmupRatio?: number;
-  warmupSteps?: number;
-  loraRank?: number;
-  loraAlpha?: number;
-  loraModules?: string;
-  loraDropout?: number;
-  loraInitStd?: number;
-  outputAdapterPath?: string;
-  weightDecay?: number;
-  checkpointSaveSteps?: number;
-  checkpointSaveDir?: string;
-  resumeFromCheckpoint?: string;
-  autoResume?: boolean;
-  assistantLossOnly?: boolean;
-  chatTemplatePath?: string;
-  contextLength?: number;
-  batchSize?: number;
-  microBatchSize?: number;
+export interface LlamaConfig {
+  device?: string
+  gpu_layers?: NumericLike
+  ctx_size?: NumericLike
+  system_prompt?: string
+  lora?: string
+  temp?: NumericLike
+  top_p?: NumericLike
+  top_k?: NumericLike
+  predict?: NumericLike
+  seed?: NumericLike
+  no_mmap?: boolean | ''
+  reverse_prompt?: string
+  repeat_penalty?: NumericLike
+  presence_penalty?: NumericLike
+  frequency_penalty?: NumericLike
+  tools?: boolean | string
+  verbosity?: NumericLike
+  n_discarded?: NumericLike
+  'main-gpu'?: NumericLike | string
+  [key: string]: string | number | boolean | string[] | undefined
 }
 
-
-/** Structure of a message for chat-style prompts */
-export interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool' | string;
-  content: string;
+export interface LlmLlamacppArgs {
+  loader: Loader
+  logger?: QvacLogger | Console | null
+  opts?: { stats?: boolean }
+  diskPath?: string
+  modelName: string
+  projectionModel?: string
+  modelPath?: string
+  modelConfig?: Record<string, string>
 }
 
-/**
- * GGML client implementation for the Llama LLM model.
- */
-declare class LlmLlamacpp extends BaseInference {
-  protected readonly _config: Record<string, any>;
-  protected readonly _diskPath: string;
-  protected readonly _modelName: string;
-  protected _defaultFinetuneParams: FinetuningParams | null;
-  protected addon!: Addon;
-  protected weightsProvider: WeightsProvider;
+export interface UserTextMessage {
+  role: 'system' | 'assistant' | 'user' | 'tool' | 'session' | string
+  content: string
+  type?: undefined
+  [key: string]: any
+}
 
-  /**
-   * @param args - Setup parameters including loader, logger, disk path, and model name
-   * @param config - Model-specific configuration settings
-   */
-  constructor(
-    args: LlmLlamacppArgs,
-    config: Record<string, any>,
-    finetuningParams?: FinetuningParams | null
-  );
+export interface UserMediaMessage {
+  role: 'user'
+  type: 'media'
+  content: Uint8Array
+}
 
-  /**
-   * Implementation of load method, to load model weights, initialize the native addon, and activate the model.
-   * @param closeLoader - Whether to close the loader when complete (default true)
-   * @param onDownloadProgress - Optional byte-level progress callback
-   */
-  protected _load(
+export interface ChatFunctionDefinition {
+  type: 'function'
+  name: string
+  description?: string
+  parameters?: Record<string, any>
+}
+
+export type Message =
+  | UserTextMessage
+  | UserMediaMessage
+  | ChatFunctionDefinition
+
+export interface DownloadWeightsOptions {
+  closeLoader?: boolean
+}
+
+export interface DownloadResult {
+  filePath: string | null
+  error: boolean
+  completed: boolean
+}
+
+export default class LlmLlamacpp extends BaseInference {
+  protected addon: Addon
+
+  constructor(args: LlmLlamacppArgs, config: LlamaConfig)
+
+  _load(
     closeLoader?: boolean,
-    onDownloadProgress?: ProgressReportCallback
-  ): Promise<void>;
+    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
+  ): Promise<void>
 
-  /**
-   * Load model weights, initialize the native addon, and activate the model.
-   * @param closeLoader - Whether to close the loader when complete (default true)
-   * @param onDownloadProgress - Optional byte-level progress callback
-   */
-  public load(
+  load(
     closeLoader?: boolean,
-    onDownloadProgress?: ProgressReportCallback
-  ): Promise<void>;
+    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
+  ): Promise<void>
 
-  /**
-   * Download the model weight files and return the local path to the primary file.
-   * @param onDownloadProgress - Callback invoked with bytes downloaded
-   * @returns Local file path for the model weights
-   */
-  public downloadWeights(
-    onDownloadProgress?: ProgressReportCallback,
-    opts?: {
-      closeLoader?: boolean
-    }
-  ): Promise<string>;
+  downloadWeights(
+    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
+    opts?: DownloadWeightsOptions
+  ): Promise<Record<string, DownloadResult>>
 
-  /**
-   * Instantiate the native addon with the given parameters.
-   * @param params.path - Local file or directory path
-   * @param params.settings - LLM-specific settings
-   */
-  protected _createAddon(
-    params: { path: string; settings: Record<string, any> },
-    finetuningParams?: FinetuningParams | null
-  ): Addon;
+  _downloadWeights(
+    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
+    opts?: DownloadWeightsOptions
+  ): Promise<Record<string, DownloadResult>>
 
-  /**
-   * Internal method to start inference with a text prompt.
-   * @param prompt - Input prompt string
-   * @returns A QvacResponse representing the inference job
-   */
-  protected _runInternal(prompt: Message[]): Promise<QvacResponse>;
+  _runInternal(prompt: Message[]): Promise<QvacResponse>
 
-  /**
-   * Public API to run inference. Delegates to _runInternal.
-   * @param prompt - Input prompt string
-   */
-  run(prompt: Message[]): Promise<QvacResponse>;
+  run(prompt: Message[]): Promise<QvacResponse>
 
-  /**
-   * Launch a finetuning run.
-   * @param finetuningOptions - Optional finetuning parameters.
-   */
-  finetune(finetuningOptions?: FinetuningParams): Promise<{ status: string }>;
+  unload(): Promise<void>
 
-  /**
-   * Wait until finetuning is complete.
-   */
-  protected _waitForFinetuneCompletion(options?: {
-    pollIntervalMs?: number;
-    timeoutMs?: number;
-  }): Promise<string>;
+  pause(): Promise<void>
+
+  unpause(): Promise<void>
+
+  stop(): Promise<void>
+
+  cancel(jobId?: string): Promise<void>
+
+  status(): Promise<any>
+
+  destroy(): Promise<void>
+
+  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+
+  getApiDefinition(): string
 }
 
-export = LlmLlamacpp;
+export { ReportProgressCallback, QvacResponse }

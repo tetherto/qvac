@@ -4,33 +4,24 @@ const { z } = require('zod')
 
 const InferenceArgsSchema = z.object({
   inputs: z.array(z.string()),
-  lib: z.string().optional(), // Optional for P2P mode
-  link: z.string().optional(),
-  params: z.object({
-    num_return_sequences: z.number().int() // todo: use enum for available modes
-  }),
-  opts: z.object({
-    stats: z.boolean(),
-    context_window_size: z.number().int(),
-    prefill_chunk_size: z.number().int(),
-    temperature: z.number(),
-    max_tokens: z.number().int(),
-    top_p: z.number(),
-    do_sample: z.boolean(),
-    system_message: z.string()
-  }),
-  config: z.object({}).optional(),
-  // P2P model parameters
-  hyperdriveKey: z.string().optional(),
-  modelName: z.string().optional(),
-  modelConfig: z.object({
+  config: z.object({
+    // Model source (local or P2P)
+    modelName: z.string().optional(),
+    diskPath: z.string().optional(), // Local GGUF models
+    hyperdriveKey: z.string().optional(), // P2P models
+    // Inference parameters
+    device: z.string().optional(),
     gpu_layers: z.string().optional(),
     ctx_size: z.string().optional(),
     temp: z.string().optional(),
     top_p: z.string().optional(),
+    top_k: z.string().optional(),
     n_predict: z.string().optional(),
-    system_prompt: z.string().optional()
-  }).optional()
+    repeat_penalty: z.string().optional(),
+    seed: z.string().optional()
+  }).optional(),
+  // System prompt for guiding model behavior
+  systemPrompt: z.string().optional()
 })
 
 module.exports = {

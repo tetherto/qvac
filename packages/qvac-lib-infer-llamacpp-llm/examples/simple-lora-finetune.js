@@ -1,27 +1,180 @@
 'use strict'
 
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-
 const LlmLlamacpp = require('../index.js')
+const FilesystemDL = require('@qvac/dl-filesystem')
+const fs = require('bare-fs')
+const path = require('bare-path')
+const https = require('bare-https')
+
+const MODEL = {
+  name: 'Qwen3-0.6B-Q8_0.gguf',
+  url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
+}
+
+async function downloadFile (url, dest) {
+  return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    const req = https.request(url, response => {
+      // Handle redirects (added 307, 308 for Windows model download)
+      if ([301, 302, 307, 308].includes(response.statusCode)) {
+        file.destroy()
+        // Wait for unlink to complete before recursive call (fixes Windows race condition)
+        fs.unlink(dest, (unlinkErr) => {
+          // Ignore ENOENT - file may not exist yet
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
+
+          let redirectUrl = response.headers.location
+          // Handle relative redirects
+          if (redirectUrl.startsWith('/')) {
+            const originalUrl = new URL(url)
+            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+          }
+
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve)
+            .catch(safeReject)
+        })
+        return
+      }
+
+      if (response.statusCode !== 200) {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
+        return
+      }
+
+      response.on('error', (err) => {
+        file.destroy()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+
+      // Wait for 'close' event to ensure data is fully flushed to disk (important on Windows)
+      file.on('close', () => {
+        safeResolve()
+      })
+    })
+
+    req.on('error', err => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    req.end()
+  })
+}
+
+async function ensureModel ({ modelName, downloadUrl }) {
+  const modelDir = path.resolve('./models')
+
+  const modelPath = path.join(modelDir, modelName)
+
+  if (fs.existsSync(modelPath)) {
+    const stats = fs.statSync(modelPath)
+    console.log(`Found ${modelName}: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+    return [modelName, modelDir]
+  }
+
+  fs.mkdirSync(modelDir, { recursive: true })
+  console.log(`Downloading test model ${modelName}...`)
+
+  await downloadFile(downloadUrl, modelPath)
+
+  const stats = fs.statSync(modelPath)
+  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+  return [modelName, modelDir]
+}
 
 async function runFinetuningTests () {
   let model
-  let store
-  try {
-    store = new Corestore('./store')
+  let loader
 
-    const hdDL = new HyperDriveDL({
-      key: 'hd://b11388de0e9214d8c2181eae30e31bcd49c48b26d621b353ddc7f01972dddd76',
-      store
+  // Store original console methods to restore later (outside try for finally access)
+  const originalConsoleLog = console.log
+  const originalConsoleInfo = console.info
+  const originalConsoleWarn = console.warn
+
+  // Helper to check if message should be suppressed
+  const shouldSuppressMessage = (args) => {
+    const message = args.join(' ')
+    return message && message.includes('No response found for job')
+  }
+
+  // Override console methods to filter out "No response found for job" messages
+  console.log = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleLog.apply(console, args)
+  }
+
+  console.info = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleInfo.apply(console, args)
+  }
+
+  // CRITICAL: BaseInference uses logger.warn() for "No response found for job"
+  console.warn = (...args) => {
+    if (shouldSuppressMessage(args)) return
+    originalConsoleWarn.apply(console, args)
+  }
+
+  // Create a filtered logger that suppresses "No response found for job" messages
+  const filteredLogger = {
+    info: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleInfo.apply(console, args)
+    },
+    log: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleLog.apply(console, args)
+    },
+    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    warn: (...args) => {
+      if (shouldSuppressMessage(args)) return
+      originalConsoleWarn.apply(console, args)
+    },
+    error: console.error.bind(console),
+    debug: console.debug.bind(console)
+  }
+
+  try {
+    // Download model if needed (same pattern as reasoning.test.js)
+    const [modelName, modelDir] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
     })
 
+    // Use FilesystemDL instead of HyperDriveDL (same as reasoning.test.js)
+    loader = new FilesystemDL({ dirPath: modelDir })
+
     const args = {
-      loader: hdDL,
+      loader,
       opts: { stats: true },
-      logger: console,
-      diskPath: './models/',
-      modelName: 'Qwen3_0.6B.Q8_0.gguf'
+      logger: filteredLogger,
+      diskPath: modelDir,
+      modelName
     }
 
     const config = {
@@ -32,13 +185,11 @@ async function runFinetuningTests () {
     }
 
     model = new LlmLlamacpp(args, config)
-
-    await hdDL.ready()
-    await model.load(true, null)
+    await model.load()
 
     const finetuneOptions = {
-      trainDatasetDir: './models/biomed.jsonl',
-      evalDatasetDir: './models/biomed.jsonl',
+      trainDatasetDir: './models/small_train_HF.jsonl',
+      evalDatasetDir: './models/eval_HF.jsonl',
       numberOfEpochs: 8,
       learningRate: 1e-5,
       lrMin: 1e-8,
@@ -60,6 +211,11 @@ async function runFinetuningTests () {
     console.error('Test failed:', error.message)
     console.error('Stack:', error.stack)
   } finally {
+    // Restore original console methods
+    console.log = originalConsoleLog
+    console.info = originalConsoleInfo
+    console.warn = originalConsoleWarn
+
     if (model) {
       try {
         await model.unload()
@@ -67,11 +223,11 @@ async function runFinetuningTests () {
         console.error('Failed to unload model during cleanup:', unloadErr)
       }
     }
-    if (store) {
+    if (loader) {
       try {
-        await store.close()
-      } catch (storeErr) {
-        console.error('Failed to close store during cleanup:', storeErr)
+        await loader.close()
+      } catch (closeErr) {
+        console.error('Failed to close loader during cleanup:', closeErr)
       }
     }
   }

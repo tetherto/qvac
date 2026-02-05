@@ -1,36 +1,14 @@
 'use strict'
 
-const Hyperswarm = require('hyperswarm')
 const Corestore = require('corestore')
-const HyperDriveDL = require('@tetherto/qvac-lib-dl-hyperdrive')
-const LlmLlamacpp = require('@tetherto/llm-llamacpp')
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
 const logger = require('../utils/logger')
-const path = require('path')
+const path = require('bare-path')
 
-// --- P2P Infrastructure Initialization (like quickstart.js) ---
+// --- Simplified P2P Infrastructure (based on quickstart.js) ---
 const storeDir = path.resolve(__dirname, '../../../store')
 const store = new Corestore(storeDir)
-const dbStore = store.namespace('db')
-const swarm = new Hyperswarm()
-
-swarm.on('connection', conn => {
-  logger.info('New swarm connection established')
-  dbStore.replicate(conn)
-})
-
-const core = dbStore.get({
-  key: Buffer.from('6d15c77f4bbfbe61f761307faa07a2657a5e5060e1d2336bf16fb8074e662fb3', 'hex')
-})
-
-const p2pReady = (async () => {
-  await core.ready()
-  const foundPeers = dbStore.findingPeers()
-  swarm.join(core.discoveryKey)
-  await swarm.flush()
-  await foundPeers()
-  logger.info('P2P infrastructure ready')
-})()
-
 const hdStore = store.namespace('hd')
 
 // --- Model Management ---
@@ -45,13 +23,13 @@ let loadingPromise = null
  * @returns {Promise<Object>} Model instance
  */
 const loadP2PModel = async (options) => {
-  await p2pReady // Ensure P2P infra is ready
   const { hyperdriveKey, modelName, modelConfig } = options
   if (!hyperdriveKey || !modelName) {
     const errMsg = 'Both hyperdriveKey and modelName must be provided.'
     logger.error(errMsg)
     throw new Error(errMsg)
   }
+
   const modelId = `${hyperdriveKey}-${modelName}`
 
   logger.info('=== loadP2PModel called ===')
@@ -107,26 +85,51 @@ const loadP2PModel = async (options) => {
     })
     logger.info('HyperDriveDL created successfully')
 
+    // Wait for hyperdrive to be ready
+    logger.info('Waiting for HyperDriveDL to be ready...')
+    await hdDL.ready()
+    logger.info('HyperDriveDL is ready')
+
     // Create a LlmLlamacpp instance
     const args = {
       loader: hdDL,
-      opts: { stats: true },
-      logger: console,
-      // saveWeightsToDisk: true,
-      diskPath: './p2p-models/',
-      modelName
+      logger: {
+        info: logger.info.bind(logger),
+        error: logger.error.bind(logger),
+        warn: logger.warn.bind(logger),
+        debug: logger.debug.bind(logger)
+      },
+      modelName,
+      diskPath: './models'
     }
+
+    // Explicitly pass all model parameters to ensure they reach the C++ addon
     const config = {
-      gpu_layers: modelConfig?.gpu_layers || '32',
-      ctx_size: modelConfig?.ctx_size || '1024',
-      ...modelConfig
+      device: modelConfig?.device,
+      gpu_layers: modelConfig?.gpu_layers,
+      ctx_size: modelConfig?.ctx_size,
+      temp: modelConfig?.temp,
+      top_p: modelConfig?.top_p,
+      top_k: modelConfig?.top_k,
+      n_predict: modelConfig?.n_predict,
+      repeat_penalty: modelConfig?.repeat_penalty,
+      seed: modelConfig?.seed,
+      verbosity: '3'
     }
     logger.info('LlmLlamacpp config prepared:', JSON.stringify(config, null, 2))
     logger.info('Instantiating LlmLlamacpp...')
     const model = new LlmLlamacpp(args, config)
     logger.info('LlmLlamacpp instance created')
+
+    // Load model with progress callback
     logger.info('Loading model...')
-    await model.load()
+    const closeLoader = true
+    const reportProgressCallback = (report) => {
+      if (typeof report === 'object') {
+        logger.info(`${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`)
+      }
+    }
+    await model.load(closeLoader, reportProgressCallback)
     logger.info('Model loaded successfully!')
 
     // Cache the model
@@ -188,7 +191,6 @@ module.exports = {
   isModelLoading,
   clearP2PModel,
   getModelStatus,
-  swarm,
   store,
   hdStore
 }

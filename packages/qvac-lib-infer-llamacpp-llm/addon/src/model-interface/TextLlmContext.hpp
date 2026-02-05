@@ -4,6 +4,8 @@
 
 #include <llama.h>
 
+#include "../utils/ChatTemplateUtils.hpp"
+#include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -28,7 +30,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      std::vector<common_chat_msg> chatMsgs, bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs,
+      bool isCacheLoaded) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -40,8 +43,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessageWithTools(
-      std::vector<common_chat_msg> chatMsgs,
-      std::vector<common_chat_tool> tools, bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded) override;
 
   /**
    * The generate response method. It generates the response token by token.
@@ -50,7 +53,7 @@ public:
    * @return - true if successful, false if context overflow.
    */
   bool generateResponse(
-      std::function<void(const std::string&)> outputCallback) override;
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -111,6 +114,7 @@ public:
   /**
    * The reset state method. It resets the context.
    *
+   * @param resetStats - whether to reset performance statistics
    */
   void resetState(bool resetStats) override;
 
@@ -144,6 +148,11 @@ private:
       const std::vector<common_chat_tool>& tools,
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
 
+  bool handleQwen3ReasoningEOS(
+      llama_token& tokenId, std::string& tokenStr, llama_batch* batchPtr,
+      llama_pos& n_past,
+      const std::function<void(const std::string&)>& outputCallback);
+
   common_init_result llama_init; // NOLINT(readability-identifier-naming)
   llama_model* model;            // NOLINT(readability-identifier-naming)
   llama_context* lctx;           // NOLINT(readability-identifier-naming)
@@ -163,6 +172,13 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8_buffer_;
+
+  // Reasoning state for Qwen3 models
+  qvac_lib_inference_addon_llama::utils::Qwen3ReasoningState reasoning_state_;
+
+  // Cache whether this is a Qwen3 model (checked once at load time)
+  bool is_qwen3_model_ = false;
+
   std::atomic<bool> stop_generation = false;
 };
 

@@ -6,7 +6,6 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { LlamaInterface } = require('./addon')
 
-const END_OF_INPUT = 'end of job'
 const noop = () => { }
 
 /**
@@ -125,31 +124,128 @@ class LlmLlamacpp extends BaseInference {
       configurationParams
     )
     const binding = require('./binding')
+    
+    // Create a filtered logger that suppresses "No response found for job" messages
+    // This prevents BaseInference from logging these messages during finetuning
+    // BaseInference's _outputCallback logs "No response found for job" when it receives
+    // Output events during finetuning (which doesn't create job responses)
+    const originalLogger = this.logger
+    const originalInfo = originalLogger && typeof originalLogger.info === 'function' 
+      ? originalLogger.info.bind(originalLogger) 
+      : null
+    
+    // Helper to check if message should be suppressed
+    const shouldSuppressMessage = (args) => {
+      const message = args.map(arg => {
+        if (typeof arg === 'string') return arg
+        if (arg && typeof arg === 'object') {
+          if (arg.message && typeof arg.message === 'string') return arg.message
+          return JSON.stringify(arg)
+        }
+        return String(arg)
+      }).join(' ')
+      return message && message.includes('No response found for job')
+    }
+
+    // Create filtered logger that wraps BOTH info and warn methods
+    // BaseInference uses logger.warn() for "No response found for job" messages
+    const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
+    Object.assign(filteredLogger, originalLogger)
+    
+    const originalWarn = originalLogger && typeof originalLogger.warn === 'function'
+      ? originalLogger.warn.bind(originalLogger)
+      : null
+    
+    filteredLogger.info = (...args) => {
+      if (shouldSuppressMessage(args)) {
+        return // Suppress these messages
+      }
+      if (originalInfo) {
+        return originalInfo.apply(originalLogger, args)
+      }
+    }
+    
+    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    filteredLogger.warn = (...args) => {
+      if (shouldSuppressMessage(args)) {
+        return // Suppress these messages
+      }
+      if (originalWarn) {
+        return originalWarn.apply(originalLogger, args)
+      }
+    }
+    
+    // Replace logger to filter BaseInference's internal logging
+    // Store original for LogMsg events from C++
+    const originalLoggerRef = this.logger
+    this.logger = filteredLogger
+    
     const transitionCb = this.logger && typeof this.logger.info === 'function'
       ? this.logger.info.bind(this.logger)
       : null
 
-    // Wrap _outputCallback to capture log messages
+    // Override _outputCallback to intercept BaseInference's logging
+    // This is called directly from _addonOutputCallback, so we MUST override it here
     const originalOutputCb = this._outputCallback?.bind(this)
-    const wrappedOutputCb = (instance, eventType, jobId, data, extra) => {
+    this._outputCallback = (instance, eventType, jobId, data, extra) => {
+      // For LogMsg events, use original logger (these come from C++, not BaseInference)
       if (eventType === 'LogMsg') {
         const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
-        this.logger?.info?.(logMsg)
+        originalLoggerRef?.info?.(logMsg)
         // Don't call originalOutputCb for LogMsg to avoid duplicate logging
         return
       }
+      
+      // For Output events during finetuning, check if this is progress bar output
+      // If so, print directly and skip BaseInference's job routing
+      if (eventType === 'Output' && typeof data === 'string') {
+        const dataStr = data
+        // Check if this is finetuning progress bar output
+        if (dataStr.includes('data=') && (dataStr.includes('loss=') || dataStr.includes('train:'))) {
+          // This is finetuning progress output - print it directly to stdout
+          // Bypass BaseInference's job routing to avoid "No response found for job" messages
+          process.stdout.write(dataStr)
+          return
+        }
+      }
+      
+      // For all other events, call BaseInference's _outputCallback
+      // The filtered logger will suppress "No response found for job" messages
       if (originalOutputCb) {
         return originalOutputCb(instance, eventType, jobId, data, extra)
       }
     }
+    
+    // Also create wrappedOutputCb for LlamaInterface constructor (though it may not be used)
+    const wrappedOutputCb = this._outputCallback
 
     return new LlamaInterface(
       binding,
       configurationParams,
+      this._addonOutputCallback.bind(this),
       wrappedOutputCb,
       transitionCb,
       finetuningParams
     )
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
+    if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+    }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (typeof data === 'string') {
+      mappedEvent = 'Output'
+    }
+
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 
   async _withExclusiveRun (fn) {
@@ -172,34 +268,38 @@ class LlmLlamacpp extends BaseInference {
   async _runInternal (prompt) {
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      // Process prompt to handle media content with user role
-      const processedPrompt = prompt.map(message => {
-        // Check if message has user role and media type with Uint8Array content
+      // Separate media messages from text messages
+      const textMessages = []
+      let mediaData = null
+
+      for (const message of prompt) {
         if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-          // Send media data as separate append call
-          this.addon.append({ type: 'media', input: message.content })
-            .catch(err => this.logger.error('Failed to send media data:', err))
-
-          // Return modified message with empty string for media content
-          return {
-            ...message,
-            content: ''
+            message.type === 'media' &&
+            message.content instanceof Uint8Array) {
+          if (mediaData !== null) {
+            throw new Error('Only one media message is supported at the moment')
           }
+          mediaData = message.content
+          // Keep the message as a placeholder marker (with empty content) for tokenization
+          textMessages.push({ ...message, content: '' })
+        } else {
+          textMessages.push(message)
         }
+      }
 
-        return message
-      })
+      const promptMessages = []
 
-      const serializedPrompt = JSON.stringify(processedPrompt)
+      // Send media first if present
+      if (mediaData) {
+        promptMessages.push({ type: 'media', content: mediaData })
+      }
 
-      const jobId = await this.addon.append({ type: 'text', input: serializedPrompt })
+      // Send text messages
+      promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+      await this.addon.runJob(promptMessages)
 
-      this.logger.info('Created inference job with ID:', jobId)
-
-      const response = this._createResponse(jobId)
-      await this.addon.append({ type: END_OF_INPUT })
+      // Only one job is supported at the moment, with hardcoded jobId 'job'
+      const response = this._createResponse('job')
 
       this.logger.info('Inference job started successfully')
 
@@ -236,22 +336,48 @@ class LlmLlamacpp extends BaseInference {
   async _waitForFinetuneCompletion ({ pollIntervalMs = 500, timeoutMs = 100000000000 } = {}) {
     const deadline = Date.now() + timeoutMs
     let sawFinetuneState = false
+    let sawPausedState = false
 
     while (Date.now() <= deadline) {
       const status = await this.addon.status()
       if (status === 'FINETUNING') {
         sawFinetuneState = true
-      } else if (sawFinetuneState) {
-        // Only return on terminal states (IDLE = completion, not PAUSED)
-        // PAUSED is a temporary state - training can resume, so keep waiting
-        if (status === 'PAUSED') {
-          // Continue waiting - training may resume
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-          continue
+        // If we saw PAUSED before and now see FINETUNING, training has resumed
+        // Reset the paused flag since we're training again
+        if (sawPausedState) {
+          sawPausedState = false
         }
-        // Return on other terminal states (IDLE, ERROR, etc.)
+      } else if (status === 'PAUSED') {
+        sawPausedState = true
+        // Continue waiting - training may resume
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+        continue
+      } else if (sawFinetuneState) {
+        // We've seen FINETUNING before
+        if (status === 'IDLE') {
+          // If we saw PAUSED before, training might resume, so wait a bit longer
+          if (sawPausedState) {
+            // Wait a bit to see if training resumes
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs * 2))
+            const nextStatus = await this.addon.status()
+            // If status is still IDLE after waiting, training is truly complete
+            if (nextStatus === 'IDLE') {
+              return status
+            }
+            // Otherwise, status changed (likely to FINETUNING from resume), continue
+            continue
+          }
+          // No pause was seen, training is complete
+          return status
+        }
+        // Return on other terminal states (ERROR, etc.)
         return status
+      } else if (status === 'IDLE' && !sawFinetuneState) {
+        // Training hasn't started yet, keep waiting
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+        continue
       } else if (status !== 'LOADING') {
+        // Other states (ERROR, etc.) - return immediately
         return status
       }
 
