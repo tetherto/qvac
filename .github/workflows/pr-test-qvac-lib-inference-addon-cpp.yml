@@ -56,7 +56,8 @@ jobs:
 
       - name: yamlfmt
         uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
-
+        workdir: ${{ env.PKG_DIR }}
+        
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v7
         with:
