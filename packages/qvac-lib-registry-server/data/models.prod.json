@@ -2,7 +2,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
     "engine": "@qvac/translation-llamacpp",
-    "description": "",
+    "description": "BSC-LT SalamandraTA 2B instruct model for translation (q8).",
     "quantization": "q8",
     "params": "2B",
     "license": "Apache-2.0",
@@ -16,7 +16,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf",
     "engine": "@qvac/translation-llamacpp",
-    "description": "",
+    "description": "BSC-LT SalamandraTA 2B instruct model for translation (q4).",
     "quantization": "q4",
     "params": "2B",
     "license": "Apache-2.0",
@@ -30,7 +30,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Whisper small English-only transcription model (q8).",
     "quantization": "q8",
     "params": "",
     "license": "MIT",
@@ -45,7 +45,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Whisper large-v3-turbo multilingual transcription, faster than large-v3.",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -275,7 +275,7 @@
   {
     "source": "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/blob/b69aef112e9f895e6f98d7ae0949f72ff09aa401/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Llama 3.2 1B instruct model (q4_0), lightweight chat.",
     "quantization": "q4_0",
     "params": "1B",
     "license": "Llama-3.2",
