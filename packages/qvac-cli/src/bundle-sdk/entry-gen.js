@@ -1,7 +1,7 @@
-"use strict";
+'use strict'
 
-import path from "node:path";
-import { parseBuiltinSpecifier } from "./plugins.js";
+import path from 'node:path'
+import { parseBuiltinSpecifier } from './plugins.js'
 
 /**
  * Generates the worker entry file with selected plugins.
@@ -9,28 +9,28 @@ import { parseBuiltinSpecifier } from "./plugins.js";
  * @param {string[]} pluginSpecifiers
  * @param {string} sdkName
  */
-export function generateWorkerEntry(pluginSpecifiers, sdkName) {
-  const imports = [];
-  const registrations = [];
-  let varIndex = 0;
+export function generateWorkerEntry (pluginSpecifiers, sdkName) {
+  const imports = []
+  const registrations = []
+  let varIndex = 0
 
   for (const specifier of pluginSpecifiers) {
-    const builtin = parseBuiltinSpecifier(specifier, sdkName);
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
     if (builtin) {
       imports.push(
         `import { ${builtin.exportName} } from "${sdkName}/${builtin.suffix}/plugin";`
-      );
-      registrations.push(`registerPlugin(${builtin.exportName});`);
+      )
+      registrations.push(`registerPlugin(${builtin.exportName});`)
     } else {
-      const varName = `customPlugin${varIndex++}`;
-      imports.push(`import ${varName} from "${specifier}";`);
-      registrations.push(`registerPlugin(${varName});`);
+      const varName = `customPlugin${varIndex++}`
+      imports.push(`import ${varName} from "${specifier}";`)
+      registrations.push(`registerPlugin(${varName});`)
     }
   }
 
-  const importsStr = imports.join("\n");
-  const registrationsStr = registrations.join("\n");
-  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join("\n");
+  const importsStr = imports.join('\n')
+  const registrationsStr = registrations.join('\n')
+  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join('\n')
 
   return `/**
  * QVAC SDK Worker Entry (auto-generated)
@@ -58,7 +58,7 @@ ${registrationsStr}
 if (hasRPCConfig) {
   ensureRPCSetup();
 }
-`;
+`
 }
 
 /**
@@ -69,28 +69,28 @@ if (hasRPCConfig) {
  * @param {string} sdkName
  * @param {string} appWorkerImport
  */
-export function generatePearWorkerEntry(pluginSpecifiers, sdkName, appWorkerImport) {
-  const imports = [];
-  const registrations = [];
-  let varIndex = 0;
+export function generatePearWorkerEntry (pluginSpecifiers, sdkName, appWorkerImport) {
+  const imports = []
+  const registrations = []
+  let varIndex = 0
 
   for (const specifier of pluginSpecifiers) {
-    const builtin = parseBuiltinSpecifier(specifier, sdkName);
+    const builtin = parseBuiltinSpecifier(specifier, sdkName)
     if (builtin) {
       imports.push(
         `import { ${builtin.exportName} } from "${sdkName}/${builtin.suffix}/plugin";`
-      );
-      registrations.push(`registerPlugin(${builtin.exportName});`);
+      )
+      registrations.push(`registerPlugin(${builtin.exportName});`)
     } else {
-      const varName = `customPlugin${varIndex++}`;
-      imports.push(`import ${varName} from "${specifier}";`);
-      registrations.push(`registerPlugin(${varName});`);
+      const varName = `customPlugin${varIndex++}`
+      imports.push(`import ${varName} from "${specifier}";`)
+      registrations.push(`registerPlugin(${varName});`)
     }
   }
 
-  const importsStr = imports.join("\n");
-  const registrationsStr = registrations.join("\n");
-  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join("\n");
+  const importsStr = imports.join('\n')
+  const registrationsStr = registrations.join('\n')
+  const pluginsList = pluginSpecifiers.map((p) => `*   - ${p}`).join('\n')
 
   return `/**
  * QVAC Pear Worker Entry (auto-generated)
@@ -107,11 +107,11 @@ ${importsStr}
 ${registrationsStr}
 
 await import(${JSON.stringify(appWorkerImport)});
-`;
+`
 }
 
-function toPosixPath(p) {
-  return p.replace(/\\\\/g, "/");
+function toPosixPath (p) {
+  return p.replace(/\\\\/g, '/')
 }
 
 /**
@@ -119,9 +119,9 @@ function toPosixPath(p) {
  * @param {string} fromDir
  * @param {string} targetPath
  */
-export function toRelativeImportSpecifier(fromDir, targetPath) {
-  let rel = path.relative(fromDir, targetPath);
-  rel = toPosixPath(rel);
-  if (!rel.startsWith(".")) rel = `./${rel}`;
-  return rel;
+export function toRelativeImportSpecifier (fromDir, targetPath) {
+  let rel = path.relative(fromDir, targetPath)
+  rel = toPosixPath(rel)
+  if (!rel.startsWith('.')) rel = `./${rel}`
+  return rel
 }
