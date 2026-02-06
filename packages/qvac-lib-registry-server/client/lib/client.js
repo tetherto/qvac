@@ -2,7 +2,7 @@
 
 const { QvacErrorRegistryClient, ERR_CODES } = require('../utils/error')
 const RegistryConfig = require('./config')
-const { RegistryDatabase } = require('@tetherto/qvac-registry-schema')
+const { RegistryDatabase } = require('@tetherto/qvac-registry-schema-mono')
 const ReadyResource = require('ready-resource')
 const Logger = require('./logger')
 const Corestore = require('corestore')
