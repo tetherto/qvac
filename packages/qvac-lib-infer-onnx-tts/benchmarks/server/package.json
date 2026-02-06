@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "setup": "bare setup.js",
+    "setup:tts": "BENCHMARK_CONFIG=config-tts.yaml bare setup.js",
+    "setup:chatterbox": "bare chatterbox-setup.js",
     "start": "bare index.js",
     "lint": "standard",
     "lint:fix": "standard --fix"

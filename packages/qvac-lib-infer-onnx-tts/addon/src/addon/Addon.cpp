@@ -21,8 +21,9 @@ template <>
 qvac_lib_inference_addon_tts::Addon::Addon(
     js_env_t* env,
     std::unordered_map<std::string, std::string> configMap,
+    std::vector<float> referenceAudio,
     js_value_t* jsHandle, js_value_t* outputCb, js_value_t* transitionCb)
-    : env_{env}, transitionCb_{transitionCb}, model_{configMap} {
+    : env_{env}, transitionCb_{transitionCb}, model_{configMap, referenceAudio} {
 
   initializeProcessingThread(env, jsHandle, outputCb, transitionCb);
   QLOG(logger::Priority::INFO,"TTS addon initialized successfully");

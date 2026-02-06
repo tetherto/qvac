@@ -62,13 +62,19 @@ class TTSClient:
         # Convert paths to absolute, relative to benchmarks/ directory
         # This finds the benchmarks/ directory regardless of where the script is run from
         benchmarks_dir = Path(__file__).resolve().parents[3]  # Go up: tts/ -> src/ -> client/ -> benchmarks/
-        
-        if not Path(model_cfg.modelPath).is_absolute():
-            self.model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
-        if not Path(model_cfg.configPath).is_absolute():
-            self.model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
-        if not Path(model_cfg.eSpeakDataPath).is_absolute():
-            self.model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
+
+        if model_cfg.is_chatterbox:
+            if model_cfg.modelDir and not Path(model_cfg.modelDir).is_absolute():
+                model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
+            if model_cfg.referenceAudioPath and not Path(model_cfg.referenceAudioPath).is_absolute():
+                model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
+        else:
+            if model_cfg.modelPath and not Path(model_cfg.modelPath).is_absolute():
+                model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
+            if model_cfg.configPath and not Path(model_cfg.configPath).is_absolute():
+                model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
+            if model_cfg.eSpeakDataPath and not Path(model_cfg.eSpeakDataPath).is_absolute():
+                model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
     
     def synthesize_batch(self, texts: List[str]) -> TTSResults:
         """
@@ -81,19 +87,38 @@ class TTSClient:
             TTSResults with timing and RTF metrics
         """
         logger.info(f"Sending {len(texts)} texts to {self.url}")
-        
-        request_data = {
-            "texts": texts,
-            "config": {
-                "modelPath": self.model_cfg.modelPath,
-                "configPath": self.model_cfg.configPath,
-                "eSpeakDataPath": self.model_cfg.eSpeakDataPath,
-                "language": self.model_cfg.language,
-                "sampleRate": self.model_cfg.sampleRate,
-                "useGPU": self.model_cfg.useGPU
-            },
-            "includeSamples": self.include_samples  # Request samples if needed
-        }
+
+        if self.model_cfg.is_chatterbox:
+            request_data = {
+                "texts": texts,
+                "config": {
+                    "modelDir": self.model_cfg.modelDir,
+                    "tokenizerPath": self.model_cfg.tokenizerPath,
+                    "speechEncoderPath": self.model_cfg.speechEncoderPath,
+                    "embedTokensPath": self.model_cfg.embedTokensPath,
+                    "conditionalDecoderPath": self.model_cfg.conditionalDecoderPath,
+                    "languageModelPath": self.model_cfg.languageModelPath,
+                    "referenceAudioPath": self.model_cfg.referenceAudioPath,
+                    "language": self.model_cfg.language,
+                    "sampleRate": self.model_cfg.sampleRate,
+                    "useGPU": self.model_cfg.useGPU,
+                    "variant": self.model_cfg.variant or "fp32"
+                },
+                "includeSamples": self.include_samples
+            }
+        else:
+            request_data = {
+                "texts": texts,
+                "config": {
+                    "modelPath": self.model_cfg.modelPath,
+                    "configPath": self.model_cfg.configPath,
+                    "eSpeakDataPath": self.model_cfg.eSpeakDataPath,
+                    "language": self.model_cfg.language,
+                    "sampleRate": self.model_cfg.sampleRate,
+                    "useGPU": self.model_cfg.useGPU
+                },
+                "includeSamples": self.include_samples  # Request samples if needed
+            }
         
         resp = self.client.post(self.url, json=request_data)
         resp.raise_for_status()

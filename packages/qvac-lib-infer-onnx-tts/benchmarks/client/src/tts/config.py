@@ -31,12 +31,32 @@ class DatasetConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
-    modelPath: str = Field(..., description="Path to ONNX model")
-    configPath: str = Field(..., description="Path to model config JSON")
-    eSpeakDataPath: str = Field(..., description="Path to eSpeak-ng data")
+    # Piper TTS fields (required for Piper configs)
+    modelPath: Optional[str] = Field(None, description="Path to ONNX model")
+    configPath: Optional[str] = Field(None, description="Path to model config JSON")
+    eSpeakDataPath: Optional[str] = Field(None, description="Path to eSpeak-ng data")
+    # Common
     language: str = Field("en", description="Language code")
     sampleRate: int = Field(22050, description="Audio sample rate")
     useGPU: bool = Field(False, description="Enable GPU acceleration for inference")
+    # Chatterbox TTS fields (optional; when set, config is Chatterbox)
+    modelDir: Optional[str] = Field(None, description="Chatterbox model directory")
+    tokenizerPath: Optional[str] = Field(None, description="Chatterbox tokenizer path")
+    speechEncoderPath: Optional[str] = Field(None, description="Chatterbox speech encoder ONNX path")
+    embedTokensPath: Optional[str] = Field(None, description="Chatterbox embed tokens ONNX path")
+    conditionalDecoderPath: Optional[str] = Field(None, description="Chatterbox conditional decoder ONNX path")
+    languageModelPath: Optional[str] = Field(None, description="Chatterbox language model ONNX path")
+    referenceAudioPath: Optional[str] = Field(None, description="Chatterbox reference audio path")
+    variant: Optional[str] = Field("fp32", description="Chatterbox model variant (fp32, fp16, q4)")
+
+    @property
+    def is_chatterbox(self) -> bool:
+        """True if this config describes a Chatterbox model (vs Piper)."""
+        return (
+            self.modelDir is not None
+            or self.tokenizerPath is not None
+            or self.speechEncoderPath is not None
+        )
 
 
 class Config(BaseModel):
