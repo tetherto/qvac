@@ -2,58 +2,43 @@
 
 const test = require('brittle')
 const os = require('bare-os')
-const FilesystemDL = require('@qvac/dl-filesystem')
-const GGMLBert = require('../../index.js')
-const { ensureModel, getModelConfigs, TestLogger, waitForCompletion } = require('./utils')
+const { createEmbeddingsTestInstance, getModelConfigs, waitForCompletion } = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const DEFAULT_DEVICE = (isDarwinX64 || isLinuxArm64) ? 'cpu' : 'gpu'
 
 const DEFAULT_BATCH_SIZE = '1024'
 
 const TEST_MODEL = getModelConfigs()[0]
 
-async function createInstance (modelName, dirPath, device = 'gpu') {
-  const loader = new FilesystemDL({ dirPath })
-  const logger = new TestLogger()
-
-  if (isDarwinX64 || isLinuxArm64) {
-    device = 'cpu'
-  }
-
-  const ngl = device === 'cpu' ? '0' : '999'
-  const configParts = [`-ngl\t${ngl}`, `--batch_size\t${DEFAULT_BATCH_SIZE}`, `-dev\t${device}`]
-
-  if (platform === 'android') {
-    configParts.push('-fa\toff')
-  }
-
-  const config = configParts.join('\n')
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath: dirPath }, config)
-
-  return { inference, loader }
-}
-
 test('Two embed instances can run inference simultaneously', {
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
-  const [, dirPath] = await ensureModel(modelName)
-
-  const { inference: inference1, loader: loader1 } = await createInstance(modelName, dirPath)
-  const { inference: inference2, loader: loader2 } = await createInstance(modelName, dirPath)
+  const { inference: inference1, loader: loader1 } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    DEFAULT_DEVICE,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
+  const { inference: inference2, loader: loader2 } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    DEFAULT_DEVICE,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
 
   t.teardown(async () => {
-    await inference1.destroy().catch(() => {})
-    await inference2.destroy().catch(() => {})
+    await inference1.unload().catch(() => {})
+    await inference2.unload().catch(() => {})
     await loader1.close().catch(() => {})
     await loader2.close().catch(() => {})
   })
-
-  await inference1.load()
-  await inference2.load()
 
   const sentences1 = ['Hello world', 'This is a test']
   const sentences2 = ['Goodbye world', 'Another test sentence']
@@ -75,21 +60,25 @@ test('Repeated embed load/unload cycles should remain stable', {
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
-  const [, dirPath] = await ensureModel(modelName)
 
   const NUM_CYCLES = 6
   const testSentence = 'This is a stability test sentence.'
 
   for (let i = 0; i < NUM_CYCLES; i++) {
-    const { inference, loader } = await createInstance(modelName, dirPath)
+    const { inference, loader } = await createEmbeddingsTestInstance(
+      t,
+      modelName,
+      DEFAULT_DEVICE,
+      null,
+      DEFAULT_BATCH_SIZE
+    )
 
-    await inference.load()
     const response = await inference.run(testSentence)
     const embeddings = await waitForCompletion(response)
 
     t.ok(embeddings[0][0].length > 0, `cycle ${i + 1}: produced embeddings`)
 
-    await inference.destroy()
+    await inference.unload()
     await loader.close()
 
     t.pass(`cycle ${i + 1}: load/unload completed`)
@@ -102,27 +91,34 @@ test('Unloading one embed instance does not affect another running instance', {
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
-  const [, dirPath] = await ensureModel(modelName)
-
-  const { inference: inference1, loader: loader1 } = await createInstance(modelName, dirPath)
-  const { inference: inference2, loader: loader2 } = await createInstance(modelName, dirPath)
+  const { inference: inference1, loader: loader1 } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    DEFAULT_DEVICE,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
+  const { inference: inference2, loader: loader2 } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    DEFAULT_DEVICE,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
 
   t.teardown(async () => {
-    await inference1.destroy().catch(() => {})
-    await inference2.destroy().catch(() => {})
+    await inference1.unload().catch(() => {})
+    await inference2.unload().catch(() => {})
     await loader1.close().catch(() => {})
     await loader2.close().catch(() => {})
   })
-
-  await inference1.load()
-  await inference2.load()
 
   const largeBatch = Array(50).fill(null).map((_, i) => `Test sentence number ${i} for batch processing`)
   const response1Promise = inference1.run(largeBatch)
 
   await new Promise(resolve => setTimeout(resolve, 100))
 
-  await inference2.destroy()
+  await inference2.unload()
   await loader2.close()
   t.pass('unloaded instance 2 while instance 1 is processing')
 
@@ -136,16 +132,18 @@ test('Multiple embed load/unload cycles on one instance while another processes'
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
-  const [, dirPath] = await ensureModel(modelName)
-
-  const { inference: inference1, loader: loader1 } = await createInstance(modelName, dirPath)
+  const { inference: inference1, loader: loader1 } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    DEFAULT_DEVICE,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
 
   t.teardown(async () => {
-    await inference1.destroy().catch(() => {})
+    await inference1.unload().catch(() => {})
     await loader1.close().catch(() => {})
   })
-
-  await inference1.load()
 
   const NUM_CYCLES = 3
   const NUM_BATCHES = 5
@@ -156,9 +154,14 @@ test('Multiple embed load/unload cycles on one instance while another processes'
     const response1Promise = inference1.run(sentences)
 
     if (cyclesCompleted < NUM_CYCLES) {
-      const { inference: inference2, loader: loader2 } = await createInstance(modelName, dirPath)
-      await inference2.load()
-      await inference2.destroy()
+      const { inference: inference2, loader: loader2 } = await createEmbeddingsTestInstance(
+        t,
+        modelName,
+        DEFAULT_DEVICE,
+        null,
+        DEFAULT_BATCH_SIZE
+      )
+      await inference2.unload()
       await loader2.close()
       cyclesCompleted++
       t.pass(`load/unload cycle ${cyclesCompleted} completed while instance 1 processes batch ${batch + 1}`)
