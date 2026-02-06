@@ -78,6 +78,14 @@ const loadModelOptionsBaseSchema = z.union([
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
+  // Custom plugin catch-all: accepts any modelType string with generic config
+  z.object({
+    modelSrc: modelSrcInputSchema,
+    modelType: z.string(),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
+    seed: z.boolean().optional(),
+    delegate: delegateSchema,
+  }),
 ]);
 
 export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform(
@@ -235,6 +243,27 @@ export const loadModelOptionsToRequestSchema = z.union([
         ? modelInputToSrcSchema.parse(data.detectorModelSrc)
         : undefined,
     })),
+  // Custom plugin catch-all: accepts any modelType string with generic config
+  z
+    .object({
+      modelSrc: modelSrcInputSchema,
+      modelType: z.string(),
+      modelConfig: z.record(z.string(), z.unknown()).optional(),
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: data.modelType,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+    })),
 ]);
 
 const commonModelConfigSchema = z.object({
@@ -287,6 +316,13 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
   modelConfig: ocrConfigSchema, // ocr has no defaults
 });
 
+// Custom plugin catch-all: accepts any modelType string with generic config
+export const loadCustomPluginModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.string(),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
+  });
+
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
   .union([
@@ -296,6 +332,7 @@ export const loadModelSrcRequestSchema = z
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
+    loadCustomPluginModelRequestSchema,
   ])
   .transform((data) => ({
     ...data,

@@ -28,7 +28,7 @@
         "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
         "@types/node": "^24.2.1",
         "@types/tar-stream": "^3.1.4",
-        "bare-pack": "^1.5.1",
+        "bare-pack": "^2.0.0",
         "bare-readline": "^1.2.0",
         "brittle": "^3.19.1",
         "chromadb": "^3.0.14",
@@ -805,7 +805,7 @@
 
     "bare-module-resolve": ["bare-module-resolve@1.12.1", "", { "dependencies": { "bare-semver": "^1.0.0" }, "peerDependencies": { "bare-url": "*" }, "optionalPeers": ["bare-url"] }, "sha512-hbmAPyFpEq8FoZMd5sFO3u6MC5feluWoGE8YKlA8fCrl6mNtx68Wjg4DTiDJcqRJaovTvOYKfYngoBUnbaT7eg=="],
 
-    "bare-module-traverse": ["bare-module-traverse@1.8.3", "", { "dependencies": { "bare-addon-resolve": "^1.5.0", "bare-module-lexer": "^1.4.0", "bare-module-resolve": "^1.7.0" }, "peerDependencies": { "bare-buffer": "*", "bare-url": "*" }, "optionalPeers": ["bare-buffer", "bare-url"] }, "sha512-Iykt1899FOo0lpejEwAUK50fYIzQ18uiJFqybgZvIIqnZSV0/0GhJp+3w3Vx5hTVeTIROF8UmTUB5jHNs65PAg=="],
+    "bare-module-traverse": ["bare-module-traverse@2.0.1", "", { "dependencies": { "bare-addon-resolve": "^1.5.0", "bare-module-lexer": "^1.4.0", "bare-module-resolve": "^1.7.0" }, "peerDependencies": { "bare-buffer": "*", "bare-url": "*" }, "optionalPeers": ["bare-buffer", "bare-url"] }, "sha512-1au+Og5p97T9b6Y7xmHZ7KtpW8vEYtz2jC2whmm+YJp46EaHfk26j91MmQhufdkR/8sdK1Q5p+P9A/Y5GrJg7Q=="],
 
     "bare-net": ["bare-net@2.2.0", "", { "dependencies": { "bare-events": "^2.2.2", "bare-pipe": "^4.0.0", "bare-stream": "^2.0.0", "bare-tcp": "^2.0.0" } }, "sha512-UF7cAbHsGE+H6uEqWF5IULBow1x58chZz4g3ALgHtv7wZsFcCbRDt0JKWEumf5Oma3QWS1Q6aLi0Rpll8RElMg=="],
 
@@ -813,7 +813,7 @@
 
     "bare-os": ["bare-os@3.6.2", "", {}, "sha512-T+V1+1srU2qYNBmJCXZkUY5vQ0B4FSlL3QDROnKQYOqeiQR8UbjNHlPa+TIbM4cuidiN9GaTaOZgSEgsvPbh5A=="],
 
-    "bare-pack": ["bare-pack@1.5.1", "", { "dependencies": { "bare-bundle": "^1.8.3", "bare-bundle-id": "^1.0.0", "bare-fs": "^4.2.1", "bare-module-traverse": "~1.8.0", "bare-path": "^3.0.0", "bare-url": "*", "paparam": "^1.5.0", "promaphore": "^1.0.0" }, "peerDependencies": { "bare-buffer": "*" }, "optionalPeers": ["bare-buffer"], "bin": { "bare-pack": "bin.js" } }, "sha512-ACc5Tx3p3LMD4ov2GYQSe1kKTyvNqzXTjdO+USL/5kD9r77VBTn0y+W7Cl5j3xp8u/REs5NoOCHyK+ykaMpwGA=="],
+    "bare-pack": ["bare-pack@2.0.0", "", { "dependencies": { "bare-bundle": "^1.8.3", "bare-bundle-id": "^1.0.0", "bare-fs": "^4.2.1", "bare-module-traverse": "~2.0.0", "bare-path": "^3.0.0", "bare-url": "*", "paparam": "^1.5.0", "promaphore": "^1.0.0" }, "peerDependencies": { "bare-buffer": "*" }, "optionalPeers": ["bare-buffer"], "bin": { "bare-pack": "bin.js" } }, "sha512-pyz9qzjtKB7pU5/oFGF6/UYIEZsRKYjKDh0jzkSJmlV3gLxNsgP9m+yuu+ppLuiTJK554YQgm5mZq0W1qi+YcA=="],
 
     "bare-path": ["bare-path@3.0.0", "", { "dependencies": { "bare-os": "^3.0.1" } }, "sha512-tyfW2cQcB5NN8Saijrhqn0Zh7AnFNsnczRcuWODH0eYAXBsJ5gVxAUuNr7tsHSC6IZ77cA0SitzT+s47kot8Mw=="],
 
@@ -2528,8 +2528,6 @@
     "apache-arrow/@types/node": ["@types/node@20.19.30", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-WJtwWJu7UdlvzEAUm484QNg5eAoq5QR08KDNx7g45Usrs2NtOPiX8ugDqmKdXkyL03rBqU5dYNYVQetEpBHq2g=="],
 
     "babel-plugin-polyfill-corejs2/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
-
-    "bare-thread/bare-module-traverse": ["bare-module-traverse@2.0.1", "", { "dependencies": { "bare-addon-resolve": "^1.5.0", "bare-module-lexer": "^1.4.0", "bare-module-resolve": "^1.7.0" }, "peerDependencies": { "bare-buffer": "*", "bare-url": "*" }, "optionalPeers": ["bare-buffer", "bare-url"] }, "sha512-1au+Og5p97T9b6Y7xmHZ7KtpW8vEYtz2jC2whmm+YJp46EaHfk26j91MmQhufdkR/8sdK1Q5p+P9A/Y5GrJg7Q=="],
 
     "better-opn/open": ["open@8.4.2", "", { "dependencies": { "define-lazy-prop": "^2.0.0", "is-docker": "^2.1.1", "is-wsl": "^2.2.0" } }, "sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ=="],
 

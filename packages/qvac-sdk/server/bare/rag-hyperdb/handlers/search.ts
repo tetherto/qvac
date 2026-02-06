@@ -2,7 +2,7 @@ import {
   getRagInstance,
   hasRagWorkspaceStorage,
 } from "@/server/bare/rag-hyperdb/rag-workspace-manager";
-import { embed } from "@/server/bare/addons/llamacpp-embedding";
+import { embed } from "@/server/bare/ops/embed";
 import { ragSearchParamsSchema, type RagSearchParams } from "@/schemas";
 
 export async function search(params: RagSearchParams) {
