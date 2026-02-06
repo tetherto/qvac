@@ -59,29 +59,31 @@ static std::vector<std::string> split(const std::string& str, char delimiter) {
     if (!trimmed.empty()) {
       tokens.push_back(std::move(trimmed));
     }
-    }
-    return tokens;
+  }
+  return tokens;
 }
 
 LlamaModel::LlamaModel(
-    const std::string& modelPath, const std::string& projectionPath,
-    std::unordered_map<std::string, std::string>& configFilemap)
+    std::string&& modelPath, std::string&& projectionPath,
+    std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
       shards_(GGUFShards::expandGGUFIntoShards(modelPath)) {
-  auto thisModelInit = [this](auto&... args) {
+  auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };
   initLoader_.init(
       InitLoader::LOADER_TYPE::DELAYED,
       thisModelInit,
-      modelPath,
-      projectionPath,
-      configFilemap);
+      std::move(modelPath),
+      std::move(projectionPath),
+      std::move(configFilemap));
 }
 void LlamaModel::init(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    const std::string& modelPath, const std::string& projectionPath,
-    std::unordered_map<std::string, std::string>& configFilemap) {
+    const std::string&& modelPath, const std::string&& projectionPath,
+    std::unordered_map<std::string, std::string>&& configFilemapRvalue) {
+  std::unordered_map<std::string, std::string> configFilemap =
+      std::move(configFilemapRvalue);
 
   // Set verbosity level
   setVerbosityLevel(configFilemap);
@@ -130,7 +132,7 @@ void LlamaModel::initializeBackend(const std::string& backendsDir) {
   backendsHandle_ = LlamaBackendsHandle(backendsDir);
 }
 
-void LlamaModel::set_weights_for_file(
+void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
   isStreaming_ = true;
@@ -155,6 +157,7 @@ bool LlamaModel::isLoaded() { return static_cast<bool>(llmContext_); }
 
 void LlamaModel::llamaLogCallback(
     ggml_log_level level, const char* text, void* userData) {
+  (void)userData;
   // Convert ggml_log_level to QLOG Priority
   Priority priority;
   switch (level) {
@@ -181,31 +184,45 @@ void LlamaModel::llamaLogCallback(
   // level
   QLOG_IF(priority, string_format("[Llama.cpp] %s", text));
 }
-void LlamaModel::stop() {
+void LlamaModel::cancel() const {
   if (llmContext_) {
     llmContext_->stop();
   }
 }
 
-LlamaModel::Output LlamaModel::process(
-    const Input& input,
-    const std::function<void(const Output&)>& outputCallback) {
-  Output out;
+std::any LlamaModel::process(const std::any& input) {
+  if (input.type() != typeid(Prompt)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Invalid input type");
+  }
+  return processPrompt(std::any_cast<Prompt>(input));
+}
+
+std::string LlamaModel::processPrompt(const Prompt& prompt) {
+  if (prompt.media.has_value()) {
+    loadMedia(*(prompt.media));
+  }
+
+  const std::string& input = prompt.input;
+  std::string out;
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
 
-  if (loadMedia(input)) {
-    return out;
+  if (prompt.prefill) {
+    // Just a PoC. TODO implement actual usage
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] processTextWithOutputCallback: Prefill is enabled but "
+        "not implemented yet.\n");
   }
 
   bool isCacheLoaded = false;
   bool shouldResetAfterInference = false;
   if (cacheManager_.has_value()) {
     isCacheLoaded = cacheManager_->handleCache(
-        chatMsgs,
-        tools,
-        std::get<std::string>(input),
-        [this](const std::string& inputPrompt) {
+        chatMsgs, tools, input, [this](const std::string& inputPrompt) {
           return this->formatPrompt(inputPrompt);
         });
 
@@ -214,7 +231,7 @@ LlamaModel::Output LlamaModel::process(
       shouldResetAfterInference = true;
     }
   } else {
-    auto formatted = formatPrompt(std::get<std::string>(input));
+    auto formatted = formatPrompt(input);
     chatMsgs = std::move(formatted.first);
     tools = std::move(formatted.second);
     shouldResetAfterInference = true;
@@ -243,10 +260,10 @@ LlamaModel::Output LlamaModel::process(
   }
 
   std::ostringstream oss;
-  auto cb = outputCallback;
+  auto cb = prompt.outputCallback;
 
   // Capture response either via callback or into `out`
-  if (!outputCallback) {
+  if (!prompt.outputCallback) {
     cb = [&](const std::string& token) { oss << token; };
   }
 
@@ -258,7 +275,7 @@ LlamaModel::Output LlamaModel::process(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
 
-  if (!outputCallback) {
+  if (!prompt.outputCallback) {
     out = oss.str();
   }
 
@@ -269,14 +286,14 @@ LlamaModel::Output LlamaModel::process(
   return out;
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() {
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(llmContext_->getCtx());
-  constexpr double kMillisInSecond = 1000.0;
+  constexpr double K_MILLIS_IN_SECOND = 1000.0;
 
   double timeToFirstToken = perfData.t_p_eval_ms;
   double tokensPerSecond =
       (perfData.t_eval_ms > 0)
-          ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
+          ? K_MILLIS_IN_SECOND / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
 
   int32_t generatedTokens = perfData.n_eval;
@@ -670,21 +687,14 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
   return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
 }
 
-bool LlamaModel::loadMedia(const LlamaModel::Input& input) {
-    if (!isTextLlm_) {
-        // if input is a memory buffer, load media from it
-        if (std::holds_alternative<std::vector<uint8_t>>(input)) {
-            llmContext_->loadMedia(std::get<std::vector<uint8_t>>(input));
-            return true;
-        }
-        return false;
-    }
-
-    // Text-only model: media not supported
-    if (std::holds_alternative<std::vector<uint8_t>>(input)) {
-      const char* errorMsg = "Media not supported by text-only models";
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(MediaNotSupported), errorMsg);
-    }
-    return false;
+bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
+  if (isTextLlm_) {
+    QLOG_IF(Priority::ERROR, "Media not supported by text-only models");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(MediaNotSupported),
+        "Media not supported by text-only models");
+  }
+  llmContext_->loadMedia(input);
+  return true;
 }
