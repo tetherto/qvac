@@ -6,7 +6,6 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { LlamaInterface } = require('./addon')
 
-const END_OF_INPUT = 'end of job'
 const noop = () => { }
 
 /**
@@ -113,9 +112,27 @@ class LlmLlamacpp extends BaseInference {
     return new LlamaInterface(
       binding,
       configurationParams,
-      this._outputCallback.bind(this),
-      this.logger.info.bind(this.logger)
+      this._addonOutputCallback.bind(this)
     )
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
+    if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+    }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (typeof data === 'string') {
+      mappedEvent = 'Output'
+    }
+
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 
   async _withExclusiveRun (fn) {
@@ -138,34 +155,38 @@ class LlmLlamacpp extends BaseInference {
   async _runInternal (prompt) {
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      // Process prompt to handle media content with user role
-      const processedPrompt = prompt.map(message => {
-        // Check if message has user role and media type with Uint8Array content
+      // Separate media messages from text messages
+      const textMessages = []
+      let mediaData = null
+
+      for (const message of prompt) {
         if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-          // Send media data as separate append call
-          this.addon.append({ type: 'media', input: message.content })
-            .catch(err => this.logger.error('Failed to send media data:', err))
-
-          // Return modified message with empty string for media content
-          return {
-            ...message,
-            content: ''
+            message.type === 'media' &&
+            message.content instanceof Uint8Array) {
+          if (mediaData !== null) {
+            throw new Error('Only one media message is supported at the moment')
           }
+          mediaData = message.content
+          // Keep the message as a placeholder marker (with empty content) for tokenization
+          textMessages.push({ ...message, content: '' })
+        } else {
+          textMessages.push(message)
         }
+      }
 
-        return message
-      })
+      const promptMessages = []
 
-      const serializedPrompt = JSON.stringify(processedPrompt)
+      // Send media first if present
+      if (mediaData) {
+        promptMessages.push({ type: 'media', content: mediaData })
+      }
 
-      const jobId = await this.addon.append({ type: 'text', input: serializedPrompt })
+      // Send text messages
+      promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+      await this.addon.runJob(promptMessages)
 
-      this.logger.info('Created inference job with ID:', jobId)
-
-      const response = this._createResponse(jobId)
-      await this.addon.append({ type: END_OF_INPUT })
+      // Only one job is supported at the moment, with hardcoded jobId 'job'
+      const response = this._createResponse('job')
 
       this.logger.info('Inference job started successfully')
 
