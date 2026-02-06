@@ -1,0 +1,36 @@
+---
+description: Defines SDK pod packages - the central source of truth for package scope
+alwaysApply: true
+---
+
+# SDK Pod Packages
+
+The following packages belong to the SDK pod:
+
+- `packages/qvac-sdk`
+- `packages/qvac-docs`
+- `packages/qvac-lib-rag`
+- `packages/qvac-lib-logging`
+- `packages/qvac-lib-error-base`
+
+When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
+
+## Glob Patterns
+
+For rules that need glob patterns:
+
+```yaml
+globs:
+  - packages/qvac-sdk/**
+  - packages/qvac-docs/**
+  - packages/qvac-lib-rag/**
+  - packages/qvac-lib-logging/**
+  - packages/qvac-lib-error-base/**
+```
+
+## Skill Naming Convention
+
+Skills for SDK pod should use the `sdk-` prefix:
+- `sdk-pr-create`
+- `sdk-changelog`
+- `sdk-release`

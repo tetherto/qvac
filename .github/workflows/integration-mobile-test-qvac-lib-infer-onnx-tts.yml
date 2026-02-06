@@ -325,7 +325,6 @@ jobs:
         run: |
           echo "Setting up mobile test framework..."
           npm install
-          npm install @qvac/transcription-whispercpp@npm:@tetherto/transcription-whispercpp
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
