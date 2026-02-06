@@ -1,9 +1,6 @@
----
-alwaysApply: false
----
-# Generate Human-Readable Changelog
+# Generate Human-Readable Changelog (CHANGELOG_LLM.md)
 
-When the user asks to generate a presentable changelog for a version, follow these steps:
+Guide for transforming raw changelog files into a polished, human-readable release document.
 
 ## Step 1: Identify Version
 
@@ -13,7 +10,7 @@ If not specified, check the current version from `package.json` or ask the user.
 
 Read all files from `changelog/{VERSION}/`:
 - `CHANGELOG.md` - Main changelog entries
-- `breaking.md` - Breaking changes with migration guides  
+- `breaking.md` - Breaking changes with migration guides
 - `api.md` - API changes with code examples
 - `models.md` - Model additions/removals with constant names
 
@@ -85,10 +82,3 @@ await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
 ## Step 4: Output Location
 
 Save the file to: `changelog/{VERSION}/CHANGELOG_LLM.md`
-
-## Execution
-
-To run this rule, tell me something like:
-- "Generate presentable changelog for 0.5.0"
-- "Create CHANGELOG_LLM.md for current version"
-- "Make the changelog human-readable"
