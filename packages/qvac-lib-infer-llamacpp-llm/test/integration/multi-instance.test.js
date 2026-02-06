@@ -152,12 +152,14 @@ test('Unloading one instance does not affect another generating instance', {
   const chunks = []
   let unloadedInstance2 = false
   let resolveAfterTokens
+  let thresholdReached = false
   const afterTokens = new Promise(resolve => { resolveAfterTokens = resolve })
 
   const responsePromise = response1
     .onUpdate(data => {
       chunks.push(data)
       if (resolveAfterTokens && chunks.length >= 3) {
+        thresholdReached = true
         resolveAfterTokens()
         resolveAfterTokens = null
       }
@@ -171,6 +173,7 @@ test('Unloading one instance does not affect another generating instance', {
     })
 
   await afterTokens
+  t.ok(thresholdReached, 'instance 1 produced enough tokens before unloading instance 2')
   if (!unloadedInstance2) {
     unloadedInstance2 = true
     await addon2.unload()
