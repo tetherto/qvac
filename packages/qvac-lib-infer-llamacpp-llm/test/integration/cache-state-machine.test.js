@@ -320,19 +320,19 @@ test('Cache to no-cache to cache transition works correctly', { timeout: 600_000
 })
 
 test('Canceled runs produce smaller stats than full runs', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '2048', ctx_size: '4096' })
+  const { model } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
+
+  // Use prompt without session so cache is not used and n_past starts from prompt only
+  const noCachePrompt = [...STOP_PROMPT]
 
   // Run full inference without cancelling
-  const fullSessionName = path.join(dirPath, 'cache-full-run.bin')
-  const fullStats = await runAndCollectStats(model, buildStoppingPrompt(fullSessionName))
+  const fullStats = await runAndCollectStats(model, noCachePrompt)
 
   // Run and cancel after first token
-  const cancelAfterFirstSessionName = path.join(dirPath, 'cache-cancel-first.bin')
-  const cancelAfterFirstStats = await runAndCancelAfterFirstToken(model, buildStoppingPrompt(cancelAfterFirstSessionName))
+  const cancelAfterFirstStats = await runAndCancelAfterFirstToken(model, noCachePrompt)
 
   // Run with timeout cancellation
-  const timeoutSessionName = path.join(dirPath, 'cache-timeout.bin')
-  const timeoutStats = await runWithTimeoutCancellation(model, buildStoppingPrompt(timeoutSessionName))
+  const timeoutStats = await runWithTimeoutCancellation(model, noCachePrompt)
 
   // Verify cancel-after-first-token stats are smaller than full run
   t.ok(

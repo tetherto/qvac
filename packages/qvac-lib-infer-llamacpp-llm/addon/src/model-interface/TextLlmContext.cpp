@@ -349,7 +349,6 @@ bool TextLlmContext::evalMessageWithTools(
       throw qvac_errors::StatusError(
           AddonID, toString(FailedToDecode), errorMsg);
     }
-
     n_past += textBatchPtr->n_tokens;
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
   }
@@ -366,7 +365,12 @@ bool TextLlmContext::evalMessageWithTools(
 bool TextLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  llama_pos remainingCtx = llama_n_ctx(lctx) - n_past - 1;
   int nRemain = params.n_predict;
+  if (nRemain > remainingCtx) {
+    // Cap to remaining context so we never overflow
+    nRemain = static_cast<int>(remainingCtx);
+  }
   BatchPtr batchPtr = BatchPtr(new llama_batch(
       llama_batch_init(1, 0, 1))); // batch for next token generation
 
@@ -374,7 +378,24 @@ bool TextLlmContext::generateResponse(
   reasoning_state_.inside_reasoning = false;
   reasoning_state_.recent_output_buffer.clear();
 
+  // Early exit if cancel was already requested (e.g. during prefill)
+  if (stop_generation.load()) {
+    stop_generation.store(false);
+    return true;
+  }
+
   while (nRemain != 0) {
+    // Check for cancel before starting another token (earlier exit)
+    if (stop_generation.load()) {
+      stop_generation.store(false);
+      if (outputCallback && utf8_buffer_.hasPendingBytes()) {
+        std::string remaining = utf8_buffer_.flush();
+        if (!remaining.empty()) {
+          outputCallback(remaining);
+        }
+      }
+      return true;
+    }
     if (n_past + 1 > llama_n_ctx(lctx) && n_discarded == 0) {
       return false;
     } else if (n_past + 1 > llama_n_ctx(lctx) && n_discarded > 0) {
