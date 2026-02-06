@@ -324,7 +324,24 @@ bool MtmdLlmContext::generateResponse(
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 
+  // Early exit if cancel was already requested (e.g. during prefill)
+  if (stopGeneration_.load()) {
+    stopGeneration_.store(false);
+    return true;
+  }
+
   while (nRemain != 0) {
+    // Check for cancel before starting another token (earlier exit)
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      if (outputCallback && utf8Buffer_.hasPendingBytes()) {
+        std::string remaining = utf8Buffer_.flush();
+        if (!remaining.empty()) {
+          outputCallback(remaining);
+        }
+      }
+      return true;
+    }
     if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ == 0) {
       return false;
     } else if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ > 0) {
@@ -429,69 +446,69 @@ void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
 }
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
-    if (media.empty()) {
-        resetMedia();
-        const char* errorMsg = "[MtmdLlm] Media buffer is empty\n";
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
+  if (media.empty()) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Media buffer is empty\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
 
-    if (ctxVision_.get() == nullptr) {
-      resetMedia();
-      const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToLoadModel), errorMsg);
-    }
+  if (ctxVision_.get() == nullptr) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(UnableToLoadModel), errorMsg);
+  }
 
-    mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-        ctxVision_.get(), media.data(), media.size()));
-    if (!bmp.ptr) {
-        resetMedia();
-        const char* errorMsg =
-            "[MtmdLlm] Failed to load media from memory buffer\n";
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
-    bitmaps_.entries.push_back(std::move(bmp));
+  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
+      ctxVision_.get(), media.data(), media.size()));
+  if (!bmp.ptr) {
+    resetMedia();
+    const char* errorMsg =
+        "[MtmdLlm] Failed to load media from memory buffer\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
+  bitmaps_.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::loadMedia(const std::string& fname) {
-    if (fname.empty()) {
-        resetMedia();
-        const char* errorMsg = "[MtmdLlm] Filename is empty\n";
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
+  if (fname.empty()) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Filename is empty\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
 
-    if (ctxVision_.get() == nullptr) {
-      resetMedia();
-      const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToLoadModel), errorMsg);
-    }
+  if (ctxVision_.get() == nullptr) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(UnableToLoadModel), errorMsg);
+  }
 
-    mtmd::bitmap bmp(
-        mtmd_helper_bitmap_init_from_file(ctxVision_.get(), fname.c_str()));
-    if (!bmp.ptr) {
-        resetMedia();
-        std::string errorMsg = string_format(
-            "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
-    bitmaps_.entries.push_back(std::move(bmp));
+  mtmd::bitmap bmp(
+      mtmd_helper_bitmap_init_from_file(ctxVision_.get(), fname.c_str()));
+  if (!bmp.ptr) {
+    resetMedia();
+    std::string errorMsg = string_format(
+        "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
+  bitmaps_.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {

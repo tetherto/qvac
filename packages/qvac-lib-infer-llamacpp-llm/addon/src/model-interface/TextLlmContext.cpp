@@ -375,7 +375,24 @@ bool TextLlmContext::generateResponse(
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
 
+  // Early exit if cancel was already requested (e.g. during prefill)
+  if (stopGeneration_.load()) {
+    stopGeneration_.store(false);
+    return true;
+  }
+
   while (nRemain != 0) {
+    // Check for cancel before starting another token (earlier exit)
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      if (outputCallback && utf8Buffer_.hasPendingBytes()) {
+        std::string remaining = utf8Buffer_.flush();
+        if (!remaining.empty()) {
+          outputCallback(remaining);
+        }
+      }
+      return true;
+    }
     if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ == 0) {
       return false;
     } else if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ > 0) {
