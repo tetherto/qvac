@@ -11,6 +11,7 @@ endif()
 add_executable(
   addon-test
   test_llama_model.cpp
+  test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
@@ -27,6 +28,7 @@ add_executable(
   test_llama_lazy_init_backend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
@@ -73,7 +75,8 @@ endif()
 
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
-target_compile_definitions(addon-test PRIVATE 
+target_compile_definitions(addon-test PRIVATE
+  STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
 )
 
