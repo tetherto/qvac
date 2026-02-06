@@ -61,11 +61,22 @@ class LlamaInterface {
   }
 
   /**
-   * Pause finetuning
-   * @returns {Promise<boolean>} true if pause was requested, false if not finetuning
+   * Pause finetuning.
+   * @returns {Promise<boolean>} true when pause completed, false when not finetuning
    */
   async pause () {
-    return this._binding.pause(this._handle)
+    const didPause = await this._binding.pause(this._handle)
+    if (!didPause) return false
+    return new Promise((resolve) => {
+      this._pauseCompleteResolve = () => resolve(true)
+    })
+  }
+
+  resolvePauseComplete () {
+    if (this._pauseCompleteResolve) {
+      this._pauseCompleteResolve()
+      this._pauseCompleteResolve = null
+    }
   }
 
   /**
@@ -74,6 +85,10 @@ class LlamaInterface {
    */
   async status () {
     return this._binding.status(this._handle)
+  }
+
+  isFinetuningRunning () {
+    return this._binding.isFinetuningRunning(this._handle)
   }
 
   /**

@@ -74,6 +74,8 @@ struct TrainingCheckpointState {
           // from beginning
   bool skippingBatches =
       false; // Track if we're currently skipping batches to reach resume point
+  bool finetuningStartedEmitted =
+      false; // Emit FinetuningStarted once when first batch is processed
 };
 
 // Dataset preparation functions

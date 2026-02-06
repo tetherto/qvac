@@ -127,6 +127,13 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[]): Promise<QvacResponse>
 
+  finetune(
+    finetuningOptions?: Record<string, any>,
+    options?: { resume?: boolean }
+  ): Promise<{ status: string }>
+
+  pauseFinetune(): Promise<void>
+
   unload(): Promise<void>
 
   pause(): Promise<void>

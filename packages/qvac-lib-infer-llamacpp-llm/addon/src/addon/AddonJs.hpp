@@ -255,6 +255,33 @@ inline js_value_t* status(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t* isFinetuningRunning(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  LlamaModel* llamaModel = nullptr;
+  {
+    std::scoped_lock lock{g_modelMapMutex};
+    auto it = g_modelMap.find(instance.addonCpp.get());
+    if (it != g_modelMap.end()) {
+      llamaModel = it->second;
+    }
+  }
+
+  bool running = false;
+  if (llamaModel != nullptr) {
+    auto* checkpointState = llamaModel->getCurrentCheckpointState();
+    if (checkpointState != nullptr && !checkpointState->shouldExit.load()) {
+      running = true;
+    }
+  }
+
+  return js::Boolean::create(env, running);
+}
+JSCATCH
+
 inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
