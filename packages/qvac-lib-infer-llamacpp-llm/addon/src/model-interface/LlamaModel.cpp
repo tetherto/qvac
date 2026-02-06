@@ -1364,41 +1364,25 @@ void LlamaModel::saveLoraAdapter(
 }
 
 bool LlamaModel::requestPause() {
-  constexpr int maxRetries = 30;
-  constexpr auto retryInterval = std::chrono::milliseconds(100);
-  
-  for (int retry = 0; retry < maxRetries; ++retry) {
-    if (currentCheckpointState_ != nullptr) {
-      currentCheckpointState_->pauseRequested.store(true);
-      
-      llama_context* ctx = getContext();
-      if (ctx != nullptr) {
-        llama_opt_request_stop(ctx);
-      }
-      
-      return true;
-    }
-    
-    auto* globalState = llama_finetuning_helpers::getGlobalCheckpointState();
-    if (globalState != nullptr) {
-      globalState->pauseRequested.store(true);
-      
-      llama_context* ctx = getContext();
-      if (ctx != nullptr) {
-        llama_opt_request_stop(ctx);
-      }
-      
-      return true;
-    }
-    
+  if (currentCheckpointState_ != nullptr) {
+    currentCheckpointState_->pauseRequested.store(true);
     llama_context* ctx = getContext();
-    if (ctx != nullptr && retry < maxRetries - 1) {
-      std::this_thread::sleep_for(retryInterval);
-    } else {
-      break;
+    if (ctx != nullptr) {
+      llama_opt_request_stop(ctx);
     }
+    return true;
   }
-  
+
+  auto* globalState = llama_finetuning_helpers::getGlobalCheckpointState();
+  if (globalState != nullptr) {
+    globalState->pauseRequested.store(true);
+    llama_context* ctx = getContext();
+    if (ctx != nullptr) {
+      llama_opt_request_stop(ctx);
+    }
+    return true;
+  }
+
   return false;
 }
 

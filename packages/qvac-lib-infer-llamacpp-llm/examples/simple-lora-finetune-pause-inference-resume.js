@@ -106,30 +106,6 @@ async function ensureModel ({ modelName, downloadUrl }) {
   return [modelName, modelDir]
 }
 
-async function getStatus (model) {
-  if (model.addon) {
-    return await model.addon.status()
-  }
-  throw new Error('Addon not initialized')
-}
-
-async function waitForStatus (model, expected, { pollIntervalMs = 200, timeoutMs = 30000 } = {}) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() <= deadline) {
-    try {
-      const current = await getStatus(model)
-      if (current === expected) {
-        return current
-      }
-    } catch (error) {
-      console.log(`Status check failed: ${error.message}, retrying...`)
-    }
-    await sleep(pollIntervalMs)
-  }
-  throw new Error(`Timeout waiting for status ${expected}`)
-}
-
-// Find pause checkpoint directory (step-based naming: pause_checkpoint_step_00000003)
 function findPauseCheckpoint (checkpointDir) {
   if (!fs.existsSync(checkpointDir)) {
     return null
@@ -142,8 +118,6 @@ function findPauseCheckpoint (checkpointDir) {
     return null
   }
 
-  // Return the path to the latest pause checkpoint (highest step number)
-  // Sort by step number (extract from name)
   pauseCheckpoints.sort((a, b) => {
     const stepA = parseInt(a.match(/pause_checkpoint_step_(\d+)/)?.[1] || '0')
     const stepB = parseInt(b.match(/pause_checkpoint_step_(\d+)/)?.[1] || '0')
@@ -179,18 +153,15 @@ async function main () {
 
   const loader = new FilesystemDL({ dirPath: modelDir })
 
-  // Store original console methods to restore later
   const originalConsoleLog = console.log
   const originalConsoleInfo = console.info
   const originalConsoleWarn = console.warn
 
-  // Helper to check if message should be suppressed
   const shouldSuppressMessage = (args) => {
     const message = args.join(' ')
     return message && message.includes('No response found for job')
   }
 
-  // Override console methods to filter out "No response found for job" messages
   console.log = (...args) => {
     if (shouldSuppressMessage(args)) return
     originalConsoleLog.apply(console, args)
@@ -201,13 +172,11 @@ async function main () {
     originalConsoleInfo.apply(console, args)
   }
 
-  // CRITICAL: BaseInference uses logger.warn() for "No response found for job"
   console.warn = (...args) => {
     if (shouldSuppressMessage(args)) return
     originalConsoleWarn.apply(console, args)
   }
 
-  // Create a filtered logger that suppresses "No response found for job" messages
   const filteredLogger = {
     info: (...args) => {
       if (shouldSuppressMessage(args)) return
@@ -217,7 +186,6 @@ async function main () {
       if (shouldSuppressMessage(args)) return
       originalConsoleLog.apply(console, args)
     },
-    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
     warn: (...args) => {
       if (shouldSuppressMessage(args)) return
       originalConsoleWarn.apply(console, args)
@@ -249,15 +217,11 @@ async function main () {
     console.log('Loading model...')
     client = new LlamaClient(args, config)
 
-    // Store original _createAddon if it exists
     const originalCreateAddon = client._createAddon?.bind(client)
-
-    // Override _createAddon to intercept the output callback
     if (originalCreateAddon) {
       client._createAddon = function (configurationParams, finetuningParams) {
         const originalOutputCb = this._outputCallback?.bind(this)
         this._outputCallback = function (instance, eventType, jobId, data, extra) {
-          // Filter out "No response found for job" messages that interfere with progress bar
           const dataStr = typeof data === 'string' ? data : (data?.message || JSON.stringify(data) || '')
           if (dataStr && dataStr.includes('No response found for job')) {
             return // Suppress these messages during finetuning - don't call originalOutputCb
@@ -304,7 +268,6 @@ async function main () {
     console.log(`  Checkpoint directory: ${finetuneOptions.checkpointSaveDir}`)
     console.log('')
 
-    // Clear any existing pause checkpoint from previous runs
     try {
       const checkpointDir = finetuneOptions.checkpointSaveDir
       if (fs.existsSync(checkpointDir)) {
@@ -326,36 +289,16 @@ async function main () {
       console.log(`⚠️  Could not clear pause checkpoint: ${err.message}\n`)
     }
 
-    // Start finetuning (non-blocking)
     console.log('🚀 Starting finetuning...')
     const finetuneTask = client.finetune(finetuneOptions)
 
-    // Wait for training to start
-    console.log('Waiting for training to start...')
-    for (let i = 0; i < 5; i++) {
-      await sleep(500)
-      await getStatus(client)
-    }
-    await waitForStatus(client, 'FINETUNING', { pollIntervalMs: 200, timeoutMs: 30000 })
-    console.log('✅ Training started\n')
-
-    // Wait 1 minute 30 seconds before pausing
     console.log('Training for 90 seconds (1 minute 30 seconds) before pausing...')
     await sleep(90000)
 
-    const statusBeforePause = await getStatus(client)
-    console.log(`Status before pause: ${statusBeforePause}\n`)
-
-    // Pause finetuning
     console.log('⏸️  Pausing finetuning...')
     await client.pauseFinetune()
-
-    // Wait for status to change to PAUSED
-    console.log('Waiting for status to change to PAUSED...')
-    await waitForStatus(client, 'PAUSED', { pollIntervalMs: 200, timeoutMs: 15000 })
     console.log('✅ Finetuning is now PAUSED\n')
 
-    // Verify pause checkpoint was created and find it
     console.log('Verifying pause checkpoint was created...')
     let pauseCheckpointPath = null
     const maxRetries = 10
@@ -384,7 +327,6 @@ async function main () {
     const loraAdapterPath = path.join(pauseCheckpointPath, 'model.gguf')
     console.log(`LoRA adapter path: ${loraAdapterPath}\n`)
 
-    // Prepare inference messages
     const inferenceMessages = [
       { role: 'system', content: 'You are a helpful healthcare assistant.' },
       {
@@ -393,7 +335,6 @@ async function main () {
       }
     ]
 
-    // Inference 1: Run inference on the paused checkpoint (with LoRA adapters)
     console.log('\n' + '='.repeat(60))
     console.log('Step 1: Inference on paused checkpoint (with LoRA adapters)')
     console.log('='.repeat(60))
@@ -422,7 +363,6 @@ async function main () {
       }
     }
 
-    // Inference 2: Run inference on the base model without LoRA adapters
     console.log('\n' + '='.repeat(60))
     console.log('Step 2: Inference on base model (without LoRA adapters)')
     console.log('='.repeat(60))
@@ -434,7 +374,6 @@ async function main () {
         ctx_size: '4096',
         temp: '0.0',
         n_predict: '256'
-        // Note: No 'lora' parameter - using base model only
       }
 
       console.log('🔮 Preparing inference 2: Loading base model (no LoRA adapters)...')
@@ -451,31 +390,20 @@ async function main () {
       }
     }
 
-    // Resume finetuning
     console.log('\n' + '='.repeat(60))
     console.log('Step 3: Resuming finetuning')
     console.log('='.repeat(60))
     console.log('▶️  Resuming finetuning...')
-    await client.resumeFinetune()
-
-    // Wait for status to change back to FINETUNING
-    console.log('Waiting for status to change to FINETUNING...')
-    await waitForStatus(client, 'FINETUNING', { pollIntervalMs: 200, timeoutMs: 15000 })
+    const resumeTask = client.finetune({ resume: true })
     console.log('✅ Finetuning has RESUMED\n')
 
-    // Wait a bit more to see training continue
     console.log('Training for another 5 seconds after resume...')
     await sleep(5000)
 
-    // Wait for completion
     console.log('Waiting for finetuning to complete...')
-    const finetuneResult = await finetuneTask
+    const finetuneResult = await resumeTask
     console.log('\n✅ Finetune completed:', finetuneResult)
 
-    const finalStatus = await getStatus(client)
-    console.log(`Final status: ${finalStatus}`)
-
-    // Verify pause checkpoint was cleared after completion
     try {
       const checkpointDir = finetuneOptions.checkpointSaveDir
       if (!fs.existsSync(checkpointDir)) {
@@ -495,9 +423,7 @@ async function main () {
           console.log('⚠️  Pause checkpoint still exists (may be normal if training was paused at end)')
         }
       }
-    } catch (err) {
-      // Ignore errors
-    }
+    } catch (_) {}
 
     console.log('\n=== Test Complete ===')
   } catch (error) {
@@ -505,7 +431,6 @@ async function main () {
     console.error('Stack:', error.stack)
     process.exit(1)
   } finally {
-    // Restore original console methods
     console.log = originalConsoleLog
     console.info = originalConsoleInfo
     console.warn = originalConsoleWarn

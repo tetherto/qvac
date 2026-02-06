@@ -26,6 +26,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("finetune", qvac_lib_inference_addon_llama::finetune)
   V("pause", qvac_lib_inference_addon_llama::pause)
   V("status", qvac_lib_inference_addon_llama::status)
+  V("isFinetuningRunning", qvac_lib_inference_addon_llama::isFinetuningRunning)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)

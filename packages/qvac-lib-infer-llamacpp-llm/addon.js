@@ -68,13 +68,25 @@ class LlamaInterface {
   }
 
   /**
-   * Request training pause when native binding provides support.
+   * Pause finetuning.
+   * @returns {Promise<boolean>} true when pause completed, false when not finetuning
    */
   async pause () {
     if (typeof this._binding.pause !== 'function') {
       throw new Error('Pause is not exposed by this native binding')
     }
-    return this._binding.pause(this._handle)
+    const didPause = await this._binding.pause(this._handle)
+    if (!didPause) return false
+    return new Promise((resolve) => {
+      this._pauseCompleteResolve = () => resolve(true)
+    })
+  }
+
+  resolvePauseComplete () {
+    if (this._pauseCompleteResolve) {
+      this._pauseCompleteResolve()
+      this._pauseCompleteResolve = null
+    }
   }
 
   /**
@@ -86,6 +98,10 @@ class LlamaInterface {
       return 'UNKNOWN'
     }
     return this._binding.status(this._handle)
+  }
+
+  isFinetuningRunning () {
+    return this._binding.isFinetuningRunning(this._handle)
   }
 
   /**

@@ -552,6 +552,11 @@ void optEpochCallback(
 
   state->globalStep += 1;
 
+  if (!state->finetuningStartedEmitted && state->logFn) {
+    state->finetuningStartedEmitted = true;
+    state->logFn(R"({"type":"FinetuningStarted"})");
+  }
+
   if (state->expectedFirstBatchAfterResume >= 0 && state->logFn) {
     if (!state->firstBatchAfterResumeLogged) {
       if (state->globalStep == state->expectedFirstBatchAfterResume) {

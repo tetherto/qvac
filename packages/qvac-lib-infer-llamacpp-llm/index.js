@@ -129,16 +129,11 @@ class LlmLlamacpp extends BaseInference {
     )
     const binding = require('./binding')
     
-    // Create a filtered logger that suppresses "No response found for job" messages
-    // This prevents BaseInference from logging these messages during finetuning
-    // BaseInference's _outputCallback logs "No response found for job" when it receives
-    // Output events during finetuning (which doesn't create job responses)
     const originalLogger = this.logger
     const originalInfo = originalLogger && typeof originalLogger.info === 'function' 
       ? originalLogger.info.bind(originalLogger) 
       : null
     
-    // Helper to check if message should be suppressed
     const shouldSuppressMessage = (args) => {
       const message = args.map(arg => {
         if (typeof arg === 'string') return arg
@@ -151,8 +146,6 @@ class LlmLlamacpp extends BaseInference {
       return message && message.includes('No response found for job')
     }
 
-    // Create filtered logger that wraps BOTH info and warn methods
-    // BaseInference uses logger.warn() for "No response found for job" messages
     const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
     Object.assign(filteredLogger, originalLogger)
     
@@ -161,26 +154,20 @@ class LlmLlamacpp extends BaseInference {
       : null
     
     filteredLogger.info = (...args) => {
-      if (shouldSuppressMessage(args)) {
-        return // Suppress these messages
-      }
+      if (shouldSuppressMessage(args)) return
       if (originalInfo) {
         return originalInfo.apply(originalLogger, args)
       }
     }
     
-    // CRITICAL: BaseInference._outputCallback uses logger.warn() not logger.info()
+    // BaseInference._outputCallback uses logger.warn() for "No response found for job"
     filteredLogger.warn = (...args) => {
-      if (shouldSuppressMessage(args)) {
-        return // Suppress these messages
-      }
+      if (shouldSuppressMessage(args)) return
       if (originalWarn) {
         return originalWarn.apply(originalLogger, args)
       }
     }
     
-    // Replace logger to filter BaseInference's internal logging
-    // Store original for LogMsg events from C++
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
     
@@ -192,18 +179,16 @@ class LlmLlamacpp extends BaseInference {
           const obj = JSON.parse(data)
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
             this._finetuneCompletionResolve(obj.status)
-            if ((obj.status === 'IDLE' || obj.status === 'ERROR') && this._finetunePausedResolve) {
-              this._finetunePausedResolve()
+            if ((obj.status === 'IDLE' || obj.status === 'ERROR')) {
+              this.addon?.resolvePauseComplete?.()
             }
             return
           }
-          if (obj?.type === 'FinetunePaused' && this._finetunePausedResolve) {
-            this._finetunePausedResolve()
-            let resolvePaused
-            this._finetunePausedPromise = new Promise((resolve) => {
-              resolvePaused = resolve
-            })
-            this._finetunePausedResolve = resolvePaused
+          if (obj?.type === 'FinetunePaused') {
+            this.addon?.resolvePauseComplete?.()
+            if (this._finetuneCompletionResolve) {
+              this._finetuneCompletionResolve('PAUSED')
+            }
             return
           }
         } catch (_) {}
@@ -234,8 +219,6 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
-    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
@@ -367,15 +350,30 @@ class LlmLlamacpp extends BaseInference {
     })
   }
 
-  async finetune (finetuningOptions = undefined) {
-    this.logger?.info?.('finetune() called')
+  async finetune (finetuningOptions = undefined, options = {}) {
+    if (arguments.length === 1 &&
+        finetuningOptions &&
+        typeof finetuningOptions === 'object' &&
+        finetuningOptions.resume === true &&
+        Object.keys(finetuningOptions).length === 1) {
+      options = finetuningOptions
+      finetuningOptions = undefined
+    }
+    options = options ?? {}
+    const { resume = false } = options
     const params = finetuningOptions ?? this._defaultFinetuneParams
-    if (!params) {
+    if (!resume && !params) {
       throw new Error('Finetuning parameters are required but not provided.')
     }
+    if (resume && !this._defaultFinetuneParams) {
+      throw new Error('No stored finetuning parameters. Call finetune(opts) first before pausing.')
+    }
 
-    this._defaultFinetuneParams = params
-    this.logger?.info?.('Finetuning parameters:', params)
+    if (!resume) {
+      this._defaultFinetuneParams = params
+    }
+    this.logger?.info?.(resume ? 'finetune() called (resume)' : 'finetune() called')
+    this.logger?.info?.('Finetuning parameters:', params ?? this._defaultFinetuneParams)
 
     if (!this.addon) {
       this.logger?.info?.('Addon not loaded, calling load()...')
@@ -385,25 +383,24 @@ class LlmLlamacpp extends BaseInference {
 
     return this._withExclusiveRun(async () => {
       let resolveCompletion
-      let resolvePaused
       this._finetuneCompletionPromise = new Promise((resolve) => {
         resolveCompletion = resolve
       })
       this._finetuneCompletionResolve = resolveCompletion
-      this._finetunePausedPromise = new Promise((resolve) => {
-        resolvePaused = resolve
-      })
-      this._finetunePausedResolve = resolvePaused
       try {
-        this.logger?.info?.('Calling addon.finetune()...')
-        await this.addon.finetune(params)
-        this.logger?.info?.('addon.finetune() returned, waiting for completion...')
+        if (resume) {
+          this.logger?.info?.('Calling addon.activate() to resume...')
+          await this.addon.activate()
+        } else {
+          this.logger?.info?.('Calling addon.finetune()...')
+          await this.addon.finetune(params)
+        }
+        this.logger?.info?.('Waiting for completion...')
         const finalStatus = await this._waitForFinetuneCompletion()
         this.logger?.info?.(`Finetuning completed with status: ${finalStatus}`)
         return { status: finalStatus }
       } finally {
         this._finetuneCompletionResolve = null
-        this._finetunePausedResolve = null
       }
     })
   }
@@ -431,25 +428,12 @@ class LlmLlamacpp extends BaseInference {
     if (!this.addon) {
       throw new Error('Addon not initialized')
     }
-    const didPause = await this.addon.pause()
-    if (!didPause) {
-      return
+    if (!this.addon.isFinetuningRunning()) {
+      throw new Error('Finetuning not running')
     }
-    if (this._finetunePausedPromise) {
-      await this._finetunePausedPromise
-    }
+    await this.addon.pause()
   }
 
-  /**
-   * Resume finetuning from pause checkpoint.
-   * @returns {Promise<void>}
-   */
-  async resumeFinetune () {
-    if (!this.addon) {
-      throw new Error('Addon not initialized')
-    }
-    await this.addon.activate()
-  }
 }
 
 module.exports = LlmLlamacpp
