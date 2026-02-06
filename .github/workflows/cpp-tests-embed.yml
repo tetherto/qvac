@@ -278,52 +278,6 @@ jobs:
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
 
-      - name: Comment Coverage on PR
-        if: ${{ matrix.os == 'ubuntu-24.04' && github.event.pull_request && always() }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-
-            const workdir = process.env.WORKDIR || '${{ inputs.workdir }}';
-            const path = `${workdir}/build/test/unit/coverage-summary.txt`;
-            if (!fs.existsSync(path)) {
-              console.log('Coverage summary not found, skipping PR comment');
-              return;
-            }
-
-            const prNumber = context.payload.pull_request?.number ||
-                             context.payload.number ||
-                             context.issue?.number ||
-                             (context.eventName === 'workflow_call' && context.payload.workflow_call?.inputs?.pr_number);
-
-            if (!prNumber) {
-              console.log('No PR number found in context. This workflow may have been triggered manually or not from a PR.');
-              return;
-            }
-
-            const coverage = fs.readFileSync(path, 'utf8');
-            const coveragePct = process.env.LINE_COVERAGE_PERCENTAGE || '0.0';
-
-            const body = `## 🧪 C++ Test Coverage Report
-
-            **Coverage:** ${coveragePct}%
-
-            <details>
-            <summary>📊 Detailed Coverage</summary>
-
-            \`\`\`
-            ${coverage}
-            \`\`\`
-
-            </details>`;
-
-            github.rest.issues.createComment({
-              issue_number: prNumber,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
 
       - name: Coverage Summary
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}

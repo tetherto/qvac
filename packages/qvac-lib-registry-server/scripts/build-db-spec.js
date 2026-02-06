@@ -14,7 +14,7 @@ const HyperDBBuilder = require('hyperdb/builder')
 const Hyperdispatch = require('hyperdispatch')
 const Hyperschema = require('hyperschema')
 const generateQVACRegistrySchema = require('../lib/generate-schema')
-const { QVAC_MAIN_REGISTRY } = require('@tetherto/qvac-registry-schema')
+const { QVAC_MAIN_REGISTRY } = require('@tetherto/qvac-registry-schema-mono')
 
 const SCHEMA_DIR = path.join(__dirname, '..', 'shared', 'spec', 'hyperschema')
 const DB_DIR = path.join(__dirname, '..', 'shared', 'spec', 'hyperdb')
