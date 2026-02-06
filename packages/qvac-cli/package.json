@@ -1,0 +1,23 @@
+{
+  "name": "qvac",
+  "version": "0.1.0",
+  "description": "Command-line interface for the QVAC ecosystem",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "qvac": "./src/index.js"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "tsx": "^4.21.0"
+  }
+}
