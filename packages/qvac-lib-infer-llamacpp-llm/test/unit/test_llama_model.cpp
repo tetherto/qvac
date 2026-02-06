@@ -616,10 +616,13 @@ TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
 #endif
   config_no_device["backendsDir"] = backendDir.string();
 
+  std::string modelPath = getValidModelPath();
+  std::string projPath = test_projection_path;
   EXPECT_THROW(
       {
         LlamaModel model(
-            getValidModelPath(), test_projection_path, config_no_device);
+            std::move(modelPath), std::move(projPath),
+            std::move(config_no_device));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
@@ -645,9 +648,12 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
 #endif
   config["backendsDir"] = backendDir.string();
 
+  std::string modelPath = getValidModelPath();
+  std::string projPath = test_projection_path;
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), test_projection_path, config);
+        LlamaModel model(std::move(modelPath), std::move(projPath),
+                        std::move(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
@@ -673,9 +679,12 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
 #endif
   config["backendsDir"] = backendDir.string();
 
+  std::string modelPath2 = getValidModelPath();
+  std::string projPath2 = test_projection_path;
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), test_projection_path, config);
+        LlamaModel model(std::move(modelPath2), std::move(projPath2),
+                        std::move(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
@@ -686,16 +695,21 @@ TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
     GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
   }
 
-  LlamaModel model(getValidModelPath(), test_projection_path, config_files);
+  std::string modelPath = getValidModelPath();
+  std::string projPath = test_projection_path;
+  auto configCopy = config_files;
+  LlamaModel model(std::move(modelPath), std::move(projPath),
+                  std::move(configCopy));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"role": "user", "type": "media", "content": "base64data"}])";
-  EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
@@ -724,19 +738,23 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
     GTEST_SKIP() << "Multimodal model and projection required for this test";
   }
 
-  LlamaModel model(
-      multimodalModelPath.string(), projectionPath.string(), config_files);
+  std::string modelPathStr = multimodalModelPath.string();
+  std::string projPathStr = projectionPath.string();
+  auto configCopy = config_files;
+  LlamaModel model(std::move(modelPathStr), std::move(projPathStr),
+                  std::move(configCopy));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "type": "media", "content": "data"},
     {"role": "assistant", "content": "response"}
   ])";
-  EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
@@ -765,17 +783,21 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
     GTEST_SKIP() << "Multimodal model and projection required for this test";
   }
 
-  LlamaModel model(
-      multimodalModelPath.string(), projectionPath.string(), config_files);
+  std::string modelPathStr2 = multimodalModelPath.string();
+  std::string projPathStr2 = projectionPath.string();
+  auto configCopy2 = config_files;
+  LlamaModel model(std::move(modelPathStr2), std::move(projPathStr2),
+                  std::move(configCopy2));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"role": "user", "type": "media", "content": "data"}])";
-  EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, ProcessContextOverflow) {
@@ -797,7 +819,10 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(getValidModelPath(), test_projection_path, small_ctx_config);
+  std::string modelPath = getValidModelPath();
+  std::string projPath = test_projection_path;
+  LlamaModel model(std::move(modelPath), std::move(projPath),
+                  std::move(small_ctx_config));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
@@ -805,10 +830,11 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
   }
 
   std::string long_content(50000, 'a');
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"role": "user", "content": ")" + long_content + R"("}])";
 
-  EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
@@ -831,26 +857,31 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(getValidModelPath(), test_projection_path, small_ctx_config);
+  std::string modelPath4 = getValidModelPath();
+  std::string projPath4 = test_projection_path;
+  LlamaModel model(std::move(modelPath4), std::move(projPath4),
+                  std::move(small_ctx_config));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string first_input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model.process(first_input);
+    std::string output = model.processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
 
   std::string long_content(30000, 'a');
-  std::string overflow_input =
+  LlamaModel::Prompt overflowPrompt;
+  overflowPrompt.input =
       R"([{"role": "user", "content": ")" + long_content + R"("}])";
 
-  EXPECT_THROW({ model.process(overflow_input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.processPrompt(overflowPrompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
@@ -858,17 +889,22 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
     GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
   }
 
-  LlamaModel model(getValidModelPath(), test_projection_path, config_files);
+  std::string modelPath3 = getValidModelPath();
+  std::string projPath3 = test_projection_path;
+  auto configCopy3 = config_files;
+  LlamaModel model(std::move(modelPath3), std::move(projPath3),
+                  std::move(configCopy3));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string session_only_input =
+  LlamaModel::Prompt sessionPrompt;
+  sessionPrompt.input =
       R"([{"role": "session", "content": "test_session.bin"}, {"role": "session", "content": "reset"}])";
   EXPECT_NO_THROW({
-    std::string output = model.process(session_only_input);
+    std::string output = model.processPrompt(sessionPrompt);
     EXPECT_EQ(output.length(), 0);
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -896,9 +932,12 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
 #endif
   config["backendsDir"] = backendDir.string();
 
+  std::string modelPath4 = getValidModelPath();
+  std::string projPath4 = test_projection_path;
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), test_projection_path, config);
+        LlamaModel model(std::move(modelPath4), std::move(projPath4),
+                        std::move(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);

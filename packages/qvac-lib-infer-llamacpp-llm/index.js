@@ -36,7 +36,6 @@ class LlmLlamacpp extends BaseInference {
     this._diskPath = diskPath
     this._modelName = modelName
     this._projectionModel = projectionModel
-    // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._runQueueWaiter = Promise.resolve()
