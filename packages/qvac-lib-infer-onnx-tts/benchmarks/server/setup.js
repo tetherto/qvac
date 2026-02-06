@@ -10,7 +10,7 @@ const BENCHMARKS_DIR = path.join(__dirname, '..')
 const SHARED_DATA_DIR = path.join(BENCHMARKS_DIR, 'shared-data')
 const ESPEAK_DATA_PATH = path.join(SHARED_DATA_DIR, 'espeak-ng-data')
 const MODELS_PATH = path.join(SHARED_DATA_DIR, 'models')
-const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', 'config.yaml')
+const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', process.env.BENCHMARK_CONFIG || 'config.yaml')
 
 // Load configuration
 let config
@@ -18,7 +18,7 @@ try {
   const configContent = fs.readFileSync(CONFIG_PATH, 'utf8')
   config = yaml.parse(configContent)
 } catch (err) {
-  console.error('Failed to load config.yaml:', err)
+  console.error('Failed to load config:', CONFIG_PATH, err)
   process.exit(1)
 }
 

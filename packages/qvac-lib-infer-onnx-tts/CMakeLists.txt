@@ -144,10 +144,13 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/PiperEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TashkeelDiacritizer.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
 find_package(onnxruntime CONFIG REQUIRED)
+find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(
   ${qvac-lib-inference-tts}
@@ -196,6 +199,7 @@ target_link_libraries(
   PRIVATE
     piper_core
     onnxruntime::onnxruntime_static
+    tokenizers::tokenizers_cpp
 )
 
 # Ensure runtime libraries resolve relative to the addon location on macOS

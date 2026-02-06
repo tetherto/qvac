@@ -1,0 +1,2 @@
+# Optional: Chatterbox TTS for benchmark comparison
+chatterbox-tts>=0.1.0

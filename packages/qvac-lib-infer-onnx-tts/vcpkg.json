@@ -16,17 +16,23 @@
     },
     {
       "name": "onnxruntime",
-      "features": ["dml-ep"],
+      "features": [
+        "dml-ep"
+      ],
       "platform": "windows"
     },
     {
       "name": "onnxruntime",
-      "features": ["coreml-ep"],
+      "features": [
+        "coreml-ep"
+      ],
       "platform": "ios | osx"
     },
     {
       "name": "onnxruntime",
-      "features": ["nnapi-ep"],
+      "features": [
+        "nnapi-ep"
+      ],
       "platform": "android"
     },
     "espeak-ng",
@@ -36,6 +42,10 @@
     {
       "name": "piper",
       "version>=": "1.2.0#2"
+    },
+    {
+      "name": "tokenizers-cpp",
+      "version>=": "0.1.1#0"
     }
   ],
   "features": {
@@ -50,6 +60,10 @@
     {
       "name": "flatbuffers",
       "version": "23.5.26"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version": "0.12.2"
     }
   ]
-} 
+}
