@@ -11,6 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/PiperEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TashkeelDiacritizer.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
 )

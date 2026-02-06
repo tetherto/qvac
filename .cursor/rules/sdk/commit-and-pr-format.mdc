@@ -1,6 +1,11 @@
 ---
 description: Commit message and PR title format requirements
-globs: packages/qvac-sdk/**
+globs:
+  - packages/qvac-sdk/**
+  - packages/qvac-docs/**
+  - packages/qvac-lib-rag/**
+  - packages/qvac-lib-logging/**
+  - packages/qvac-lib-error-base/**
 alwaysApply: false
 ---
 
@@ -127,6 +132,37 @@ Use `[notask]` when omitting the ticket: `prefix[notask]: subject`.
   - Revert commits (e.g., `Revert "feat: add feature"`)
   - Squash commits (e.g., `squash! fix: bug fix`)
 - You can test validation locally: `node scripts/validator.cjs --type=commit --msg="your message"`
+
+## PR Description Quality Guidelines
+
+**General principles:**
+- Be concise - prefer bullet points over prose
+- Focus on "why" not "what" - the diff shows what changed
+- Delete template sections that don't apply
+- Avoid vague statements like "improved performance" without specifics
+
+**"What problem does this PR solve?"**
+- Describe the user-facing issue, bug, or need - NOT implementation details
+- Good: "Users couldn't load models larger than 4GB on Windows"
+- Bad: "The buffer allocation in loadModel was incorrect"
+
+**"How does it solve it?"**
+- High-level approach, not line-by-line changes
+- Mention key design decisions if non-obvious
+- Good: "Switch to memory-mapped file loading with chunked reads"
+- Bad: "Changed line 45 to use mmap instead of readFile"
+
+**"How was it tested?"**
+- Actual test scenarios, not just "I ran the tests"
+- Include: OS, model size, edge cases if relevant
+- Good: "Tested 8GB model on Windows 11, memory stayed under 1GB"
+- Bad: "Unit tests pass"
+
+**Avoid:**
+- Implementation details obvious from the diff
+- Repeating commit messages verbatim
+- Unnecessary context the reviewer doesn't need
+- Marketing language or superlatives
 
 ## Important Notes
 

@@ -1,8 +1,49 @@
 # QVAC Registry Server
 
-Unified service implementation for the QVAC Registry using an Autobase-backed HyperDB view and Hyperblobs storage. The service can run as multiple writer replicas while exposing a single RPC API for model management.
+Distributed model registry for QVAC. Download AI models for local inference, or contribute new models to the registry.
 
-## Architecture
+## For Users
+
+### Downloading Models
+
+Use the client library to query and download models:
+
+```bash
+npm install @tetherto/qvac-lib-registry-client
+```
+
+```javascript
+const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
+
+const client = new QVACRegistryClient({
+  registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY
+})
+
+// List all available models
+const models = await client.findModels({})
+console.log('Available models:', models)
+
+// Download a model
+const result = await client.downloadModel('hf/ggml-tiny.bin', 'hf', {
+  outputFile: './whisper-tiny.ggml'
+})
+
+await client.close()
+```
+
+For full API documentation, see the [Client README](./client/README.md).
+
+### Contributing Models
+
+Want to add a model to the registry? See the [Model Submission Guide](./docs/MODEL_SUBMISSION_GUIDE.md).
+
+---
+
+## For Administrators
+
+This section covers running and operating the registry server.
+
+### Architecture
 
 The registry uses an **Autobase multi-writer** architecture:
 
@@ -12,7 +53,7 @@ The registry uses an **Autobase multi-writer** architecture:
 - **Hyperswarm** handles replication for both Autobase writers and the view
 - **Protomux RPC** exposes typed endpoints (`add-model`, `list-models`, `get-model`) for automation
 
-## Features
+### Features
 
 - Runs as 1, 3, or more writers for high availability
 - Autobase-backed HyperDB view keeps metadata consistent across replicas
@@ -21,16 +62,16 @@ The registry uses an **Autobase multi-writer** architecture:
 - Automatic Hyperblobs storage with content-addressable pointers
 - Minimal configuration via `.env` (`REGISTRY_STORAGE`, `MODEL_DRIVES_STORAGE`, optional AWS/HF tokens)
 
-## Quick Start (Single Writer)
+### Quick Start (Single Writer)
 
-### 1. Install and Build
+#### 1. Install and Build
 
 ```bash
 npm install
 npm run build:spec
 ```
 
-### 2. Start the Registry
+#### 2. Start the Registry
 
 ```bash
 node scripts/bin.js run --storage ./corestore
@@ -38,7 +79,7 @@ node scripts/bin.js run --storage ./corestore
 
 Keys are auto-generated and saved to `.env` on first run (QVAC_AUTOBASE_KEY and QVAC_REGISTRY_CORE_KEY).
 
-### 3. Initialize Writer Authorization
+#### 3. Initialize Writer Authorization
 
 Before adding models, authorize your writer keypair:
 
@@ -54,7 +95,7 @@ The command:
 
 **Note**: Restart the registry service after updating `.env` for the changes to take effect.
 
-### 4. Add a Model
+#### 4. Add a Model
 
 Use the same storage directory from `init-writer`:
 
@@ -83,7 +124,7 @@ AWS_ACCESS_KEY_ID=...                 # AWS S3 access key
 AWS_SECRET_ACCESS_KEY=...             # AWS S3 secret
 AWS_REGION=eu-central-1               # AWS region (defaults to eu-central-1)
 
-### 5. Verify the Model
+#### 5. Verify the Model
 
 Use the client package to list all models and confirm the upload:
 
@@ -113,21 +154,21 @@ See `client/examples/` for more examples:
 - `download-model.js` - Download a single model
 - `download-all-models.js` - Download all models
 
-### Next Steps
+#### Next Steps
 
 Re-run `init-writer` for each writer that should have `add-model` access (e.g., CI jobs, staging machines).
 
 **For production deployment**, see [`docs/DEPLOYMENT_GUIDE.md`](./docs/DEPLOYMENT_GUIDE.md).
 
-## Blind Peer Replication
+### Blind Peer Replication
 
 The registry can optionally use [blind peers](https://github.com/holepunchto/blind-peer) to mirror all cores (Autobase view + Hyperblobs) and announce them on the public DHT. This provides high availability and geographic distribution.
 
 **For setup instructions and trust configuration, see [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md#step-2-start-blind-peers-for-high-availability).**
 
-## Scripts Overview
+### Scripts Overview
 
-### Core Scripts
+#### Core Scripts
 
 - **`bin.js`**: Starts the unified registry service
 - **`add-model`**: Adds a model via RPC to the running service
@@ -136,14 +177,14 @@ The registry can optionally use [blind peers](https://github.com/holepunchto/bli
 - **`sync-models`**: Syncs JSON config against database (adds new, updates metadata)
 - **`build:spec`**: Builds database specification from schema
 
-### Utility Scripts
+#### Utility Scripts
 
 - **`cleanup`**: Removes temporary files and resets environment
 - **`run-blind-peer`**: Starts a local blind peer and prints its public key for testing
 
-## Development
+### Development
 
-### Schema Changes
+#### Schema Changes
 
 If you modify the database schema in `lib/generate-schema.js`:
 
@@ -151,7 +192,7 @@ If you modify the database schema in `lib/generate-schema.js`:
 2. Run `npm run build:spec` to regenerate specifications
 3. Restart the service
 
-### Testing
+#### Testing
 
 Run tests to verify functionality:
 
@@ -161,14 +202,14 @@ npm run test:unit         # Unit tests only
 npm run test:integration  # Integration tests only
 ```
 
-### Linting
+#### Linting
 
 ```bash
 npm run lint              # Check for linting errors
 npm run lint:fix          # Auto-fix linting errors
 ```
 
-### Debug Logging
+#### Debug Logging
 
 Enable debug logging to see detailed internal operations:
 
@@ -189,9 +230,9 @@ Available log levels (in order of verbosity):
 - `warn`: Only warnings and errors
 - `error`: Only error messages
 
-## Architecture Details
+### Architecture Details
 
-### Storage Layout
+#### Storage Layout
 
 ```
 corestore/
@@ -201,7 +242,7 @@ corestore/
     └── blobs-models    # Single Hyperblobs core for all models
 ```
 
-### Data Flow
+#### Data Flow
 
 1. **Service starts**: Opens Autobase writers + HyperDB view, joins Hyperswarm
 2. **Client connects**: Via view discovery key, replicates the read-only core
@@ -213,7 +254,7 @@ corestore/
 4. **Client queries**: Reads metadata from HyperDB
 5. **Client downloads**: Uses blob pointers to fetch from Hyperblobs
 
-### External Pointer Pattern
+#### External Pointer Pattern
 
 Model metadata references blob storage:
 
@@ -236,21 +277,21 @@ Model metadata references blob storage:
 }
 ```
 
-## Troubleshooting
+### Troubleshooting
 
-### "QVAC_AUTOBASE_KEY not set" warning
+#### "QVAC_AUTOBASE_KEY not set" warning
 
 This is expected on first run. `node scripts/bin.js run` automatically generates an Autobase key and persists `QVAC_AUTOBASE_KEY` in `.env`.
 
-### "Could not connect to service" when adding model
+#### "Could not connect to service" when adding model
 
 Ensure at least one writer is running and exposing the RPC server key printed at startup.
 
-### Schema mismatch errors
+#### Schema mismatch errors
 
 Regenerate specs with `npm run build:spec` and restart the service.
 
-### Diagnostic Scripts
+#### Diagnostic Scripts
 
 **`check-peers.js`**: Verifies DHT peer connectivity and sync status for a hypercore key. Reports remote/local lengths, contiguous gaps, and sync status.
 
