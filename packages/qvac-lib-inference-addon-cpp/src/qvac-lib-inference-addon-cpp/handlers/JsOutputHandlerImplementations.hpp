@@ -47,6 +47,7 @@ struct JsTypedArrayOutputHandler : JsBaseOutputHandler<vector<T>> {
             }) {}
 };
 
+
 struct JsStringArrayOutputHandler
     : public JsBaseOutputHandler<std::vector<std::string>> {
   JsStringArrayOutputHandler()
