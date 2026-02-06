@@ -151,18 +151,34 @@ test('Unloading one instance does not affect another generating instance', {
   const response1 = await addon1.run(LONG_PROMPT)
   const chunks = []
   let unloadedInstance2 = false
+  let resolveAfterTokens
+  const afterTokens = new Promise(resolve => { resolveAfterTokens = resolve })
 
-  await response1
+  const responsePromise = response1
     .onUpdate(data => {
       chunks.push(data)
-      if (!unloadedInstance2 && chunks.length >= 3) {
-        unloadedInstance2 = true
-        addon2.unload()
-          .then(() => loader2.close())
-          .then(() => t.pass('unloaded instance 2 while instance 1 is generating'))
+      if (resolveAfterTokens && chunks.length >= 3) {
+        resolveAfterTokens()
+        resolveAfterTokens = null
       }
     })
     .await()
+    .finally(() => {
+      if (resolveAfterTokens) {
+        resolveAfterTokens()
+        resolveAfterTokens = null
+      }
+    })
+
+  await afterTokens
+  if (!unloadedInstance2) {
+    unloadedInstance2 = true
+    await addon2.unload()
+    await loader2.close()
+    t.pass('unloaded instance 2 while instance 1 is generating')
+  }
+
+  await responsePromise
 
   const output1 = chunks.join('').trim()
   t.ok(output1.length > 0, 'instance 1 completed generation after instance 2 was unloaded')
@@ -192,23 +208,52 @@ test('Multiple load/unload cycles on one instance while another generates', {
   const chunks = []
   let cyclesCompleted = 0
   const NUM_CYCLES = 3
+  const TOKENS_PER_CYCLE = 10
+  let resolveTokenTarget = null
+  let tokenTarget = 0
 
-  await response1
+  const waitForTokens = async (count) => {
+    if (chunks.length >= count) return
+    await new Promise(resolve => {
+      tokenTarget = count
+      resolveTokenTarget = resolve
+    })
+  }
+
+  const responsePromise = response1
     .onUpdate(data => {
       chunks.push(data)
-      if (cyclesCompleted < NUM_CYCLES && chunks.length % 10 === 0) {
-        cyclesCompleted++
-        const cycleNum = cyclesCompleted
-        createInstance(modelName, dirPath)
-          .then(({ addon: addon2, loader: loader2 }) =>
-            addon2.load()
-              .then(() => addon2.unload())
-              .then(() => loader2.close())
-          )
-          .then(() => t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`))
+      if (resolveTokenTarget && chunks.length >= tokenTarget) {
+        const resolve = resolveTokenTarget
+        resolveTokenTarget = null
+        resolve()
       }
     })
     .await()
+    .finally(() => {
+      if (resolveTokenTarget) {
+        const resolve = resolveTokenTarget
+        resolveTokenTarget = null
+        resolve()
+      }
+    })
+
+  for (let i = 0; i < NUM_CYCLES; i++) {
+    const target = (i + 1) * TOKENS_PER_CYCLE
+    await waitForTokens(target)
+    if (chunks.length < target) {
+      break
+    }
+    cyclesCompleted++
+    const cycleNum = cyclesCompleted
+    const { addon: addon2, loader: loader2 } = await createInstance(modelName, dirPath)
+    await addon2.load()
+    await addon2.unload()
+    await loader2.close()
+    t.pass(`load/unload cycle ${cycleNum} completed while instance 1 generates`)
+  }
+
+  await responsePromise
 
   const output1 = chunks.join('').trim()
   t.ok(output1.length > 0, 'instance 1 completed generation')
