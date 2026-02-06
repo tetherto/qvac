@@ -1,0 +1,21 @@
+{
+  "description": "Tag parsing scenarios",
+  "input": {
+    "tagList": [
+      "qvac-sdk-v1.0.0",
+      "qvac-sdk-v1.1.0",
+      "qvac-sdk-v1.2.0",
+      "qvac-sdk-v2.0.0",
+      "qvac-docs-v1.0.0"
+    ]
+  },
+  "expected": {
+    "latestForSdk": "qvac-sdk-v2.0.0",
+    "latestForDocs": "qvac-docs-v1.0.0",
+    "versionFromTag": {
+      "qvac-sdk-v2.0.0": "2.0.0",
+      "qvac-sdk-v1.0.0": "1.0.0",
+      "qvac-docs-v1.0.0": "1.0.0"
+    }
+  }
+}
