@@ -18,11 +18,10 @@ function parseCanonicalSource (source) {
     const url = new URL(trimmed)
     const bucket = url.hostname
     const key = normalizePath(url.pathname)
-    const s3Path = `${bucket}/${key}`
     return {
       canonicalUrl: trimmed,
-      path: s3Path,
-      filename: s3Path.split('/').pop(),
+      path: key,
+      filename: key.split('/').pop(),
       protocol: 's3',
       bucket,
       key
