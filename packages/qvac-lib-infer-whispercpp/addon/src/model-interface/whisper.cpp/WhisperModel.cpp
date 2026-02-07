@@ -275,10 +275,7 @@ void WhisperModel::process(const Input& input) {
   params.new_segment_callback_user_data = &ud;
 
   int result = whisper_full(
-      ctx_.get(),
-      params,
-      input.data(),
-      static_cast<int>(input.size()));
+      ctx_.get(), params, input.data(), static_cast<int>(input.size()));
 
   const auto t1 = std::chrono::steady_clock::now();
   totalWallMs_ += std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -362,9 +359,7 @@ bool WhisperModel::configContextIsChanged(
   return false;
 }
 
-void WhisperModel::resetContext() {
-  ctx_.reset();
-}
+void WhisperModel::resetContext() { ctx_.reset(); }
 
 void WhisperModel::setConfig(const WhisperConfig& config) {
   bool contextChanged = configContextIsChanged(cfg_, config);
