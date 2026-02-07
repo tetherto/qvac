@@ -1,4 +1,4 @@
-name: Run Integration Tests
+name: Integration Tests (Whispercpp)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: 'ref'
+        description: "ref"
         type: string
       repository:
         type: string
@@ -21,8 +21,11 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      WORKDIR: packages/qvac-lib-infer-whispercpp
+
     permissions:
       contents: read
       packages: read
@@ -30,7 +33,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
           - os: ubuntu-22.04
             platform: linux
             arch: x64
@@ -154,21 +156,6 @@ jobs:
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
           }
-
-      - name: Install gh cli for ai-run-linux-gpu
-        if: matrix.os == 'ai-run-linux-gpu'
-        shell: bash
-        run: |
-          (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
-            && sudo mkdir -p -m 755 /etc/apt/keyrings \
-                  && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-                  && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-            && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-            && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-            && sudo apt update \
-            && sudo apt install gh -y
-          gh --version
-        continue-on-error: true
 
       - name: Install gh cli for ai-run-linux-gpu
         if: matrix.os == 'ai-run-linux-gpu'
