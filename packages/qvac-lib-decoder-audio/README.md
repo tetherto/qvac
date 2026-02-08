@@ -262,3 +262,4 @@ Coverage reports are generated in the 'coverage/unit/' directory. Open the corre
 This project is licensed under the Apache-2.0 License – see the [LICENSE](LICENSE) file for details.
 
 *For questions or issues, please open an issue on the GitHub repository.*
+
