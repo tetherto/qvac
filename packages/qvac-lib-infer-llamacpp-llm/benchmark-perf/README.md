@@ -57,11 +57,7 @@ npm install --prefix benchmark-perf
 
 The runner will also install addon dependencies in `packages/qvac-lib-infer-llamacpp-llm` if missing.
 
-Python deps are listed in `benchmark-perf/requirements.txt`:
-
-```bash
-pip install -r benchmark-perf/requirements.txt
-```
+Python deps are listed in `benchmark-perf/requirements.txt` and are installed into a venv at `benchmark-perf/.venv` by the runner.
 
 If you use gated models, set `HF_TOKEN` or pass `--hf-token`/`-HfToken`.
 

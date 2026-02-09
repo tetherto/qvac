@@ -59,9 +59,21 @@ if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
   (cd "${ROOT_DIR}" && npm install)
 fi
 
-if ! python3 -c "import psutil" >/dev/null 2>&1; then
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Python 3 is required but was not found on PATH."
+  exit 1
+fi
+
+VENV_DIR="${PERF_DIR}/.venv"
+if [[ ! -d "${VENV_DIR}" ]]; then
+  echo "==> Creating Python venv"
+  python3 -m venv "${VENV_DIR}"
+fi
+
+VENV_PY="${VENV_DIR}/bin/python"
+if ! "${VENV_PY}" -c "import psutil" >/dev/null 2>&1; then
   echo "==> Installing Python deps"
-  (cd "${ROOT_DIR}" && pip install -r benchmark-perf/requirements.txt)
+  "${VENV_PY}" -m pip install -r "${PERF_DIR}/requirements.txt"
 fi
 
 echo "==> Running QVAC perf"
@@ -71,7 +83,7 @@ fi
 bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${ADDON:+--addon "${ADDON}"}
 
 echo "==> Running PyTorch perf"
-python3 "${PERF_DIR}/pytorch-perf.py" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${HF_TOKEN:+--hf-token "${HF_TOKEN}"}
+"${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${HF_TOKEN:+--hf-token "${HF_TOKEN}"}
 
 if [[ "${RUN_JUDGE}" == "true" ]]; then
   echo "==> Running judge"

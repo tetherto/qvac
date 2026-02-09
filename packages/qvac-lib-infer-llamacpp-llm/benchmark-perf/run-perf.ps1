@@ -24,13 +24,18 @@ if (-not (Test-Path "$PerfDir/node_modules")) {
   Pop-Location
 }
 
+$VenvDir = Join-Path $PerfDir "benchmark-perf/.venv"
+if (-not (Test-Path $VenvDir)) {
+  Write-Host "==> Creating Python venv"
+  python -m venv $VenvDir
+}
+
+$VenvPython = Join-Path $VenvDir "Scripts/python.exe"
 try {
-  python -c "import psutil" | Out-Null
+  & $VenvPython -c "import psutil" | Out-Null
 } catch {
   Write-Host "==> Installing Python deps"
-  Push-Location "$PerfDir"
-  pip install -r benchmark-perf/requirements.txt
-  Pop-Location
+  & $VenvPython -m pip install -r (Join-Path $PerfDir "benchmark-perf/requirements.txt")
 }
 
 Write-Host "==> Running QVAC perf"
@@ -52,7 +57,7 @@ if ($HfToken -ne "") {
   $hfArgs += "--hf-token"
   $hfArgs += $HfToken
 }
-& python "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
+& $VenvPython "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
 
 if ($Judge) {
   Write-Host "==> Running judge"
@@ -63,5 +68,5 @@ if ($Judge) {
 
 if ($Analyze) {
   Write-Host "==> Running analysis"
-  & python "$PerfDir/benchmark-perf/analysis/analyze.py" --input "$PerfDir/benchmark-perf/results" --output "$PerfDir/benchmark-perf/analysis/plots"
+  & $VenvPython "$PerfDir/benchmark-perf/analysis/analyze.py" --input "$PerfDir/benchmark-perf/results" --output "$PerfDir/benchmark-perf/analysis/plots"
 }
