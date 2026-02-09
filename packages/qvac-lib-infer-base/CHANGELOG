@@ -1,3 +1,5 @@
+# 0.3.0
+- To be compatible with new addon-cpp architecture, use async keywords for `addon.cancel` and response cancel handler, as the updated addon-cpp now returns a JS future for cancelling.
 # 0.0.1
 - feat: initial structure
 - feat: consolidate QvacResponse from @qvac/response into infer-base
