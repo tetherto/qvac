@@ -201,7 +201,7 @@ async function main () {
     const finetuneOptions = {
       trainDatasetDir: trainDatasetPath,
       evalDatasetDir: evalDatasetPath,
-      numberOfEpochs: 5,
+      numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,
       lrScheduler: 'cosine',
@@ -245,7 +245,7 @@ async function main () {
     }
 
     console.log('🚀 Starting finetuning...')
-    const finetuneTask = client.finetune(finetuneOptions)
+    let finetuneTask = client.finetune(finetuneOptions)
 
     async function getPauseStepNumber (checkpointDir) {
       const maxRetries = 10
