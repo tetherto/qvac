@@ -24,6 +24,7 @@ import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
 import ttsAddonLogging from "@qvac/tts-onnx/addonLogging";
 import whisperAddonLogging from "@qvac/transcription-whispercpp/addonLogging";
+import parakeetAddonLogging from "@qvac/transcription-parakeet/addonLogging";
 import nmtAddonLogging from "@qvac/translation-nmtcpp/addonLogging";
 
 // Buffer SDK logs from startup so clients can receive them when they subscribe
@@ -44,6 +45,9 @@ embedAddonLogging.setLogger(
 ttsAddonLogging.setLogger(createAddonLoggerCallback(ADDON_NAMESPACES.TTS));
 whisperAddonLogging.setLogger(
   createAddonLoggerCallback(ADDON_NAMESPACES.WHISPERCPP),
+);
+parakeetAddonLogging.setLogger(
+  createAddonLoggerCallback(ADDON_NAMESPACES.PARAKEET),
 );
 nmtAddonLogging.setLogger(createAddonLoggerCallback(ADDON_NAMESPACES.NMTCPP));
 
@@ -127,6 +131,7 @@ function clearLoggers() {
   embedAddonLogging.releaseLogger();
   ttsAddonLogging.releaseLogger();
   whisperAddonLogging.releaseLogger();
+  parakeetAddonLogging.releaseLogger();
   nmtAddonLogging.releaseLogger();
 }
 

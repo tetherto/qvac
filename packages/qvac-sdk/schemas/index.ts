@@ -20,6 +20,7 @@ export * from "./translate";
 export * from "./translation-config";
 export * from "./llamacpp-config";
 export * from "./whispercpp-config";
+export * from "./parakeet-config";
 export * from "./text-to-speech";
 export * from "./error";
 export * from "./rag";
@@ -57,12 +58,14 @@ export {
   embeddingsModelTypeSchema,
   nmtModelTypeSchema,
   ttsModelTypeSchema,
+  parakeetModelTypeSchema,
   ocrModelTypeSchema,
   type CanonicalModelType,
   type AliasKey,
   type ModelTypeInput,
   type LlmModelTypeInput,
   type WhisperModelTypeInput,
+  type ParakeetModelTypeInput,
   type EmbeddingsModelTypeInput,
   type NmtModelTypeInput,
   type TtsModelTypeInput,

@@ -5,6 +5,7 @@ import {
   type LlmConfig,
   type LoadModelServerParams,
   type WhisperConfig,
+  type ParakeetConfig,
   type OCRConfig,
 } from "@/schemas";
 import { createLlmModel } from "@/server/bare/addons/llamacpp-completion";
@@ -12,6 +13,7 @@ import { createEmbeddingsModel } from "@/server/bare/addons/llamacpp-embedding";
 import { createNmtModel } from "@/server/bare/addons/nmtcpp-translation";
 import { createTtsModel } from "@/server/bare/addons/onnx-tts";
 import { createWhisperModel } from "@/server/bare/addons/whispercpp-transcription";
+import { createParakeetModel } from "@/server/bare/addons/parakeet-transcription";
 import { createOCRModel } from "@/server/bare/addons/onnx-ocr";
 import {
   isModelLoaded,
@@ -114,6 +116,13 @@ export async function loadModel(params: LoadModelServerParams) {
         modelPath,
         modelConfig as WhisperConfig,
         vadModelPath,
+      );
+      break;
+    case ModelType.parakeetTranscription:
+      result = createParakeetModel(
+        modelId,
+        modelPath,
+        modelConfig as ParakeetConfig,
       );
       break;
     case ModelType.llamacppEmbedding:

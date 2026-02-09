@@ -1,5 +1,6 @@
 import {
   type WhisperConfig,
+  type ParakeetConfig,
   type ModelTypeInput,
   normalizeModelType,
   ModelType,
@@ -19,6 +20,12 @@ export function transformConfigForReload(
       return {
         whisperConfig: whisperParams,
         ...(miscConfig && { miscConfig }),
+      };
+    }
+    case ModelType.parakeetTranscription: {
+      const parakeetConfig = config as ParakeetConfig;
+      return {
+        parakeetConfig,
       };
     }
     case ModelType.llamacppCompletion:

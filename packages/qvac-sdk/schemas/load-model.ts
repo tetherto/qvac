@@ -6,6 +6,7 @@ import {
   type EmbedConfig,
 } from "./llamacpp-config";
 import { whisperConfigSchema } from "./whispercpp-config";
+import { parakeetConfigSchema } from "./parakeet-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import { ttsConfigSchema } from "./text-to-speech";
@@ -18,6 +19,7 @@ import {
 import {
   llmModelTypeSchema,
   whisperModelTypeSchema,
+  parakeetModelTypeSchema,
   embeddingsModelTypeSchema,
   nmtModelTypeSchema,
   ttsModelTypeSchema,
@@ -43,6 +45,13 @@ const loadModelOptionsBaseSchema = z.union([
     modelConfig: whisperConfigSchema.partial().strict().optional(),
     seed: z.boolean().optional(),
     vadModelSrc: modelSrcInputSchema.optional(),
+    delegate: delegateSchema,
+  }),
+  z.object({
+    modelSrc: modelSrcInputSchema,
+    modelType: parakeetModelTypeSchema,
+    modelConfig: parakeetConfigSchema.partial().strict().optional(),
+    seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
   z.object({
@@ -138,6 +147,28 @@ export const loadModelOptionsToRequestSchema = z.union([
       vadModelSrc: data.vadModelSrc
         ? modelInputToSrcSchema.parse(data.vadModelSrc)
         : undefined,
+    })),
+  z
+    .object({
+      modelSrc: modelSrcInputSchema,
+      modelType: parakeetModelTypeSchema,
+      modelConfig: parakeetConfigSchema.partial().strict().optional(),
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.parakeetTranscription,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: (data.modelConfig ?? {}) as z.infer<
+        typeof parakeetConfigSchema
+      >,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
     })),
   z
     .object({
@@ -263,6 +294,11 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
   modelConfig: whisperConfigSchema, // whisper has no defaults
 });
 
+export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.parakeetTranscription),
+  modelConfig: parakeetConfigSchema, // parakeet has no defaults
+});
+
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.llamacppEmbedding),
   modelConfig: embedConfigBaseSchema,
@@ -292,6 +328,7 @@ export const loadModelSrcRequestSchema = z
   .union([
     loadLlmModelRequestSchema,
     loadWhisperModelRequestSchema,
+    loadParakeetModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,

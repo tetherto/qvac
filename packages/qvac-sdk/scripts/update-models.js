@@ -31,6 +31,7 @@ const ADDON_MAP = {
 const CANONICAL_TO_ALIAS = {
   "llamacpp-completion": "llm",
   "whispercpp-transcription": "whisper",
+  "parakeet-transcription": "parakeet",
   "llamacpp-embedding": "embeddings",
   "nmtcpp-translation": "nmt",
   vad: "vad",
@@ -266,6 +267,10 @@ const generateExportName = ({ modelId, hyperbeeKey, usedNames, addon }) => {
     }
 
     name = `WHISPER_${nameParts.map(cleanPart).join("_")}`;
+  } else if (addon === "parakeet-transcription") {
+    // PARAKEET models: PARAKEET_<type>_<version>_<quant>
+    const nameParts = [type, version, quant].filter((p) => p && p !== "");
+    name = `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
   } else if (functionField === "vad") {
     // VAD models: VAD_<type>_<version>
     // Use type (e.g., "silero") instead of full name to avoid redundancy

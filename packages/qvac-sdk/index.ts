@@ -65,6 +65,10 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  type ParakeetConfig,
+  parakeetConfigSchema,
+  type ParakeetModelTypeInput,
+  parakeetModelTypeSchema,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
