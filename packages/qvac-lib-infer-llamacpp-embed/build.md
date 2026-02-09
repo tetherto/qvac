@@ -159,3 +159,4 @@ bare-make install
 - **CMake cannot find cmake-bare**: Make sure you installed `bare` (not `bare-runtime`). The `bare` package includes the necessary CMake configuration files.
 - **Android cross-compilation fails with "Could NOT find Vulkan (missing: glslc)"**: Install Vulkan shader compiler tools with `brew install shaderc` on macOS.
 - **Build is targeting wrong platform**: If you're switching between platforms (e.g., from macOS to iOS, or between different architectures) and the build is still targeting the previous platform, clean the build directory first: `rm -rf build` before running `bare-make generate` again.
+- **macOS JS code silently crashes**: `bare-make` currently prefers the Homebrew LLVM toolchain when it is installed, which can produce corrupted `prebuilds` binaries that segfault early in JS usage. If you hit this, uninstall or temporarily move your Homebrew LLVM during the build.
