@@ -275,8 +275,8 @@ class BaseInference {
       throw new QvacInferenceBaseError({ code: ERR_CODES.ADDON_NOT_INITIALIZED })
     }
     const response = new QvacResponse({
-      cancelHandler: () => {
-        return this.addon.cancel(jobId)
+      cancelHandler: async () => {
+        await this.addon.cancel()
       },
       pauseHandler: () => {
         return this.addon.pause()
