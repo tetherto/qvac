@@ -10,10 +10,10 @@
     "perf:analyze": "python3 analysis/analyze.py"
   },
   "dependencies": {
-    "@qvac/dl-filesystem": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.8.8",
+    "@qvac/dl-filesystem": "^0.2.0",
+    "@qvac/llm-llamacpp": "^0.8.7",
     "bare-fs": "^4.5.1",
-    "bare-https": "^4.4.2",
+    "bare-https": "^2.1.2",
     "bare-os": "^2.1.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
