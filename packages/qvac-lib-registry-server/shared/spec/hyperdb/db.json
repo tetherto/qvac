@@ -23,7 +23,8 @@
       "indexes": [
         "@qvac-main-registry/models-by-engine",
         "@qvac-main-registry/models-by-name",
-        "@qvac-main-registry/models-by-quantization"
+        "@qvac-main-registry/models-by-quantization",
+        "@qvac-main-registry/models-by-engine-quantization"
       ],
       "schema": "@qvac-main-registry/model",
       "derived": false,
@@ -67,6 +68,19 @@
       "unique": false,
       "deprecated": false,
       "key": [
+        "quantization"
+      ]
+    },
+    {
+      "name": "models-by-engine-quantization",
+      "namespace": "qvac-main-registry",
+      "id": 5,
+      "type": 2,
+      "collection": "@qvac-main-registry/model",
+      "unique": false,
+      "deprecated": false,
+      "key": [
+        "engine",
         "quantization"
       ]
     }

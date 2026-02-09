@@ -64,6 +64,13 @@ registryDB.indexes.register({
   key: ['quantization']
 })
 
+registryDB.indexes.register({
+  name: 'models-by-engine-quantization',
+  collection: `@${QVAC_MAIN_REGISTRY}/model`,
+  unique: false,
+  key: ['engine', 'quantization']
+})
+
 HyperDBBuilder.toDisk(db)
 
 const dispatch = Hyperdispatch.from(SCHEMA_DIR, DISPATCH_DIR)
