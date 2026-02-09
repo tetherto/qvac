@@ -15,66 +15,97 @@
 
 namespace qvac_lib_inference_addon_cpp {
 
+/**
+ * @brief Tracks active processing state for synchronization.
+ *
+ * Used to synchronize cancel() with process() - cancel waits for processing
+ * to complete before returning, ensuring job_ is not reset while in use.
+ */
+class ProcessingSync {
+public:
+  void waitInactive() const {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [this] { return !active_; });
+  }
+
+  void setActive(bool active) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      active_ = active;
+    }
+    cv_.notify_all();
+  }
+
+private:
+  bool active_{false};
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
+};
+
 class JobRunner {
   std::shared_ptr<OutputQueue> outputQueue_;
-  model::IModel* const model_;
-  model::IModelCancel* const modelCancel_;
+  model::IModel *const model_;
+  model::IModelCancel *const modelCancel_;
   mutable std::timed_mutex mtx_;
   mutable std::condition_variable_any processCv_;
   std::optional<std::any> job_;
   mutable std::thread processingThread_;
   mutable std::atomic_bool running_ = false;
   mutable std::atomic_bool ready_ = false;
+  mutable ProcessingSync processingSync_;
+
+  void finalizeJob(std::unique_lock<std::timed_mutex> &lock) {
+    processingSync_.setActive(false);
+    if (!lock.owns_lock()) {
+      lock.lock();
+    }
+    job_.reset();
+  }
 
   void process() {
     while (running_) {
+      std::unique_lock lock(mtx_);
+
       try {
-        std::any* job = nullptr;
-        {
-          std::unique_lock lock(mtx_);
+        // Signal that thread is ready for a new job
+        ready_ = true;
+        processCv_.notify_all();
+        processCv_.wait(lock, [this] { return !running_ || job_.has_value(); });
 
-          // Signal that thread is ready for a new job
-          ready_ = true;
-          processCv_.notify_all();
-          processCv_.wait(lock);
-
-          if (!job_.has_value()) {
-            continue;
-          }
-
-          // Not ready for a new job. Has a job in progress now.
-          ready_ = false;
-          job = &job_.value();
+        if (!running_ || !job_.has_value()) {
+          continue;
         }
 
-        std::any output = model_->process(*job);
+        // Acquire processing while holding the main `lock` for atomicity.
+        ready_ = false;
+        processingSync_.setActive(true);
 
-        {
-          std::scoped_lock lock(mtx_);
-          // Make sure to reset job before queue result. Client might
-          // be waiting to queue a new job as soon as current is ended.
-          job_.reset();
-          outputQueue_->queueResult(std::move(output));
-          outputQueue_->queueJobEnded();
-        }
-      } catch (const std::exception& e) {
-        std::scoped_lock lock(mtx_);
-        job_.reset();
+        // Unlock main lock to ensure cancel() can acquire without blocking
+        lock.unlock();
+
+        std::any output = model_->process(job_.value());
+
+        // Make sure to reset job before queue result. Client might
+        // be waiting to queue a new job as soon as current is ended.
+        finalizeJob(lock);
+
+        outputQueue_->queueResult(std::move(output));
+        outputQueue_->queueJobEnded();
+      } catch (const std::exception &e) {
+        finalizeJob(lock);
         outputQueue_->queueException(e);
       } catch (...) {
-        std::scoped_lock lock(mtx_);
-        QLOG(
-            logger::Priority::DEBUG,
-            "process: Unknown exception in processing loop");
-        job_.reset();
+        finalizeJob(lock);
+        outputQueue_->queueException(
+            std::runtime_error("Unknown exception in processing loop"));
       }
     }
   }
 
 public:
-  explicit JobRunner(
-      std::shared_ptr<OutputQueue> outputQueue, model::IModel* model,
-      model::IModelCancel* modelCancel = nullptr)
+  explicit JobRunner(std::shared_ptr<OutputQueue> outputQueue,
+                     model::IModel *model,
+                     model::IModelCancel *modelCancel = nullptr)
       : outputQueue_(std::move(outputQueue)), model_(model),
         modelCancel_(modelCancel) {}
 
@@ -91,7 +122,10 @@ public:
   ~JobRunner() {
     if (running_) {
       QLOG(logger::Priority::DEBUG, "Stopping job");
-      running_ = false;
+      {
+        std::lock_guard lock(mtx_);
+        running_ = false;
+      }
       processCv_.notify_one();
       if (processingThread_.joinable()) {
         processingThread_.join();
@@ -103,9 +137,8 @@ public:
     std::unique_lock lock(mtx_, std::defer_lock);
     if (!lock.try_lock_for(std::chrono::milliseconds{100}) ||
         job_.has_value()) {
-      outputQueue_->queueException(
-          std::runtime_error(
-              "Cannot set new job: a job is already set or being processed"));
+      outputQueue_->queueException(std::runtime_error(
+          "Cannot set new job: a job is already set or being processed"));
       return;
     }
     job_ = std::move(input);
@@ -117,9 +150,11 @@ public:
     std::scoped_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
+      return;
     }
-    if (job_.has_value() && modelCancel_ != nullptr) {
+    if (job_.has_value()) {
       modelCancel_->cancel();
+      processingSync_.waitInactive();
       job_.reset();
     }
   }

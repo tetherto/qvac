@@ -19,16 +19,27 @@ class AddonJs {
   js::ThreadQueuedRefDeleter weights_deleter_ = {};
 
 public:
-  const std::unique_ptr<AddonCpp> addonCpp;
+  const std::shared_ptr<AddonCpp> addonCpp;
 
   AddonJs(
       js_env_t* env, std::unique_ptr<OutputCallBackInterface>&& outputCallback,
       std::unique_ptr<model::IModel>&& model)
       : env_(env), addonCpp(
-                       std::make_unique<AddonCpp>(
+                       std::make_shared<AddonCpp>(
                            std::move(outputCallback), std::move(model))) {}
 
   ~AddonJs() = default;
+
+  /**
+   * @brief Cancels the currently running job asynchronously
+   * @param env JavaScript environment handle
+   * @return JavaScript Promise that resolves when cancellation completes
+   * @note This is a non-blocking operation that returns a future/promise
+   */
+  js_value_t* cancelJob() {
+    return js::JsAsyncTask::run(
+        env_, [addonCppRef = addonCpp]() { addonCppRef->cancelJob(); });
+  }
 
   /**
    * @brief Loads model weights from JavaScript blob data

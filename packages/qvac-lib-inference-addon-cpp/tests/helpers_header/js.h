@@ -13,7 +13,10 @@ struct js_value_t {};
 struct js_ref_t {};
 struct js_callback_info_t {};
 struct js_handle_scope_t {};
-struct uv_async_t {};
+struct js_deferred_t {};
+struct uv_async_t {
+  void* data;
+};
 struct uv_handle_t {};
 struct uv_loop_t {};
 
@@ -402,6 +405,30 @@ inline int js_is_exception_pending(js_env_t* env, bool* result) { return -1; }
 
 inline int js_get_and_clear_last_exception(js_env_t* env, js_value_t** result) {
   return -1;
+}
+
+// Promise/Future API (for async operations)
+inline int js_create_promise(
+    js_env_t* env, js_deferred_t** deferred, js_value_t** promise) {
+  *deferred = new js_deferred_t{};
+  *promise = new js_value_t{};
+  return 0;
+}
+
+inline int js_resolve_deferred(
+    js_env_t* env, js_deferred_t* deferred, js_value_t* resolution) {
+  return 0;
+}
+
+inline int js_reject_deferred(
+    js_env_t* env, js_deferred_t* deferred, js_value_t* rejection) {
+  return 0;
+}
+
+inline int js_create_error(
+    js_env_t* env, js_value_t* code, js_value_t* message, js_value_t** result) {
+  *result = new js_value_t{};
+  return 0;
 }
 
 // UV/libuv functions (minimal stubs for compilation)

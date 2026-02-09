@@ -277,8 +277,7 @@ public:
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto& instance = getInstance(env, argsParser.get(0, "instance"));
-    instance.addonCpp->cancelJob();
-    return nullptr;
+    return instance.cancelJob();
   }
   JSCATCH
 };
