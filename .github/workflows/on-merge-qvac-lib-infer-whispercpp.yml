@@ -130,6 +130,7 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release:
     needs: [publish-release-npm]
