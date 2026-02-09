@@ -188,8 +188,8 @@ async function runFinetuningTests () {
     await model.load()
 
     const finetuneOptions = {
-      trainDatasetDir: './models/small_train_HF.jsonl',
-      evalDatasetDir: './models/eval_HF.jsonl',
+      trainDatasetDir: './examples/input/small_train_HF.jsonl',
+      evalDatasetDir: './examples/input/eval_HF.jsonl',
       numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,
