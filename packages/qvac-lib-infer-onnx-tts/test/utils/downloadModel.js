@@ -157,7 +157,7 @@ function getFileSizeFromUrl (url) {
   return null
 }
 
-async function downloadRealModel (url, filepath) {
+async function ensureFileDownloaded (url, filepath) {
   const isJson = filepath.endsWith('.json')
 
   // Ensure the directory exists
@@ -304,10 +304,10 @@ async function ensureTTSModelPair (modelName) {
   console.log(`\nEnsuring model files for ${modelName}...`)
 
   // Download .onnx file
-  const onnxResult = await downloadRealModel(onnxUrl, onnxPath)
+  const onnxResult = await ensureFileDownloaded(onnxUrl, onnxPath)
 
   // Download .json file
-  const jsonResult = await downloadRealModel(jsonUrl, jsonPath)
+  const jsonResult = await ensureFileDownloaded(jsonUrl, jsonPath)
 
   return {
     onnx: onnxResult,
@@ -591,29 +591,34 @@ async function ensureChatterboxModels (options = {}) {
 
   console.log(`\nEnsuring Chatterbox models (variant: ${variant})...`)
 
+  // Ensure target directory exists
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true })
   }
 
   const baseUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/onnx'
+
+  // Define file suffixes based on variant
   const suffix = variant === 'fp32' ? '' : `_${variant}`
 
+  // Files to download (each model has .onnx and .onnx_data files)
   const modelFiles = [
     { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
-    { name: `speech_encoder${suffix}.onnx_data`, minSize: 100000000 },
+    { name: `speech_encoder${suffix}.onnx_data`, minSize: 100000000 }, // ~1GB for fp32
     { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
-    { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 },
+    { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 }, // ~233MB for fp32
     { name: `conditional_decoder${suffix}.onnx`, minSize: 1000 },
-    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 100000000 },
+    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 100000000 }, // ~769MB for fp32
     { name: `language_model${suffix}.onnx`, minSize: 100000 },
-    { name: `language_model${suffix}.onnx_data`, minSize: 100000000 }
+    { name: `language_model${suffix}.onnx_data`, minSize: 100000000 } // ~1.27GB for fp32
   ]
 
+  // Adjust minimum sizes for smaller variants
   if (variant === 'fp16') {
-    modelFiles[1].minSize = 50000000
-    modelFiles[3].minSize = 5000000
-    modelFiles[5].minSize = 50000000
-    modelFiles[7].minSize = 50000000
+    modelFiles[1].minSize = 50000000 // ~522MB
+    modelFiles[3].minSize = 5000000 // ~116MB
+    modelFiles[5].minSize = 50000000 // ~384MB
+    modelFiles[7].minSize = 50000000 // ~635MB
   } else if (variant === 'q4' || variant === 'quantized') {
     modelFiles[1].minSize = 20000000
     modelFiles[3].minSize = 2000000
@@ -626,11 +631,13 @@ async function ensureChatterboxModels (options = {}) {
 
   for (const file of modelFiles) {
     const url = `${baseUrl}/${file.name}`
+    // Save with standard names (without variant suffix) for easier usage
     const targetName = file.name.replace(suffix, '')
     const targetPath = path.join(targetDir, targetName)
 
     console.log(`\n Downloading ${file.name}...`)
 
+    // Check if file already exists with sufficient size
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= file.minSize) {
@@ -643,6 +650,7 @@ async function ensureChatterboxModels (options = {}) {
       }
     }
 
+    // Download the file
     let downloadSuccess = false
 
     if (isMobile) {
@@ -659,7 +667,7 @@ async function ensureChatterboxModels (options = {}) {
           '-L', '-o', targetPath, url,
           '--fail', '--show-error',
           '--connect-timeout', '30',
-          '--max-time', '1800'
+          '--max-time', '1800' // 30 minutes for large files
         ], { stdio: ['inherit', 'inherit', 'pipe'] })
         downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
         if (!downloadSuccess) {
@@ -687,6 +695,7 @@ async function ensureChatterboxModels (options = {}) {
     }
   }
 
+  // Download tokenizer.json separately (it's in a different location)
   const tokenizerUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/tokenizer.json'
   const tokenizerPath = path.join(targetDir, 'tokenizer.json')
 
@@ -737,6 +746,7 @@ async function ensureChatterboxModels (options = {}) {
     }
   }
 
+  // Summary
   console.log('\n' + '='.repeat(50))
   console.log('CHATTERBOX MODEL DOWNLOAD SUMMARY')
   console.log('='.repeat(50))
@@ -754,4 +764,4 @@ async function ensureChatterboxModels (options = {}) {
   }
 }
 
-module.exports = { downloadRealModel, ensureTTSModelPair, ensureEspeakData, ensureWhisperModel, ensureChatterboxModels }
+module.exports = { ensureFileDownloaded, ensureTTSModelPair, ensureEspeakData, ensureWhisperModel, ensureChatterboxModels }

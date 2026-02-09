@@ -7,8 +7,8 @@ const { createWav } = require('./wav-generator-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
 
 // paths to model files locally
-const mainModelUrl = './cache/model.onnx'
-const configJsonPath = './cache/config.json'
+const mainModelUrl = 'benchmarks/shared-data/models/en_US-lessac-medium.onnx'
+const configJsonPath = 'benchmarks/shared-data/models/en_US-lessac-medium.onnx.json'
 
 // downloads the model files locally from HD
 async function downloadModelsLocally () {
@@ -39,14 +39,12 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  await downloadModelsLocally()
-
   const args = {
     mainModelUrl,
     configJsonPath,
     // Enable stats logging
     opts: { stats: true },
-    eSpeakDataPath: '/path/to/espeak-ng-data',
+    eSpeakDataPath: 'benchmarks/shared-data/espeak-ng-data',
     logger: console
   }
 

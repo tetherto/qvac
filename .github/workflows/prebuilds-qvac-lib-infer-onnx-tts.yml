@@ -75,6 +75,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -102,6 +105,9 @@ jobs:
           - os: macos-15
             platform: darwin
             arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
           - os: windows-2022
             platform: win32
             arch: x64
@@ -125,10 +131,19 @@ jobs:
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Maximize build space
         run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
           sudo docker image prune --all --force
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /opt/hostedtoolcache/go
+          if [[ "${{ matrix.platform }}" != "android" ]]; then
+            sudo rm -rf /usr/local/lib/android
+          fi
+          echo "=== Disk space after cleanup ==="
+          df -h /
 
       - name: Echo workflow inputs
         shell: bash
@@ -153,9 +168,11 @@ jobs:
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install ccache on macOS
-        run: brew install ccache
+        run: |
+          brew install ccache
+          brew unlink fmt || true
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Configure ccache
@@ -166,12 +183,19 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('vcpkg.json') }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -198,7 +222,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
@@ -257,13 +281,13 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Remove Homebrew LLVM
         working-directory: ${{ env.WORKDIR }}
         run: bash ./ci/remove-brew-llvm.sh
         shell: bash
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg in macos
         run: |
           cd ..
@@ -273,11 +297,11 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
-      - if: ${{ matrix.os == 'macos-15' }}
+      - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
         run: |
           SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)
@@ -340,7 +364,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vcpkg/cache
-          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
+          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'packages/qvac-lib-infer-onnx-tts/vcpkg.json', 'packages/qvac-lib-infer-onnx-tts/vcpkg-configuration.json' ) }}
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -358,6 +382,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           bare-make install
+
+      - name: Strip debug symbols (skip windows and android)
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        run: find ${{ env.WORKDIR }}/prebuilds -name "*.bare" -exec strip {} \;
 
       - name: Show ccache stats
         run: ccache -s

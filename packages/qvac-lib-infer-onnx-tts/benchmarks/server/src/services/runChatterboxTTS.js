@@ -6,7 +6,7 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const logger = require('../utils/logger')
 
-// Paths relative to benchmarks/server/src/services/ -> ../../.. = benchmarks
+// Paths relative to benchmarks/ directory (server/ is in benchmarks/server/)
 const BENCHMARKS_DIR = path.join(__dirname, '../../..')
 const SHARED_DATA_DIR = path.join(BENCHMARKS_DIR, 'shared-data')
 const DEFAULT_MODEL_DIR = path.join(SHARED_DATA_DIR, 'models', 'chatterbox')
@@ -16,10 +16,19 @@ let cachedModel = null
 let cachedModelKey = null
 let loadTimeMs = 0
 
+/**
+ * Load reference audio from a WAV file
+ * @param {string} filePath - Path to WAV file
+ * @returns {Float32Array} Audio samples normalized to [-1, 1]
+ */
 function loadReferenceAudioFromFile (filePath) {
   const buffer = fs.readFileSync(filePath)
+  
+  // Parse WAV header (simplified - assumes standard PCM WAV)
+  // WAV header is typically 44 bytes
   const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-
+  
+  // Find 'data' chunk
   let dataOffset = 12
   while (dataOffset < buffer.length - 8) {
     const chunkId = String.fromCharCode(buffer[dataOffset], buffer[dataOffset + 1], buffer[dataOffset + 2], buffer[dataOffset + 3])
@@ -30,17 +39,21 @@ function loadReferenceAudioFromFile (filePath) {
     }
     dataOffset += 8 + chunkSize
   }
-
+  
+  // Get format info from 'fmt ' chunk (at offset 20-35 typically)
   const bitsPerSample = dataView.getUint16(34, true)
   const numChannels = dataView.getUint16(22, true)
+  
+  // Read audio data
   const audioData = buffer.slice(dataOffset)
   const bytesPerSample = bitsPerSample / 8
   const numSamples = Math.floor(audioData.length / bytesPerSample / numChannels)
-
+  
   const samples = new Float32Array(numSamples)
   const audioView = new DataView(audioData.buffer, audioData.byteOffset, audioData.byteLength)
-
+  
   for (let i = 0; i < numSamples; i++) {
+    // Read first channel only (mono mix)
     const offset = i * bytesPerSample * numChannels
     if (bitsPerSample === 16) {
       samples[i] = audioView.getInt16(offset, true) / 32768.0
@@ -48,10 +61,17 @@ function loadReferenceAudioFromFile (filePath) {
       samples[i] = audioView.getFloat32(offset, true)
     }
   }
-
+  
   return samples
 }
 
+/**
+ * Generate synthetic reference audio for benchmarking (fallback).
+ * @param {number} [durationSec=1.0] - Duration in seconds
+ * @param {number} [sampleRate=24000] - Sample rate
+ * @param {number} [frequency=440] - Frequency of sine wave in Hz
+ * @returns {Float32Array} Audio samples in range [-1, 1]
+ */
 function generateSyntheticReferenceAudio (durationSec = 1.0, sampleRate = 24000, frequency = 440) {
   const numSamples = Math.floor(sampleRate * durationSec)
   const samples = new Float32Array(numSamples)
@@ -61,15 +81,22 @@ function generateSyntheticReferenceAudio (durationSec = 1.0, sampleRate = 24000,
   return samples
 }
 
+/**
+ * Generate a cache key for model
+ */
 function generateModelKey (config) {
   return `chatterbox:${config.modelDir || 'default'}`
 }
 
+/**
+ * Run Chatterbox TTS synthesis on multiple texts
+ */
 async function runChatterboxTTS (payload) {
   const { texts, config, includeSamples = false } = payload
 
   logger.info(`[Chatterbox] Processing ${texts.length} texts`)
 
+  // Resolve paths relative to benchmarks directory if not absolute
   let modelDir = config.modelDir || DEFAULT_MODEL_DIR
   if (!path.isAbsolute(modelDir)) {
     modelDir = path.join(BENCHMARKS_DIR, modelDir)
@@ -83,11 +110,13 @@ async function runChatterboxTTS (payload) {
 
   const modelKey = generateModelKey(config)
 
+  // Load model if not cached or if different model requested
   if (!cachedModel || cachedModelKey !== modelKey) {
     const loadStart = process.hrtime()
 
     logger.info(`[Chatterbox] Loading model from: ${modelDir}`)
 
+    // Load reference audio from file (required for Chatterbox)
     let refAudioPath = config.referenceAudioPath
     if (refAudioPath && !path.isAbsolute(refAudioPath)) {
       refAudioPath = path.join(BENCHMARKS_DIR, refAudioPath)
@@ -101,6 +130,7 @@ async function runChatterboxTTS (payload) {
       referenceAudio = loadReferenceAudioFromFile(refAudioPath)
       logger.info(`[Chatterbox] Using reference audio from: ${refAudioPath} (${referenceAudio.length} samples)`)
     } else {
+      // Fallback to synthetic audio
       referenceAudio = generateSyntheticReferenceAudio(1.0, 24000, 440)
       logger.warn(`[Chatterbox] Reference audio not found, using synthetic audio (${referenceAudio.length} samples)`)
     }
@@ -116,7 +146,7 @@ async function runChatterboxTTS (payload) {
     }
 
     const modelConfig = {
-      language: 'en',
+      language: 'en', // Chatterbox only supports English
       useGPU: config.useGPU !== undefined ? config.useGPU : false
     }
 
@@ -162,10 +192,12 @@ async function runChatterboxTTS (payload) {
     const [textSec, textNano] = process.hrtime(textStart)
     const textGenMs = textSec * 1e3 + textNano / 1e6
 
+    // Chatterbox uses 24kHz sample rate
     const sampleRate = 24000
     const sampleCount = buffer.length
     const durationSec = sampleCount / sampleRate
 
+    // Calculate RTF from stats if available, otherwise compute
     let rtf
     if (jobStats?.realTimeFactor) {
       rtf = jobStats.realTimeFactor
@@ -179,6 +211,7 @@ async function runChatterboxTTS (payload) {
     logger.info(`  Samples: ${sampleCount}, Sample Rate: ${sampleRate}`)
     logger.info(`  Duration: ${durationSec.toFixed(2)}s, Generation: ${textGenMs.toFixed(2)}ms`)
     logger.info(`  RTF: ${rtf.toFixed(4)} (${(1 / rtf).toFixed(1)}x real-time)`)
+    logger.debug(`  First 10 samples: ${buffer.slice(0, 10).join(', ')}`)
 
     const output = {
       text,
@@ -189,6 +222,7 @@ async function runChatterboxTTS (payload) {
       rtf
     }
 
+    // Include samples if requested (for comparison/round-trip testing)
     if (includeSamples) {
       output.samples = buffer
     }
@@ -203,6 +237,7 @@ async function runChatterboxTTS (payload) {
 
   logger.info(`[Chatterbox] Completed ${outputs.length} syntheses in ${totalGenMs.toFixed(2)}ms (avg RTF: ${avgRtf.toFixed(4)})`)
 
+  // Get package version
   let version = 'unknown'
   try {
     const pkg = require('@qvac/tts-onnx/package.json')

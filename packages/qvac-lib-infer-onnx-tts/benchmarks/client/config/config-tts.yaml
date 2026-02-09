@@ -1,9 +1,7 @@
-# Piper TTS benchmark config (addon + Python native comparison)
-# Use: python -m src.tts.main --config config/config-tts.yaml
 server:
-  addon_url: "http://localhost:8080/synthesize"
+  addon_url: "http://localhost:8080/synthesize-tts"
   addon_version: "^0.1.0"
-  python_url: "http://localhost:8081/synthesize"
+  python_url: "http://localhost:8081/synthesize-tts"
   timeout: 60
   batch_size: 10
 

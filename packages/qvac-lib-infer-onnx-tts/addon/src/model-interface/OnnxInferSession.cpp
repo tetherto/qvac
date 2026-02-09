@@ -76,11 +76,11 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 
 OnnxInferSession::OnnxInferSession(const std::string& modelPath) {
   static Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "ChatterboxEngine");
-
+  
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
+  
 #ifdef _WIN32
   // For Windows, Ort::Session expects a wide string (wchar_t*) for the model path
   std::wstring wModelPath(modelPath.begin(), modelPath.end());
@@ -125,7 +125,7 @@ void OnnxInferSession::run() {
   for (const auto& name : inputNames_) {
     inputNames.push_back(name.c_str());
   }
-
+  
   std::vector<const char*> outputNames;
   for (const auto& name : outputNames_) {
     outputNames.push_back(name.c_str());
@@ -148,7 +148,7 @@ void OnnxInferSession::run() {
       outputNames_[i],
       outputsTensorsValues_[i].GetTensorTypeAndShapeInfo().GetShape(),
       onnxTypeToOurType(outputsTensorsValues_[i].GetTensorTypeAndShapeInfo().GetElementType())});
-  }
+    }
 }
 
 std::vector<std::string> OnnxInferSession::getInputNames() const {
