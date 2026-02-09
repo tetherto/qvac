@@ -97,6 +97,11 @@ export interface DownloadResult {
   completed: boolean
 }
 
+export interface FinetuneHandle {
+  await(): Promise<{ status: string }>
+  pause?(): Promise<void>
+}
+
 export default class LlmLlamacpp extends BaseInference {
   protected addon: Addon
 
@@ -129,9 +134,7 @@ export default class LlmLlamacpp extends BaseInference {
   finetune(
     finetuningOptions?: Record<string, any>,
     options?: { resume?: boolean }
-  ): Promise<{ status: string }>
-
-  getFinetuningStartedPromise(): Promise<{ started: boolean }>
+  ): Promise<FinetuneHandle>
 
   pauseFinetune(): Promise<void>
 
@@ -152,4 +155,4 @@ export default class LlmLlamacpp extends BaseInference {
   getApiDefinition(): string
 }
 
-export { ReportProgressCallback, QvacResponse }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle }

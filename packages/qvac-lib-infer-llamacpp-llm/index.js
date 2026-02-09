@@ -123,12 +123,12 @@ class LlmLlamacpp extends BaseInference {
       configurationParams
     )
     const binding = require('./binding')
-    
+
     const originalLogger = this.logger
-    const originalInfo = originalLogger && typeof originalLogger.info === 'function' 
-      ? originalLogger.info.bind(originalLogger) 
+    const originalInfo = originalLogger && typeof originalLogger.info === 'function'
+      ? originalLogger.info.bind(originalLogger)
       : null
-    
+
     const shouldSuppressMessage = (args) => {
       const message = args.map(arg => {
         if (typeof arg === 'string') return arg
@@ -143,18 +143,18 @@ class LlmLlamacpp extends BaseInference {
 
     const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
     Object.assign(filteredLogger, originalLogger)
-    
+
     const originalWarn = originalLogger && typeof originalLogger.warn === 'function'
       ? originalLogger.warn.bind(originalLogger)
       : null
-    
+
     filteredLogger.info = (...args) => {
       if (shouldSuppressMessage(args)) return
       if (originalInfo) {
         return originalInfo.apply(originalLogger, args)
       }
     }
-    
+
     // BaseInference._outputCallback uses logger.warn() for "No response found for job"
     filteredLogger.warn = (...args) => {
       if (shouldSuppressMessage(args)) return
@@ -162,10 +162,10 @@ class LlmLlamacpp extends BaseInference {
         return originalWarn.apply(originalLogger, args)
       }
     }
-    
+
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
-    
+
     const transitionCb = this.logger && typeof this.logger.info === 'function'
       ? this.logger.info.bind(this.logger)
       : null
@@ -175,32 +175,27 @@ class LlmLlamacpp extends BaseInference {
       if (typeof data === 'string') {
         try {
           const obj = JSON.parse(data)
-          if (obj?.type === 'FinetuningStarted') {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: true })
-              this._finetuneStartedResolve = null
-            }
-            return
-          }
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: false })
-              this._finetuneStartedResolve = null
-            }
             this._finetuneCompletionResolve(obj.status)
+            this._finetuneCompletionResolve = null
             if ((obj.status === 'IDLE' || obj.status === 'ERROR')) {
               this.addon?.resolvePauseComplete?.()
+            }
+            if (this._finetuneRelease) {
+              this._finetuneRelease()
+              this._finetuneRelease = null
             }
             return
           }
           if (obj?.type === 'FinetunePaused') {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: false })
-              this._finetuneStartedResolve = null
-            }
             this.addon?.resolvePauseComplete?.()
             if (this._finetuneCompletionResolve) {
               this._finetuneCompletionResolve('PAUSED')
+              this._finetuneCompletionResolve = null
+            }
+            if (this._finetuneRelease) {
+              this._finetuneRelease()
+              this._finetuneRelease = null
             }
             return
           }
@@ -343,69 +338,49 @@ class LlmLlamacpp extends BaseInference {
       this.logger?.info?.('Addon loaded')
     }
 
-    return this._withExclusiveRun(async () => {
-      let resolveCompletion
-      this._finetuneCompletionPromise = new Promise((resolve) => {
-        resolveCompletion = resolve
-      })
-      this._finetuneCompletionResolve = resolveCompletion
-      let resolveStarted
-      this._finetuneStartedPromise = new Promise((resolve) => {
-        resolveStarted = resolve
-      })
-      this._finetuneStartedResolve = resolveStarted
-      try {
-        if (resume) {
-          this.logger?.info?.('Calling addon.activate() to resume...')
-          await this.addon.activate()
-        } else {
-          this.logger?.info?.('Calling addon.finetune()...')
-          await this.addon.finetune(params)
-        }
-        this.logger?.info?.('Waiting for completion...')
-        const finalStatus = await this._waitForFinetuneCompletion()
-        this.logger?.info?.(`Finetuning completed with status: ${finalStatus}`)
-        return { status: finalStatus }
-      } finally {
-        this._finetuneCompletionResolve = null
-        this._finetuneStartedResolve = null
-      }
-    })
-  }
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    this._finetuneRelease = release
+    await prev
 
-  async _waitForFinetuneCompletion ({ timeoutMs = 100000000000 } = {}) {
-    let timeoutId
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Time out')), timeoutMs)
+    let resolveCompletion
+    let rejectCompletion
+    const completionPromise = new Promise((resolve, reject) => {
+      resolveCompletion = resolve
+      rejectCompletion = reject
     })
-    try {
-      return await Promise.race([
-        this._finetuneCompletionPromise,
-        timeoutPromise
-      ])
-    } finally {
-      clearTimeout(timeoutId)
+    this._finetuneCompletionResolve = resolveCompletion
+
+    const handle = {
+      await: () => completionPromise.then(status => ({ status })),
+      pause: () => this.pauseFinetune()
     }
-  }
 
-  /**
-   * Pause finetuning. Saves checkpoint and pauses training.
-   * @returns {Promise<void>}
-   */
-  getFinetuningStartedPromise () {
-    return this._finetuneStartedPromise ?? Promise.resolve({ started: false })
+    try {
+      if (resume) {
+        this.logger?.info?.('Calling addon.activate() to resume...')
+        await this.addon.activate()
+      } else {
+        this.logger?.info?.('Calling addon.finetune()...')
+        await this.addon.finetune(params)
+      }
+      return handle
+    } catch (err) {
+      this._finetuneRelease?.()
+      this._finetuneRelease = null
+      this._finetuneCompletionResolve = null
+      rejectCompletion(err)
+      throw err
+    }
   }
 
   async pauseFinetune () {
     if (!this.addon) {
       throw new Error('Addon not initialized')
     }
-    if (!this.addon.isFinetuningRunning()) {
-      throw new Error('Finetuning not running')
-    }
     await this.addon.pause()
   }
-
 }
 
 module.exports = LlmLlamacpp

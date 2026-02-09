@@ -290,14 +290,15 @@ async function main () {
     }
 
     console.log('🚀 Starting finetuning...')
-    const finetuneTask = client.finetune(finetuneOptions)
+    const finetuneHandle = await client.finetune(finetuneOptions)
 
     console.log('Training for 90 seconds (1 minute 30 seconds) before pausing...')
     await sleep(90000)
 
     console.log('⏸️  Pausing finetuning...')
     await client.pauseFinetune()
-    console.log('✅ Finetuning is now PAUSED\n')
+    const pauseResult = await finetuneHandle.await()
+    console.log('✅ Finetuning is now PAUSED:', pauseResult?.status, '\n')
 
     console.log('Verifying pause checkpoint was created...')
     let pauseCheckpointPath = null
@@ -394,14 +395,14 @@ async function main () {
     console.log('Step 3: Resuming finetuning')
     console.log('='.repeat(60))
     console.log('▶️  Resuming finetuning...')
-    const resumeTask = client.finetune({ resume: true })
+    const resumeHandle = await client.finetune({ resume: true })
     console.log('✅ Finetuning has RESUMED\n')
 
     console.log('Training for another 5 seconds after resume...')
     await sleep(5000)
 
     console.log('Waiting for finetuning to complete...')
-    const finetuneResult = await resumeTask
+    const finetuneResult = await resumeHandle.await()
     console.log('\n✅ Finetune completed:', finetuneResult)
 
     try {

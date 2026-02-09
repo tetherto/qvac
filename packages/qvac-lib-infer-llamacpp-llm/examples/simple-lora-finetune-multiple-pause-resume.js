@@ -245,7 +245,7 @@ async function main () {
     }
 
     console.log('🚀 Starting finetuning...')
-    let finetuneTask = client.finetune(finetuneOptions)
+    let finetuneHandle = await client.finetune(finetuneOptions)
 
     async function getPauseStepNumber (checkpointDir) {
       const maxRetries = 10
@@ -299,8 +299,11 @@ async function main () {
 
       console.log(`⏸️  Pausing finetuning (cycle ${cycle})...`)
       await client.pauseFinetune()
-      const pauseResult = await finetuneTask
-      
+      const pauseResult = await finetuneHandle.await()
+      if (pauseResult?.status !== 'PAUSED') {
+        console.log(`⚠️  Pause status: ${pauseResult?.status} (cycle ${cycle})`)
+      }
+
       const pauseStep = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
       if (pauseStep !== null) {
         console.log(`✅ Finetuning paused at step ${pauseStep} (cycle ${cycle})\n`)
@@ -321,13 +324,13 @@ async function main () {
       if (resumeCheckpointStep !== null) {
         console.log(`   Expected to resume from checkpoint step ${resumeCheckpointStep}`)
       }
-      finetuneTask = client.finetune({ resume: true })
+      finetuneHandle = await client.finetune({ resume: true })
 
       const checkpointAfterResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
       if (checkpointAfterResume !== null) {
         console.log(`⚠️  Warning: Checkpoint still exists after resume at step ${checkpointAfterResume} (cycle ${cycle})`)
       }
-      
+
       if (resumeCheckpointStep !== null) {
         const resumeFromStep = resumeCheckpointStep + 1
         console.log(`✅ Finetuning has RESUMED from checkpoint step ${resumeCheckpointStep}, continuing from step ${resumeFromStep} (cycle ${cycle})\n`)
@@ -340,7 +343,7 @@ async function main () {
     console.log('All pause/resume cycles completed')
     console.log(`${'='.repeat(60)}\n`)
 
-    const finetuneResult = await finetuneTask
+    const finetuneResult = await finetuneHandle.await()
     console.log('\n✅ Finetune completed:', finetuneResult)
 
     console.log('\n=== Test Complete ===')
