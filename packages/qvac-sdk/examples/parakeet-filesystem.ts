@@ -3,49 +3,44 @@ import { loadModel, unloadModel, transcribe } from "@qvac/sdk";
 /**
  * Parakeet Transcription Example
  *
- * Downloads models from community HuggingFace repos (not NVIDIA):
- *   TDT (multilingual): https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+ * Downloads the TDT model from HuggingFace (community ONNX conversions):
+ *   https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+ *
+ * Other model variants available:
  *   CTC (English-only): https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
  *   EOU (streaming):    https://huggingface.co/altunene/parakeet-rs
  *
- * Preprocessor (required for TDT):
- *   https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx
- *
  * Usage:
- *   bun run examples/parakeet-filesystem.ts <model-dir> <wav-file-path>
+ *   bun run examples/parakeet-filesystem.ts <wav-file-path> [model-url]
  *
  * Example:
- *   bun run examples/parakeet-filesystem.ts ./models/parakeet-tdt-0.6b-v3-onnx ./audio.wav
+ *   bun run examples/parakeet-filesystem.ts ./audio.wav
+ *   bun run examples/parakeet-filesystem.ts ./audio.wav https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
  */
 
 // Parse command line arguments
 const args = process.argv.slice(2);
 
-if (args.length < 2) {
+if (!args[0]) {
   console.error(
-    "Usage: bun run examples/parakeet-filesystem.ts <model-dir> <wav-file-path>",
-  );
-  console.error(
-    "Example: bun run examples/parakeet-filesystem.ts ./models/parakeet-tdt-0.6b-v3-onnx ./audio.wav",
+    "Usage: bun run examples/parakeet-filesystem.ts <wav-file-path> [model-url]",
   );
   process.exit(1);
 }
 
-const modelDir = args[0] as string;
-const audioFilePath = args[1] as string;
-
-// Point modelSrc to the encoder ONNX file; the addon loads all files from the same directory
-const modelSrc = `${modelDir}/encoder-model.onnx`;
+const audioFilePath = args[0];
+const modelUrl =
+  args[1] || "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx";
 
 try {
   console.log("Starting Parakeet transcription example...");
-  console.log(`Model directory: ${modelDir}`);
-  console.log(`Audio file: ${audioFilePath}`);
+  console.log(`Model: ${modelUrl}`);
+  console.log(`Audio: ${audioFilePath}`);
 
-  // Load the Parakeet model from local filesystem
-  console.log("Loading Parakeet model...");
+  // Load the Parakeet model - downloads all ONNX files from HuggingFace
+  console.log("Loading Parakeet model (downloading if needed)...");
   const modelId = await loadModel({
-    modelSrc,
+    modelSrc: modelUrl,
     modelType: "parakeet",
     modelConfig: {
       // Model variant: "tdt" | "ctc" | "eou" | "sortformer"
@@ -61,7 +56,11 @@ try {
       captionEnabled: false,
     },
     onProgress: (progress) => {
-      console.log(progress);
+      const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
+      const totalMB = (progress.total / 1024 / 1024).toFixed(2);
+      console.log(
+        `Downloading: ${progress.percentage.toFixed(1)}% (${downloadedMB}MB / ${totalMB}MB)`,
+      );
     },
   });
 

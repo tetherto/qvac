@@ -571,6 +571,102 @@ export async function downloadModelFromHttp(
   return downloadPromise;
 }
 
+/**
+ * Required model files for each parakeet model variant.
+ * The preprocessor URL may differ from the main repo.
+ */
+const PARAKEET_TDT_FILES = [
+  "encoder-model.onnx",
+  "encoder-model.onnx.data",
+  "decoder_joint-model.onnx",
+  "vocab.txt",
+];
+
+const PARAKEET_TDT_PREPROCESSOR_URL =
+  "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx";
+
+/**
+ * Downloads all required parakeet model files to a dedicated cache directory.
+ * Accepts a base URL like:
+ *   https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/encoder-model.onnx
+ * Or a repo-level URL like:
+ *   https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+ *
+ * Returns path to encoder-model.onnx within the cached model directory.
+ */
+export async function downloadParakeetModelFromHttp(
+  url: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+): Promise<string> {
+  // Derive the base URL (repo resolve/main/ prefix) from the input URL
+  let baseUrl: string;
+  const resolveMainIdx = url.indexOf("/resolve/main/");
+  if (resolveMainIdx !== -1) {
+    baseUrl = url.substring(0, resolveMainIdx + "/resolve/main/".length);
+  } else {
+    // Assume repo-level URL, append /resolve/main/
+    baseUrl = url.replace(/\/+$/, "") + "/resolve/main/";
+  }
+
+  // Create a dedicated cache directory for this parakeet model
+  const cacheDir = getModelsCacheDir();
+  const modelHash = generateShortHash(baseUrl);
+  const modelDir = path.join(cacheDir, `parakeet_${modelHash}`);
+
+  try {
+    await fsPromises.mkdir(modelDir, { recursive: true });
+  } catch {
+    // directory may already exist
+  }
+
+  const downloadKey = createHttpDownloadKey(baseUrl);
+
+  // Download each required file
+  for (const fileName of PARAKEET_TDT_FILES) {
+    const filePath = path.join(modelDir, fileName);
+    const fileUrl = `${baseUrl}${fileName}`;
+
+    try {
+      await fsPromises.access(filePath);
+      const stats = await fsPromises.stat(filePath);
+      if (stats.size > 0) {
+        logger.info(`✅ Parakeet file cached: ${fileName}`);
+        continue;
+      }
+    } catch {
+      // file doesn't exist, download it
+    }
+
+    logger.info(`📥 Downloading parakeet file: ${fileName}`);
+    await performHttpDownload(fileUrl, filePath, downloadKey, progressCallback);
+    logger.info(`✅ Downloaded: ${fileName}`);
+  }
+
+  // Download preprocessor (from a different HuggingFace repo)
+  const preprocessorPath = path.join(modelDir, "preprocessor.onnx");
+  try {
+    await fsPromises.access(preprocessorPath);
+    const stats = await fsPromises.stat(preprocessorPath);
+    if (stats.size > 0) {
+      logger.info(`✅ Parakeet preprocessor cached`);
+    } else {
+      throw new Error("empty file");
+    }
+  } catch {
+    logger.info(`📥 Downloading parakeet preprocessor`);
+    await performHttpDownload(
+      PARAKEET_TDT_PREPROCESSOR_URL,
+      preprocessorPath,
+      downloadKey,
+      progressCallback,
+    );
+    logger.info(`✅ Downloaded: preprocessor.onnx`);
+  }
+
+  // Return path to the encoder file (used as modelPath by the SDK)
+  return path.join(modelDir, "encoder-model.onnx");
+}
+
 async function downloadShardedModelFromHttp(
   shardUrl: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
