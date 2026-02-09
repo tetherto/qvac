@@ -151,7 +151,7 @@ class PythonTTSRunner:
             logger.info(f"Using shared eSpeak data: {ESPEAK_DATA_PATH}")
         else:
             logger.warning(f"Shared eSpeak data not found at {ESPEAK_DATA_PATH}")
-            logger.warning("Run setup.js first to download shared data!")
+            logger.warning("Run npm run setup in ../server first to download shared data!")
     
     def is_model_loaded(self, model_path: str, language: str) -> bool:
         """Check if the requested model is already loaded"""

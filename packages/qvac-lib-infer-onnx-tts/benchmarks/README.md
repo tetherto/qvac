@@ -14,24 +14,17 @@ A benchmark suite comparing **TTS ONNX Addon** (@qvac/tts-onnx) against **Python
 
 ### 1. Install Server Dependencies & Download Resources
 
-**Piper TTS (default config):**
+**Piper TTS:**
 ```bash
 cd server
 npm install
-npm run setup  # Downloads eSpeak-ng data and Piper models (uses config/config.yaml)
-```
-
-**Piper TTS using TTS config explicitly:**
-```bash
-npm run setup:tts  # Uses config/config-tts.yaml for model language etc.
+npm run setup   # or: npm run setup:tts — downloads eSpeak-ng data and Piper models (uses config/config-tts.yaml)
 ```
 
 **Chatterbox TTS:**
 ```bash
 npm run setup:chatterbox  # Downloads Chatterbox ONNX models (uses config/config-chatterbox.yaml)
 ```
-
-You can also use a specific config via env: `BENCHMARK_CONFIG=config-tts.yaml npm run setup` (or `bare setup.js`).
 
 ### 2. Install Python Dependencies
 
@@ -250,8 +243,8 @@ The benchmark uses [LJSpeech](https://huggingface.co/datasets/lj_speech) from Hu
 ```
 benchmarks/
 ├── server/                  # Node.js addon server (port 8080)
-│   ├── setup.js            # Downloads Piper resources (config via BENCHMARK_CONFIG)
-│   ├── chatterbox-setup.js  # Downloads Chatterbox models
+│   ├── tts-setup.js        # Piper TTS: eSpeak-ng + models (config-tts.yaml)
+│   ├── chatterbox-setup.js # Chatterbox: ONNX models only
 │   └── src/                # Server implementation (/synthesize, /synthesize-chatterbox)
 ├── python-server/           # Python native server (port 8081)
 │   ├── requirements.txt    # Piper TTS

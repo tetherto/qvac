@@ -10,7 +10,7 @@ const BENCHMARKS_DIR = path.join(__dirname, '..')
 const SHARED_DATA_DIR = path.join(BENCHMARKS_DIR, 'shared-data')
 const ESPEAK_DATA_PATH = path.join(SHARED_DATA_DIR, 'espeak-ng-data')
 const MODELS_PATH = path.join(SHARED_DATA_DIR, 'models')
-const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', process.env.BENCHMARK_CONFIG || 'config.yaml')
+const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', 'config-tts.yaml')
 
 // Load configuration
 let config
@@ -18,7 +18,7 @@ try {
   const configContent = fs.readFileSync(CONFIG_PATH, 'utf8')
   config = yaml.parse(configContent)
 } catch (err) {
-  console.error('Failed to load config:', CONFIG_PATH, err)
+  console.error('Failed to load config-tts.yaml:', err)
   process.exit(1)
 }
 
@@ -49,7 +49,7 @@ function getModelNameForLanguage (language) {
     case 'fr-fr':
     case 'fr':
       return 'fr_FR-siwis-medium'
-    
+
     case 'hi-in':
     case 'hi':
       return 'hi_IN-rohan-medium'
@@ -65,7 +65,7 @@ function getModelNameForLanguage (language) {
     case 'ca-es':
     case 'ca':
       return 'ca_ES-upc_ona-medium'
-    
+
     case 'cs-cz':
     case 'cs':
       return 'cs_CZ-jirka-medium'
@@ -73,7 +73,7 @@ function getModelNameForLanguage (language) {
     case 'cy-gb':
     case 'cy':
       return 'cy_GB-gwryw_gogleddol-medium'
-    
+
     case 'da-dk':
     case 'da':
       return 'da_DK-talesyntese-medium'
@@ -81,7 +81,7 @@ function getModelNameForLanguage (language) {
     case 'el-gr':
     case 'el':
       return 'el_GR-rapunzelina-medium'
-    
+
     case 'fa-ir':
     case 'fa':
       return 'fa_IR-reza_ibrahim-medium'
@@ -109,15 +109,15 @@ function getModelNameForLanguage (language) {
     case 'kk-kz':
     case 'kk':
       return 'kk_KZ-issai-high'
-    
+
     case 'lb-lu':
     case 'lb':
       return 'lb_LU-marylux-medium'
-    
+
     case 'lv-lv':
     case 'lv':
       return 'lv_LV-aivars-medium'
-    
+
     case 'ml-in':
     case 'ml':
       return 'ml_IN-meera-medium'
@@ -449,7 +449,7 @@ async function setup () {
   console.log('\nNext steps:')
   console.log('  1. Start Node.js server:  npm start')
   console.log('  2. Start Python server:   cd ../python-server && python main.py')
-  console.log('  3. Run benchmark:         cd ../client && python -m src.tts.main')
+  console.log('  3. Run benchmark:         cd ../client && python -m src.tts.main --config config/config-tts.yaml')
   console.log('=================================================\n')
 }
 
