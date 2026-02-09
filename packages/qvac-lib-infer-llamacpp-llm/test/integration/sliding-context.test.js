@@ -23,7 +23,9 @@ const DEFAULT_MODEL = {
 // ── Constants ────────────────────────────────────────────────────────────────
 const N_CTX = 256
 const PROMPT_TOKENS = 44 // STORY_PROMPT tokenizes to 44 tokens with Llama 3.2 1B
-// Free generation slots before first slide: N_CTX - PROMPT_TOKENS = 212
+const FREE_SLOTS = N_CTX - PROMPT_TOKENS
+const SLIDE_PREDICT = isWindowsX64 ? 256 : 512
+const MANY_SLIDES_PREDICT = isWindowsX64 ? 384 : 1024
 
 // Prompt designed to elicit long output so generation hits the context limit
 const STORY_PROMPT = [
@@ -128,33 +130,42 @@ function countPrefillDiscardLogs (logs) {
   ).length
 }
 
-// n_discarded=32, n_predict=512
-// slides = ceil((512 - 212) / 32) = ceil(300/32) = 10
+function expectedSlides (nPredict, nDiscarded) {
+  if (nDiscarded <= 0) return 0
+  const extra = nPredict - FREE_SLOTS
+  if (extra <= 0) return 0
+  const clampedDiscard = Math.min(nDiscarded, FREE_SLOTS - 1)
+  return Math.ceil(extra / clampedDiscard)
+}
+
+// n_discarded=32, n_predict=SLIDE_PREDICT
 test('Basic generation sliding', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '512',
+    n_predict: String(SLIDE_PREDICT),
     n_discarded: '32'
   })
 
   const { stats } = await runAndCollect(model, STORY_PROMPT)
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
-  t.is(stats.generatedTokens, 512, 'model generated exactly n_predict tokens')
+  t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
 
   const discardCount = countDiscardLogs(logs)
-  t.is(discardCount, 10, 'exact slide count: ceil(300/32) = 10')
+  t.is(
+    discardCount,
+    expectedSlides(SLIDE_PREDICT, 32),
+    'slide count matches expected n_predict / n_discarded'
+  )
 })
 
-// n_discarded=0, n_predict=512
+// n_discarded=0, n_predict=SLIDE_PREDICT
 test('Generation fails with context overflow when sliding disabled', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '512',
+    n_predict: String(SLIDE_PREDICT),
     n_discarded: '0'
   })
 
@@ -175,89 +186,102 @@ test('Generation fails with context overflow when sliding disabled', {
   await new Promise(resolve => setTimeout(resolve, 10000))
 })
 
-// n_discarded=16, n_predict=1024
-// slides = ceil((1024 - 212) / 16) = ceil(812/16) = 51
+// n_discarded=16, n_predict=MANY_SLIDES_PREDICT
 test('Many slides with small n_discarded', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '1024',
+    n_predict: String(MANY_SLIDES_PREDICT),
     n_discarded: '16'
   })
 
   const { stats } = await runAndCollect(model, STORY_PROMPT)
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
-  t.is(stats.generatedTokens, 1024, 'model generated exactly n_predict tokens')
+  t.is(stats.generatedTokens, MANY_SLIDES_PREDICT, 'model generated exactly n_predict tokens')
 
   const discardCount = countDiscardLogs(logs)
-  t.is(discardCount, 51, 'exact slide count: ceil(812/16) = 51')
+  t.is(
+    discardCount,
+    expectedSlides(MANY_SLIDES_PREDICT, 16),
+    'slide count matches expected n_predict / n_discarded'
+  )
 })
 
-// n_discarded=99999, clamped to n_ctx - firstMsgTokens - 1 = 256 - 44 - 1 = 211
-// slides = ceil((512 - 212) / 211) = ceil(300/211) = 2
+// n_discarded=99999, clamped to FREE_SLOTS - 1
 test('Large n_discarded is clamped to fit available context space', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '512',
+    n_predict: String(SLIDE_PREDICT),
     n_discarded: '99999'
   })
 
   const { stats } = await runAndCollect(model, STORY_PROMPT)
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
-  t.is(stats.generatedTokens, 512, 'model generated exactly n_predict tokens')
+  t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
 
   const discardCount = countDiscardLogs(logs)
-  t.is(discardCount, 2, 'exact slide count: ceil(300/211) = 2 (clamped n_discarded)')
+  t.is(
+    discardCount,
+    expectedSlides(SLIDE_PREDICT, 99999),
+    'slide count matches expected n_predict / clamped n_discarded'
+  )
 })
 
-// n_discarded=32, n_predict=512
-// Each run: 10 slides: total after two runs = 20
+// n_discarded=32, n_predict=SLIDE_PREDICT
 test('Sliding context persists across consecutive inference runs: total = 20 slides', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '512',
+    n_predict: String(SLIDE_PREDICT),
     n_discarded: '32'
   })
 
   const first = await runAndCollect(model, STORY_PROMPT)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
-  t.is(first.stats.generatedTokens, 512, 'first run: generated exactly n_predict tokens')
+  t.is(first.stats.generatedTokens, SLIDE_PREDICT, 'first run: generated exactly n_predict tokens')
 
   const discardCountAfterFirst = countDiscardLogs(logs)
-  t.is(discardCountAfterFirst, 10, 'first run: 10 slides')
+  t.is(
+    discardCountAfterFirst,
+    expectedSlides(SLIDE_PREDICT, 32),
+    'first run: slide count matches expected'
+  )
 
   const second = await runAndCollect(model, STORY_PROMPT)
   t.is(second.stats.promptTokens, PROMPT_TOKENS, 'second run: prompt tokens match')
-  t.is(second.stats.generatedTokens, 512, 'second run: generated exactly n_predict tokens')
+  t.is(second.stats.generatedTokens, SLIDE_PREDICT, 'second run: generated exactly n_predict tokens')
 
   const discardCountAfterSecond = countDiscardLogs(logs)
-  t.is(discardCountAfterSecond, 20, 'total after both runs = 20 slides')
+  t.is(
+    discardCountAfterSecond,
+    expectedSlides(SLIDE_PREDICT, 32) * 2,
+    'total after both runs matches expected slides'
+  )
 })
 
-// slides = ceil((512 - 212) / 1) = 300
+// n_discarded=1, n_predict=SLIDE_PREDICT
 test('Sliding context works with minimal n_discarded of 1', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const { model, logs } = await setupModel(t, {
-    n_predict: '512',
+    n_predict: String(SLIDE_PREDICT),
     n_discarded: '1'
   })
 
   const { stats } = await runAndCollect(model, STORY_PROMPT)
 
   t.is(stats.promptTokens, PROMPT_TOKENS, `prompt tokenizes to ${PROMPT_TOKENS} tokens`)
-  t.is(stats.generatedTokens, 512, 'model generated exactly n_predict tokens')
+  t.is(stats.generatedTokens, SLIDE_PREDICT, 'model generated exactly n_predict tokens')
 
   const discardCount = countDiscardLogs(logs)
-  t.is(discardCount, 300, 'exact slide count: ceil(300/1) = 300')
+  t.is(
+    discardCount,
+    expectedSlides(SLIDE_PREDICT, 1),
+    'slide count matches expected n_predict / n_discarded'
+  )
 })
 
 // n_discarded=64, n_predict=200
@@ -268,8 +292,7 @@ test('Sliding context works with minimal n_discarded of 1', {
 //   n_past + nTokens - n_discarded = ~264 - 64 = ~200 < 256
 // :> discards n_discarded (64) tokens after first message
 test('Cached follow-up discards middle tokens to fit new message', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -307,8 +330,7 @@ test('Cached follow-up discards middle tokens to fit new message', {
 //   n_discarded = 211 > 0
 // :> removes all middle tokens from pos 44 to 244
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -342,8 +364,7 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
 //   full middle discard: leftTokens >= 0 (first condition fails)
 // :> no recovery possible, throws ContextOverflow
 test('Cached follow-up overflows when sliding is disabled and context is full', {
-  timeout: 900_000,
-  skip: isWindowsX64
+  timeout: 900_000
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
