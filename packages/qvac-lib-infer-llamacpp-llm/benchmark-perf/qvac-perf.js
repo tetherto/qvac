@@ -74,6 +74,14 @@ const resolveParamsToRun = (config, paramsArg) => {
   return paramsArg.split(',').map(p => p.trim()).filter(Boolean)
 }
 
+const getSupportedQuantizations = (config, platform) => {
+  const all = config.params?.quantization || []
+  if (platform === 'darwin') {
+    return all.includes('F16') ? ['F16'] : []
+  }
+  return all
+}
+
 const resolveParamValue = (value, config) => {
   if (value === '{max}') {
     return String(os.cpus().length)
@@ -242,6 +250,8 @@ const run = async () => {
   const reps = Number.isFinite(args.reps) ? args.reps : config.reps
   const outputPath = resolveOutputPath(args.output, config.baseline.modelId)
   const addonSpec = args.addon
+  const platform = os.platform()
+  const supportedQuantizations = getSupportedQuantizations(config, platform)
   const modelsToRun = config.models || []
   if (modelsToRun.length === 0) {
     throw new Error('perf-config.json must include at least one model in "models"')
@@ -249,18 +259,28 @@ const run = async () => {
 
   for (const modelConfig of modelsToRun) {
     for (const paramName of paramsToRun) {
-      const values = config.params[paramName]
+      let values = config.params[paramName]
       if (!values) {
         console.warn(`Unknown param: ${paramName}, skipping`)
         continue
       }
+      if (paramName === 'quantization') {
+        values = supportedQuantizations
+        if (!values.length) {
+          console.warn(`No supported quantizations for platform ${platform}, skipping`)
+          continue
+        }
+      }
+      const baselineQuantization = supportedQuantizations.includes(config.baseline.quantization)
+        ? config.baseline.quantization
+        : (supportedQuantizations[0] || config.baseline.quantization)
       for (const rawValue of values) {
         const value = rawValue === null ? undefined : rawValue
         for (const prompt of config.prompts) {
           for (let rep = 1; rep <= reps; rep++) {
             try {
               await runOnce({
-                baseline: { ...config.baseline, quantization: config.baseline.quantization, modelId: modelConfig.id },
+                baseline: { ...config.baseline, quantization: baselineQuantization, modelId: modelConfig.id },
                 modelConfig,
                 prompt,
                 paramName,

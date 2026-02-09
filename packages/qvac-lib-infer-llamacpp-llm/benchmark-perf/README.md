@@ -63,6 +63,8 @@ If you use gated models, set `HF_TOKEN` or pass `--hf-token`/`-HfToken`.
 
 Python 3.10+ is required for the PyTorch baseline.
 
+On macOS, the PyTorch baseline only supports `F16` quantization. The runner limits both QVAC and PyTorch to `F16` on macOS to keep comparisons fair; Q4/Q8 should be run on Linux. This aligns with bitsandbytes’ macOS support being CPU-only/experimental (no CUDA GPU quantization). See the bitsandbytes installation guide: https://huggingface.co/docs/bitsandbytes/en/installation
+
 ## Analysis
 
 `analysis/analyze.py` reads all JSONL results in `benchmark-perf/results` and produces a set of plots plus CSV summaries that help compare parameters across platforms and implementations.

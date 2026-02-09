@@ -51,6 +51,21 @@ def resolve_param_value(value):
     return value
 
 
+def is_quantization_supported(quantization):
+    platform = os.uname().sysname.lower() if hasattr(os, "uname") else ""
+    if platform == "darwin" and quantization in ("bnb-4bit", "bnb-8bit"):
+        return False
+    return True
+
+
+def supported_quantization_values(config):
+    platform = os.uname().sysname.lower() if hasattr(os, "uname") else ""
+    values = config.get("params", {}).get("quantization", [])
+    if platform == "darwin":
+        return [v for v in values if v == "F16"]
+    return values
+
+
 def create_run_id():
     return f"{int(time.time() * 1000)}-{os.urandom(4).hex()}"
 
@@ -182,6 +197,7 @@ def main():
     hf_token = args.hf_token or os.getenv("HF_TOKEN")
     if hf_token:
         os.environ["HF_TOKEN"] = hf_token
+    quantization_values = supported_quantization_values(config)
 
     for model_config in models_to_run:
         for param_name in params_to_run:
@@ -189,13 +205,30 @@ def main():
             if not values:
                 print(f"Unknown param: {param_name}, skipping")
                 continue
+            if param_name == "quantization":
+                values = quantization_values
+                if not values:
+                    print("No supported quantizations for this platform, skipping")
+                    continue
             for raw_value in values:
                 value = None if raw_value is None else raw_value
                 for prompt in config["prompts"]:
                     for rep in range(1, reps + 1):
+                        baseline_quantization = config["baseline"]["quantization"]
+                        if quantization_values and baseline_quantization not in quantization_values:
+                            baseline_quantization = quantization_values[0]
+                        model_variant = value if param_name == "quantization" else config["baseline"]["quantization"]
+                        variant_config = model_config.get("torch", {}).get(model_variant)
+                        if not variant_config:
+                            print(f"Missing PyTorch model variant config for {model_variant}, skipping")
+                            continue
+                        quantization = variant_config.get("quantization", "fp16")
+                        if not is_quantization_supported(quantization):
+                            print(f"Skipping {model_config['id']} {model_variant} on this platform (unsupported quantization)")
+                            continue
                         try:
                             run_once(
-                                baseline={**config["baseline"], "modelId": model_config["id"]},
+                                baseline={**config["baseline"], "quantization": baseline_quantization, "modelId": model_config["id"]},
                                 model_config=model_config,
                                 prompt=prompt,
                                 param_name=param_name,
