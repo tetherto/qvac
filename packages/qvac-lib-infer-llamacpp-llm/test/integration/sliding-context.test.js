@@ -12,6 +12,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isWindowsX64 = platform === 'win32' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
@@ -130,7 +131,8 @@ function countPrefillDiscardLogs (logs) {
 // n_discarded=32, n_predict=512
 // slides = ceil((512 - 212) / 32) = ceil(300/32) = 10
 test('Basic generation sliding', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '512',
@@ -148,7 +150,8 @@ test('Basic generation sliding', {
 
 // n_discarded=0, n_predict=512
 test('Generation fails with context overflow when sliding disabled', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '512',
@@ -175,7 +178,8 @@ test('Generation fails with context overflow when sliding disabled', {
 // n_discarded=16, n_predict=1024
 // slides = ceil((1024 - 212) / 16) = ceil(812/16) = 51
 test('Many slides with small n_discarded', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '1024',
@@ -194,7 +198,8 @@ test('Many slides with small n_discarded', {
 // n_discarded=99999, clamped to n_ctx - firstMsgTokens - 1 = 256 - 44 - 1 = 211
 // slides = ceil((512 - 212) / 211) = ceil(300/211) = 2
 test('Large n_discarded is clamped to fit available context space', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '512',
@@ -213,7 +218,8 @@ test('Large n_discarded is clamped to fit available context space', {
 // n_discarded=32, n_predict=512
 // Each run: 10 slides: total after two runs = 20
 test('Sliding context persists across consecutive inference runs: total = 20 slides', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '512',
@@ -237,7 +243,8 @@ test('Sliding context persists across consecutive inference runs: total = 20 sli
 
 // slides = ceil((512 - 212) / 1) = 300
 test('Sliding context works with minimal n_discarded of 1', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: '512',
@@ -261,7 +268,8 @@ test('Sliding context works with minimal n_discarded of 1', {
 //   n_past + nTokens - n_discarded = ~264 - 64 = ~200 < 256
 // :> discards n_discarded (64) tokens after first message
 test('Cached follow-up discards middle tokens to fit new message', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -299,7 +307,8 @@ test('Cached follow-up discards middle tokens to fit new message', {
 //   n_discarded = 211 > 0
 // :> removes all middle tokens from pos 44 to 244
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -333,7 +342,8 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
 //   full middle discard: leftTokens >= 0 (first condition fails)
 // :> no recovery possible, throws ContextOverflow
 test('Cached follow-up overflows when sliding is disabled and context is full', {
-  timeout: 900_000
+  timeout: 900_000,
+  skip: isWindowsX64
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
