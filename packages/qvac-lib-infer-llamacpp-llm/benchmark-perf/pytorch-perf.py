@@ -8,6 +8,9 @@ from datetime import datetime
 import psutil
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from transformers.utils import logging as hf_logging
+
+hf_logging.set_verbosity_error()
 
 
 def now_ms():
@@ -88,7 +91,7 @@ def load_torch_model(model_id, quantization, hf_token=None):
     elif quantization == "bnb-8bit":
         kwargs["load_in_8bit"] = True
     else:
-        kwargs["torch_dtype"] = torch.float16
+        kwargs["dtype"] = torch.float16
     model = AutoModelForCausalLM.from_pretrained(model_id, token=hf_token, **kwargs)
     tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
     return model, tokenizer
@@ -115,12 +118,16 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
     memory_load = capture_memory()
 
     prompt_text = stringify_prompt(prompt["messages"])
-    input_ids = tokenizer(prompt_text, return_tensors="pt").input_ids.to(model.device)
+    inputs = tokenizer(prompt_text, return_tensors="pt")
+    input_ids = inputs.input_ids.to(model.device)
+    attention_mask = inputs.attention_mask.to(model.device) if hasattr(inputs, "attention_mask") else None
     prompt_tokens = input_ids.shape[-1]
 
     streamer = TextIteratorStreamer(tokenizer, skip_prompt=True)
     max_new_tokens = int(config.get("n_predict", "256"))
     gen_kwargs = dict(input_ids=input_ids, max_new_tokens=max_new_tokens, streamer=streamer, do_sample=False)
+    if attention_mask is not None:
+        gen_kwargs["attention_mask"] = attention_mask
 
     start_time = time.time()
     first_token_ms = None

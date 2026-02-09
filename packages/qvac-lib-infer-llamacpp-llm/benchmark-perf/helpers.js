@@ -36,13 +36,17 @@ async function downloadFile (url, dest, headers = {}) {
             return safeReject(unlinkErr)
           }
 
-          let redirectUrl = response.headers.location
-          if (redirectUrl.startsWith('/')) {
+          const redirectUrl = response.headers.location
+          if (!redirectUrl) {
+            return safeReject(new Error(`Redirect without location header from ${url}`))
+          }
+          let resolvedUrl = redirectUrl
+          if (resolvedUrl.startsWith('/')) {
             const originalUrl = new URL(url)
-            redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
+            resolvedUrl = `${originalUrl.protocol}//${originalUrl.host}${resolvedUrl}`
           }
 
-          downloadFile(redirectUrl, dest, headers)
+          downloadFile(resolvedUrl, dest, headers)
             .then(safeResolve)
             .catch(safeReject)
         })

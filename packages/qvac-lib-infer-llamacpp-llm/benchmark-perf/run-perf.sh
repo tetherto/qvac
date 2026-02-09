@@ -75,6 +75,12 @@ if ! "${VENV_PY}" -c "import psutil" >/dev/null 2>&1; then
   echo "==> Installing Python deps"
   "${VENV_PY}" -m pip install -r "${PERF_DIR}/requirements.txt"
 fi
+if [[ "${RUN_ANALYSIS}" == "true" ]]; then
+  if ! "${VENV_PY}" -c "import pandas, matplotlib, seaborn, sklearn" >/dev/null 2>&1; then
+    echo "==> Installing analysis deps"
+    "${VENV_PY}" -m pip install -r "${PERF_DIR}/analysis/requirements.txt"
+  fi
+fi
 
 echo "==> Running QVAC perf"
 if [[ -n "${HF_TOKEN}" ]]; then
@@ -95,5 +101,5 @@ fi
 
 if [[ "${RUN_ANALYSIS}" == "true" ]]; then
   echo "==> Running analysis"
-  python3 "${PERF_DIR}/analysis/analyze.py" --input "${PERF_DIR}/results" --output "${PERF_DIR}/analysis/plots"
+  "${VENV_PY}" "${PERF_DIR}/analysis/analyze.py" --input "${PERF_DIR}/results" --output "${PERF_DIR}/analysis/plots"
 fi

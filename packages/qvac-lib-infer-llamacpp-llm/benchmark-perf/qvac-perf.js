@@ -311,5 +311,5 @@ const run = async () => {
 
 run().catch(err => {
   console.error('❌ Error:', err)
-  if (typeof process !== 'undefined') process.exit(1)
+  if (bareProcess?.exit) bareProcess.exit(1)
 })

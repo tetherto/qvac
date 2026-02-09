@@ -79,7 +79,8 @@ const parseJudgeResponse = (text) => {
 }
 
 const run = async () => {
-  const args = parseArgs(process.argv)
+  const argv = bareProcess?.argv || (typeof process !== 'undefined' ? process.argv : [])
+  const args = parseArgs(argv)
   if (!args.input) {
     throw new Error('Missing --input JSONL file')
   }

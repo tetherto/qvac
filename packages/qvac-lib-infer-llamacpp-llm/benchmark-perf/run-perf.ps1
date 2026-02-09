@@ -37,6 +37,14 @@ try {
   Write-Host "==> Installing Python deps"
   & $VenvPython -m pip install -r (Join-Path $PerfDir "benchmark-perf/requirements.txt")
 }
+if ($Analyze) {
+  try {
+    & $VenvPython -c "import pandas, matplotlib, seaborn, sklearn" | Out-Null
+  } catch {
+    Write-Host "==> Installing analysis deps"
+    & $VenvPython -m pip install -r (Join-Path $PerfDir "benchmark-perf/analysis/requirements.txt")
+  }
+}
 
 Write-Host "==> Running QVAC perf"
 $addonArgs = @()
