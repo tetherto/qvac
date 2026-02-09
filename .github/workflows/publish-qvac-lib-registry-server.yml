@@ -2,7 +2,7 @@ name: Publish (Qvac-lib-registry-server)
 
 on:
   pull_request:
-   paths:
+    paths:
       - "packages/qvac-lib-registry-server/shared/**"
       - "packages/qvac-lib-registry-server/client/**"
   push:
@@ -51,19 +51,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          BEFORE_SHA="${{ github.event.before }}"
-          AFTER_SHA="${{ github.sha }}"
+          PKG_DIR="${PKG_DIR}"
+          EVENT="${GITHUB_EVENT_NAME}"
 
-          # workflow_dispatch has no "before". Also guard against the all-zero SHA.
-          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
-            BEFORE_SHA="$(git rev-parse "${AFTER_SHA}^" 2>/dev/null || true)"
-          fi
+          if [[ "${EVENT}" == "pull_request" ]]; then
+            # PR diff: base..head
+            BEFORE_SHA="${{ github.event.pull_request.base.sha }}"
+            AFTER_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # push/workflow_dispatch diff: before..sha
+            BEFORE_SHA="${{ github.event.before }}"
+            AFTER_SHA="${{ github.sha }}"
 
-          # If we still couldn't resolve BEFORE_SHA (rare), treat as changed to allow manual runs.
-          if [[ -z "${BEFORE_SHA}" ]]; then
-            echo "schema=true" >> "$GITHUB_OUTPUT"
-            echo "client=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            # workflow_dispatch has no "before". Also guard against the all-zero SHA.
+            if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+              BEFORE_SHA="$(git rev-parse "${AFTER_SHA}^" 2>/dev/null || true)"
+            fi
+
+            # If we still couldn't resolve BEFORE_SHA (rare), treat as changed to allow manual runs.
+            if [[ -z "${BEFORE_SHA}" ]]; then
+              echo "schema=true" >> "$GITHUB_OUTPUT"
+              echo "client=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
 
           if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- "${PKG_DIR}/shared/" | grep -q .; then
@@ -126,10 +136,11 @@ jobs:
 
   publish-schema-gpr:
     needs: [detect-changes, publish-logic]
-    if:   needs.detect-changes.outputs.schema_changed == 'true' &&
-          (needs.publish-logic.outputs.publish_feature == 'true' ||
-          needs.publish-logic.outputs.publish_main == 'true' ||
-          needs.publish-logic.outputs.publish_tmp == 'true')
+    if: |
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      (needs.publish-logic.outputs.publish_feature == 'true' ||
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,7 +192,18 @@ jobs:
           tag: "latest"
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
-          workdir:  ${{ env.PKG_DIR }}/shared
+          workdir: ${{ env.PKG_DIR }}/shared
+
+  publish-schema:
+    name: Publish Schema (meta)
+    needs: [publish-schema-gpr, publish-schema-npm]
+    if: |
+      always() &&
+      (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
+      (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Schema publish completed or skipped."
 
   lint-and-test:
     needs: detect-changes
@@ -243,8 +265,8 @@ jobs:
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true')
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -270,7 +292,6 @@ jobs:
           workdir: ${{ env.PKG_DIR }}/client
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: ${{ env.NAME_SUFFIX }}
-
 
   publish-client-npm:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
@@ -306,4 +327,4 @@ jobs:
           tag: "latest"
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
-          workdir:  ${{ env.PKG_DIR }}/client
+          workdir: ${{ env.PKG_DIR }}/client
