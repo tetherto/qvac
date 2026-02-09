@@ -176,7 +176,18 @@ class LlmLlamacpp extends BaseInference {
       if (typeof data === 'string') {
         try {
           const obj = JSON.parse(data)
+          if (obj?.type === 'FinetuningStarted') {
+            if (this._finetuneStartedResolve) {
+              this._finetuneStartedResolve({ started: true })
+              this._finetuneStartedResolve = null
+            }
+            return
+          }
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
+            if (this._finetuneStartedResolve) {
+              this._finetuneStartedResolve({ started: false })
+              this._finetuneStartedResolve = null
+            }
             this._finetuneCompletionResolve(obj.status)
             if ((obj.status === 'IDLE' || obj.status === 'ERROR')) {
               this.addon?.resolvePauseComplete?.()
@@ -184,6 +195,10 @@ class LlmLlamacpp extends BaseInference {
             return
           }
           if (obj?.type === 'FinetunePaused') {
+            if (this._finetuneStartedResolve) {
+              this._finetuneStartedResolve({ started: false })
+              this._finetuneStartedResolve = null
+            }
             this.addon?.resolvePauseComplete?.()
             if (this._finetuneCompletionResolve) {
               this._finetuneCompletionResolve('PAUSED')
@@ -386,6 +401,11 @@ class LlmLlamacpp extends BaseInference {
         resolveCompletion = resolve
       })
       this._finetuneCompletionResolve = resolveCompletion
+      let resolveStarted
+      this._finetuneStartedPromise = new Promise((resolve) => {
+        resolveStarted = resolve
+      })
+      this._finetuneStartedResolve = resolveStarted
       try {
         if (resume) {
           this.logger?.info?.('Calling addon.activate() to resume...')
@@ -400,6 +420,7 @@ class LlmLlamacpp extends BaseInference {
         return { status: finalStatus }
       } finally {
         this._finetuneCompletionResolve = null
+        this._finetuneStartedResolve = null
       }
     })
   }
@@ -423,6 +444,10 @@ class LlmLlamacpp extends BaseInference {
    * Pause finetuning. Saves checkpoint and pauses training.
    * @returns {Promise<void>}
    */
+  getFinetuningStartedPromise () {
+    return this._finetuneStartedPromise ?? Promise.resolve({ started: false })
+  }
+
   async pauseFinetune () {
     if (!this.addon) {
       throw new Error('Addon not initialized')

@@ -57,28 +57,18 @@ struct TrainingCheckpointState {
   uint32_t targetModules = 0;
   LoraLrSchedulerState* scheduler = nullptr;
   std::function<void(const std::string&)> logFn;
-  // Pause/resume control
   std::atomic<bool> pauseRequested{false};
   std::atomic<bool> shouldExit{false};
-  std::atomic<bool> pauseCheckpointSaved{
-      false}; // Flag to prevent multiple saves
+  std::atomic<bool> pauseCheckpointSaved{false};
   std::filesystem::path pauseCheckpointPath;
   std::atomic<bool> isIdle{true};
   std::atomic<bool> isFinetuning{false};
   std::atomic<bool> isPaused{false};
-  // Resume verification
-  int64_t expectedFirstBatchAfterResume =
-      -1; // Set when resuming to verify first batch
-  bool firstBatchAfterResumeLogged =
-      false; // Track if we've logged the first batch
-  // Mid-epoch resume support
-  int64_t batchOffsetWithinEpoch =
-      -1; // Batch index within epoch to resume from (0-indexed), -1 means start
-          // from beginning
-  bool skippingBatches =
-      false; // Track if we're currently skipping batches to reach resume point
-  bool finetuningStartedEmitted =
-      false; // Emit FinetuningStarted once when first batch is processed
+  int64_t expectedFirstBatchAfterResume = -1;
+  bool firstBatchAfterResumeLogged = false;
+  int64_t batchOffsetWithinEpoch = -1;
+  bool skippingBatches = false;
+  bool finetuningStartedEmitted = false;
 };
 
 // Dataset preparation functions
@@ -113,8 +103,6 @@ bool loadPauseCheckpoint(
     const std::filesystem::path& checkpointPath, llama_adapter_lora* adapter,
     llama_model* model, llama_context* ctx, ggml_opt_context_t* optCtx,
     CheckpointMetadata& meta);
-// Note: optCtx parameter is kept for API compatibility but optimizer loading
-// is handled separately via llama_opt_init with checkpoint_path parameter
 bool pauseCheckpointExists(const std::filesystem::path& checkpointDir);
 void clearPauseCheckpoint(const std::filesystem::path& checkpointDir);
 void optEpochCallback(
@@ -122,13 +110,11 @@ void optEpochCallback(
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState);
 
-// Wrapper for callback that uses global state (for compatibility)
 void optEpochCallbackWrapper(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs);
 
-// Global checkpoint state management (for callback compatibility)
 void setGlobalCheckpointState(TrainingCheckpointState* state);
 TrainingCheckpointState* getGlobalCheckpointState();
 void clearGlobalCheckpointState();

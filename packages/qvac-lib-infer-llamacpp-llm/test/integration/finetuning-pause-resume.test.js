@@ -8,7 +8,6 @@ const {
   ensureModel,
   setupPauseResumeTestData,
   getDefaultFinetuneConfig,
-  waitForFinetuningStart,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
@@ -90,9 +89,10 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
   await model.load()
 
   const finetuneTask = model.finetune(finetuneConfig)
-
-  const state = await waitForFinetuningStart(model, { maxAttempts: 60, pollIntervalMs: 250 })
-  if (state === 'IDLE') {
+  // Yield so finetune callback creates _finetuneStartedPromise before we await it
+  await new Promise(r => setImmediate(r))
+  const started = await model.getFinetuningStartedPromise()
+  if (!started.started) {
     return handleEarlyCompletion(t, finetuneTask, checkpointDir)
   }
 

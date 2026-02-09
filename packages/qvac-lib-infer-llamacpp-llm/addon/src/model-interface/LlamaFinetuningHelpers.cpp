@@ -25,8 +25,6 @@
 
 namespace llama_finetuning_helpers {
 
-// Global checkpoint state for callback (thread-local would be better but this
-// matches current implementation)
 static TrainingCheckpointState* gTrainingCheckpointState = nullptr;
 
 std::string readTextFile(const std::string& path) {
@@ -242,10 +240,9 @@ findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir) {
 
   if (!std::filesystem::exists(checkpointDir) ||
       !std::filesystem::is_directory(checkpointDir)) {
-    return latestPath; // Return empty path if directory doesn't exist
+    return latestPath;
   }
 
-  // Scan for all pause_checkpoint_step_* directories
   for (const auto& entry : std::filesystem::directory_iterator(checkpointDir)) {
     if (!entry.is_directory()) {
       continue;
@@ -254,10 +251,8 @@ findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir) {
     const std::string dirName = entry.path().filename().string();
     const std::string prefix = "pause_checkpoint_step_";
 
-    // Check if directory matches pattern
     if (dirName.size() > prefix.size() &&
         dirName.substr(0, prefix.size()) == prefix) {
-      // Extract step number from directory name
       const std::string stepStr = dirName.substr(prefix.size());
       try {
         int64_t step = std::stoll(stepStr);
@@ -266,13 +261,12 @@ findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir) {
           latestPath = entry.path();
         }
       } catch (const std::exception&) {
-        // Invalid step number, skip this directory
         continue;
       }
     }
   }
 
-  return latestPath; // Returns empty path if no pause checkpoint found
+  return latestPath;
 }
 
 bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
@@ -341,10 +335,6 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
     state.logFn(msg.str());
   }
 
-  // Note: Checkpoint save is already logged by llama.cpp's progress bar
-  // callback (ggml_opt_epoch_callback_progress_bar), so we don't duplicate the
-  // log here
-
   return true;
 }
 
@@ -394,7 +384,6 @@ bool savePauseCheckpoint(
     return false;
   }
 
-  // Use step-based naming: pause_checkpoint_step_{globalStep}
   const auto pauseDir =
       pauseCheckpointDirectory(state.checkpointDir, state.globalStep);
   std::error_code ec;
@@ -453,7 +442,6 @@ bool savePauseCheckpoint(
     state.logFn(msg.str());
   }
 
-  // Set pauseCheckpointPath so it's available for logging
   state.pauseCheckpointPath = pauseDir;
 
   if (state.logFn) {
@@ -473,30 +461,21 @@ bool loadPauseCheckpoint(
     return false;
   }
 
-  // Load metadata to verify checkpoint is valid
   const auto metadataPath = checkpointPath / "metadata.json";
   if (!parseCheckpointMetadata(metadataPath, meta)) {
     return false;
   }
 
-  // Note: Adapter state is loaded via llama_opt_init with checkpoint_path
-  // The checkpoint directory is passed to llama_opt_init which loads both
-  // optimizer state and adapter state from the checkpoint directory.
-  // The adapter should be recreated with the same parameters before calling
-  // llama_opt_init with the checkpoint path.
-
   return true;
 }
 
 bool pauseCheckpointExists(const std::filesystem::path& checkpointDir) {
-  // Find the latest pause checkpoint (highest step number)
   const auto pausePath = findLatestPauseCheckpoint(checkpointDir);
   return !pausePath.empty() && std::filesystem::exists(pausePath) &&
          std::filesystem::is_directory(pausePath);
 }
 
 void clearPauseCheckpoint(const std::filesystem::path& checkpointDir) {
-  // Find and clear the latest pause checkpoint
   const auto pausePath = findLatestPauseCheckpoint(checkpointDir);
   if (!pausePath.empty() && std::filesystem::exists(pausePath)) {
     std::error_code ec;
@@ -634,8 +613,6 @@ void optEpochCallback(
   }
 }
 
-// Wrapper function that uses global state (for compatibility with callback
-// signature)
 void optEpochCallbackWrapper(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
@@ -651,7 +628,6 @@ void optEpochCallbackWrapper(
       gTrainingCheckpointState);
 }
 
-// Functions to manage global checkpoint state
 void setGlobalCheckpointState(TrainingCheckpointState* state) {
   gTrainingCheckpointState = state;
 }

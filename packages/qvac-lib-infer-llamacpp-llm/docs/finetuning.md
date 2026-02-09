@@ -97,6 +97,28 @@ Checks atomic bool `isFinetuningRunning()` first; if false, throws. Then calls `
 
 **Related example:** [examples/simple-lora-finetune-pause-resume.js](../examples/simple-lora-finetune-pause-resume.js) — Run with: `bare examples/simple-lora-finetune-pause-resume.js`
 
+### `getFinetuningStartedPromise()`
+
+Returns a promise that resolves when training has started (first batch processed) or when training completes or pauses before that. Use this when you need to wait for training to begin before calling `pauseFinetune()` — otherwise training may finish before the pause is applied.
+
+```js
+const finetuneTask = model.finetune(finetuneOptions)
+// Yield so finetune callback creates the promise
+await new Promise(r => setImmediate(r))
+const started = await model.getFinetuningStartedPromise()
+if (started.started) {
+  // Training is running; safe to pause after a delay
+  await sleep(2500)
+  await model.pauseFinetune()
+  const pauseResult = await finetuneTask  // { status: 'PAUSED' }
+} else {
+  // Training completed or paused before first batch (e.g. small dataset)
+  const result = await finetuneTask
+}
+```
+
+- **Returns**: `Promise<{ started: boolean }>` — `{ started: true }` when the first batch has been processed; `{ started: false }` when training completed or paused before that. If called before `finetune()` has created its internal promise, returns `{ started: false }` immediately (hence the `setImmediate` yield above).
+
 ---
 
 ## Finetuning Parameters
@@ -139,15 +161,16 @@ The finetuning and pause/resume flow uses **atomic flags** and **events** only. 
 | Flow | Mechanism |
 |------|------------|
 | **Completion** | Events `FinetuneComplete` (IDLE/ERROR) and `FinetunePaused` resolve promises |
-| **Is finetuning running?** | Atomic read via `isFinetuningRunning()` (checks `checkpointState` exists and `!shouldExit`) |
-| **Request pause** | `requestPause()` does a single check: if checkpoint state exists, sets `pauseRequested.store(true)` and calls `llama_opt_request_stop()`. Returns immediately (no retry loop) |
-| **Resume** | `shouldResumeFromPause` atomic flag set before calling C++ finetune |
+| **Training started** | Event `FinetuningStarted` emitted when first batch is processed; used by `getFinetuningStartedPromise()` |
+| **Is finetuning running?** | Atomic read via `isFinetuningRunning()` (checks `checkpointState` exists and `isFinetuning.load()`) |
+| **Request pause** | `requestPause()` does a single check: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and calls `llama_opt_request_stop()`. Returns immediately (no retry loop) |
+| **Resume** | `activate()` checks `isPaused`; if true, sets `shouldResumeFromPause` and invokes `finetune()` (spawns C++ finetune thread with `allowResume=true`) |
 
 **Atomic flags in C++:** `pauseRequested`, `shouldExit`, `pauseCheckpointSaved` (in `TrainingCheckpointState`), `shouldResumeFromPause` (in addon).
 
 ### How the JS API Calls the Backend
 
-- **`finetune(opts?, { resume })`** — When `resume: true`, calls `addon.activate()` (which sets `shouldResumeFromPause` and invokes C++ finetune). Otherwise calls `addon.finetune()`. Awaits `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED).
+- **`finetune(opts?, { resume })`** — When `resume: true`, calls `addon.activate()` (which checks `isPaused`, sets `shouldResumeFromPause`, and invokes `finetune()` to spawn the C++ finetune thread with `allowResume=true`). Otherwise calls `addon.finetune()`. Awaits `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED).
 - **`pauseFinetune()`** — Checks atomic bool `isFinetuningRunning()` first; if false, throws. Then calls `addon.pause()` → C++ `requestPause()` sets `pauseRequested` and awaits `FinetunePaused` (checkpoint saved). The finetune promise resolves with `{ status: 'PAUSED' }`.
 
 ### Parameter Notes
@@ -175,8 +198,8 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 3. **Resume** — When `allowResumeFromPause` is true: `findLatestPauseCheckpoint()` locates the latest `pause_checkpoint_step_*` dir; `parseCheckpointMetadata()` loads epoch/step; `configureOptimizer()` passes `checkpoint_path` to `llama_opt_init` to restore optimizer and adapter state.
 4. **Optimizer** — `configureOptimizer()` sets up `llama_opt_params` (AdamW, LoRA param filter, LR scheduler). `schedulerOptimizerParams` provides per-step learning rate.
 5. **Training loop** — `runTrainingLoop()` calls `llama_opt_epoch()` for each epoch. The per-batch callback is `optEpochCallbackWrapper` → `optEpochCallback()`.
-6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json), sets `shouldExit` and `pauseCheckpointSaved`, emits `FinetunePaused`; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
-7. **Pause** — `requestPause()`: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately.
+6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; on first batch, emits `FinetuningStarted` and sets `isFinetuning=true`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json), sets `shouldExit`, `pauseCheckpointSaved`, `isPaused` (and clears `isFinetuning`), emits `FinetunePaused`; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
+7. **Pause** — `requestPause()`: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir`; emits `FinetuneComplete` (IDLE). On error: emits `FinetuneComplete` (ERROR).
 
 **Atomic flags** — `TrainingCheckpointState` holds `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `isIdle`, `isFinetuning`, `isPaused`. These are set at lifecycle transitions (first batch, pause checkpoint saved, completion). `activate()` checks `isPaused` to resume; `isFinetuningRunning()` checks `isFinetuning`. No state derivation. The addon uses `shouldResumeFromPause` to signal resume.
@@ -195,7 +218,7 @@ Use JSONL where each line is a JSON object with a `messages` array. Each message
 ```
 
 - **Roles**: `system`, `user`, `assistant` (and optionally `tool`).
-- **File**: Single `.jsonl` file path (e.g., `./models/small_train_HF.jsonl`).
+- **File**: Single `.jsonl` file path (e.g., `./examples/input/small_train_HF.jsonl`).
 
 ### Plain Text (Causal) — `assistantLossOnly: false`
 
@@ -248,8 +271,8 @@ async function main() {
   await model.load()
 
   const finetuneOptions = {
-    trainDatasetDir: './models/small_train_HF.jsonl',
-    evalDatasetDir: './models/eval_HF.jsonl',
+    trainDatasetDir: './examples/input/small_train_HF.jsonl',
+    evalDatasetDir: './examples/input/eval_HF.jsonl',
     numberOfEpochs: 8,
     learningRate: 1e-5,
     lrMin: 1e-8,
@@ -276,22 +299,30 @@ main().catch(console.error)
 
 ### 2. Pause and Resume
 
-Start finetuning, pause after it begins, then resume and wait for completion.
+Start finetuning, wait for training to begin, pause, then resume and wait for completion. Use `getFinetuningStartedPromise()` to wait for the first batch before pausing; otherwise training may complete before the pause is applied (especially with small datasets).
 
 **Run:** `bare examples/simple-lora-finetune-pause-resume.js`
 
 For multiple pause/resume cycles, see [examples/simple-lora-finetune-multiple-pause-resume.js](../examples/simple-lora-finetune-multiple-pause-resume.js).
 
 ```js
-let finetuneTask = model.finetune(finetuneOptions)
-
-await model.pauseFinetune()
-const pauseResult = await finetuneTask  // { status: 'PAUSED' }
-
-finetuneTask = model.finetune({ resume: true })
-const result = await finetuneTask
-console.log('Finetune completed:', result)
+const finetuneTask = model.finetune(finetuneOptions)
+await new Promise(r => setImmediate(r))  // yield so finetune callback creates promises
+const started = await model.getFinetuningStartedPromise()
+if (started.started) {
+  await sleep(2500)  // train for a few seconds
+  await model.pauseFinetune()
+  const pauseResult = await finetuneTask  // { status: 'PAUSED' }
+  const resumeTask = model.finetune({ resume: true })
+  const result = await resumeTask
+  console.log('Finetune completed:', result)
+} else {
+  const result = await finetuneTask  // completed before first batch
+  console.log('Finetune completed:', result)
+}
 ```
+
+The [simple-lora-finetune-pause-resume.js](../examples/simple-lora-finetune-pause-resume.js) example uses a fixed sleep (`sleep(90000)`) instead of `getFinetuningStartedPromise()` for simplicity.
 
 ### 3. Inference with Finetuned LoRA
 
@@ -402,4 +433,4 @@ Call `finetune({ resume: true })` to resume. The addon automatically finds the l
 
 Run commands assume you are in the package root directory.
 
-**Prerequisites:** Finetuning examples download the model automatically but require training dataset files (`small_train_HF.jsonl`, `eval_HF.jsonl`) in `./models/`. Create them using the [Creating a Chat Dataset](#4-creating-a-chat-dataset) pattern or [test/integration/utils.js](../test/integration/utils.js) `createTestDataset()`. The inference example expects a LoRA checkpoint from a prior finetuning run.
+**Prerequisites:** Finetuning examples download the model automatically. Training datasets are in `./examples/input/` (`small_train_HF.jsonl`, `eval_HF.jsonl`). To create your own, use the [Creating a Chat Dataset](#4-creating-a-chat-dataset) pattern or [test/integration/utils.js](../test/integration/utils.js) `createTestDataset()`. The inference example expects a LoRA checkpoint from a prior finetuning run.
