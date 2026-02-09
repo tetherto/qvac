@@ -1,5 +1,3 @@
-'use strict'
-
 /**
  * Built-in plugin registry mapping suffix to export name.
  * Specifier format: `${sdkName}/${suffix}/plugin`

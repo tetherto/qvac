@@ -1,5 +1,3 @@
-'use strict'
-
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { ConfigNotFoundError, ConfigLoadError } from './errors.js'

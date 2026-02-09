@@ -1,5 +1,3 @@
-'use strict'
-
 import path from 'node:path'
 import { parseBuiltinSpecifier } from './plugins.js'
 

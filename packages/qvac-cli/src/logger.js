@@ -1,5 +1,3 @@
-'use strict'
-
 /**
  * Creates a logger with the specified log level.
  * @param {"quiet" | "normal" | "verbose"} logLevel

@@ -1,5 +1,3 @@
-'use strict'
-
 import { BUILTIN_PLUGINS, BUILTIN_SUFFIXES } from './constants.js'
 import { InvalidPluginSpecifierError } from '../errors.js'
 

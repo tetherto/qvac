@@ -1,5 +1,3 @@
-'use strict'
-
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from './constants.js'
