@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Generic monorepo changelog generator
+ * Qvac (generic) changelog generator
  *
  * Generates changelog from merged PRs since the latest package tag,
- * scoped to a specific package path.
+ * scoped to a specific package path. Use for non-SDK-pod packages.
  *
  * CLI Usage:
- *   node scripts/changelog-generate.cjs --package=qvac-sdk
- *   node scripts/changelog-generate.cjs --package=qvac-sdk --base-commit=abc123 --base-version=0.5.0
+ *   node scripts/generate-changelog-qvac.cjs --package=<name>
+ *   node scripts/generate-changelog-qvac.cjs --package=<name> --base-commit=abc123 --base-version=0.5.0
  *
  * Programmatic Usage:
- *   const { generateChangelog } = require("./scripts/changelog-generate.cjs");
+ *   const { generateChangelog } = require("./scripts/generate-changelog-qvac.cjs");
  *   const result = await generateChangelog({ packageName: "qvac-sdk" });
  */
 
@@ -434,7 +434,7 @@ async function main() {
   if (!params.package) {
     console.error("Usage:");
     console.error(
-      "  node scripts/changelog-generate.cjs --package=<name> [options]",
+      "  node scripts/generate-changelog-qvac.cjs --package=<name> [options]",
     );
     console.error("");
     console.error("Options:");

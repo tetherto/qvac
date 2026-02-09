@@ -3,13 +3,13 @@
 /**
  * SDK pod changelog generator
  *
- * Wraps the generic monorepo changelog script with SDK pod-specific
+ * Wraps the qvac changelog script with SDK pod-specific
  * formatting: PR validation, emoji sections, breaking/api/model detail files.
  * Shared across all SDK pod packages.
  *
  * Usage:
- *   node scripts/sdk/changelog-generate.cjs --package=qvac-sdk
- *   node scripts/sdk/changelog-generate.cjs --package=qvac-lib-rag --base-commit=abc123 --base-version=0.5.0
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-lib-rag --base-commit=abc123 --base-version=0.5.0
  */
 
 const fs = require("fs");
@@ -19,7 +19,7 @@ const {
   generateChangelog,
   getRepoRoot,
   parseArgs,
-} = require("../changelog-generate.cjs");
+} = require("../generate-changelog-qvac.cjs");
 
 const SECTIONS = [
   { key: "feat", title: "✨ Features" },
@@ -401,7 +401,7 @@ async function main() {
   if (!params.package) {
     console.error("Usage:");
     console.error(
-      "  node scripts/sdk/changelog-generate.cjs --package=<name> [options]",
+      "  node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> [options]",
     );
     console.error("");
     console.error("Options:");

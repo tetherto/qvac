@@ -8,7 +8,7 @@ import os from "os";
 // --- Generic script imports ---
 const GENERIC_SCRIPT_PATH = path.join(
   __dirname,
-  "../../../../scripts/changelog-generate.cjs",
+  "../../../../scripts/generate-changelog-qvac.cjs",
 );
 const {
   extractVersionFromTag,
@@ -20,7 +20,7 @@ const {
 // --- SDK wrapper imports ---
 const SDK_SCRIPT_PATH = path.join(
   __dirname,
-  "../../../../scripts/sdk/changelog-generate.cjs",
+  "../../../../scripts/sdk/generate-changelog-sdk-pod.cjs",
 );
 const {
   extractCodeBlocks,

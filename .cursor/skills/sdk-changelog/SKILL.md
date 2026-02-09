@@ -36,13 +36,13 @@ Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing vers
 All SDK pod packages use the same command:
 
 ```bash
-node scripts/sdk/changelog-generate.cjs --package=<name>
+node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name>
 ```
 
 With migration flags:
 
 ```bash
-node scripts/sdk/changelog-generate.cjs --package=<name> --base-commit=<sha> --base-version=<version>
+node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> --base-commit=<sha> --base-version=<version>
 ```
 
 ### Step 4: Generate CHANGELOG_LLM.md (if requested)
