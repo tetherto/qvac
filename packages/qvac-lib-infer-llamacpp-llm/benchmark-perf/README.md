@@ -55,6 +55,8 @@ Node deps are listed in `benchmark-perf/package.json`:
 npm install --prefix benchmark-perf
 ```
 
+The runner will also install addon dependencies in `packages/qvac-lib-infer-llamacpp-llm` if missing.
+
 Python deps are listed in `benchmark-perf/requirements.txt`:
 
 ```bash

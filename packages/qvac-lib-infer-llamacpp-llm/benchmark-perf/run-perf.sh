@@ -54,6 +54,11 @@ if [[ ! -d "${PERF_DIR}/node_modules" ]]; then
   (cd "${PERF_DIR}" && npm install)
 fi
 
+if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
+  echo "==> Installing addon dependencies"
+  (cd "${ROOT_DIR}" && npm install)
+fi
+
 echo "==> Running QVAC perf"
 if [[ -n "${HF_TOKEN}" ]]; then
   export HF_TOKEN

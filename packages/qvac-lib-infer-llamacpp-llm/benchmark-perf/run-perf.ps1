@@ -17,6 +17,13 @@ if (-not (Test-Path "$PerfDir/benchmark-perf/node_modules")) {
   Pop-Location
 }
 
+if (-not (Test-Path "$PerfDir/node_modules")) {
+  Write-Host "==> Installing addon dependencies"
+  Push-Location "$PerfDir"
+  npm install
+  Pop-Location
+}
+
 Write-Host "==> Running QVAC perf"
 $addonArgs = @()
 if ($Addon -ne "") {
