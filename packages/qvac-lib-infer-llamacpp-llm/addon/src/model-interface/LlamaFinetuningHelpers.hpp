@@ -63,6 +63,9 @@ struct TrainingCheckpointState {
   std::atomic<bool> pauseCheckpointSaved{
       false}; // Flag to prevent multiple saves
   std::filesystem::path pauseCheckpointPath;
+  std::atomic<bool> isIdle{true};
+  std::atomic<bool> isFinetuning{false};
+  std::atomic<bool> isPaused{false};
   // Resume verification
   int64_t expectedFirstBatchAfterResume =
       -1; // Set when resuming to verify first batch

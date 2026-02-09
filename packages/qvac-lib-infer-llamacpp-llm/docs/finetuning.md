@@ -97,22 +97,6 @@ Checks atomic bool `isFinetuningRunning()` first; if false, throws. Then calls `
 
 **Related example:** [examples/simple-lora-finetune-pause-resume.js](../examples/simple-lora-finetune-pause-resume.js) — Run with: `bare examples/simple-lora-finetune-pause-resume.js`
 
-### `status()`
-
-Returns the current model/addon status. During finetuning you may see:
-
-- `LOADING` — model loading
-- `IDLE` — ready (or training finished)
-- `LISTENING` — inference active
-- `FINETUNING` — training in progress
-- `PAUSED` — training paused
-
-```js
-const status = await model.status()
-```
-
-Use `status()` for diagnostics (e.g., logging, debugging). The finetuning and pause/resume control flow does **not** use `status()` — it uses atomic flags and events instead.
-
 ---
 
 ## Finetuning Parameters
@@ -195,7 +179,7 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 7. **Pause** — `requestPause()`: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately.
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir`; emits `FinetuneComplete` (IDLE). On error: emits `FinetuneComplete` (ERROR).
 
-**Atomic flags** — `TrainingCheckpointState` holds `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`. The addon uses `shouldResumeFromPause` to signal resume. `getCurrentCheckpointState()` exposes the active state for `isFinetuningRunning()` and `status()`.
+**Atomic flags** — `TrainingCheckpointState` holds `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `isIdle`, `isFinetuning`, `isPaused`. These are set at lifecycle transitions (first batch, pause checkpoint saved, completion). `activate()` checks `isPaused` to resume; `isFinetuningRunning()` checks `isFinetuning`. No state derivation. The addon uses `shouldResumeFromPause` to signal resume.
 
 ---
 

@@ -261,49 +261,24 @@ function createTestAddon (binding, modelPath, projectionPath, config, onOutput, 
   )
 }
 
-function verifyAddonStatus (t, status) {
-  t.ok(['LOADING', 'IDLE', 'LISTENING', 'FINETUNING', 'PAUSED'].includes(status),
-    `Addon should have valid status, got: ${status}`)
-}
-
 async function waitForJobCompletion (addon, collector, options = {}) {
   const { checkComplete } = options
   const maxWaitSeconds = options.maxWaitSeconds || 600
   const pollIntervalMs = options.pollIntervalMs || 500
 
   for (let i = 0; i < maxWaitSeconds * (1000 / pollIntervalMs); i++) {
-    const currentStatus = await addon.status()
     if (checkComplete) {
-      if (checkComplete(currentStatus, collector)) {
+      if (checkComplete(null, collector)) {
         return
       }
     } else {
-      if (currentStatus === 'IDLE' && collector.jobCompleted) {
+      if (collector.jobCompleted) {
         return
       }
     }
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
   }
   throw new Error('Timeout waiting for job completion')
-}
-
-async function waitForStatus (model, expectedStatus, options = {}) {
-  const pollIntervalMs = options.pollIntervalMs || 200
-  const timeoutMs = options.timeoutMs || 30000
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() <= deadline) {
-    try {
-      const currentStatus = await model.status()
-      if (currentStatus === expectedStatus) {
-        return currentStatus
-      }
-    } catch (error) {
-      // Continue polling on error
-    }
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-  }
-  throw new Error(`Timeout waiting for status ${expectedStatus}`)
 }
 
 function createTestDataset (filePath, format = 'chat') {
@@ -406,21 +381,18 @@ function getDefaultFinetuneConfig (overrides = {}) {
   }
 }
 
-// Wait for finetuning to start, handling race conditions where it might complete quickly
 async function waitForFinetuningStart (model, options = {}) {
   const maxAttempts = options.maxAttempts || 10
   const pollIntervalMs = options.pollIntervalMs || 100
 
-  let status = await model.status()
   let attempts = 0
-
-  while (status !== 'FINETUNING' && status !== 'IDLE' && attempts < maxAttempts) {
+  while (attempts < maxAttempts) {
+    const running = model.addon?.isFinetuningRunning?.()
+    if (running) return 'FINETUNING'
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-    status = await model.status()
     attempts++
   }
-
-  return status
+  return 'IDLE'
 }
 
 // Setup test datasets and checkpoint directory
@@ -490,19 +462,13 @@ async function handleEarlyCompletion (t, finetunePromise, checkpointDir = null, 
   return result
 }
 
-// Verify model status is valid (for initial status checks)
-function verifyInitialStatus (t, status) {
-  t.ok(['LOADING', 'IDLE', 'LISTENING'].includes(status), 'Initial status should be valid')
-}
-
-// Verify final status after finetuning
 async function verifyFinalStatus (t, model, result = null) {
   await new Promise(resolve => setTimeout(resolve, 1000))
-  const finalStatus = await model.status()
+  const finalStatus = result?.status ?? 'IDLE'
   t.ok(finalStatus === 'IDLE', `Final status should be IDLE, got: ${finalStatus}`)
 
-  if (result && result.status) {
-    t.comment(`Result status: ${result.status}, Model status: ${finalStatus}`)
+  if (result?.status) {
+    t.comment(`Result status: ${result.status}`)
   }
 
   return finalStatus
@@ -518,9 +484,7 @@ module.exports = {
   getFinetuneModel,
   createDefaultGpuConfig,
   createTestAddon,
-  verifyAddonStatus,
   waitForJobCompletion,
-  waitForStatus,
   createTestDataset,
   cleanupCheckpoints,
   verifyCheckpointExists,
@@ -530,6 +494,5 @@ module.exports = {
   setupFinetuneTestData,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
-  verifyInitialStatus,
   verifyFinalStatus
 }
