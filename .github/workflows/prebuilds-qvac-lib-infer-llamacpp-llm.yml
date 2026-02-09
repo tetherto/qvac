@@ -387,6 +387,26 @@ jobs:
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $CFG_OPTS
 
+      - if: ${{ matrix.platform == 'darwin' }}
+        name: Verify CXX compiler (macOS)
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+          CXX_COMPILER_FILE="$(ls -1 build/CMakeFiles/*/CMakeCXXCompiler.cmake 2>/dev/null | head -n 1)"
+          if [ -z "${CXX_COMPILER_FILE:-}" ]; then
+            echo "CMakeCXXCompiler.cmake not found under build/CMakeFiles"
+            exit 1
+          fi
+          echo "CMakeCXXCompiler.cmake: $CXX_COMPILER_FILE"
+          grep -E 'CMAKE_CXX_COMPILER(:|_ID):' "$CXX_COMPILER_FILE" || true
+          if grep -q 'CMAKE_CXX_COMPILER_ID:INTERNAL=AppleClang' "$CXX_COMPILER_FILE"; then
+            echo "AppleClang detected"
+            exit 0
+          fi
+          echo "ERROR: Non-AppleClang compiler detected on macOS"
+          exit 1
+
       - name: Run bare-make build
         working-directory: ${{ env.WORKDIR }}
         run: bare-make build
