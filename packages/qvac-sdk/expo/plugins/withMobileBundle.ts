@@ -30,7 +30,7 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin that automatically generates the mobile worker bundle during build.
  *
- * Runs bundle-sdk.js (uses qvac.config.* if exists, else all plugins).
+ * Runs `npx qvac bundle sdk` (uses qvac.config.* if exists, else all built-in plugins).
  * Output: node_modules/@qvac/sdk/dist/worker.mobile.bundle.js
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
@@ -50,7 +50,7 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       throw new SDKNotFoundInNodeModulesError();
     }
 
-    // Generate bundle via bundle-sdk.js
+    // Generate bundle via qvac CLI
     // (uses qvac.config.* if exists, else includes all built-in plugins)
     const configPath = findConfigFile(projectRoot);
     if (configPath) {
@@ -91,7 +91,7 @@ function findConfigFile(projectRoot: string): string | null {
   return null;
 }
 
-/** Runs bundle-sdk.js with mobile-specific options */
+/** Runs qvac CLI with mobile-specific options */
 function runBundler(
   projectRoot: string,
   qvacSdkPath: string,
@@ -103,14 +103,13 @@ function runBundler(
   // Patch bare-kit linkers to use addons manifest
   patchBareKitLinkers(projectRoot, qvacSdkPath);
 
-  const bundlerPath = path.join(qvacSdkPath, "scripts", "bundle-sdk.js");
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
   const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
 
   try {
     execSync(
-      `"${process.execPath}" "${bundlerPath}" ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
+      `npx qvac bundle sdk ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
       { stdio: "inherit", cwd: projectRoot },
     );
   } catch (error) {
