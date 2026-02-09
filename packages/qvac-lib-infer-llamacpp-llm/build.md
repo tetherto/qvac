@@ -56,7 +56,7 @@ If you want to build the addon from source instead of using pre-built packages, 
 
 4. **Platform-specific requirements**:
    - **macOS**: 
-     - Xcode Command Line Tools
+     - Xcode Command Line Tools (LLVM compiler is not supported)
      - For Android cross-compilation: Android NDK and Vulkan tools (`brew install shaderc vulkan-tools molten-vk vulkan-headers`)
    - **Linux**: GCC/G++ compiler, CMake
       - Ubuntu-22 requires g++-13 installed:
@@ -159,3 +159,4 @@ bare-make install
 - **CMake cannot find cmake-bare**: Make sure you installed `bare` (not `bare-runtime`). The `bare` package includes the necessary CMake configuration files.
 - **Android cross-compilation fails with "Could NOT find Vulkan (missing: glslc)"**: Install Vulkan shader compiler tools with `brew install shaderc` on macOS.
 - **Build is targeting wrong platform**: If you're switching between platforms (e.g., from macOS to iOS, or between different architectures) and the build is still targeting the previous platform, clean the build directory first: `rm -rf build` before running `bare-make generate` again.
+- **macOS JS code silently crashes**: `bare-make` currently prefers the Homebrew LLVM toolchain when it is installed, which can produce corrupted `prebuilds` binaries that segfault early in JS usage. If you hit this, uninstall or temporarily move your Homebrew LLVM during the build.

@@ -12,17 +12,17 @@ public:
   const std::filesystem::path configJsonPath_ = basePath_ / "en_US-amy-low.onnx.json";
 
   TTSConfig validConfig_ {
-    modelPath_.string(), configJsonPath_.string(), "en", eSpeakDataPath_.string(), false
+    modelPath_.string(), configJsonPath_.string(), "en", eSpeakDataPath_.string(), "", false
   };
 
   TTSConfig emptyConfig_ {};
 
   TTSConfig invalidModelPathConfig_ {
-    "invalid", configJsonPath_.string(), "en", eSpeakDataPath_.string(), false
+    "invalid", configJsonPath_.string(), "en", eSpeakDataPath_.string(), "", false
   };
 
   TTSConfig invalidConfigJsonPathConfig_ {
-    modelPath_.string(), "invalid", "en", eSpeakDataPath_.string(), false
+    modelPath_.string(), "invalid", "en", eSpeakDataPath_.string(), "", false
   };
 
 };

@@ -1,3 +1,4 @@
+.githuman
 /.sync-repos
 sync-monorepo.sh
 reset_history.sh

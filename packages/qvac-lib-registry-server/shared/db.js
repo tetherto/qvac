@@ -75,6 +75,47 @@ class RegistryDatabase extends ReadyResource {
     return this.db.find(`@${QVAC_MAIN_REGISTRY}/models-by-quantization`, query)
   }
 
+  findModelsByEngineQuantization (query = {}) {
+    return this.db.find(`@${QVAC_MAIN_REGISTRY}/models-by-engine-quantization`, query)
+  }
+
+  async findBy (params = {}) {
+    if (!this.opened) await this.ready()
+
+    const { name, engine, quantization, includeDeprecated = false } = params
+
+    let models
+
+    if (engine) {
+      const query = { gte: { engine }, lte: { engine } }
+      if (quantization) {
+        query.gte.quantization = quantization
+        query.lte.quantization = quantization + '\uffff'
+      }
+      models = await this.db.find(`@${QVAC_MAIN_REGISTRY}/models-by-engine-quantization`, query).toArray()
+    } else if (quantization) {
+      models = await this.db.find(`@${QVAC_MAIN_REGISTRY}/models-by-quantization`, {
+        gte: { quantization },
+        lte: { quantization: quantization + '\uffff' }
+      }).toArray()
+    } else if (name) {
+      models = await this.db.find(`@${QVAC_MAIN_REGISTRY}/models-by-name`, {
+        gte: name,
+        lte: name + '\uffff'
+      }).toArray()
+    } else {
+      models = await this.db.find(`@${QVAC_MAIN_REGISTRY}/model`, {}).toArray()
+    }
+
+    if (name && engine) {
+      models = models.filter(m => m.path?.split('/').pop()?.toLowerCase().includes(name.toLowerCase()))
+    }
+
+    if (!includeDeprecated) models = models.filter(m => !m.deprecated)
+
+    return models
+  }
+
   async putLicense (record) {
     if (!this.opened) await this.ready()
     const tx = this.db.transaction()

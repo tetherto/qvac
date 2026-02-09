@@ -131,6 +131,7 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+      workdir: "packages/qvac-lib-infer-llamacpp-llm"
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
