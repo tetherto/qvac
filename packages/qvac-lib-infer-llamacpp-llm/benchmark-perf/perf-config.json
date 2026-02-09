@@ -1,0 +1,126 @@
+{
+  "reps": 3,
+  "baseline": {
+    "modelId": "qwen3-1.7b",
+    "quantization": "Q4_0",
+    "device": "gpu",
+    "gpu_layers": "99",
+    "ctx_size": "4096",
+    "threads": "4",
+    "batch-size": "2048",
+    "ubatch-size": "512",
+    "verbosity": "0",
+    "temp": "0.1",
+    "seed": "42",
+    "n_predict": "256",
+    "top_p": "0.9",
+    "top_k": "40"
+  },
+  "params": {
+    "quantization": ["Q4_0", "Q4_K_M", "Q8_0", "F16"],
+    "device": ["gpu", "cpu"],
+    "ctx_size": ["512", "1024", "2048", "4096", "8192"],
+    "no-mmap": [null, ""],
+    "threads": ["1", "2", "4", "8", "{max}"],
+    "batch-size": ["128", "512", "1024", "2048", "4096", "8192", "10000"],
+    "ubatch-size": ["64", "128", "256", "512", "1024"],
+    "no-kv-offload": [null, ""],
+    "flash-attn": [null, ""],
+    "cache-type-k": ["f16", "q8_0", "q4_0"],
+    "cache-type-v": ["f16", "q8_0", "q4_0"]
+  },
+  "models": [
+    {
+      "id": "qwen3-1.7b",
+      "qvac": {
+        "Q4_0": {
+          "modelName": "Qwen3-1.7B-Q4_0.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf"
+        },
+        "Q4_K_M": {
+          "modelName": "Qwen3-1.7B-Q4_K_M.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
+        },
+        "Q8_0": {
+          "modelName": "Qwen3-1.7B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q8_0.gguf"
+        },
+        "F16": {
+          "modelName": "Qwen3-1.7B-BF16.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-BF16.gguf"
+        }
+      },
+      "torch": {
+        "Q4_0": { "modelId": "Qwen/Qwen3-1.7B", "quantization": "bnb-4bit" },
+        "Q4_K_M": { "modelId": "Qwen/Qwen3-1.7B", "quantization": "bnb-4bit" },
+        "Q8_0": { "modelId": "Qwen/Qwen3-1.7B", "quantization": "bnb-8bit" },
+        "F16": { "modelId": "Qwen/Qwen3-1.7B", "quantization": "fp16" }
+      }
+    },
+    {
+      "id": "qwen3-4b",
+      "qvac": {
+        "Q4_0": {
+          "modelName": "Qwen3-4B-Q4_0.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf"
+        },
+        "Q4_K_M": {
+          "modelName": "Qwen3-4B-Q4_K_M.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+        },
+        "Q8_0": {
+          "modelName": "Qwen3-4B-Q8_0.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q8_0.gguf"
+        },
+        "F16": {
+          "modelName": "Qwen3-4B-BF16.gguf",
+          "downloadUrl": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-BF16.gguf"
+        }
+      },
+      "torch": {
+        "Q4_0": { "modelId": "Qwen/Qwen3-4B", "quantization": "bnb-4bit" },
+        "Q4_K_M": { "modelId": "Qwen/Qwen3-4B", "quantization": "bnb-4bit" },
+        "Q8_0": { "modelId": "Qwen/Qwen3-4B", "quantization": "bnb-8bit" },
+        "F16": { "modelId": "Qwen/Qwen3-4B", "quantization": "fp16" }
+      }
+    }
+  ],
+  "judgeModel": {
+    "modelId": "qwen3-4b",
+    "quantization": "Q4_0"
+  },
+  "prompts": [
+    {
+      "id": "short",
+      "messages": [
+        { "role": "system", "content": "You are a helpful assistant. Answer concisely." },
+        { "role": "user", "content": "What is the capital of France?" }
+      ]
+    },
+    {
+      "id": "medium",
+      "messages": [
+        { "role": "system", "content": "You are a helpful assistant." },
+        {
+          "role": "user",
+          "content": "Explain the difference between TCP and UDP protocols. Cover reliability, ordering, connection management, and typical use cases for each."
+        }
+      ]
+    },
+    {
+      "id": "long",
+      "messages": [
+        { "role": "system", "content": "You are a helpful assistant." },
+        { "role": "user", "content": "Summarize the passage below into 6-8 concise bullet points that capture the main facts, timeline, and conclusions. Keep the summary factual and avoid adding new information.\n\nPassage:\nIn the spring of 1978, a coastal city commissioned a multi-year study to understand why its fishing yields had fallen by nearly 30% over a decade. The study combined dockside surveys, ocean temperature records, and interviews with ship captains. Researchers observed that the average time at sea increased, yet the total catch per vessel decreased. At the same time, they discovered a gradual but measurable shift in sea surface temperatures, especially in the shallow bays where juvenile fish typically feed.\n\nThe research team proposed three possible contributors. First, intensified trawling in the mid-1970s damaged reef habitats and reduced spawning grounds. Second, unusually warm summers in two consecutive years appeared to change the migration paths of the most common species. Third, new regulations in a neighboring region displaced fleets into the city’s waters, increasing competition. None of these factors alone accounted for the full decline, but in combination they correlated strongly with the timing of reduced yields.\n\nTo test their hypothesis, the team partnered with local cooperatives to trial habitat restoration and seasonal catch limits. Over two years, reef restoration sites showed a modest return of juvenile fish, and seasonal limits stabilized catch rates without reducing total income. However, when a third warm summer arrived, yields dipped again despite the interventions. This suggested that climate variability was amplifying the impact of local practices.\n\nThe final report recommended a mixed strategy: continue restoration, coordinate regionally to prevent fleet displacement, and create adaptive seasonal rules tied to temperature thresholds. The report acknowledged uncertainty in predicting future temperature changes but argued that flexible policy would be more resilient than fixed quotas. It also recommended expanding community-based monitoring so that fishers could provide real-time observations to inform regulatory adjustments.\n\nThe city council adopted the recommendations and established a regional forum for data sharing. Over the next three years, average yields improved slightly, though they did not return to prior highs. Researchers concluded that while local actions could offset some declines, long-term recovery would depend on broader climate trends and cooperative management across jurisdictions." }
+      ]
+    },
+    {
+      "id": "worst_case",
+      "messages": [
+        { "role": "system", "content": "You are a helpful assistant. Be detailed and exhaustive." },
+        { "role": "user", "content": "You are given a long briefing that combines a fictional case study, supporting data, and open questions. Produce a detailed analysis that includes: (1) a structured summary by section, (2) a list of assumptions and uncertainties, (3) a risk assessment with likelihood and impact, (4) a prioritized set of recommendations, and (5) a short executive memo. The output should be long and exhaustive.\n\nBriefing:\nSection A: Background\nA regional transportation authority launched a five-year modernization program to reduce congestion, improve safety, and cut emissions. The program includes replacing aging buses, upgrading rail signals, and introducing demand-responsive microtransit in underserved neighborhoods. The authority serves a diverse metro area with a dense urban core, a ring of mid-density suburbs, and an outer belt of small towns. Ridership has been recovering unevenly since a sharp decline two years ago. Weekday commuter trips are still down, but weekend and off-peak usage have begun to rebound.\n\nSection B: Current Performance Data\nOver the last 12 months, average bus on-time performance improved from 68% to 74%, with the largest gains on routes that received dedicated bus lanes. Rail on-time performance improved from 81% to 88% after targeted signal replacements at three bottleneck stations. However, reported safety incidents per million passenger miles increased slightly on rail due to a cluster of minor door malfunctions. The authority attributes this to deferred maintenance during the supply chain disruptions of the prior year. Emissions from the fleet fell 12% as older diesel buses were retired, but the authority remains short of its 2026 emissions target by an estimated 8%.\n\nSection C: Financial Constraints\nThe modernization program is funded by a mix of federal grants (45%), local taxes (35%), and fare revenue (20%). Federal grants require quarterly reporting and adherence to specific procurement rules that can extend timelines. Local tax revenue is stable but cannot exceed a capped growth rate. Fare revenue depends on ridership, which remains uncertain due to changes in commuting patterns and the rise of hybrid work. The authority forecasts a 5% operating deficit next year unless costs are reduced or ridership exceeds current projections. Operating costs are rising due to labor agreements, fuel price volatility, and insurance premiums.\n\nSection D: Microtransit Pilot Results\nThe microtransit pilot covered three neighborhoods with limited fixed-route service. It offered app-based ride requests with dynamic routing. Average wait time was 12 minutes, with a 78% on-time pickup rate. Surveys showed high satisfaction among riders who previously lacked reliable access to jobs and healthcare. However, the cost per passenger trip was high, nearly 2.5x the cost of a standard bus trip. The pilot reduced missed medical appointments by 18% in the service area, but it did not significantly reduce private car usage, suggesting it may have served latent demand rather than replacing car trips.\n\nSection E: Infrastructure Readiness\nThe authority plans to deploy 80 electric buses over the next 18 months. Charging infrastructure at depots is 60% complete, with utility upgrades delayed by permitting. The grid operator requires a phased rollout to avoid peak load spikes, and the authority must coordinate charging schedules across depots. A separate plan to install regenerative braking on older rail units is still in the design phase, with uncertainty about the cost-benefit ratio given the remaining lifespan of those units.\n\nSection F: Equity and Accessibility\nCommunity advisory panels emphasized the need to prioritize accessibility upgrades in older stations, many of which lack elevators or tactile guidance. An audit found that 23% of stations are not fully ADA compliant. The authority has set a goal to reduce that number to 10% within three years. Advocates also requested language-accessible communications and real-time service alerts, noting that riders with limited English proficiency often rely on station signage and are less likely to use mobile apps.\n\nSection G: Future Scenarios\nScenario analysis considers three ridership trajectories: conservative (flat ridership), moderate (3% annual growth), and optimistic (7% annual growth driven by downtown redevelopment). Each scenario affects capital planning differently. Under conservative assumptions, the authority would need to slow procurement of electric buses and defer some rail upgrades. Under optimistic assumptions, the authority could accelerate station renovations and expand microtransit to six additional neighborhoods.\n\nSection H: Open Questions\n1. Should microtransit remain a targeted equity intervention despite higher costs, or should it be scaled only where cost recovery improves?\n2. How should the authority balance near-term emissions goals with long-term grid constraints?\n3. What governance model best supports regional coordination across neighboring jurisdictions to reduce duplication and align fare policies?\n4. How should service plans adapt to hybrid work patterns that shift peak demand to mid-day?\n5. Which performance metrics should be prioritized to evaluate success beyond ridership (e.g., access to jobs, safety, equity, emissions)?\n\nSection I: Supplementary Data\n- Average bus fare: $2.25\n- Average rail fare: $3.00\n- Annual operating budget: $820M\n- Capital program budget: $2.4B over five years\n- Average trip length: bus 4.2 miles, rail 9.6 miles\n- Workforce size: 6,800 employees\n- Customer satisfaction (overall): 76%\n- Customer satisfaction (microtransit pilot): 88%\n- Annual missed trips due to maintenance: 3.1% of scheduled rail trips\n- Emissions baseline year: 2018\n- Emissions reduction achieved to date: 12%\n\nSection J: Stakeholder Perspectives\nBusiness groups support faster downtown rail upgrades but worry about construction disruptions. Neighborhood organizations prioritize accessibility and local bus frequency, even if rail expansions slow. Environmental coalitions advocate for rapid electrification and demand stricter emissions milestones. Labor unions emphasize workforce stability and training for electric fleet maintenance.\n\nSection K: Comparative Benchmarks\nPeer cities with similar population sizes have achieved bus on-time performance between 72% and 80%, and rail on-time performance between 85% and 92%. Microtransit pilots in two comparable regions reported cost per trip between 1.8x and 2.2x of standard bus service, but higher rates of replacing car trips. One peer authority reduced emissions by 20% within four years by accelerating electric bus deployment, though it faced short-term service reductions due to depot construction.\n\nSection L: Additional Considerations\nThe authority’s customer service channels are fragmented; riders may need to use a phone line for some issues and a separate app for others. Consolidating channels could improve satisfaction but would require a new vendor contract. Security staffing has been increased at three stations due to recent incidents, raising operating costs. The authority is exploring partnerships with universities to analyze passenger flow data, but data-sharing agreements are still under negotiation.\n\nSection M: Data Integrity and Monitoring\nThe current data pipeline for on-time performance relies on GPS pings that sometimes drop in tunnels and dense urban canyons. Analysts estimate a 2-3% undercount of late arrivals due to data gaps. A modernization of the telemetry system is planned but not funded in the current budget. Real-time dashboards exist but are used inconsistently across divisions.\n\nSection N: Risk Register (Initial)\n- Risk 1: Delays in charging infrastructure due to permitting (Likelihood: High; Impact: Medium)\n- Risk 2: Continued ridership volatility (Likelihood: Medium; Impact: High)\n- Risk 3: Supply chain issues for electric bus components (Likelihood: Medium; Impact: Medium)\n- Risk 4: Workforce training gaps for new technology (Likelihood: Medium; Impact: Medium)\n- Risk 5: Community opposition to service changes (Likelihood: Low; Impact: Medium)\n\nSection O: Timeline\nYear 1: Complete 40% of electric bus procurement, replace signals at three stations, launch microtransit in three neighborhoods.\nYear 2: Expand microtransit to two more neighborhoods, begin accessibility upgrades at five stations, complete 60% of depot charging infrastructure.\nYear 3: Reach 80% electric bus deployment, complete accessibility upgrades at 10 stations, integrate service alerts across channels.\nYear 4: Full deployment of electric buses, complete signal upgrades system-wide, expand microtransit based on evaluation.\nYear 5: Review program impact, update long-term capital plan, and set new emissions targets.\n\nSection P: Required Outputs\nProvide a comprehensive analysis as requested above, but keep your final executive memo to 8-10 sentences. Use headings for each section and produce a well-structured response. Include a short list of key metrics to monitor quarterly." }
+      ],
+      "n_predict": 1024
+    }
+  ]
+}

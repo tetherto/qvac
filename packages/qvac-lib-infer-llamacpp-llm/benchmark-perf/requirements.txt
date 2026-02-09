@@ -1,0 +1,4 @@
+psutil>=5.9
+torch>=2.2
+transformers>=4.38
+accelerate>=0.27

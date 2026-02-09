@@ -1,0 +1,112 @@
+name: LLM Perf Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      params:
+        description: 'Params to run (comma-separated, or "all"). Valid: quantization,device,ctx_size,no-mmap,threads,batch-size,ubatch-size,no-kv-offload,flash-attn,cache-type-k,cache-type-v'
+        default: 'all'
+      reps:
+        description: 'Repetitions per config'
+        default: '3'
+      config:
+        description: 'Path to perf-config.json'
+        default: 'benchmark-perf/perf-config.json'
+      addon:
+        description: 'Addon package name or path (optional)'
+        default: ''
+      hf_token:
+        description: 'Hugging Face token for gated models (optional)'
+        default: ''
+      judge:
+        description: 'Run judge (true/false)'
+        default: 'false'
+      analyze:
+        description: 'Run analysis (true/false)'
+        default: 'false'
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: ubuntu-latest
+            arch: x64
+          - os: windows-latest
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bare runtime
+        run: npm install -g bare-runtime
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        run: pip install -r benchmark-perf/requirements.txt
+
+      - name: Install analysis deps
+        if: inputs.analyze == 'true'
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        run: pip install -r benchmark-perf/analysis/requirements.txt
+
+      - name: Build addon
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        run: npm install && npm run build
+
+      - name: Run perf suite
+        if: runner.os != 'Windows'
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        env:
+          PARAMS: ${{ inputs.params }}
+          REPS: ${{ inputs.reps }}
+          CONFIG: ${{ inputs.config }}
+          ADDON: ${{ inputs.addon }}
+          JUDGE: ${{ inputs.judge }}
+          ANALYZE: ${{ inputs.analyze }}
+          HF_TOKEN: ${{ inputs.hf_token || secrets.HF_TOKEN }}
+        run: |
+          args=(--params "$PARAMS" --reps "$REPS" --config "$CONFIG")
+          if [[ -n "$ADDON" ]]; then args+=(--addon "$ADDON"); fi
+          if [[ "$JUDGE" == "true" ]]; then args+=(--judge); fi
+          if [[ "$ANALYZE" == "true" ]]; then args+=(--analyze); fi
+          bash benchmark-perf/run-perf.sh "${args[@]}"
+
+      - name: Run perf suite (Windows)
+        if: runner.os == 'Windows'
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ inputs.hf_token || secrets.HF_TOKEN }}
+        run: |
+          $params = @(
+            "-File", "benchmark-perf/run-perf.ps1",
+            "-Params", "${{ inputs.params }}",
+            "-Reps", "${{ inputs.reps }}",
+            "-Config", "${{ inputs.config }}"
+          )
+          if ("${{ inputs.addon }}" -ne "") { $params += @("-Addon", "${{ inputs.addon }}") }
+          if ("${{ inputs.judge }}" -eq "true") { $params += "-Judge" }
+          if ("${{ inputs.analyze }}" -eq "true") { $params += "-Analyze" }
+          powershell -ExecutionPolicy Bypass @params
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-perf-${{ matrix.os }}-${{ matrix.arch }}
+          path: "packages/qvac-lib-infer-llamacpp-llm/benchmark-perf/results/*.jsonl"
+
+      - name: Upload analysis plots
+        if: inputs.analyze == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-perf-plots-${{ matrix.os }}-${{ matrix.arch }}
+          path: "packages/qvac-lib-infer-llamacpp-llm/benchmark-perf/analysis/plots/**"
