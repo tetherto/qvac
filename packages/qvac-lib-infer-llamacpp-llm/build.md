@@ -56,7 +56,7 @@ If you want to build the addon from source instead of using pre-built packages, 
 
 4. **Platform-specific requirements**:
    - **macOS**: 
-     - Xcode Command Line Tools
+     - Xcode Command Line Tools (LLVM compiler is not supported)
      - For Android cross-compilation: Android NDK and Vulkan tools (`brew install shaderc vulkan-tools molten-vk vulkan-headers`)
    - **Linux**: GCC/G++ compiler, CMake
       - Ubuntu-22 requires g++-13 installed:
