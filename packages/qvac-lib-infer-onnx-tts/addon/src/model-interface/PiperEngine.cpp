@@ -19,7 +19,6 @@
 #include <dml_provider_factory.h>
 #endif
 
-namespace fs = std::filesystem;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace qvac::ttslib::piper {
@@ -248,6 +247,5 @@ Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
 #endif
   return sessionOptions;
 }
-
 
 } // namespace qvac::ttslib::piper

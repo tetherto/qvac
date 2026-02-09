@@ -9,7 +9,7 @@ namespace qvac::ttslib::addon_model::chatterbox_testing {
 class TTSModelChatterboxTestMock : public ::testing::Test {
 public:
   std::shared_ptr<ChatterboxEngineMock> engineMock_ = std::make_shared<ChatterboxEngineMock>();
-
+  
   // Chatterbox config with required keys to trigger Chatterbox engine detection
   std::unordered_map<std::string, std::string> config_{
     {"language", "en"},
@@ -34,7 +34,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveInit) {
 TEST_F(TTSModelChatterboxTestMock, positiveLoad) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
-
+  
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
   EXPECT_NO_THROW(model.load());
   EXPECT_TRUE(model.isLoaded());
@@ -44,7 +44,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveReload) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
   EXPECT_CALL(*engineMock_, unload()).Times(1);
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
-
+  
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
   EXPECT_NO_THROW(model.reload());
   EXPECT_TRUE(model.isLoaded());
@@ -86,14 +86,14 @@ TEST_F(TTSModelChatterboxTestMock, positiveIsLoaded) {
 TEST_F(TTSModelChatterboxTestMock, positiveProcess) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
-
+  
   qvac::ttslib::AudioResult mockResult;
   mockResult.pcm16 = {1, 2, 3, 4, 5};
   mockResult.sampleRate = 24000;  // Chatterbox uses 24kHz
   mockResult.channels = 1;
   mockResult.samples = 5;
   mockResult.durationMs = 100.0;
-
+  
   EXPECT_CALL(*engineMock_, synthesize(::testing::_)).Times(1).WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
@@ -149,7 +149,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveDoubleLoad) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
   EXPECT_CALL(*engineMock_, unload()).Times(1);
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
-
+  
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
   EXPECT_TRUE(model.isLoaded());
 
@@ -164,7 +164,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveDoubleUnload) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
   EXPECT_CALL(*engineMock_, unload()).Times(2);
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
-
+  
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
   EXPECT_TRUE(model.isLoaded());
 
@@ -180,7 +180,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveSetReferenceAudio) {
   EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
 
   TTSModel model(config_, referenceAudio_, nullptr, engineMock_);
-
+  
   std::vector<float> newReferenceAudio = {0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f};
   EXPECT_NO_THROW(model.setReferenceAudio(newReferenceAudio));
 }

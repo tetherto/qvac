@@ -2,6 +2,7 @@
 
 const { z } = require('zod')
 
+// Piper TTS config schema
 const TTSConfigSchema = z.object({
   modelPath: z.string(),
   configPath: z.string(),
@@ -25,7 +26,6 @@ const ChatterboxConfigSchema = z.object({
   embedTokensPath: z.string().optional(),
   conditionalDecoderPath: z.string().optional(),
   languageModelPath: z.string().optional(),
-  referenceAudioPath: z.string().optional(),
   useSyntheticAudio: z.boolean().optional().default(true),
   language: z.string().default('en'),
   sampleRate: z.number().int().positive().default(24000),

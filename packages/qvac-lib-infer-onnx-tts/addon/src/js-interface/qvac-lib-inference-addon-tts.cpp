@@ -17,13 +17,11 @@ using JsIfTTS = qvac_lib_inference_addon_cpp::JsInterface<qvac_lib_inference_add
 // Supports both Piper and Chatterbox configurations
 static std::unordered_map<std::string, std::string> getTTSConfigMap(js_env_t* env, js::Object configurationParams) {
   std::unordered_map<std::string, std::string> configMap;
-
+  
   // Common configuration
   auto languageOpt = configurationParams.getOptionalProperty<js::String>(env, "language");
   if (languageOpt.has_value()) {
     configMap["language"] = languageOpt.value().as<std::string>(env);
-  } else {
-    configMap["language"] = "en";
   }
 
   auto useGPUOpt = configurationParams.getOptionalProperty<js::Boolean>(env, "useGPU");
@@ -36,12 +34,12 @@ static std::unordered_map<std::string, std::string> getTTSConfigMap(js_env_t* en
   if (modelPathOpt.has_value()) {
     configMap["modelPath"] = modelPathOpt.value().as<std::string>(env);
   }
-
+  
   auto eSpeakDataPathOpt = configurationParams.getOptionalProperty<js::String>(env, "eSpeakDataPath");
   if (eSpeakDataPathOpt.has_value()) {
     configMap["eSpeakDataPath"] = eSpeakDataPathOpt.value().as<std::string>(env);
   }
-
+  
   auto configJsonPathOpt = configurationParams.getOptionalProperty<js::String>(env, "configJsonPath");
   if (configJsonPathOpt.has_value()) {
     configMap["configJsonPath"] = configJsonPathOpt.value().as<std::string>(env);
@@ -103,9 +101,9 @@ js_value_t *JsIfTTS::createInstance(js_env_t *env, js_callback_info_t *info) try
     throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument, "Expected output callback as function");
   }
 
-  auto configurationParams = js::Object{env, args[1]};
+  auto configurationParams = js::Object{env, args[1]};  
   auto configMap = getTTSConfigMap(env, configurationParams);
-
+  
   // Extract reference audio (Float32Array) for Chatterbox voice cloning
   auto referenceAudio = getReferenceAudio(env, configurationParams);
 

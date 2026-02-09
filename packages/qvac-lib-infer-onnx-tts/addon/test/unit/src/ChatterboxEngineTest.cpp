@@ -8,7 +8,7 @@ class ChatterboxEngineTest : public ::testing::Test {
 public:
   // Dummy paths for validation testing (files don't need to exist for validation tests)
   const std::string dummyPath_ = "dummy_path";
-
+  
   // Reference audio (required for Chatterbox)
   std::vector<float> referenceAudio_ = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
 

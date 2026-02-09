@@ -15,11 +15,11 @@ TTSModel::TTSModel(const std::unordered_map<std::string, std::string>& configMap
                    std::shared_ptr<piper::IPiperEngine> piperEngine,
                    std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine) {
   engineType_ = detectEngineType(configMap);
-
+  
   chatterboxConfig_.referenceAudio = referenceAudio;
-
+  
   saveLoadParams(configMap);
-
+  
   if (engineType_ == EngineType::Chatterbox) {
     if (chatterboxEngine) {
       chatterboxEngine_ = chatterboxEngine;
@@ -35,7 +35,7 @@ TTSModel::TTSModel(const std::unordered_map<std::string, std::string>& configMap
     }
     QLOG(Priority::INFO, "TTSModel initialized with Piper engine");
   }
-
+  
   load();
   QLOG(Priority::INFO, "TTSModel initialized successfully");
 }
@@ -53,7 +53,7 @@ EngineType TTSModel::detectEngineType(const std::unordered_map<std::string, std:
 
 qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::string, std::string>& configMap) {
   qvac::ttslib::TTSConfig config = piperConfig_;
-
+  
   auto updateConfig = [&](const std::string& key, std::string& configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
@@ -85,7 +85,7 @@ qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::
 
 qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(const std::unordered_map<std::string, std::string>& configMap) {
   qvac::ttslib::chatterbox::ChatterboxConfig config = chatterboxConfig_;
-
+  
   auto updateConfig = [&](const std::string& key, std::string& configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
@@ -193,35 +193,35 @@ TTSModel::Output TTSModel::process(const Input &text) {
     QLOG(Priority::ERROR, "Model not loaded, processing failed.");
     throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelNotLoaded, "Model not loaded");
   }
-
+  
   auto startTime = std::chrono::high_resolution_clock::now();
   textLength_ += text.size();
-
+  
   AudioResult result;
   if (engineType_ == EngineType::Chatterbox) {
     result = chatterboxEngine_->synthesize(text);
   } else {
     result = piperEngine_->synthesize(text);
   }
-
+  
   auto endTime = std::chrono::high_resolution_clock::now();
   totalTime_ += std::chrono::duration<double>(endTime - startTime).count();
-
+  
   audioDurationMs_ += result.durationMs;
   totalSamples_ += static_cast<int64_t>(result.samples);
-
+  
   if (audioDurationMs_ > 0) {
     realTimeFactor_ = (totalTime_ * 1000.0) / audioDurationMs_;
   } else {
     realTimeFactor_ = 0.0;
   }
-
+  
   if (totalTime_ > 0) {
     tokensPerSecond_ = textLength_ / totalTime_;
   } else {
     tokensPerSecond_ = 0.0;
   }
-
+  
   return result.pcm16;
 }
 
@@ -229,7 +229,7 @@ TTSModel::Output TTSModel::process(
     const Input &text,
     const std::function<void(const Output&)> &consumer) {
   const auto& result = process(text);
-
+  
   if (consumer)  {
     consumer(result);
   }
@@ -239,13 +239,13 @@ TTSModel::Output TTSModel::process(
 
 qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
-
+  
   stats.emplace_back("totalTime", totalTime_);
   stats.emplace_back("tokensPerSecond", tokensPerSecond_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
-
+  
   return stats;
 }
 

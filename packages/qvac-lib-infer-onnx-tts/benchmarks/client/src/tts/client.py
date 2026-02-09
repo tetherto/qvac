@@ -62,19 +62,21 @@ class TTSClient:
         # Convert paths to absolute, relative to benchmarks/ directory
         # This finds the benchmarks/ directory regardless of where the script is run from
         benchmarks_dir = Path(__file__).resolve().parents[3]  # Go up: tts/ -> src/ -> client/ -> benchmarks/
-
+        
         if model_cfg.is_chatterbox:
+            # Chatterbox: resolve modelDir and referenceAudioPath
             if model_cfg.modelDir and not Path(model_cfg.modelDir).is_absolute():
-                model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
+                self.model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
             if model_cfg.referenceAudioPath and not Path(model_cfg.referenceAudioPath).is_absolute():
-                model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
+                self.model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
         else:
+            # Piper TTS: resolve modelPath, configPath, eSpeakDataPath
             if model_cfg.modelPath and not Path(model_cfg.modelPath).is_absolute():
-                model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
+                self.model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
             if model_cfg.configPath and not Path(model_cfg.configPath).is_absolute():
-                model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
+                self.model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
             if model_cfg.eSpeakDataPath and not Path(model_cfg.eSpeakDataPath).is_absolute():
-                model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
+                self.model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
     
     def synthesize_batch(self, texts: List[str]) -> TTSResults:
         """
@@ -87,22 +89,18 @@ class TTSClient:
             TTSResults with timing and RTF metrics
         """
         logger.info(f"Sending {len(texts)} texts to {self.url}")
-
+        
+        # Build config based on whether this is Chatterbox or Piper TTS
         if self.model_cfg.is_chatterbox:
             request_data = {
                 "texts": texts,
                 "config": {
                     "modelDir": self.model_cfg.modelDir,
-                    "tokenizerPath": self.model_cfg.tokenizerPath,
-                    "speechEncoderPath": self.model_cfg.speechEncoderPath,
-                    "embedTokensPath": self.model_cfg.embedTokensPath,
-                    "conditionalDecoderPath": self.model_cfg.conditionalDecoderPath,
-                    "languageModelPath": self.model_cfg.languageModelPath,
                     "referenceAudioPath": self.model_cfg.referenceAudioPath,
                     "language": self.model_cfg.language,
                     "sampleRate": self.model_cfg.sampleRate,
                     "useGPU": self.model_cfg.useGPU,
-                    "variant": self.model_cfg.variant or "fp32"
+                    "variant": self.model_cfg.variant
                 },
                 "includeSamples": self.include_samples
             }
