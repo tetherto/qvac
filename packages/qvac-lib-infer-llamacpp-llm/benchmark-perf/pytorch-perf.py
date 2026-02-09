@@ -146,7 +146,8 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
     output_tokens = len(tokenizer(output_text).input_ids) if output_text else 0
     total_gen_time = max(end_time - start_time, 1e-6)
     generation_time = max(total_gen_time - (first_token_ms / 1000.0 if first_token_ms else 0), 1e-6)
-    tps = output_tokens / generation_time
+    tokens_after_first = max(output_tokens - 1, 0)
+    tps = tokens_after_first / generation_time
 
     memory_end = capture_memory()
 

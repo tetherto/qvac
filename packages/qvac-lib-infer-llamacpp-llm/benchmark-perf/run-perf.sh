@@ -59,6 +59,13 @@ if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
   (cd "${ROOT_DIR}" && npm install)
 fi
 
+if [[ -z "${ADDON}" ]]; then
+  if ! find "${ROOT_DIR}/prebuilds" -maxdepth 2 -type f -name "qvac__llm-llamacpp*" >/dev/null 2>&1; then
+    echo "Missing prebuilds for local addon. Run 'npm run build' or pass --addon @qvac/llm-llamacpp@<version>."
+    exit 1
+  fi
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 is required but was not found on PATH."
   exit 1

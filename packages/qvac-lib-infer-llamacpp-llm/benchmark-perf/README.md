@@ -25,11 +25,17 @@ cd packages/qvac-lib-infer-llamacpp-llm
 # All-in-one runner (macOS/Linux)
 ./benchmark-perf/run-perf.sh --params device,ctx_size --reps 3 --judge --analyze --addon @qvac/llm-llamacpp
 
+# Run with a published addon version
+./benchmark-perf/run-perf.sh --addon @qvac/llm-llamacpp@0.8.8
+
 # Optional: Hugging Face token for gated models
 ./benchmark-perf/run-perf.sh --hf-token "$HF_TOKEN"
 
 # All-in-one runner (Windows)
 powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Params device,ctx_size -Reps 3 -Judge -Analyze -Addon @qvac/llm-llamacpp
+
+# Run with a published addon version
+powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Addon @qvac/llm-llamacpp@0.8.8
 
 # Optional: Hugging Face token for gated models
 powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -HfToken $env:HF_TOKEN
@@ -55,7 +61,7 @@ Node deps are listed in `benchmark-perf/package.json`:
 npm install --prefix benchmark-perf
 ```
 
-The runner will also install addon dependencies in `packages/qvac-lib-infer-llamacpp-llm` if missing.
+The runner will also install addon dependencies in `packages/qvac-lib-infer-llamacpp-llm` if missing. If you don't pass `--addon`, ensure local prebuilds exist by running `npm run build`.
 
 Python deps are listed in `benchmark-perf/requirements.txt` and are installed into a venv at `benchmark-perf/.venv` by the runner.
 

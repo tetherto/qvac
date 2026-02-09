@@ -24,6 +24,14 @@ if (-not (Test-Path "$PerfDir/node_modules")) {
   Pop-Location
 }
 
+if ($Addon -eq "") {
+  $prebuilds = Get-ChildItem -Path (Join-Path $PerfDir "prebuilds") -Recurse -Filter "qvac__llm-llamacpp*" -ErrorAction SilentlyContinue
+  if (-not $prebuilds) {
+    Write-Error "Missing prebuilds for local addon. Run 'npm run build' or pass -Addon @qvac/llm-llamacpp@<version>."
+    exit 1
+  }
+}
+
 $VenvDir = Join-Path $PerfDir "benchmark-perf/.venv"
 if (-not (Test-Path $VenvDir)) {
   Write-Host "==> Creating Python venv"
