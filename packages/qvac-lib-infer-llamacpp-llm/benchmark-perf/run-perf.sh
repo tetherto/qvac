@@ -11,6 +11,41 @@ RUN_JUDGE="false"
 RUN_ANALYSIS="false"
 ADDON=""
 HF_TOKEN="${HF_TOKEN:-}"
+ADDON_MODULE=""
+
+is_path_spec() {
+  [[ "$1" == /* || "$1" == ./* || "$1" == ../* || "$1" == "~/"* ]]
+}
+
+normalize_addon_module() {
+  local spec="$1"
+  if is_path_spec "$spec"; then
+    echo "$spec"
+    return
+  fi
+  if [[ "$spec" == @*/*@* ]]; then
+    echo "${spec%@*}"
+    return
+  fi
+  if [[ "$spec" == *@* && "$spec" != @* ]]; then
+    echo "${spec%@*}"
+    return
+  fi
+  echo "$spec"
+}
+
+extract_addon_version() {
+  local spec="$1"
+  if [[ "$spec" == @*/*@* ]]; then
+    echo "${spec##*@}"
+    return
+  fi
+  if [[ "$spec" == *@* && "$spec" != @* ]]; then
+    echo "${spec##*@}"
+    return
+  fi
+  echo ""
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,14 +84,38 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -d "${PERF_DIR}/node_modules" ]]; then
+if [[ -z "${ADDON_MODULE}" && -n "${ADDON}" ]]; then
+  ADDON_MODULE="$(normalize_addon_module "${ADDON}")"
+fi
+
+if [[ ! -f "${PERF_DIR}/node_modules/bare-path/package.json" ]]; then
   echo "==> Installing perf dependencies"
   (cd "${PERF_DIR}" && npm install)
 fi
 
-if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
-  echo "==> Installing addon dependencies"
-  (cd "${ROOT_DIR}" && npm install)
+if [[ -z "${ADDON}" || "${RUN_JUDGE}" == "true" ]]; then
+  if [[ ! -f "${ROOT_DIR}/node_modules/bare-path/package.json" ]]; then
+    echo "==> Installing addon dependencies"
+    (cd "${ROOT_DIR}" && npm install)
+  fi
+fi
+
+if [[ -n "${ADDON}" ]] && ! is_path_spec "${ADDON}"; then
+  ADDON_VERSION="$(extract_addon_version "${ADDON}")"
+  MODULE_PATH="${PERF_DIR}/node_modules/${ADDON_MODULE}/package.json"
+  INSTALL_ADDON="false"
+  if [[ ! -f "${MODULE_PATH}" ]]; then
+    INSTALL_ADDON="true"
+  elif [[ -n "${ADDON_VERSION}" ]]; then
+    INSTALLED_VERSION="$(node -p "require('${MODULE_PATH}').version" 2>/dev/null || echo "")"
+    if [[ "${INSTALLED_VERSION}" != "${ADDON_VERSION}" ]]; then
+      INSTALL_ADDON="true"
+    fi
+  fi
+  if [[ "${INSTALL_ADDON}" == "true" ]]; then
+    echo "==> Installing addon package ${ADDON}"
+    (cd "${PERF_DIR}" && npm install "${ADDON}")
+  fi
 fi
 
 if [[ -z "${ADDON}" ]]; then
@@ -93,7 +152,11 @@ echo "==> Running QVAC perf"
 if [[ -n "${HF_TOKEN}" ]]; then
   export HF_TOKEN
 fi
-bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${ADDON:+--addon "${ADDON}"}
+if [[ -n "${ADDON}" ]]; then
+  bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" --addon "${ADDON_MODULE}"
+else
+  bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}"
+fi
 
 echo "==> Running PyTorch perf"
 "${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${HF_TOKEN:+--hf-token "${HF_TOKEN}"}

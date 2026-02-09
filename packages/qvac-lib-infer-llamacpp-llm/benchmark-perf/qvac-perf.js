@@ -36,6 +36,18 @@ const stringifyPrompt = (messages) => {
   return messages.map(msg => `${msg.role}: ${msg.content}`).join('\n') + '\nassistant:'
 }
 
+const normalizeAddonSpec = (spec) => {
+  if (!spec) return spec
+  const isPath = spec.startsWith('/') || spec.startsWith('./') || spec.startsWith('../') || spec.startsWith('~/')
+  if (isPath) return spec
+  if (spec.startsWith('@')) {
+    const versionIndex = spec.indexOf('@', 1)
+    return versionIndex === -1 ? spec : spec.slice(0, versionIndex)
+  }
+  const versionIndex = spec.lastIndexOf('@')
+  return versionIndex > 0 ? spec.slice(0, versionIndex) : spec
+}
+
 const parseArgs = (argv) => {
   const args = {
     config: DEFAULT_CONFIG_PATH,
@@ -51,7 +63,7 @@ const parseArgs = (argv) => {
     else if (arg === '--params') args.params = argv[++i]
     else if (arg === '--reps') args.reps = Number(argv[++i])
     else if (arg === '--output') args.output = argv[++i]
-    else if (arg === '--addon') args.addon = argv[++i]
+    else if (arg === '--addon') args.addon = normalizeAddonSpec(argv[++i])
     else if (arg === '--hf-token') args.hfToken = argv[++i]
   }
   return args
@@ -225,7 +237,9 @@ const runOnce = async ({
     ttftMs,
     tps: stats.TPS ?? null,
     generatedTokens: stats.generatedTokens ?? null,
-    promptTokensPerTtft: (stats.promptTokens && ttftMs) ? stats.promptTokens / ttftMs : null,
+    promptTokensPerTtft: (stats.promptTokens !== null && stats.promptTokens !== undefined && ttftMs)
+      ? stats.promptTokens / ttftMs
+      : null,
     memory: {
       load: memoryLoad,
       end: memoryEnd,

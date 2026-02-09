@@ -87,6 +87,9 @@ const run = async () => {
 
   const config = JSON.parse(fs.readFileSync(args.config, 'utf-8'))
   const judgeModel = config.judgeModel
+  if (!judgeModel) {
+    throw new Error('Missing judgeModel in perf-config.json')
+  }
   const judgeConfig = (config.models || []).find(model => model.id === judgeModel.modelId)
   if (!judgeConfig) {
     throw new Error(`Missing judge model config for ${judgeModel.modelId}`)

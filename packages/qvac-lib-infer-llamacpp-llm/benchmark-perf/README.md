@@ -53,6 +53,14 @@ bare benchmark-perf/judge.js --input benchmark-perf/results/qvac_*.jsonl
 python3 benchmark-perf/analysis/analyze.py --input benchmark-perf/results --output benchmark-perf/analysis/plots
 ```
 
+### Using `npm run`
+
+When invoking via npm, pass script args after `--`:
+
+```bash
+npm run benchmark-perf -- --addon @qvac/llm-llamacpp@0.8.7
+```
+
 ## Dependencies
 
 Node deps are listed in `benchmark-perf/package.json`:

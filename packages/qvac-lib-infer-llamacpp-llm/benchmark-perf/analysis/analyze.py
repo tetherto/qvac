@@ -120,7 +120,7 @@ def plot_param_effects(df, output_dir):
         if subset.empty:
             continue
         for metric in metrics:
-            if metric not in subset:
+            if metric not in subset.columns:
                 continue
             plt.figure(figsize=(10, 5))
             sns.lineplot(
@@ -137,7 +137,7 @@ def plot_param_effects(df, output_dir):
 
 
 def plot_prompt_throughput(df, output_dir):
-    if "promptTokensPerTtft" not in df:
+    if "promptTokensPerTtft" not in df.columns:
         return
     plt.figure(figsize=(10, 5))
     sns.scatterplot(data=df, x="perfValue", y="promptTokensPerTtft", hue="impl")
@@ -163,7 +163,7 @@ def plot_pca(df, output_dir):
 
 
 def plot_qvac_vs_torch(df, output_dir):
-    if "impl" not in df:
+    if "impl" not in df.columns:
         return
     merged = df.pivot_table(
         index=["modelId", "perfParam", "perfValue", "promptId", "rep", "platform", "arch", "backend"],
@@ -179,7 +179,7 @@ def plot_qvac_vs_torch(df, output_dir):
     for metric in ["ttftMs", "tps"]:
         qvac_col = f"{metric}_qvac"
         torch_col = f"{metric}_pytorch"
-        if qvac_col not in merged or torch_col not in merged:
+        if qvac_col not in merged.columns or torch_col not in merged.columns:
             continue
         merged[f"{metric}_delta"] = merged[qvac_col] - merged[torch_col]
         plt.figure(figsize=(10, 5))
@@ -192,7 +192,7 @@ def plot_qvac_vs_torch(df, output_dir):
 
 
 def plot_memory(df, output_dir):
-    if "memory_end_rss" not in df:
+    if "memory_end_rss" not in df.columns:
         return
     plt.figure(figsize=(10, 5))
     sns.scatterplot(data=df, x="perfValue", y="memory_end_rss", hue="impl")
@@ -203,7 +203,7 @@ def plot_memory(df, output_dir):
 
 
 def plot_score(df, output_dir):
-    if "score" not in df:
+    if "score" not in df.columns:
         return
     plt.figure(figsize=(10, 5))
     sns.lineplot(data=df, x="perfValue", y="score", hue="impl", marker="o")
