@@ -322,13 +322,41 @@ function createTestDataset (filePath, format = 'chat') {
   return filePath
 }
 
+function createPauseResumeTestDataset (filePath) {
+  const baseSamples = [
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Name a planet.' }, { role: 'assistant', content: 'Earth is a planet in our solar system.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 3 times 4?' }, { role: 'assistant', content: '3 times 4 equals 12.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the opposite of hot?' }, { role: 'assistant', content: 'The opposite of hot is cold.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'How many days in a week?' }, { role: 'assistant', content: 'There are 7 days in a week.' }] }
+  ]
+  const dir = path.dirname(filePath)
+  fs.mkdirSync(dir, { recursive: true })
+  const content = baseSamples.map(s => JSON.stringify(s)).join('\n')
+  fs.writeFileSync(filePath, content)
+  return filePath
+}
+
+function setupPauseResumeTestData (testDataDir, testCheckpointDir, testId) {
+  const trainDatasetPath = path.join(testDataDir, `train${testId}.jsonl`)
+  const evalDatasetPath = path.join(testDataDir, `eval${testId}.jsonl`)
+  const checkpointDir = path.join(testCheckpointDir, `test${testId}`)
+
+  createPauseResumeTestDataset(trainDatasetPath)
+  createPauseResumeTestDataset(evalDatasetPath)
+  cleanupCheckpoints(checkpointDir)
+
+  return { trainDatasetPath, evalDatasetPath, checkpointDir }
+}
+
 function cleanupCheckpoints (checkpointDir) {
   if (fs.existsSync(checkpointDir)) {
     try {
       fs.rmSync(checkpointDir, { recursive: true, force: true })
-    } catch (err) {
-      // Ignore cleanup errors
-    }
+    } catch (err) {}
   }
 }
 
@@ -336,7 +364,6 @@ function verifyCheckpointExists (checkpointPath) {
   return fs.existsSync(checkpointPath) && fs.statSync(checkpointPath).isDirectory()
 }
 
-// Find pause checkpoint directory (step-based naming: pause_checkpoint_step_00000003)
 function findPauseCheckpoint (checkpointDir) {
   if (!fs.existsSync(checkpointDir)) {
     return null
@@ -349,12 +376,10 @@ function findPauseCheckpoint (checkpointDir) {
     return null
   }
 
-  // Return the path to the latest pause checkpoint (highest step number)
-  // Sort by step number (extract from name)
   pauseCheckpoints.sort((a, b) => {
     const stepA = parseInt(a.match(/pause_checkpoint_step_(\d+)/)?.[1] || '0')
     const stepB = parseInt(b.match(/pause_checkpoint_step_(\d+)/)?.[1] || '0')
-    return stepB - stepA // Descending order
+    return stepB - stepA
   })
 
   return path.join(checkpointDir, pauseCheckpoints[0])
@@ -363,9 +388,9 @@ function findPauseCheckpoint (checkpointDir) {
 function getDefaultFinetuneConfig (overrides = {}) {
   const testOutputDir = path.join('test', 'finetune-output')
   return {
-    trainDatasetDir: '', // Must be provided in overrides
-    evalDatasetDir: '', // Must be provided in overrides
-    outputParametersDir: testOutputDir, // Required property
+    trainDatasetDir: '',
+    evalDatasetDir: '',
+    outputParametersDir: testOutputDir,
     numberOfEpochs: 1,
     learningRate: 1e-5,
     lrMin: 1e-8,
@@ -395,7 +420,6 @@ async function waitForFinetuningStart (model, options = {}) {
   return 'IDLE'
 }
 
-// Setup test datasets and checkpoint directory
 function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
   const trainDatasetPath = path.join(testDataDir, `train${testId}.jsonl`)
   const evalDatasetPath = path.join(testDataDir, `eval${testId}.jsonl`)
@@ -408,54 +432,39 @@ function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
   return { trainDatasetPath, evalDatasetPath, checkpointDir }
 }
 
-// Verify pause checkpoint exists and has required files
 function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
   return new Promise((resolve) => {
     setTimeout(() => {
       const pauseCheckpointPath = findPauseCheckpoint(checkpointDir)
 
-      if (pauseCheckpointPath) {
-        t.ok(verifyCheckpointExists(pauseCheckpointPath), 'Pause checkpoint should exist')
-        t.comment(`Pause checkpoint found: ${path.basename(pauseCheckpointPath)}`)
-
-        // Verify metadata exists
-        const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
-        if (fs.existsSync(metadataPath)) {
-          t.comment('Pause checkpoint metadata exists')
-          try {
-            const metadataContent = fs.readFileSync(metadataPath, 'utf8')
-            t.ok(metadataContent.length > 0, 'Metadata should not be empty')
-            t.comment(`Metadata contains ${metadataContent.split('\n').length} lines`)
-          } catch (err) {
-            t.comment(`Could not read metadata: ${err.message}`)
-          }
-        } else {
-          t.comment('Metadata file not found in pause checkpoint')
-        }
-
-        // Check for model.gguf (LoRA adapter)
-        const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
-        if (fs.existsSync(modelPath)) {
-          t.comment('Pause checkpoint contains model.gguf')
-        }
-
-        resolve(pauseCheckpointPath)
-      } else {
-        t.comment('Pause checkpoint may not exist yet (timing dependent)')
-        resolve(null)
+      if (!pauseCheckpointPath) {
+        t.fail('Pause checkpoint must exist after pause - required for resume')
+        return resolve(null)
       }
+
+      t.ok(verifyCheckpointExists(pauseCheckpointPath), 'Pause checkpoint should exist')
+      t.comment(`Pause checkpoint found: ${path.basename(pauseCheckpointPath)}`)
+
+      const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
+      t.ok(fs.existsSync(metadataPath), 'Pause checkpoint must contain metadata.json')
+      if (fs.existsSync(metadataPath)) {
+        const metadataContent = fs.readFileSync(metadataPath, 'utf8')
+        t.ok(metadataContent.length > 0, 'Metadata should not be empty')
+      }
+
+      const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
+      t.ok(fs.existsSync(modelPath), 'Pause checkpoint must contain model.gguf (LoRA adapter)')
+
+      resolve(pauseCheckpointPath)
     }, waitMs)
   })
 }
 
-// Handle early finetuning completion (when it completes before pause can be tested)
 async function handleEarlyCompletion (t, finetunePromise, checkpointDir = null, message = 'Finetuning completed too quickly') {
   t.comment(`${message} - this is acceptable for small datasets`)
   const result = await finetunePromise
-  t.ok(result, 'Finetuning should complete')
-  if (result.status) {
-    t.ok(result.status === 'IDLE', 'Final status should be IDLE')
-  }
+  t.ok(result && typeof result === 'object', 'Finetuning should complete with result object')
+  t.ok(result?.status === 'IDLE', `Final status should be IDLE, got: ${result?.status}`)
   if (checkpointDir) {
     cleanupCheckpoints(checkpointDir)
   }
@@ -464,13 +473,9 @@ async function handleEarlyCompletion (t, finetunePromise, checkpointDir = null, 
 
 async function verifyFinalStatus (t, model, result = null) {
   await new Promise(resolve => setTimeout(resolve, 1000))
+  t.ok(result, 'Result must be provided')
   const finalStatus = result?.status ?? 'IDLE'
   t.ok(finalStatus === 'IDLE', `Final status should be IDLE, got: ${finalStatus}`)
-
-  if (result?.status) {
-    t.comment(`Result status: ${result.status}`)
-  }
-
   return finalStatus
 }
 
@@ -479,7 +484,6 @@ module.exports = {
   ensureModelPath,
   getMediaPath,
   makeOutputCollector,
-  testTextWithSettings,
   getDefaultTextModel,
   getFinetuneModel,
   createDefaultGpuConfig,
@@ -492,6 +496,7 @@ module.exports = {
   getDefaultFinetuneConfig,
   waitForFinetuningStart,
   setupFinetuneTestData,
+  setupPauseResumeTestData,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus
