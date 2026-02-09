@@ -146,11 +146,12 @@ public:
   common_params& getCommonParams();
 
   /**
-   * Get the current checkpoint state (for status checking).
+   * Get the current checkpoint state.
    * Returns nullptr if no checkpoint state exists.
    */
   llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState() const {
-    return currentCheckpointState_;
+    return currentCheckpointState_ != nullptr ? currentCheckpointState_
+                                              : pausedCheckpointState_.get();
   }
 
   /**

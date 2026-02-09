@@ -554,6 +554,9 @@ void optEpochCallback(
 
   if (!state->finetuningStartedEmitted && state->logFn) {
     state->finetuningStartedEmitted = true;
+    state->isIdle.store(false);
+    state->isFinetuning.store(true);
+    state->isPaused.store(false);
     state->logFn(R"({"type":"FinetuningStarted"})");
   }
 
@@ -583,6 +586,8 @@ void optEpochCallback(
       if (savePauseCheckpoint(optCtx, *state)) {
         state->pauseCheckpointSaved.store(true);
         state->shouldExit.store(true);
+        state->isFinetuning.store(false);
+        state->isPaused.store(true);
         
         if (state->logFn) {
           std::ostringstream pauseMsg;

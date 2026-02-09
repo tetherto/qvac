@@ -22,7 +22,6 @@ export interface Addon {
   activate(): Promise<void>
   pause(): Promise<boolean>
   stop(): Promise<void>
-  status(): Promise<string>
   append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>
   cancel(jobId?: number): Promise<void>
   destroyInstance(): Promise<void>
@@ -143,8 +142,6 @@ export default class LlmLlamacpp extends BaseInference {
   stop(): Promise<void>
 
   cancel(jobId?: string): Promise<void>
-
-  status(): Promise<any>
 
   destroy(): Promise<void>
 

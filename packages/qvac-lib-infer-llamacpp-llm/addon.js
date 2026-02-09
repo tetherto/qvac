@@ -79,14 +79,6 @@ class LlamaInterface {
     }
   }
 
-  /**
-   * Get addon status
-   * @returns {String} Current status
-   */
-  async status () {
-    return this._binding.status(this._handle)
-  }
-
   isFinetuningRunning () {
     return this._binding.isFinetuningRunning(this._handle)
   }

@@ -221,40 +221,6 @@ inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* status(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
-  if (llamaModel != nullptr) {
-    auto* checkpointState = llamaModel->getCurrentCheckpointState();
-    if (checkpointState) {
-      bool shouldExit = checkpointState->shouldExit.load();
-      bool pauseCheckpointSaved = checkpointState->pauseCheckpointSaved.load();
-      
-      if (shouldExit && pauseCheckpointSaved) {
-        return js::String::create(env, "PAUSED");
-      }
-      if (!shouldExit) {
-        return js::String::create(env, "FINETUNING");
-      }
-    }
-  }
-
-  return js::String::create(env, "IDLE");
-}
-JSCATCH
-
 inline js_value_t* isFinetuningRunning(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -273,7 +239,7 @@ inline js_value_t* isFinetuningRunning(js_env_t* env, js_callback_info_t* info) 
   bool running = false;
   if (llamaModel != nullptr) {
     auto* checkpointState = llamaModel->getCurrentCheckpointState();
-    if (checkpointState != nullptr && !checkpointState->shouldExit.load()) {
+    if (checkpointState != nullptr && checkpointState->isFinetuning.load()) {
       running = true;
     }
   }
@@ -289,27 +255,6 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  LlamaModel* statusModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      statusModel = it->second;
-    }
-  }
-  string statusStr = "IDLE";
-  if (statusModel != nullptr) {
-    auto* checkpointState = statusModel->getCurrentCheckpointState();
-    if (checkpointState) {
-      if (checkpointState->shouldExit.load() && 
-          checkpointState->pauseCheckpointSaved.load()) {
-        statusStr = "PAUSED";
-      } else if (!checkpointState->shouldExit.load()) {
-        statusStr = "FINETUNING";
-      }
-    }
-  }
-
   LlamaModel* llamaModel = nullptr;
   {
     std::scoped_lock lock{g_modelMapMutex};
@@ -319,7 +264,15 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  if (statusStr == "PAUSED" && llamaModel != nullptr) {
+  bool shouldResume = false;
+  if (llamaModel != nullptr) {
+    auto* checkpointState = llamaModel->getCurrentCheckpointState();
+    if (checkpointState != nullptr && checkpointState->isPaused.load()) {
+      shouldResume = true;
+    }
+  }
+
+  if (shouldResume && llamaModel != nullptr) {
     FinetuningParameters params;
     bool hasParams = qvac_lib_inference_addon_llama_detail::take(
         instance.addonCpp.get(), params);

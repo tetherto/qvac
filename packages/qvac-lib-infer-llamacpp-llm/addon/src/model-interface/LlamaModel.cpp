@@ -960,6 +960,11 @@ void LlamaModel::finetune(
                      checkpointState->pauseCheckpointSaved.load();
 
     if (checkpointState) {
+      checkpointState->isIdle.store(true);
+      checkpointState->isFinetuning.store(false);
+      if (!wasPaused) {
+        checkpointState->isPaused.store(false);
+      }
       clearGlobalCheckpointState();
       if (wasPaused) {
         pausedCheckpointState_ = std::move(checkpointState);
@@ -981,6 +986,16 @@ void LlamaModel::finetune(
       }
     }
   } catch (const std::exception& ex) {
+    if (currentCheckpointState_) {
+      currentCheckpointState_->isIdle.store(true);
+      currentCheckpointState_->isFinetuning.store(false);
+      currentCheckpointState_->isPaused.store(false);
+    }
+    if (pausedCheckpointState_) {
+      pausedCheckpointState_->isIdle.store(true);
+      pausedCheckpointState_->isFinetuning.store(false);
+      pausedCheckpointState_->isPaused.store(false);
+    }
     llama_finetuning_helpers::clearGlobalCheckpointState();
     currentCheckpointState_ = nullptr;
     if (logCallback) {
