@@ -18,11 +18,11 @@ struct DeviceDescription {
   std::string gpuBackend;
 
   DeviceDescription(
-      const ggml_backend_dev_t DEV,
-      const enum ggml_backend_dev_type BACKEND_TYPE_ENUM,
+      const ggml_backend_dev_t dev,
+      const enum ggml_backend_dev_type backendTypeEnum,
       const BackendInterface& bckI)
-      : gpuDescription(bckI.ggml_backend_dev_description(DEV)),
-        gpuBackend(bckI.ggml_backend_dev_name(DEV)) {
+      : gpuDescription(bckI.ggml_backend_dev_description(dev)),
+        gpuBackend(bckI.ggml_backend_dev_name(dev)) {
     std::transform(
         gpuDescription.begin(),
         gpuDescription.end(),
@@ -32,7 +32,7 @@ struct DeviceDescription {
         gpuBackend.begin(), gpuBackend.end(), gpuBackend.begin(), tolower);
     {
       std::string backendTypeStr;
-      switch (BACKEND_TYPE_ENUM) {
+      switch (backendTypeEnum) {
       case GGML_BACKEND_DEVICE_TYPE_CPU:
         backendTypeStr = "CPU";
         break;
@@ -62,10 +62,10 @@ struct DeviceDescription {
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_reg_t REG,
+    std::vector<std::string>& openClBackends, const ggml_backend_reg_t reg,
     const DeviceDescription& devDescr,
-    const enum ggml_backend_dev_type BACKEND_TYPE_ENUM) {
-  if (bckI.ggml_backend_reg_name(REG) != std::string("RPC")) {
+    const enum ggml_backend_dev_type backendTypeEnum) {
+  if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
       std::string text = string_format(
@@ -74,18 +74,18 @@ void emplaceIfValidDevice(
 #endif
     };
 
-    const bool IS_OPEN_CL =
+    const bool isOpenCl =
         devDescr.gpuBackend.find("opencl") != std::string::npos;
-    const bool IS_ADRENO =
+    const bool isAdreno =
         devDescr.gpuDescription.find("adreno") != std::string::npos;
-    if (IS_OPEN_CL && IS_ADRENO) {
+    if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
-    } else if (!IS_OPEN_CL) {
+    } else if (!isOpenCl) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
-      if (BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
         gpuBackends.emplace_back(devDescr.gpuBackend);
-      } else if (BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
         igpuBackends.emplace_back(devDescr.gpuBackend);
       }
     }
@@ -93,22 +93,20 @@ void emplaceIfValidDevice(
 }
 
 bool shouldProcessDevice(
-    const enum ggml_backend_dev_type BACKEND_TYPE_ENUM,
-    const DeviceDescription& DEV_DESCR,
-    const std::optional<MainGpuType> MAIN_GPU_TYPE) {
-  const bool ANY_GPU = !MAIN_GPU_TYPE.has_value() &&
-                       (BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU ||
-                        BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_IGPU);
-  const bool INTEGRATED_GPU =
-      MAIN_GPU_TYPE.has_value() &&
-      MAIN_GPU_TYPE.value() == MainGpuType::Integrated &&
-      BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_IGPU;
-  const bool DEDICATED_GPU = MAIN_GPU_TYPE.has_value() &&
-                             MAIN_GPU_TYPE.value() == MainGpuType::Dedicated &&
-                             BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU;
-  const bool IS_OPEN_CL =
-      DEV_DESCR.gpuBackend.find("opencl") != std::string::npos;
-  return ANY_GPU || INTEGRATED_GPU || DEDICATED_GPU || IS_OPEN_CL;
+    const enum ggml_backend_dev_type backendTypeEnum,
+    const DeviceDescription& devDescr,
+    const std::optional<MainGpuType> mainGpuType) {
+  const bool anyGpu = !mainGpuType.has_value() &&
+                      (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                       backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU);
+  const bool integratedGpu = mainGpuType.has_value() &&
+                             mainGpuType.value() == MainGpuType::Integrated &&
+                             backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
+  const bool dedicatedGpu = mainGpuType.has_value() &&
+                            mainGpuType.value() == MainGpuType::Dedicated &&
+                            backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU;
+  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
+  return anyGpu || integratedGpu || dedicatedGpu || isOpenCl;
 }
 
 void tryEmplaceDevice(
@@ -117,12 +115,12 @@ void tryEmplaceDevice(
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends) {
-  const ggml_backend_dev_t DEV = bckI.ggml_backend_dev_get(deviceIndex);
-  const ggml_backend_reg_t REG = bckI.ggml_backend_dev_backend_reg(DEV);
-  const enum ggml_backend_dev_type BACKEND_TYPE_ENUM =
-      bckI.ggml_backend_dev_type(DEV);
-  const DeviceDescription DEV_DESCR(DEV, BACKEND_TYPE_ENUM, bckI);
-  if (shouldProcessDevice(BACKEND_TYPE_ENUM, DEV_DESCR, mainGpuType)) {
+  const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  const enum ggml_backend_dev_type backendTypeEnum =
+      bckI.ggml_backend_dev_type(dev);
+  const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
+  if (shouldProcessDevice(backendTypeEnum, devDescr, mainGpuType)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
@@ -131,9 +129,9 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
-        REG,
-        DEV_DESCR,
-        BACKEND_TYPE_ENUM);
+        reg,
+        devDescr,
+        backendTypeEnum);
   } else {
 #ifndef NDEBUG
     bckI.llamaLogCallback(

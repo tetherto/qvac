@@ -14,8 +14,8 @@ template <>
 js_value_t*
 JsIfLlama::createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto args = js::getArguments(env, info);
-  constexpr size_t K_EXPECTED_FIVE_ARGS = 5;
-  if (args.size() != 4 && args.size() != K_EXPECTED_FIVE_ARGS) {
+  constexpr size_t kExpectedFiveArgs = 5;
+  if (args.size() != 4 && args.size() != kExpectedFiveArgs) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Incorrect number of parameters. Expected 4 or 5 parameters");
@@ -37,7 +37,7 @@ JsIfLlama::createInstance(js_env_t* env, js_callback_info_t* info) try {
   std::unordered_map<std::string, std::string> configFilemap;
   configFilemap = getConfigFilemap(env, configurationParams);
   std::scoped_lock lock{instancesMtx_};
-  if (args.size() == K_EXPECTED_FIVE_ARGS) {
+  if (args.size() == kExpectedFiveArgs) {
     if (!js::is<js::Object>(env, args[4])) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
