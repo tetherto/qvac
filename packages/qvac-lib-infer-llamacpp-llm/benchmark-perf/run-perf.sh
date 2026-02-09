@@ -59,6 +59,11 @@ if [[ ! -d "${ROOT_DIR}/node_modules" ]]; then
   (cd "${ROOT_DIR}" && npm install)
 fi
 
+if ! python3 -c "import psutil" >/dev/null 2>&1; then
+  echo "==> Installing Python deps"
+  (cd "${ROOT_DIR}" && pip install -r benchmark-perf/requirements.txt)
+fi
+
 echo "==> Running QVAC perf"
 if [[ -n "${HF_TOKEN}" ]]; then
   export HF_TOKEN

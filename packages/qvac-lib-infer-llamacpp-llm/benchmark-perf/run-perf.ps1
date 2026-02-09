@@ -24,6 +24,15 @@ if (-not (Test-Path "$PerfDir/node_modules")) {
   Pop-Location
 }
 
+try {
+  python -c "import psutil" | Out-Null
+} catch {
+  Write-Host "==> Installing Python deps"
+  Push-Location "$PerfDir"
+  pip install -r benchmark-perf/requirements.txt
+  Pop-Location
+}
+
 Write-Host "==> Running QVAC perf"
 $addonArgs = @()
 if ($Addon -ne "") {

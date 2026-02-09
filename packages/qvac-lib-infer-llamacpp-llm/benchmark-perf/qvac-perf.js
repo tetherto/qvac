@@ -231,7 +231,8 @@ const runOnce = async ({
 }
 
 const run = async () => {
-  const args = parseArgs(process.argv)
+  const argv = bareProcess?.argv || (typeof process !== 'undefined' ? process.argv : [])
+  const args = parseArgs(argv)
   if (args.hfToken) {
     if (bareProcess?.env) bareProcess.env.HF_TOKEN = args.hfToken
     if (typeof process !== 'undefined' && process.env) process.env.HF_TOKEN = args.hfToken
