@@ -6,9 +6,7 @@ import { loadModel, unloadModel, transcribe } from "@qvac/sdk";
  * Downloads the TDT model from HuggingFace (community ONNX conversions):
  *   https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
  *
- * Other model variants available:
- *   CTC (English-only): https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
- *   EOU (streaming):    https://huggingface.co/altunene/parakeet-rs
+ * Note: Only the TDT model variant is currently supported.
  *
  * Usage:
  *   bun run examples/parakeet-filesystem.ts <wav-file-path> [model-url]
@@ -43,7 +41,7 @@ try {
     modelSrc: modelUrl,
     modelType: "parakeet",
     modelConfig: {
-      // Model variant: "tdt" | "ctc" | "eou" | "sortformer"
+      // Only "tdt" is currently supported
       modelType: "tdt",
       // Inference options
       maxThreads: 4,

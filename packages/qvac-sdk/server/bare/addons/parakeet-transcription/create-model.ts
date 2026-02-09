@@ -6,8 +6,8 @@ import TranscriptionParakeet, {
 import { type AnyModel } from "@/server/bare/registry/model-registry";
 import { type ParakeetConfig } from "@/schemas";
 import { createStreamLogger } from "@/logging";
+import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
-import path from "bare-path";
 
 export type ParakeetModel = TranscriptionParakeet;
 
@@ -16,29 +16,20 @@ export function createParakeetModel(
   modelPath: string,
   parakeetConfig: ParakeetConfig,
 ) {
-  // modelPath points to a file inside the model directory
-  // e.g., /path/to/models/parakeet-tdt-0.6b-v3-onnx/encoder-model.onnx
-  //
-  // The parakeet addon uses two paths:
-  //   1. diskPath for downloadFiles() - must be the model directory (where ONNX files live)
-  //      so existsSync(path.join(diskPath, 'encoder-model.onnx')) succeeds
-  //   2. config.path for _createAddon/_loadModelWeights - the model directory path
-  //      overrides _getModelFilePath() = path.join(diskPath, modelName)
-  const modelDir = path.dirname(modelPath);
+  const { dirPath } = parseModelPath(modelPath);
 
-  const loader = new FilesystemDL({ dirPath: modelDir });
+  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, "parakeet");
 
-  // Cast args - our FilesystemDL loader is runtime-compatible with the expected Loader interface
   const args = {
     loader,
     logger,
-    modelName: path.basename(modelDir),
-    diskPath: modelDir,
+    modelName: parseModelPath(dirPath).basePath,
+    diskPath: dirPath,
   } as unknown as TranscriptionParakeetArgs;
 
   const config: UpstreamConfig = {
-    path: modelDir,
+    path: dirPath,
     parakeetConfig: parakeetConfig as TranscriptionParakeetConfig,
   };
 
