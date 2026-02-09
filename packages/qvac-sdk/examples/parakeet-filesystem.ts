@@ -1,31 +1,54 @@
 import { loadModel, unloadModel, transcribe } from "@qvac/sdk";
 
-// Get HTTP URL from command line or use default HuggingFace URL
-const httpUrl =
-  process.argv[3] ||
-  "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2/resolve/main/";
+/**
+ * Parakeet Transcription Example
+ *
+ * Downloads models from community HuggingFace repos (not NVIDIA):
+ *   TDT (multilingual): https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+ *   CTC (English-only): https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
+ *   EOU (streaming):    https://huggingface.co/altunene/parakeet-rs
+ *
+ * Preprocessor (required for TDT):
+ *   https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx
+ *
+ * Usage:
+ *   bun run examples/parakeet-filesystem.ts <model-dir> <wav-file-path>
+ *
+ * Example:
+ *   bun run examples/parakeet-filesystem.ts ./models/parakeet-tdt-0.6b-v3-onnx ./audio.wav
+ */
 
 // Parse command line arguments
-const audioFilePath = process.argv[2];
+const args = process.argv.slice(2);
 
-if (!audioFilePath) {
+if (args.length < 2) {
   console.error(
-    "Usage: bun run examples/parakeet-filesystem.ts <wav-file-path> [model-http-url]",
+    "Usage: bun run examples/parakeet-filesystem.ts <model-dir> <wav-file-path>",
+  );
+  console.error(
+    "Example: bun run examples/parakeet-filesystem.ts ./models/parakeet-tdt-0.6b-v3-onnx ./audio.wav",
   );
   process.exit(1);
 }
 
-try {
-  console.log("🎤 Starting Parakeet transcription example...");
-  console.log(`📦 Model source: ${httpUrl}`);
+const modelDir = args[0] as string;
+const audioFilePath = args[1] as string;
 
-  // Load the Parakeet model from HTTP
-  console.log("📥 Loading Parakeet model...");
+// Point modelSrc to the encoder ONNX file; the addon loads all files from the same directory
+const modelSrc = `${modelDir}/encoder-model.onnx`;
+
+try {
+  console.log("Starting Parakeet transcription example...");
+  console.log(`Model directory: ${modelDir}`);
+  console.log(`Audio file: ${audioFilePath}`);
+
+  // Load the Parakeet model from local filesystem
+  console.log("Loading Parakeet model...");
   const modelId = await loadModel({
-    modelSrc: httpUrl,
+    modelSrc,
     modelType: "parakeet",
     modelConfig: {
-      // Model variant: "tdt" (multilingual), "ctc" (English), "eou" (streaming), "sortformer" (diarization)
+      // Model variant: "tdt" | "ctc" | "eou" | "sortformer"
       modelType: "tdt",
       // Inference options
       maxThreads: 4,
@@ -38,30 +61,31 @@ try {
       captionEnabled: false,
     },
     onProgress: (progress) => {
-      const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
-      const totalMB = (progress.total / 1024 / 1024).toFixed(2);
-      console.log(
-        `Loading: ${progress.percentage.toFixed(1)}% (${downloadedMB}MB / ${totalMB}MB)`,
-      );
+      console.log(progress);
     },
   });
 
-  console.log(`✅ Parakeet model loaded with ID: ${modelId}`);
+  console.log(`Parakeet model loaded with ID: ${modelId}`);
 
   // Perform transcription
-  console.log("🎧 Transcribing audio...");
+  console.log("Transcribing audio...");
   const text = await transcribe({ modelId, audioChunk: audioFilePath });
 
-  console.log("📝 Transcription result:");
+  console.log("Transcription result:");
   console.log(text);
 
   // Unload the model when done
-  console.log("🧹 Unloading Parakeet model...");
-  await unloadModel({ modelId });
-  console.log("✅ Parakeet model unloaded successfully");
+  console.log("Unloading Parakeet model...");
+  try {
+    await unloadModel({ modelId });
+    console.log("Parakeet model unloaded successfully");
+  } catch {
+    // parakeet addon does not yet implement unload - process exit will clean up
+    console.log("Parakeet model cleanup via process exit");
+  }
 
   process.exit(0);
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("Error:", error);
   process.exit(1);
 }
