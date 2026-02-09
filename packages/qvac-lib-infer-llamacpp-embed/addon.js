@@ -19,38 +19,21 @@ class BertInterface {
   } ///
 
   /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
+   * Cancel current inference process.
    */
-  async cancel (jobId) {
-    this._binding.cancel(this._handle, jobId)
+  async cancel () {
+    this._binding.cancel(this._handle)
   }
 
   /**
-   * Adds new input to the processing queue
+   * Processes new input
    * @param {Object} data
    * @param {String} data.type - Either 'text' for string input or 'end of job'
    * @param {String} data.input - The input text string (arrays are JSON stringified)
    * @returns {Promise<Number>} - job ID
    */
-  async append (data) {
-    return this._binding.append(this._handle, data)
-  }
-
-  /**
-   * Addon process status
-   * @returns {Promise<String>}
-   */
-  async status () {
-    return this._binding.status(this._handle)
-  }
-
-  /**
-   * Stops addon process and clears resources (including memory).
-   */
-  async destroyInstance () {
-    if (!this._handle) return
-    this._binding.destroyInstance(this._handle)
-    this._handle = null
+  async runJob (data) {
+    return this._binding.runJob(this._handle, data)
   }
 
   /**
@@ -71,27 +54,14 @@ class BertInterface {
     return this._binding.activate(this._handle)
   }
 
-  /**
-   * Resets the model state
-   */
-  async reset () {
-    return this._binding.reset(this._handle)
+  // unload() alias for caller BaseInference
+  async destroyInstance () {
+    await this.unload()
   }
 
   /**
-   * Pauses the model processing
+   * Stops addon process and clears resources (including memory).
    */
-  async pause () {
-    return this._binding.pause(this._handle)
-  }
-
-  /**
-   * Stops the model processing
-   */
-  async stop () {
-    return this._binding.stop(this._handle)
-  }
-
   async unload () {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)

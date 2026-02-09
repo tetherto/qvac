@@ -1,4 +1,4 @@
-'use strict'
+'jesusmb1995:feature-qvac-lib-infer-llamacpp-llm-refactor-addon-cppuse strict'
 
 const fs = require('bare-fs')
 const path = require('bare-path')

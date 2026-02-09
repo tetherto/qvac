@@ -5,8 +5,6 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { BertInterface } = require('./addon')
 
-const END_OF_INPUT = 'end of job'
-
 /**
  * GGML client implementation for BERT GTE model
  */
@@ -20,7 +18,7 @@ class GGMLBert extends BaseInference {
    */
   constructor (
     { opts = {}, loader, logger = null, diskPath = '.', modelName, exclusiveRun = true },
-    config
+    config = {}
   ) {
     super({ logger, opts, exclusiveRun })
     this._config = config
@@ -88,13 +86,10 @@ class GGMLBert extends BaseInference {
       ? { type: 'sequences', input: text }
       : { type: 'text', input: text }
 
-    const jobId = await this.addon.append(inputData)
+    await this.addon.runJob(inputData)
 
-    const response = this._createResponse(jobId)
-
-    await this.addon.append({ type: END_OF_INPUT })
-
-    return response
+    // Only one job is supported at the moment, with hardcoded jobId 'job'
+    return this._createResponse('job')
   }
 
   /**
@@ -113,9 +108,27 @@ class GGMLBert extends BaseInference {
     return new BertInterface(
       binding,
       configurationParams,
-      this._outputCallback.bind(this),
+      this._addonOutputCallback.bind(this),
       console.log
     )
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
+    if (typeof data === 'object' && data !== null && 'tokens_per_second' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+    }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (event.includes('Embeddings')) {
+      mappedEvent = 'Output'
+    }
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 }
 

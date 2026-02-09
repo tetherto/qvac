@@ -21,17 +21,10 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
   activate(): Promise<void>
-  pause(): Promise<void>
-  stop(): Promise<void>
-  reset(): Promise<void>
-  status(): Promise<string>
-  append(input: { type: 'text' | 'sequences' | 'end of job'; input?: string | string[] }): Promise<number>
-  cancel(jobId?: number): Promise<void>
-  destroyInstance(): Promise<void>
+  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<number>
+  cancel(): Promise<void>
   unload(): Promise<void>
 }
-
-export type GGMLConfig = string
 
 export interface GGMLArgs {
   loader: Loader
@@ -51,6 +44,21 @@ export interface DownloadResult {
   filePath: string | null
   error: boolean
   completed: boolean
+}
+
+export type NumericLike = `${number}`
+
+export interface GGMLConfig {
+  device: 'gpu' | 'cpu'
+  gpu_layers?: NumericLike
+  batch_size?: NumericLike
+  pooling?: 'none' | 'mean' | 'cls' | 'last' | 'rank'
+  attention?: 'causal' | 'non-causal'
+  embed_normalize?: NumericLike
+  flash_attn?: 'on' | 'off' | 'auto'
+  'main-gpu'?: NumericLike | 'integrated' | 'dedicated'
+  verbosity?: NumericLike
+  [key: string]: string | number | boolean | string[] | undefined
 }
 
 export interface AddonConfigurationParams {
@@ -114,12 +122,7 @@ export class BertInterface implements Addon {
   
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
   activate(): Promise<void>
-  pause(): Promise<void>
-  stop(): Promise<void>
-  reset(): Promise<void>
-  status(): Promise<string>
-  append(input: { type: 'text' | 'sequences' | 'end of job'; input?: string | string[] }): Promise<number>
+  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<number>
   cancel(jobId?: number): Promise<void>
-  destroyInstance(): Promise<void>
   unload(): Promise<void>
 }

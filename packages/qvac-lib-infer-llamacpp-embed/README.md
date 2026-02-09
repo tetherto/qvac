@@ -121,12 +121,16 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
-The `config` is a string consisting of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-Each parameter is separated by a tab (`\t`) from its value, and different parameters are separated by newlines (`\n`).
+The `config` is a dictionary (object) consisting of hyper-parameters which can be used to tweak the behaviour of the model.  
+All parameter values should be strings.
 
 ```js
-// an example of possible configuration
-const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
+const config = {
+  device: 'gpu',
+  gpu_layers: '99',
+  batch_size: '1024',
+  ctx_size: '512'
+}
 ```
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
