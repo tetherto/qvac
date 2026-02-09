@@ -79,7 +79,7 @@
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.1.5",
     "@qvac/rag": "^0.4.2",
-    "@qvac/transcription-parakeet": "file:/home/raju/Documents/T/workspace/qvac-lib-infer-parakeet",
+    "@qvac/transcription-parakeet": "^0.1.0",
     "@qvac/transcription-whispercpp": "^0.3.17",
     "@qvac/translation-nmtcpp": "^0.3.6",
     "@qvac/tts-onnx": "^0.2.13",
