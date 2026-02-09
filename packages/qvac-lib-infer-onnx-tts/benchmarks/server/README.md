@@ -11,8 +11,8 @@ Node.js server using `@qvac/tts-onnx` addon for benchmarking.
 
 ```bash
 npm install
-npm run setup        # Piper TTS: eSpeak + models (uses config.yaml)
-npm run setup:tts    # Piper TTS using config-tts.yaml
+npm run setup        # Piper TTS: eSpeak-ng + models (uses config-tts.yaml) — same as setup:tts
+npm run setup:tts    # Piper TTS (same as setup)
 npm run setup:chatterbox  # Chatterbox: ONNX models only
 ```
 
