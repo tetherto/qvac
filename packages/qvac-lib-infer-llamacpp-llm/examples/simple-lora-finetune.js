@@ -205,7 +205,8 @@ async function runFinetuningTests () {
       outputParametersDir: './finetuned-model-direct'
     }
 
-    const finetuneResult = await model.finetune(finetuneOptions)
+    const handle = await model.finetune(finetuneOptions)
+    const finetuneResult = await handle.await()
     console.log('Finetune completed:', finetuneResult)
   } catch (error) {
     console.error('Test failed:', error.message)

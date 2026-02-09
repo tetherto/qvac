@@ -88,30 +88,20 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
 
   await model.load()
 
-  const finetuneTask = model.finetune(finetuneConfig)
-  // Yield so finetune callback creates _finetuneStartedPromise before we await it
-  await new Promise(r => setImmediate(r))
-  const started = await model.getFinetuningStartedPromise()
-  if (!started.started) {
-    return handleEarlyCompletion(t, finetuneTask, checkpointDir)
+  const finetuneHandle = await model.finetune(finetuneConfig)
+  await sleep(15000)
+  await model.pauseFinetune()
+
+  const pauseResult = await finetuneHandle.await()
+  if (pauseResult?.status !== 'PAUSED') {
+    return handleEarlyCompletion(t, finetuneHandle, checkpointDir)
   }
-
-  await sleep(2500)
-
-  try {
-    await model.pauseFinetune()
-  } catch (err) {
-    t.comment(`pauseFinetune threw (finetuning may have completed): ${err.message}`)
-    return handleEarlyCompletion(t, finetuneTask, checkpointDir)
-  }
-
-  const pauseResult = await finetuneTask
   t.ok(pauseResult?.status === 'PAUSED', `pause should resolve with PAUSED, got: ${pauseResult?.status}`)
 
   await verifyPauseCheckpoint(t, checkpointDir, 2000)
 
-  const resumeTask = model.finetune({ resume: true })
-  const result = await resumeTask
+  const resumeHandle = await model.finetune({ resume: true })
+  const result = await resumeHandle.await()
 
   t.ok(result, 'Resume must return result')
   await verifyFinalStatus(t, model, result)

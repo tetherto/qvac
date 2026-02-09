@@ -253,7 +253,7 @@ async function main () {
     }
 
     console.log('🚀 Starting finetuning...')
-    const finetuneTask = client.finetune(finetuneOptions)
+    const finetuneHandle = await client.finetune(finetuneOptions)
 
     console.log('Training for 1 minute 30 seconds to allow several batches to complete...')
     await sleep(90000)
@@ -261,7 +261,7 @@ async function main () {
     console.log('')
     console.log('⏸️  Pausing finetuning...')
     await client.pauseFinetune()
-    const pauseResult = await finetuneTask
+    const pauseResult = await finetuneHandle.await()
     console.log('✅ Finetuning is now PAUSED\n')
     console.log('Pause result:', pauseResult)
 
@@ -329,14 +329,14 @@ async function main () {
 
     console.log('')
     console.log('▶️  Resuming finetuning...')
-    const resumeTask = client.finetune({ resume: true })
+    const resumeHandle = await client.finetune({ resume: true })
     console.log('✅ Finetuning has RESUMED')
 
     await sleep(500)
     console.log('')
 
     console.log('Waiting for finetuning to complete...')
-    const finetuneResult = await resumeTask
+    const finetuneResult = await resumeHandle.await()
     console.log('\n✅ Finetune completed:', finetuneResult)
 
     try {

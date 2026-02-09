@@ -446,9 +446,9 @@ function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
   })
 }
 
-async function handleEarlyCompletion (t, finetunePromise, checkpointDir = null, message = 'Finetuning completed too quickly') {
+async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, message = 'Finetuning completed too quickly') {
   t.comment(`${message} - this is acceptable for small datasets`)
-  const result = await finetunePromise
+  const result = await (finetuneHandle?.await ? finetuneHandle.await() : finetuneHandle)
   t.ok(result && typeof result === 'object', 'Finetuning should complete with result object')
   t.ok(result?.status === 'IDLE', `Final status should be IDLE, got: ${result?.status}`)
   if (checkpointDir) {
