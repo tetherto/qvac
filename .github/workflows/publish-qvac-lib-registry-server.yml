@@ -1,6 +1,10 @@
 name: Publish (Qvac-lib-registry-server)
 
 on:
+  pull_request:
+    paths:
+      - "packages/qvac-lib-registry-server/shared/**"
+      - "packages/qvac-lib-registry-server/client/**"
   push:
     branches:
       - main
@@ -27,9 +31,9 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
-      package-slug: qvac-lib-dl-base
-      package-json-path: packages/qvac-lib-dl-base/package.json
-      changelog-path: packages/qvac-lib-dl-base/CHANGELOG.md
+      package-slug: qvac-lib-registry-server
+      package-json-path: packages/qvac-lib-registry-server/package.json
+      changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
 
   detect-changes:
     runs-on: ubuntu-latest
@@ -47,19 +51,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          BEFORE_SHA="${{ github.event.before }}"
-          AFTER_SHA="${{ github.sha }}"
+          PKG_DIR="${PKG_DIR}"
+          EVENT="${GITHUB_EVENT_NAME}"
 
-          # workflow_dispatch has no "before". Also guard against the all-zero SHA.
-          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
-            BEFORE_SHA="$(git rev-parse "${AFTER_SHA}^" 2>/dev/null || true)"
-          fi
+          if [[ "${EVENT}" == "pull_request" ]]; then
+            # PR diff: base..head
+            BEFORE_SHA="${{ github.event.pull_request.base.sha }}"
+            AFTER_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # push/workflow_dispatch diff: before..sha
+            BEFORE_SHA="${{ github.event.before }}"
+            AFTER_SHA="${{ github.sha }}"
 
-          # If we still couldn't resolve BEFORE_SHA (rare), treat as changed to allow manual runs.
-          if [[ -z "${BEFORE_SHA}" ]]; then
-            echo "schema=true" >> "$GITHUB_OUTPUT"
-            echo "client=true" >> "$GITHUB_OUTPUT"
-            exit 0
+            # workflow_dispatch has no "before". Also guard against the all-zero SHA.
+            if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+              BEFORE_SHA="$(git rev-parse "${AFTER_SHA}^" 2>/dev/null || true)"
+            fi
+
+            # If we still couldn't resolve BEFORE_SHA (rare), treat as changed to allow manual runs.
+            if [[ -z "${BEFORE_SHA}" ]]; then
+              echo "schema=true" >> "$GITHUB_OUTPUT"
+              echo "client=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
 
           if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" -- "${PKG_DIR}/shared/" | grep -q .; then
@@ -77,7 +91,10 @@ jobs:
   publish-logic:
     runs-on: ubuntu-latest
     outputs:
-      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
@@ -87,10 +104,20 @@ jobs:
           ref_name="${GITHUB_REF_NAME}"
           event_name="${GITHUB_EVENT_NAME}"
 
-          publish_gpr="false"
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
           if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-            if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              publish_gpr="true"
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
             fi
           fi
 
@@ -101,12 +128,19 @@ jobs:
             gpr_tag="$ref_name"
           fi
 
-          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
-  publish-schema:
+  publish-schema-gpr:
     needs: [detect-changes, publish-logic]
-    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_gpr == 'true'
+    if: |
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      (needs.publish-logic.outputs.publish_feature == 'true' ||
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -130,6 +164,46 @@ jobs:
           workdir: ${{ env.PKG_DIR }}/shared
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: ${{ env.NAME_SUFFIX }}
+
+  publish-schema-npm:
+    needs: [detect-changes, publish-logic]
+    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure npm for GitHub Package Registry
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: "true"
+          workdir: ${{ env.PKG_DIR }}/shared
+
+  publish-schema:
+    name: Publish Schema (meta)
+    needs: [publish-schema-gpr, publish-schema-npm]
+    if: |
+      always() &&
+      (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
+      (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Schema publish completed or skipped."
 
   lint-and-test:
     needs: detect-changes
@@ -183,14 +257,16 @@ jobs:
         shell: bash
         run: npm run typecheck
 
-  publish-client:
+  publish-client-gpr:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: |
       needs.detect-changes.outputs.client_changed == 'true' &&
       always() &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
-      needs.publish-logic.outputs.publish_gpr == 'true'
+      (needs.publish-logic.outputs.publish_feature == 'true' ||
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -216,3 +292,39 @@ jobs:
           workdir: ${{ env.PKG_DIR }}/client
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           name-suffix: ${{ env.NAME_SUFFIX }}
+
+  publish-client-npm:
+    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    if: |
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      always() &&
+      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
+      needs.lint-and-test.result == 'success' &&
+      needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure npm for package registries
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: "true"
+          workdir: ${{ env.PKG_DIR }}/client
