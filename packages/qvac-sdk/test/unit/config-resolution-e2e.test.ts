@@ -94,6 +94,7 @@ test("CANONICAL_TO_ALIAS: correct mappings", (t) => {
   t.is(CANONICAL_TO_ALIAS[ModelType.llamacppCompletion], "llm");
   t.is(CANONICAL_TO_ALIAS[ModelType.llamacppEmbedding], "embeddings");
   t.is(CANONICAL_TO_ALIAS[ModelType.whispercppTranscription], "whisper");
+  t.is(CANONICAL_TO_ALIAS[ModelType.parakeetTranscription], "parakeet");
 });
 
 test("no patterns match = schema defaults only", (t) => {

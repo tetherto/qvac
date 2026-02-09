@@ -13,6 +13,7 @@ import {
 test("ModelType contains all canonical values", (t) => {
   t.is(ModelType.llamacppCompletion, "llamacpp-completion");
   t.is(ModelType.whispercppTranscription, "whispercpp-transcription");
+  t.is(ModelType.parakeetTranscription, "parakeet-transcription");
   t.is(ModelType.llamacppEmbedding, "llamacpp-embedding");
   t.is(ModelType.nmtcppTranslation, "nmtcpp-translation");
   t.is(ModelType.onnxTts, "onnx-tts");
@@ -22,6 +23,7 @@ test("ModelType contains all canonical values", (t) => {
 test("ModelTypeAliases maps to correct canonical values", (t) => {
   t.is(ModelTypeAliases.llm, ModelType.llamacppCompletion);
   t.is(ModelTypeAliases.whisper, ModelType.whispercppTranscription);
+  t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription);
   t.is(ModelTypeAliases.embeddings, ModelType.llamacppEmbedding);
   t.is(ModelTypeAliases.nmt, ModelType.nmtcppTranslation);
   t.is(ModelTypeAliases.tts, ModelType.onnxTts);
@@ -32,6 +34,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   // Canonical keys
   t.is(PUBLIC_MODEL_TYPES.llamacppCompletion, "llamacpp-completion");
   t.is(PUBLIC_MODEL_TYPES.whispercppTranscription, "whispercpp-transcription");
+  t.is(PUBLIC_MODEL_TYPES.parakeetTranscription, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.llamacppEmbedding, "llamacpp-embedding");
   t.is(PUBLIC_MODEL_TYPES.nmtcppTranslation, "nmtcpp-translation");
   t.is(PUBLIC_MODEL_TYPES.onnxTts, "onnx-tts");
@@ -40,6 +43,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   // Alias keys
   t.is(PUBLIC_MODEL_TYPES.llm, "llamacpp-completion");
   t.is(PUBLIC_MODEL_TYPES.whisper, "whispercpp-transcription");
+  t.is(PUBLIC_MODEL_TYPES.parakeet, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.embeddings, "llamacpp-embedding");
   t.is(PUBLIC_MODEL_TYPES.nmt, "nmtcpp-translation");
   t.is(PUBLIC_MODEL_TYPES.tts, "onnx-tts");
@@ -50,6 +54,7 @@ test("normalizeModelType converts aliases to canonical", (t) => {
   // Aliases should normalize to canonical
   t.is(normalizeModelType("llm"), "llamacpp-completion");
   t.is(normalizeModelType("whisper"), "whispercpp-transcription");
+  t.is(normalizeModelType("parakeet"), "parakeet-transcription");
   t.is(normalizeModelType("embeddings"), "llamacpp-embedding");
   t.is(normalizeModelType("nmt"), "nmtcpp-translation");
   t.is(normalizeModelType("tts"), "onnx-tts");
@@ -62,6 +67,10 @@ test("normalizeModelType passes through canonical values unchanged", (t) => {
     normalizeModelType("whispercpp-transcription"),
     "whispercpp-transcription",
   );
+  t.is(
+    normalizeModelType("parakeet-transcription"),
+    "parakeet-transcription",
+  );
   t.is(normalizeModelType("llamacpp-embedding"), "llamacpp-embedding");
   t.is(normalizeModelType("nmtcpp-translation"), "nmtcpp-translation");
   t.is(normalizeModelType("onnx-tts"), "onnx-tts");
@@ -72,6 +81,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
   // Aliases
   t.is(isModelTypeAlias("llm"), true);
   t.is(isModelTypeAlias("whisper"), true);
+  t.is(isModelTypeAlias("parakeet"), true);
   t.is(isModelTypeAlias("embeddings"), true);
   t.is(isModelTypeAlias("nmt"), true);
   t.is(isModelTypeAlias("tts"), true);
@@ -80,6 +90,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
   // Canonical values are not aliases
   t.is(isModelTypeAlias("llamacpp-completion"), false);
   t.is(isModelTypeAlias("whispercpp-transcription"), false);
+  t.is(isModelTypeAlias("parakeet-transcription"), false);
   t.is(isModelTypeAlias("llamacpp-embedding"), false);
   t.is(isModelTypeAlias("nmtcpp-translation"), false);
   t.is(isModelTypeAlias("onnx-tts"), false);
@@ -89,6 +100,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
 test("modelTypeInputSchema accepts aliases", (t) => {
   t.is(modelTypeInputSchema.parse("llm"), "llm");
   t.is(modelTypeInputSchema.parse("whisper"), "whisper");
+  t.is(modelTypeInputSchema.parse("parakeet"), "parakeet");
   t.is(modelTypeInputSchema.parse("embeddings"), "embeddings");
   t.is(modelTypeInputSchema.parse("nmt"), "nmt");
   t.is(modelTypeInputSchema.parse("tts"), "tts");
@@ -103,6 +115,10 @@ test("modelTypeInputSchema accepts canonical values", (t) => {
   t.is(
     modelTypeInputSchema.parse("whispercpp-transcription"),
     "whispercpp-transcription",
+  );
+  t.is(
+    modelTypeInputSchema.parse("parakeet-transcription"),
+    "parakeet-transcription",
   );
   t.is(modelTypeInputSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
   t.is(modelTypeInputSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
@@ -120,6 +136,7 @@ test("modelTypeInputSchema rejects invalid values", (t) => {
 test("modelTypeSchema transforms aliases to canonical", (t) => {
   t.is(modelTypeSchema.parse("llm"), "llamacpp-completion");
   t.is(modelTypeSchema.parse("whisper"), "whispercpp-transcription");
+  t.is(modelTypeSchema.parse("parakeet"), "parakeet-transcription");
   t.is(modelTypeSchema.parse("embeddings"), "llamacpp-embedding");
   t.is(modelTypeSchema.parse("nmt"), "nmtcpp-translation");
   t.is(modelTypeSchema.parse("tts"), "onnx-tts");
@@ -131,6 +148,10 @@ test("modelTypeSchema passes through canonical values", (t) => {
   t.is(
     modelTypeSchema.parse("whispercpp-transcription"),
     "whispercpp-transcription",
+  );
+  t.is(
+    modelTypeSchema.parse("parakeet-transcription"),
+    "parakeet-transcription",
   );
   t.is(modelTypeSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
   t.is(modelTypeSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
