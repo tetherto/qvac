@@ -284,9 +284,7 @@ private:
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
 
-  // Finetuning state
   llama_finetuning_helpers::TrainingCheckpointState* currentCheckpointState_ = nullptr;
-  // Hold ownership of checkpoint state when paused to prevent destruction
   std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState> pausedCheckpointState_;
   bool optimizerInitialized_ = false;
 };

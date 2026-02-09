@@ -131,6 +131,8 @@ export default class LlmLlamacpp extends BaseInference {
     options?: { resume?: boolean }
   ): Promise<{ status: string }>
 
+  getFinetuningStartedPromise(): Promise<{ started: boolean }>
+
   pauseFinetune(): Promise<void>
 
   unload(): Promise<void>

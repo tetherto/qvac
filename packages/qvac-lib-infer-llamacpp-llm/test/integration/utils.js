@@ -341,9 +341,9 @@ function createPauseResumeTestDataset (filePath) {
 }
 
 function setupPauseResumeTestData (testDataDir, testCheckpointDir, testId) {
-  const trainDatasetPath = path.join(testDataDir, `train${testId}.jsonl`)
-  const evalDatasetPath = path.join(testDataDir, `eval${testId}.jsonl`)
-  const checkpointDir = path.join(testCheckpointDir, `test${testId}`)
+  const trainDatasetPath = path.join(testDataDir, `train_${testId}.jsonl`)
+  const evalDatasetPath = path.join(testDataDir, `eval_${testId}.jsonl`)
+  const checkpointDir = path.join(testCheckpointDir, `test_${testId}`)
 
   createPauseResumeTestDataset(trainDatasetPath)
   createPauseResumeTestDataset(evalDatasetPath)
@@ -406,24 +406,10 @@ function getDefaultFinetuneConfig (overrides = {}) {
   }
 }
 
-async function waitForFinetuningStart (model, options = {}) {
-  const maxAttempts = options.maxAttempts || 10
-  const pollIntervalMs = options.pollIntervalMs || 100
-
-  let attempts = 0
-  while (attempts < maxAttempts) {
-    const running = model.addon?.isFinetuningRunning?.()
-    if (running) return 'FINETUNING'
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
-    attempts++
-  }
-  return 'IDLE'
-}
-
 function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
-  const trainDatasetPath = path.join(testDataDir, `train${testId}.jsonl`)
-  const evalDatasetPath = path.join(testDataDir, `eval${testId}.jsonl`)
-  const checkpointDir = path.join(testCheckpointDir, `test${testId}`)
+  const trainDatasetPath = path.join(testDataDir, `train_${testId}.jsonl`)
+  const evalDatasetPath = path.join(testDataDir, `eval_${testId}.jsonl`)
+  const checkpointDir = path.join(testCheckpointDir, `test_${testId}`)
 
   createTestDataset(trainDatasetPath, 'chat')
   createTestDataset(evalDatasetPath, 'chat')
@@ -472,7 +458,6 @@ async function handleEarlyCompletion (t, finetunePromise, checkpointDir = null, 
 }
 
 async function verifyFinalStatus (t, model, result = null) {
-  await new Promise(resolve => setTimeout(resolve, 1000))
   t.ok(result, 'Result must be provided')
   const finalStatus = result?.status ?? 'IDLE'
   t.ok(finalStatus === 'IDLE', `Final status should be IDLE, got: ${finalStatus}`)
@@ -494,7 +479,6 @@ module.exports = {
   verifyCheckpointExists,
   findPauseCheckpoint,
   getDefaultFinetuneConfig,
-  waitForFinetuningStart,
   setupFinetuneTestData,
   setupPauseResumeTestData,
   verifyPauseCheckpoint,

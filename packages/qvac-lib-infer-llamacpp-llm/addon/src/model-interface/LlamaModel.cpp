@@ -888,7 +888,6 @@ void LlamaModel::finetune(
     std::unique_ptr<llama_adapter_lora, decltype(&llama_adapter_lora_free)>
         adapterPtr(adapter, llama_adapter_lora_free);
 
-    // Clear any previously paused checkpoint state when starting/resuming training
     pausedCheckpointState_.reset();
     currentCheckpointState_ = nullptr;
 
@@ -907,10 +906,6 @@ void LlamaModel::finetune(
         checkpointState->firstBatchAfterResumeLogged = false;
 
         const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
-        // Calculate batch offset within epoch for mid-epoch resume
-        // globalStep is incremented AFTER processing each batch, so if globalStep = 7,
-        // we've processed batches 0-6 and should resume from batch 7 (0-indexed)
-        // Using (globalStep - 1) % stepsPerEpoch to match original branch logic
         const int64_t batchOffset = (resumeMeta.globalStep - 1) % stepsPerEpoch;
         checkpointState->batchOffsetWithinEpoch = batchOffset;
         checkpointState->skippingBatches = (batchOffset > 0);
@@ -932,7 +927,6 @@ void LlamaModel::finetune(
         checkpointState.get(),
         resumingFromPause);
 
-    // Log that checkpoint loading completed
     if (resumingFromPause && logCallback) {
       logCallback("Checkpoint loaded successfully");
     }
@@ -1308,8 +1302,6 @@ void LlamaModel::executeTrainingLoop(
     }
 
     int64_t resumeFromBatch = -1;
-    // Only resume from a specific batch offset for the epoch where we paused
-    // Subsequent epochs should start from batch 0
     if (resumingFromPause && checkpointState &&
         checkpointState->batchOffsetWithinEpoch > 0 &&
         epoch == startEpoch) {
@@ -1327,7 +1319,6 @@ void LlamaModel::executeTrainingLoop(
         nullptr,
         resumeFromBatch);
 
-    // Print newline after epoch completes (callback is called before final batch completes)
     if (!checkpointState || !checkpointState->shouldExit.load()) {
       if (checkpointEnabled) {
         std::cout << "\r";
