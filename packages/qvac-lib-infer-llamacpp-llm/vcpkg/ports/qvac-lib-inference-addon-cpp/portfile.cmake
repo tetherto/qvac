@@ -1,7 +1,7 @@
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL git@github.com:jesusmb1995/qvac.git
-  REF a880531124ac01ae61a7c66553e1aac2fb1e2bf1
+  REF 2e37729b041effe1c8fee0e3b2800d8971ee1a35
 )
 
 set(SOURCE_PATH "${SOURCE_PATH}/packages/qvac-lib-inference-addon-cpp")
