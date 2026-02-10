@@ -1,4 +1,4 @@
-name: PR Validation (Qvac-sdk)
+name: PR Validation (SDK Pod)
 
 on:
   pull_request_target:
@@ -9,6 +9,10 @@ on:
       - reopened
     paths:
       - "packages/qvac-sdk/**"
+      - "packages/qvac-docs/**"
+      - "packages/qvac-lib-rag/**"
+      - "packages/qvac-lib-logging/**"
+      - "packages/qvac-lib-error-base/**"
     branches:
       - main
       - release-*
@@ -16,9 +20,6 @@ on:
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/qvac-sdk
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,4 +37,4 @@ jobs:
           echo ""
 
           # Run validator
-          node scripts/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
+          node scripts/sdk/validator.cjs --type=pr --title="$PR_TITLE" --body="$PR_BODY"
