@@ -225,7 +225,7 @@ def main():
                         baseline_quantization = config["baseline"]["quantization"]
                         if quantization_values and baseline_quantization not in quantization_values:
                             baseline_quantization = quantization_values[0]
-                        model_variant = value if param_name == "quantization" else config["baseline"]["quantization"]
+                        model_variant = value if param_name == "quantization" else baseline_quantization
                         variant_config = model_config.get("torch", {}).get(model_variant)
                         if not variant_config:
                             print(f"Missing PyTorch model variant config for {model_variant}, skipping")
