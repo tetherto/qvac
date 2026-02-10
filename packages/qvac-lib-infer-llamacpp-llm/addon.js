@@ -46,6 +46,10 @@ class LlamaInterface {
     this._binding.activate(this._handle)
   }
 
+  async resumeFinetune () {
+    return this._binding.resumeFinetune(this._handle)
+  }
+
   /**
    * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
    */
@@ -60,13 +64,8 @@ class LlamaInterface {
     return this._binding.finetune(this._handle)
   }
 
-  /**
-   * Pause finetuning.
-   * @returns {Promise<boolean>} true when pause completed, false when not finetuning
-   */
   async pause () {
-    const result = await this._binding.pause(this._handle)
-    return result !== false
+    await this._binding.pause(this._handle)
   }
 
   /**

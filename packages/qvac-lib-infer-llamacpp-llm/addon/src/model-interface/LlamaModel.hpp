@@ -146,15 +146,6 @@ public:
   common_params& getCommonParams();
 
   /**
-   * Get the current checkpoint state.
-   * Returns nullptr if no checkpoint state exists.
-   */
-  llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState() const {
-    return currentCheckpointState_ != nullptr ? currentCheckpointState_
-                                              : pausedCheckpointState_.get();
-  }
-
-  /**
    * Finetune the model using LoRA (with pause/resume support).
    *
    * @param params - finetuning parameters

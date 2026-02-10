@@ -24,7 +24,7 @@ function createStub (defaultImpl = () => {}) {
 
 function createMockAddon () {
   const finetuneStub = createStub()
-  const activateStub = createStub()
+  const resumeFinetuneStub = createStub()
   const finetune = function (...args) {
     finetune.called = true
     finetune.lastArgs = args
@@ -34,18 +34,19 @@ function createMockAddon () {
   finetune.lastArgs = null
   finetune.callsFake = (impl) => { finetuneStub.callsFake(impl); return finetune }
   finetune.calledWith = (...expected) => finetuneStub.calledWith(...expected)
-  const activate = function (...args) {
-    activate.called = true
-    activate.lastArgs = args
-    return activateStub.apply(this, args)
+  const resumeFinetune = function (...args) {
+    resumeFinetune.called = true
+    resumeFinetune.lastArgs = args
+    return resumeFinetuneStub.apply(this, args)
   }
-  activate.called = false
-  activate.lastArgs = null
-  activate.callsFake = (impl) => { activateStub.callsFake(impl); return activate }
-  activate.calledWith = (...expected) => activateStub.calledWith(...expected)
+  resumeFinetune.called = false
+  resumeFinetune.lastArgs = null
+  resumeFinetune.callsFake = (impl) => { resumeFinetuneStub.callsFake(impl); return resumeFinetune }
+  resumeFinetune.calledWith = (...expected) => resumeFinetuneStub.calledWith(...expected)
   return {
     finetune,
-    activate,
+    activate: createStub(),
+    resumeFinetune,
     pause: createStub(() => Promise.resolve(true))
   }
 }
@@ -93,7 +94,7 @@ test('finetune() throws on resume when no stored params', async (t) => {
     () => model.finetune({ resume: true }),
     /No stored finetuning parameters/
   )
-  t.ok(!model.addon.activate.called)
+  t.ok(!model.addon.resumeFinetune.called)
 })
 
 test('finetune(opts) stores params and calls addon.finetune', async (t) => {
@@ -117,7 +118,7 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
   t.alike(result, { status: 'IDLE' })
 })
 
-test('finetune({ resume: true }) uses stored params and calls addon.activate', async (t) => {
+test('finetune({ resume: true }) uses stored params and calls addon.resumeFinetune', async (t) => {
   const opts = {
     trainDatasetDir: '/tmp/train.jsonl',
     evalDatasetDir: '/tmp/eval.jsonl',
@@ -127,16 +128,16 @@ test('finetune({ resume: true }) uses stored params and calls addon.activate', a
   }
   const model = createModelWithMockAddon(opts)
 
-  model.addon.activate.callsFake(completeFinetuneWith(model))
+  model.addon.resumeFinetune.callsFake(completeFinetuneWith(model))
 
   const handle = await model.finetune({ resume: true })
-  t.ok(model.addon.activate.called)
+  t.ok(model.addon.resumeFinetune.called)
   t.ok(!model.addon.finetune.called)
   const result = await handle.await()
   t.alike(result, { status: 'IDLE' })
 })
 
-test('finetune(opts, { resume: true }) calls activate', async (t) => {
+test('finetune(opts, { resume: true }) calls resumeFinetune', async (t) => {
   const storedOpts = {
     trainDatasetDir: '/tmp/train.jsonl',
     evalDatasetDir: '/tmp/eval.jsonl',
@@ -146,10 +147,10 @@ test('finetune(opts, { resume: true }) calls activate', async (t) => {
   }
   const model = createModelWithMockAddon(storedOpts)
 
-  model.addon.activate.callsFake(completeFinetuneWith(model))
+  model.addon.resumeFinetune.callsFake(completeFinetuneWith(model))
 
   const handle = await model.finetune(storedOpts, { resume: true })
-  t.ok(model.addon.activate.called)
+  t.ok(model.addon.resumeFinetune.called)
   t.ok(!model.addon.finetune.called)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
@@ -168,7 +169,7 @@ test('finetune(opts, { resume: false }) starts fresh with addon.finetune', async
 
   const handle = await model.finetune(opts, { resume: false })
   t.ok(model.addon.finetune.called)
-  t.ok(!model.addon.activate.called)
+  t.ok(!model.addon.resumeFinetune.called)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
 
@@ -188,7 +189,7 @@ test('finetune(opts with resume key) does NOT trigger resume shorthand', async (
   const handle = await model.finetune(opts)
   t.ok(model.addon.finetune.called)
   t.ok(model.addon.finetune.calledWith(opts))
-  t.ok(!model.addon.activate.called)
+  t.ok(!model.addon.resumeFinetune.called)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
 

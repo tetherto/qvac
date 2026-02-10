@@ -156,7 +156,6 @@ class LlmLlamacpp extends BaseInference {
       }
     }
 
-    // BaseInference._outputCallback uses logger.warn() for "No response found for job"
     filteredLogger.warn = (...args) => {
       if (shouldSuppressMessage(args)) return
       if (originalWarn) {
@@ -272,7 +271,6 @@ class LlmLlamacpp extends BaseInference {
   async _runInternal (prompt) {
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      // Separate media messages from text messages
       const textMessages = []
       let mediaData = null
 
@@ -293,12 +291,10 @@ class LlmLlamacpp extends BaseInference {
 
       const promptMessages = []
 
-      // Send media first if present
       if (mediaData) {
         promptMessages.push({ type: 'media', content: mediaData })
       }
 
-      // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
       await this.addon.runJob(promptMessages)
 
@@ -379,8 +375,8 @@ class LlmLlamacpp extends BaseInference {
 
     try {
       if (resume) {
-        this.logger?.info?.('Calling addon.activate() to resume...')
-        await this.addon.activate()
+        this.logger?.info?.('Calling addon.resumeFinetune() to resume...')
+        await this.addon.resumeFinetune()
       } else {
         this.logger?.info?.('Calling addon.finetune()...')
         await this.addon.finetune(params)
