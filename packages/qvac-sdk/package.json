@@ -64,7 +64,7 @@
     "check-models": "node ./scripts/update-models.js --check",
     "check-models:hook": "node ./scripts/update-models.js --check --non-blocking",
     "update-models": "node ./scripts/update-models.js",
-    "changelog:generate": "node ./scripts/changelog-generate.cjs && prettier --write changelog",
+    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk && prettier --write changelog",
     "docs:gen-pages": "remark \"docs/*.mdx\" --output .docs-build",
     "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
   },

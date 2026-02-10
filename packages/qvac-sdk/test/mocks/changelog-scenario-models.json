@@ -1,0 +1,23 @@
+{
+  "description": "Release with model changes",
+  "input": {
+    "commitLog": [
+      "abc1234 Merge pull request #300 from user/add-models"
+    ],
+    "prs": [
+      {
+        "number": 300,
+        "title": "QVAC-300 feat[mod]: add new whisper models",
+        "body": "## 📦 Models\n\n### Added models\n\n```\nWHISPER_LARGE_V3\nWHISPER_MEDIUM\n```",
+        "url": "https://github.com/tetherto/qvac/pull/300"
+      }
+    ]
+  },
+  "expected": {
+    "prNumbers": [300],
+    "includedInChangelog": [300],
+    "hasModelsMd": true,
+    "modelsAdded": ["WHISPER_LARGE_V3", "WHISPER_MEDIUM"],
+    "modelsRemoved": []
+  }
+}

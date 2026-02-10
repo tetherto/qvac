@@ -131,7 +131,7 @@ Use `[notask]` when omitting the ticket: `prefix[notask]: subject`.
   - Version bumps (e.g., `1.0.0`, `v1.0.0`)
   - Revert commits (e.g., `Revert "feat: add feature"`)
   - Squash commits (e.g., `squash! fix: bug fix`)
-- You can test validation locally: `node scripts/validator.cjs --type=commit --msg="your message"`
+- You can test validation locally: `node scripts/sdk/validator.cjs --type=commit --msg="your message"`
 
 ## PR Description Quality Guidelines
 
