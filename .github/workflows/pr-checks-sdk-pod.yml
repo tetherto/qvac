@@ -1,0 +1,278 @@
+name: PR Checks (SDK Pod)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    paths:
+      - "packages/qvac-sdk/**"
+      - "packages/qvac-lib-rag/**"
+      - "packages/qvac-lib-logging/**"
+      - "packages/qvac-lib-error-base/**"
+      - "packages/qvac-docs/**"
+    branches:
+      - main
+      - release-*
+  workflow_dispatch:
+
+concurrency:
+  group: sdk-pod-pr-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Package config lives in .github/sdk-pod-checks.json
+# Scripts (lint, build, test:unit) are auto-detected from each package's package.json
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Strip safe-to-test label on new pushes from external contributors.
+  # Forces re-review before CI runs on updated code.
+  # ---------------------------------------------------------------------------
+  strip-label:
+    if: |
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      !contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove safe-to-test label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/safe-to-test" \
+            2>/dev/null || true
+          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
+
+  # ---------------------------------------------------------------------------
+  # Security gate for pull_request_target
+  #
+  # Trusted authors (org members, collaborators) and same-repo PRs run
+  # immediately. External fork PRs require the "safe-to-test" label applied
+  # by a team member after reviewing the PR code.
+  # ---------------------------------------------------------------------------
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - name: Check authorization
+        id: check
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Same-repo PRs are always trusted
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "::notice::Same-repo PR — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Org members / collaborators are trusted even from forks
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # External fork PRs require the safe-to-test label
+          if [ "$HAS_LABEL" = "true" ]; then
+            echo "::notice::Fork PR with safe-to-test label — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::External fork PR without safe-to-test label — skipping checks"
+            echo "::warning::A team member must review the code and apply the 'safe-to-test' label"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  changes:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      # Checkout base branch — config file is read from here (trusted)
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed packages
+        id: detect
+        shell: bash
+        run: |
+          # Default pkg_manager to "npm" when not specified in config
+          ALL_PACKAGES=$(jq -c '[.[] | .pkg_manager //= "npm"]' .github/sdk-pod-checks.json)
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # workflow_dispatch: run all packages
+            MATRIX="$ALL_PACKAGES"
+          else
+            # Fetch PR head (available on base repo via pull refs)
+            git fetch origin "refs/pull/${{ github.event.pull_request.number }}/head"
+
+            # Filter to only packages with changed files in this PR
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            CHANGED_FILES=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+
+            MATRIX=$(echo "$ALL_PACKAGES" | jq -c --arg files "$CHANGED_FILES" '[
+              .[] | select(.path as $p | $files | split("\n") | any(startswith($p + "/")))
+            ]')
+          fi
+
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          has_changes=$(echo "$MATRIX" | jq -r 'if length > 0 then "true" else "false" end')
+          echo "has_changes=${has_changes}" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: [authorize, changes]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.matrix) }}
+      fail-fast: false
+    name: check (${{ matrix.package }})
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
+    steps:
+      # Checkout PR head — this is the code we're actually testing
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check for disallowed dependencies
+        shell: bash
+        id: check_dependencies
+        continue-on-error: true
+        run: |
+          deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+            exit 1
+          fi
+
+      # setup-bun pinned to v2.1.2
+      - name: Setup Bun
+        if: matrix.pkg_manager == 'bun'
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3
+        with:
+          bun-version: latest
+
+      - name: Setup Node
+        if: matrix.pkg_manager == 'npm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure scoped registry
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${PAT_TOKEN}
+          foreground-scripts=true
+          ignore-scripts=true
+          NPMRC
+
+          if [ -n "${PAT_TOKEN:-}" ]; then
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          # Bun needs bunfig.toml in addition to .npmrc
+          if [ "${{ matrix.pkg_manager }}" = "bun" ]; then
+            cat > bunfig.toml <<EOF
+          [install]
+          registry = "https://registry.npmjs.org/"
+
+          [install.scopes]
+          "@tetherto" = { token = "${PAT_TOKEN}", url = "https://npm.pkg.github.com" }
+          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
+          EOF
+          fi
+
+      - name: Install dependencies
+        run: ${{ matrix.pkg_manager }} install
+
+      # All script steps use npm run --if-present (bun lacks --if-present).
+      # npm run just reads package.json scripts — works regardless of installer.
+
+      - name: Run lint
+        id: run_lint
+        continue-on-error: true
+        run: npm run --if-present lint
+
+      - name: Run build (types)
+        id: run_build_types
+        continue-on-error: true
+        run: npm run --if-present build:types
+
+      - name: Run build
+        id: run_build
+        continue-on-error: true
+        run: npm run --if-present build
+
+      - name: Run unit tests
+        id: run_tests
+        continue-on-error: true
+        run: npm run --if-present test:unit
+
+      - name: Check for errors
+        shell: bash
+        run: |
+          count=0
+          if [ "${{ steps.run_lint.outcome }}" = "failure" ]; then
+            echo "::error::Lint failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_build_types.outcome }}" = "failure" ]; then
+            echo "::error::Build (types) failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_build.outcome }}" = "failure" ]; then
+            echo "::error::Build failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
+            echo "::error::Unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Disallowed dependencies detected"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi

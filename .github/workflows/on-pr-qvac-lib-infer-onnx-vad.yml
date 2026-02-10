@@ -128,7 +128,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
 
   cpp-lint:
-    needs: [context, sanity-checks]
+    needs: context
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -137,7 +137,7 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   prebuild:
-    needs: [context, cpp-lint]
+    needs: context
     permissions:
       contents: write
       packages: write
@@ -159,7 +159,7 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs: [run-integration-tests, sanity-checks, prebuild]
+    needs: [run-integration-tests, sanity-checks, cpp-lint, prebuild]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
