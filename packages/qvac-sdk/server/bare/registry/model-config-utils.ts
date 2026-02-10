@@ -51,17 +51,6 @@ export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
       [ModelType.llamacppEmbedding]: { device: "cpu" },
     },
   },
-  {
-    name: "iPhone 17",
-    match: {
-      platform: "ios",
-      deviceModelPrefix: "iPhone 17",
-    },
-    defaults: {
-      [ModelType.llamacppCompletion]: { device: "cpu" },
-      [ModelType.llamacppEmbedding]: { device: "cpu" },
-    },
-  },
 ];
 
 export function matchesPattern(
