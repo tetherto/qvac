@@ -64,4 +64,4 @@ alwaysApply: false
   - `[bc]` → MUST include BEFORE/AFTER code examples
   - `[api]` → MUST include at least one code block showing new API usage
 - When creating commits or PRs, ALWAYS validate against this format
-- Test locally: `node scripts/validator.cjs --type=commit --msg="your message"`
+- Test locally: `node scripts/sdk/validator.cjs --type=commit --msg="your message"`
