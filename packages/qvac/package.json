@@ -1,0 +1,41 @@
+{
+  "name": "qvac",
+  "version": "0.1.0",
+  "description": "Command-line interface for the QVAC ecosystem",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "qvac": "./bin/qvac.js"
+  },
+  "files": [
+    "bin/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "tether",
+    "cli",
+    "qvac",
+    "bare"
+  ],
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac"
+  },
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix"
+  },
+  "dependencies": {
+    "@qvac/qvac-cli": "^0.1.2"
+  },
+  "devDependencies": {
+    "standard": "^17.1.2"
+  }
+}
