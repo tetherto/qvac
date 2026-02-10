@@ -118,8 +118,10 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://tether-ai-dev/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
@@ -365,19 +367,6 @@ jobs:
           rustup target add aarch64-linux-android
           rustup target add armv7-linux-androideabi
           rustup target list --installed
-
-      - name: Create vcpkg cache location
-        run: mkdir -p vcpkg/cache
-
-      - name: Get vcpkg cache
-        id: cache-vcpkg
-        uses: actions/cache@v4
-        with:
-          path: vcpkg/cache
-          key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
-          restore-keys: |
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
-            vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Generate
         working-directory: ${{ env.WORKDIR }}
