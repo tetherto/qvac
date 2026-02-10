@@ -156,6 +156,11 @@ public:
       modelCancel_->cancel();
       processingSync_.waitInactive();
       job_.reset();
+      if (ready_.load()) {
+        // If the worker has not taken the job yet (ready_ == true, still in
+        // wait), it will never run queueJobEnded. Signal finished now.
+        outputQueue_->queueException(std::runtime_error("Job cancelled"));
+      }
     }
   }
 };
