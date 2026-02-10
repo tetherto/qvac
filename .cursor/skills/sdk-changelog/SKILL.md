@@ -91,6 +91,6 @@ Before completing:
 ## References
 
 - SDK pod packages: `.cursor/rules/sdk/sdk-pod-packages.mdc`
-- GitFlow: `gitflow.md`
+- GitFlow: `/gitflow.md`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)

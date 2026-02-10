@@ -8,7 +8,7 @@ If not specified, check the current version from `package.json` or ask the user.
 
 ## Step 2: Read Source Files
 
-Read all files from `changelog/{VERSION}/`:
+Read all files from `{PACKAGE_ROOT}/changelog/{VERSION}/`:
 - `CHANGELOG.md` - Main changelog entries
 - `breaking.md` - Breaking changes with migration guides
 - `api.md` - API changes with code examples
@@ -16,7 +16,7 @@ Read all files from `changelog/{VERSION}/`:
 
 ## Step 3: Generate CHANGELOG_LLM.md
 
-Create `changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines:
+Create `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md` with these guidelines:
 
 ### Format Requirements
 
@@ -81,4 +81,4 @@ await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
 
 ## Step 4: Output Location
 
-Save the file to: `changelog/{VERSION}/CHANGELOG_LLM.md`
+Save the file to: `{PACKAGE_ROOT}/changelog/{VERSION}/CHANGELOG_LLM.md`
