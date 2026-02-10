@@ -78,6 +78,9 @@ public:
     return currentCheckpointState_;
   }
 
+  /** Block until the training thread has completed the pause path. */
+  void waitUntilPauseComplete();
+
 private:
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;

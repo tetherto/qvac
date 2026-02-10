@@ -25,9 +25,8 @@ function createStub (defaultImpl = () => {}) {
 const createMockAddon = () => ({
   finetune: createStub(),
   activate: createStub(),
-  pause: createStub(() => Promise.resolve()),
-  isFinetuningRunning: createStub(() => true),
-  resolvePauseComplete: createStub()
+  pause: createStub(() => Promise.resolve(true)),
+  isFinetuningRunning: createStub(() => true)
 })
 
 function completeFinetuneWith (model, status = 'IDLE') {

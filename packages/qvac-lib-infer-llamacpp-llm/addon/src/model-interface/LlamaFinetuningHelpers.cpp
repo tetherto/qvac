@@ -577,10 +577,14 @@ void optEpochCallback(
           state->logFn(pauseMsg.str());
           state->logFn(R"({"type":"FinetunePaused"})");
         }
+        state->pauseWaitDone.store(true);
+        state->pauseDoneCv.notify_all();
       } else {
         if (state->logFn) {
           state->logFn("Warning: Failed to save pause checkpoint");
         }
+        state->pauseWaitDone.store(true);
+        state->pauseDoneCv.notify_all();
       }
     }
     return;

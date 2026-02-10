@@ -15,6 +15,7 @@
 #include <system_error>
 #include <vector>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 #include <common/arg.h>
@@ -936,11 +937,13 @@ void LlamaModel::finetune(
     }
 
     if (checkpointState) {
+      checkpointState->pauseWaitDone.store(false);
       currentCheckpointState_ = checkpointState.get();
       setGlobalCheckpointState(checkpointState.get());
     }
 
-    executeTrainingLoop(
+    try {
+      executeTrainingLoop(
         params,
         datasetPtr.get(),
         trainSplit,
@@ -949,6 +952,13 @@ void LlamaModel::finetune(
         logCallback,
         resumingFromPause ? resumeMeta.epoch : 0,
         resumingFromPause);
+    } catch (...) {
+      if (checkpointState) {
+        checkpointState->pauseWaitDone.store(true);
+        checkpointState->pauseDoneCv.notify_all();
+      }
+      throw;
+    }
 
     bool wasPaused = checkpointState && checkpointState->shouldExit.load() &&
                      checkpointState->pauseCheckpointSaved.load();
@@ -959,6 +969,8 @@ void LlamaModel::finetune(
       if (!wasPaused) {
         checkpointState->isPaused.store(false);
       }
+      checkpointState->pauseWaitDone.store(true);
+      checkpointState->pauseDoneCv.notify_all();
       clearGlobalCheckpointState();
       if (wasPaused) {
         pausedCheckpointState_ = std::move(checkpointState);
@@ -1390,6 +1402,20 @@ bool LlamaModel::requestPause() {
   }
 
   return false;
+}
+
+void LlamaModel::waitUntilPauseComplete() {
+  auto* state = currentCheckpointState_ != nullptr
+      ? currentCheckpointState_
+      : llama_finetuning_helpers::getGlobalCheckpointState();
+  if (state == nullptr) {
+    return;
+  }
+  constexpr auto timeout = std::chrono::minutes(5);
+  std::unique_lock lock(state->pauseDoneMutex);
+  state->pauseDoneCv.wait_for(
+      lock, timeout,
+      [state] { return state->pauseWaitDone.load(); });
 }
 
 void LlamaModel::clearPauseRequest() {

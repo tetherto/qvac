@@ -1,8 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -69,6 +71,10 @@ struct TrainingCheckpointState {
   int64_t batchOffsetWithinEpoch = -1;
   bool skippingBatches = false;
   bool finetuningStartedEmitted = false;
+
+  std::mutex pauseDoneMutex;
+  std::condition_variable pauseDoneCv;
+  std::atomic<bool> pauseWaitDone{false};
 };
 
 // Dataset preparation functions
