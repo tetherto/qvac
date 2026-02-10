@@ -17,6 +17,7 @@ This library simplifies running Large Language Models (LLMs) within QVAC runtime
   - [8. Release Resources](#8-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
+- [Fine-tuning](#fine-tuning)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
@@ -398,6 +399,12 @@ main().catch(error => {
 bare index.js
 ```
 
+
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
 
 ## Other examples
 
