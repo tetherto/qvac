@@ -177,6 +177,9 @@ public:
    */
   void clearPauseRequest();
 
+  /** Block until the training thread has completed the pause path. */
+  void waitUntilPauseComplete();
+
 private:
   /**
    * The Common params parse method. It parses the common params.

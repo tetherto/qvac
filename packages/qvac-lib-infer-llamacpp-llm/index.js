@@ -178,9 +178,6 @@ class LlmLlamacpp extends BaseInference {
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
             this._finetuneCompletionResolve(obj.status)
             this._finetuneCompletionResolve = null
-            if ((obj.status === 'IDLE' || obj.status === 'ERROR')) {
-              this.addon?.resolvePauseComplete?.()
-            }
             if (this._finetuneRelease) {
               this._finetuneRelease()
               this._finetuneRelease = null
@@ -188,7 +185,6 @@ class LlmLlamacpp extends BaseInference {
             return
           }
           if (obj?.type === 'FinetunePaused') {
-            this.addon?.resolvePauseComplete?.()
             if (this._finetuneCompletionResolve) {
               this._finetuneCompletionResolve('PAUSED')
               this._finetuneCompletionResolve = null

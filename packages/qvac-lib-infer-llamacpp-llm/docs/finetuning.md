@@ -87,7 +87,7 @@ const resumeResult = await resumeHandle.await()
 
 ### `pauseFinetune()`
 
-Pauses finetuning and saves a checkpoint to `checkpointSaveDir`. The checkpoint can be used to resume later. Pause is applied after the current batch completes. Behaves like `cancel`: does not throw when nothing is running; always awaitable. The promise resolves when the C++ backend emits `FinetunePaused` (checkpoint saved), or immediately when finetuning is not running. You can also call `handle.pause()` on the finetune handle instead of `model.pauseFinetune()`.
+Pauses finetuning and saves a checkpoint to `checkpointSaveDir`. The checkpoint can be used to resume later. Pause is applied after the current batch completes. Behaves like `cancel`: does not throw when nothing is running; always awaitable. The promise resolves when the C++ backend has finished the pause (blocking until the training thread has saved the checkpoint or reported save failure), or immediately when finetuning is not running. You can also call `handle.pause()` on the finetune handle instead of `model.pauseFinetune()`.
 
 ```js
 await model.pauseFinetune()
@@ -139,7 +139,7 @@ The finetuning and pause/resume flow uses **atomic flags** and **events** only. 
 | **Completion** | Events `FinetuneComplete` (IDLE/ERROR) and `FinetunePaused` resolve promises |
 | **Training started** | Event `FinetuningStarted` emitted when first batch is processed |
 | **Is finetuning running?** | Atomic read via `isFinetuningRunning()` (checks `checkpointState` exists and `isFinetuning.load()`) |
-| **Request pause** | `requestPause()` does a single check: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and calls `llama_opt_request_stop()`. Returns immediately (no retry loop) |
+| **Request pause** | `requestPause()` sets `pauseRequested` and `llama_opt_request_stop()`. The binding then runs `waitUntilPauseComplete()` on a background thread (like cancel): blocks on a condition variable until the training thread sets pause done (checkpoint saved or save failed); the Promise resolves when that wait returns. |
 | **Resume** | `activate()` checks `isPaused`; if true, sets `shouldResumeFromPause` and invokes `finetune()` (spawns C++ finetune thread with `allowResume=true`) |
 
 **Atomic flags in C++:** `pauseRequested`, `shouldExit`, `pauseCheckpointSaved` (in `TrainingCheckpointState`), `shouldResumeFromPause` (in addon).
@@ -147,7 +147,7 @@ The finetuning and pause/resume flow uses **atomic flags** and **events** only. 
 ### How the JS API Calls the Backend
 
 - **`finetune(opts?, { resume })`** — When `resume: true`, calls `addon.activate()` (which checks `isPaused`, sets `shouldResumeFromPause`, and invokes `finetune()` to spawn the C++ finetune thread with `allowResume=true`). Otherwise calls `addon.finetune()`. Returns a handle immediately; `handle.await()` resolves when `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED) is emitted.
-- **`pauseFinetune()`** — Behaves like `cancel`: does not throw when nothing is running; always awaitable. Calls `addon.pause()` → C++ `requestPause()` sets `pauseRequested` and awaits `FinetunePaused` (checkpoint saved).
+- **`pauseFinetune()`** — Behaves like `cancel`: does not throw when nothing is running; always awaitable. Calls `addon.pause()` → C++ `requestPause()` then blocks in C++ until the training thread has completed the pause path (checkpoint saved or save failed); the binding returns a single Promise that resolves when that wait returns.
 
 ### Parameter Notes
 

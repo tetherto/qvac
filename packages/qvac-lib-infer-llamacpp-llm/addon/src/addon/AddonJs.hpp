@@ -217,7 +217,12 @@ inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
   bool didPause = llamaModel->requestPause();
   shouldResumeFromPause.store(false);
 
-  return js::Boolean::create(env, didPause);
+  if (!didPause) {
+    return js::Boolean::create(env, false);
+  }
+  return js::JsAsyncTask::run(env, [llamaModel]() {
+    llamaModel->waitUntilPauseComplete();
+  });
 }
 JSCATCH
 

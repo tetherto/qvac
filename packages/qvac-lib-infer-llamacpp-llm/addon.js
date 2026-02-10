@@ -65,18 +65,8 @@ class LlamaInterface {
    * @returns {Promise<boolean>} true when pause completed, false when not finetuning
    */
   async pause () {
-    const didPause = await this._binding.pause(this._handle)
-    if (!didPause) return false
-    return new Promise((resolve) => {
-      this._pauseCompleteResolve = () => resolve(true)
-    })
-  }
-
-  resolvePauseComplete () {
-    if (this._pauseCompleteResolve) {
-      this._pauseCompleteResolve()
-      this._pauseCompleteResolve = null
-    }
+    const result = await this._binding.pause(this._handle)
+    return result !== false
   }
 
   isFinetuningRunning () {
