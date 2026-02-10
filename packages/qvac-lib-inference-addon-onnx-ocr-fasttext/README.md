@@ -10,7 +10,7 @@ The OCR process uses two models:
 *   **Detector:** Locates text regions within an image.
 *   **Recognizer:** Extracts text strings from the detected regions. Recognizer models are language-specific.
 
-## Table of Contents
+## Table of Contents 
 
 *   [Supported Platforms](#supported-platforms)
 *   [Installation](#installation)
