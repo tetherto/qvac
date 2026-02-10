@@ -246,7 +246,7 @@ function removeErrorHandlers (response) {
  */
 async function cleanupResources (loader, inference) {
   await loader.close()
-  await inference.destroy()
+  await inference.unload()
 }
 
 /**
