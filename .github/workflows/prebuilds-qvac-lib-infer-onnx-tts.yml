@@ -340,6 +340,32 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
+      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'arm64' }}
+        name: Install Rust target for iOS arm64 device
+        shell: bash
+        run: |
+          rustup default stable
+          rustup target add aarch64-apple-ios
+          rustup target add aarch64-apple-ios-sim
+          rustup target list --installed
+
+      - if: ${{ matrix.platform == 'ios' && matrix.arch == 'x64' }}
+        name: Install Rust target for iOS x64 simulator
+        shell: bash
+        run: |
+          rustup default stable
+          rustup target add x86_64-apple-ios
+          rustup target list --installed
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Install Rust targets for Android
+        shell: bash
+        run: |
+          rustup default stable
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          rustup target list --installed
+
       - name: Create vcpkg cache location
         run: mkdir -p vcpkg/cache
 
