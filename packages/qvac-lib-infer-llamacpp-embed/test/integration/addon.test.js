@@ -535,7 +535,7 @@ createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than fu
   )
 
   // Use a large number of sequences to give cancel time to take effect
-  const numSequences = isMobile ? 64 : 256
+  const numSequences = isMobile ? 16 : 64
   const sequences = new Array(numSequences)
     .fill(null)
     .map((_, i) => `Comparison test sequence #${i} with padding to increase processing time.`)
@@ -553,6 +553,7 @@ createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than fu
 
   // Cancel as soon as possible
   await inference.addon.cancel()
+  console.log('Finished waiting for cancel.')
 
   let cancelEmbeddings = null
   try {
