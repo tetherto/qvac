@@ -495,7 +495,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Scope package as @tetherto for GPR
         shell: bash
@@ -549,10 +549,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       # Re-assert scope for public npm (fresh checkout)
       - name: Scope package as @qvac for npm
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           set -euo pipefail
@@ -565,3 +566,4 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
+          workdir: ${{ env.WORKDIR }}

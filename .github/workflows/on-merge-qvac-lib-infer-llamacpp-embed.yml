@@ -84,6 +84,7 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -97,6 +98,7 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -110,6 +112,7 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-release-npm:
     needs: publish-logic

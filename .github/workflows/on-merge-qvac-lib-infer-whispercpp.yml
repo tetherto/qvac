@@ -91,6 +91,7 @@ jobs:
       # workflow_dispatch -> github.event.inputs.tag is set; push -> fallback to computed gpr_tag
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -104,6 +105,7 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -117,6 +119,7 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release-npm:
     needs: publish-logic

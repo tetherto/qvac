@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 
 echo "🔍 Validating commit message..."
-node scripts/validator.cjs --type=commit --msg="$(cat $1)"
+node "$(git rev-parse --show-toplevel)/scripts/sdk/validator.cjs" --type=commit --msg="$(cat $1)"
