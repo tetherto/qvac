@@ -1,0 +1,100 @@
+# Deploy Registry Server to Staging
+#
+# Rsyncs the registry-server package to staging VMs and restarts pm2.
+# Triggers on push to main (when registry-server files change) or manually.
+#
+# To add a new VM (e.g. staging-3):
+#   1. Add repo secrets: STAGING_HOST_3, STAGING_USER_3, STAGING_DEPLOY_PATH_3
+#   2. Add "3" to the matrix.server list below
+#
+# Shared secret:
+#   STAGING_SSH_KEY       - Private SSH key (shared across all staging VMs)
+#
+# Per-server secrets (replace N with server number):
+#   STAGING_HOST_N        - VM hostname/IP
+#   STAGING_USER_N        - SSH username
+#   STAGING_DEPLOY_PATH_N - Absolute path to registry-server on the VM
+
+name: Deploy Registry Server (Staging)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/qvac-lib-registry-server/**"
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-registry-server
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [1, 2]
+    name: deploy (staging-${{ matrix.server }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          HOST: ${{ secrets[format('STAGING_HOST_{0}', matrix.server)] }}
+          USER: ${{ secrets[format('STAGING_USER_{0}', matrix.server)] }}
+          DEPLOY_PATH: ${{ secrets[format('STAGING_DEPLOY_PATH_{0}', matrix.server)] }}
+        run: |
+          missing=""
+          [ -z "$SSH_KEY" ] && missing="$missing STAGING_SSH_KEY"
+          [ -z "$HOST" ] && missing="$missing STAGING_HOST_${{ matrix.server }}"
+          [ -z "$USER" ] && missing="$missing STAGING_USER_${{ matrix.server }}"
+          [ -z "$DEPLOY_PATH" ] && missing="$missing STAGING_DEPLOY_PATH_${{ matrix.server }}"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secrets for staging-${{ matrix.server }}:$missing"
+            exit 1
+          fi
+          echo "All secrets set for staging-${{ matrix.server }}"
+
+      - name: Setup SSH key
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets[format('STAGING_HOST_{0}', matrix.server)] }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync package to staging-${{ matrix.server }}
+        shell: bash
+        env:
+          REMOTE_HOST: ${{ secrets[format('STAGING_HOST_{0}', matrix.server)] }}
+          REMOTE_USER: ${{ secrets[format('STAGING_USER_{0}', matrix.server)] }}
+          REMOTE_PATH: ${{ secrets[format('STAGING_DEPLOY_PATH_{0}', matrix.server)] }}
+        run: |
+          rsync -avz --delete \
+            --exclude='.*' \
+            --exclude='node_modules/' \
+            --exclude='corestore/' \
+            --exclude='ecosystem.config.js' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ${{ env.PKG_DIR }}/ \
+            "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/"
+
+      - name: Install dependencies and restart on staging-${{ matrix.server }}
+        shell: bash
+        env:
+          REMOTE_HOST: ${{ secrets[format('STAGING_HOST_{0}', matrix.server)] }}
+          REMOTE_USER: ${{ secrets[format('STAGING_USER_{0}', matrix.server)] }}
+          REMOTE_PATH: ${{ secrets[format('STAGING_DEPLOY_PATH_{0}', matrix.server)] }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "${REMOTE_USER}@${REMOTE_HOST}" << EOF
+            cd ${REMOTE_PATH}
+            echo "--- npm install ---"
+            npm install --production
+            echo "--- pm2 restart ---"
+            pm2 restart 0 --log-date-format 'YYYY-MM-DD HH:mm:ss Z'
+            echo "--- deploy complete on staging-${{ matrix.server }} ---"
+          EOF
