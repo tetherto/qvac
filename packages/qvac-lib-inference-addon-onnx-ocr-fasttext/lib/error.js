@@ -20,7 +20,8 @@ const ERR_CODES = Object.freeze({
   MISSING_REQUIRED_PARAMETER: 9012,
   UNSUPPORTED_IMAGE_FORMAT: 9013,
   IMAGE_DECODE_FAILED: 9014,
-  UNSUPPORTED_LANGUAGE: 9015
+  UNSUPPORTED_LANGUAGE: 9015,
+  FAILED_TO_RUN_JOB: 9016
 })
 
 addCodes({
@@ -83,6 +84,10 @@ addCodes({
   [ERR_CODES.UNSUPPORTED_LANGUAGE]: {
     name: 'UNSUPPORTED_LANGUAGE',
     message: (langList) => `Unsupported language: ${langList}`
+  },
+  [ERR_CODES.FAILED_TO_RUN_JOB]: {
+    name: 'FAILED_TO_RUN_JOB',
+    message: (message) => `Failed to run job, error: ${message}`
   }
 })
 
