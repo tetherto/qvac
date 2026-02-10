@@ -489,7 +489,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${WORKDIR}/prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         shell: bash
@@ -514,7 +514,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
-          workdir: ${{ inputs.workdir }}
+          workdir: ${{ env.WORKDIR }}
           name-suffix: "-mono"
 
       - name: Capture published version
@@ -568,7 +568,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: ${WORKDIR}/prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -576,7 +576,7 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          workdir: $((WORKDIR))
+          workdir: ${{ env.WORKDIR }}
 
       - name: Capture published version
         id: capture_version
