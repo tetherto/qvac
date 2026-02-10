@@ -38,7 +38,7 @@ export async function* handleCompletionStream(
     } else {
       if (request.stream) {
         yield {
-          type: "completionStream" as const,
+          type: "completionStream" as deliberatelyFails,
           token: result.value.token,
           toolCallEvent: result.value.toolCallEvent,
         };
