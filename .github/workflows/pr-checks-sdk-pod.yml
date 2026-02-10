@@ -33,15 +33,30 @@ jobs:
   # ---------------------------------------------------------------------------
   # Strip safe-to-test label on new pushes from external contributors.
   # Forces re-review before CI runs on updated code.
+  # Authors with repo write permission are not stripped (checked in step).
   # ---------------------------------------------------------------------------
   strip-label:
     if: |
       github.event.action == 'synchronize' &&
-      github.event.pull_request.head.repo.full_name != github.repository &&
-      !contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
+      - name: Check author permission
+        id: perm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REPO: ${{ github.repository }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          PERM=$(gh api "repos/$BASE_REPO/collaborators/${PR_AUTHOR}/permission" --jq '.permission' 2>/dev/null || true)
+          if [[ "$PERM" =~ ^(admin|write|maintain)$ ]]; then
+            echo "author_has_write=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "author_has_write=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Remove safe-to-test label
+        if: steps.perm.outputs.author_has_write != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -70,6 +85,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
         run: |
@@ -85,7 +101,15 @@ jobs:
             exit 0
           fi
 
-          # Org members / collaborators are trusted even from forks
+          # Collaborator with write (or higher) is trusted even when author_association is not MEMBER/COLLABORATOR
+          PERM=$(gh api "repos/$BASE_REPO/collaborators/${PR_AUTHOR}/permission" --jq '.permission' 2>/dev/null || true)
+          if [[ "$PERM" =~ ^(admin|write|maintain)$ ]]; then
+            echo "::notice::Author has $PERM permission — authorized"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Org members / collaborators (by author_association) are trusted even from forks
           if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
             echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
             echo "allowed=true" >> "$GITHUB_OUTPUT"
