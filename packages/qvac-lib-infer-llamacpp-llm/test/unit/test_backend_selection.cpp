@@ -32,9 +32,6 @@ static MockDevice createGPUDevice(std::string&& desc, std::string&& backend) {
   return {std::move(desc), std::move(backend), GGML_BACKEND_DEVICE_TYPE_GPU};
 }
 
-// IGPU enum was removed from ggml API. BackendSelection uses description
-// (intel/uhd/iris/apu) to detect integrated GPUs. Use Intel UHD desc so
-// isIntegratedGpu() classifies it as integrated.
 static MockDevice createIGPUDevice(std::string&& desc, std::string&& backend) {
   return {std::move(desc), std::move(backend), GGML_BACKEND_DEVICE_TYPE_GPU};
 }

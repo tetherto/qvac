@@ -992,16 +992,8 @@ void LlamaModel::finetune(
       }
     }
   } catch (const std::exception& ex) {
-    if (currentCheckpointState_) {
-      currentCheckpointState_->isIdle.store(true);
-      currentCheckpointState_->isFinetuning.store(false);
-      currentCheckpointState_->isPaused.store(false);
-    }
-    if (pausedCheckpointState_) {
-      pausedCheckpointState_->isIdle.store(true);
-      pausedCheckpointState_->isFinetuning.store(false);
-      pausedCheckpointState_->isPaused.store(false);
-    }
+    if (currentCheckpointState_) currentCheckpointState_->setIdle();
+    if (pausedCheckpointState_) pausedCheckpointState_->setIdle();
     llama_finetuning_helpers::clearGlobalCheckpointState();
     currentCheckpointState_ = nullptr;
     if (logCallback) {
@@ -1391,7 +1383,8 @@ bool LlamaModel::requestPause() {
     return true;
   }
 
-  auto* globalState = llama_finetuning_helpers::getGlobalCheckpointState();
+  llama_finetuning_helpers::TrainingCheckpointState* globalState =
+      llama_finetuning_helpers::getGlobalCheckpointState();
   if (globalState != nullptr) {
     globalState->pauseRequested.store(true);
     llama_context* ctx = getContext();
@@ -1404,10 +1397,11 @@ bool LlamaModel::requestPause() {
   return false;
 }
 
-void LlamaModel::waitUntilPauseComplete() {
-  auto* state = currentCheckpointState_ != nullptr
-      ? currentCheckpointState_
-      : llama_finetuning_helpers::getGlobalCheckpointState();
+void LlamaModel::waitUntilFinetuningPauseComplete() {
+  llama_finetuning_helpers::TrainingCheckpointState* state =
+      currentCheckpointState_ != nullptr
+          ? currentCheckpointState_
+          : llama_finetuning_helpers::getGlobalCheckpointState();
   if (state == nullptr) {
     return;
   }
@@ -1426,5 +1420,13 @@ void LlamaModel::clearPauseRequest() {
   if (ctx != nullptr) {
     llama_opt_reset_stop(ctx);
   }
+}
+
+void LlamaModel::setShouldResumeFromPause(bool value) {
+  shouldResumeFromPause_.store(value);
+}
+
+bool LlamaModel::takeShouldResumeFromPause() {
+  return shouldResumeFromPause_.exchange(false);
 }
 #endif // STANDALONE_TEST_BUILD
