@@ -1,0 +1,21 @@
+name: vulkaninfo test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-vulkaninfo:
+    name: test-vulkaninfo
+    runs-on: [self-hosted, ai-run-windows-gpu]
+    steps:
+      - name: Run nvidia-smi without params
+        shell: powershell
+        run: |
+          Write-Host "=== GPU Info ==="
+          nvidia-smi
+
+      - name: Run vulkaninfo without params
+        shell: powershell
+        run: |
+          Write-Host "=== Running vulkaninfo ==="
+          vulkaninfo
