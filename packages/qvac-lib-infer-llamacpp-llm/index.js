@@ -39,6 +39,7 @@ class LlmLlamacpp extends BaseInference {
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._runQueueWaiter = Promise.resolve()
+    this._runQueueBusy = false
     this._defaultFinetuneParams = finetuningParams ?? null
   }
 
@@ -245,13 +246,20 @@ class LlmLlamacpp extends BaseInference {
   }
 
   async _withExclusiveRun (fn) {
+    if (this._runQueueBusy) {
+      throw new Error(
+        'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
+      )
+    }
     const prev = this._runQueueWaiter || Promise.resolve()
     let release
     this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    this._runQueueBusy = true
     await prev
     try {
       return await fn()
     } finally {
+      this._runQueueBusy = false
       release()
     }
   }
@@ -334,11 +342,27 @@ class LlmLlamacpp extends BaseInference {
       this.logger?.info?.('Addon loaded')
     }
 
+    if (this._runQueueBusy) {
+      throw new Error(
+        'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
+      )
+    }
+
     const prev = this._runQueueWaiter || Promise.resolve()
     let release
     this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    this._finetuneRelease = release
-    await prev
+    this._runQueueBusy = true
+    this._finetuneRelease = () => {
+      this._runQueueBusy = false
+      release()
+    }
+
+    try {
+      await prev
+    } catch (e) {
+      this._finetuneRelease()
+      throw e
+    }
 
     let resolveCompletion
     let rejectCompletion
@@ -363,7 +387,7 @@ class LlmLlamacpp extends BaseInference {
       }
       return handle
     } catch (err) {
-      this._finetuneRelease?.()
+      this._finetuneRelease()
       this._finetuneRelease = null
       this._finetuneCompletionResolve = null
       rejectCompletion(err)

@@ -22,12 +22,33 @@ function createStub (defaultImpl = () => {}) {
   return fn
 }
 
-const createMockAddon = () => ({
-  finetune: createStub(),
-  activate: createStub(),
-  pause: createStub(() => Promise.resolve(true)),
-  isFinetuningRunning: createStub(() => true)
-})
+function createMockAddon () {
+  const finetuneStub = createStub()
+  const activateStub = createStub()
+  const finetune = function (...args) {
+    finetune.called = true
+    finetune.lastArgs = args
+    return finetuneStub.apply(this, args)
+  }
+  finetune.called = false
+  finetune.lastArgs = null
+  finetune.callsFake = (impl) => { finetuneStub.callsFake(impl); return finetune }
+  finetune.calledWith = (...expected) => finetuneStub.calledWith(...expected)
+  const activate = function (...args) {
+    activate.called = true
+    activate.lastArgs = args
+    return activateStub.apply(this, args)
+  }
+  activate.called = false
+  activate.lastArgs = null
+  activate.callsFake = (impl) => { activateStub.callsFake(impl); return activate }
+  activate.calledWith = (...expected) => activateStub.calledWith(...expected)
+  return {
+    finetune,
+    activate,
+    pause: createStub(() => Promise.resolve(true))
+  }
+}
 
 function completeFinetuneWith (model, status = 'IDLE') {
   return () => {
@@ -182,7 +203,6 @@ test('pauseFinetune() throws when addon not initialized', async (t) => {
 
 test('pauseFinetune() does not throw when finetuning not running', async (t) => {
   const model = createModelWithMockAddon(null)
-  model.addon.isFinetuningRunning.callsFake(() => false)
   model.addon.pause.callsFake(() => Promise.resolve(false))
   await t.execution(async () => { await model.pauseFinetune() })
   t.ok(model.addon.pause.called)

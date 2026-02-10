@@ -146,7 +146,6 @@ The finetuning and pause/resume flow uses **atomic flags** and **events** only. 
 |------|------------|
 | **Completion** | `handle.await()` resolves when event `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED) is emitted. |
 | **Training started** | Event `FinetuningStarted` emitted when the first batch is processed. |
-| **Is finetuning running?** | Atomic read via `isFinetuningRunning()` (checks checkpoint state and `isFinetuning`). |
 | **Request pause** | `requestPause()` sets `pauseRequested` and `llama_opt_request_stop()`. The binding runs `waitUntilPauseComplete()` on a background thread (same pattern as cancel): blocks on a condition variable until the training thread signals pause done (checkpoint saved or save failed); the Promise resolves when that wait returns. |
 | **Resume** | `activate()` checks `isPaused`; if true, sets `shouldResumeFromPause` and invokes `finetune()` (spawns C++ finetune thread with `allowResume=true`). |
 
@@ -188,7 +187,7 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 7. **Pause** — `requestPause()`: if `currentCheckpointState_` or global state exists, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir`; emits `FinetuneComplete` (IDLE). On error: emits `FinetuneComplete` (ERROR).
 
-**Atomic flags** — `TrainingCheckpointState` holds `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `isIdle`, `isFinetuning`, `isPaused`. These are set at lifecycle transitions (first batch, pause checkpoint saved, completion). `activate()` checks `isPaused` to resume; `isFinetuningRunning()` checks `isFinetuning`. No state derivation. The addon uses `shouldResumeFromPause` to signal resume.
+**Atomic flags** — `TrainingCheckpointState` holds `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `isIdle`, `isFinetuning`, `isPaused`. These are set at lifecycle transitions (first batch, pause checkpoint saved, completion). `activate()` checks `isPaused` to resume. No state derivation. The addon uses `shouldResumeFromPause` to signal resume.
 
 ---
 

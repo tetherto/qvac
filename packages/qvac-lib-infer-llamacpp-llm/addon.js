@@ -69,10 +69,6 @@ class LlamaInterface {
     return result !== false
   }
 
-  isFinetuningRunning () {
-    return this._binding.isFinetuningRunning(this._handle)
-  }
-
   /**
    * @param {Object} data
    * @param {String} data.type
