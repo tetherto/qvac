@@ -1,5 +1,31 @@
 cmake_minimum_required(VERSION 3.25)
 
+# bare-make's macOS toolchain currently prefers Homebrew LLVM when installed.
+# Force Apple toolchain paths before `project()` so compiler detection uses Xcode CLT.
+if(APPLE)
+  execute_process(
+    COMMAND xcrun --find clang
+    OUTPUT_VARIABLE APPLE_CLANG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  execute_process(
+    COMMAND xcrun --find clang++
+    OUTPUT_VARIABLE APPLE_CLANGXX
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  if(NOT APPLE_CLANG OR NOT APPLE_CLANGXX)
+    message(FATAL_ERROR "Failed to locate Apple clang/clang++ with xcrun. Install Xcode Command Line Tools.")
+  endif()
+
+  set(CMAKE_C_COMPILER "${APPLE_CLANG}" CACHE FILEPATH "Apple C compiler path" FORCE)
+  set(CMAKE_CXX_COMPILER "${APPLE_CLANGXX}" CACHE FILEPATH "Apple C++ compiler path" FORCE)
+  # cmake-toolchains resolves these cache entries and may re-apply them via vcpkg chainloading.
+  # Force them to Apple tool paths as well.
+  set(clang "${APPLE_CLANG}" CACHE FILEPATH "Apple clang path override" FORCE)
+  set(clang++ "${APPLE_CLANGXX}" CACHE FILEPATH "Apple clang++ path override" FORCE)
+endif()
+
 option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
@@ -16,6 +42,12 @@ find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 project(qvac-lib-infer-llamacpp-embed C CXX)
+
+if(APPLE)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    message(FATAL_ERROR "Non-Apple compiler is active (${CMAKE_CXX_COMPILER_ID}: ${CMAKE_CXX_COMPILER}). Please clean build dir and rerun generation.")
+  endif()
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
