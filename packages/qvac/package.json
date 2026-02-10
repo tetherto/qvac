@@ -33,7 +33,7 @@
     "lint:fix": "standard --fix"
   },
   "dependencies": {
-    "@qvac/qvac-cli": "^0.1.2"
+    "@qvac/cli": "^0.1.0"
   },
   "devDependencies": {
     "standard": "^17.1.2"

@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const cliEntry = require.resolve('@qvac/qvac-cli')
+const cliEntry = require.resolve('@qvac/cli')
 
 const child = spawn(process.execPath, [cliEntry, ...process.argv.slice(2)], {
   stdio: 'inherit',
@@ -16,6 +16,6 @@ child.on('exit', (code) => {
 })
 
 child.on('error', (err) => {
-  console.error('Failed to start @qvac/qvac-cli:', err.message)
+  console.error('Failed to start @qvac/cli:', err.message)
   process.exit(1)
 })
