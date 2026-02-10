@@ -180,8 +180,16 @@ sequenceDiagram
     User->>LlamaModel: finetune(opts) or finetune({ resume: true })
     LlamaModel->>LlamaModel: _runQueueBusy check, store params
     LlamaModel->>Addon: finetune(params) or resumeFinetune() (resume)
-    Addon->>Binding: _binding.finetune(handle, params)
-    Binding->>AddonJs: qvac_lib_inference_addon_llama::finetune(env, info)
+
+    alt start
+        Addon->>Binding: _binding.finetune(handle, params)
+        Binding->>AddonJs: finetune(env, info)
+    else resume
+        Addon->>Binding: _binding.resumeFinetune(handle)
+        Binding->>AddonJs: resumeFinetune(env, info)
+        AddonJs->>AddonJs: take/put params, clearPauseRequest, shouldResumeFromPause=true
+        AddonJs->>AddonJs: finetune(env, info)
+    end
 
     AddonJs->>AddonJs: JsArgsParser, get LlamaModel* from g_modelMap
     AddonJs->>AddonJs: FinetuneParamStore take/put, build enqueueLog
@@ -225,13 +233,14 @@ sequenceDiagram
     AddonJs->>LlamaModelCpp: llamaModel->requestPause()
     LlamaModelCpp->>LlamaModelCpp: currentCheckpointState_->pauseRequested = true
     LlamaModelCpp->>LlamaModelCpp: llama_opt_request_stop(ctx)
-    LlamaModelCpp-->>AddonJs: true
 
-    AddonJs->>AddonJs: JsAsyncTask::run(env, [llamaModel]() {
-    AddonJs->>LlamaModelCpp: llamaModel->waitUntilPauseComplete()
+    Note over AddonJs: Always returns Promise (JsAsyncTask::run). If requestPause() was false, runs empty task so Promise resolves immediately.
+
+    AddonJs->>AddonJs: JsAsyncTask::run(env, [llamaModel]() { ... } or []() {})
+    AddonJs->>LlamaModelCpp: llamaModel->waitUntilPauseComplete() (when didPause)
     Note over LlamaModelCpp: waits on pauseDoneCv until pause done
 
-    par Finetune thread reacts to stop
+    par Finetune thread reacts to stop (when finetuning was running)
         FinetuneThread->>Helpers: training loop sees pauseRequested / stop
         Helpers->>Helpers: save checkpoint, state->logFn(R"({"type":"FinetunePaused"})")
         Helpers->>Helpers: pauseWaitDone=true, pauseDoneCv.notify_all()
@@ -253,9 +262,9 @@ sequenceDiagram
 | Layer | Component | Role |
 |-------|-----------|------|
 | JS | `index.js` → `LlamaModel` | Public API: `finetune()`, `pauseFinetune()`, run-queue busy check, handle with `await()` / `pause()`. Wires `_outputCallback` to resolve finetune completion and release queue. |
-| JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `pause()` → `_binding.pause(handle)`. |
-| C++ | `binding.cpp` | BARE exports: `finetune` → `qvac_lib_inference_addon_llama::finetune`, `pause` → `qvac_lib_inference_addon_llama::pause`. |
-| C++ | `AddonJs.hpp` | Parses JS args, gets `LlamaModel*`, stores params; `finetune` spawns thread calling `LlamaModel::finetune`; `activate` delegates to base (initial load); `resumeFinetune` runs resume path only (no status check); `pause` calls `requestPause()` then `waitUntilPauseComplete()` (async to JS). |
+| JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `resumeFinetune()` → `_binding.resumeFinetune(handle)`, `pause()` → `_binding.pause(handle)`. |
+| C++ | `binding.cpp` | BARE exports: `finetune`, `resumeFinetune`, `pause` → `qvac_lib_inference_addon_llama::*`. |
+| C++ | `AddonJs.hpp` | Parses JS args, gets `LlamaModel*`, stores params; `finetune` spawns thread calling `LlamaModel::finetune`; `activate` delegates to base (initial load); `resumeFinetune` runs resume path only (no status check); `pause` calls `requestPause()` then always `JsAsyncTask::run` (waitUntilPauseComplete when didPause, else empty task)—always returns Promise. |
 | C++ | `LlamaModel.cpp` | `finetune(params, logCallback, allowResume)` runs training; `requestPause()`, `waitUntilPauseComplete()`, `clearPauseRequest()`. Emits completion via `logCallback` (e.g. `FinetuneComplete`, progress). |
 | C++ | `LlamaFinetuningHelpers.cpp` | Training loop; on pause writes checkpoint and emits `{"type":"FinetunePaused"}` via `state->logFn`, then signals `pauseDoneCv`. |
 | C++ → JS | `outputQueue` + `OutputCallBackJs` | `enqueueLog` → `queueResult(any(string))`; addon drains queue and invokes JS `outputCallback`. JS parses JSON for `FinetuneComplete` / `FinetunePaused` and resolves `handle.await()`. |
