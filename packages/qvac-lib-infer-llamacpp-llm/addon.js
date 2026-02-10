@@ -100,10 +100,6 @@ class LlamaInterface {
     return this._binding.status(this._handle)
   }
 
-  isFinetuningRunning () {
-    return this._binding.isFinetuningRunning(this._handle)
-  }
-
   /**
    * Run one inference job with an array of message objects.
    * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
