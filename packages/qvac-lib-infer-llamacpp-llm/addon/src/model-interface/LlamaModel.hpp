@@ -1,6 +1,7 @@
 #pragma once
 // NOLINTBEGIN(readability-identifier-naming)
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -168,8 +169,11 @@ public:
    */
   void clearPauseRequest();
 
-  /** Block until the training thread has completed the pause path. */
-  void waitUntilPauseComplete();
+  /** Block until the training thread has completed the finetuning pause path. */
+  void waitUntilFinetuningPauseComplete();
+
+  void setShouldResumeFromPause(bool value);
+  bool takeShouldResumeFromPause();
 
 private:
   /**
@@ -281,6 +285,7 @@ private:
   llama_finetuning_helpers::TrainingCheckpointState* currentCheckpointState_ = nullptr;
   std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState> pausedCheckpointState_;
   bool optimizerInitialized_ = false;
+  std::atomic<bool> shouldResumeFromPause_{false};
 };
 
 // NOLINTEND(readability-identifier-naming)

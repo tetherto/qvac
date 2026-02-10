@@ -75,6 +75,12 @@ struct TrainingCheckpointState {
   std::mutex pauseDoneMutex;
   std::condition_variable pauseDoneCv;
   std::atomic<bool> pauseWaitDone{false};
+
+  void setIdle() {
+    isIdle.store(true);
+    isFinetuning.store(false);
+    isPaused.store(false);
+  }
 };
 
 // Dataset preparation functions

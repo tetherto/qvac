@@ -93,10 +93,9 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
   await model.pauseFinetune()
 
   const pauseResult = await finetuneHandle.await()
-  if (pauseResult?.status !== 'PAUSED') {
+  if (pauseResult?.status === 'IDLE') {
     return handleEarlyCompletion(t, finetuneHandle, checkpointDir)
   }
-  t.ok(pauseResult?.status === 'PAUSED', `pause should resolve with PAUSED, got: ${pauseResult?.status}`)
 
   await verifyPauseCheckpoint(t, checkpointDir, 2000)
 

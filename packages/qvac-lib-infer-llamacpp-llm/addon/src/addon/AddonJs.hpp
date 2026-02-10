@@ -1,9 +1,6 @@
 #pragma once
-#include <atomic>
 #include <iostream>
 #include <memory>
-#include <unordered_map>
-#include <mutex>
 #include <thread>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
@@ -20,11 +17,9 @@
 
 namespace qvac_lib_inference_addon_llama {
 
-namespace {
-std::mutex g_modelMapMutex;
-std::unordered_map<void*, LlamaModel*> g_modelMap;
-std::atomic<bool> shouldResumeFromPause{false};
-} // namespace
+inline LlamaModel* getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return dynamic_cast<LlamaModel*>(&instance.addonCpp->model.get());
+}
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -37,8 +32,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       args.getMapEntry(1, "projectionPath"),
       args.getSubmap(1, "config"));
 
-  LlamaModel* llamaModelPtr = dynamic_cast<LlamaModel*>(model.get());
-
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
@@ -49,12 +42,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  void* addonCppPtr = addon->addonCpp.get();
-  if (llamaModelPtr != nullptr && addonCppPtr != nullptr) {
-    std::scoped_lock lock{g_modelMapMutex};
-    g_modelMap[addonCppPtr] = llamaModelPtr;
-  }
 
   return JsInterface::createInstance(env, std::move(addon));
 }
@@ -127,15 +114,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
 
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
+  LlamaModel* llamaModel = getLlamaModel(instance);
   if (llamaModel == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -143,19 +122,14 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   }
 
   try {
-    js_value_t* arg1 = args.get(1, "finetuningParams");
-    if (!js::is<js::Undefined>(env, arg1) && !js::is<js::Null>(env, arg1)) {
-      if (!js::is<js::Object>(env, arg1)) {
-        throw StatusError(
-            general_error::InvalidArgument,
-            "Expected finetuning parameters as an object.");
-      }
-      auto finetuningParametersObj = js::Object{env, arg1};
-      FinetuningParameters finetuningArgs(env, finetuningParametersObj);
-      qvac_lib_inference_addon_llama_detail::put(
-          instance.addonCpp.get(), finetuningArgs);
-    }
-  } catch (const StatusError& e) {
+    FinetuningParameters finetuningArgs = args.getObject<FinetuningParameters>(
+        1, "finetuningParams",
+        [](js_env_t* e, js::Object& jsObj) {
+          return FinetuningParameters(e, jsObj);
+        });
+    qvac_lib_inference_addon_llama_detail::put(
+        instance.addonCpp.get(), finetuningArgs);
+  } catch (const StatusError&) {
   }
 
   FinetuningParameters params;
@@ -178,7 +152,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
     }
   };
 
-  bool allowResume = shouldResumeFromPause.exchange(false);
+  bool allowResume = llamaModel->takeShouldResumeFromPause();
 
   std::thread finetuneThread([llamaModel, params, enqueueLog, allowResume]() {
     try {
@@ -193,21 +167,13 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t* pauseFinetuning(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
+  LlamaModel* llamaModel = getLlamaModel(instance);
   if (llamaModel == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -215,11 +181,11 @@ inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
   }
 
   bool didPause = llamaModel->requestPause();
-  shouldResumeFromPause.store(false);
+  llamaModel->setShouldResumeFromPause(false);
 
   if (didPause) {
     return js::JsAsyncTask::run(env, [llamaModel]() {
-      llamaModel->waitUntilPauseComplete();
+      llamaModel->waitUntilFinetuningPauseComplete();
     });
   }
   return js::JsAsyncTask::run(env, []() {});
@@ -238,15 +204,7 @@ inline js_value_t* resumeFinetune(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
+  LlamaModel* llamaModel = getLlamaModel(instance);
   if (llamaModel == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
@@ -265,7 +223,7 @@ inline js_value_t* resumeFinetune(js_env_t* env, js_callback_info_t* info) try {
       instance.addonCpp.get(), params);
 
   llamaModel->clearPauseRequest();
-  shouldResumeFromPause.store(true);
+  llamaModel->setShouldResumeFromPause(true);
   return finetune(env, info);
 }
 JSCATCH

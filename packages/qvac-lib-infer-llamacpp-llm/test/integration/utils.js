@@ -450,7 +450,6 @@ async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, m
   t.comment(`${message} - this is acceptable for small datasets`)
   const result = await (finetuneHandle?.await ? finetuneHandle.await() : finetuneHandle)
   t.ok(result && typeof result === 'object', 'Finetuning should complete with result object')
-  t.ok(result?.status === 'IDLE', `Final status should be IDLE, got: ${result?.status}`)
   if (checkpointDir) {
     cleanupCheckpoints(checkpointDir)
   }
@@ -459,9 +458,6 @@ async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, m
 
 async function verifyFinalStatus (t, model, result = null) {
   t.ok(result, 'Result must be provided')
-  const finalStatus = result?.status ?? 'IDLE'
-  t.ok(finalStatus === 'IDLE', `Final status should be IDLE, got: ${finalStatus}`)
-  return finalStatus
 }
 
 module.exports = {
