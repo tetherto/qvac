@@ -6,7 +6,7 @@ on:
 jobs:
   run-vulkaninfo:
     name: test-vulkaninfo
-    runs-on: [self-hosted, ai-run-windows-gpu]
+    runs-on: ai-run-windows-gpu
     steps:
       - name: Run nvidia-smi without params
         shell: powershell
