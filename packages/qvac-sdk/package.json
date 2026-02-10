@@ -71,10 +71,10 @@
   "dependencies": {
     "@qvac/decoder-audio": "^0.3.3",
     "@qvac/dl-filesystem": "^0.2.0",
-    "@qvac/embed-llamacpp": "^0.10.3",
+    "@qvac/embed-llamacpp": "^0.10.7",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.0",
-    "@qvac/llm-llamacpp": "^0.8.5",
+    "@qvac/llm-llamacpp": "^0.8.9",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.1.5",
     "@qvac/rag": "^0.4.2",
