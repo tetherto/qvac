@@ -462,15 +462,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: /tmp/prebuilds
-
-      - name: Place merged prebuilds into package workdir
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${WORKDIR}/prebuilds"
-          rm -rf "${WORKDIR}/prebuilds"/*
-          cp -R /tmp/prebuilds/* "${WORKDIR}/prebuilds/"
+          path: ${WORKDIR}/prebuilds
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         shell: bash
@@ -545,12 +537,19 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds
+          path: ${WORKDIR}/prebuilds
+
       - name: Publish to NPM Package Registry
         id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
+          workdir: $((WORKDIR))
 
       - name: Capture published version
         id: capture_version
