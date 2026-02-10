@@ -31,42 +31,6 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Strip safe-to-test label on new pushes from external contributors.
-  # Forces re-review before CI runs on updated code.
-  # Authors with repo write permission are not stripped (checked in step).
-  # ---------------------------------------------------------------------------
-  strip-label:
-    if: |
-      github.event.action == 'synchronize' &&
-      github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check author permission
-        id: perm
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASE_REPO: ${{ github.repository }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-        run: |
-          PERM=$(gh api "repos/$BASE_REPO/collaborators/${PR_AUTHOR}/permission" --jq '.permission' 2>/dev/null || true)
-          if [[ "$PERM" =~ ^(admin|write|maintain)$ ]]; then
-            echo "author_has_write=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "author_has_write=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Remove safe-to-test label
-        if: steps.perm.outputs.author_has_write != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh api -X DELETE \
-            "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/safe-to-test" \
-            2>/dev/null || true
-          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
-
-  # ---------------------------------------------------------------------------
   # Security gate for pull_request_target
   #
   # Trusted authors (org members, collaborators) and same-repo PRs run
@@ -77,7 +41,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       allowed: ${{ steps.check.outputs.allowed }}
+      has_write: ${{ steps.perm.outputs.has-permission }}
     steps:
+      - name: Check actor write permission
+        id: perm
+        uses: scherermichael-oss/action-has-permission@17f29510f1bf987b916c8cbb451566a56eed23f1
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Check authorization
         id: check
         shell: bash
@@ -85,9 +58,9 @@ jobs:
           EVENT: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'safe-to-test') }}
+          HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
         run: |
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
@@ -101,10 +74,11 @@ jobs:
             exit 0
           fi
 
-          # Collaborator with write (or higher) is trusted even when author_association is not MEMBER/COLLABORATOR
-          PERM=$(gh api "repos/$BASE_REPO/collaborators/${PR_AUTHOR}/permission" --jq '.permission' 2>/dev/null || true)
-          if [[ "$PERM" =~ ^(admin|write|maintain)$ ]]; then
-            echo "::notice::Author has $PERM permission — authorized"
+          echo "::notice::Actor '$GITHUB_ACTOR' has write-or-higher permission: $HAS_WRITE"
+
+          # Actor with write (or higher) is trusted even when author_association is not MEMBER/COLLABORATOR.
+          if [ "$HAS_WRITE" = "1" ]; then
+            echo "::notice::Actor has write-or-higher permission — authorized"
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -125,6 +99,34 @@ jobs:
             echo "::warning::A team member must review the code and apply the 'safe-to-test' label"
             echo "allowed=false" >> "$GITHUB_OUTPUT"
           fi
+
+  # ---------------------------------------------------------------------------
+  # Strip safe-to-test label on new pushes from external contributors.
+  # Forces re-review before CI runs on updated code.
+  # Event actors with repo write permission are not stripped (from authorize output).
+  # ---------------------------------------------------------------------------
+  strip-label:
+    needs: authorize
+    if: |
+      needs.authorize.outputs.has_write != '1' &&
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log actor write permission check
+        shell: bash
+        run: |
+          echo "::notice::Actor '${{ github.actor }}' has write-or-higher permission: ${{ needs.authorize.outputs.has_write }}"
+
+      - name: Remove safe-to-test label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X DELETE \
+            "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/safe-to-test" \
+            2>/dev/null || true
+          echo "::warning::Removed safe-to-test label — new commits pushed. Re-review required."
 
   changes:
     needs: authorize
