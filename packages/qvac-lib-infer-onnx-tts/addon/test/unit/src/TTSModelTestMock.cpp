@@ -23,7 +23,7 @@ TEST_F(TTSModelTestMock, positiveInit) {
 
 TEST_F(TTSModelTestMock, positiveLoad) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
-  
+
   TTSModel model(config_, {}, engineMock_);
   EXPECT_NO_THROW(model.load());
   EXPECT_TRUE(model.isLoaded());
@@ -32,7 +32,7 @@ TEST_F(TTSModelTestMock, positiveLoad) {
 TEST_F(TTSModelTestMock, positiveReload) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
   EXPECT_CALL(*engineMock_, unload()).Times(1);
-  
+
   TTSModel model(config_, {}, engineMock_);
   EXPECT_NO_THROW(model.reload());
   EXPECT_TRUE(model.isLoaded());
@@ -127,7 +127,7 @@ TEST_F(TTSModelTestMock, negativeUnloadedProcess) {
 TEST_F(TTSModelTestMock, positiveDoubleLoad) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(2);
   EXPECT_CALL(*engineMock_, unload()).Times(1);
-  
+
   TTSModel model(config_, {}, engineMock_);
   EXPECT_TRUE(model.isLoaded());
 
@@ -141,7 +141,7 @@ TEST_F(TTSModelTestMock, positiveDoubleLoad) {
 TEST_F(TTSModelTestMock, positiveDoubleUnload) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
   EXPECT_CALL(*engineMock_, unload()).Times(2);
-  
+
   TTSModel model(config_, {}, engineMock_);
   EXPECT_TRUE(model.isLoaded());
 

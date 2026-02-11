@@ -17,24 +17,26 @@ using JsIfTTS = qvac_lib_inference_addon_cpp::JsInterface<qvac_lib_inference_add
 // Supports both Piper and Chatterbox configurations
 static std::unordered_map<std::string, std::string> getTTSConfigMap(js_env_t* env, js::Object configurationParams) {
   std::unordered_map<std::string, std::string> configMap;
-  
+
   // Common configuration
   auto languageOpt = configurationParams.getOptionalProperty<js::String>(env, "language");
   if (languageOpt.has_value()) {
     configMap["language"] = languageOpt.value().as<std::string>(env);
   }
 
-  auto useGPUOpt = configurationParams.getOptionalProperty<js::Boolean>(env, "useGPU");
+  auto useGPUOpt =
+      configurationParams.getOptionalProperty<js::Boolean>(env, "useGPU");
   if (useGPUOpt.has_value()) {
     configMap["useGPU"] = useGPUOpt.value().as<bool>(env) ? "true" : "false";
   }
 
   // Piper-specific configuration
-  auto modelPathOpt = configurationParams.getOptionalProperty<js::String>(env, "modelPath");
+  auto modelPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "modelPath");
   if (modelPathOpt.has_value()) {
     configMap["modelPath"] = modelPathOpt.value().as<std::string>(env);
   }
-  
+
   auto eSpeakDataPathOpt = configurationParams.getOptionalProperty<js::String>(env, "eSpeakDataPath");
   if (eSpeakDataPathOpt.has_value()) {
     configMap["eSpeakDataPath"] = eSpeakDataPathOpt.value().as<std::string>(env);
@@ -45,43 +47,62 @@ static std::unordered_map<std::string, std::string> getTTSConfigMap(js_env_t* en
     configMap["configJsonPath"] = configJsonPathOpt.value().as<std::string>(env);
   }
 
-  auto tashkeelModelDirOpt = configurationParams.getOptionalProperty<js::String>(env, "tashkeelModelDir");
+  auto tashkeelModelDirOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "tashkeelModelDir");
   if (tashkeelModelDirOpt.has_value()) {
-    configMap["tashkeelModelDir"] = tashkeelModelDirOpt.value().as<std::string>(env);
+    configMap["tashkeelModelDir"] =
+        tashkeelModelDirOpt.value().as<std::string>(env);
   }
 
   // Chatterbox-specific configuration
-  auto tokenizerPathOpt = configurationParams.getOptionalProperty<js::String>(env, "tokenizerPath");
+  auto tokenizerPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "tokenizerPath");
   if (tokenizerPathOpt.has_value()) {
     configMap["tokenizerPath"] = tokenizerPathOpt.value().as<std::string>(env);
   }
 
-  auto speechEncoderPathOpt = configurationParams.getOptionalProperty<js::String>(env, "speechEncoderPath");
+  auto speechEncoderPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "speechEncoderPath");
   if (speechEncoderPathOpt.has_value()) {
-    configMap["speechEncoderPath"] = speechEncoderPathOpt.value().as<std::string>(env);
+    configMap["speechEncoderPath"] =
+        speechEncoderPathOpt.value().as<std::string>(env);
   }
 
-  auto embedTokensPathOpt = configurationParams.getOptionalProperty<js::String>(env, "embedTokensPath");
+  auto embedTokensPathOpt = configurationParams.getOptionalProperty<js::String>(
+      env, "embedTokensPath");
   if (embedTokensPathOpt.has_value()) {
-    configMap["embedTokensPath"] = embedTokensPathOpt.value().as<std::string>(env);
+    configMap["embedTokensPath"] =
+        embedTokensPathOpt.value().as<std::string>(env);
   }
 
-  auto conditionalDecoderPathOpt = configurationParams.getOptionalProperty<js::String>(env, "conditionalDecoderPath");
+  auto conditionalDecoderPathOpt =
+      configurationParams.getOptionalProperty<js::String>(
+          env, "conditionalDecoderPath");
   if (conditionalDecoderPathOpt.has_value()) {
-    configMap["conditionalDecoderPath"] = conditionalDecoderPathOpt.value().as<std::string>(env);
+    configMap["conditionalDecoderPath"] =
+        conditionalDecoderPathOpt.value().as<std::string>(env);
   }
 
-  auto languageModelPathOpt = configurationParams.getOptionalProperty<js::String>(env, "languageModelPath");
+  auto languageModelPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "languageModelPath");
   if (languageModelPathOpt.has_value()) {
-    configMap["languageModelPath"] = languageModelPathOpt.value().as<std::string>(env);
+    configMap["languageModelPath"] =
+        languageModelPathOpt.value().as<std::string>(env);
   }
 
   return configMap;
 }
 
-// Helper function to extract Float32Array for reference audio (Chatterbox voice cloning)
-static std::vector<float> getReferenceAudio(js_env_t* env, js::Object configurationParams) {
-  auto refAudioOpt = configurationParams.getOptionalProperty<js::TypedArray<float>>(env, "referenceAudio");
+// Helper function to extract Float32Array for reference audio (Chatterbox voice
+// cloning)
+static std::vector<float> getReferenceAudio(js_env_t *env,
+                                            js::Object configurationParams) {
+  auto refAudioOpt =
+      configurationParams.getOptionalProperty<js::TypedArray<float>>(
+          env, "referenceAudio");
   if (refAudioOpt.has_value()) {
     return refAudioOpt.value().as<std::vector<float>>(env);
   }
@@ -103,14 +124,14 @@ js_value_t *JsIfTTS::createInstance(js_env_t *env, js_callback_info_t *info) try
 
   auto configurationParams = js::Object{env, args[1]};  
   auto configMap = getTTSConfigMap(env, configurationParams);
-  
+
   // Extract reference audio (Float32Array) for Chatterbox voice cloning
   auto referenceAudio = getReferenceAudio(env, configurationParams);
 
   std::scoped_lock lk{JsIfTTS::instancesMtx_};
   auto &handle = JsIfTTS::instances_.emplace_back(
-    std::make_unique<qvac_lib_inference_addon_tts::Addon>(
-      env, configMap, referenceAudio, args[0], args[2], args[3]));
+      std::make_unique<qvac_lib_inference_addon_tts::Addon>(
+          env, configMap, referenceAudio, args[0], args[2], args[3]));
 
   return js::External::create(env, handle.get());
 }

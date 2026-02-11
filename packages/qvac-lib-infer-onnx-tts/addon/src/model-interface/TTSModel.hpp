@@ -8,15 +8,12 @@
 #include <chrono>
 
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
-#include "src/model-interface/IPiperEngine.hpp"
 #include "src/model-interface/IChatterboxEngine.hpp"
+#include "src/model-interface/IPiperEngine.hpp"
 
 namespace qvac::ttslib::addon_model {
 
-enum class EngineType {
-  Piper,
-  Chatterbox
-};
+enum class EngineType { Piper, Chatterbox };
 
 // Adapter compatible with ModelInterface (declarations only)
 class TTSModel {
@@ -25,10 +22,11 @@ public:
   using InputView = std::string_view;
   using Output = std::vector<int16_t>;
 
-  TTSModel(const std::unordered_map<std::string, std::string>& configMap,
-           const std::vector<float>& referenceAudio = {},
+  TTSModel(const std::unordered_map<std::string, std::string> &configMap,
+           const std::vector<float> &referenceAudio = {},
            std::shared_ptr<piper::IPiperEngine> piperEngine = nullptr,
-           std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine = nullptr);
+           std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine =
+               nullptr);
 
   void unload();
   void unloadWeights() {};
@@ -43,9 +41,9 @@ public:
   Output process(const Input& text);
   Output process(const Input& text, const std::function<void(const Output&)>& consumer);
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
-  
+
   // Set reference audio for Chatterbox voice cloning
-  void setReferenceAudio(const std::vector<float>& referenceAudio);
+  void setReferenceAudio(const std::vector<float> &referenceAudio);
 
 private:
   EngineType engineType_ = EngineType::Piper;
@@ -62,12 +60,15 @@ private:
   int64_t totalSamples_ = 0;
   size_t textLength_ = 0;
   bool loaded_ = false;
-  
-  EngineType detectEngineType(const std::unordered_map<std::string, std::string>& configMap) const;
+
+  EngineType detectEngineType(
+      const std::unordered_map<std::string, std::string> &configMap) const;
   qvac::ttslib::TTSConfig createTTSConfig(const std::unordered_map<std::string, std::string>& configMap);
-  chatterbox::ChatterboxConfig createChatterboxConfig(const std::unordered_map<std::string, std::string>& configMap);
+  chatterbox::ChatterboxConfig createChatterboxConfig(
+      const std::unordered_map<std::string, std::string> &configMap);
   bool isConfigValid(const qvac::ttslib::TTSConfig& config) const;
-  bool isChatterboxConfigValid(const chatterbox::ChatterboxConfig& config) const;
+  bool
+  isChatterboxConfigValid(const chatterbox::ChatterboxConfig &config) const;
   void resetRuntimeStats();
 };
 

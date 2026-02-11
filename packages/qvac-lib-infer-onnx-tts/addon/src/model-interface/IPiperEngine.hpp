@@ -13,7 +13,8 @@ struct TTSConfig {
   std::string configJsonPath;
   std::string language;
   std::string eSpeakDataPath;
-  std::string tashkeelModelDir; // Path to Tashkeel model directory for Arabic diacritization                               // 
+  std::string tashkeelModelDir; // Path to Tashkeel model directory for Arabic
+                                // diacritization //
   bool useGPU = false;
 };
 

@@ -1,30 +1,32 @@
 #include "TTSModel.hpp"
 
-#include "src/addon/TTSErrors.hpp"
-#include "src/model-interface/PiperEngine.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "src/addon/TTSErrors.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
+#include "src/model-interface/PiperEngine.hpp"
 
 #include <sstream>
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-TTSModel::TTSModel(const std::unordered_map<std::string, std::string>& configMap,
-                   const std::vector<float>& referenceAudio,
-                   std::shared_ptr<piper::IPiperEngine> piperEngine,
-                   std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine) {
+TTSModel::TTSModel(
+    const std::unordered_map<std::string, std::string> &configMap,
+    const std::vector<float> &referenceAudio,
+    std::shared_ptr<piper::IPiperEngine> piperEngine,
+    std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine) {
   engineType_ = detectEngineType(configMap);
-  
+
   chatterboxConfig_.referenceAudio = referenceAudio;
-  
+
   saveLoadParams(configMap);
-  
+
   if (engineType_ == EngineType::Chatterbox) {
     if (chatterboxEngine) {
       chatterboxEngine_ = chatterboxEngine;
     } else {
-      chatterboxEngine_ = std::make_shared<chatterbox::ChatterboxEngine>(chatterboxConfig_);
+      chatterboxEngine_ =
+          std::make_shared<chatterbox::ChatterboxEngine>(chatterboxConfig_);
     }
     QLOG(Priority::INFO, "TTSModel initialized with Chatterbox engine");
   } else {
@@ -35,12 +37,13 @@ TTSModel::TTSModel(const std::unordered_map<std::string, std::string>& configMap
     }
     QLOG(Priority::INFO, "TTSModel initialized with Piper engine");
   }
-  
+
   load();
   QLOG(Priority::INFO, "TTSModel initialized successfully");
 }
 
-EngineType TTSModel::detectEngineType(const std::unordered_map<std::string, std::string>& configMap) const {
+EngineType TTSModel::detectEngineType(
+    const std::unordered_map<std::string, std::string> &configMap) const {
   // If Chatterbox-specific config keys are present, use Chatterbox
   if (configMap.find("tokenizerPath") != configMap.end() ||
       configMap.find("speechEncoderPath") != configMap.end() ||
@@ -53,8 +56,8 @@ EngineType TTSModel::detectEngineType(const std::unordered_map<std::string, std:
 
 qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::string, std::string>& configMap) {
   qvac::ttslib::TTSConfig config = piperConfig_;
-  
-  auto updateConfig = [&](const std::string& key, std::string& configField) {
+
+  auto updateConfig = [&](const std::string &key, std::string &configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
       configField = it->second;
@@ -83,10 +86,11 @@ qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::
   return config;
 }
 
-qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(const std::unordered_map<std::string, std::string>& configMap) {
+qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
+    const std::unordered_map<std::string, std::string> &configMap) {
   qvac::ttslib::chatterbox::ChatterboxConfig config = chatterboxConfig_;
-  
-  auto updateConfig = [&](const std::string& key, std::string& configField) {
+
+  auto updateConfig = [&](const std::string &key, std::string &configField) {
     auto it = configMap.find(key);
     if (it != configMap.end()) {
       configField = it->second;
@@ -116,11 +120,10 @@ bool TTSModel::isConfigValid(const qvac::ttslib::TTSConfig& config) const {
   return !config.modelPath.empty() && !config.language.empty() && !config.eSpeakDataPath.empty() && !config.configJsonPath.empty();
 }
 
-bool TTSModel::isChatterboxConfigValid(const chatterbox::ChatterboxConfig& config) const {
-  return !config.language.empty() &&
-         !config.referenceAudio.empty() &&
-         !config.tokenizerPath.empty() &&
-         !config.speechEncoderPath.empty() &&
+bool TTSModel::isChatterboxConfigValid(
+    const chatterbox::ChatterboxConfig &config) const {
+  return !config.language.empty() && !config.referenceAudio.empty() &&
+         !config.tokenizerPath.empty() && !config.speechEncoderPath.empty() &&
          !config.embedTokensPath.empty() &&
          !config.conditionalDecoderPath.empty() &&
          !config.languageModelPath.empty();
@@ -196,14 +199,14 @@ TTSModel::Output TTSModel::process(const Input &text) {
   
   auto startTime = std::chrono::high_resolution_clock::now();
   textLength_ += text.size();
-  
+
   AudioResult result;
   if (engineType_ == EngineType::Chatterbox) {
     result = chatterboxEngine_->synthesize(text);
   } else {
     result = piperEngine_->synthesize(text);
   }
-  
+
   auto endTime = std::chrono::high_resolution_clock::now();
   totalTime_ += std::chrono::duration<double>(endTime - startTime).count();
   
@@ -258,7 +261,8 @@ void TTSModel::resetRuntimeStats() {
   textLength_ = 0;
 }
 
-void TTSModel::setReferenceAudio(const std::vector<float>& referenceAudio) {
+void TTSModel::setReferenceAudio(const std::vector<float> &referenceAudio) {
   chatterboxConfig_.referenceAudio = referenceAudio;
-  QLOG(Priority::INFO, "Reference audio set, size: " + std::to_string(referenceAudio.size()));
+  QLOG(Priority::INFO,
+       "Reference audio set, size: " + std::to_string(referenceAudio.size()));
 }
