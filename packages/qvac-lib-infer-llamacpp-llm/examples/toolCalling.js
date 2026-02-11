@@ -192,7 +192,7 @@ async function main () {
           },
           required: ['table', 'conditions']
         }
-      },
+      }
 
     ]
 
@@ -202,7 +202,7 @@ async function main () {
       {
         role: 'user',
         content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
-      },
+      }
     ]
     const toolsLastQuery1 = [
       systemMessageAmbiguous,
@@ -210,7 +210,7 @@ async function main () {
         role: 'user',
         content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
       },
-      ...tools1,
+      ...tools1
     ]
 
     const tools2 = [
@@ -245,7 +245,7 @@ async function main () {
           },
           required: ['lat1', 'lon1', 'lat2', 'lon2']
         }
-      },
+      }
     ]
 
     const toolsFirstQuery2 = [
@@ -254,7 +254,7 @@ async function main () {
       {
         role: 'user',
         content: 'calculate 156 * 23 precision 0. Also, How far is here from there?'
-      },
+      }
     ]
 
     const toolsLastQuery2 = [
@@ -263,7 +263,7 @@ async function main () {
         role: 'user',
         content: 'calculate 156 * 23 precision 0. Also, How far is here from there?'
       },
-      ...tools2,
+      ...tools2
     ]
 
     const tools3 = [
@@ -298,7 +298,7 @@ async function main () {
           },
           required: ['title', 'date']
         }
-      },
+      }
     ]
 
     const toolsFirstQuery3 = [
@@ -318,7 +318,7 @@ async function main () {
       {
         role: 'user',
         content: 'Daily is fine. Also, schedule a team meeting on April 10th at 2 PM for 60 minutes.'
-      },
+      }
     ]
 
     const toolsLastQuery3 = [
@@ -338,7 +338,7 @@ async function main () {
         role: 'user',
         content: 'Daily is fine. Also, schedule a team meeting on April 10th at 2 PM for 60 minutes.'
       },
-      ...tools3,
+      ...tools3
     ]
 
     // 5. Running tool calling queries
@@ -348,7 +348,7 @@ async function main () {
       { name: 'Query 2 (tools first): Math calculation and ambiguous query', prompt: toolsFirstQuery2 },
       { name: 'Query 2 (tools last): Math calculation and ambiguous query', prompt: toolsLastQuery2 },
       { name: 'Query 3 (tools first): Conversation context with tools', prompt: toolsFirstQuery3 },
-      { name: 'Query 3 (tools last): Conversation context with tools', prompt: toolsLastQuery3 },
+      { name: 'Query 3 (tools last): Conversation context with tools', prompt: toolsLastQuery3 }
     ]
 
     const toolCallResults = []
