@@ -45,7 +45,7 @@ public:
    * Members are destroyed in reverse order of declaration, ensuring
    * llmContext_ is destroyed before backendsHandle_.
    */
-  ~LlamaModel() = default;
+  ~LlamaModel() override = default;
 
   std::string getName() const final { return "LlamaModel"; }
 

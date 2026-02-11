@@ -159,7 +159,7 @@ void LlamaModel::llamaLogCallback(
     ggml_log_level level, const char* text, void* userData) {
   (void)userData;
   // Convert ggml_log_level to QLOG Priority
-  Priority priority;
+  Priority priority = Priority::DEBUG;
   switch (level) {
   case GGML_LOG_LEVEL_ERROR:
     priority = Priority::ERROR;
@@ -171,8 +171,6 @@ void LlamaModel::llamaLogCallback(
     priority = Priority::INFO;
     break;
   case GGML_LOG_LEVEL_DEBUG:
-    priority = Priority::DEBUG;
-    break;
   case GGML_LOG_LEVEL_NONE:
   case GGML_LOG_LEVEL_CONT:
   default:
@@ -288,12 +286,12 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(llmContext_->getCtx());
-  constexpr double K_MILLIS_IN_SECOND = 1000.0;
+  constexpr double kMillisInSecond = 1000.0;
 
   double timeToFirstToken = perfData.t_p_eval_ms;
   double tokensPerSecond =
       (perfData.t_eval_ms > 0)
-          ? K_MILLIS_IN_SECOND / perfData.t_eval_ms * perfData.n_eval
+          ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
 
   int32_t generatedTokens = perfData.n_eval;
