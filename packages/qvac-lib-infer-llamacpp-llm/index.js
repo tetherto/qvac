@@ -144,6 +144,13 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
+   * Cancel the current task 
+   */
+  async cancel () {
+    await this.addon.cancel()
+  }
+
+  /**
    * Internal method to start inference with a text prompt.
    * @param {Message[]} prompt - Input prompt array of messages
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job

@@ -47,7 +47,7 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
+   * Cancel current task 
    */
   async cancel () {
     await this._binding.cancel(this._handle)

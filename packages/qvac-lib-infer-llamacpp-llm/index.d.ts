@@ -17,14 +17,21 @@ export interface Loader {
   getFileSize?(path: string): Promise<number>
 }
 
+export interface AddonMessage {
+  type: 'text'
+  input: string
+}
+export interface AddonMediaMessage {
+  type: 'media'
+  content: Uint8Array
+}
+export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
+
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  pause(): Promise<void>
-  stop(): Promise<void>
-  status(): Promise<string>
-  append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>
-  cancel(jobId?: number): Promise<void>
+  runJob(messages: AddonRunJobMessage[]): Promise<void>
+  cancel(): Promise<void>
   destroyInstance(): Promise<void>
   unload(): Promise<void>
 }
@@ -135,7 +142,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   stop(): Promise<void>
 
-  cancel(jobId?: string): Promise<void>
+  cancel(): Promise<void>
 
   status(): Promise<any>
 

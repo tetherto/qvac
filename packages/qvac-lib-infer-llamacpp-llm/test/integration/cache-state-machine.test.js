@@ -145,10 +145,8 @@ async function runAndCancelAfterFirstToken (model, prompt) {
   let chain = response.onUpdate(async () => {
     if (stopRequested) return
     chunkCount++
-    if (typeof response.cancel === 'function') {
-      stopRequested = true
-      await response.cancel()
-    }
+    stopRequested = true
+    await model.cancel()
   })
   if (typeof response.onError === 'function') {
     chain = chain.onError(err => {
@@ -165,6 +163,13 @@ async function runAndCancelAfterFirstToken (model, prompt) {
 }
 
 async function runWithTimeoutCancellation (model, prompt) {
+  const response = await model.run(prompt)
+  await model.cancel()
+  return normalizeStats(response.stats, { _chunkCount: 0 })
+}
+
+/** Cancels via QvacResponse (one test keeps coverage of response.cancel()). */
+async function runWithTimeoutCancellationViaResponse (model, prompt) {
   const response = await model.run(prompt)
   if (typeof response.cancel === 'function') {
     await response.cancel()
@@ -232,10 +237,20 @@ test('Cancelling after first token only stores one generation chunk', { timeout:
   )
 })
 
-test('Timeout cancellation before first token keeps cache/timing stats at zero', { timeout: 600_000 }, async t => {
+test('Timeout cancellation before first token keeps cache/timing stats at zero (via model.cancel())', { timeout: 600_000 }, async t => {
   const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
-  const stats = await runWithTimeoutCancellation(
+  const stats = await runWithTimeoutCancellation(model, buildStoppingPrompt(sessionName))
+  // Small delay between cancel request and actually stopped
+  const threshold = 45
+  t.is(stats._chunkCount, 0, 'timeout prevented any chunk emission')
+  t.ok(stats.promptTokens < threshold)
+})
+
+test('Timeout cancellation before first token keeps cache/timing stats at zero (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
+  const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
+  const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
+  const stats = await runWithTimeoutCancellationViaResponse(
     model,
     buildStoppingPrompt(sessionName)
   )
