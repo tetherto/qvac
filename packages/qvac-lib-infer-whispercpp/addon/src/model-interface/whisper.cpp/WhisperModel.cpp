@@ -68,13 +68,6 @@ void WhisperModel::load() {
       throw std::runtime_error("Failed to initialize Whisper context");
     }
 
-    state_.reset(whisper_init_state(ctx_.get()));
-    if (state_ == nullptr) {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-          "Failed to initialize Whisper state");
-      throw std::runtime_error("Failed to initialize Whisper state");
-    }
     is_loaded_ = true;
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -238,9 +231,8 @@ void WhisperModel::warmup() {
   params.new_segment_callback_user_data = nullptr;
 
   // Run warmup inference to "heat up" the model
-  whisper_full_with_state(
+  whisper_full(
       ctx_.get(),
-      state_.get(),
       params,
       silentAudio.data(),
       static_cast<int>(silentAudio.size()));
@@ -282,12 +274,8 @@ void WhisperModel::process(const Input& input) {
   params.new_segment_callback = onNewSegment;
   params.new_segment_callback_user_data = &ud;
 
-  int result = whisper_full_with_state(
-      ctx_.get(),
-      state_.get(),
-      params,
-      input.data(),
-      static_cast<int>(input.size()));
+  int result = whisper_full(
+      ctx_.get(), params, input.data(), static_cast<int>(input.size()));
 
   const auto t1 = std::chrono::steady_clock::now();
   totalWallMs_ += std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -371,10 +359,7 @@ bool WhisperModel::configContextIsChanged(
   return false;
 }
 
-void WhisperModel::resetContext() {
-  ctx_.reset();
-  state_.reset();
-}
+void WhisperModel::resetContext() { ctx_.reset(); }
 
 void WhisperModel::setConfig(const WhisperConfig& config) {
   bool contextChanged = configContextIsChanged(cfg_, config);
