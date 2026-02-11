@@ -144,7 +144,7 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
-   * Cancel the current task 
+   * Cancel the current task
    */
   async cancel () {
     await this.addon.cancel()
@@ -186,7 +186,12 @@ class LlmLlamacpp extends BaseInference {
 
       // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
-      await this.addon.runJob(promptMessages)
+      const accepted = await this.addon.runJob(promptMessages)
+      if (!accepted) {
+        throw new Error(
+          'Cannot set new job: a job is already set or being processed'
+        )
+      }
 
       // Only one job is supported at the moment, with hardcoded jobId 'job'
       const response = this._createResponse('job')

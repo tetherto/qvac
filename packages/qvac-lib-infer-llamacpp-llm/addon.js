@@ -47,7 +47,7 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel current task 
+   * Cancel current task
    */
   async cancel () {
     await this._binding.cancel(this._handle)

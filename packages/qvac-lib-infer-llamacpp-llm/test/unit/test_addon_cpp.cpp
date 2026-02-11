@@ -1,3 +1,6 @@
+// Run/cancel scenarios below must match the behavior described in README
+// section "API behavior by state".
+
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -130,4 +133,59 @@ TEST_F(AddonCppTest, StopDuringGeneration) {
       addonInstance.outputHandler->tryPop(std::chrono::seconds(1));
 
   ASSERT_FALSE(answer.has_value()) << "Expected no response after cancellation";
+}
+
+TEST_F(AddonCppTest, CancelWhenIdle) {
+  if (!fs::exists(getValidModelPath())) {
+    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::string model_path = getValidModelPath();
+  std::string projector_path = test_projection_path;
+  auto config_copy = config_files;
+
+  qvac_lib_inference_addon_llama::AddonInstance addonInstance =
+      qvac_lib_inference_addon_llama::createInstance(
+          std::move(model_path),
+          std::move(projector_path),
+          std::move(config_copy));
+
+  addonInstance.addon->activate();
+
+  // Cancel when no job is running: must not throw
+  EXPECT_NO_THROW(addonInstance.addon->cancelJob());
+}
+
+TEST_F(AddonCppTest, RunWhenJobAlreadyRunning) {
+  if (!fs::exists(getValidModelPath())) {
+    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::string long_prompt = R"([
+    {"role": "user", "content": "Tell me a very long story."}
+  ])";
+  std::string short_prompt = R"([
+    {"role": "user", "content": "Hi."}
+  ])";
+
+  std::string model_path = getValidModelPath();
+  std::string projector_path = test_projection_path;
+  auto config_copy = config_files;
+  config_copy["n_predict"] = "100";
+
+  qvac_lib_inference_addon_llama::AddonInstance addonInstance =
+      qvac_lib_inference_addon_llama::createInstance(
+          std::move(model_path),
+          std::move(projector_path),
+          std::move(config_copy));
+
+  addonInstance.addon->activate();
+  EXPECT_TRUE(
+      addonInstance.addon->runJob(LlamaModel::Prompt{.input = long_prompt}))
+      << "Expected to accept first job";
+
+  // Second run while first is still in progress: reject second job
+  EXPECT_FALSE(
+      addonInstance.addon->runJob(LlamaModel::Prompt{.input = short_prompt}))
+      << "Expected to reject second job";
 }

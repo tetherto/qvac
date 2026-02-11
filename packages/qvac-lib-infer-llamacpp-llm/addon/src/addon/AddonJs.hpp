@@ -92,8 +92,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "At least one of text or media input is required");
   }
 
-  instance.addonCpp->runJob(any(std::move(prompt)));
-  return nullptr;
+  return instance.runJob(any(std::move(prompt)));
 }
 JSCATCH
 

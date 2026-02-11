@@ -163,7 +163,7 @@ async function runAndCancelAfterFirstToken (model, prompt) {
 }
 
 async function runWithTimeoutCancellation (model, prompt) {
-  const response = await model.run(prompt)
+  await model.run(prompt)
   await model.cancel()
   return normalizeStats(response.stats, { _chunkCount: 0 })
 }

@@ -30,7 +30,7 @@ export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  runJob(messages: AddonRunJobMessage[]): Promise<void>
+  runJob(messages: AddonRunJobMessage[]): Promise<boolean>
   cancel(): Promise<void>
   destroyInstance(): Promise<void>
   unload(): Promise<void>
