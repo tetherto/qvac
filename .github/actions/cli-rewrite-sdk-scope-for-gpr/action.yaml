@@ -1,0 +1,32 @@
+name: CLI - Rewrite SDK Scope for GPR
+description: Rewrites @qvac/sdk references to @tetherto/sdk-mono in qvac-cli source for GPR publishing
+
+runs:
+  using: composite
+  steps:
+    - name: Rewrite @qvac/sdk references for GPR
+      shell: bash
+      working-directory: packages/qvac-cli
+      run: |
+        # GPR SDK package name
+        NEW_SDK_NAME="@tetherto/sdk-mono"
+
+        echo "Rewriting @qvac/sdk → $NEW_SDK_NAME in source files..."
+
+        # Update constants.js
+        CONSTANTS_FILE="src/bundle-sdk/constants.js"
+        if [ -f "$CONSTANTS_FILE" ]; then
+          sed -i.bak "s|@qvac/sdk|${NEW_SDK_NAME}|g" "$CONSTANTS_FILE"
+          rm "${CONSTANTS_FILE}.bak"
+          echo "✓ Updated $CONSTANTS_FILE"
+        fi
+
+        # Update index.js (path resolution uses '@qvac' and 'sdk' as separate segments)
+        INDEX_FILE="src/bundle-sdk/index.js"
+        if [ -f "$INDEX_FILE" ]; then
+          sed -i.bak "s|'@qvac'|'@tetherto'|g" "$INDEX_FILE"
+          sed -i.bak "s|'sdk'|'sdk-mono'|g" "$INDEX_FILE"
+          sed -i.bak "s|@qvac/sdk|${NEW_SDK_NAME}|g" "$INDEX_FILE"
+          rm "${INDEX_FILE}.bak"
+          echo "✓ Updated $INDEX_FILE"
+        fi
