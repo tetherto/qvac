@@ -31,7 +31,7 @@ public:
    * @param modelDir Path to directory containing model.onnx and JSON maps
    * @return true if initialization succeeded
    */
-  bool initialize(const std::string &modelDir);
+  bool initialize(const std::string& modelDir);
 
   /**
    * Check if the diacritizer is initialized
@@ -44,8 +44,8 @@ public:
    * @param taskeen_threshold Optional threshold for sukoon insertion (0.0-1.0)
    * @return Diacritized text
    */
-  std::string diacritize(const std::string &text,
-                         std::optional<float> taskeen_threshold = 0.8f);
+  std::string diacritize(
+      const std::string& text, std::optional<float> taskeen_threshold = 0.8f);
 
   /**
    * Check if a character is an Arabic diacritic
@@ -59,43 +59,43 @@ public:
 
 private:
   // JSON map loading
-  bool loadInputIdMap(const std::string &path);
-  bool loadTargetIdMap(const std::string &path);
-  bool loadHintIdMap(const std::string &path);
+  bool loadInputIdMap(const std::string& path);
+  bool loadTargetIdMap(const std::string& path);
+  bool loadHintIdMap(const std::string& path);
 
   // Text preprocessing
   std::pair<std::u32string, std::unordered_set<char32_t>>
-  toValidChars(const std::u32string &text);
+  toValidChars(const std::u32string& text);
   std::pair<std::u32string, std::vector<std::u32string>>
-  extractCharsAndDiacritics(const std::u32string &text,
-                            bool normalizeDiacritics = true);
+  extractCharsAndDiacritics(
+      const std::u32string& text, bool normalizeDiacritics = true);
 
   // ID conversion
-  std::vector<int64_t> inputToIds(const std::u32string &text);
-  std::vector<int64_t> hintToIds(const std::vector<std::u32string> &diacritics);
+  std::vector<int64_t> inputToIds(const std::u32string& text);
+  std::vector<int64_t> hintToIds(const std::vector<std::u32string>& diacritics);
   std::vector<std::u32string>
-  targetToDiacritics(const std::vector<uint8_t> &targetIds);
+  targetToDiacritics(const std::vector<uint8_t>& targetIds);
 
   // Inference
-  std::pair<std::vector<uint8_t>, std::vector<float>>
-  infer(const std::vector<int64_t> &inputIds,
-        const std::vector<int64_t> &diacIds, int64_t seqLength);
+  std::pair<std::vector<uint8_t>, std::vector<float>> infer(
+      const std::vector<int64_t>& inputIds, const std::vector<int64_t>& diacIds,
+      int64_t seqLength);
 
   // Post-processing
-  std::string
-  annotateTextWithDiacritics(const std::u32string &inputText,
-                             const std::vector<std::u32string> &diacritics,
-                             const std::unordered_set<char32_t> &removedChars);
+  std::string annotateTextWithDiacritics(
+      const std::u32string& inputText,
+      const std::vector<std::u32string>& diacritics,
+      const std::unordered_set<char32_t>& removedChars);
 
   std::string annotateTextWithDiacriticsTaskeen(
-      const std::u32string &inputText,
-      const std::vector<std::u32string> &diacritics,
-      const std::unordered_set<char32_t> &removedChars,
-      const std::vector<float> &logits, float threshold);
+      const std::u32string& inputText,
+      const std::vector<std::u32string>& diacritics,
+      const std::unordered_set<char32_t>& removedChars,
+      const std::vector<float>& logits, float threshold);
 
   // UTF-8 <-> UTF-32 conversion
-  static std::u32string utf8ToUtf32(const std::string &utf8);
-  static std::string utf32ToUtf8(const std::u32string &utf32);
+  static std::u32string utf8ToUtf32(const std::string& utf8);
+  static std::string utf32ToUtf8(const std::u32string& utf32);
   static std::string utf32CharToUtf8(char32_t c);
 
   // ONNX Runtime

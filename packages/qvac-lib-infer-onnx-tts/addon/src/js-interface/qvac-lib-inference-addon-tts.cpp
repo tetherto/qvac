@@ -1,14 +1,15 @@
 #include "qvac-lib-inference-addon-tts.hpp"
 
+#include <cstdio>
+#include <string>
+#include <unordered_map>
+
+#include <js.h>
+
 #include "qvac-lib-inference-addon-cpp/JsInterface.hpp"
 #include "qvac-lib-inference-addon-cpp/JsUtils.hpp"
 #include "src/addon/Addon.hpp"
 #include "src/addon/TTSErrors.hpp"
-
-#include <cstdio>
-#include <js.h>
-#include <string>
-#include <unordered_map>
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 using JsIfTTS = qvac_lib_inference_addon_cpp::JsInterface<
@@ -17,7 +18,7 @@ using JsIfTTS = qvac_lib_inference_addon_cpp::JsInterface<
 // Helper function to extract TTS configuration from JS object
 // Supports both Piper and Chatterbox configurations
 static std::unordered_map<std::string, std::string>
-getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
+getTTSConfigMap(js_env_t* env, js::Object configurationParams) {
   std::unordered_map<std::string, std::string> configMap;
 
   // Common configuration
@@ -55,8 +56,8 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   }
 
   auto tashkeelModelDirOpt =
-      configurationParams.getOptionalProperty<js::String>(env,
-                                                          "tashkeelModelDir");
+      configurationParams.getOptionalProperty<js::String>(
+          env, "tashkeelModelDir");
   if (tashkeelModelDirOpt.has_value()) {
     configMap["tashkeelModelDir"] =
         tashkeelModelDirOpt.value().as<std::string>(env);
@@ -70,8 +71,8 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   }
 
   auto speechEncoderPathOpt =
-      configurationParams.getOptionalProperty<js::String>(env,
-                                                          "speechEncoderPath");
+      configurationParams.getOptionalProperty<js::String>(
+          env, "speechEncoderPath");
   if (speechEncoderPathOpt.has_value()) {
     configMap["speechEncoderPath"] =
         speechEncoderPathOpt.value().as<std::string>(env);
@@ -93,8 +94,8 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
   }
 
   auto languageModelPathOpt =
-      configurationParams.getOptionalProperty<js::String>(env,
-                                                          "languageModelPath");
+      configurationParams.getOptionalProperty<js::String>(
+          env, "languageModelPath");
   if (languageModelPathOpt.has_value()) {
     configMap["languageModelPath"] =
         languageModelPathOpt.value().as<std::string>(env);
@@ -105,8 +106,8 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
 
 // Helper function to extract Float32Array for reference audio (Chatterbox voice
 // cloning)
-static std::vector<float> getReferenceAudio(js_env_t *env,
-                                            js::Object configurationParams) {
+static std::vector<float>
+getReferenceAudio(js_env_t* env, js::Object configurationParams) {
   auto refAudioOpt =
       configurationParams.getOptionalProperty<js::TypedArray<float>>(
           env, "referenceAudio");
@@ -120,8 +121,8 @@ static std::vector<float> getReferenceAudio(js_env_t *env,
 namespace qvac_lib_inference_addon_cpp {
 
 template <>
-js_value_t *JsIfTTS::createInstance(js_env_t *env,
-                                    js_callback_info_t *info) try {
+js_value_t*
+JsIfTTS::createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto args = js::getArguments(env, info);
   if (args.size() != 4) {
     throw qvac_errors::StatusError(
@@ -129,8 +130,9 @@ js_value_t *JsIfTTS::createInstance(js_env_t *env,
         "Incorrect number of parameters. Expected 4 parameters");
   }
   if (!js::is<js::Function>(env, args[2])) {
-    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
-                                   "Expected output callback as function");
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Expected output callback as function");
   }
 
   auto configurationParams = js::Object{env, args[1]};
@@ -140,7 +142,7 @@ js_value_t *JsIfTTS::createInstance(js_env_t *env,
   auto referenceAudio = getReferenceAudio(env, configurationParams);
 
   std::scoped_lock lk{JsIfTTS::instancesMtx_};
-  auto &handle = JsIfTTS::instances_.emplace_back(
+  auto& handle = JsIfTTS::instances_.emplace_back(
       std::make_unique<qvac_lib_inference_addon_tts::Addon>(
           env, configMap, referenceAudio, args[0], args[2], args[3]));
 
@@ -149,14 +151,14 @@ js_value_t *JsIfTTS::createInstance(js_env_t *env,
 JSCATCH
 
 template <>
-js_value_t *JsIfTTS::load(js_env_t *env, js_callback_info_t *info) try {
+js_value_t* JsIfTTS::load(js_env_t* env, js_callback_info_t* info) try {
   auto args = js::getArguments(env, info);
   if (args.size() != 2) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Incorrect number of parameters. Expected 2 parameters");
   }
-  auto &instance = getInstance(env, args[0]);
+  auto& instance = getInstance(env, args[0]);
   auto configurationParams = js::Object{env, args[1]};
   std::unordered_map<std::string, std::string> configFilemap =
       getTTSConfigMap(env, configurationParams);
@@ -167,14 +169,14 @@ js_value_t *JsIfTTS::load(js_env_t *env, js_callback_info_t *info) try {
 JSCATCH
 
 template <>
-js_value_t *JsIfTTS::reload(js_env_t *env, js_callback_info_t *info) try {
+js_value_t* JsIfTTS::reload(js_env_t* env, js_callback_info_t* info) try {
   auto args = js::getArguments(env, info);
   if (args.size() != 2) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Incorrect number of parameters. Expected 2 parameters");
   }
-  auto &instance = getInstance(env, args[0]);
+  auto& instance = getInstance(env, args[0]);
   auto configurationParams = js::Object{env, args[1]};
   std::unordered_map<std::string, std::string> configFilemap =
       getTTSConfigMap(env, configurationParams);
@@ -189,64 +191,64 @@ JSCATCH
 namespace qvac_lib_inference_addon_tts {
 
 // Export functions that delegate to JsInterface
-js_value_t *createInstance(js_env_t *env, js_callback_info_t *info) {
+js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::createInstance(env, info);
 }
 
-js_value_t *unload(js_env_t *env, js_callback_info_t *info) {
+js_value_t* unload(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::unload(env, info);
 }
 
-js_value_t *load(js_env_t *env, js_callback_info_t *info) {
+js_value_t* load(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::load(env, info);
 }
 
-js_value_t *reload(js_env_t *env, js_callback_info_t *info) {
+js_value_t* reload(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::reload(env, info);
 }
 
-js_value_t *loadWeights(js_env_t *env, js_callback_info_t *info) {
-  throw qvac_errors::createTTSError(qvac_errors::tts_error::InvalidAPI,
-                                    "loadWeights not supported");
+js_value_t* loadWeights(js_env_t* env, js_callback_info_t* info) {
+  throw qvac_errors::createTTSError(
+      qvac_errors::tts_error::InvalidAPI, "loadWeights not supported");
 }
 
-js_value_t *unloadWeights(js_env_t *env, js_callback_info_t *info) {
-  throw qvac_errors::createTTSError(qvac_errors::tts_error::InvalidAPI,
-                                    "unloadWeights not supported");
+js_value_t* unloadWeights(js_env_t* env, js_callback_info_t* info) {
+  throw qvac_errors::createTTSError(
+      qvac_errors::tts_error::InvalidAPI, "unloadWeights not supported");
 }
 
-js_value_t *activate(js_env_t *env, js_callback_info_t *info) {
+js_value_t* activate(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::activate(env, info);
 }
 
-js_value_t *append(js_env_t *env, js_callback_info_t *info) {
+js_value_t* append(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::append(env, info);
 }
 
-js_value_t *status(js_env_t *env, js_callback_info_t *info) {
+js_value_t* status(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::status(env, info);
 }
 
-js_value_t *pause(js_env_t *env, js_callback_info_t *info) {
+js_value_t* pause(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::pause(env, info);
 }
 
-js_value_t *stop(js_env_t *env, js_callback_info_t *info) {
+js_value_t* stop(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::stop(env, info);
 }
 
-js_value_t *cancel(js_env_t *env, js_callback_info_t *info) {
+js_value_t* cancel(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::cancel(env, info);
 }
 
-js_value_t *destroyInstance(js_env_t *env, js_callback_info_t *info) {
+js_value_t* destroyInstance(js_env_t* env, js_callback_info_t* info) {
   return JsIfTTS::destroyInstance(env, info);
 }
 
-auto setLogger(js_env_t *env, js_callback_info_t *info) -> js_value_t * {
+auto setLogger(js_env_t* env, js_callback_info_t* info) -> js_value_t* {
   return JsIfTTS::setLogger(env, info);
 }
-auto releaseLogger(js_env_t *env, js_callback_info_t *info) -> js_value_t * {
+auto releaseLogger(js_env_t* env, js_callback_info_t* info) -> js_value_t* {
   return JsIfTTS::releaseLogger(env, info);
 }
 

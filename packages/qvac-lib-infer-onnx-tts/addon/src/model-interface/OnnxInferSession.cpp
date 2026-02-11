@@ -74,9 +74,9 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 
 } // namespace
 
-OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
-  static Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING,
-                      "ChatterboxEngine");
+OnnxInferSession::OnnxInferSession(const std::string& modelPath) {
+  static Ort::Env env(
+      OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING, "ChatterboxEngine");
 
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
@@ -106,8 +106,8 @@ OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
   }
 }
 
-OrtTensor OnnxInferSession::getInput(const std::string &inputName) {
-  for (const auto &input : inputTensors_) {
+OrtTensor OnnxInferSession::getInput(const std::string& inputName) {
+  for (const auto& input : inputTensors_) {
     if (input.name == inputName) {
       return input;
     }
@@ -115,8 +115,8 @@ OrtTensor OnnxInferSession::getInput(const std::string &inputName) {
   throw std::runtime_error("Input not found");
 }
 
-OrtTensor OnnxInferSession::getOutput(const std::string &outputName) {
-  for (const auto &output : outputTensors_) {
+OrtTensor OnnxInferSession::getOutput(const std::string& outputName) {
+  for (const auto& output : outputTensors_) {
     if (output.name == outputName) {
       return output;
     }
@@ -125,25 +125,30 @@ OrtTensor OnnxInferSession::getOutput(const std::string &outputName) {
 }
 
 void OnnxInferSession::run() {
-  std::vector<const char *> inputNames;
-  for (const auto &name : inputNames_) {
+  std::vector<const char*> inputNames;
+  for (const auto& name : inputNames_) {
     inputNames.push_back(name.c_str());
   }
 
-  std::vector<const char *> outputNames;
-  for (const auto &name : outputNames_) {
+  std::vector<const char*> outputNames;
+  for (const auto& name : outputNames_) {
     outputNames.push_back(name.c_str());
   }
 
   outputsTensorsValues_ = session_->Run(
-      Ort::RunOptions{nullptr}, inputNames.data(), inputTensorsValues_.data(),
-      inputTensorsValues_.size(), outputNames.data(), outputNames.size());
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      inputTensorsValues_.data(),
+      inputTensorsValues_.size(),
+      outputNames.data(),
+      outputNames.size());
 
   outputTensors_.clear();
 
   for (size_t i = 0; i < outputsTensorsValues_.size(); i++) {
     outputTensors_.emplace_back(OrtTensor{
-        outputsTensorsValues_[i].GetTensorMutableData<void>(), outputNames_[i],
+        outputsTensorsValues_[i].GetTensorMutableData<void>(),
+        outputNames_[i],
         outputsTensorsValues_[i].GetTensorTypeAndShapeInfo().GetShape(),
         onnxTypeToOurType(outputsTensorsValues_[i]
                               .GetTensorTypeAndShapeInfo()
@@ -160,7 +165,7 @@ std::vector<std::string> OnnxInferSession::getOutputNames() const {
 }
 
 void OnnxInferSession::initInputTensors(
-    const std::vector<std::vector<int64_t>> &inputShapes) {
+    const std::vector<std::vector<int64_t>>& inputShapes) {
   inputTensors_.clear();
   inputTensorsValues_.clear();
 
@@ -176,9 +181,11 @@ void OnnxInferSession::initInputTensors(
         allocator_, inputShape.data(), inputShape.size(), onnxType);
     inputTensorsValues_.push_back(std::move(inputValue));
 
-    inputTensors_.emplace_back(
-        OrtTensor{inputTensorsValues_[i].GetTensorMutableData<void>(),
-                  inputNames_[i], inputShape, onnxTypeToOurType(onnxType)});
+    inputTensors_.emplace_back(OrtTensor{
+        inputTensorsValues_[i].GetTensorMutableData<void>(),
+        inputNames_[i],
+        inputShape,
+        onnxTypeToOurType(onnxType)});
   }
 }
 

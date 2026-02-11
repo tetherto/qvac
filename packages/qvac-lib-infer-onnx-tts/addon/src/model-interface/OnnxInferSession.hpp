@@ -21,7 +21,7 @@ enum class OrtElementType {
 };
 
 struct OrtTensor {
-  void *data;
+  void* data;
   std::string name;
   std::vector<int64_t> shape;
   OrtElementType type;
@@ -29,7 +29,7 @@ struct OrtTensor {
 
 class OnnxInferSession {
 public:
-  OnnxInferSession(const std::string &modelPath);
+  OnnxInferSession(const std::string& modelPath);
   ~OnnxInferSession() = default;
 
   void run();
@@ -37,10 +37,10 @@ public:
   std::vector<std::string> getInputNames() const;
   std::vector<std::string> getOutputNames() const;
 
-  OrtTensor getInput(const std::string &inputName);
-  OrtTensor getOutput(const std::string &outputName);
+  OrtTensor getInput(const std::string& inputName);
+  OrtTensor getOutput(const std::string& outputName);
 
-  void initInputTensors(const std::vector<std::vector<int64_t>> &inputShapes);
+  void initInputTensors(const std::vector<std::vector<int64_t>>& inputShapes);
 
 private:
   std::unique_ptr<Ort::Session> session_;

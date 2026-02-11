@@ -1,11 +1,12 @@
 #include "cli/AddonShim.hpp"
+
 #include "src/addon/TTSModel.hpp"
 
 using qvac::ttslib::TTSConfig;
 using qvac::ttslib::addon_model::TTSModel;
 using qvac::ttslib::cli_shim::TTSAddonShim;
 
-TTSAddonShim::TTSAddonShim(const TTSConfig &config) : model_(config) {
+TTSAddonShim::TTSAddonShim(const TTSConfig& config) : model_(config) {
   processingThread_ = std::thread([this]() { this->processLoop(); });
 }
 
@@ -26,7 +27,7 @@ uint32_t TTSAddonShim::append(std::string_view text) {
   return id;
 }
 
-bool TTSAddonShim::poll(std::vector<Event> &outEvents) {
+bool TTSAddonShim::poll(std::vector<Event>& outEvents) {
   std::lock_guard<std::mutex> lock(mtx_);
   if (events_.empty())
     return false;
@@ -43,8 +44,9 @@ void TTSAddonShim::processLoop() {
     Job job{0, {}};
     {
       std::unique_lock<std::mutex> lock(mtx_);
-      cv_.wait_for(lock, std::chrono::milliseconds(100),
-                   [this]() { return !jobs_.empty() || !running_.load(); });
+      cv_.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+        return !jobs_.empty() || !running_.load();
+      });
       if (!running_.load())
         break;
       if (jobs_.empty())
@@ -61,7 +63,7 @@ void TTSAddonShim::processLoop() {
         events_.push(Event{EventType::Output, job.id, outputPath});
         events_.push(Event{EventType::JobEnded, job.id, {}});
       }
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
       std::lock_guard<std::mutex> lock(mtx_);
       events_.push(Event{EventType::Error, job.id, e.what()});
       events_.push(Event{EventType::JobEnded, job.id, {}});
