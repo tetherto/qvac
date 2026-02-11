@@ -32,7 +32,6 @@ export interface Addon {
   activate(): Promise<void>
   runJob(messages: AddonRunJobMessage[]): Promise<boolean>
   cancel(): Promise<void>
-  destroyInstance(): Promise<void>
   unload(): Promise<void>
 }
 

@@ -91,7 +91,7 @@ async function setupMultimodalInference (t, device = 'gpu') {
 
   t.teardown(async () => {
     await loader.close()
-    await inference.destroy()
+    await inference.unload()
   })
 
   await inference.load()

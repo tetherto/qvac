@@ -63,14 +63,8 @@ class LlamaInterface {
   }
 
   /**
-   * Stops addon process and clears resources (including memory).
+   * Unload the model and clear resources (including memory).
    */
-  async destroyInstance () {
-    if (!this._handle) return
-    this._binding.destroyInstance(this._handle)
-    this._handle = null
-  }
-
   async unload () {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)
