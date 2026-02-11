@@ -83,10 +83,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
@@ -175,6 +175,13 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
 
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Install ccache on Linux
