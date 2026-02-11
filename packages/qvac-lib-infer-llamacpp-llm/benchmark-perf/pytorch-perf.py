@@ -413,7 +413,16 @@ def run_once(
             end = min(start + prefill_batch, prefill_len)
             for micro_start in range(start, end, prefill_micro_batch):
                 micro_end = min(micro_start + prefill_micro_batch, end)
+                # Skip empty chunks (shouldn't happen, but defensive check)
+                if micro_end <= micro_start:
+                    continue
                 chunk_ids = input_ids[:, micro_start:micro_end]
+                # Validate chunk is not empty
+                if chunk_ids.shape[0] == 0 or chunk_ids.shape[1] == 0:
+                    raise RuntimeError(
+                        f"Empty chunk in prefill: micro_start={micro_start}, micro_end={micro_end}, "
+                        f"chunk_ids.shape={chunk_ids.shape}, input_ids.shape={input_ids.shape}"
+                    )
                 chunk_mask = attention_mask[:, micro_start:micro_end] if attention_mask is not None else None
                 outputs = model(
                     input_ids=chunk_ids,
@@ -429,6 +438,19 @@ def run_once(
         past_key_values_for_generation = past_key_values
         first_token_logits = None
         if seq_len > 0:
+            # Defensive check: ensure input_ids is valid before slicing
+            if input_ids.shape[0] == 0:
+                raise RuntimeError(
+                    f"Empty batch dimension in input_ids: shape={input_ids.shape}, seq_len={seq_len}"
+                )
+            if input_ids.shape[1] == 0:
+                raise RuntimeError(
+                    f"Empty sequence dimension in input_ids: shape={input_ids.shape}, seq_len={seq_len}"
+                )
+            if input_ids.shape[1] < seq_len:
+                raise RuntimeError(
+                    f"input_ids sequence length ({input_ids.shape[1]}) < seq_len ({seq_len})"
+                )
             last_token = input_ids[:, -1:]
             # Validate that last_token is not empty
             if last_token.shape[0] == 0 or last_token.shape[1] == 0:
@@ -437,6 +459,11 @@ def run_once(
                     f"input_ids.shape={input_ids.shape}, seq_len={seq_len}"
                 )
             last_mask = attention_mask[:, -1:] if attention_mask is not None else None
+            if attention_mask is not None and (last_mask.shape[0] == 0 or last_mask.shape[1] == 0):
+                raise RuntimeError(
+                    f"Empty last_mask: shape={last_mask.shape}, "
+                    f"attention_mask.shape={attention_mask.shape}, seq_len={seq_len}"
+                )
             outputs = model(
                 input_ids=last_token,
                 attention_mask=last_mask,
@@ -481,30 +508,82 @@ def run_once(
     # 1. Process the last token with the cached KV (tokens 0 to seq_len-2)
     # 2. Generate the first token and subsequent tokens
     gen_start = time.time()
-    if seq_len > 0 and past_key_values_for_generation is not None:
-        # past_key_values_for_generation contains KV cache for all prompt tokens except the last one.
-        # Pass the last prompt token as input_ids so model.generate() can process it and continue generation.
-        generate_input_ids = input_ids[:, -1:]  # Last prompt token
-        generate_attention_mask = attention_mask[:, -1:] if attention_mask is not None else None
-    else:
-        # Fallback: if no prefill was done, use the original input_ids
-        # This should never happen if seq_len > 0 (validated earlier), but add safety check
-        if seq_len == 0 or input_ids.shape[1] == 0:
+    # Determine input_ids for generation
+    # If we have past_key_values_for_generation (from prefill), use only the last token.
+    # Otherwise, use the full input_ids (fallback for seq_len==1 or when kv_cache_prefill is None).
+    if seq_len > 0:
+        # Defensive check: ensure input_ids is valid before slicing
+        if input_ids.shape[0] == 0:
             raise RuntimeError(
-                f"Cannot generate: empty input_ids (seq_len={seq_len}, shape={input_ids.shape})"
+                f"Cannot generate: empty batch dimension in input_ids (seq_len={seq_len}, shape={input_ids.shape})"
             )
-        generate_input_ids = input_ids
-        generate_attention_mask = attention_mask
-        past_key_values_for_generation = None  # Don't use past_key_values if we're starting from scratch
+        if input_ids.shape[1] == 0:
+            raise RuntimeError(
+                f"Cannot generate: empty sequence dimension in input_ids (seq_len={seq_len}, shape={input_ids.shape})"
+            )
+        if input_ids.shape[1] < seq_len:
+            raise RuntimeError(
+                f"Cannot generate: input_ids sequence length ({input_ids.shape[1]}) < seq_len ({seq_len})"
+            )
+        
+        if past_key_values_for_generation is not None and seq_len > 1:
+            # past_key_values_for_generation contains KV cache for tokens 0 to seq_len-2 (all except last token).
+            # Pass the last prompt token as input_ids so model.generate() can process it and continue generation.
+            generate_input_ids = input_ids[:, -1:]  # Last prompt token
+            # Validate the slice result
+            if generate_input_ids.shape[0] == 0 or generate_input_ids.shape[1] == 0:
+                raise RuntimeError(
+                    f"Empty generate_input_ids after slicing: shape={generate_input_ids.shape}, "
+                    f"input_ids.shape={input_ids.shape}, seq_len={seq_len}"
+                )
+            generate_attention_mask = attention_mask[:, -1:] if attention_mask is not None else None
+            if attention_mask is not None and generate_attention_mask is not None:
+                if generate_attention_mask.shape[0] == 0 or generate_attention_mask.shape[1] == 0:
+                    raise RuntimeError(
+                        f"Empty generate_attention_mask after slicing: shape={generate_attention_mask.shape}, "
+                        f"attention_mask.shape={attention_mask.shape}, seq_len={seq_len}"
+                    )
+        else:
+            # Fallback: if no prefill was done (seq_len==1) or kv_cache_prefill is None, use the original input_ids
+            # This ensures we always have valid input_ids for generation
+            generate_input_ids = input_ids
+            generate_attention_mask = attention_mask
+            # If we're using full input_ids, don't pass past_key_values (model will process from scratch)
+            past_key_values_for_generation = None
+    else:
+        raise RuntimeError(
+            f"Cannot generate: seq_len={seq_len}, input_ids.shape={input_ids.shape}"
+        )
     
-    generated = model.generate(
-        input_ids=generate_input_ids,
-        max_new_tokens=max_new_tokens,
-        do_sample=False,
-        use_cache=True,
-        attention_mask=generate_attention_mask,
-        past_key_values=past_key_values_for_generation,  # Contains KV cache for tokens 0 to seq_len-2
-    )
+    # Final validation before model.generate()
+    if max_new_tokens <= 0:
+        raise RuntimeError(
+            f"Cannot generate: max_new_tokens={max_new_tokens} must be > 0. "
+            f"ctx_size={ctx_size}, prompt_tokens={prompt_tokens}, max_prompt_len={max_prompt_len}, seq_len={seq_len}"
+        )
+    if generate_input_ids.shape[0] == 0 or generate_input_ids.shape[1] == 0:
+        raise RuntimeError(
+            f"Cannot generate: generate_input_ids is empty (shape={generate_input_ids.shape}, "
+            f"input_ids.shape={input_ids.shape}, seq_len={seq_len})"
+        )
+    
+    try:
+        generated = model.generate(
+            input_ids=generate_input_ids,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            use_cache=True,
+            attention_mask=generate_attention_mask,
+            past_key_values=past_key_values_for_generation,  # Contains KV cache for tokens 0 to seq_len-2
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"model.generate() failed: {exc}. "
+            f"generate_input_ids.shape={generate_input_ids.shape}, "
+            f"max_new_tokens={max_new_tokens}, "
+            f"past_key_values_for_generation={'present' if past_key_values_for_generation is not None else 'None'}, "
+            f"seq_len={seq_len}, prompt_tokens={prompt_tokens}"
+        ) from exc
     # Validate that generated tensor is not empty
     if generated.shape[0] == 0:
         raise RuntimeError(
