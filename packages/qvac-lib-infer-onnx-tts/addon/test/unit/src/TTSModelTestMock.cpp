@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
 #include "mocks/PiperEngineMock.hpp"
 #include "src/model-interface/TTSModel.hpp"
+#include <gtest/gtest.h>
 
 using namespace qvac::ttslib::piper::testing;
 
@@ -8,11 +8,14 @@ namespace qvac::ttslib::addon_model::testing {
 
 class TTSModelTestMock : public ::testing::Test {
 public:
-  std::shared_ptr<PiperEngineMock> engineMock_ = std::make_shared<PiperEngineMock>();
-  
+  std::shared_ptr<PiperEngineMock> engineMock_ =
+      std::make_shared<PiperEngineMock>();
+
   std::unordered_map<std::string, std::string> config_{
-    {"modelPath", "dummy"}, {"language", "dummy"},
-    {"eSpeakDataPath", "dummy"}, {"configJsonPath", "dummy"}};
+      {"modelPath", "dummy"},
+      {"language", "dummy"},
+      {"eSpeakDataPath", "dummy"},
+      {"configJsonPath", "dummy"}};
 };
 
 TEST_F(TTSModelTestMock, positiveInit) {
@@ -69,15 +72,17 @@ TEST_F(TTSModelTestMock, positiveIsLoaded) {
 
 TEST_F(TTSModelTestMock, positiveProcess) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
-  
+
   qvac::ttslib::AudioResult mockResult;
   mockResult.pcm16 = {1, 2, 3, 4, 5};
   mockResult.sampleRate = 16000;
   mockResult.channels = 1;
   mockResult.samples = 5;
   mockResult.durationMs = 100.0;
-  
-  EXPECT_CALL(*engineMock_, synthesize(::testing::_)).Times(1).WillOnce(::testing::Return(mockResult));
+
+  EXPECT_CALL(*engineMock_, synthesize(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, {}, engineMock_);
   const std::vector<int16_t> result = model.process("dummy");
@@ -94,10 +99,15 @@ TEST_F(TTSModelTestMock, positiveProcessWithConsumer) {
   mockResult.samples = 5;
   mockResult.durationMs = 100.0;
 
-  EXPECT_CALL(*engineMock_, synthesize(::testing::_)).Times(1).WillOnce(::testing::Return(mockResult));
+  EXPECT_CALL(*engineMock_, synthesize(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, {}, engineMock_);
-  const std::vector<int16_t> result = model.process("dummy", [](const std::vector<int16_t>& result) { EXPECT_EQ(result, std::vector<int16_t>({1, 2, 3, 4, 5})); });
+  const std::vector<int16_t> result =
+      model.process("dummy", [](const std::vector<int16_t> &result) {
+        EXPECT_EQ(result, std::vector<int16_t>({1, 2, 3, 4, 5}));
+      });
 }
 
 TEST_F(TTSModelTestMock, positiveRuntimeStats) {

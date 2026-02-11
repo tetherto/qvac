@@ -15,28 +15,28 @@ namespace qvac::ttslib::piper {
 
 class PiperEngine : public IPiperEngine {
 public:
-  explicit PiperEngine(const TTSConfig& cfg);
+  explicit PiperEngine(const TTSConfig &cfg);
   ~PiperEngine() override;
 
-  void load(const TTSConfig& cfg) override;
+  void load(const TTSConfig &cfg) override;
 
   void unload() override;
 
-  AudioResult synthesize(const std::string& text) override;
+  AudioResult synthesize(const std::string &text) override;
 
 private:
-  void loadVoice(const TTSConfig& cfg);
+  void loadVoice(const TTSConfig &cfg);
   void initialize();
   void cleanup();
-  void
-  configureESpeak(const std::string& lang, const std::string& espeakNgDataPath);
-  std::vector<int16_t> generateAudio(const std::string& text);
+  void configureESpeak(const std::string &lang,
+                       const std::string &espeakNgDataPath);
+  std::vector<int16_t> generateAudio(const std::string &text);
   void audioCallback();
   Ort::SessionOptions getOrtSessionOptions(bool useGPU);
 
   // Tashkeel (Arabic diacritization) support
-  void initializeTashkeel(const std::string& tashkeelModelDir);
-  std::string preprocessText(const std::string& text);
+  void initializeTashkeel(const std::string &tashkeelModelDir);
+  std::string preprocessText(const std::string &text);
   bool isArabicLanguage() const;
 
   ::piper::PiperConfig piperConfig_;

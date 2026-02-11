@@ -58,11 +58,7 @@ public:
       dummyPath_};
 
   ChatterboxConfig missingConditionalDecoderConfig_{
-      "en",
-      referenceAudio_,
-      dummyPath_,
-      dummyPath_,
-      dummyPath_,
+      "en", referenceAudio_, dummyPath_, dummyPath_, dummyPath_,
       "nonexistent_conditional_decoder.onnx", // conditionalDecoderPath (doesn't
                                               // exist)
       dummyPath_};

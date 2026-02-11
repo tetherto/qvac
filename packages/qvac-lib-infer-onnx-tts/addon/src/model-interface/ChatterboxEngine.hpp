@@ -13,28 +13,27 @@ template <typename T> struct TensorData {
 
 class ChatterboxEngine : public IChatterboxEngine {
 public:
-  explicit ChatterboxEngine(const ChatterboxConfig& cfg);
+  explicit ChatterboxEngine(const ChatterboxConfig &cfg);
   ~ChatterboxEngine() override;
-  void load(const ChatterboxConfig& cfg) override;
+  void load(const ChatterboxConfig &cfg) override;
   void unload() override;
   bool isLoaded() const override;
-  AudioResult synthesize(const std::string& text) override;
+  AudioResult synthesize(const std::string &text) override;
 
 private:
-  std::vector<int64_t> tokenize(const std::string& text);
+  std::vector<int64_t> tokenize(const std::string &text);
 
-  void runEmbedTokensInfer(const std::vector<int64_t>& inputIds);
+  void runEmbedTokensInfer(const std::vector<int64_t> &inputIds);
   void runSpeechEncoderInfer();
   void runLanguageModelInfer(
-      const TensorData<float>& inputsEmbs,
-      const TensorData<int64_t>& positionIds,
-      const TensorData<int64_t>& attentionMask,
-      std::unordered_map<std::string, TensorData<float>>& pastKeyValues);
+      const TensorData<float> &inputsEmbs,
+      const TensorData<int64_t> &positionIds,
+      const TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
 
-  void runConditionalDecoderInfer(
-      const std::vector<int64_t>& speechTokens,
-      const TensorData<float>& speakerEmbeddings,
-      const TensorData<float>& speakerFeatures);
+  void runConditionalDecoderInfer(const std::vector<int64_t> &speechTokens,
+                                  const TensorData<float> &speakerEmbeddings,
+                                  const TensorData<float> &speakerFeatures);
 
   ChatterboxConfig config_;
   std::string language_;

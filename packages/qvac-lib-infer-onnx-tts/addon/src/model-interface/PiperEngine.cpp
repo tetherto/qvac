@@ -24,19 +24,19 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace qvac::ttslib::piper {
 
-PiperEngine::PiperEngine(const TTSConfig& cfg) : IPiperEngine() { load(cfg); }
+PiperEngine::PiperEngine(const TTSConfig &cfg) : IPiperEngine() { load(cfg); }
 
 PiperEngine::~PiperEngine() { unload(); }
 
-void PiperEngine::load(const TTSConfig& cfg) {
+void PiperEngine::load(const TTSConfig &cfg) {
   loadVoice(cfg);
   initialize();
 }
 
 void PiperEngine::unload() { cleanup(); }
 
-AudioResult PiperEngine::synthesize(const std::string& text) {
-  const std::vector<int16_t>& wav = generateAudio(text);
+AudioResult PiperEngine::synthesize(const std::string &text) {
+  const std::vector<int16_t> &wav = generateAudio(text);
 
   AudioResult result;
   result.sampleRate = voice_.synthesisConfig.sampleRate;
@@ -52,15 +52,14 @@ AudioResult PiperEngine::synthesize(const std::string& text) {
   return result;
 }
 
-void PiperEngine::loadVoice(const TTSConfig& cfg) {
+void PiperEngine::loadVoice(const TTSConfig &cfg) {
   if (initialized_)
     return;
 
   std::filesystem::path model(cfg.modelPath);
   if (!std::filesystem::exists(model)) {
-    throw qvac_errors::createTTSError(
-        qvac_errors::tts_error::ModelFileNotFound,
-        "Model file not found: " + cfg.modelPath);
+    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelFileNotFound,
+                                      "Model file not found: " + cfg.modelPath);
   }
 
   if (!std::filesystem::exists(cfg.configJsonPath)) {
@@ -84,31 +83,22 @@ void PiperEngine::loadVoice(const TTSConfig& cfg) {
 
   Ort::SessionOptions opts = getOrtSessionOptions(cfg.useGPU);
   voice_.session.options = std::move(opts);
-  ::piper::loadVoice(
-      piperConfig_,
-      model.string(),
-      cfg.configJsonPath,
-      voice_,
-      speakerId_,
-      false);
+  ::piper::loadVoice(piperConfig_, model.string(), cfg.configJsonPath, voice_,
+                     speakerId_, false);
 
   configureESpeak(cfg.language, cfg.eSpeakDataPath);
 
   // Initialize our custom Tashkeel for Arabic
   QLOG(Priority::INFO, "Tashkeel model dir: '" + cfg.tashkeelModelDir + "'");
-  QLOG(
-      Priority::INFO,
-      "Is Arabic language: " +
-          std::string(isArabicLanguage() ? "true" : "false"));
+  QLOG(Priority::INFO, "Is Arabic language: " +
+                           std::string(isArabicLanguage() ? "true" : "false"));
 
   if (isArabicLanguage() && !cfg.tashkeelModelDir.empty()) {
     QLOG(Priority::INFO, "Initializing custom Tashkeel for Arabic...");
     initializeTashkeel(cfg.tashkeelModelDir);
   } else if (isArabicLanguage() && cfg.tashkeelModelDir.empty()) {
-    QLOG(
-        Priority::WARNING,
-        "Arabic language detected but tashkeelModelDir is "
-        "empty - diacritization disabled");
+    QLOG(Priority::WARNING, "Arabic language detected but tashkeelModelDir is "
+                            "empty - diacritization disabled");
   }
 }
 
@@ -142,19 +132,16 @@ bool PiperEngine::isArabicLanguage() const {
          (language_.substr(0, 2) == "ar" || language_.substr(0, 2) == "AR");
 }
 
-void PiperEngine::initializeTashkeel(const std::string& tashkeelModelDir) {
+void PiperEngine::initializeTashkeel(const std::string &tashkeelModelDir) {
   if (tashkeelModelDir.empty()) {
-    QLOG(
-        Priority::WARNING,
-        "Tashkeel model directory not specified, Arabic "
-        "diacritization disabled");
+    QLOG(Priority::WARNING, "Tashkeel model directory not specified, Arabic "
+                            "diacritization disabled");
     return;
   }
 
   if (!std::filesystem::exists(tashkeelModelDir)) {
-    QLOG(
-        Priority::WARNING,
-        "Tashkeel model directory not found: " + tashkeelModelDir);
+    QLOG(Priority::WARNING,
+         "Tashkeel model directory not found: " + tashkeelModelDir);
     return;
   }
 
@@ -165,12 +152,11 @@ void PiperEngine::initializeTashkeel(const std::string& tashkeelModelDir) {
     return;
   }
 
-  QLOG(
-      Priority::INFO,
-      "Custom Tashkeel Arabic diacritizer initialized successfully");
+  QLOG(Priority::INFO,
+       "Custom Tashkeel Arabic diacritizer initialized successfully");
 }
 
-std::string PiperEngine::preprocessText(const std::string& text) {
+std::string PiperEngine::preprocessText(const std::string &text) {
   // Apply Tashkeel diacritization for Arabic
   if (isArabicLanguage() && tashkeel_ && tashkeel_->isInitialized()) {
     QLOG(Priority::INFO, "Applying Tashkeel diacritization...");
@@ -185,19 +171,19 @@ std::string PiperEngine::preprocessText(const std::string& text) {
   return text;
 }
 
-void PiperEngine::configureESpeak(
-    const std::string& lang, const std::string& espeakNgDataPath) {
+void PiperEngine::configureESpeak(const std::string &lang,
+                                  const std::string &espeakNgDataPath) {
   piperConfig_.useESpeak = true;
   piperConfig_.eSpeakDataPath = espeakNgDataPath;
   voice_.phonemizeConfig.eSpeak.voice = lang;
 }
 
 void PiperEngine::audioCallback() {
-  collectedAudio_.insert(
-      collectedAudio_.end(), audioBuffer_.begin(), audioBuffer_.end());
+  collectedAudio_.insert(collectedAudio_.end(), audioBuffer_.begin(),
+                         audioBuffer_.end());
 }
 
-std::vector<int16_t> PiperEngine::generateAudio(const std::string& text) {
+std::vector<int16_t> PiperEngine::generateAudio(const std::string &text) {
   collectedAudio_.clear();
   audioBuffer_.clear();
 
@@ -205,10 +191,8 @@ std::vector<int16_t> PiperEngine::generateAudio(const std::string& text) {
   std::string processedText = preprocessText(text);
 
   ::piper::SynthesisResult result;
-  ::piper::textToAudio(
-      piperConfig_, voice_, processedText, audioBuffer_, result, [this]() {
-        audioCallback();
-      });
+  ::piper::textToAudio(piperConfig_, voice_, processedText, audioBuffer_,
+                       result, [this]() { audioCallback(); });
   return collectedAudio_;
 }
 
@@ -226,36 +210,32 @@ Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
 #if defined(__ANDROID__)
   try {
     const bool nnapiAvailable =
-        std::find(
-            providers.begin(), providers.end(), "NnapiExecutionProvider") !=
-        providers.end();
+        std::find(providers.begin(), providers.end(),
+                  "NnapiExecutionProvider") != providers.end();
     if (nnapiAvailable) {
       uint32_t nnapiFlags = NNAPI_FLAG_USE_FP16 | NNAPI_FLAG_CPU_DISABLED;
       Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(
           sessionOptions, nnapiFlags));
       QLOG(Priority::INFO, "Using NNAPI execution provider");
     }
-  } catch (const std::exception& e) {
-    QLOG(
-        Priority::ERROR,
-        "Error setting up NNAPI provider: " + std::string(e.what()));
+  } catch (const std::exception &e) {
+    QLOG(Priority::ERROR,
+         "Error setting up NNAPI provider: " + std::string(e.what()));
   }
 
 #elif defined(__APPLE__)
 
   try {
     const bool coremlAvailable =
-        std::find(
-            providers.begin(), providers.end(), "CoreMLExecutionProvider") !=
-        providers.end();
+        std::find(providers.begin(), providers.end(),
+                  "CoreMLExecutionProvider") != providers.end();
     if (coremlAvailable) {
       sessionOptions.AppendExecutionProvider("CoreML");
       QLOG(Priority::INFO, "Using CoreML execution provider");
     }
-  } catch (const std::exception& e) {
-    QLOG(
-        Priority::ERROR,
-        "Error setting up CoreML provider: " + std::string(e.what()));
+  } catch (const std::exception &e) {
+    QLOG(Priority::ERROR,
+         "Error setting up CoreML provider: " + std::string(e.what()));
   }
 
 #elif defined(_WIN32) || defined(_WIN64)
@@ -271,10 +251,9 @@ Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
           OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
       QLOG(Priority::INFO, "Using DirectML execution provider");
     }
-  } catch (const std::exception& e) {
-    QLOG(
-        Priority::ERROR,
-        "Error setting up DirectML provider: " + std::string(e.what()));
+  } catch (const std::exception &e) {
+    QLOG(Priority::ERROR,
+         "Error setting up DirectML provider: " + std::string(e.what()));
   }
 #endif
   return sessionOptions;
