@@ -25,7 +25,8 @@
 
 namespace llama_finetuning_helpers {
 
-static TrainingCheckpointState* gTrainingCheckpointState = nullptr;
+static thread_local TrainingCheckpointState* tlsCurrentCheckpointState =
+    nullptr;
 
 std::string readTextFile(const std::string& path) {
   std::ifstream stream(path, std::ios::in | std::ios::binary);
@@ -629,18 +630,14 @@ void optEpochCallbackWrapper(
       ibatch,
       ibatchMax,
       tStartUs,
-      gTrainingCheckpointState);
+      tlsCurrentCheckpointState);
 }
 
-void setGlobalCheckpointState(TrainingCheckpointState* state) {
-  gTrainingCheckpointState = state;
+void setCurrentCheckpointState(TrainingCheckpointState* state) {
+  tlsCurrentCheckpointState = state;
 }
 
-TrainingCheckpointState* getGlobalCheckpointState() {
-  return gTrainingCheckpointState;
-}
-
-void clearGlobalCheckpointState() { gTrainingCheckpointState = nullptr; }
+void clearCurrentCheckpointState() { tlsCurrentCheckpointState = nullptr; }
 
 #ifndef STANDALONE_TEST_BUILD
 std::string resolveAdapterOutputPath(

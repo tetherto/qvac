@@ -51,7 +51,6 @@ add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 
   list(APPEND ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/FinetuneParamStore.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp

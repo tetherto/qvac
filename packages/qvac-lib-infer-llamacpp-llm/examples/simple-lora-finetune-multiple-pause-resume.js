@@ -324,7 +324,7 @@ async function main () {
       if (resumeCheckpointStep !== null) {
         console.log(`   Expected to resume from checkpoint step ${resumeCheckpointStep}`)
       }
-      finetuneHandle = await client.finetune({ resume: true })
+      finetuneHandle = await client.finetune()
 
       const checkpointAfterResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
       if (checkpointAfterResume !== null) {

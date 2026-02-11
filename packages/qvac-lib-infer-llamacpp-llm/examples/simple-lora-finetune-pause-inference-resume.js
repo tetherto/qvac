@@ -395,7 +395,7 @@ async function main () {
     console.log('Step 3: Resuming finetuning')
     console.log('='.repeat(60))
     console.log('▶️  Resuming finetuning...')
-    const resumeHandle = await client.finetune({ resume: true })
+    const resumeHandle = await client.finetune()
     console.log('✅ Finetuning has RESUMED\n')
 
     console.log('Training for another 5 seconds after resume...')
