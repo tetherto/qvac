@@ -1,5 +1,5 @@
 #pragma once
-// NOLINTBEGIN(readability-identifier-naming)
+
 #include <atomic>
 
 #include <llama.h>
@@ -140,36 +140,35 @@ private:
 
   bool handleQwen3ReasoningEOS(
       llama_token& tokenId, std::string& tokenStr, llama_batch* batchPtr,
-      llama_pos& n_past,
+      llama_pos& nPast,
       const std::function<void(const std::string&)>& outputCallback);
 
-  common_init_result llama_init; // NOLINT(readability-identifier-naming)
-  llama_model* model;            // NOLINT(readability-identifier-naming)
-  llama_context* lctx;           // NOLINT(readability-identifier-naming)
-  const llama_vocab* vocab;      // NOLINT(readability-identifier-naming)
-  CommonSamplerPtr smpl;         // NOLINT(readability-identifier-naming)
+  common_init_result llamaInit_;
+  llama_model* model_;
+  llama_context* lctx_;
+  const llama_vocab* vocab_;
+  CommonSamplerPtr smpl_;
 
-  common_params params;            // NOLINT(readability-identifier-naming)
-  common_chat_templates_ptr tmpls; // NOLINT(readability-identifier-naming)
-  std::vector<llama_token>
-      antiprompt_tokens; // NOLINT(readability-identifier-naming)
+  common_params params_;
+  common_chat_templates_ptr tmpls_;
+  std::vector<llama_token> antipromptTokens_;
 
-  llama_pos n_past = 0;           // NOLINT(readability-identifier-naming)
-  llama_pos n_discarded = 0;      // NOLINT(readability-identifier-naming)
-  llama_pos firstMsgTokens = 0;   // NOLINT(readability-identifier-naming)
-  ThreadPoolPtr threadpool;       // NOLINT(readability-identifier-naming)
-  ThreadPoolPtr threadpool_batch; // NOLINT(readability-identifier-naming)
+  llama_pos nPast_ = 0;
+  llama_pos nDiscarded_ = 0;
+  llama_pos firstMsgTokens_ = 0;
+  ThreadPoolPtr threadpool_;
+  ThreadPoolPtr threadpoolBatch_;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
-  qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8_buffer_;
+  qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
 
   // Reasoning state for Qwen3 models
-  qvac_lib_inference_addon_llama::utils::Qwen3ReasoningState reasoning_state_;
+  qvac_lib_inference_addon_llama::utils::Qwen3ReasoningState reasoningState_;
 
   // Cache whether this is a Qwen3 model (checked once at load time)
-  bool is_qwen3_model_ = false;
+  bool isQwen3Model_ = false;
 
-  std::atomic<bool> stop_generation = false;
+  std::atomic<bool> stopGeneration_ = false;
 };
 
-// NOLINTEND(readability-identifier-naming)
+

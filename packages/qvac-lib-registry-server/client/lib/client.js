@@ -2,7 +2,7 @@
 
 const { QvacErrorRegistryClient, ERR_CODES } = require('../utils/error')
 const RegistryConfig = require('./config')
-const { RegistryDatabase } = require('@tetherto/qvac-registry-schema')
+const { RegistryDatabase } = require('@tetherto/qvac-registry-schema-mono')
 const ReadyResource = require('ready-resource')
 const Logger = require('./logger')
 const Corestore = require('corestore')
@@ -127,6 +127,22 @@ class QVACRegistryClient extends ReadyResource {
     await this.ready()
     this.logger.debug('findModelsByQuantization called', { query })
     return this.db.findModelsByQuantization(query).toArray()
+  }
+
+  /**
+   * Find models with optional filters.
+   * Uses the database's findBy method for efficient indexed queries.
+   * @param {Object} params - Filter parameters
+   * @param {string} [params.name] - Filter by name (partial match)
+   * @param {string} [params.engine] - Filter by engine (exact match)
+   * @param {string} [params.quantization] - Filter by quantization (partial match)
+   * @param {boolean} [params.includeDeprecated=false] - Include deprecated models
+   * @returns {Promise<Array>} Array of matching models
+   */
+  async findBy (params = {}) {
+    await this.ready()
+    this.logger.debug('findBy called', { params })
+    return this.db.findBy(params)
   }
 
   _validateString (value, name) {

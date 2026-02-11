@@ -99,4 +99,27 @@ TEST(JsOutputHandlerTest, Js2DArrayOutputHandlerCanHandleFlattened2DArray) {
   EXPECT_TRUE(handler.canHandle(testData));
 }
 
+// ============================================================================
+// JsStringOutputHandler Tests
+// ============================================================================
+
+TEST(JsOutputHandlerTest, JsStringArrayOutputHandlerCanInstantiate) {
+  js_env_t env;
+  out_handl::JsStringArrayOutputHandler handler;
+  handler.setEnv(&env);
+  EXPECT_TRUE(true);
+}
+
+TEST(JsOutputHandlerTest, JsStringArrayOutputHandlerCanHandleString) {
+  js_env_t env;
+  out_handl::JsStringArrayOutputHandler handler;
+  handler.setEnv(&env);
+
+  std::vector<std::string> testString = {
+      "test string", "test string 2", "hello world"};
+  std::any testData = std::any(testString);
+
+  EXPECT_TRUE(handler.canHandle(testData));
+}
+
 } // namespace qvac_lib_inference_addon_cpp

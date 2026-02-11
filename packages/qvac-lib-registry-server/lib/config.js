@@ -3,7 +3,7 @@
 const path = require('path')
 const process = require('process')
 const IdEnc = require('hypercore-id-encoding')
-const { ENV_KEYS } = require('@tetherto/qvac-registry-schema')
+const { ENV_KEYS } = require('@tetherto/qvac-registry-schema-mono')
 const { getEnv, updateEnvFile } = require('../utils/env')
 
 const AUTOBASE_ENV_KEY = ENV_KEYS.QVAC_AUTOBASE_KEY || 'QVAC_AUTOBASE_KEY'

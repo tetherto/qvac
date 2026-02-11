@@ -47,6 +47,25 @@ struct JsTypedArrayOutputHandler : JsBaseOutputHandler<vector<T>> {
             }) {}
 };
 
+
+struct JsStringArrayOutputHandler
+    : public JsBaseOutputHandler<std::vector<std::string>> {
+  JsStringArrayOutputHandler()
+      : JsBaseOutputHandler<std::vector<std::string>>(
+            [this](
+                const std::vector<std::string>& stringVector) -> js_value_t* {
+              auto array = js::Array::create(this->env_);
+
+              for (size_t i = 0; i < stringVector.size(); ++i) {
+                js_value_t* str;
+                auto jsString = js::String::create(this->env_, stringVector[i]);
+                array.set(this->env_, i, jsString);
+              }
+
+              return array;
+            }) {}
+};
+
 template <typename ContainerT, typename T>
 class Js2DArrayOutputHandler : public JsBaseOutputHandler<ContainerT> {
   template <typename C, typename = void> struct has_size : false_type {};

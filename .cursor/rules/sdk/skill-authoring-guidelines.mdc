@@ -1,0 +1,340 @@
+---
+description: Guidelines for creating SDK pod Cursor skills
+alwaysApply: false
+globs:
+  - .cursor/skills/sdk-**
+---
+
+# Skill Authoring Guidelines
+
+Guidelines for creating effective Cursor skills, based on the [Agent Skills specification](https://agentskills.io/specification) and [Anthropic best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices).
+
+## Directory Structure
+
+```
+.cursor/skills/
+└── skill-name/
+    ├── SKILL.md              # Required - main instructions
+    ├── references/           # Optional - detailed documentation
+    │   ├── REFERENCE.md
+    │   └── examples.md
+    ├── scripts/              # Optional - executable code
+    │   └── helper.py
+    └── assets/               # Optional - templates, data files
+```
+
+## Naming Convention
+
+**Use pod prefix for skill directories:**
+- SDK pod skills: `sdk-pr-create`, `sdk-changelog`, `sdk-release`
+- Other pods: `infra-deploy`, `platform-migration`
+
+**If pod is unclear, ask the user.**
+
+**Skill name requirements:**
+- Max 64 characters
+- Lowercase letters, numbers, and hyphens only
+- No consecutive hyphens (`--`)
+- Cannot start or end with hyphen
+- Must match parent directory name
+
+**Prefer gerund form or action-oriented names:**
+- Good: `processing-pdfs`, `analyzing-data`, `sdk-pr-create`
+- Avoid: `helper`, `utils`, `tools`
+
+## Required Frontmatter
+
+```yaml
+---
+name: skill-name
+description: What the skill does and when to use it.
+---
+```
+
+### Optional Frontmatter Fields
+
+| Field | Purpose |
+|-------|---------|
+| `license` | License name or reference |
+| `compatibility` | Environment requirements |
+| `metadata` | Arbitrary key-value pairs |
+| `disable-model-invocation` | Set `true` for manual-only skills |
+
+## Manual-Only Skills
+
+If a skill should NOT auto-trigger based on context (only invoked via `/skill-name`):
+
+```yaml
+---
+name: dangerous-operation
+description: Performs destructive operation. Only invoke manually.
+disable-model-invocation: true
+---
+```
+
+Document this clearly in the description so users know to invoke manually.
+
+## Writing Effective Descriptions
+
+The description is critical for skill discovery.
+
+**Write in third person** (injected into system prompt):
+- Good: "Generates PR descriptions for SDK pod packages"
+- Bad: "I help you create PR descriptions"
+- Bad: "You can use this to create PRs"
+
+**Include WHAT and WHEN:**
+- WHAT: What the skill does (specific capabilities)
+- WHEN: When to use it (trigger scenarios, keywords)
+
+**Example:**
+```yaml
+description: Generate PR descriptions for SDK pod packages following template and
+  format rules. Use when creating PRs for qvac-sdk, qvac-docs, qvac-lib-rag,
+  qvac-lib-logging, or qvac-lib-error-base.
+```
+
+## SKILL.md Body Structure
+
+Include a "When to use this skill" section early in the body:
+
+```markdown
+# My Skill
+
+Brief one-line description.
+
+## When to use this skill
+
+**Applies to SDK pod packages:**
+- packages/qvac-sdk
+- packages/qvac-docs
+- packages/qvac-lib-rag
+- packages/qvac-lib-logging
+- packages/qvac-lib-error-base
+
+**Use when:**
+- The user asks to...
+- Working with...
+
+**Do NOT use for:**
+- (common confusion cases, if any)
+
+## Instructions
+...
+```
+
+This helps both the agent and human readers understand scope quickly. Listing the applicable directories explicitly avoids ambiguity.
+
+## Keep SKILL.md Under 500 Lines
+
+The context window is shared. Be concise.
+
+**Default assumption:** The agent is already smart. Only add context it doesn't have.
+
+Challenge each piece of information:
+- "Does the agent really need this explanation?"
+- "Can I assume the agent knows this?"
+- "Does this paragraph justify its token cost?"
+
+## Progressive Disclosure
+
+Put essential info in SKILL.md; detailed content in `references/` loaded on demand.
+
+```markdown
+# My Skill
+
+## Quick start
+[Essential instructions here]
+
+## Additional resources
+- For complete API details, see [references/REFERENCE.md](references/REFERENCE.md)
+- For usage examples, see [references/examples.md](references/examples.md)
+```
+
+**Keep references one level deep.** No nested chains like:
+`SKILL.md → reference.md → details.md → more.md`
+
+## Common Patterns
+
+### Template Pattern
+
+Provide output format templates:
+
+```markdown
+## Output format
+
+Use this template:
+
+# [Title]
+
+## Summary
+[One paragraph]
+
+## Details
+- Point 1
+- Point 2
+```
+
+### Examples Pattern
+
+Show input/output pairs:
+
+```markdown
+## Commit message examples
+
+**Input:** Added user authentication
+**Output:**
+feat(auth): implement user authentication
+
+**Input:** Fixed date display bug
+**Output:**
+fix(ui): correct date formatting
+```
+
+### Workflow Pattern
+
+Break complex tasks into steps with checklists:
+
+```markdown
+## Workflow
+
+Copy this checklist:
+
+- [ ] Step 1: Analyze input
+- [ ] Step 2: Generate output
+- [ ] Step 3: Validate result
+- [ ] Step 4: Present to user
+```
+
+### Feedback Loop Pattern
+
+For quality-critical tasks:
+
+```markdown
+## Process
+
+1. Generate output
+2. Validate: `python scripts/validate.py output.json`
+3. If validation fails:
+   - Review error message
+   - Fix issues
+   - Validate again
+4. Only proceed when validation passes
+```
+
+## The `scripts/` Directory
+
+Skills can include a `scripts/` directory with executable code the agent can run.
+
+**When to use scripts:**
+- Validation/verification steps
+- Complex data transformations
+- Operations that need consistency across runs
+- Tasks where generated code would be unreliable
+
+**Benefits over generated code:**
+- More reliable than ad-hoc generated code
+- Save tokens (script not loaded into context, only output)
+- Ensure consistency across uses
+- Can be tested and versioned
+
+**Reference scripts in SKILL.md:**
+```markdown
+## Validation
+
+Run the validation script before proceeding:
+`python scripts/validate.py output.json`
+
+If validation fails, review errors and fix before continuing.
+```
+
+**Make intent clear** - whether agent should **execute** or **read**:
+- "Run `scripts/validate.py` to check output" (execute)
+- "See `scripts/validate.py` for the algorithm" (read as reference)
+
+**Script requirements:**
+- Self-contained or clearly document dependencies
+- Include helpful error messages
+- Handle edge cases gracefully
+- Use forward slashes in paths (not Windows backslashes)
+
+## Anti-Patterns to Avoid
+
+### Windows-Style Paths
+- Good: `scripts/helper.py`
+- Bad: `scripts\helper.py`
+
+### Too Many Options
+```markdown
+# Bad - confusing
+"You can use library A, or B, or C, or D..."
+
+# Good - provide default with escape hatch
+"Use library A for this task.
+For edge case X, use library B instead."
+```
+
+### Time-Sensitive Information
+```markdown
+# Bad - will become outdated
+"If before August 2025, use old API"
+
+# Good - use deprecated section
+## Current method
+Use v2 API.
+
+## Deprecated (old patterns)
+<details>
+<summary>Legacy v1 API</summary>
+...
+</details>
+```
+
+### Inconsistent Terminology
+Choose one term and use it throughout:
+- Good: Always "API endpoint"
+- Bad: Mix "endpoint", "URL", "route", "path"
+
+### Vague Skill Names
+- Good: `sdk-pr-create`, `processing-pdfs`
+- Bad: `helper`, `utils`, `stuff`
+
+## Degrees of Freedom
+
+Match specificity to task fragility:
+
+| Freedom | When to Use | Example |
+|---------|-------------|---------|
+| High (text instructions) | Multiple valid approaches | Code review guidelines |
+| Medium (templates) | Preferred pattern with variation | Report generation |
+| Low (exact scripts) | Fragile operations, consistency critical | Database migrations |
+
+## Quality Checklist
+
+Before finalizing a skill:
+
+### Core Quality
+- [ ] Description is specific with trigger terms
+- [ ] Description includes WHAT and WHEN
+- [ ] Written in third person
+- [ ] SKILL.md body under 500 lines
+- [ ] Consistent terminology throughout
+- [ ] Examples are concrete, not abstract
+
+### Structure
+- [ ] File references one level deep
+- [ ] Progressive disclosure used appropriately
+- [ ] Workflows have clear steps
+- [ ] No time-sensitive information
+
+### If Including Scripts
+- [ ] Scripts handle errors explicitly
+- [ ] Required packages documented
+- [ ] No Windows-style paths
+- [ ] Validation steps for critical operations
+
+## References
+
+- [Agent Skills Specification](https://agentskills.io/specification)
+- [Anthropic Best Practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+- [Cursor Skills Documentation](https://cursor.com/docs/context/skills)

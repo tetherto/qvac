@@ -274,6 +274,61 @@ const index4 = {
 }
 collection1.indexes.push(index4)
 
+// '@qvac-main-registry/models-by-engine-quantization' collection key
+const index5_key = new IndexEncoder([
+  IndexEncoder.STRING,
+  IndexEncoder.STRING,
+  IndexEncoder.STRING,
+  IndexEncoder.STRING
+], { prefix: 5 })
+
+function index5_indexify (record) {
+  const arr = []
+
+  const a0 = record.engine
+  if (a0 === undefined) return arr
+  arr.push(a0)
+
+  const a1 = record.quantization
+  if (a1 === undefined) return arr
+  arr.push(a1)
+
+  const a2 = record.path
+  if (a2 === undefined) return arr
+  arr.push(a2)
+
+  const a3 = record.source
+  if (a3 === undefined) return arr
+  arr.push(a3)
+
+  return arr
+}
+
+// '@qvac-main-registry/models-by-engine-quantization'
+const index5 = {
+  name: '@qvac-main-registry/models-by-engine-quantization',
+  id: 5,
+  encodeKey (record) {
+    return index5_key.encode(index5_indexify(record))
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return index5_key.encodeRange({
+      gt: gt ? index5_indexify(gt) : null,
+      lt: lt ? index5_indexify(lt) : null,
+      gte: gte ? index5_indexify(gte) : null,
+      lte: lte ? index5_indexify(lte) : null
+    })
+  },
+  encodeValue: (doc) => index5.collection.encodeKey(doc),
+  encodeIndexKeys (record, context) {
+    return [index5_key.encode([record.engine, record.quantization, record.path, record.source])]
+  },
+  reconstruct: (keyBuf, valueBuf) => valueBuf,
+  offset: collection1.indexes.length,
+  collection: collection1
+}
+collection1.indexes.push(index5)
+
 const collections = [
   collection0,
   collection1
@@ -282,7 +337,8 @@ const collections = [
 const indexes = [
   index2,
   index3,
-  index4
+  index4,
+  index5
 ]
 
 module.exports = { version, collections, indexes, resolveCollection, resolveIndex }
@@ -300,6 +356,7 @@ function resolveIndex (name) {
     case '@qvac-main-registry/models-by-engine': return index2
     case '@qvac-main-registry/models-by-name': return index3
     case '@qvac-main-registry/models-by-quantization': return index4
+    case '@qvac-main-registry/models-by-engine-quantization': return index5
     default: return null
   }
 }

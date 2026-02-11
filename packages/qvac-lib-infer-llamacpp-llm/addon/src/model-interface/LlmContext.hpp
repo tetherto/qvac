@@ -1,5 +1,5 @@
 #pragma once
-// NOLINTBEGIN(readability-identifier-naming)
+
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
@@ -29,24 +29,24 @@ using BatchPtr = std::unique_ptr<llama_batch, BatchDeleter>;
 struct ThreadPoolDeleter{
     void operator()(ggml_threadpool* ptr) {
       if (ptr != nullptr) {
-        auto* cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-        if (cpu_dev == nullptr) {
+        auto* cpuDev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+        if (cpuDev == nullptr) {
           throw qvac_errors::StatusError(
-              AddonID, toString(NoBackendFound), "no CPU backend found");
+              ADDON_ID, toString(NoBackendFound), "no CPU backend found");
         }
-        auto* reg = ggml_backend_dev_backend_reg(cpu_dev);
-        void* proc_addr =
+        auto* reg = ggml_backend_dev_backend_reg(cpuDev);
+        void* procAddr =
             ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
-        if (proc_addr == nullptr) {
+        if (procAddr == nullptr) {
           throw qvac_errors::StatusError(
-              AddonID,
+              ADDON_ID,
               toString(UnableToDeleteThreadPool),
               "Failed to get ggml_threadpool_free function address");
         }
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        auto* ggml_threadpool_free_fn =
-            reinterpret_cast<decltype(ggml_threadpool_free)*>(proc_addr);
-        ggml_threadpool_free_fn(ptr);
+        auto* ggmlThreadpoolFreeFn =
+            reinterpret_cast<decltype(ggml_threadpool_free)*>(procAddr);
+        ggmlThreadpoolFreeFn(ptr);
       }
     }
 };
@@ -69,11 +69,11 @@ public:
    * The eval message method. It evaluates the message and updates the context.
    *
    * @param chatMsgs - chat messages.
-   * @param is_cache_loaded - whether the cache is loaded.
+   * @param isCacheLoaded - whether the cache is loaded.
    * @return - true if successful, false if inference is stopped.
    */
   virtual bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs, bool is_cache_loaded) = 0;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded) = 0;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -81,21 +81,21 @@ public:
    *
    * @param chatMsgs - chat messages.
    * @param tools - tools.
-   * @param is_cache_loaded - whether the cache is loaded.
+   * @param isCacheLoaded - whether the cache is loaded.
    * @return - true if successful, false if inference is stopped.
    */
   virtual bool evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, bool is_cache_loaded) = 0;
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded) = 0;
 
   /**
    * The generate response method. It generates the response token by token.
    *
-   * @param output_callback - the output callback.
+   * @param outputCallback - the output callback.
    * @return - true if successful, false if context overflow.
    */
   virtual bool generateResponse(
-      const std::function<void(const std::string&)>& output_callback) = 0;
+      const std::function<void(const std::string&)>& outputCallback) = 0;
 
   /**
    * The stop method. It stops the model inference.
@@ -110,18 +110,18 @@ public:
   virtual llama_context* getCtx() = 0;
 
   /**
-   * The get n_past method. It returns the n_past.
+   * The get nPast method. It returns the nPast.
    *
-   * @return - the n_past.
+   * @return - the nPast.
    */
   [[nodiscard]] virtual llama_pos getNPast() const = 0;
 
   /**
-   * The set n_past method. It sets the n_past.
+   * The set nPast method. It sets the nPast.
    *
-   * @param n_past - the n_past.
+   * @param nPast - the nPast.
    */
-  virtual void setNPast(llama_pos n_past) = 0;
+  virtual void setNPast(llama_pos nPast) = 0;
 
   /**
    * Get the number of tokens belonging to the first user message.
@@ -131,12 +131,12 @@ public:
   /**
    * Set the number of tokens belonging to the first user message.
    */
-  virtual void setFirstMsgTokens(llama_pos first_msg_tokens) = 0;
+  virtual void setFirstMsgTokens(llama_pos firstMsgTokens) = 0;
 
   /**
    * Set the number of tokens to discard when overflowing context.
    */
-  virtual void setNDiscarded(llama_pos n_discarded) = 0;
+  virtual void setNDiscarded(llama_pos nDiscarded) = 0;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -166,7 +166,7 @@ public:
 
   /**
    * Remove the last N tokens from the model context.
-   * This decrements n_past and removes the tokens from the KV cache.
+   * This decrements nPast and removes the tokens from the KV cache.
    *
    * @param count - the number of tokens to remove
    * @return the actual number of tokens removed (may be less than requested if
@@ -181,4 +181,4 @@ public:
   virtual void resetMedia() {};
 };
 
-// NOLINTEND(readability-identifier-naming)
+
