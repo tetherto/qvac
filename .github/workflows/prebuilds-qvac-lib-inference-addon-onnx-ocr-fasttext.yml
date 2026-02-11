@@ -67,15 +67,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+            variant: ubuntu
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
+            variant: ubuntu
           - os: ubuntu-24.04
             platform: android
             arch: arm64
+            variant: ubuntu
             flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
           - os: macos-15
             platform: ios
@@ -115,7 +118,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.variant == 'ubuntu' }}
         name: Maximize build space
         run: |
           sudo docker image prune --all --force
@@ -134,14 +137,14 @@ jobs:
           echo "Matrix arch: ${{ matrix.arch }}"
           echo "Matrix tags: ${{ matrix.tags }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.variant == 'ubuntu' }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.variant == 'ubuntu' }}
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache
 
@@ -155,12 +158,11 @@ jobs:
           ccache --set-config=max_size=2G
           ccache --set-config=compression=true
           ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
       - if: ${{ matrix.os != 'windows-2022' }}
-        name: Get ccache cache
-        uses: actions/cache@v4
+        name: Restore ccache cache
+        id: cache-ccache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
@@ -172,22 +174,35 @@ jobs:
         name: Configure windows runner
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm
-          choco install ccache -y
+          choco upgrade llvm -y --no-progress
 
       - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure ccache on Windows
-        shell: bash
+        name: Install and configure ccache on Windows
+        shell: pwsh
         run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          # Download ccache directly from GitHub releases
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $env:TEMP -Force
+          New-Item -ItemType Directory -Path $ccacheDir -Force | Out-Null
+          Move-Item -Path "$env:TEMP\ccache-$ccacheVersion-windows-x86_64\*" -Destination $ccacheDir -Force
+
+          # Add to PATH for subsequent steps
+          echo "C:\ccache" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # Configure ccache
+          & "C:\ccache\ccache.exe" --set-config=max_size=2G
+          & "C:\ccache\ccache.exe" --set-config=compression=true
+          & "C:\ccache\ccache.exe" -z
 
       - if: ${{ matrix.os == 'windows-2022' }}
-        name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        name: Restore ccache cache (Windows)
+        id: cache-ccache-win
+        uses: actions/cache/restore@v4
         with:
           path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
@@ -218,15 +233,23 @@ jobs:
           set -eu
           echo "Writing .npmrc for dual registry install…"
           cat > .npmrc <<NPMRC
+          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
 
       - name: Install global dependencies
         run: npm install -g bare-runtime bare-make
@@ -272,7 +295,7 @@ jobs:
           echo "Simulator SDK: $SDK_SIM"
           ls $SDK_SIM/System/Library/Frameworks | grep UIKit || echo "UIKit.framework missing in simulator SDK!"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.variant == 'ubuntu' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -291,7 +314,7 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' }}
+      - if: ${{ matrix.variant == 'ubuntu' }}
         name: Update apt sources
         run: sudo apt-get update
 
@@ -329,7 +352,7 @@ jobs:
 
       - name: Generate
         working-directory: ${{ env.PKG_DIR }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
@@ -339,11 +362,36 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make install
 
+      - name: Strip debug symbols
+        if: ${{ matrix.platform != 'win32' }}
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          if [[ "${{ matrix.platform }}" == "android" ]]; then
+            find prebuilds -name "*.bare" -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
+          else
+            find prebuilds -name "*.bare" -exec strip {} \;
+          fi
+
       - name: Show ccache stats
         run: ccache -s
 
-      - name: Save vcpkg cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.cache-vcpkg.outputs.cache-hit != 'true'
+      - if: ${{ matrix.os != 'windows-2022' && steps.cache-ccache.outputs.cache-hit != 'true' }}
+        name: Save ccache cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+
+      - if: ${{ matrix.os == 'windows-2022' && steps.cache-ccache-win.outputs.cache-hit != 'true' }}
+        name: Save ccache cache (Windows)
+        uses: actions/cache/save@v4
+        with:
+          path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
         uses: actions/cache/save@v4
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
