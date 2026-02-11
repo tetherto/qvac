@@ -187,7 +187,11 @@ jobs:
           # Validate prebuilds directory exists
           if [ ! -d "package/prebuilds" ]; then
             echo "ERROR: No prebuilds directory found in package"
-            echo "The downloaded package may not contain prebuilt binaries"
+            echo "Contents of downloaded package:"
+            ls -la package/ 2>/dev/null || true
+            echo ""
+            echo "This workflow needs a package that includes prebuilt binaries (e.g. @qvac/tts-onnx or @tetherto/tts-onnx)."
+            echo "Packages like @tetherto/tts-onnx-mono are different and do not include prebuilds — use the addon package name instead."
             exit 1
           fi
 
