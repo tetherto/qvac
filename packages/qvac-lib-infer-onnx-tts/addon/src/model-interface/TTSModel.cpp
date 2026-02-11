@@ -54,7 +54,8 @@ EngineType TTSModel::detectEngineType(
   return EngineType::Piper;
 }
 
-qvac::ttslib::TTSConfig TTSModel::createTTSConfig(const std::unordered_map<std::string, std::string>& configMap) {
+qvac::ttslib::TTSConfig TTSModel::createTTSConfig(
+    const std::unordered_map<std::string, std::string> &configMap) {
   qvac::ttslib::TTSConfig config = piperConfig_;
 
   auto updateConfig = [&](const std::string &key, std::string &configField) {
@@ -116,8 +117,9 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
   return config;
 }
 
-bool TTSModel::isConfigValid(const qvac::ttslib::TTSConfig& config) const {
-  return !config.modelPath.empty() && !config.language.empty() && !config.eSpeakDataPath.empty() && !config.configJsonPath.empty();
+bool TTSModel::isConfigValid(const qvac::ttslib::TTSConfig &config) const {
+  return !config.modelPath.empty() && !config.language.empty() &&
+         !config.eSpeakDataPath.empty() && !config.configJsonPath.empty();
 }
 
 bool TTSModel::isChatterboxConfigValid(
@@ -129,7 +131,8 @@ bool TTSModel::isChatterboxConfigValid(
          !config.languageModelPath.empty();
 }
 
-void TTSModel::saveLoadParams(const std::unordered_map<std::string, std::string>& configMap) {
+void TTSModel::saveLoadParams(
+    const std::unordered_map<std::string, std::string> &configMap) {
   if (engineType_ == EngineType::Chatterbox) {
     chatterboxConfig_ = createChatterboxConfig(configMap);
     configSet_ = isChatterboxConfigValid(chatterboxConfig_);
@@ -175,17 +178,13 @@ void TTSModel::unload() {
   QLOG(Priority::INFO, "TTS model unloaded successfully");
 }
 
-void TTSModel::reset() {
-  resetRuntimeStats();
-}
+void TTSModel::reset() { resetRuntimeStats(); }
 
 void TTSModel::initializeBackend() {
   // No-op: backend initialized by engine construction/init
 }
 
-bool TTSModel::isLoaded() const {
-  return loaded_;
-}
+bool TTSModel::isLoaded() const { return loaded_; }
 
 TTSModel::Output TTSModel::process(const Input &text) {
   if (text.empty() || text == " ") {
@@ -194,9 +193,10 @@ TTSModel::Output TTSModel::process(const Input &text) {
 
   if (!isLoaded()) {
     QLOG(Priority::ERROR, "Model not loaded, processing failed.");
-    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelNotLoaded, "Model not loaded");
+    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelNotLoaded,
+                                      "Model not loaded");
   }
-  
+
   auto startTime = std::chrono::high_resolution_clock::now();
   textLength_ += text.size();
 
@@ -209,31 +209,31 @@ TTSModel::Output TTSModel::process(const Input &text) {
 
   auto endTime = std::chrono::high_resolution_clock::now();
   totalTime_ += std::chrono::duration<double>(endTime - startTime).count();
-  
+
   audioDurationMs_ += result.durationMs;
   totalSamples_ += static_cast<int64_t>(result.samples);
-  
+
   if (audioDurationMs_ > 0) {
     realTimeFactor_ = (totalTime_ * 1000.0) / audioDurationMs_;
   } else {
     realTimeFactor_ = 0.0;
   }
-  
+
   if (totalTime_ > 0) {
     tokensPerSecond_ = textLength_ / totalTime_;
   } else {
     tokensPerSecond_ = 0.0;
   }
-  
+
   return result.pcm16;
 }
 
-TTSModel::Output TTSModel::process(
-    const Input &text,
-    const std::function<void(const Output&)> &consumer) {
-  const auto& result = process(text);
-  
-  if (consumer)  {
+TTSModel::Output
+TTSModel::process(const Input &text,
+                  const std::function<void(const Output &)> &consumer) {
+  const auto &result = process(text);
+
+  if (consumer) {
     consumer(result);
   }
 
@@ -242,13 +242,13 @@ TTSModel::Output TTSModel::process(
 
 qvac_lib_inference_addon_cpp::RuntimeStats TTSModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
-  
+
   stats.emplace_back("totalTime", totalTime_);
   stats.emplace_back("tokensPerSecond", tokensPerSecond_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
-  
+
   return stats;
 }
 
