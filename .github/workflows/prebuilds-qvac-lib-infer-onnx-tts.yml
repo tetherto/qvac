@@ -167,8 +167,6 @@ jobs:
           echo "Matrix arch: ${{ matrix.arch }}"
           echo "Matrix tags: ${{ matrix.tags }}"
 
-      #REVIEW: Consider using platform == 'linux' instead of startsWith(matrix.os, 'ubuntu')
-      # android build should use the tooling from the NDK
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Update c++ tools
         run: |
