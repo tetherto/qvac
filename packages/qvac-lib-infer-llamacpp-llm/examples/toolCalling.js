@@ -125,8 +125,7 @@ async function main () {
       content: 'You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls.'
     }
 
-    const toolQuery1 = [
-      systemMessageAmbiguous,
+    const tools1 = [
       // Test handled by this function:
       // - Multiple parameters with different types
       // - Complex multiple tools with array parameters
@@ -194,14 +193,27 @@ async function main () {
           required: ['table', 'conditions']
         }
       },
+
+    ]
+
+    const toolsFirstQuery1 = [
+      systemMessageAmbiguous,
+      ...tools1,
       {
         role: 'user',
         content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
-      }
+      },
+    ]
+    const toolsLastQuery1 = [
+      systemMessageAmbiguous,
+      {
+        role: 'user',
+        content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
+      },
+      ...tools1,
     ]
 
-    const toolQuery2 = [
-      systemMessageAmbiguous,
+    const tools2 = [
       // Test handled by this function:
       // - Math/computation tool
       {
@@ -234,17 +246,27 @@ async function main () {
           required: ['lat1', 'lon1', 'lat2', 'lon2']
         }
       },
+    ]
+
+    const toolsFirstQuery2 = [
+      systemMessageAmbiguous,
+      ...tools2,
       {
         role: 'user',
         content: 'calculate 156 * 23 precision 0. Also, How far is here from there?'
-      }
+      },
     ]
 
-    const toolQuery3 = [
+    const toolsLastQuery2 = [
+      systemMessageAmbiguous,
       {
-        role: 'system',
-        content: 'You are a personal assistant.'
+        role: 'user',
+        content: 'calculate 156 * 23 precision 0. Also, How far is here from there?'
       },
+      ...tools2,
+    ]
+
+    const tools3 = [
       // Test handled by this function:
       // - Part of conversation context tool test
       {
@@ -277,6 +299,14 @@ async function main () {
           required: ['title', 'date']
         }
       },
+    ]
+
+    const toolsFirstQuery3 = [
+      {
+        role: 'system',
+        content: 'You are a personal assistant.'
+      },
+      ...tools3,
       {
         role: 'user',
         content: 'What is the weather in Seattle on April 10th?'
@@ -288,14 +318,37 @@ async function main () {
       {
         role: 'user',
         content: 'Daily is fine. Also, schedule a team meeting on April 10th at 2 PM for 60 minutes.'
-      }
+      },
+    ]
+
+    const toolsLastQuery3 = [
+      {
+        role: 'system',
+        content: 'You are a personal assistant.'
+      },
+      {
+        role: 'user',
+        content: 'What is the weather in Seattle on April 10th?'
+      },
+      {
+        role: 'assistant',
+        content: 'Let me check that for you. Do you need hourly or just daily?'
+      },
+      {
+        role: 'user',
+        content: 'Daily is fine. Also, schedule a team meeting on April 10th at 2 PM for 60 minutes.'
+      },
+      ...tools3,
     ]
 
     // 5. Running tool calling queries
     const queries = [
-      { name: 'Query 1: Complex tool calling with multiple parameters', prompt: toolQuery1 },
-      { name: 'Query 2: Math calculation and ambiguous query', prompt: toolQuery2 },
-      { name: 'Query 3: Conversation context with tools', prompt: toolQuery3 }
+      { name: 'Query 1 (tools first): Complex tool calling with multiple parameters', prompt: toolsFirstQuery1 },
+      { name: 'Query 1 (tools last): Complex tool calling with multiple parameters', prompt: toolsLastQuery1 },
+      { name: 'Query 2 (tools first): Math calculation and ambiguous query', prompt: toolsFirstQuery2 },
+      { name: 'Query 2 (tools last): Math calculation and ambiguous query', prompt: toolsLastQuery2 },
+      { name: 'Query 3 (tools first): Conversation context with tools', prompt: toolsFirstQuery3 },
+      { name: 'Query 3 (tools last): Conversation context with tools', prompt: toolsLastQuery3 },
     ]
 
     const toolCallResults = []
