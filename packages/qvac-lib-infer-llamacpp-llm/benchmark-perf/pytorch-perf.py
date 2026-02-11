@@ -16,6 +16,11 @@ def now_ms():
     return time.time() * 1000.0
 
 
+def log(message):
+    ts = datetime.utcnow().isoformat()
+    print(f"[{ts}] {message}", flush=True)
+
+
 def capture_memory():
     process = psutil.Process(os.getpid())
     return {"rssBytes": process.memory_info().rss}
@@ -169,7 +174,12 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
         torch.set_num_threads(threads)
         torch.set_num_interop_threads(max(1, threads // 2))
 
+    log(
+        f"Starting run: model={model_config['id']} {param_name}={resolved_value} "
+        f"prompt={prompt['id']} rep={rep_index}"
+    )
     load_start = time.time()
+    log("Loading PyTorch model")
     model, tokenizer = load_torch_model(
         model_id,
         quantization,
@@ -182,6 +192,7 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
         hf_token=hf_token,
     )
     model_load_ms = (time.time() - load_start) * 1000.0
+    log(f"Model loaded in {model_load_ms:.1f}ms")
     memory_load = capture_memory()
 
     prompt_text = stringify_prompt(prompt["messages"])
@@ -213,11 +224,16 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
 
     # Transformers TextStreamer only supports batch size 1. We approximate TTFT
     # with a single forward pass and use generate() for throughput per micro-batch.
+    log(
+        f"Running forward pass: batch={batch_size} ubatch={ubatch_size} "
+        f"promptTokens={prompt_tokens} maxNew={max_new_tokens}"
+    )
     first_token_ms = None
     with torch.no_grad():
         ttft_start = time.time()
         _ = model(input_ids=input_ids, attention_mask=attention_mask)
         first_token_ms = (time.time() - ttft_start) * 1000.0
+    log(f"Forward pass complete (TTFT={first_token_ms:.1f}ms)")
 
     total_generated_tokens = 0
     output_text = ""
@@ -230,7 +246,8 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
         batches.append((batch_input_ids, batch_attention_mask))
 
     gen_start = time.time()
-    for batch_input_ids, batch_attention_mask in batches:
+    for batch_index, (batch_input_ids, batch_attention_mask) in enumerate(batches, start=1):
+        log(f"Generating batch {batch_index}/{len(batches)}")
         generated = model.generate(
             input_ids=batch_input_ids,
             max_new_tokens=max_new_tokens,
@@ -245,6 +262,7 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
             output_text = tokenizer.decode(
                 generated[0][input_len:], skip_special_tokens=True
             )
+    log("Generation complete")
 
     end_time = time.time()
 
@@ -296,6 +314,10 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
 
     with open(output_path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(result) + "\n")
+    log(
+        f"Completed run: model={model_config['id']} {param_name}={resolved_value} "
+        f"prompt={prompt['id']} rep={rep_index}"
+    )
 
 
 def main():
@@ -365,6 +387,10 @@ def main():
                                 hf_token=hf_token,
                             )
                         except Exception as exc:
+                            log(
+                                f"Run failed: model={model_config['id']} {param_name}={value} "
+                                f"prompt={prompt['id']} rep={rep} error={exc}"
+                            )
                             error_result = {
                                 "runId": create_run_id(),
                                 "timestamp": datetime.utcnow().isoformat(),

@@ -197,7 +197,11 @@ if [[ "${RUN_JUDGE}" == "true" ]]; then
   for file in "${PERF_DIR}"/results/qvac_*.jsonl; do
     [[ -e "$file" ]] || continue
     set +e
-    bare "${PERF_DIR}/judge.js" --config "${CONFIG}" --input "$file"
+    judge_args=(--config "${CONFIG}" --input "$file")
+    if [[ -n "${ADDON}" ]]; then
+      judge_args+=(--addon "${ADDON_MODULE}")
+    fi
+    bare "${PERF_DIR}/judge.js" "${judge_args[@]}"
     judge_status=$?
     set -e
     if [[ $judge_status -ne 0 ]]; then

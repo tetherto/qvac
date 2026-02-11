@@ -204,8 +204,11 @@ def plot_qvac_vs_torch(df, output_dir):
         if qvac_col not in merged.columns or torch_col not in merged.columns:
             continue
         merged[f"{metric}_delta"] = merged[qvac_col] - merged[torch_col]
+        plot_data = merged[["perfParam", f"{metric}_delta"]].dropna()
+        if plot_data.empty or plot_data["perfParam"].nunique() == 0:
+            continue
         plt.figure(figsize=(10, 5))
-        sns.boxplot(data=merged, x="perfParam", y=f"{metric}_delta")
+        sns.boxplot(data=plot_data, x="perfParam", y=f"{metric}_delta")
         plt.xticks(rotation=45, ha="right")
         plt.title(f"QVAC - PyTorch {metric} delta by perfParam")
         plt.tight_layout()

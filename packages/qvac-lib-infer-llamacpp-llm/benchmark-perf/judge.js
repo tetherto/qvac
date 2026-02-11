@@ -14,13 +14,15 @@ const parseArgs = (argv) => {
   const args = {
     config: DEFAULT_CONFIG_PATH,
     input: null,
-    output: null
+    output: null,
+    addon: null
   }
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--config') args.config = argv[++i]
     else if (arg === '--input') args.input = argv[++i]
     else if (arg === '--output') args.output = argv[++i]
+    else if (arg === '--addon') args.addon = argv[++i]
   }
   return args
 }
@@ -78,6 +80,17 @@ const parseJudgeResponse = (text) => {
   }
 }
 
+const resolveAddonModule = (addonSpec) => {
+  if (!addonSpec) {
+    return LlmLlamacpp
+  }
+  try {
+    return require(addonSpec)
+  } catch (error) {
+    return require(path.resolve(addonSpec))
+  }
+}
+
 const run = async () => {
   const argv = bareProcess?.argv || (typeof process !== 'undefined' ? process.argv : [])
   const args = parseArgs(argv)
@@ -104,7 +117,8 @@ const run = async () => {
   })
 
   const loader = new FilesystemDL({ dirPath: modelDir })
-  const judge = new LlmLlamacpp({
+  const AddonClass = resolveAddonModule(args.addon)
+  const judge = new AddonClass({
     loader,
     modelName,
     diskPath: modelDir,

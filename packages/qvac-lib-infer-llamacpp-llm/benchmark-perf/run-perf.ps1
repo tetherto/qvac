@@ -136,7 +136,11 @@ if ($LASTEXITCODE -ne 0) {
 if ($Judge) {
   Write-Host "==> Running judge"
   Get-ChildItem "$PerfDir/benchmark-perf/results" -Filter "qvac_*.jsonl" | ForEach-Object {
-    & bare "$PerfDir/benchmark-perf/judge.js" --config $Config --input $_.FullName
+    $judgeArgs = @("--config", $Config, "--input", $_.FullName)
+    if ($AddonModule -ne "") {
+      $judgeArgs += @("--addon", $AddonModule)
+    }
+    & bare "$PerfDir/benchmark-perf/judge.js" @judgeArgs
     if ($LASTEXITCODE -ne 0) {
       Write-Warning "Judge failed for $($_.FullName) with exit code $LASTEXITCODE, continuing."
       $Failures = 1
