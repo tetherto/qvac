@@ -6,9 +6,9 @@ This repository uses a **main-first GitFlow** optimized for **public SDK/model p
 
 - **All development merges into `main`.**
 - **All contributor work comes from forks** (no pushing branches in the upstream org repo).
-- **Releases are cut from versioned `release-<package>-<x.y.z>` branches** that exist in the upstream org repo.
+- **Releases are published from versioned `release-<package>-<x.y.z>` branches** that exist in the upstream org repo.
 - **Release/patch changes land via fork PRs into `release-*`**, not via upstream branch-to-branch merges.
-- **Patches are done as two PRs**: (1) fork → `main` (dev fix), (2) fork → `release-*` (patch release).
+- **Changes are done as two PRs**: (1) fork → `main` (dev fix), (2) fork → `release-*` (patch release).
 - **`feature-*` and `tmp-*` are non-release streams** (GitHub Packages only), used to share dev builds safely.
 - CI/CD is **path-scoped** so only the impacted package(s) build/publish.
 
@@ -55,6 +55,7 @@ This repo assumes a **fork-first** workflow:
   - all `release-*` branches (NPM publishing lines)
   - any upstream `feature-*` / `tmp-*` branches (when we need a shared dev stream that publishes)
 - Contributors create branches in **their fork**, then open PRs **into upstream target branches**.
+- Maintainers can create branches within the org if they chose to, while updates to the release branch must come from the fork.
 
 ### Roles
 
