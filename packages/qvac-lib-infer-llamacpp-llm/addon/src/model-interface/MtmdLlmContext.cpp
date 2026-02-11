@@ -311,11 +311,56 @@ bool MtmdLlmContext::evalMessageWithTools(
 
   if (isFirstMsg) {
     firstMsgTokens_ = nPast_;
-    if (nDiscarded_ >= llama_n_ctx(lctx_) - firstMsgTokens_) {
-      nDiscarded_ = llama_n_ctx(lctx_) - firstMsgTokens_ - 1;
+    const auto ctxSize = static_cast<llama_pos>(llama_n_ctx(lctx_));
+    if (nDiscarded_ >= ctxSize - firstMsgTokens_) {
+      nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
     }
   }
   return true;
+}
+
+void MtmdLlmContext::flushPendingUtf8ToCallback(
+    const std::function<void(const std::string&)>& outputCallback) {
+  if (!outputCallback || !utf8Buffer_.hasPendingBytes()) {
+    return;
+  }
+  std::string remaining = utf8Buffer_.flush();
+  if (!remaining.empty()) {
+    outputCallback(remaining);
+  }
+}
+
+void MtmdLlmContext::applyContextDiscard() {
+  if (nPast_ + 1 <= static_cast<llama_pos>(llama_n_ctx(lctx_)) ||
+      nDiscarded_ == 0) {
+    return;
+  }
+  auto* mem = llama_get_memory(lctx_);
+  llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
+  llama_memory_seq_add(
+      mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
+  nPast_ -= nDiscarded_;
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[MtmdLlm] discarded %d tokens after the first message\n",
+          nDiscarded_));
+}
+
+void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
+  stopGeneration_.store(false);
+  llama_token eot = llama_vocab_eot(vocab_);
+  common_batch_add(
+      *batch,
+      eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
+      nPast_++,
+      {0},
+      true);
+  if (llama_decode(lctx_, *batch) != 0) {
+    const char* errorMsg = "[MtmdLlm] failed to decode EOT token\n";
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(FailedToDecode), errorMsg);
+  }
 }
 
 bool MtmdLlmContext::generateResponse(
@@ -324,51 +369,31 @@ bool MtmdLlmContext::generateResponse(
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 
-  // Early exit if cancel was already requested (e.g. during prefill)
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);
+    flushPendingUtf8ToCallback(outputCallback);
     return true;
   }
 
   while (nRemain != 0) {
-    // Check for cancel before starting another token (earlier exit)
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      if (outputCallback && utf8Buffer_.hasPendingBytes()) {
-        std::string remaining = utf8Buffer_.flush();
-        if (!remaining.empty()) {
-          outputCallback(remaining);
-        }
-      }
+      flushPendingUtf8ToCallback(outputCallback);
       return true;
     }
-    if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ == 0) {
+    if (nPast_ + 1 > static_cast<llama_pos>(llama_n_ctx(lctx_)) &&
+        nDiscarded_ == 0) {
       return false;
-    } else if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ > 0) {
-      auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(
-          mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
-      llama_memory_seq_add(
-          mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
-      nPast_ -= nDiscarded_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[MtmdLlm] discarded %d tokens after the first message\n",
-              nDiscarded_));
     }
+    applyContextDiscard();
 
     llama_token tokenId = common_sampler_sample(smpl_.get(), lctx_, -1);
     common_sampler_accept(smpl_.get(), tokenId, true);
-
-    // decrement remaining sampling budget
     --nRemain;
 
-    // send text to JS callback with UTF-8 buffering
     std::string tokenStr =
         common_token_to_piece(lctx_, tokenId, params_.special);
     if (outputCallback) {
-      // Use buffer to accumulate tokens until complete UTF-8 sequences
       std::string completeChars = utf8Buffer_.addToken(tokenStr);
       if (!completeChars.empty()) {
         outputCallback(completeChars);
@@ -376,38 +401,16 @@ bool MtmdLlmContext::generateResponse(
     }
 
     if (llama_vocab_is_eog(vocab_, tokenId) || checkAntiprompt()) {
-      // Flush any remaining UTF-8 bytes before ending generation
-      if (outputCallback && utf8Buffer_.hasPendingBytes()) {
-        std::string remaining = utf8Buffer_.flush();
-        if (!remaining.empty()) {
-          outputCallback(remaining);
-        }
-      }
-      break; // end of generation
+      flushPendingUtf8ToCallback(outputCallback);
+      break;
     }
 
     common_batch_clear(*batch);
-    // Check for stop generation request
-    if (!stopGeneration_.load()) {
-      common_batch_add(*batch, tokenId, nPast_++, {0}, true);
-    } else {
-      // Generation stopped by request - add EOT token and exit
-      stopGeneration_.store(false);
-      llama_token eot = llama_vocab_eot(vocab_);
-      common_batch_add(
-          *batch,
-          eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
-          nPast_++,
-          {0},
-          true);
-      // Decode the EOT token
-      if (llama_decode(lctx_, *batch) != 0) {
-        const char* errorMsg = "[MtmdLlm] failed to decode EOT token\n";
-        throw qvac_errors::StatusError(
-            ADDON_ID, toString(FailedToDecode), errorMsg);
-      }
-      break; // Exit generation loop after processing EOT
+    if (stopGeneration_.load()) {
+      handleStopRequestAndAddEot(batch);
+      break;
     }
+    common_batch_add(*batch, tokenId, nPast_++, {0}, true);
 
     // eval the token
     if (llama_decode(lctx_, *batch) != 0) {
@@ -417,12 +420,8 @@ bool MtmdLlmContext::generateResponse(
     }
   }
 
-  // Flush any remaining UTF-8 bytes at end of generation loop
-  if (nRemain == 0 && outputCallback && utf8Buffer_.hasPendingBytes()) {
-    std::string remaining = utf8Buffer_.flush();
-    if (!remaining.empty()) {
-      outputCallback(remaining);
-    }
+  if (nRemain == 0) {
+    flushPendingUtf8ToCallback(outputCallback);
   }
   return true;
 }

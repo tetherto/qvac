@@ -198,59 +198,58 @@ std::any LlamaModel::process(const std::any& input) {
   return processPrompt(std::any_cast<Prompt>(input));
 }
 
+LlamaModel::ResolvedPrompt
+LlamaModel::resolveChatAndTools(const std::string& input) {
+  ResolvedPrompt resolved;
+  if (cacheManager_.has_value()) {
+    resolved.isCacheLoaded = cacheManager_->handleCache(
+        resolved.chatMsgs,
+        resolved.tools,
+        input,
+        [this](const std::string& inputPrompt) {
+          return this->formatPrompt(inputPrompt);
+        });
+    resolved.shouldResetAfterInference =
+        cacheManager_->isCacheDisabled() ||
+        !cacheManager_->wasCacheUsedInLastPrompt();
+  } else {
+    auto formatted = formatPrompt(input);
+    resolved.chatMsgs = std::move(formatted.first);
+    resolved.tools = std::move(formatted.second);
+    resolved.shouldResetAfterInference = true;
+  }
+  return resolved;
+}
+
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
   if (prompt.media.has_value()) {
     loadMedia(*(prompt.media));
   }
 
-  const std::string& input = prompt.input;
-  std::string out;
-  std::vector<common_chat_msg> chatMsgs;
-  std::vector<common_chat_tool> tools;
-
   if (prompt.prefill) {
-    // Just a PoC. TODO implement actual usage
     QLOG_IF(
         Priority::WARNING,
         "[LlamaModel] processTextWithOutputCallback: Prefill is enabled but "
         "not implemented yet.\n");
   }
 
-  bool isCacheLoaded = false;
-  bool shouldResetAfterInference = false;
-  if (cacheManager_.has_value()) {
-    isCacheLoaded = cacheManager_->handleCache(
-        chatMsgs, tools, input, [this](const std::string& inputPrompt) {
-          return this->formatPrompt(inputPrompt);
-        });
+  std::string out;
+  ResolvedPrompt resolved = resolveChatAndTools(prompt.input);
 
-    if (cacheManager_->isCacheDisabled() ||
-        !cacheManager_->wasCacheUsedInLastPrompt()) {
-      shouldResetAfterInference = true;
-    }
-  } else {
-    auto formatted = formatPrompt(input);
-    chatMsgs = std::move(formatted.first);
-    tools = std::move(formatted.second);
-    shouldResetAfterInference = true;
-  }
-
-  if (chatMsgs.empty() && tools.empty()) {
+  if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(
         Priority::INFO,
         "No messages to process after session commands - returning early\n");
     return out;
   }
 
-  bool returnEval = true;
-  if (tools.empty()) {
-    returnEval = llmContext_->evalMessage(chatMsgs, isCacheLoaded);
-  } else {
-    returnEval =
-        llmContext_->evalMessageWithTools(chatMsgs, tools, isCacheLoaded);
-  }
+  bool evalOk =
+      resolved.tools.empty()
+          ? llmContext_->evalMessage(resolved.chatMsgs, resolved.isCacheLoaded)
+          : llmContext_->evalMessageWithTools(
+                resolved.chatMsgs, resolved.tools, resolved.isCacheLoaded);
 
-  if (!returnEval) {
+  if (!evalOk) {
     QLOG_IF(
         Priority::DEBUG,
         "Inference was interrupted during prompt evaluation\n");
@@ -258,15 +257,12 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  auto cb = prompt.outputCallback;
-
-  // Capture response either via callback or into `out`
+  auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
-    cb = [&](const std::string& token) { oss << token; };
+    callback = [&](const std::string& token) { oss << token; };
   }
 
-  bool generationOk = llmContext_->generateResponse(cb);
-  if (!generationOk) {
+  if (!llmContext_->generateResponse(callback)) {
     resetState();
     std::string errorMsg = string_format("%s: context overflow\n", __func__);
     throw qvac_errors::StatusError(
@@ -276,11 +272,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
   if (!prompt.outputCallback) {
     out = oss.str();
   }
-
-  if (shouldResetAfterInference) {
+  if (resolved.shouldResetAfterInference) {
     resetState(false);
   }
-
   return out;
 }
 
@@ -315,16 +309,15 @@ void LlamaModel::commonParamsParse(
   std::vector<std::string> configVector;
 
   // Check if tools are enabled and exclude it with jinja from the config file
-  if (auto it = configFilemap.find("tools"); it != configFilemap.end()) {
-    std::string toolsVal = it->second;
-    std::transform(
-        toolsVal.begin(), toolsVal.end(), toolsVal.begin(), ::tolower);
+  if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
+    std::string toolsVal = iter->second;
+    std::ranges::transform(toolsVal, toolsVal.begin(), ::tolower);
     if (toolsVal == "true") {
       params.use_jinja = true;
       // Remove "tools" from config, since using jinja
-      configFilemap.erase(it);
+      configFilemap.erase(iter);
     } else {
-      configFilemap.erase(it);
+      configFilemap.erase(iter);
     }
   }
   if (auto jit = configFilemap.find("jinja"); jit != configFilemap.end()) {
@@ -333,22 +326,25 @@ void LlamaModel::commonParamsParse(
   }
 
   // parse custom nDiscarded from config (apply only if > 0)
-  if (auto it = configFilemap.find("n_discarded"); it != configFilemap.end()) {
+  if (auto iter = configFilemap.find("n_discarded");
+      iter != configFilemap.end()) {
     try {
-      long long parsed = std::stoll(it->second);
+      long long parsed = std::stoll(iter->second);
       if (parsed > 0) {
         configuredNDiscarded_ = static_cast<llama_pos>(parsed);
       }
     } catch (...) {
       std::string errorMsg = string_format(
-          "%s: invalid n_discarded value: %s\n", __func__, it->second.c_str());
+          "%s: invalid n_discarded value: %s\n",
+          __func__,
+          iter->second.c_str());
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
-    configFilemap.erase(it);
+    configFilemap.erase(iter);
   }
 
   auto deviceIt = configFilemap.find("device");
@@ -392,13 +388,13 @@ void LlamaModel::commonParamsParse(
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      auto listString = it->second;
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      auto listString = iter->second;
       std::vector<std::string> list = split(listString, ',');
       for (const auto& item : list) {
         params.antiprompt.push_back(item);
       }
-      configFilemap.erase(it);
+      configFilemap.erase(iter);
     }
   }
 
@@ -442,8 +438,8 @@ void LlamaModel::commonParamsParse(
     const std::string argPrefix = "--";
 
     std::string arg = configVector.at(argIndex);
-    if (arg.compare(0, argPrefix.size(), argPrefix) == 0) {
-      std::replace(arg.begin(), arg.end(), '_', '-');
+    if (arg.starts_with(argPrefix)) {
+      std::ranges::replace(arg, '_', '-');
     }
     if (argToOptions.find(arg) == argToOptions.end()) {
       std::string errorMsg =
@@ -473,7 +469,7 @@ void LlamaModel::commonParamsParse(
 
       // arg with single value
       checkArg(argIndex);
-      std::string val = configVector[++argIndex];
+      const std::string& val = configVector[++argIndex];
       if (opt.handler_int != nullptr) {
         opt.handler_int(params, std::stoi(val));
         continue;
@@ -485,7 +481,7 @@ void LlamaModel::commonParamsParse(
 
       // arg with 2 values
       checkArg(argIndex);
-      std::string val2 = configVector[++argIndex];
+      const std::string& val2 = configVector[++argIndex];
       if (opt.handler_str_str != nullptr) {
         opt.handler_str_str(params, val, val2);
         continue;

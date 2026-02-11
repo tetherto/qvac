@@ -116,6 +116,14 @@ public:
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
 private:
+  struct ResolvedPrompt {
+    std::vector<common_chat_msg> chatMsgs;
+    std::vector<common_chat_tool> tools;
+    bool isCacheLoaded = false;
+    bool shouldResetAfterInference = false;
+  };
+  ResolvedPrompt resolveChatAndTools(const std::string& input);
+
   /**
    * The Common params parse method. It parses the common params.
    *
