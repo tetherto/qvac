@@ -10,7 +10,7 @@ function createSeparator (char = '=', length = 80) {
   return char.repeat(length)
 }
 
-function extractToolCallsQwen (response) {
+function extractToolCalls (response) {
   const toolCalls = []
   const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
   let match
@@ -26,24 +26,7 @@ function extractToolCallsQwen (response) {
   return toolCalls
 }
 
-const extractToolCallsLFM = (response) => {
-  const toolCallParts = response.split(']')
-  if (toolCallParts.length < 2) {
-    return []
-  }
-  const toolCallsStr = toolCallParts.slice(0, -1).join(']').concat(']')
-  try {
-    const toolCalls = JSON.parse(toolCallsStr)
-    return toolCalls
-  } catch (e) {
-    console.error('ERROR: extractToolCallsLFM: unable to extract toolCalls\n')
-    console.error(toolCallsStr)
-    console.error(e)
-  }
-  return []
-}
-
-async function runQuery (model, query, extractToolCalls) {
+async function runQuery (model, query) {
   console.log(`\n${createSeparator()}`)
   console.log(query.name)
   console.log(createSeparator())
@@ -87,19 +70,6 @@ function printToolCallSummary (results) {
   console.log(`\n${createSeparator()}`)
 }
 
-const modelMap = {
-  'LFM': {
-    hdKey: 'f41503e44a2c0a537d9a9665984cb2d87eb2216e6301e898ffea60f5ce6c904d',
-    modelName: 'LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
-    extractToolCalls: extractToolCallsLFM,
-  },
-  'Qwen3': {
-    hdKey: '05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9',
-    modelName: 'Qwen3-1.7B-Q4_0.gguf',
-    extractToolCalls: extractToolCallsQwen,
-  }
-}
-
 async function main () {
   console.log('Tool Calling Example: Demonstrates tool calling capabilities')
   console.log('============================================================')
@@ -108,10 +78,7 @@ async function main () {
   const store = new Corestore('./store')
   const hdStore = store.namespace('hd')
 
-  // CHANGE ME
-  const { hdKey, modelName, extractToolCalls } = modelMap['LFM']
-  // const { hdKey, modelName, extractToolCalls } = modelMap['Qwen3']
-
+  const hdKey = '05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9'
   const hdDL = new HyperDriveDL({
     key: `hd://${hdKey}`,
     store: hdStore
@@ -122,7 +89,7 @@ async function main () {
     loader: hdDL,
     opts: { stats: true },
     logger: console,
-    modelName,
+    modelName: 'Qwen3-1.7B-Q4_0.gguf',
     diskPath: './models'
   }
 
@@ -155,8 +122,7 @@ async function main () {
     // 4. Defining tool queries with function schemas
     const systemMessageAmbiguous = {
       role: 'system',
-      content: 'You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls. Output function calls as JSON.'
-      // content: 'Output function calls as JSON. You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls.'
+      content: 'You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls.'
     }
 
     const tools1 = [
@@ -231,10 +197,8 @@ async function main () {
     ]
 
     const toolsFirstQuery1 = [
-      {
-        ...systemMessageAmbiguous,
-        content: systemMessageAmbiguous.content.concat(`List of tools: ${JSON.stringify(tools1)}`)
-      },
+      systemMessageAmbiguous,
+      ...tools1,
       {
         role: 'user',
         content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
@@ -380,16 +344,16 @@ async function main () {
     // 5. Running tool calling queries
     const queries = [
       { name: 'Query 1 (tools first): Complex tool calling with multiple parameters', prompt: toolsFirstQuery1 },
-      // { name: 'Query 1 (tools last): Complex tool calling with multiple parameters', prompt: toolsLastQuery1 },
-      // { name: 'Query 2 (tools first): Math calculation and ambiguous query', prompt: toolsFirstQuery2 },
-      // { name: 'Query 2 (tools last): Math calculation and ambiguous query', prompt: toolsLastQuery2 },
-      // { name: 'Query 3 (tools first): Conversation context with tools', prompt: toolsFirstQuery3 },
-      // { name: 'Query 3 (tools last): Conversation context with tools', prompt: toolsLastQuery3 }
+      { name: 'Query 1 (tools last): Complex tool calling with multiple parameters', prompt: toolsLastQuery1 },
+      { name: 'Query 2 (tools first): Math calculation and ambiguous query', prompt: toolsFirstQuery2 },
+      { name: 'Query 2 (tools last): Math calculation and ambiguous query', prompt: toolsLastQuery2 },
+      { name: 'Query 3 (tools first): Conversation context with tools', prompt: toolsFirstQuery3 },
+      { name: 'Query 3 (tools last): Conversation context with tools', prompt: toolsLastQuery3 }
     ]
 
     const toolCallResults = []
     for (const query of queries) {
-      const result = await runQuery(model, query, extractToolCalls)
+      const result = await runQuery(model, query)
       toolCallResults.push(result)
     }
 
