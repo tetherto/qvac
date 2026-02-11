@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Script to trigger the Chatterbox Benchmark GitHub Action workflow from local
-# Run from repo root or from packages/qvac-lib-infer-onnx-tts
 # Usage: ./scripts/trigger-benchmark-chatterbox.sh [options]
-# From repo root: packages/qvac-lib-infer-onnx-tts/scripts/trigger-benchmark-chatterbox.sh [options]
 
 set -e
 
@@ -17,14 +15,12 @@ WHISPER_MODEL="medium"
 NUM_RUNS="1"
 USE_GPU="false"
 MODEL_VARIANT="fp32"
-BRANCH=""
+BRANCH="temp-chatterbox"
 REMOTE="upstream"
 WATCH="false"
-# Paths relative to packages/qvac-lib-infer-onnx-tts when running from package dir; or use absolute
 CSV_OUTPUT="benchmarks/results/chatterbox-benchmark-history.csv"
 SHEET_ID="1V9-MVHWatby7zrwx7uiZHmV5zXzkocN_H9LiFGO6gZw"
 SHEET_NAME="chatterbox-benchmark-history"
-WORKFLOW_FILE="benchmark-chatterbox-qvac-lib-infer-onnx-tts.yml"
 
 # Colors for output
 RED='\033[0;31m'
@@ -231,8 +227,8 @@ if [ "$WATCH" = "true" ]; then
 fi
 echo ""
 
-# Trigger the workflow (monorepo workflow file name)
-gh workflow run "$WORKFLOW_FILE" \
+# Trigger the workflow
+gh workflow run benchmark-chatterbox.yaml \
     -R "$REPO" \
     --ref "$BRANCH" \
     -f addon_version="$ADDON_VERSION" \
@@ -257,7 +253,7 @@ echo ""
 sleep 3
 
 # Get the latest run ID for the benchmark workflow
-RUN_ID=$(gh run list --workflow="$WORKFLOW_FILE" -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --workflow=benchmark-chatterbox.yaml -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
 
 if [ -z "$RUN_ID" ]; then
     echo -e "${RED}Error: Could not get workflow run ID.${NC}"
@@ -271,71 +267,72 @@ echo ""
 if [ "$WATCH" = "true" ]; then
     echo -e "${YELLOW}Watching workflow run...${NC}"
     echo ""
-
+    
     # Watch the workflow until completion
     gh run watch "$RUN_ID" -R "$REPO"
-
+    
     # Get the run status
     RUN_STATUS=$(gh run view "$RUN_ID" -R "$REPO" --json conclusion --jq '.conclusion')
-
+    
     if [ "$RUN_STATUS" != "success" ]; then
         echo -e "${RED}Workflow failed with status: $RUN_STATUS${NC}"
         echo "Check the logs at: https://github.com/$REPO/actions/runs/$RUN_ID"
         exit 1
     fi
-
+    
     echo ""
     echo -e "${GREEN}Workflow completed successfully!${NC}"
     echo ""
     echo -e "${YELLOW}Downloading benchmark results...${NC}"
-
+    
     # Create temp directory for artifacts
     TEMP_DIR=$(mktemp -d)
     trap "rm -rf $TEMP_DIR" EXIT
-
+    
     # Download the benchmark results artifact
     ARTIFACT_NAME="chatterbox-benchmark-results-v${ADDON_VERSION}"
     gh run download "$RUN_ID" -R "$REPO" -n "$ARTIFACT_NAME" -D "$TEMP_DIR" 2>/dev/null || {
+        # Try with just "chatterbox-benchmark-results" pattern if version-specific fails
         gh run download "$RUN_ID" -R "$REPO" -p "chatterbox-benchmark-results-*" -D "$TEMP_DIR" 2>/dev/null || {
             echo -e "${RED}Error: Could not download benchmark artifacts.${NC}"
             exit 1
         }
     }
-
+    
     echo -e "${GREEN}Artifacts downloaded.${NC}"
     echo ""
-
-    # Find the addon results file (saved as chatterbox_addon.md)
+    
+    # Find the addon results file
     ADDON_RESULTS_FILE=$(find "$TEMP_DIR" -name "*_addon.md" -type f | head -1)
-
+    
     if [ -z "$ADDON_RESULTS_FILE" ] || [ ! -f "$ADDON_RESULTS_FILE" ]; then
         echo -e "${RED}Error: Could not find addon results file.${NC}"
         echo "Contents of temp directory:"
         find "$TEMP_DIR" -type f
         exit 1
     fi
-
+    
     echo -e "${YELLOW}Parsing benchmark results...${NC}"
     echo ""
-
+    
     # Parse metrics from the addon results file (macOS compatible using grep + awk)
     ADDON_CONTENT=$(cat "$ADDON_RESULTS_FILE")
-
+    
     # Extract Addon Average RTF (e.g., **Average RTF:** 6.7758)
     ADDON_RTF=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average RTF:\*\*' | awk -F':**' '{print $2}' | tr -d ' ' | head -1)
     [ -z "$ADDON_RTF" ] && ADDON_RTF="N/A"
-
+    
     # Extract Average WER (e.g., - **Average WER:** 3.57%)
     AVG_WER=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average WER:\*\*' | awk -F':**' '{print $2}' | tr -d ' ' | head -1)
     [ -z "$AVG_WER" ] && AVG_WER="N/A"
-
+    
     # Extract Average CER (e.g., - **Average CER:** 1.00%)
     AVG_CER=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average CER:\*\*' | awk -F':**' '{print $2}' | tr -d ' ' | head -1)
     [ -z "$AVG_CER" ] && AVG_CER="N/A"
-
+    
     # Get current date
     DATE=$(date '+%Y-%m-%d %H:%M:%S')
-
+    
     echo -e "${GREEN}Parsed Results:${NC}"
     echo "  Date:           $DATE"
     echo "  Model:          chatterbox"
@@ -349,29 +346,29 @@ if [ "$WATCH" = "true" ]; then
     echo "  Run ID:         $RUN_ID"
     echo "  Branch:         $BRANCH"
     echo ""
-
+    
     # Save to CSV if output path is set
     if [ -n "$CSV_OUTPUT" ]; then
         # Ensure output directory exists
         CSV_DIR=$(dirname "$CSV_OUTPUT")
         mkdir -p "$CSV_DIR"
-
+        
         # Create CSV header if file doesn't exist
         if [ ! -f "$CSV_OUTPUT" ]; then
             echo "Date,Model,Variant,RTF,WER,CER,Run_ID,Branch,Dataset,Addon_Version" > "$CSV_OUTPUT"
             echo -e "${GREEN}Created new CSV file: $CSV_OUTPUT${NC}"
         fi
-
+        
         # Append results to CSV
         echo "\"$DATE\",\"chatterbox\",\"$MODEL_VARIANT\",\"$ADDON_RTF\",\"$AVG_WER\",\"$AVG_CER\",\"$RUN_ID\",\"$BRANCH\",\"$DATASET\",\"$ADDON_VERSION\"" >> "$CSV_OUTPUT"
-
+        
         echo -e "${GREEN}Results appended to: $CSV_OUTPUT${NC}"
     fi
-
+    
     # Save to Google Sheets using direct API
     if [ -n "$SHEET_ID" ]; then
         echo -e "${YELLOW}Sending results to Google Sheets...${NC}"
-
+        
         # Check if gcloud is installed
         if ! command -v gcloud &> /dev/null; then
             echo -e "${RED}Error: gcloud CLI is not installed.${NC}"
@@ -380,7 +377,7 @@ if [ "$WATCH" = "true" ]; then
         else
             # Get OAuth token
             ACCESS_TOKEN=$(gcloud auth print-access-token 2>/dev/null)
-
+            
             if [ -z "$ACCESS_TOKEN" ]; then
                 echo -e "${RED}Error: Not authenticated with gcloud.${NC}"
                 echo "Please run: gcloud auth login"
@@ -396,43 +393,43 @@ EOF
 )
                 # URL encode the sheet name
                 ENCODED_SHEET_NAME=$(echo "$SHEET_NAME" | sed 's/ /%20/g')
-
+                
                 # Append to Google Sheets using Sheets API
                 SHEETS_API_URL="https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${ENCODED_SHEET_NAME}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
-
+                
                 SHEET_RESPONSE=$(curl -s -X POST \
                     -H "Authorization: Bearer $ACCESS_TOKEN" \
                     -H "Content-Type: application/json" \
                     -d "$ROW_DATA" \
                     "$SHEETS_API_URL" 2>&1)
-
+                
                 # Check response
                 if echo "$SHEET_RESPONSE" | grep -q '"updatedRows"'; then
                     echo -e "${GREEN}Results added to Google Sheets successfully!${NC}"
                 elif echo "$SHEET_RESPONSE" | grep -q '"error"'; then
                     echo -e "${RED}Warning: Failed to add to Google Sheets${NC}"
                     echo "Full response: $SHEET_RESPONSE"
-
+                    
                     # Check if sheet doesn't exist and create header
                     if echo "$SHEET_RESPONSE" | grep -q "Unable to parse range"; then
                         echo -e "${YELLOW}Sheet '$SHEET_NAME' may not exist. Creating with headers...${NC}"
-
+                        
                         # Create header row
                         HEADER_DATA='{"values": [["Date", "Model", "Variant", "RTF", "WER", "CER", "Run_ID", "Branch", "Dataset", "Addon_Version"]]}'
-
+                        
                         curl -s -X PUT \
                             -H "Authorization: Bearer $ACCESS_TOKEN" \
                             -H "Content-Type: application/json" \
                             -d "$HEADER_DATA" \
                             "https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${ENCODED_SHEET_NAME}!A1?valueInputOption=USER_ENTERED" > /dev/null
-
+                        
                         # Retry append
                         SHEET_RESPONSE=$(curl -s -X POST \
                             -H "Authorization: Bearer $ACCESS_TOKEN" \
                             -H "Content-Type: application/json" \
                             -d "$ROW_DATA" \
                             "$SHEETS_API_URL" 2>&1)
-
+                        
                         if echo "$SHEET_RESPONSE" | grep -q '"updatedRows"'; then
                             echo -e "${GREEN}Results added to Google Sheets successfully!${NC}"
                         fi
@@ -444,7 +441,7 @@ EOF
         fi
     fi
     echo ""
-
+    
     # Display the full addon results file
     echo -e "${YELLOW}Full Chatterbox Benchmark Results:${NC}"
     echo "----------------------------------------"
@@ -452,7 +449,7 @@ EOF
     echo "----------------------------------------"
 else
     echo "View the workflow run at:"
-    echo "  gh run list --workflow=$WORKFLOW_FILE -R $REPO"
+    echo "  gh run list --workflow=benchmark-chatterbox.yaml -R $REPO"
     echo ""
     echo "Or watch the latest run:"
     echo "  gh run watch $RUN_ID -R $REPO"

@@ -202,12 +202,19 @@ jobs:
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Install g++-13 on Ubuntu 22.04
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('vcpkg.json') }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -241,7 +248,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\ccache
-          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('vcpkg.json') }}
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 
@@ -464,6 +471,11 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: find prebuilds -name "*.bare" -exec strip {} \;
+
+      - name: Strip debug symbols (skip windows and android)
+        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
+        shell: bash
+        run: find ${{ env.WORKDIR }}/prebuilds -name "*.bare" -exec strip {} \;
 
       - name: Show ccache stats
         run: ccache -s

@@ -21,10 +21,10 @@ def _get_results_root() -> Path:
 
 
 def _get_model_name(cfg: Config) -> str:
-    """Return model name for result files: stem of modelPath for Piper, 'chatterbox' for Chatterbox."""
-    if getattr(cfg.model, "is_chatterbox", False) and cfg.model.is_chatterbox:
-        return "chatterbox"
-    return Path(cfg.model.modelPath).stem if cfg.model.modelPath else "unknown"
+    """Get model name from config (handles both Piper and Chatterbox configs)"""
+    # Chatterbox uses modelDir, Piper uses modelPath
+    model_path = getattr(cfg.model, 'modelPath', None) or getattr(cfg.model, 'modelDir', None)
+    return Path(model_path).stem if model_path else "chatterbox"
 
 
 def calculate_percentiles(values: List[float]) -> Dict[str, float]:
@@ -51,6 +51,7 @@ def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_
         round_trip_metrics: Optional round-trip quality metrics (WER/CER)
     """
     results_root = _get_results_root()
+    
     model_name = _get_model_name(cfg)
     md_path = results_root / f"{model_name}_{label}.md"
     
@@ -231,6 +232,7 @@ def round_trip_quality_test(
 def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_runs: List[TTSResults], round_trip_results: Optional[Dict] = None):
     """Save comparison report between addon and python implementations"""
     results_root = _get_results_root()
+    
     model_name = _get_model_name(cfg)
     md_path = results_root / f"{model_name}_comparison.md"
     

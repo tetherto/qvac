@@ -96,13 +96,13 @@ const handleRequest = async (req, res) => {
         version,
         endpoints: {
           '/': 'Health check',
-          '/synthesize': 'POST - Run TTS synthesis',
+          '/synthesize-tts': 'POST - Run Piper TTS synthesis',
           '/synthesize-chatterbox': 'POST - Run Chatterbox TTS synthesis'
         }
       }))
     }
 
-    if (pathname === '/synthesize' && method === HTTP_METHODS.POST) {
+    if (pathname === '/synthesize-tts' && method === HTTP_METHODS.POST) {
       const validated = TTSRequestSchema.parse(body)
       const result = await runTTS(validated)
       return res.end(JSON.stringify(result))

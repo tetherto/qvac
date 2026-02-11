@@ -12,6 +12,7 @@ const embedTokensPath = 'models/chatterbox/embed_tokens.onnx'
 const conditionalDecoderPath = 'models/chatterbox/conditional_decoder.onnx'
 const languageModelPath = 'models/chatterbox/language_model.onnx'
 
+// Reference audio path for voice cloning
 const refWavPath = path.join(__dirname, 'ref.wav')
 
 async function main () {
@@ -30,6 +31,8 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
+  // Reference audio for Chatterbox voice cloning.
+  // Load from ref.wav; falls back to synthetic tone if missing.
   let referenceAudio
   try {
     const { samples, sampleRate } = readWavAsFloat32(refWavPath)
@@ -43,6 +46,7 @@ async function main () {
     throw err
   }
 
+  // Chatterbox configuration
   const chatterboxArgs = {
     tokenizerPath,
     speechEncoderPath,
@@ -91,6 +95,7 @@ async function main () {
     }
 
     console.log('Writing to .wav file...')
+    // Chatterbox uses 24kHz sample rate
     createWav(buffer, 24000, 'chatterbox-output.wav')
     console.log('Finished writing to chatterbox-output.wav')
   } catch (err) {

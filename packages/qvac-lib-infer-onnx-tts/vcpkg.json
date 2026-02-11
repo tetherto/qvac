@@ -16,23 +16,17 @@
     },
     {
       "name": "onnxruntime",
-      "features": [
-        "dml-ep"
-      ],
+      "features": ["dml-ep"],
       "platform": "windows"
     },
     {
       "name": "onnxruntime",
-      "features": [
-        "coreml-ep"
-      ],
+      "features": ["coreml-ep"],
       "platform": "ios | osx"
     },
     {
       "name": "onnxruntime",
-      "features": [
-        "nnapi-ep"
-      ],
+      "features": ["nnapi-ep"],
       "platform": "android"
     },
     "espeak-ng",
@@ -66,4 +60,4 @@
       "version": "0.12.2"
     }
   ]
-}
+} 

@@ -1,0 +1,22 @@
+{
+  "description": "Release with breaking changes",
+  "input": {
+    "commitLog": [
+      "abc1234 Merge pull request #200 from user/breaking-config"
+    ],
+    "prs": [
+      {
+        "number": 200,
+        "title": "QVAC-200 feat[bc]: replace setConfig with config file",
+        "body": "## Breaking Changes\n\n**BEFORE:**\n```ts\nawait setConfig({ cache: '/path' })\n```\n\n**AFTER:**\n```json\n{ \"cacheDirectory\": \"/path\" }\n```",
+        "url": "https://github.com/tetherto/qvac/pull/200"
+      }
+    ]
+  },
+  "expected": {
+    "prNumbers": [200],
+    "includedInChangelog": [200],
+    "hasBreakingMd": true,
+    "beforeAfterExtracted": true
+  }
+}

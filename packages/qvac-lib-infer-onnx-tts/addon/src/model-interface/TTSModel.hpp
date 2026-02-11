@@ -43,7 +43,7 @@ public:
   Output process(const Input& text);
   Output process(const Input& text, const std::function<void(const Output&)>& consumer);
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
-
+  
   // Set reference audio for Chatterbox voice cloning
   void setReferenceAudio(const std::vector<float>& referenceAudio);
 
@@ -54,7 +54,7 @@ private:
   TTSConfig piperConfig_;
   chatterbox::ChatterboxConfig chatterboxConfig_;
   bool configSet_ = false;
-
+  
   double totalTime_ = 0.0;
   double tokensPerSecond_ = 0.0;
   double realTimeFactor_ = 0.0;
@@ -62,7 +62,7 @@ private:
   int64_t totalSamples_ = 0;
   size_t textLength_ = 0;
   bool loaded_ = false;
-
+  
   EngineType detectEngineType(const std::unordered_map<std::string, std::string>& configMap) const;
   qvac::ttslib::TTSConfig createTTSConfig(const std::unordered_map<std::string, std::string>& configMap);
   chatterbox::ChatterboxConfig createChatterboxConfig(const std::unordered_map<std::string, std::string>& configMap);

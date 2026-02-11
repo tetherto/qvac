@@ -28,6 +28,20 @@ jobs:
     if: github.ref_name == 'main'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
     secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
+
+  mobile-integration-tests:
+    needs: prebuild-main
+    if: github.ref_name == 'main'
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   prebuild-release:
     if: startsWith(github.ref_name, 'release-')
@@ -37,3 +51,36 @@ jobs:
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
+
+  run-integration-tests-release:
+    needs: prebuild-release
+    if: startsWith(github.ref_name, 'release-')
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
+
+  mobile-integration-tests-release:
+    needs: prebuild-release
+    if: startsWith(github.ref_name, 'release-')
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
+
+  publish-release:
+    needs: prebuild-release
+    if: startsWith(github.ref_name, 'release-') && needs.prebuild-release.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.prebuild-release.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: packages/qvac-lib-infer-onnx-tts

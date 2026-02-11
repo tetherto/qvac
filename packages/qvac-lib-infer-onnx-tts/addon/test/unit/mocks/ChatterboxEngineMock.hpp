@@ -4,7 +4,7 @@
 
 namespace qvac::ttslib::chatterbox::testing {
 
-class ChatterboxEngineMock : public IChatterboxEngine {
+class ChatterboxEngineMock : public chatterbox::IChatterboxEngine {
 public:
   ChatterboxEngineMock() = default;
   ~ChatterboxEngineMock() = default;

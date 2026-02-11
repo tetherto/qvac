@@ -7,16 +7,17 @@
 #include "AudioResult.hpp"
 
 namespace qvac::ttslib {
-  struct TTSConfig {
-    std::string modelPath;
-    std::string configJsonPath;
-    std::string language;
-    std::string eSpeakDataPath;
-    std::string tashkeelModelDir; // Path to Tashkeel model directory for Arabic
-                                  // diacritization
-    bool useGPU = false;
-  };
-}
+
+struct TTSConfig {
+  std::string modelPath;
+  std::string configJsonPath;
+  std::string language;
+  std::string eSpeakDataPath;
+  std::string tashkeelModelDir; // Path to Tashkeel model directory for Arabic diacritization                               // 
+  bool useGPU = false;
+};
+
+} // namespace qvac::ttslib
 
 namespace qvac::ttslib::piper {
 

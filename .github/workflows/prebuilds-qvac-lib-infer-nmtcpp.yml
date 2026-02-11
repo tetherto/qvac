@@ -292,15 +292,11 @@ jobs:
           sudo apt install -y vulkan-sdk
 
       - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
-        name: Cache Vulkan SDK for linux arm64
-        id: cache-vulkan-arm64
-        uses: actions/cache@v4
-        with:
-          path: ~/vulkan
-          key: vulkan-sdk-linux-arm64-v1
-
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
-        name: Build Vulkan SDK for linux arm64
+        name: Build Vulkan SDK for linux arm64 (with S3 cache)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           sudo apt install -y xz-utils
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
@@ -308,7 +304,29 @@ jobs:
           mkdir -p vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
-          ./vulkansdk --maxjobs
+
+          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+          S3_BUCKET="tether-ai-dev"
+          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
+
+          echo "Vulkan SDK version: ${SDK_VERSION}"
+
+          # Try to download cached build from S3
+          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
+            echo "Found cached Vulkan SDK, extracting..."
+            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          else
+            echo "No cache found, building Vulkan SDK for ARM64..."
+            ./vulkansdk --maxjobs
+
+            # Upload the compiled SDK to S3 for future runs
+            echo "Uploading compiled SDK to S3..."
+            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
+            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          fi
 
       - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
         name: Setup Vulkan SDK environment for linux arm64
