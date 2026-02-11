@@ -1,0 +1,58 @@
+diff --git a/rust/Cargo.toml b/rust/Cargo.toml
+index f875fac..a913fb1 100644
+--- a/rust/Cargo.toml
++++ b/rust/Cargo.toml
+@@ -11,3 +11,4 @@ crate-type = ["staticlib"]
+ tokenizers = { version = "0.21.0", default-features = false, features = ["onig"] }
+ serde = { version = "1.0", features = [ "derive" ] }
+ serde_json = "1.0"
++ahash = "0.8"
+diff --git a/rust/src/lib.rs b/rust/src/lib.rs
+index e8c94a3..fdc03a1 100644
+--- a/rust/src/lib.rs
++++ b/rust/src/lib.rs
+@@ -1,6 +1,7 @@
+ // A simple C wrapper of tokenzier library
++use ahash::AHashMap;
+ use serde_json::Value;
+-use std::{collections::HashMap, str::FromStr};
++use std::str::FromStr;
+ use tokenizers::models::bpe::BPE;
+ use tokenizers::pre_tokenizers::byte_level::ByteLevel;
+ use tokenizers::tokenizer::Tokenizer;
+@@ -11,7 +12,7 @@ pub struct TokenizerWrapper {
+     id_to_token_result: String,
+ }
+ 
+-pub type Vocab = HashMap<String, u32>;
++pub type Vocab = AHashMap<String, u32>;
+ pub type Merges = Vec<(String, String)>;
+ 
+ #[repr(C)]
+@@ -36,7 +37,7 @@ impl TokenizerWrapper {
+     ) -> TokenizerWrapper {
+         let vocab_json: Value = serde_json::from_str(vocab).unwrap();
+         let added_tokens_json: Value = serde_json::from_str(added_tokens).unwrap();
+-        let mut vocab = HashMap::new();
++        let mut vocab = AHashMap::new();
+         match vocab_json {
+             Value::Object(m) => {
+                 for (token, id) in m {
+@@ -215,7 +216,7 @@ extern "C" fn tokenizers_get_decode_str(
+ ) {
+     unsafe {
+         *out_cstr = (*handle).decode_str.as_mut_ptr();
+-        *out_len = (*handle).decode_str.len();
++        *out_len = (&(*handle).decode_str).len();
+     }
+ }
+ 
+@@ -248,7 +249,7 @@ extern "C" fn tokenizers_id_to_token(
+         };
+ 
+         *out_cstr = (*handle).id_to_token_result.as_mut_ptr();
+-        *out_len = (*handle).id_to_token_result.len();
++        *out_len = (&(*handle).id_to_token_result).len();
+     }
+ }
+ 
