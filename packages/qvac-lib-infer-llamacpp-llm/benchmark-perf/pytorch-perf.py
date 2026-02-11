@@ -147,6 +147,36 @@ def load_torch_model(
     return model, tokenizer
 
 
+def determine_max_threads(config, params_to_run, quick):
+    baseline_threads = int(config.get("baseline", {}).get("threads", "0") or 0)
+    if "threads" not in params_to_run:
+        return baseline_threads if baseline_threads > 0 else os.cpu_count() or 1
+
+    values = config.get("params", {}).get("threads", [])
+    if quick:
+        values = pick_quick_values(values, config.get("baseline", {}).get("threads"))
+
+    resolved = []
+    for raw in values or []:
+        resolved_value = resolve_param_value(raw)
+        if resolved_value is None or resolved_value == "":
+            continue
+        try:
+            resolved.append(int(resolved_value))
+        except ValueError:
+            continue
+
+    if baseline_threads > 0:
+        resolved.append(baseline_threads)
+
+    if not resolved:
+        return os.cpu_count() or 1
+
+    # Interop threads can only be set once per process, so we pick the max
+    # value the sweep might request and set it up-front.
+    return max(resolved)
+
+
 def run_once(baseline, model_config, prompt, param_name, param_value, rep_index, output_path, hf_token):
     resolved_value = resolve_param_value(param_value)
     config = dict(baseline)
@@ -172,7 +202,6 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
     threads = int(config.get("threads", "0") or 0)
     if threads > 0:
         torch.set_num_threads(threads)
-        torch.set_num_interop_threads(max(1, threads // 2))
 
     log(
         f"Starting run: model={model_config['id']} {param_name}={resolved_value} "
@@ -266,8 +295,8 @@ def run_once(baseline, model_config, prompt, param_name, param_value, rep_index,
 
     end_time = time.time()
 
-    total_gen_time = max(end_time - gen_start, 1e-6)
-    generation_time = max(total_gen_time - (first_token_ms / 1000.0 if first_token_ms else 0), 1e-6)
+    # Generation timing only covers the generate() loop; TTFT is measured earlier.
+    generation_time = max(end_time - gen_start, 1e-6)
     tokens_after_first = max(total_generated_tokens - batch_size, 0)
     tps = tokens_after_first / generation_time
     output_tokens = total_generated_tokens
@@ -339,6 +368,9 @@ def main():
     if hf_token:
         os.environ["HF_TOKEN"] = hf_token
     quantization_values = supported_quantization_values(config)
+    max_threads = determine_max_threads(config, params_to_run, args.quick)
+    if max_threads > 0:
+        torch.set_num_interop_threads(max(1, max_threads // 2))
 
     for model_config in models_to_run:
         for param_name in params_to_run:
