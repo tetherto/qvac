@@ -7,6 +7,11 @@ const LOG_LEVELS = {
 }
 
 export function createLogger (level = 'info') {
+  if (!(level in LOG_LEVELS)) {
+    const validLevels = Object.keys(LOG_LEVELS).join(', ')
+    console.warn(`Invalid log level "${level}", falling back to "info". Valid levels: ${validLevels}`)
+  }
+
   const currentLevel = LOG_LEVELS[level] ?? LOG_LEVELS.info
 
   return {
@@ -27,7 +32,7 @@ export function createLogger (level = 'info') {
     },
     debug (message) {
       if (currentLevel >= LOG_LEVELS.debug) {
-        console.log(message)
+        console.debug(message)
       }
     }
   }
