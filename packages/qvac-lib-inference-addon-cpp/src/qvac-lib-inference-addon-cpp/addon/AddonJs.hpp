@@ -30,6 +30,13 @@ public:
 
   ~AddonJs() = default;
 
+  /// @returns JavaScript Boolean that indicates if the job was run
+  /// successfully. Can be false because a job is already set or being
+  /// processed.
+  js_value_t* runJob(std::any input) {
+    return js::Boolean::create(env_, addonCpp->runJob(std::move(input)));
+  }
+
   /**
    * @brief Cancels the currently running job asynchronously
    * @param env JavaScript environment handle

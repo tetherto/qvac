@@ -30,23 +30,22 @@ public:
   void stop() override { stopped_ = true; }
 };
 
-TEST(AddonJsTest, CanInstantiateAddonJs) {
+AddonJs createTestAddonJs() {
   js_env_t env;
   auto outputCallback = std::make_unique<MockOutputCallback>();
   auto model = std::make_unique<MockModel>();
+  return AddonJs(&env, std::move(outputCallback), std::move(model));
+}
 
-  AddonJs addon(&env, std::move(outputCallback), std::move(model));
+TEST(AddonJsTest, CanInstantiateAddonJs) {
+  auto addon = createTestAddonJs();
 
   EXPECT_NE(addon.addonCpp, nullptr);
   EXPECT_EQ(addon.addonCpp->model.get().getName(), "MockModel");
 }
 
 TEST(AddonJsTest, AddonCppIsAccessibleViaAddonJs) {
-  js_env_t env;
-  auto outputCallback = std::make_unique<MockOutputCallback>();
-  auto model = std::make_unique<MockModel>();
-
-  AddonJs addon(&env, std::move(outputCallback), std::move(model));
+  auto addon = createTestAddonJs();
 
   // Verify the shared_ptr to AddonCpp is valid and accessible
   ASSERT_NE(addon.addonCpp, nullptr);
@@ -54,6 +53,29 @@ TEST(AddonJsTest, AddonCppIsAccessibleViaAddonJs) {
   // The model reference should be accessible through AddonCpp
   const model::IModel& modelRef = addon.addonCpp->model.get();
   EXPECT_EQ(modelRef.getName(), "MockModel");
+}
+
+TEST(AddonJsTest, RunJobRValue) {
+  auto addon = createTestAddonJs();
+  std::string testInput = "test-data";
+  EXPECT_NO_THROW(addon.runJob(std::any(std::move(testInput))));
+}
+
+TEST(AddonJsTest, RunJobUsesMoveSemantics) {
+  auto addon = createTestAddonJs();
+
+  // Prepare the test input and wrap it in a std::any
+  std::string testInput = "test-data";
+  std::any inputAny = testInput;
+
+  // Call runJob with std::move - intentionally moving inputAny
+  EXPECT_NO_THROW(addon.runJob(std::move(inputAny)));
+}
+
+TEST(AddonJsTest, CancelJobInvokesAddonCppCancelJob) {
+  auto addon = createTestAddonJs();
+  // No exception should be thrown
+  EXPECT_NO_THROW(addon.cancelJob());
 }
 
 } // namespace qvac_lib_inference_addon_cpp

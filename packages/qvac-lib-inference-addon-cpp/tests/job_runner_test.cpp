@@ -240,27 +240,10 @@ TEST_F(JobRunnerTest, CannotRunJobWhileProcessing) {
   jobRunner_->start();
 
   // Start first job
-  jobRunner_->runJob(std::string("test input 1"));
+  EXPECT_TRUE(jobRunner_->runJob(std::string("test input 1")));
 
   // Immediately try to start another
-  std::this_thread::sleep_for(std::chrono::milliseconds{10});
-  jobRunner_->runJob(std::string("test input 2"));
-
-  // Wait for processing
-  std::this_thread::sleep_for(std::chrono::milliseconds{300});
-
-  auto outputs = outputQueue_->clear();
-
-  // Should have error from second job attempt
-  bool found_error = false;
-  for (const auto& output : outputs) {
-    if (output.type() == typeid(Output::Error)) {
-      found_error = true;
-      auto error = std::any_cast<Output::Error>(output);
-      EXPECT_NE(error.find("Cannot set new job"), std::string::npos);
-    }
-  }
-  EXPECT_TRUE(found_error);
+  EXPECT_FALSE(jobRunner_->runJob(std::string("test input 2")));
 }
 
 // Stress test: multiple rapid cancel calls

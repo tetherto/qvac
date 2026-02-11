@@ -111,8 +111,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) {
   std::string text = inputObj.getPropertyAs<js::String, std::string>(env, "input");
   
   // Run the job with input wrapped in std::any
-  instance.addonCpp->runJob(std::any(std::move(text)));
-  return nullptr;
+  return instance.runJob(std::any(std::move(text)));
 }
 ```
 ### Exporting JavaScript Bindings

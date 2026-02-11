@@ -44,8 +44,8 @@ private:
 
 class JobRunner {
   std::shared_ptr<OutputQueue> outputQueue_;
-  model::IModel *const model_;
-  model::IModelCancel *const modelCancel_;
+  model::IModel* const model_;
+  model::IModelCancel* const modelCancel_;
   mutable std::timed_mutex mtx_;
   mutable std::condition_variable_any processCv_;
   std::optional<std::any> job_;
@@ -54,7 +54,7 @@ class JobRunner {
   mutable std::atomic_bool ready_ = false;
   mutable ProcessingSync processingSync_;
 
-  void finalizeJob(std::unique_lock<std::timed_mutex> &lock) {
+  void finalizeJob(std::unique_lock<std::timed_mutex>& lock) {
     processingSync_.setActive(false);
     if (!lock.owns_lock()) {
       lock.lock();
@@ -91,7 +91,7 @@ class JobRunner {
 
         outputQueue_->queueResult(std::move(output));
         outputQueue_->queueJobEnded();
-      } catch (const std::exception &e) {
+      } catch (const std::exception& e) {
         finalizeJob(lock);
         outputQueue_->queueException(e);
       } catch (...) {
@@ -103,9 +103,9 @@ class JobRunner {
   }
 
 public:
-  explicit JobRunner(std::shared_ptr<OutputQueue> outputQueue,
-                     model::IModel *model,
-                     model::IModelCancel *modelCancel = nullptr)
+  explicit JobRunner(
+      std::shared_ptr<OutputQueue> outputQueue, model::IModel* model,
+      model::IModelCancel* modelCancel = nullptr)
       : outputQueue_(std::move(outputQueue)), model_(model),
         modelCancel_(modelCancel) {}
 
@@ -133,17 +133,20 @@ public:
     }
   }
 
-  void runJob(std::any input) {
+  bool runJob(std::any input) {
     std::unique_lock lock(mtx_, std::defer_lock);
     if (!lock.try_lock_for(std::chrono::milliseconds{100}) ||
         job_.has_value()) {
-      outputQueue_->queueException(std::runtime_error(
-          "Cannot set new job: a job is already set or being processed"));
-      return;
+      // Do not queue exception, there could be another job already
+      // running and we want to keep the messages on queue matching
+      // the valid jobs.
+      // Return a boolean instead.
+      return false;
     }
     job_ = std::move(input);
     lock.unlock();
     processCv_.notify_one();
+    return true;
   }
 
   void cancel() {
