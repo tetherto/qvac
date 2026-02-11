@@ -55,7 +55,7 @@ jobs:
         if: steps.version.outputs.bumped == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.current }}
+          tag_name: ocr-onnx-v${{ steps.version.outputs.current }}
           name: QVAC OCR Addon v${{ steps.version.outputs.current }}
           body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
         env:

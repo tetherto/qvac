@@ -66,8 +66,8 @@ async function downloadFile (url, destPath) {
  */
 async function ensureModelPath (modelName) {
   const modelFilename = `${modelName}.onnx`
-  // Models are now in rec_512 subdirectory
-  const relativePath = `models/ocr/rec_512/${modelFilename}`
+  // Models are now in rec_dyn subdirectory (dynamic width models)
+  const relativePath = `models/ocr/rec_dyn/${modelFilename}`
 
   if (!isMobile) {
     const fullPath = path.resolve('.', relativePath)
