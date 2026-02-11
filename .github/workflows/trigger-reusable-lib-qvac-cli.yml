@@ -106,8 +106,6 @@ jobs:
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-        with:
-          workdir: packages/qvac-cli
 
       - name: Publish to GitHub Packages (dev)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
@@ -141,8 +139,6 @@ jobs:
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-        with:
-          workdir: packages/qvac-cli
 
       - name: Publish to GitHub Packages (feature)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
@@ -168,8 +164,6 @@ jobs:
 
       - name: Rewrite SDK scope for GPR
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
-        with:
-          workdir: packages/qvac-cli
 
       - name: Publish to GitHub Packages (tmp)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
