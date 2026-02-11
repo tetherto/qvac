@@ -68,7 +68,7 @@ Addon<BertModel>::append(int priority, BertModel::InputView inputView) {
   // Convert InputView (variant) to Input (variant) by copying
   BertModel::Input input = inputView;
   uint32_t jobId = 0;
-  constexpr int K_DEFAULT_PRIORITY = 50;
+  constexpr int kDefaultPriority = 50;
   {
     std::scoped_lock lock{mtx_};
     if (lastAppendedJob_ != nullptr) {
@@ -79,7 +79,7 @@ Addon<BertModel>::append(int priority, BertModel::InputView inputView) {
       jobId = lastAppendedJob_->id;
       try {
         jobQueue_.emplace(
-            priority == -1 ? K_DEFAULT_PRIORITY : priority, std::move(newJob));
+            priority == -1 ? kDefaultPriority : priority, std::move(newJob));
       } catch (...) {
         lastAppendedJob_ = nullptr;
         throw;

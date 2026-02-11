@@ -382,7 +382,7 @@ void BertModel::init(
   // Extract and set verbosity level from config (modifies configCopy)
   std::string configCopy = config;
   auto verbosityConfig = extractVerbosityConfig(configCopy);
-  SetVerbosityLevel(verbosityConfig);
+  setVerbosityLevel(verbosityConfig);
   lazyCommonInit();
   initializeBackend(backendsDir);
 
