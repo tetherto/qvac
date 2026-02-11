@@ -11,6 +11,12 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/qvac-lib-inference-addon-onnx-ocr-fasttext"
   workflow_dispatch:
     inputs:
       ref:
@@ -21,7 +27,7 @@ on:
       package:
         description: "Full NPM package spec to test (default: @qvac/ocr-onnx@latest)"
         type: string
-        required: false
+        required: true
         default: '@qvac/ocr-onnx@latest'
 
 env:
@@ -101,23 +107,23 @@ jobs:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          qvac_registry="https://registry.npmjs.org/"
 
-          # Addon .npmrc (inside package folder)
-          mkdir -p "addon/${{ env.PKG_DIR }}"
-          cat > "addon/${{ env.PKG_DIR }}/.npmrc" <<NPMRC
+          # Configure addon registry
+          cd addon/${{ inputs.workdir || env.PKG_DIR }}
+          cat > .npmrc <<NPMRC
+          always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          # Test-framework .npmrc (always npmjs for public @qvac deps)
-          cat > "test-framework/.npmrc" <<NPMRC
+          # Configure test-framework registry (always npmjs for public @qvac deps)
+          cd $GITHUB_WORKSPACE/test-framework
+          cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -126,38 +132,41 @@ jobs:
           NPMRC
 
           # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
 
-      - name: Download prebuilds (from artifacts)
-        if: github.event_name != 'workflow_dispatch'
+      - name: Download Android prebuilds (from artifacts)
+        if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds
-          path: addon/${{ env.PKG_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
+          path: addon/${{ inputs.workdir || env.PKG_DIR }}/prebuilds
           merge-multiple: true
+        continue-on-error: true
 
-      - name: Download prebuilds (from npm - workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        working-directory: ./addon/${{ env.PKG_DIR }}
-        shell: bash
+      - name: Download iOS prebuilds (from artifacts)
+        if: matrix.platform == 'iOS' && !inputs.package
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
+          path: addon/${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download prebuilds from package
+        if: inputs.package
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         run: |
           PACKAGE_SPEC="${{ inputs.package }}"
           echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
 
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
-
-          # Force @qvac registry to npmjs for manual downloads (project-level)
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
 
           if ! npm pack "$PACKAGE_SPEC"; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
@@ -165,40 +174,49 @@ jobs:
             exit 1
           fi
 
+          # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
+          # Validate prebuilds directory exists
           if [ ! -d "package/prebuilds" ]; then
             echo "ERROR: No prebuilds directory found in package"
             echo "The downloaded package may not contain prebuilt binaries"
             exit 1
           fi
 
-          mkdir -p prebuilds
-          rm -rf prebuilds/*
-          mv package/prebuilds/* ./prebuilds/
+          # Move prebuilds to expected location
+          mv package/prebuilds ./prebuilds
 
+          # Cleanup
           rm -rf package *.tgz
 
           echo "✅ Prebuilds downloaded from npm:"
           ls -la prebuilds/
 
       - name: Verify and prepare prebuilds
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "Checking for prebuilds..."
-          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds 2>/dev/null)" ]; then
-            echo "✅ Prebuilds found:"
+          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+            echo "✅ Prebuilds found from artifacts:"
             ls -la prebuilds/
           else
-            echo "❌ ERROR: No prebuilds found!"
-            echo "   This workflow requires prebuilds to be available."
-            echo "   Either:"
-            echo "   1. Run this workflow after prebuild job completes"
-            echo "   2. Or commit prebuilds to the repository (not recommended)"
-            exit 1
+            echo "⚠️  No prebuilds from artifacts, checking source..."
+            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+              echo "✅ Prebuilds found in source:"
+              ls -la prebuilds/
+            else
+              echo "❌ ERROR: No prebuilds found!"
+              echo "   This workflow requires prebuilds to be available."
+              echo "   Either:"
+              echo "   1. Run this workflow after prebuild job completes"
+              echo "   2. Or commit prebuilds to the repository"
+              exit 1
+            fi
           fi
 
+          # Copy mobile prebuilds if needed
           if npm run mobile:copy-prebuilds 2>/dev/null; then
             echo "✅ Mobile prebuilds prepared"
           else
@@ -206,7 +224,7 @@ jobs:
           fi
 
       - name: Remove desktop prebuilds to save disk space
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "Removing desktop prebuilds to save disk space (keeping Android + iOS)..."
@@ -220,7 +238,7 @@ jobs:
           df -h
 
       - name: Verify test files exist
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "Verifying addon has mobile tests..."
@@ -260,17 +278,17 @@ jobs:
           echo "✅ Ninja installed successfully"
 
       - name: Install addon dependencies
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         run: |
           echo "Installing addon dependencies..."
           npm install
 
       - name: Validate mobile tests are up-to-date
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         run: npm run test:mobile:validate
 
       - name: Pack addon
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "Packing addon..."
@@ -303,37 +321,53 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: eu-central-1
 
       - name: Generate presigned URLs for OCR models
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "🔑 Generating presigned URLs for OCR models..."
           chmod +x scripts/generate-ocr-presigned-urls.sh
-          OUTPUT_DIR="${GITHUB_WORKSPACE}/addon/${{ env.PKG_DIR }}/test/mobile/testAssets"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/testAssets"
           mkdir -p "$OUTPUT_DIR"
           OUTPUT_DIR="$OUTPUT_DIR" ./scripts/generate-ocr-presigned-urls.sh
           echo "✅ Presigned URLs generated and saved to testAssets"
           cat "$OUTPUT_DIR/ocr-model-urls.json"
 
       - name: Copy test assets to testAssets
-        working-directory: ./addon/${{ env.PKG_DIR }}
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           echo "📷 Copying test assets to testAssets..."
           ASSETS_DIR="test/mobile/testAssets"
           mkdir -p "$ASSETS_DIR"
-          cp test/images/basic_test.bmp "$ASSETS_DIR/" || true
+          # Copy test images needed for mobile tests
+          # Rename files to avoid Android resource merger conflicts (same base name, different extension)
+          cp test/images/basic_test.bmp "$ASSETS_DIR/basic_test_bmp.bmp"
+          cp test/images/basic_test.jpg "$ASSETS_DIR/basic_test_jpg.jpg"
+          cp test/images/basic_test.png "$ASSETS_DIR/basic_test_png.png"
+          cp test/images/unrecognizable_text.bmp "$ASSETS_DIR/unrecognizable_text.bmp"
+          cp test/images/portuguese.bmp "$ASSETS_DIR/portuguese.bmp"
           echo "✅ Test assets copied"
-          ls -la "$ASSETS_DIR/" || true
+          ls -la "$ASSETS_DIR/"
 
       - name: Build test app with addon
         working-directory: ./test-framework
         shell: bash
         run: |
           echo "Building test app with addon..."
-          ADDON_PATH="${GITHUB_WORKSPACE}/addon/${{ env.PKG_DIR }}"
+          echo "This will:"
+          echo "  1. Install the addon package"
+          echo "  2. Extract test code from addon's test/mobile/ directory"
+          echo "  3. Auto-detect and order test files by dependencies"
+          echo "  4. Generate backend.cjs with test functions"
+          echo "  5. Generate e2e tests for each test function"
+          echo "  6. Copy testAssets if available"
+          echo "  7. Bundle the app"
+          echo ""
+
+          ADDON_PATH="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}"
           npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
 
           echo ""
@@ -427,9 +461,20 @@ jobs:
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
 
+          # Bundle JavaScript
           echo "Bundling JavaScript code..."
           npm run bundle
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Bundle failed"
+            exit 1
+          fi
+
+          echo "✅ Bundle completed successfully"
+
+          # Build RELEASE APK (not debug) to ensure JS bundle is included
+          # Debug builds skip bundling by default and try to connect to Metro
+          # Release builds embed the JS bundle in the APK
           cd android
           echo "Building APK with Gradle (RELEASE with embedded JS bundle)..."
           ./gradlew assembleRelease \
@@ -455,7 +500,8 @@ jobs:
             df -h
           else
             echo "❌ APK file not found"
-            find android/app/build/outputs/apk -type f 2>/dev/null || true
+            echo "Searching in android/app/build/outputs/apk:"
+            find android/app/build/outputs/apk -type f 2>/dev/null || echo "Directory not found"
             exit 1
           fi
 
@@ -550,31 +596,53 @@ jobs:
             exit 1
           fi
 
+          echo "📋 Provisioning Profile Details:"
           security cms -D -i "$PP_FILE" > /tmp/profile.plist
 
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /tmp/profile.plist 2>/dev/null || echo "Unknown")
           PROFILE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+
+          # Detect profile type (Development, Ad Hoc, App Store, Enterprise)
           HAS_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" /tmp/profile.plist 2>/dev/null && echo "yes" || echo "no")
           PROVISIONS_ALL=$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" /tmp/profile.plist 2>/dev/null || echo "false")
           HAS_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /tmp/profile.plist 2>/dev/null || echo "false")
 
           if [[ "$PROVISIONS_ALL" == "true" ]]; then
+            PROFILE_TYPE="Enterprise"
             EXPORT_METHOD="enterprise"
           elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "true" ]]; then
+            PROFILE_TYPE="Development"
             EXPORT_METHOD="development"
           elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "false" ]]; then
+            PROFILE_TYPE="Ad Hoc"
             EXPORT_METHOD="ad-hoc"
           else
+            PROFILE_TYPE="App Store"
             EXPORT_METHOD="app-store"
           fi
 
+          echo "  Name: $PROFILE_NAME"
+          echo "  Type: $PROFILE_TYPE"
+          echo "  Export Method: $EXPORT_METHOD"
+          echo "  Application ID: $PROFILE_BUNDLE_ID"
+          echo "  Team ID: $PROFILE_TEAM_ID"
+          echo "  Expected Bundle ID: ${{ env.APP_BUNDLE_ID }}"
+
+          # Save export method for next step
           echo "EXPORT_METHOD=$EXPORT_METHOD" >> $GITHUB_ENV
 
+          # Extract just the bundle ID part (remove team prefix)
           BUNDLE_ID_ONLY=$(echo "$PROFILE_BUNDLE_ID" | sed 's/^[^.]*\.//')
+
           if [[ "$BUNDLE_ID_ONLY" != "${{ env.APP_BUNDLE_ID }}" ]]; then
             echo ""
             echo "❌ ERROR: Provisioning profile bundle ID mismatch!"
             echo "   Profile has: $BUNDLE_ID_ONLY"
             echo "   Expected: ${{ env.APP_BUNDLE_ID }}"
+            echo ""
+            echo "The provisioning profile was created for a different bundle identifier."
+            echo "Please create a new provisioning profile for: ${{ env.APP_BUNDLE_ID }}"
             exit 1
           fi
 
@@ -601,13 +669,39 @@ jobs:
         shell: bash
         run: |
           echo "Building iOS app for Device Farm..."
+
+          # Bundle JavaScript first
           echo "Bundling JavaScript code..."
           npm run bundle
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Bundle failed"
+            exit 1
+          fi
+
+          echo "✅ Bundle completed successfully"
+
+          # Get scheme name
           cd ios
           SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
           echo "Detected scheme: $SCHEME_NAME"
 
+          # Debug: Check bundle identifier in project
+          echo "🔍 Checking project configuration..."
+          BUNDLE_ID=$(xcodebuild -showBuildSettings -workspace $SCHEME_NAME.xcworkspace -scheme "$SCHEME_NAME" -configuration Release -destination "generic/platform=iOS" 2>/dev/null | grep PRODUCT_BUNDLE_IDENTIFIER | head -1 | awk '{print $3}')
+          echo "Bundle Identifier in project: $BUNDLE_ID"
+
+          if [[ "$BUNDLE_ID" != "${{ env.APP_BUNDLE_ID }}" ]]; then
+            echo "⚠️  Warning: Bundle ID mismatch in Xcode project!"
+            echo "   Expected: ${{ env.APP_BUNDLE_ID }}"
+            echo "   Found: $BUNDLE_ID"
+          fi
+
+          # Debug: Check provisioning profile
+          echo "🔍 Provisioning profile UUID: $PP_UUID"
+          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision | grep -A 5 "application-identifier\|Name\|TeamIdentifier" | head -20 || echo "Could not read profile details"
+
+          # Archive for iOS device
           xcodebuild -workspace $SCHEME_NAME.xcworkspace \
             -scheme "$SCHEME_NAME" \
             -sdk iphoneos \
@@ -650,6 +744,9 @@ jobs:
           </dict>
           </plist>
           EOF
+
+          echo "📋 Export options:"
+          cat $EXPORT_OPTS_PATH
 
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
@@ -697,12 +794,26 @@ jobs:
             --type "$APP_TYPE" \
             --output json)
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Error creating upload in Device Farm"
+            echo "Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
+
           APP_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
           APP_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
           echo "app_upload_arn=$APP_UPLOAD_ARN" >> $GITHUB_OUTPUT
+          echo "App upload ARN: $APP_UPLOAD_ARN"
 
+          echo "Uploading app file: $APP_PATH"
           curl -T "$APP_PATH" "$APP_UPLOAD_URL"
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Error uploading app file using curl"
+            exit 1
+          fi
+
+          # Wait for processing
           echo "⏳ Waiting for upload to be processed..."
           MAX_ATTEMPTS=30
           ATTEMPT=1
@@ -728,9 +839,24 @@ jobs:
         working-directory: ./test-framework/e2e
         run: |
           echo "Verifying e2e test package..."
-          test -f package.json
-          test -f tests/app.test.js
+
+          if [ ! -f "package.json" ]; then
+            echo "❌ ERROR: e2e/package.json not found!"
+            exit 1
+          fi
+
+          if [ ! -f "tests/app.test.js" ]; then
+            echo "❌ ERROR: e2e/tests/app.test.js not found!"
+            exit 1
+          fi
+
           echo "✅ E2E test files verified"
+          echo ""
+          echo "Test package contents:"
+          ls -la
+          echo ""
+          echo "Test files:"
+          ls -la tests/
 
       - name: Package and Upload Test Package
         id: upload_test_package
@@ -739,14 +865,35 @@ jobs:
           echo "📦 Packaging e2e tests..."
           cd e2e
 
+          # Install dependencies before packing
           npm install
+
+          # Create tarball
           npm pack
 
+          # Create zip with test files only (no node_modules - will be installed on Device Farm)
           ZIP_NAME="e2e-tests-${{ matrix.platform }}.zip"
-          zip -r "$ZIP_NAME" package.json tests/ *.tgz
+          zip -r "$ZIP_NAME" \
+            package.json \
+            tests/ \
+            test/ \
+            *.tgz
+
+          echo "📦 Package contents (excluding node_modules):"
+          unzip -l "$ZIP_NAME" | head -20
+
+          # Verify zip was created
+          if [ ! -f "$ZIP_NAME" ]; then
+            echo "❌ ERROR: Failed to create test package zip"
+            exit 1
+          fi
+
+          SIZE=$(du -h "$ZIP_NAME" | cut -f1)
+          echo "✅ Test package created: $ZIP_NAME (Size: $SIZE)"
 
           mv "$ZIP_NAME" "$GITHUB_WORKSPACE/"
 
+          # Upload test package to AWS Device Farm
           echo "📤 Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
@@ -754,30 +901,52 @@ jobs:
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Error creating test package upload in Device Farm"
+            echo "Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
+
           TEST_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
           TEST_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
           echo "test_package_upload_arn=$TEST_UPLOAD_ARN" >> $GITHUB_OUTPUT
+          echo "Test package upload ARN: $TEST_UPLOAD_ARN"
 
+          echo "Uploading to: $TEST_UPLOAD_URL"
           curl -T "$GITHUB_WORKSPACE/$ZIP_NAME" "$TEST_UPLOAD_URL"
 
+          if [ $? -ne 0 ]; then
+            echo "❌ Error uploading test package using curl"
+            exit 1
+          fi
+
+          # Wait for processing
           echo "⏳ Waiting for test package to be processed..."
           MAX_ATTEMPTS=30
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             STATUS=$(aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN" --query "upload.status" --output text)
             echo "Test package status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ Test package upload successful"
               break
             fi
+
             if [ "$STATUS" = "FAILED" ]; then
               echo "❌ Test package upload failed"
               aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN"
               exit 1
             fi
+
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
+
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "❌ Timeout waiting for test package processing"
+            exit 1
+          fi
 
       - name: Create and Upload Test Spec
         id: upload_test_spec
