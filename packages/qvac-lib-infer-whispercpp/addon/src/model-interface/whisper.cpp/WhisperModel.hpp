@@ -121,16 +121,7 @@ private:
     }
   };
 
-  struct WhisperStateDeleter {
-    void operator()(whisper_state* state) const noexcept {
-      if (state != nullptr) {
-        whisper_free_state(state);
-      }
-    }
-  };
-
   std::unique_ptr<whisper_context, WhisperContextDeleter> ctx_{nullptr};
-  std::unique_ptr<whisper_state, WhisperStateDeleter> state_{nullptr};
   bool stream_ended_ = false;
   bool is_loaded_ = false;
   bool is_warmed_up_ = false;
