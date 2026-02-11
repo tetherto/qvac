@@ -41,15 +41,11 @@ try {
     modelSrc: modelUrl,
     modelType: "parakeet",
     modelConfig: {
-      // Only "tdt" is currently supported
-      modelType: "tdt",
-      // Inference options
+      // modelType defaults to "tdt" (only supported variant currently)
       maxThreads: 4,
       useGPU: false,
-      // Audio settings (16kHz mono expected)
       sampleRate: 16000,
       channels: 1,
-      // Output options
       timestampsEnabled: true,
       captionEnabled: false,
     },

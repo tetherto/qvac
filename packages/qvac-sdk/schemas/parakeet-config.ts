@@ -7,7 +7,7 @@ export const parakeetModelTypeEnumSchema = z.enum(["tdt"]);
 export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
 
 export const parakeetConfigSchema = z.object({
-  modelType: parakeetModelTypeEnumSchema.optional(),
+  modelType: parakeetModelTypeEnumSchema.default("tdt"),
   maxThreads: z.number().int().optional(),
   useGPU: z.boolean().optional(),
   sampleRate: z.number().int().optional(),
