@@ -1,0 +1,128 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ddd2042..b806c58 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -93,10 +93,13 @@ endif ()
+ get_filename_component(TOKENIZERS_CPP_ROOT ${CMAKE_CURRENT_LIST_FILE} DIRECTORY)
+ set(TOKENIZERS_CPP_CARGO_SOURCE_PATH ${TOKENIZERS_CPP_ROOT}/rust)
+ 
+-option(MSGPACK_USE_BOOST "Use Boost libraried" OFF)
+-add_subdirectory(msgpack)
++option(MLC_ENABLE_SENTENCEPIECE_TOKENIZER "Enable SentencePiece tokenizer" OFF)
++option(MLC_ENABLE_RWKV_WORLD_TOKENIZER "Enable RWKV-World tokenizer" OFF)
+ 
+-option(MLC_ENABLE_SENTENCEPIECE_TOKENIZER "Enable SentencePiece tokenizer" ON)
++if (MLC_ENABLE_RWKV_WORLD_TOKENIZER STREQUAL "ON")
++  option(MSGPACK_USE_BOOST "Use Boost libraried" OFF)
++  add_subdirectory(msgpack)
++endif ()
+ 
+ if(MSVC)
+   set(TOKENIZERS_RUST_LIB "${TOKENIZERS_CPP_CARGO_BINARY_DIR}/tokenizers_c.lib")
+@@ -141,35 +144,83 @@ add_custom_command(
+ 
+ set(
+   TOKENIZER_CPP_SRCS
+-  src/sentencepiece_tokenizer.cc
+   src/huggingface_tokenizer.cc
+-  src/rwkv_world_tokenizer.cc
+ )
++
++if (MLC_ENABLE_SENTENCEPIECE_TOKENIZER STREQUAL "ON")
++  list(APPEND TOKENIZER_CPP_SRCS sentencepiece/src/sentencepiece.pb.cc)
++endif ()
++
++if (MLC_ENABLE_RWKV_WORLD_TOKENIZER STREQUAL "ON")
++  list(APPEND TOKENIZER_CPP_SRCS src/rwkv_world_tokenizer.cc)
++endif ()
++
+ add_library(tokenizers_cpp STATIC ${TOKENIZER_CPP_SRCS})
+-target_include_directories(tokenizers_cpp PRIVATE sentencepiece/src)
+-target_include_directories(tokenizers_cpp PRIVATE msgpack/include)
+-target_include_directories(tokenizers_cpp PUBLIC ${TOKENIZERS_CPP_INCLUDE})
++target_include_directories(tokenizers_cpp PUBLIC
++  $<BUILD_INTERFACE:${TOKENIZERS_CPP_INCLUDE}>
++  $<INSTALL_INTERFACE:include>
++)
++
+ if (MLC_ENABLE_SENTENCEPIECE_TOKENIZER STREQUAL "ON")
+-    target_compile_definitions(tokenizers_cpp PUBLIC MLC_ENABLE_SENTENCEPIECE_TOKENIZER)
++  target_include_directories(tokenizers_cpp PRIVATE sentencepiece/src)
++endif ()
++
++if (MLC_ENABLE_RWKV_WORLD_TOKENIZER STREQUAL "ON")
++  target_include_directories(tokenizers_cpp PRIVATE msgpack/include)
++  target_link_libraries(tokenizers_cpp PRIVATE msgpack-cxx)
++endif ()
++
++if (MLC_ENABLE_SENTENCEPIECE_TOKENIZER STREQUAL "ON")
++  target_compile_definitions(tokenizers_cpp PUBLIC MLC_ENABLE_SENTENCEPIECE_TOKENIZER)
++
++  # sentencepiece config
++  option(SPM_ENABLE_SHARED "override sentence piece config" OFF)
++  option(SPM_ENABLE_TCMALLOC "" OFF)
++  # provide macro if it does not exist in cmake system
++  # it is OK to skip those since we do not provide these apps in the ios
++  # instead just link to the sentencepiece directly
++  if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    macro (set_xcode_property TARGET XCODE_PROPERTY XCODE_VALUE)
++        set_property (TARGET ${TARGET} PROPERTY
++            XCODE_ATTRIBUTE_${XCODE_PROPERTY} ${XCODE_VALUE})
++    endmacro (set_xcode_property)
++  endif()
++
++endif ()
++
++if (MLC_ENABLE_SENTENCEPIECE_TOKENIZER STREQUAL "ON")
++  add_subdirectory(sentencepiece sentencepiece EXCLUDE_FROM_ALL)
+ endif ()
+-target_link_libraries(tokenizers_cpp PRIVATE msgpack-cxx)
+-
+-# sentencepiece config
+-option(SPM_ENABLE_SHARED "override sentence piece config" OFF)
+-option(SPM_ENABLE_TCMALLOC "" OFF)
+-# provide macro if it does not exist in cmake system
+-# it is OK to skip those since we do not provide these apps in the ios
+-# instead just link to the sentencepiece directly
+-if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+-  macro (set_xcode_property TARGET XCODE_PROPERTY XCODE_VALUE)
+-      set_property (TARGET ${TARGET} PROPERTY
+-          XCODE_ATTRIBUTE_${XCODE_PROPERTY} ${XCODE_VALUE})
+-  endmacro (set_xcode_property)
+-endif()
+-add_subdirectory(sentencepiece sentencepiece EXCLUDE_FROM_ALL)
+ 
+ add_library(tokenizers_c INTERFACE ${TOKENIZERS_RUST_LIB})
+ target_link_libraries(tokenizers_c INTERFACE ${TOKENIZERS_RUST_LIB} ${TOKENIZERS_C_LINK_LIBS})
+ 
+-target_link_libraries(tokenizers_cpp PRIVATE tokenizers_c sentencepiece-static ${TOKENIZERS_CPP_LINK_LIBS})
+-target_include_directories(tokenizers_cpp PUBLIC ${TOKENIZERS_CPP_INCLUDE})
++target_link_libraries(tokenizers_cpp PRIVATE tokenizers_c ${TOKENIZERS_CPP_LINK_LIBS})
++if (MLC_ENABLE_SENTENCEPIECE_TOKENIZER STREQUAL "ON")
++  target_link_libraries(tokenizers_cpp PRIVATE sentencepiece-static)
++endif ()
++
++# Install the library targets
++install(TARGETS tokenizers_cpp tokenizers_c
++  EXPORT tokenizers_cpp_targets
++  LIBRARY DESTINATION lib
++  ARCHIVE DESTINATION lib
++  RUNTIME DESTINATION bin
++)
++
++# Install the Rust library file
++install(FILES ${TOKENIZERS_RUST_LIB}
++  DESTINATION lib
++)
++
++# Install headers
++install(DIRECTORY ${TOKENIZERS_CPP_INCLUDE}/
++  DESTINATION include
++)
++
++# Export the targets for find_package support
++install(EXPORT tokenizers_cpp_targets
++  FILE tokenizers_cpp-config.cmake
++  NAMESPACE tokenizers::
++  DESTINATION lib/cmake/tokenizers_cpp
++)
