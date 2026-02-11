@@ -10,6 +10,7 @@ param(
 )
 
 $PerfDir = Split-Path -Parent $PSScriptRoot
+$Failures = 0
 
 function Is-PathSpec($spec) {
   return [System.IO.Path]::IsPathRooted($spec) -or $spec.StartsWith(".\") -or $spec.StartsWith("..\") -or $spec.StartsWith("~/")
@@ -112,6 +113,10 @@ if ($HfToken -ne "") {
   $HfToken = $env:HF_TOKEN
 }
 & bare "$PerfDir/benchmark-perf/qvac-perf.js" --config $Config --params $Params --reps $Reps @addonArgs
+if ($LASTEXITCODE -ne 0) {
+  Write-Warning "QVAC perf failed with exit code $LASTEXITCODE, continuing."
+  $Failures = 1
+}
 
 Write-Host "==> Running PyTorch perf"
 $hfArgs = @()
@@ -123,15 +128,32 @@ if ($Quick) {
   $hfArgs += "--quick"
 }
 & $VenvPython "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
+if ($LASTEXITCODE -ne 0) {
+  Write-Warning "PyTorch perf failed with exit code $LASTEXITCODE, continuing."
+  $Failures = 1
+}
 
 if ($Judge) {
   Write-Host "==> Running judge"
   Get-ChildItem "$PerfDir/benchmark-perf/results" -Filter "qvac_*.jsonl" | ForEach-Object {
     & bare "$PerfDir/benchmark-perf/judge.js" --config $Config --input $_.FullName
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Judge failed for $($_.FullName) with exit code $LASTEXITCODE, continuing."
+      $Failures = 1
+    }
   }
 }
 
 if ($Analyze) {
   Write-Host "==> Running analysis"
   & $VenvPython "$PerfDir/benchmark-perf/analysis/analyze.py" --input "$PerfDir/benchmark-perf/results" --output "$PerfDir/benchmark-perf/analysis/plots"
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Analysis failed with exit code $LASTEXITCODE."
+    $Failures = 1
+  }
+}
+
+if ($Failures -ne 0) {
+  Write-Error "One or more benchmark stages failed."
+  exit 1
 }

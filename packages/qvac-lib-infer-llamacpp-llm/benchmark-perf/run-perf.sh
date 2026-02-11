@@ -13,6 +13,7 @@ ADDON=""
 HF_TOKEN="${HF_TOKEN:-}"
 ADDON_MODULE=""
 QUICK="false"
+FAILURES=0
 
 is_path_spec() {
   [[ "$1" == /* || "$1" == ./* || "$1" == ../* || "$1" == "~/"* ]]
@@ -165,7 +166,14 @@ fi
 if [[ "${QUICK}" == "true" ]]; then
   qvac_args+=(--quick)
 fi
+set +e
 bare "${PERF_DIR}/qvac-perf.js" "${qvac_args[@]}"
+qvac_status=$?
+set -e
+if [[ $qvac_status -ne 0 ]]; then
+  echo "⚠️  QVAC perf failed with exit code ${qvac_status}, continuing."
+  FAILURES=1
+fi
 
 echo "==> Running PyTorch perf"
 torch_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}")
@@ -175,17 +183,43 @@ fi
 if [[ "${QUICK}" == "true" ]]; then
   torch_args+=(--quick)
 fi
+set +e
 "${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" "${torch_args[@]}"
+torch_status=$?
+set -e
+if [[ $torch_status -ne 0 ]]; then
+  echo "⚠️  PyTorch perf failed with exit code ${torch_status}, continuing."
+  FAILURES=1
+fi
 
 if [[ "${RUN_JUDGE}" == "true" ]]; then
   echo "==> Running judge"
   for file in "${PERF_DIR}"/results/qvac_*.jsonl; do
     [[ -e "$file" ]] || continue
+    set +e
     bare "${PERF_DIR}/judge.js" --config "${CONFIG}" --input "$file"
+    judge_status=$?
+    set -e
+    if [[ $judge_status -ne 0 ]]; then
+      echo "⚠️  Judge failed for ${file} with exit code ${judge_status}, continuing."
+      FAILURES=1
+    fi
   done
 fi
 
 if [[ "${RUN_ANALYSIS}" == "true" ]]; then
   echo "==> Running analysis"
+  set +e
   "${VENV_PY}" "${PERF_DIR}/analysis/analyze.py" --input "${PERF_DIR}/results" --output "${PERF_DIR}/analysis/plots"
+  analyze_status=$?
+  set -e
+  if [[ $analyze_status -ne 0 ]]; then
+    echo "⚠️  Analysis failed with exit code ${analyze_status}."
+    FAILURES=1
+  fi
+fi
+
+if [[ $FAILURES -ne 0 ]]; then
+  echo "❌ One or more benchmark stages failed."
+  exit 1
 fi

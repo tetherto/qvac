@@ -118,39 +118,40 @@ const run = async () => {
     seed: '42'
   })
 
-  await judge.load()
+  let outputPath = args.output || args.input.replace('.jsonl', '.judged.jsonl')
+  try {
+    await judge.load()
 
-  const rows = readJsonl(args.input)
-  const cache = new Map()
+    const rows = readJsonl(args.input)
+    const cache = new Map()
 
-  for (const row of rows) {
-    if (!row.outputText || !row.promptText) {
-      continue
+    for (const row of rows) {
+      if (!row.outputText || !row.promptText) {
+        continue
+      }
+      const key = `${row.promptId}:${hashText(row.outputText)}`
+      if (cache.has(key)) {
+        const cached = cache.get(key)
+        row.accuracyScore = cached.score
+        row.accuracyReason = cached.reason
+        continue
+      }
+      const response = await judge.run(buildJudgePrompt(row.promptText, row.outputText))
+      const chunks = []
+      await response.onUpdate(data => chunks.push(data)).await()
+      const outputText = chunks.join('')
+      const parsed = parseJudgeResponse(outputText)
+      cache.set(key, parsed)
+      row.accuracyScore = parsed.score
+      row.accuracyReason = parsed.reason
     }
-    const key = `${row.promptId}:${hashText(row.outputText)}`
-    if (cache.has(key)) {
-      const cached = cache.get(key)
-      row.accuracyScore = cached.score
-      row.accuracyReason = cached.reason
-      continue
-    }
-    const response = await judge.run(buildJudgePrompt(row.promptText, row.outputText))
-    const chunks = []
-    await response.onUpdate(data => chunks.push(data)).await()
-    const outputText = chunks.join('')
-    const parsed = parseJudgeResponse(outputText)
-    cache.set(key, parsed)
-    row.accuracyScore = parsed.score
-    row.accuracyReason = parsed.reason
+
+    writeJsonl(outputPath, rows)
+    console.log(`✅ Wrote judged results to ${outputPath}`)
+  } finally {
+    await judge.unload().catch(() => {})
+    await loader.close().catch(() => {})
   }
-
-  const outputPath = args.output || args.input.replace('.jsonl', '.judged.jsonl')
-  writeJsonl(outputPath, rows)
-
-  await judge.unload()
-  await loader.close()
-
-  console.log(`✅ Wrote judged results to ${outputPath}`)
 }
 
 run().catch(err => {
