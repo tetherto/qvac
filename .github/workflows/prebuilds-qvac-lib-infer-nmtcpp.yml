@@ -62,6 +62,13 @@ jobs:
           - os: ubuntu-24.04-arm64-private
             platform: linux
             arch: arm64
+          # Linux builds on Ubuntu 22.04 for glibc compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
           - os: ubuntu-24.04
             platform: android
             arch: arm64
@@ -109,7 +116,7 @@ jobs:
           echo "Matrix tags: ${{ matrix.tags }}"
           echo "PKG_DIR: ${{ env.PKG_DIR }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
@@ -229,7 +236,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -261,7 +268,7 @@ jobs:
           env | sort
         continue-on-error: true
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         name: Update apt sources
         run: sudo apt-get update
 
@@ -333,6 +340,35 @@ jobs:
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
+        name: Download Vulkan SDK for ubuntu-22.04
+        run: |
+          sudo apt install -y xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir -p vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Setup Vulkan SDK path for ubuntu-22.04 x64
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Build Vulkan SDK for ubuntu-22.04 arm64
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          cd ~/vulkan
+          ./vulkansdk --maxjobs
+
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
