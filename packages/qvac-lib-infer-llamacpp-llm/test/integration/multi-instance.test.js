@@ -101,7 +101,11 @@ test('Two instances can run inference simultaneously', {
 
 test('Repeated load/unload cycles should remain stable', {
   timeout: 900_000,
+<<<<<<< current
   skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+=======
+  skip: isWindows
+>>>>>>> patched
 }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: DEFAULT_MODEL.name,
@@ -130,7 +134,11 @@ test('Repeated load/unload cycles should remain stable', {
 
 test('Unloading one instance does not affect another generating instance', {
   timeout: 900_000,
+<<<<<<< current
   skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+=======
+  skip: isWindows
+>>>>>>> patched
 }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: DEFAULT_MODEL.name,
@@ -194,7 +202,11 @@ test('Unloading one instance does not affect another generating instance', {
 
 test('Multiple load/unload cycles on one instance while another generates', {
   timeout: 900_000,
+<<<<<<< current
   skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+=======
+  skip: isWindows
+>>>>>>> patched
 }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: DEFAULT_MODEL.name,
