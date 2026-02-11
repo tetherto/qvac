@@ -86,6 +86,8 @@ export async function bundleSdk (options = {}) {
   const sdkName = await resolveSdkName(projectRoot)
   logger.log(`📦 SDK: ${sdkName}`)
 
+  const importsMapPath = resolveImportsMapPath(projectRoot, sdkName)
+
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.log(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
   for (const spec of pluginSpecifiers) {
@@ -124,8 +126,6 @@ export async function bundleSdk (options = {}) {
   )
   await fsp.writeFile(pearWorkerEntryPath, pearWorkerEntry, 'utf8')
   logger.log(`   Created: ${path.relative(projectRoot, pearWorkerEntryPath)}`)
-
-  const importsMapPath = resolveImportsMapPath(projectRoot, sdkName)
   logger.log(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
   logger.log('\n🔨 Bundling with bare-pack...')
