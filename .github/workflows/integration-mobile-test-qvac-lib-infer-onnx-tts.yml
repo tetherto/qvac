@@ -184,19 +184,32 @@ jobs:
           # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
-          # Validate prebuilds directory exists
-          if [ ! -d "package/prebuilds" ]; then
+          # Find prebuilds: addon layout has package/prebuilds; mono layout may nest under package/packages/.../prebuilds
+          PREBUILDS_SRC=""
+          if [ -d "package/prebuilds" ]; then
+            PREBUILDS_SRC="package/prebuilds"
+          else
+            # Search for prebuilds under package/ (e.g. mono: package/packages/qvac-lib-infer-onnx-tts/prebuilds)
+            CANDIDATE=$(find package -type d -name prebuilds 2>/dev/null | head -1)
+            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
+              PREBUILDS_SRC="$CANDIDATE"
+              echo "Using prebuilds from mono/nested layout: $PREBUILDS_SRC"
+            fi
+          fi
+
+          if [ -z "$PREBUILDS_SRC" ] || [ ! -d "$PREBUILDS_SRC" ]; then
             echo "ERROR: No prebuilds directory found in package"
             echo "Contents of downloaded package:"
             ls -la package/ 2>/dev/null || true
+            find package -type d -name prebuilds 2>/dev/null || true
             echo ""
-            echo "This workflow needs a package that includes prebuilt binaries (e.g. @qvac/tts-onnx or @tetherto/tts-onnx)."
-            echo "Packages like @tetherto/tts-onnx-mono are different and do not include prebuilds — use the addon package name instead."
+            echo "Use a package that includes prebuilt binaries (e.g. @qvac/tts-onnx, @tetherto/tts-onnx, or @tetherto/tts-onnx-mono with prebuilds)."
             exit 1
           fi
 
           # Move prebuilds to expected location
-          mv package/prebuilds ./prebuilds
+          rm -rf ./prebuilds
+          cp -r "$PREBUILDS_SRC" ./prebuilds
 
           # Cleanup
           rm -rf package *.tgz
