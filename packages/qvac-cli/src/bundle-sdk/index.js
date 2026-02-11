@@ -129,9 +129,9 @@ export async function bundleSdk (options = {}) {
   logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
   logger.info('\n🔨 Bundling with bare-pack...')
-  logger.info(`   Hosts: ${hosts.join(', ')}`)
+  logger.debug(`   Hosts: ${hosts.join(', ')}`)
   if (deferModules.length > 0) {
-    logger.info(`   Deferred: ${deferModules.join(', ')}`)
+    logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
   await runBarePack({

@@ -183,7 +183,7 @@ export async function generateAddonsManifest (options) {
         }
       }
     } catch (err) {
-      logger.debug(`   Could not read ${pkgName}/package.json: ${err.message}`)
+      logger.warn(`   Could not read ${pkgName}/package.json: ${err.message}`)
     }
   }
 
