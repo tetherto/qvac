@@ -21,7 +21,7 @@ bool isQwen3Model(const ::llama_model* model);
  * For other models, returns the manual override or empty string.
  */
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manual_override);
+    const ::llama_model* model, const std::string& manualOverride);
 
 /**
  * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is

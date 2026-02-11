@@ -24,11 +24,11 @@ on:
         type: string
         required: false
         default: main
-      version:
-        description: "NPM package version to test (default: latest)"
+      package:
+        description: "Full NPM package spec to test (default: @qvac/translation-nmtcpp@latest)"
         type: string
-        required: false
-        default: latest
+        required: true
+        default: "@qvac/translation-nmtcpp@latest"
 
 env:
   NODE_VERSION: "lts/*"
@@ -115,14 +115,10 @@ jobs:
 
           # Configure addon registry
           cd monorepo/${{ inputs.workdir || env.PKG_DIR }}
-          ref_name="${{ inputs.ref || github.ref_name }}"
-          qvac_registry="https://npm.pkg.github.com/"
-          if [[ "$ref_name" == release-* ]]; then
-            qvac_registry="https://registry.npmjs.org/"
-          fi
           cat > .npmrc <<NPMRC
+          always-auth=true
           registry=https://registry.npmjs.org/
-          @qvac:registry=${qvac_registry}
+          @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
           //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
@@ -149,7 +145,7 @@ jobs:
           npm install -g @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'Android' && !inputs.package
         uses: actions/download-artifact@v4
         with:
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
@@ -158,7 +154,7 @@ jobs:
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'iOS' && !inputs.package
         uses: actions/download-artifact@v4
         with:
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
@@ -166,24 +162,18 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: Download prebuilds (from npm - workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download prebuilds from package
+        if: inputs.package
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         run: |
-          VERSION="${{ inputs.version || 'latest' }}"
-          echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
+          PACKAGE_SPEC="${{ inputs.package }}"
+          echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
 
-          # Force @qvac registry to npmjs for manual downloads (project-level)
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          NPMRC
+          PACKAGE_NAME="${PACKAGE_SPEC%@*}"
 
-          # Download package from npm
-          if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then
-            echo "ERROR: Failed to download version $VERSION from npm"
-            echo "Please check that the version exists at https://www.npmjs.com/package/${{ env.ADDON_NAME }}"
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
+            echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
             exit 1
           fi
 
@@ -299,6 +289,10 @@ jobs:
           echo "Installing addon dependencies..."
           npm install
 
+      - name: Validate mobile tests are up-to-date
+        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
+        run: npm run test:mobile:validate
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
@@ -329,37 +323,69 @@ jobs:
           echo "   Both Opus and Bergamot backends will be tested"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Bundle Bergamot URLs in config file for APK to access
+      - name: Generate IndicTrans Model URLs
+        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
+        env:
+          AWS_REGION: eu-central-1
+        run: |
+          echo "🔑 Generating IndicTrans model URLs for mobile tests..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Make the script executable
+          chmod +x scripts/generate-indictrans-presigned-urls.sh
+
+          # Generate presigned URL for IndicTrans model
+          # This will export INDICTRANS_MODEL_URL to GITHUB_ENV
+          ./scripts/generate-indictrans-presigned-urls.sh
+
+          echo ""
+          echo "✅ IndicTrans model URL generated and exported"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Bundle Model URLs in config files for APK to access
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
           BERGAMOT_MODEL_URL: ${{ env.BERGAMOT_MODEL_URL }}
           BERGAMOT_VOCAB_URL: ${{ env.BERGAMOT_VOCAB_URL }}
+          INDICTRANS_MODEL_URL: ${{ env.INDICTRANS_MODEL_URL }}
         run: |
-          echo "📝 Creating Bergamot URL config file for mobile app bundling..."
+          echo "📝 Creating model URL config files for mobile app bundling..."
           echo "🔍 Debug: Checking environment variables..."
           echo "   BERGAMOT_MODEL_URL: ${BERGAMOT_MODEL_URL:-NOTSET}"
           echo "   BERGAMOT_VOCAB_URL: ${BERGAMOT_VOCAB_URL:-NOTSET}"
+          echo "   INDICTRANS_MODEL_URL: ${INDICTRANS_MODEL_URL:-NOTSET}"
 
           # Create testAssets directory in the addon
           mkdir -p test/mobile/testAssets
 
+          # Bundle Bergamot URLs
           if [ -n "${BERGAMOT_MODEL_URL:-}" ] && [ -n "${BERGAMOT_VOCAB_URL:-}" ]; then
-            echo "✅ Environment variables are set, creating bundled config in addon..."
+            echo "✅ Creating Bergamot config..."
             echo "{" > test/mobile/testAssets/bergamot-urls.json
             echo "  \"modelUrl\": \"${BERGAMOT_MODEL_URL}\"," >> test/mobile/testAssets/bergamot-urls.json
             echo "  \"vocabUrl\": \"${BERGAMOT_VOCAB_URL}\"" >> test/mobile/testAssets/bergamot-urls.json
             echo "}" >> test/mobile/testAssets/bergamot-urls.json
-            echo "✅ Bergamot URLs bundled for APK at addon/test/mobile/testAssets/bergamot-urls.json"
-            echo "   This will be copied into APK assets during build and accessible via: getAssetPath('bergamot-urls.json')"
-            echo "📄 Created config file contents:"
+            echo "   ✅ Bergamot URLs bundled"
             cat test/mobile/testAssets/bergamot-urls.json
-            echo ""
-            echo "📂 testAssets directory contents:"
-            ls -la test/mobile/testAssets/
           else
-            echo "⚠️  Environment variables not set - Bergamot URLs not available"
-            echo "   This means Bergamot tests will be skipped"
+            echo "   ⚠️  Bergamot URLs not available"
           fi
+
+          # Bundle IndicTrans URL
+          if [ -n "${INDICTRANS_MODEL_URL:-}" ]; then
+            echo "✅ Creating IndicTrans config..."
+            echo "{" > test/mobile/testAssets/indictrans-model-urls.json
+            echo "  \"modelUrl\": \"${INDICTRANS_MODEL_URL}\"" >> test/mobile/testAssets/indictrans-model-urls.json
+            echo "}" >> test/mobile/testAssets/indictrans-model-urls.json
+            echo "   ✅ IndicTrans URL bundled"
+            cat test/mobile/testAssets/indictrans-model-urls.json
+          else
+            echo "   ⚠️  IndicTrans URL not available"
+          fi
+
+          echo ""
+          echo "📂 testAssets directory contents:"
+          ls -la test/mobile/testAssets/
 
       - name: Pack addon
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
@@ -972,6 +998,7 @@ jobs:
         env:
           BERGAMOT_MODEL_URL: ${{ env.BERGAMOT_MODEL_URL }}
           BERGAMOT_VOCAB_URL: ${{ env.BERGAMOT_VOCAB_URL }}
+          INDICTRANS_MODEL_URL: ${{ env.INDICTRANS_MODEL_URL }}
         run: |
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"

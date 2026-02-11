@@ -117,16 +117,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p models/ocr/rec_512
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_japanese.onnx models/ocr/recognizer_japanese.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_korean.onnx models/ocr/recognizer_korean.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_thai.onnx models/ocr/recognizer_thai.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_zh_sim.onnx models/ocr/recognizer_zh_sim.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
-          cp models/ocr/detector_craft.onnx models/ocr/rec_512/detector_craft.onnx
-          for model in models/ocr/recognizer_*.onnx; do
-            cp "$model" models/ocr/rec_512/
-          done
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/rec_512/ models/ocr/rec_512/ --recursive
 
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
