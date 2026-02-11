@@ -12,11 +12,19 @@ export const ttsConfigSchema = z.object({
   language: z.enum(TTS_LANGUAGES),
 });
 
+export const referenceAudioSchema = z
+  .object({
+    base64: z.string(),
+    sampleRate: z.number().optional(),
+  })
+  .optional();
+
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),
   inputType: z.string().default("text"),
   text: z.string(),
   stream: z.boolean().default(true),
+  referenceAudio: referenceAudioSchema,
 });
 
 export const ttsRequestSchema = ttsClientParamsSchema.extend({
@@ -31,6 +39,7 @@ export const ttsResponseSchema = z.object({
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
+export type ReferenceAudio = z.infer<typeof referenceAudioSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;
 export type TtsResponse = z.infer<typeof ttsResponseSchema>;

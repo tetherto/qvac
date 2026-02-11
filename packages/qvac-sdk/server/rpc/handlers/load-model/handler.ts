@@ -58,13 +58,86 @@ export async function handleLoadModel(
     canonicalModelType === ModelType.onnxTts
       ? (request as { eSpeakDataPath?: string }).eSpeakDataPath
       : undefined;
+  const chatterboxSrcs =
+    canonicalModelType === ModelType.onnxTts
+      ? (request as {
+          chatterboxTokenizerSrc?: string;
+          chatterboxSpeechEncoderSrc?: string;
+          chatterboxEmbedTokensSrc?: string;
+          chatterboxConditionalDecoderSrc?: string;
+          chatterboxLanguageModelSrc?: string;
+          chatterboxReferenceAudioSamples?: number[];
+        })
+      : undefined;
+  const isTtsChatterbox =
+    canonicalModelType === ModelType.onnxTts &&
+    typeof chatterboxSrcs?.chatterboxTokenizerSrc === "string";
   const detectorModelSrc =
     canonicalModelType === ModelType.onnxOcr
       ? (request as { detectorModelSrc?: string }).detectorModelSrc
       : undefined;
 
   try {
-    const modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
+    let modelPath: string;
+    let chatterboxPaths:
+      | {
+          tokenizerPath: string;
+          speechEncoderPath: string;
+          embedTokensPath: string;
+          conditionalDecoderPath: string;
+          languageModelPath: string;
+        }
+      | undefined;
+
+    if (isTtsChatterbox && chatterboxSrcs) {
+      const [
+        tokenizerPath,
+        speechEncoderPath,
+        embedTokensPath,
+        conditionalDecoderPath,
+        languageModelPath,
+      ] = await Promise.all([
+        resolveModelPath(
+          chatterboxSrcs.chatterboxTokenizerSrc!,
+          progressCallback,
+          seed,
+        ),
+        resolveModelPath(
+          chatterboxSrcs.chatterboxSpeechEncoderSrc!,
+          progressCallback,
+          seed,
+        ),
+        resolveModelPath(
+          chatterboxSrcs.chatterboxEmbedTokensSrc!,
+          progressCallback,
+          seed,
+        ),
+        resolveModelPath(
+          chatterboxSrcs.chatterboxConditionalDecoderSrc!,
+          progressCallback,
+          seed,
+        ),
+        resolveModelPath(
+          chatterboxSrcs.chatterboxLanguageModelSrc!,
+          progressCallback,
+          seed,
+        ),
+      ]);
+      chatterboxPaths = {
+        tokenizerPath,
+        speechEncoderPath,
+        embedTokensPath,
+        conditionalDecoderPath,
+        languageModelPath,
+      };
+      modelPath = tokenizerPath;
+    } else {
+      modelPath = await resolveModelPath(
+        modelSrc,
+        progressCallback,
+        seed,
+      );
+    }
 
     let projectionModelPath: string | undefined;
     if (projectionModelSrc) {
@@ -85,7 +158,7 @@ export async function handleLoadModel(
     }
 
     let ttsConfigModelPath: string | undefined;
-    if (configSrc) {
+    if (configSrc && !isTtsChatterbox) {
       ttsConfigModelPath = await resolveModelPath(
         configSrc,
         progressCallback,
@@ -113,12 +186,18 @@ export async function handleLoadModel(
       }
     }
 
-    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
-    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
-      throw new TTSConfigModelRequiredError();
-    }
-    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
-      throw new ESpeakDataPathRequiredError();
+    // For TTS: either Chatterbox (chatterboxDir) or Piper (configSrc + eSpeakDataPath)
+    if (canonicalModelType === ModelType.onnxTts) {
+      if (isTtsChatterbox) {
+        // Chatterbox: no config or eSpeak needed
+      } else {
+        if (!ttsConfigModelPath) {
+          throw new TTSConfigModelRequiredError();
+        }
+        if (!eSpeakDataPath) {
+          throw new ESpeakDataPathRequiredError();
+        }
+      }
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths
@@ -160,10 +239,15 @@ export async function handleLoadModel(
       }
     }
 
-    // Generate hash-based modelId
+    // Generate hash-based modelId (include ref audio length for Chatterbox so different refs get different ids)
+    const configForHash = { ...(request.modelConfig as object) };
+    if (chatterboxSrcs?.chatterboxReferenceAudioSamples?.length) {
+      (configForHash as Record<string, unknown>)["refAudioLength"] =
+        chatterboxSrcs.chatterboxReferenceAudioSamples.length;
+    }
     const configStr = JSON.stringify(
-      request.modelConfig,
-      Object.keys(request.modelConfig as object).sort(),
+      configForHash,
+      Object.keys(configForHash).sort(),
     );
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
@@ -176,6 +260,8 @@ export async function handleLoadModel(
       vadModelPath,
       ttsConfigModelPath,
       eSpeakDataPath,
+      chatterboxPaths,
+      chatterboxReferenceAudioSamples: chatterboxSrcs?.chatterboxReferenceAudioSamples,
       detectorModelPath,
       modelName,
     });

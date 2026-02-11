@@ -5,7 +5,6 @@ import {
   type LlmConfig,
   type LoadModelServerParams,
   type WhisperConfig,
-  type OCRConfig,
 } from "@/schemas";
 import { createLlmModel } from "@/server/bare/addons/llamacpp-completion";
 import { createEmbeddingsModel } from "@/server/bare/addons/llamacpp-embedding";
@@ -51,6 +50,8 @@ export async function loadModel(params: LoadModelServerParams) {
     vadModelPath,
     ttsConfigModelPath,
     eSpeakDataPath,
+    chatterboxPaths,
+    chatterboxReferenceAudioSamples,
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
@@ -62,12 +63,31 @@ export async function loadModel(params: LoadModelServerParams) {
     return;
   }
 
-  // Detect if sharded model
+  // Detect if sharded model (skip for Chatterbox TTS: we validate five paths below)
   const modelFileName = path.basename(modelPath);
   const shardInfo = detectShardedModel(modelFileName);
   const isShardedModel = shardInfo.isSharded;
 
-  if (isShardedModel) {
+  if (chatterboxPaths) {
+    try {
+      const paths = [
+        chatterboxPaths.tokenizerPath,
+        chatterboxPaths.speechEncoderPath,
+        chatterboxPaths.embedTokensPath,
+        chatterboxPaths.conditionalDecoderPath,
+        chatterboxPaths.languageModelPath,
+      ];
+      for (const filePath of paths) {
+        await fsPromises.access(filePath);
+      }
+    } catch (error) {
+      logger.error(
+        `Chatterbox TTS: one or more model files not found:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw new ModelFileLocateFailedError(modelType, modelPath, error);
+    }
+  } else if (isShardedModel) {
     // For sharded models, validate all shards and tensors.txt exist
     const shardDir = path.dirname(modelPath);
     const isValid = await validateShardedModelCache(shardDir, modelFileName);
@@ -129,16 +149,22 @@ export async function loadModel(params: LoadModelServerParams) {
       break;
 
     case ModelType.onnxTts:
-      if (!eSpeakDataPath) {
-        throw new ESpeakDataPathRequiredError();
+      if (chatterboxPaths) {
+        result = createTtsModel(modelId, modelPath, modelConfig, {
+          chatterboxPaths,
+          ...(chatterboxReferenceAudioSamples?.length
+            ? { referenceAudioSamples: chatterboxReferenceAudioSamples }
+            : {}),
+        });
+      } else {
+        if (!eSpeakDataPath) {
+          throw new ESpeakDataPathRequiredError();
+        }
+        result = createTtsModel(modelId, modelPath, modelConfig, {
+          ttsConfigModelPath: ttsConfigModelPath!,
+          eSpeakDataPath,
+        });
       }
-      result = createTtsModel(
-        modelId,
-        modelPath,
-        modelConfig,
-        ttsConfigModelPath!,
-        eSpeakDataPath,
-      );
       break;
 
     case ModelType.onnxOcr:
@@ -152,7 +178,7 @@ export async function loadModel(params: LoadModelServerParams) {
         modelId,
         detectorModelPath,
         modelPath,
-        modelConfig as OCRConfig,
+        modelConfig,
       );
       break;
 

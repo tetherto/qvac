@@ -71,6 +71,19 @@ const loadModelOptionsBaseSchema = z.union([
     delegate: delegateSchema,
   }),
   z.object({
+    modelType: ttsModelTypeSchema,
+    modelConfig: ttsConfigSchema,
+    tokenizerSrc: modelSrcInputSchema,
+    speechEncoderSrc: modelSrcInputSchema,
+    embedTokensSrc: modelSrcInputSchema,
+    conditionalDecoderSrc: modelSrcInputSchema,
+    languageModelSrc: modelSrcInputSchema,
+    /** Reference audio samples for voice cloning (float in [-1, 1]). Chatterbox expects at load time. */
+    referenceAudio: z.array(z.number()).optional(),
+    seed: z.boolean().optional(),
+    delegate: delegateSchema,
+  }),
+  z.object({
     modelSrc: modelSrcInputSchema,
     modelType: ocrModelTypeSchema,
     modelConfig: ocrConfigSchema.partial().strict().optional(),
@@ -213,6 +226,43 @@ export const loadModelOptionsToRequestSchema = z.union([
     })),
   z
     .object({
+      modelType: ttsModelTypeSchema,
+      modelConfig: ttsConfigSchema,
+      tokenizerSrc: modelSrcInputSchema,
+      speechEncoderSrc: modelSrcInputSchema,
+      embedTokensSrc: modelSrcInputSchema,
+      conditionalDecoderSrc: modelSrcInputSchema,
+      languageModelSrc: modelSrcInputSchema,
+      referenceAudio: z.array(z.number()).optional(),
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.onnxTts,
+      modelSrc: modelInputToSrcSchema.parse(data.tokenizerSrc),
+      modelName: undefined,
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+      chatterboxTokenizerSrc: modelInputToSrcSchema.parse(data.tokenizerSrc),
+      chatterboxSpeechEncoderSrc: modelInputToSrcSchema.parse(
+        data.speechEncoderSrc,
+      ),
+      chatterboxEmbedTokensSrc: modelInputToSrcSchema.parse(data.embedTokensSrc),
+      chatterboxConditionalDecoderSrc: modelInputToSrcSchema.parse(
+        data.conditionalDecoderSrc,
+      ),
+      chatterboxLanguageModelSrc: modelInputToSrcSchema.parse(
+        data.languageModelSrc,
+      ),
+      chatterboxReferenceAudioSamples: data.referenceAudio,
+    })),
+  z
+    .object({
       modelSrc: modelSrcInputSchema,
       modelType: ocrModelTypeSchema,
       modelConfig: ocrConfigSchema.partial().strict().optional(),
@@ -282,6 +332,29 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   eSpeakDataPath: z.string(),
 });
 
+/** Chatterbox TTS: load from individual model file sources. */
+export const chatterboxPathsSchema = z.object({
+  tokenizerPath: z.string(),
+  speechEncoderPath: z.string(),
+  embedTokensPath: z.string(),
+  conditionalDecoderPath: z.string(),
+  languageModelPath: z.string(),
+});
+
+export type ChatterboxPaths = z.infer<typeof chatterboxPathsSchema>;
+
+export const loadChatterboxTtsModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsConfigSchema,
+    chatterboxTokenizerSrc: z.string(),
+    chatterboxSpeechEncoderSrc: z.string(),
+    chatterboxEmbedTokensSrc: z.string(),
+    chatterboxConditionalDecoderSrc: z.string(),
+    chatterboxLanguageModelSrc: z.string(),
+    chatterboxReferenceAudioSamples: z.array(z.number()).optional(),
+  });
+
 export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxOcr),
   modelConfig: ocrConfigSchema, // ocr has no defaults
@@ -295,6 +368,7 @@ export const loadModelSrcRequestSchema = z
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
+    loadChatterboxTtsModelRequestSchema,
     loadOcrModelRequestSchema,
   ])
   .transform((data) => ({
@@ -347,11 +421,14 @@ export const hyperdriveUrlSchema = z
 export const loadModelServerParamsSchema = z.object({
   modelId: z.string(),
   modelPath: z.string(),
-  options: loadModelOptionsSchema,
+  /** Parsed RPC request (Piper TTS has configSrc/eSpeakDataPath; Chatterbox has chatterbox*Src). */
+  options: loadModelRequestSchema,
   projectionModelPath: z.string().optional(),
   vadModelPath: z.string().optional(),
   ttsConfigModelPath: z.string().optional(),
   eSpeakDataPath: z.string().optional(),
+  chatterboxPaths: chatterboxPathsSchema.optional(),
+  chatterboxReferenceAudioSamples: z.array(z.number()).optional(),
   detectorModelPath: z.string().optional(),
   modelName: z.string().optional(),
 });

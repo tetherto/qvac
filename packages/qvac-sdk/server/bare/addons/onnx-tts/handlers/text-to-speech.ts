@@ -1,14 +1,24 @@
 import { getModel } from "@/server/bare/registry/model-registry";
-import { ttsRequestSchema, type TtsRequest, type TtsResponse } from "@/schemas";
+import {
+  ttsRequestSchema,
+  type TtsRequest,
+  type TtsResponse,
+} from "@/schemas";
 
 export async function* textToSpeech(
   params: TtsRequest,
 ): AsyncGenerator<TtsResponse> {
-  const { modelId, inputType, text, stream } = ttsRequestSchema.parse(params);
+  const parsed = ttsRequestSchema.parse(params);
+  const { modelId, inputType, text, stream } = parsed;
 
   const model = getModel(modelId);
 
-  const response = await model.run({ input: text, inputType });
+  // Reference audio is load-time only (Chatterbox); do not pass at run time
+  const runPayload = {
+    input: text,
+    type: inputType,
+  };
+  const response = await model.run(runPayload);
 
   if (!stream) {
     // Non-streaming mode: wait for complete response and yield once

@@ -5,6 +5,12 @@ import {
 } from "@/schemas";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 
+/**
+ * Synthesizes speech from text using a loaded TTS model.
+ *
+ * @param params - modelId, text, and optional stream; optional referenceAudio for voice cloning (e.g. Chatterbox)
+ * @returns bufferStream (when streaming), buffer promise, and done promise
+ */
 export function textToSpeech(params: TtsClientParams): {
   bufferStream: AsyncGenerator<number>;
   buffer: Promise<number[]>;
@@ -16,6 +22,9 @@ export function textToSpeech(params: TtsClientParams): {
     inputType: params.inputType,
     text: params.text,
     stream: params.stream,
+    ...(params.referenceAudio !== undefined && {
+      referenceAudio: params.referenceAudio,
+    }),
   };
 
   let doneResolver: (value: boolean) => void = () => {};

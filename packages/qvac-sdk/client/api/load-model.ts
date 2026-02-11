@@ -32,6 +32,7 @@ const logger = getClientLogger();
  *   - modelConfig: Model-specific configuration options
  *   - projectionModelSrc: (LLM only) Projection model source for multimodal models
  *   - vadModelSrc: (Whisper only) VAD model source for voice activity detection
+ *   - (TTS Piper) configSrc, eSpeakDataPath; (TTS Chatterbox) tokenizerSrc, speechEncoderSrc, embedTokensSrc, conditionalDecoderSrc, languageModelSrc
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
  *
@@ -94,6 +95,26 @@ const logger = getClientLogger();
  *     min_seconds: 2,
  *     max_seconds: 6
  *   }
+ * });
+ *
+ * // Piper TTS
+ * const piperModelId = await loadModel({
+ *   modelSrc: TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM,
+ *   modelType: "tts",
+ *   configSrc: TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_CONFIG,
+ *   eSpeakDataPath: "/path/to/espeak-ng-data",
+ *   modelConfig: { language: "en" },
+ * });
+ *
+ * // Chatterbox TTS (voice cloning) – individual model file sources
+ * const chatterboxModelId = await loadModel({
+ *   modelType: "tts",
+ *   modelConfig: { language: "en" },
+ *   tokenizerSrc: "/path/to/tokenizer.json",
+ *   speechEncoderSrc: "/path/to/speech_encoder.onnx",
+ *   embedTokensSrc: "/path/to/embed_tokens.onnx",
+ *   conditionalDecoderSrc: "/path/to/conditional_decoder.onnx",
+ *   languageModelSrc: "/path/to/language_model.onnx",
  * });
  *
  * // Load with automatic logging - logs from the model will be forwarded to your logger
