@@ -18,21 +18,20 @@ bool isQwen3Model(const ::llama_model* model) {
   }
 
   // Check model name metadata
-  char model_name[256] = {0};
+  char modelName[256] = {0};
   int32_t len = llama_model_meta_val_str(
-      model, "general.name", model_name, sizeof(model_name));
+      model, "general.name", modelName, sizeof(modelName));
 
-  if (len > 0 && len < sizeof(model_name)) {
-    model_name[len] = '\0';
-    std::string name_str(model_name);
+  if (len > 0 && len < sizeof(modelName)) {
+    modelName[len] = '\0';
+    std::string nameStr(modelName);
     std::transform(
-        name_str.begin(),
-        name_str.end(),
-        name_str.begin(),
-        [](unsigned char c) { return std::tolower(c); });
+        nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
+          return std::tolower(c);
+        });
 
-    if (name_str.find("qwen3") != std::string::npos ||
-        name_str.find("qwen-3") != std::string::npos) {
+    if (nameStr.find("qwen3") != std::string::npos ||
+        nameStr.find("qwen-3") != std::string::npos) {
       return true;
     }
   }
@@ -44,14 +43,13 @@ bool isQwen3Model(const ::llama_model* model) {
 
   if (len > 0 && len < sizeof(arch)) {
     arch[len] = '\0';
-    std::string arch_str(arch);
+    std::string archStr(arch);
     std::transform(
-        arch_str.begin(),
-        arch_str.end(),
-        arch_str.begin(),
-        [](unsigned char c) { return std::tolower(c); });
+        archStr.begin(), archStr.end(), archStr.begin(), [](unsigned char c) {
+          return std::tolower(c);
+        });
 
-    if (arch_str.find("qwen3") != std::string::npos) {
+    if (archStr.find("qwen3") != std::string::npos) {
       return true;
     }
   }
@@ -60,10 +58,10 @@ bool isQwen3Model(const ::llama_model* model) {
 }
 
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manual_override) {
+    const ::llama_model* model, const std::string& manualOverride) {
   // If manual override is provided, use it as-is
-  if (!manual_override.empty()) {
-    return manual_override;
+  if (!manualOverride.empty()) {
+    return manualOverride;
   }
 
   // For Qwen3 models, use the fixed template
@@ -78,15 +76,15 @@ std::string getChatTemplateForModel(
 std::string
 getChatTemplate(const ::llama_model* model, const common_params& params) {
   // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
-  std::string chat_template = params.chat_template;
+  std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
-    chat_template = getChatTemplateForModel(model, params.chat_template);
-    if (!chat_template.empty() && chat_template != params.chat_template) {
+    chatTemplate = getChatTemplateForModel(model, params.chat_template);
+    if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
       QLOG_IF(
           Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
     }
   }
-  return chat_template;
+  return chatTemplate;
 }
 
 std::string getPrompt(
