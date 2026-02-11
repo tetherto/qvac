@@ -2,9 +2,8 @@
 
 #include <bare.h>
 
-// NOLINTBEGIN(readability-identifier-naming)
-
-js_value_t *qvac_lib_inference_addon_llama_exports(js_env_t *env, js_value_t *exports) {
+js_value_t*
+qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
 
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define V(name, fn) \
@@ -34,7 +33,4 @@ js_value_t *qvac_lib_inference_addon_llama_exports(js_env_t *env, js_value_t *ex
   return exports;
 }
 
-
-BARE_MODULE(qvac_lib_inference_addon_llama, qvac_lib_inference_addon_llama_exports)
-
-// NOLINTEND(readability-identifier-naming)
+BARE_MODULE(qvac_lib_inference_addon_llama, qvacLibInferenceAddonLlamaExports)

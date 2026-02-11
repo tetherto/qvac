@@ -11,28 +11,28 @@
 using namespace qvac_lib_inference_addon_llama::logging;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-std::mutex LlamaLazyInitializeBackend::initMutex;
-bool LlamaLazyInitializeBackend::initialized = false;
-std::string LlamaLazyInitializeBackend::recordedBackendsDir;
-int LlamaLazyInitializeBackend::refCount = 0;
+std::mutex LlamaLazyInitializeBackend::g_initMutex;
+bool LlamaLazyInitializeBackend::g_initialized = false;
+std::string LlamaLazyInitializeBackend::g_recordedBackendsDir;
+int LlamaLazyInitializeBackend::g_refCount = 0;
 
 bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
-  std::lock_guard<std::mutex> lock(initMutex);
+  std::lock_guard<std::mutex> lock(g_initMutex);
 
-  if (initialized) {
-    if (!backendsDir.empty() && !recordedBackendsDir.empty() &&
-        backendsDir != recordedBackendsDir) {
+  if (g_initialized) {
+    if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
+        backendsDir != g_recordedBackendsDir) {
       QLOG_IF(
           Priority::WARNING,
           "Backend already initialized with different backendsDir. "
           "Previously initialized at: " +
-              recordedBackendsDir + ", requested: " + backendsDir);
+              g_recordedBackendsDir + ", requested: " + backendsDir);
     }
     return false;
   }
 
   if (!backendsDir.empty()) {
-    recordedBackendsDir = backendsDir;
+    g_recordedBackendsDir = backendsDir;
   }
 
   llama_log_set(LlamaModel::llamaLogCallback, nullptr);
@@ -54,54 +54,54 @@ bool LlamaLazyInitializeBackend::initialize(const std::string& backendsDir) {
   }
 
   llama_backend_init();
-  initialized = true;
+  g_initialized = true;
   return true;
 }
 
 void LlamaLazyInitializeBackend::incrementRefCount() {
-  std::lock_guard<std::mutex> lock(initMutex);
-  refCount++;
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  g_refCount++;
 }
 
 void LlamaLazyInitializeBackend::decrementRefCount() {
-  std::lock_guard<std::mutex> lock(initMutex);
-  if (refCount > 0) {
-    refCount--;
-    if (refCount == 0 && initialized) {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  if (g_refCount > 0) {
+    g_refCount--;
+    if (g_refCount == 0 && g_initialized) {
       QLOG_IF(
           Priority::DEBUG, "Freeing backend (reference count reached zero)");
       llama_backend_free();
-      initialized = false;
-      recordedBackendsDir.clear();
+      g_initialized = false;
+      g_recordedBackendsDir.clear();
     }
   }
 }
 
 LlamaBackendsHandle::LlamaBackendsHandle(const std::string& backendsDir)
-    : ownsHandle(true) {
+    : ownsHandle_(true) {
   LlamaLazyInitializeBackend::initialize(backendsDir);
   LlamaLazyInitializeBackend::incrementRefCount();
 }
 
 LlamaBackendsHandle::~LlamaBackendsHandle() {
-  if (ownsHandle) {
+  if (ownsHandle_) {
     LlamaLazyInitializeBackend::decrementRefCount();
   }
 }
 
 LlamaBackendsHandle::LlamaBackendsHandle(LlamaBackendsHandle&& other) noexcept
-    : ownsHandle(other.ownsHandle) {
-  other.ownsHandle = false;
+    : ownsHandle_(other.ownsHandle_) {
+  other.ownsHandle_ = false;
 }
 
 LlamaBackendsHandle&
 LlamaBackendsHandle::operator=(LlamaBackendsHandle&& other) noexcept {
   if (this != &other) {
-    if (ownsHandle) {
+    if (ownsHandle_) {
       LlamaLazyInitializeBackend::decrementRefCount();
     }
-    ownsHandle = other.ownsHandle;
-    other.ownsHandle = false;
+    ownsHandle_ = other.ownsHandle_;
+    other.ownsHandle_ = false;
   }
   return *this;
 }
