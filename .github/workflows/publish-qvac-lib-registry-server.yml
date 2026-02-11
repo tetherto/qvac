@@ -1,7 +1,12 @@
 name: Publish (Qvac-lib-registry-server)
 
 on:
-  pull_request:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     paths:
       - "packages/qvac-lib-registry-server/shared/**"
       - "packages/qvac-lib-registry-server/client/**"
@@ -23,7 +28,7 @@ env:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
     permissions:
       pull-requests: write
       contents: read
@@ -45,6 +50,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch PR head commits
+        if: github.event_name == 'pull_request_target'
+        run: |
+          git fetch origin ${{ github.event.pull_request.head.sha }}
+
       - name: Detect file changes
         id: filter
         shell: bash
@@ -54,7 +64,7 @@ jobs:
           PKG_DIR="${PKG_DIR}"
           EVENT="${GITHUB_EVENT_NAME}"
 
-          if [[ "${EVENT}" == "pull_request" ]]; then
+          if [[ "${EVENT}" == "pull_request" || "${EVENT}" == "pull_request_target" ]]; then
             # PR diff: base..head
             BEFORE_SHA="${{ github.event.pull_request.base.sha }}"
             AFTER_SHA="${{ github.event.pull_request.head.sha }}"
@@ -214,6 +224,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
