@@ -25,6 +25,7 @@ class QVACOCRBackend(OCRBackend):
         language: str = "en",
         timeout: int = 600,
         batch_size: int = 50,
+        model_dir: str = "rec_dyn",
         **kwargs
     ):
         """Initialize QVAC OCR backend.
@@ -35,6 +36,7 @@ class QVACOCRBackend(OCRBackend):
             language: Language code for OCR (e.g., 'en')
             timeout: Timeout in seconds for batch operations
             batch_size: Number of images to process in one batch
+            model_dir: Model directory name (e.g., 'rec_dyn' or 'rec_512')
             **kwargs: Additional arguments passed to parent
         """
         super().__init__(name="qvac", **kwargs)
@@ -42,6 +44,7 @@ class QVACOCRBackend(OCRBackend):
         self.language = language
         self.timeout = timeout
         self.batch_size = batch_size
+        self.model_dir = model_dir
 
         # Determine addon path
         if addon_path:
@@ -110,7 +113,8 @@ class QVACOCRBackend(OCRBackend):
                 str(self.batch_cli_script),
                 "--input", input_file,
                 "--output", output_file,
-                "--lang", self.language
+                "--lang", self.language,
+                "--model-dir", self.model_dir
             ]
 
             result = subprocess.run(

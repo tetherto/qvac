@@ -63,8 +63,8 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
 
     const onnxOcr = new ONNXOcr({
       params: {
-        pathDetector: 'models/ocr/rec_512/detector_craft.onnx',
-        pathRecognizer: `models/ocr/rec_512/recognizer_${recognizerModelName}.onnx`,
+        pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
+        pathRecognizer: `models/ocr/rec_dyn/recognizer_${recognizerModelName}.onnx`,
         langList: testCase.langList,
         useGPU: false,
         timeout

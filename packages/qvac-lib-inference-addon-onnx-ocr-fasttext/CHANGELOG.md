@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.1.6] - 2026-02-09
+
+### Changed
+
+- Replaced fixed-width recognizer preprocessing with EasyOCR-style dynamic-width resizing for improved OCR accuracy. Images are now resized proportionally to model height with LANCZOS4 interpolation instead of aspect-preserving resize to a fixed 512px width.
+- Switched to dynamic-width recognizer models (`rec_dyn`). Batch inference now uses per-batch proportional width instead of fixed `RECOGNIZER_MODEL_WIDTH`.
+- Updated default model path from `rec_512` to `rec_dyn` across tests, benchmarks, and scripts.
+- Replaced English recognizer with Latin recognizer in unit tests (`recognizer_english.onnx` → `recognizer_latin.onnx`).
+- Added `--model-dir` CLI option to batch OCR CLI, evaluate script, and QVAC OCR backend for configurable model directory.
+
+### Fixed
+
+- Improved Portuguese OCR accuracy (minor punctuation corrections in test expected outputs).
+
 # [0.1.2] - 2026-01-16
 
 ### Changed
