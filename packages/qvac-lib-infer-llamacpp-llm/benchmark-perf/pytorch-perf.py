@@ -16,10 +16,6 @@ from transformers.utils import logging as hf_logging
 hf_logging.set_verbosity_error()
 
 
-def now_ms():
-    return time.time() * 1000.0
-
-
 def log(message):
     ts = datetime.utcnow().isoformat()
     print(f"[{ts}] {message}", flush=True)
@@ -30,9 +26,28 @@ def capture_memory():
     return {"rssBytes": process.memory_info().rss}
 
 
-def stringify_prompt(messages):
+def format_prompt_for_tokenizer(tokenizer, messages):
+    """
+    Format messages using the tokenizer's chat template if available.
+    Falls back to manual formatting if chat template is not available.
+    
+    This ensures compatibility with models like Qwen that require specific formatting.
+    """
+    # Try to use the tokenizer's chat template (preferred for instruction-tuned models)
+    if hasattr(tokenizer, 'apply_chat_template') and tokenizer.chat_template:
+        try:
+            return tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        except Exception as exc:
+            # Fallback to manual formatting if chat template fails
+            log(f"Chat template failed: {exc}, using manual formatting")
+            pass
+    
+    # Fallback: manual formatting for models without chat template
     return "\n".join([f"{m['role']}: {m['content']}" for m in messages]) + "\nassistant:"
-
 
 
 def parse_args():
@@ -154,7 +169,7 @@ def load_torch_model(
         else:
             # device_map="auto" automatically selects MPS or CUDA based on availability
             kwargs = {"device_map": "auto"}
-        kwargs["torch_dtype"] = torch.float16
+    kwargs["torch_dtype"] = torch.float16
     # Flash attention 2 requires the flash-attn package (CUDA kernels) and CUDA device
     # It does not work on MPS (macOS) - flash-attn is a CUDA-only library
     if flash_attn and device != "cpu":
@@ -193,8 +208,8 @@ def load_torch_model(
             torch.backends.cuda.matmul.allow_tf32 = True
         if cache_type_k == "q4_0" or cache_type_v == "q4_0":
             torch.set_float32_matmul_precision("medium")
-        else:
-            torch.set_float32_matmul_precision("high")
+    else:
+        torch.set_float32_matmul_precision("high")
     model = AutoModelForCausalLM.from_pretrained(model_id, token=hf_token, **kwargs)
     tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
     return model, tokenizer
@@ -315,7 +330,8 @@ def run_once(
 
     kv_cache_prefill, kv_cache_bits = create_quantized_kv_cache(cache_type_k, cache_type_v, model)
 
-    prompt_text = stringify_prompt(prompt["messages"])
+    # Format prompt using tokenizer's chat template (required for Qwen and other instruction-tuned models)
+    prompt_text = format_prompt_for_tokenizer(tokenizer, prompt["messages"])
     batch_size = int(config.get("batch-size", "1"))
     ubatch_size = int(config.get("ubatch-size", str(batch_size)))
     if ubatch_size > batch_size:
@@ -329,18 +345,54 @@ def run_once(
     if ctx_size > 0:
         tokenizer_kwargs["truncation"] = True
         tokenizer_kwargs["max_length"] = ctx_size
-    inputs = tokenizer(prompt_texts, **tokenizer_kwargs)
+    try:
+        inputs = tokenizer(prompt_texts, **tokenizer_kwargs)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Tokenizer failed for prompt '{prompt['id']}': {exc}. "
+            f"Prompt text length: {len(prompt_text)}, ctx_size: {ctx_size}"
+        ) from exc
+    
     input_ids = inputs.input_ids.to(model.device)
     attention_mask = inputs.attention_mask.to(model.device) if hasattr(inputs, "attention_mask") else None
+    
+    # Validate tokenization result
+    if input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
+        raise RuntimeError(
+            f"Tokenizer returned empty input_ids. "
+            f"Prompt text length: {len(prompt_text)}, "
+            f"input_ids shape: {input_ids.shape}, "
+            f"ctx_size: {ctx_size}, "
+            f"tokenizer_kwargs: {tokenizer_kwargs}"
+        )
+    
     if attention_mask is not None:
         prompt_tokens = int(attention_mask.sum().item())
     else:
         prompt_tokens = int(input_ids.numel())
     max_prompt_len = int(input_ids.shape[1])
+    seq_len = max_prompt_len
+
+    # Validate that the prompt was tokenized into at least one token
+    if seq_len == 0:
+        raise RuntimeError(
+            f"Prompt tokenization resulted in 0 tokens. "
+            f"Prompt text length: {len(prompt_text)}, "
+            f"input_ids shape: {input_ids.shape}, "
+            f"ctx_size: {ctx_size}"
+        )
 
     max_new_tokens = int(config.get("n_predict", "256"))
     if ctx_size > 0:
         max_new_tokens = min(max_new_tokens, max(ctx_size - max_prompt_len, 0))
+
+    # Validate that there's room for at least one new token
+    if max_new_tokens <= 0:
+        raise RuntimeError(
+            f"No room for generation: ctx_size={ctx_size}, prompt_tokens={prompt_tokens}, "
+            f"max_prompt_len={max_prompt_len}, max_new_tokens={max_new_tokens}. "
+            f"Prompt exceeds or fills the context window."
+        )
 
     # Transformers TextStreamer only supports batch size 1. We approximate TTFT
     # with chunked prefill (token batching) and a single forward pass for the next token.
@@ -354,7 +406,6 @@ def run_once(
         past_key_values = kv_cache_prefill
         prefill_batch = max(batch_size, 1)
         prefill_micro_batch = max(min(ubatch_size, batch_size), 1)
-        seq_len = int(input_ids.shape[1])
         # Process all tokens except the last one in the prefill loop.
         # The last token will be processed in the decode step below to estimate TTFT.
         prefill_len = max(seq_len - 1, 0)  # Exclude last token from prefill
@@ -373,6 +424,7 @@ def run_once(
                 past_key_values = outputs.past_key_values
         # Process the last token once to estimate first-token latency (decode step).
         # This token was excluded from the prefill loop above to avoid double-processing.
+        first_token_logits = None
         if seq_len > 0:
             last_token = input_ids[:, -1:]
             last_mask = attention_mask[:, -1:] if attention_mask is not None else None
@@ -384,6 +436,8 @@ def run_once(
             )
             # Update past_key_values with the final decode step for generation
             past_key_values = outputs.past_key_values
+            # Extract logits for the first generated token (used to start generation)
+            first_token_logits = outputs.logits[:, -1, :]  # Shape: [batch_size, vocab_size]
         first_token_ms = (time.time() - ttft_start) * 1000.0
     log(f"Forward pass complete (TTFT={first_token_ms:.1f}ms)")
 
@@ -391,30 +445,46 @@ def run_once(
     output_text = ""
 
     # Use the populated KV cache from prefill phase for generation
-    # This avoids recomputing the prompt's KV cache during generation
-    # When past_key_values is provided, model.generate() expects only the last token(s)
-    # to continue generation, not the full prompt
+    # past_key_values already contains KV cache for ALL prompt tokens including the last one.
+    # We use the logits from the TTFT forward pass to get the first generated token,
+    # then pass that token to model.generate() to continue generation.
     gen_start = time.time()
-    # Use only the last token since we already have the KV cache for the full prompt
-    last_token_ids = input_ids[:, -1:] if input_ids.shape[1] > 0 else input_ids
-    last_attention_mask = attention_mask[:, -1:] if attention_mask is not None and attention_mask.shape[1] > 0 else None
+    if seq_len > 0 and first_token_logits is not None:
+        # Sample the first token from the logits obtained during TTFT measurement
+        # This avoids reprocessing the last prompt token which is already in past_key_values
+        first_token_id = torch.argmax(first_token_logits, dim=-1).unsqueeze(1)  # Shape: [batch_size, 1]
+        # Use the first generated token as input to model.generate()
+        # past_key_values already contains the last prompt token, so we start from the first generated token
+        generate_input_ids = first_token_id
+        generate_attention_mask = torch.ones_like(generate_input_ids) if attention_mask is not None else None
+    else:
+        # Fallback: if no prefill was done, use the original input_ids
+        # This should never happen if seq_len > 0 (validated earlier), but add safety check
+        if seq_len == 0 or input_ids.shape[1] == 0:
+            raise RuntimeError(
+                f"Cannot generate: empty input_ids (seq_len={seq_len}, shape={input_ids.shape})"
+            )
+        generate_input_ids = input_ids
+        generate_attention_mask = attention_mask
+    
     generated = model.generate(
-        input_ids=last_token_ids,
+        input_ids=generate_input_ids,
         max_new_tokens=max_new_tokens,
         do_sample=False,
         use_cache=True,
-        attention_mask=last_attention_mask,
-        past_key_values=past_key_values,  # Use populated cache from prefill, not a fresh empty cache
+        attention_mask=generate_attention_mask,
+        past_key_values=past_key_values,  # Contains KV cache for all prompt tokens including the last one
     )
     generated_len = int(generated.shape[1])
-    # Since we passed only the last token to generate(), the output includes:
-    # - 1 token from input (the last prompt token)
-    # - max_new_tokens generated tokens
-    # So total_generated_tokens is generated_len - 1
-    total_generated_tokens = max(generated_len - 1, 0)
-    # Decode only the generated tokens (skip the input token)
+    # When we pass the first generated token (from TTFT) to model.generate():
+    # - The output includes: 1 token from input (first generated token) + max_new_tokens additional tokens
+    # - generated_len = 1 + max_new_tokens
+    # - total_generated_tokens = generated_len (all tokens in output are generated, including the first one)
+    # Note: The first token was generated during TTFT measurement, and model.generate() continues from there
+    total_generated_tokens = max(generated_len, 0)
+    # Decode all generated tokens (the first token from TTFT + all tokens from model.generate())
     output_text = tokenizer.decode(
-        generated[0][1:], skip_special_tokens=True
+        generated[0], skip_special_tokens=True
     )
     log("Generation complete")
 

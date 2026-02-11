@@ -100,13 +100,7 @@ async function ensureModel ({ modelName, downloadUrl }) {
   return [modelName, modelDir]
 }
 
-async function ensureModelPath ({ modelName, downloadUrl }) {
-  const [downloadedModelName, modelDir] = await ensureModel({ modelName, downloadUrl })
-  return path.join(modelDir, downloadedModelName)
-}
-
 module.exports = {
   downloadFile,
-  ensureModel,
-  ensureModelPath
+  ensureModel
 }
