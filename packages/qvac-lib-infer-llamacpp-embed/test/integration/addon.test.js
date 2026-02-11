@@ -207,7 +207,7 @@ createDeviceModelTest('Model inference works correctly with array input where on
   ]
 
   // Verify that an error is thrown when one sequence exceeds model training context size
-  // Expected error: "encode_host_f32_sequences: number of tokens in sequence 1 (XXX)
+  // Expected error: "encodeHostF32Sequences: number of tokens in sequence 1 (XXX)
   // exceeds model training context size (XXX)"
   let response = null
   let jobId = null
@@ -240,11 +240,11 @@ createDeviceModelTest('Model inference works correctly with array input where on
   const errorMessage = extractErrorMessage(caughtError)
 
   // Verify the error message matches the expected format
-  // The error should mention encode_host_f32_sequences (for array input)
+  // The error should mention encodeHostF32Sequences (for array input)
   // or tokenizeInput (transformed) It should also mention which sequence is failing (sequence 1)
-  const hasEncodeError = errorMessage.includes('encode_host_f32_sequences')
+  const hasEncodeError = errorMessage.includes('encodeHostF32Sequences')
   const hasTokenizeError = errorMessage.includes('tokenizeInput')
-  t.ok(hasEncodeError || hasTokenizeError, 'Error should mention encode_host_f32_sequences or tokenizeInput')
+  t.ok(hasEncodeError || hasTokenizeError, 'Error should mention encodeHostF32Sequences or tokenizeInput')
   t.ok(errorMessage.includes('exceeds model training context size'), 'Error should mention exceeding context size')
   t.ok(errorMessage.includes(String(maxContextSize)), `Error should mention context size limit (${maxContextSize})`)
   t.ok(/\d+/.test(errorMessage), 'Error should include token count')
