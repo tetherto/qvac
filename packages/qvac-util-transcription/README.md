@@ -1,5 +1,10 @@
 # qvac-util-transcription
 
+> **DEPRECATED**: This package is deprecated and will no longer receive updates. Please use [`@qvac/sdk`](https://github.com/tetherto/qvac-sdk) for all transcription functionality. The SDK provides a more comprehensive and unified API for transcription and other AI capabilities.
+
+---
+
+
 A flexible and modular transcription pipeline that combines audio decoding and Whisper inference capabilities. This utility provides a streamlined way to process audio streams through an optional chain of components, with Voice Activity Detection (VAD) integrated within the Whisper configuration.
 
 ## Table of Contents
