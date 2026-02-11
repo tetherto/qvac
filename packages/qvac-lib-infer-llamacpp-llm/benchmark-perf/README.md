@@ -25,6 +25,9 @@ cd packages/qvac-lib-infer-llamacpp-llm
 # All-in-one runner (macOS/Linux)
 ./benchmark-perf/run-perf.sh --params device,ctx_size --reps 3 --judge --analyze --addon @qvac/llm-llamacpp
 
+# Quick smoke run (single model, single prompt, reps=1, minimal values per param)
+./benchmark-perf/run-perf.sh --quick
+
 # Run with a published addon version
 ./benchmark-perf/run-perf.sh --addon @qvac/llm-llamacpp@0.8.8
 
@@ -33,6 +36,9 @@ cd packages/qvac-lib-infer-llamacpp-llm
 
 # All-in-one runner (Windows)
 powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Params device,ctx_size -Reps 3 -Judge -Analyze -Addon @qvac/llm-llamacpp
+
+# Quick smoke run (single model, single prompt, reps=1, minimal values per param)
+powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Quick
 
 # Run with a published addon version
 powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Addon @qvac/llm-llamacpp@0.8.8
@@ -85,13 +91,14 @@ On macOS, the PyTorch baseline only supports `F16` quantization. The runner limi
 
 ### What It Produces
 
-- **Per-parameter effect plots**: one plot per metric for each parameter value (TTFT, TPS, load time, unload time, and accuracy if judge results exist).
+- **Per-parameter effect plots**: one plot per metric for each parameter value (TTFT, TPS, load time, unload time, and accuracy if judge results exist). Plots use mean with standard deviation error bars.
 - **Prompt throughput plot**: promptTokens/TTFT vs ctx_size, colored by batch-size to show prefill efficiency trends.
 - **PCA plots**: dimensionality reduction views over core perf metrics to visualize clustering by parameter values.
 - **QVAC vs PyTorch deltas**: side-by-side comparison for TTFT and TPS across identical params.
 - **Memory RSS plot**: end-of-run RSS per param value.
 - **Composite score plot**: a weighted, normalized score for quick ranking.
 - **Best-config summary**: `analysis/plots/best_configs_pareto.csv` with Pareto-optimal configs by platform/arch/backend/impl.
+- **Mean/std summary**: `analysis/plots/summary_mean_std.csv` with per-config metric mean and standard deviation.
 
 ### How to Read the Plots
 
@@ -118,6 +125,36 @@ Weights:
 - `modelUnloadMs` = -0.05
 - `memory_end_rss` = -0.05
 - `accuracyScore` = +0.20
+
+## Operational Notes
+
+### Quick Mode
+`--quick` reduces runtime by:
+- Running one model (baseline model if present)
+- Running only the first prompt
+- Using one repetition
+- Selecting two values per parameter: baseline + first alternative
+
+This is intended to validate end-to-end flow, not to produce final metrics.
+
+### Error Tracking
+When a run fails, the JSONL entry includes:
+- `errorStage` (e.g., `load`, `run`, `unload`)
+- `error` and `errorStack`
+
+This prevents failed runs from being silently ignored or misinterpreted.
+
+### Cleanup Requirements (QVAC)
+QVAC must always call `addon.unload()` and `loader.close()` even on errors to
+release native handles. Without this, the process can remain alive after
+`All QVAC runs completed` and block PyTorch/judge/analysis.
+
+### PyTorch Batch Generation
+Transformers `TextStreamer` only supports batch size 1, so batch runs use:
+- A forward pass to estimate TTFT
+- `model.generate()` per micro-batch to measure generation TPS
+
+This keeps batch-sized tests working while still capturing TTFT + TPS.
 
 ## Adding Parameters
 

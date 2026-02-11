@@ -68,11 +68,20 @@ def compute_score(df):
     return df
 
 
-def aggregate_metrics(df):
+def aggregate_metrics_mean(df):
     group_cols = ["modelId", "perfParam", "perfValue", "promptId", "platform", "arch", "backend", "impl"]
     metrics = ["ttftMs", "tps", "modelLoadMs", "modelUnloadMs", "promptTokensPerTtft", "accuracyScore"]
     available = [m for m in metrics if m in df.columns]
-    grouped = df.groupby(group_cols, dropna=False)[available].median().reset_index()
+    grouped = df.groupby(group_cols, dropna=False)[available].mean().reset_index()
+    return grouped
+
+
+def aggregate_metrics_mean_std(df):
+    group_cols = ["modelId", "perfParam", "perfValue", "promptId", "platform", "arch", "backend", "impl"]
+    metrics = ["ttftMs", "tps", "modelLoadMs", "modelUnloadMs", "promptTokensPerTtft", "accuracyScore"]
+    available = [m for m in metrics if m in df.columns]
+    grouped = df.groupby(group_cols, dropna=False)[available].agg(["mean", "std"]).reset_index()
+    grouped.columns = ["_".join(col).strip("_") for col in grouped.columns.values]
     return grouped
 
 
@@ -128,7 +137,9 @@ def plot_param_effects(df, output_dir):
                 x="perfValue",
                 y=metric,
                 hue="impl",
-                marker="o"
+                marker="o",
+                estimator="mean",
+                errorbar="sd"
             )
             plt.title(f"{param} vs {metric}")
             plt.tight_layout()
@@ -139,9 +150,20 @@ def plot_param_effects(df, output_dir):
 def plot_prompt_throughput(df, output_dir):
     if "promptTokensPerTtft" not in df.columns:
         return
+    subset = df[df["perfParam"] == "ctx_size"]
+    if subset.empty:
+        return
     plt.figure(figsize=(10, 5))
-    sns.scatterplot(data=df, x="perfValue", y="promptTokensPerTtft", hue="impl")
-    plt.title("PromptTokens/TTFT by perfValue")
+    sns.lineplot(
+        data=subset,
+        x="perfValue",
+        y="promptTokensPerTtft",
+        hue="impl",
+        marker="o",
+        estimator="mean",
+        errorbar="sd"
+    )
+    plt.title("PromptTokens/TTFT by ctx_size")
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "prompt_tokens_per_ttft.png"))
     plt.close()
@@ -166,10 +188,10 @@ def plot_qvac_vs_torch(df, output_dir):
     if "impl" not in df.columns:
         return
     merged = df.pivot_table(
-        index=["modelId", "perfParam", "perfValue", "promptId", "rep", "platform", "arch", "backend"],
+        index=["modelId", "perfParam", "perfValue", "promptId", "platform", "arch", "backend"],
         columns="impl",
         values=["ttftMs", "tps", "modelLoadMs", "modelUnloadMs"],
-        aggfunc="median"
+        aggfunc="mean"
     )
     if merged.empty:
         return
@@ -194,27 +216,51 @@ def plot_qvac_vs_torch(df, output_dir):
 def plot_memory(df, output_dir):
     if "memory_end_rss" not in df.columns:
         return
-    plt.figure(figsize=(10, 5))
-    sns.scatterplot(data=df, x="perfValue", y="memory_end_rss", hue="impl")
-    plt.title("Memory RSS (end) by perfValue")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "memory_rss_end.png"))
-    plt.close()
+    for param in sorted(df["perfParam"].dropna().unique()):
+        subset = df[df["perfParam"] == param]
+        if subset.empty:
+            continue
+        plt.figure(figsize=(10, 5))
+        sns.lineplot(
+            data=subset,
+            x="perfValue",
+            y="memory_end_rss",
+            hue="impl",
+            marker="o",
+            estimator="mean",
+            errorbar="sd"
+        )
+        plt.title(f"Memory RSS (end) by {param}")
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f"memory_rss_end_{param}.png"))
+        plt.close()
 
 
 def plot_score(df, output_dir):
     if "score" not in df.columns:
         return
-    plt.figure(figsize=(10, 5))
-    sns.lineplot(data=df, x="perfValue", y="score", hue="impl", marker="o")
-    plt.title("Composite score by perfValue")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "score_by_param.png"))
-    plt.close()
+    for param in sorted(df["perfParam"].dropna().unique()):
+        subset = df[df["perfParam"] == param]
+        if subset.empty:
+            continue
+        plt.figure(figsize=(10, 5))
+        sns.lineplot(
+            data=subset,
+            x="perfValue",
+            y="score",
+            hue="impl",
+            marker="o",
+            estimator="mean",
+            errorbar="sd"
+        )
+        plt.title(f"Composite score by {param}")
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f"score_by_param_{param}.png"))
+        plt.close()
 
 
 def write_best_configs(df, output_dir):
-    grouped = aggregate_metrics(df)
+    grouped = aggregate_metrics_mean(df)
     outputs = []
     for (model_id, platform, arch, backend, impl), subset in grouped.groupby(["modelId", "platform", "arch", "backend", "impl"]):
         subset = subset.dropna(subset=["ttftMs", "tps"])
@@ -246,6 +292,10 @@ def main():
 
     df = normalize_memory(df)
     df = compute_score(df)
+
+    summary = aggregate_metrics_mean_std(df)
+    if not summary.empty:
+        summary.to_csv(os.path.join(args.output, "summary_mean_std.csv"), index=False)
 
     plot_param_effects(df, args.output)
     plot_prompt_throughput(df, args.output)

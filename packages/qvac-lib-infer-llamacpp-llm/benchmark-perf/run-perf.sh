@@ -12,6 +12,7 @@ RUN_ANALYSIS="false"
 ADDON=""
 HF_TOKEN="${HF_TOKEN:-}"
 ADDON_MODULE=""
+QUICK="false"
 
 is_path_spec() {
   [[ "$1" == /* || "$1" == ./* || "$1" == ../* || "$1" == "~/"* ]]
@@ -76,6 +77,10 @@ while [[ $# -gt 0 ]]; do
     --hf-token)
       HF_TOKEN="$2"
       shift 2
+      ;;
+    --quick)
+      QUICK="true"
+      shift 1
       ;;
     *)
       echo "Unknown argument: $1"
@@ -153,13 +158,24 @@ if [[ -n "${HF_TOKEN}" ]]; then
   export HF_TOKEN
 fi
 if [[ -n "${ADDON}" ]]; then
-  bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" --addon "${ADDON_MODULE}"
+  qvac_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" --addon "${ADDON_MODULE}")
 else
-  bare "${PERF_DIR}/qvac-perf.js" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}"
+  qvac_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}")
 fi
+if [[ "${QUICK}" == "true" ]]; then
+  qvac_args+=(--quick)
+fi
+bare "${PERF_DIR}/qvac-perf.js" "${qvac_args[@]}"
 
 echo "==> Running PyTorch perf"
-"${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" --config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}" ${HF_TOKEN:+--hf-token "${HF_TOKEN}"}
+torch_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}")
+if [[ -n "${HF_TOKEN}" ]]; then
+  torch_args+=(--hf-token "${HF_TOKEN}")
+fi
+if [[ "${QUICK}" == "true" ]]; then
+  torch_args+=(--quick)
+fi
+"${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" "${torch_args[@]}"
 
 if [[ "${RUN_JUDGE}" == "true" ]]; then
   echo "==> Running judge"

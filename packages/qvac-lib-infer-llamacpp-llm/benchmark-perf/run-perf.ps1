@@ -5,7 +5,8 @@ param(
   [string]$Addon = "",
   [string]$HfToken = "",
   [switch]$Judge,
-  [switch]$Analyze
+  [switch]$Analyze,
+  [switch]$Quick
 )
 
 $PerfDir = Split-Path -Parent $PSScriptRoot
@@ -102,6 +103,9 @@ if ($Addon -ne "") {
   $addonArgs += "--addon"
   $addonArgs += $AddonModule
 }
+if ($Quick) {
+  $addonArgs += "--quick"
+}
 if ($HfToken -ne "") {
   $env:HF_TOKEN = $HfToken
 } elseif ($env:HF_TOKEN) {
@@ -114,6 +118,9 @@ $hfArgs = @()
 if ($HfToken -ne "") {
   $hfArgs += "--hf-token"
   $hfArgs += $HfToken
+}
+if ($Quick) {
+  $hfArgs += "--quick"
 }
 & $VenvPython "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
 
