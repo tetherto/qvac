@@ -37,6 +37,7 @@ jobs:
       changelog-path: packages/qvac-lib-infer-llamacpp-llm/CHANGELOG.md
 
   sanity-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -49,12 +50,17 @@ jobs:
           workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
