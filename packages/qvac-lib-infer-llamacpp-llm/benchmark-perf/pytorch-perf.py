@@ -355,8 +355,11 @@ def run_once(
         prefill_batch = max(batch_size, 1)
         prefill_micro_batch = max(min(ubatch_size, batch_size), 1)
         seq_len = int(input_ids.shape[1])
-        for start in range(0, seq_len, prefill_batch):
-            end = min(start + prefill_batch, seq_len)
+        # Process all tokens except the last one in the prefill loop.
+        # The last token will be processed in the decode step below to estimate TTFT.
+        prefill_len = max(seq_len - 1, 0)  # Exclude last token from prefill
+        for start in range(0, prefill_len, prefill_batch):
+            end = min(start + prefill_batch, prefill_len)
             for micro_start in range(start, end, prefill_micro_batch):
                 micro_end = min(micro_start + prefill_micro_batch, end)
                 chunk_ids = input_ids[:, micro_start:micro_end]
@@ -368,17 +371,19 @@ def run_once(
                     use_cache=True,
                 )
                 past_key_values = outputs.past_key_values
-        # One more step to estimate first-token latency (prefill + decode step).
-        last_token = input_ids[:, -1:]
-        last_mask = attention_mask[:, -1:] if attention_mask is not None else None
-        outputs = model(
-            input_ids=last_token,
-            attention_mask=last_mask,
-            past_key_values=past_key_values,
-            use_cache=True,
-        )
-        # Update past_key_values with the final decode step for generation
-        past_key_values = outputs.past_key_values
+        # Process the last token once to estimate first-token latency (decode step).
+        # This token was excluded from the prefill loop above to avoid double-processing.
+        if seq_len > 0:
+            last_token = input_ids[:, -1:]
+            last_mask = attention_mask[:, -1:] if attention_mask is not None else None
+            outputs = model(
+                input_ids=last_token,
+                attention_mask=last_mask,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
+            # Update past_key_values with the final decode step for generation
+            past_key_values = outputs.past_key_values
         first_token_ms = (time.time() - ttft_start) * 1000.0
     log(f"Forward pass complete (TTFT={first_token_ms:.1f}ms)")
 
