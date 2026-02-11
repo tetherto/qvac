@@ -7,7 +7,7 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "addon/BertErrors.hpp"
-#include "model-interface/BertModel.h"
+#include "model-interface/BertModel.hpp"
 
 namespace fs = std::filesystem;
 
@@ -246,7 +246,7 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
 
   // Process some input to generate stats
   std::string prompt = "Test prompt for stats";
-  model.encode_host_f32(prompt);
+  model.encodeHostF32(prompt);
 
   auto stats = model.runtimeStats();
   EXPECT_GT(stats.size(), 0);
@@ -309,8 +309,8 @@ TEST_F(BertModelTest, ModelLoadsSuccessfully) {
   model.waitForLoadInitialization();
 
   EXPECT_TRUE(model.isLoaded());
-  EXPECT_NE(model.get_model(), nullptr);
-  EXPECT_NE(model.get_ctx(), nullptr);
+  EXPECT_NE(model.getModel(), nullptr);
+  EXPECT_NE(model.getCtx(), nullptr);
 }
 
 TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
@@ -343,7 +343,7 @@ TEST_F(BertModelTest, EncodeHostF32SingleString) {
   }
 
   std::string prompt = "Hello world";
-  BertEmbeddings embeddings = model.encode_host_f32(prompt);
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -376,7 +376,7 @@ TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
 
   std::vector<std::string> prompts = {
       "Hello world", "Test embedding", "Another prompt"};
-  BertEmbeddings embeddings = model.encode_host_f32(prompts);
+  BertEmbeddings embeddings = model.encodeHostF32(prompts);
 
   EXPECT_EQ(embeddings.size(), 3);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -414,7 +414,7 @@ TEST_F(BertModelTest, EncodeHostF32EmptyString) {
   }
 
   std::string prompt = "";
-  BertEmbeddings embeddings = model.encode_host_f32(prompt);
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -435,7 +435,7 @@ TEST_F(BertModelTest, EncodeHostF32Sequences) {
   }
 
   std::vector<std::string> sequences = {"First sequence", "Second sequence"};
-  BertEmbeddings embeddings = model.encode_host_f32_sequences(sequences);
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
 
   EXPECT_EQ(embeddings.size(), 2);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -460,7 +460,7 @@ TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
   }
 
   std::vector<std::string> sequences;
-  BertEmbeddings embeddings = model.encode_host_f32_sequences(sequences);
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
 
   EXPECT_EQ(embeddings.size(), 0);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -559,7 +559,7 @@ TEST_F(BertModelTest, ContextOverflowSingleString) {
   }
 
   // Get model's context size
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size when tokenized
@@ -571,8 +571,7 @@ TEST_F(BertModelTest, ContextOverflowSingleString) {
   }
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
-  EXPECT_THROW(
-      { model.encode_host_f32(longString); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
@@ -589,7 +588,7 @@ TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size
@@ -603,7 +602,7 @@ TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
       "Normal prompt", longString, "Another normal"};
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
-  EXPECT_THROW({ model.encode_host_f32(prompts); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.encodeHostF32(prompts); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ContextOverflowSequences) {
@@ -620,7 +619,7 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size
@@ -634,8 +633,7 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
   EXPECT_THROW(
-      { model.encode_host_f32_sequences(sequences); },
-      qvac_errors::StatusError);
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ProcessWithContextOverflow) {
@@ -652,7 +650,7 @@ TEST_F(BertModelTest, ProcessWithContextOverflow) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   int repeatCount = (nCtxTrain / 2) + 100;
@@ -684,7 +682,7 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
   // Process multiple times to verify model state is maintained
   for (int i = 0; i < 3; ++i) {
     std::string prompt = "Test prompt " + std::to_string(i);
-    BertEmbeddings embeddings = model.encode_host_f32(prompt);
+    BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
     EXPECT_EQ(embeddings.size(), 1);
     EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -706,7 +704,7 @@ TEST_F(BertModelTest, PreprocessPrompt) {
   }
 
   std::string prompt = "Line 1\nLine 2\nLine 3";
-  std::vector<std::string> preprocessed = model.preprocess_prompt(prompt);
+  std::vector<std::string> preprocessed = model.preprocessPrompt(prompt);
 
   EXPECT_GT(preprocessed.size(), 0);
   // Preprocessing should split by newlines

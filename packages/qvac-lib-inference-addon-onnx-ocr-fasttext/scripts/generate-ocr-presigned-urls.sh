@@ -19,8 +19,8 @@ set -e
 # Configuration
 REGION="${AWS_REGION:-eu-central-1}"
 BUCKET="${S3_BUCKET:-tether-ai-dev}"
-# Use rec_512 subdirectory - matches desktop workflow
-BASE_PATH="qvac_models_compiled/ocr/rec_512"
+# Use rec_dyn subdirectory - dynamic width models
+BASE_PATH="qvac_models_compiled/ocr/rec_dyn"
 
 echo "🔑 Generating presigned URLs for OCR models..."
 echo "   Region: $REGION"
