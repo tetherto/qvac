@@ -1,7 +1,8 @@
 #include <bare.h>
 #include "qvac-lib-infer-llamacpp-embed.hpp"
 
-js_value_t* qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
+js_value_t*
+qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports) {
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn) \
@@ -32,4 +33,4 @@ js_value_t* qvacLibInferLlamacppEmbedExports(js_env_t* env, js_value_t* exports)
   return exports;
 }
 
-BARE_MODULE(qvac-lib-infer-llamacpp-embed, qvacLibInferLlamacppEmbedExports)
+BARE_MODULE("qvac-lib-infer-llamacpp-embed", qvacLibInferLlamacppEmbedExports)

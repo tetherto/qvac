@@ -65,7 +65,8 @@ struct BertCommonInitResult {
 /// trained to generate general word embeddings that summarize text
 /// information and that can be used, for example, to compare text's
 /// similarity or to search for most meaningful entries on a vector database.
-// NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes, readability-avoid-const-params-in-decls)
+// NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,
+// readability-avoid-const-params-in-decls)
 class BertModel {
 private:
   BertCommonInitResult init_;
@@ -91,7 +92,7 @@ public:
   using InputView = Input;
   using Output = OutputType;
 
-  using TokenizerHandle = void *;
+  using TokenizerHandle = void*;
 
   /// @brief This constructor allows to specify model to load more clearly and
   /// override default common params by a configuration string.
@@ -102,10 +103,10 @@ public:
       const std::string& backendsDir = "");
 
   /// @brief Construct with already parsed parameters.
-  explicit BertModel(common_params &params);
+  explicit BertModel(common_params& params);
 
   /// @see BertModel::BertModel(common_params)
-  void init(common_params &params);
+  void init(common_params& params);
 
   /// @see BertModel::BertModel(string, string)
   void init(
@@ -115,7 +116,6 @@ public:
   /// @brief Deletes model implementation.
   ~BertModel();
 
-  
   BertModel(const BertModel&) = delete;
   BertModel& operator=(const BertModel&) = delete;
   BertModel(BertModel&&) = delete;
@@ -130,7 +130,8 @@ public:
   BertEmbeddings encodeHostF32(const std::string& prompt);
 
   /// @brief Process text of embeddings of an already pre-processed input.
-  /// @note Awaits for initialization to finish if its loading .gguf shards asynchronously.
+  /// @note Awaits for initialization to finish if its loading .gguf shards
+  /// asynchronously.
   BertEmbeddings encodeHostF32(const std::vector<std::string>& prompts);
 
   /// @brief Process an array of sequences. Each sequence is processed as-is
@@ -158,9 +159,9 @@ public:
   // Methods below are accessed by the Addon<BertModel> template.
 
   void reset();
-  void reload(){}
-  void load(){}
-  void unload(){}
+  void reload() {}
+  void load() {}
+  void unload() {}
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
 
@@ -175,7 +176,8 @@ public:
 
   bool isLoaded() const;
 
-  void set_weights_for_file(  // NOLINT(readability-identifier-naming) used from addon template / other packages
+  void set_weights_for_file( // NOLINT(readability-identifier-naming) used from
+                             // addon template / other packages
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& shard);
 
@@ -195,7 +197,9 @@ private:
   tokenizeInput(const std::vector<std::string>& prompts) const;
 
   /// @brief n_embd_count: Output parameter, the number of embeddings.
-  BertEmbeddings
-  processBatched(const std::vector<std::vector<int32_t>>& inputs, std::size_t nPrompts) const;
+  BertEmbeddings processBatched(
+      const std::vector<std::vector<int32_t>>& inputs,
+      std::size_t nPrompts) const;
 };
-// NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes, readability-avoid-const-params-in-decls)
+// NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,
+// readability-avoid-const-params-in-decls)

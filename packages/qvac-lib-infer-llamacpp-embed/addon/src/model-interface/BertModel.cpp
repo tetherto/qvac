@@ -27,14 +27,17 @@ void batchAddSeq(
     llama_seq_id seqId) {
   size_t numTokens = tokens.size();
   for (size_t i = 0; i < numTokens; i++) {
-    common_batch_add(batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
+    common_batch_add(
+        batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
   }
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void batchDecode(
-    llama_context* ctx, llama_batch& batch, float* output, std::size_t numSeq, // NOLINT(bugprone-easily-swappable-parameters)
-    int numEmbd, int embeddingNorm) /* NOLINT(bugprone-easily-swappable-parameters) */ {
+    llama_context* ctx, llama_batch& batch, float* output,
+    std::size_t numSeq, // NOLINT(bugprone-easily-swappable-parameters)
+    int numEmbd,
+    int embeddingNorm) /* NOLINT(bugprone-easily-swappable-parameters) */ {
   enum llama_pooling_type poolingType = llama_pooling_type(ctx);
 
   // clear previous kv_cache values (irrelevant for embeddings)
@@ -54,7 +57,8 @@ void batchDecode(
         nullptr);
   }
 
-  std::span<const int8_t> logitsSpan{batch.logits, static_cast<std::size_t>(batch.n_tokens)};
+  std::span<const int8_t> logitsSpan{
+      batch.logits, static_cast<std::size_t>(batch.n_tokens)};
 
   for (int i = 0; i < batch.n_tokens; i++) {
     if (logitsSpan[i] == 0) {
@@ -77,7 +81,10 @@ void batchDecode(
     } else {
       // try to get sequence embeddings - supported only when pooling_type is
       // not NONE
-      embd = llama_get_embeddings_seq(ctx, *batch.seq_id[i]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      embd = llama_get_embeddings_seq(
+          ctx,
+          *batch.seq_id
+               [i]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       embeddingPos = *batch.seq_id[i];
       if (embd == nullptr) {
@@ -88,18 +95,21 @@ void batchDecode(
       }
     }
 
-    std::size_t outputIndexOffset = static_cast<std::size_t>(embeddingPos) * static_cast<std::size_t>(numEmbd);
+    std::size_t outputIndexOffset = static_cast<std::size_t>(embeddingPos) *
+                                    static_cast<std::size_t>(numEmbd);
     std::size_t capacityCount = (poolingType == LLAMA_POOLING_TYPE_NONE)
-                                          ? static_cast<std::size_t>(batch.n_tokens)
-                                          : numSeq;
-    std::span<float> outputSpan{output, capacityCount * static_cast<std::size_t>(numEmbd)};
+                                    ? static_cast<std::size_t>(batch.n_tokens)
+                                    : numSeq;
+    std::span<float> outputSpan{
+        output, capacityCount * static_cast<std::size_t>(numEmbd)};
     float* out = outputSpan.subspan(outputIndexOffset).data();
     common_embd_normalize(embd, out, numEmbd, embeddingNorm);
   }
 }
 
 // Helper functions to reduce cognitive complexity in tokenizeInput
-std::vector<std::vector<int32_t>> tokenizePrompts(llama_context* ctx, const std::vector<std::string>& prompts) {
+std::vector<std::vector<int32_t>>
+tokenizePrompts(llama_context* ctx, const std::vector<std::string>& prompts) {
   std::vector<std::vector<int32_t>> results;
   results.reserve(prompts.size());
   for (const auto& prompt : prompts) {
@@ -108,7 +118,8 @@ std::vector<std::vector<int32_t>> tokenizePrompts(llama_context* ctx, const std:
   return results;
 }
 
-void validateBatchLimitsOrThrow(const std::vector<std::vector<int32_t>>& inputs, uint64_t nBatch) {
+void validateBatchLimitsOrThrow(
+    const std::vector<std::vector<int32_t>>& inputs, uint64_t nBatch) {
   for (const auto& inp : inputs) {
     if (inp.size() > nBatch) {
       std::string msg = string_format(
@@ -183,7 +194,9 @@ void ensureLastTokenIsSpecial(
   }
 }
 
-void logPrompt(llama_context* ctx, const std::vector<int32_t>& input, const std::string& prompt) {
+void logPrompt(
+    llama_context* ctx, const std::vector<int32_t>& input,
+    const std::string& prompt) {
   qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
       GGML_LOG_LEVEL_INFO,
       string_format("%s: prompt: '%s'\n", __func__, prompt.c_str()).c_str(),
@@ -204,10 +217,13 @@ void logPrompt(llama_context* ctx, const std::vector<int32_t>& input, const std:
   }
 }
 
-void logTokenizationIfVerbose(bool verbose, llama_context* ctx,
-                              const std::vector<std::vector<int32_t>>& inputs,
-                              const std::vector<std::string>& prompts) {
-  if (!verbose) { return; }
+void logTokenizationIfVerbose(
+    bool verbose, llama_context* ctx,
+    const std::vector<std::vector<int32_t>>& inputs,
+    const std::vector<std::string>& prompts) {
+  if (!verbose) {
+    return;
+  }
   for (std::size_t i = 0; i < inputs.size(); ++i) {
     logPrompt(ctx, inputs[i], prompts[i]);
   }
@@ -217,12 +233,12 @@ void logTokenizationIfVerbose(bool verbose, llama_context* ctx,
 
 BertEmbeddings::BertEmbeddings(
     std::vector<float> flatData, BertEmbeddings::Layout layout)
-    : flat_embd_(std::move(flatData)),
-      embeddingCount_(layout.embeddingCount),
+    : flat_embd_(std::move(flatData)), embeddingCount_(layout.embeddingCount),
       embeddingSize_(layout.embeddingSize) {}
 
 std::span<const float> BertEmbeddings::operator[](std::size_t index) const {
-    return std::span<const float>(flat_embd_).subspan(index * embeddingSize_, embeddingSize_);
+  return std::span<const float>(flat_embd_)
+      .subspan(index * embeddingSize_, embeddingSize_);
 }
 
 std::size_t BertEmbeddings::size() const { return embeddingCount_; }
@@ -335,7 +351,10 @@ setupParams(const std::string& modelGgufPath, std::string_view config) {
 
   if (!common_params_parse(
           argc, argv.data(), params, LLAMA_EXAMPLE_EMBEDDING)) {
-    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidConfiguration), "Invalid configuration parameters.");
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidConfiguration),
+        "Invalid configuration parameters.");
   }
 
   return params;
@@ -363,8 +382,10 @@ BertModel::BertModel(
       backendsDir);
 }
 
-BertModel::BertModel(common_params &params)
-    : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{}, pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false), loadingContext_(InitLoader::getLoadingContext("BertModel")),
+BertModel::BertModel(common_params& params)
+    : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
+      pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
+      loadingContext_(InitLoader::getLoadingContext("BertModel")),
       shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
   auto modelInit = [this](common_params& commonParams) {
     this->init(commonParams);
@@ -391,7 +412,7 @@ void BertModel::init(
   BertModel::init(params);
 }
 
-void BertModel::init(common_params &params) {
+void BertModel::init(common_params& params) {
   lazyCommonInit();
   initializeBackend();
 
@@ -512,7 +533,7 @@ BertEmbeddings BertModel::process(
 }
 
 bool BertModel::isLoaded() const {
-    return is_loaded_ && model_ != nullptr && ctx_ != nullptr;
+  return is_loaded_ && model_ != nullptr && ctx_ != nullptr;
 }
 
 void BertModel::initializeBackend(const std::string& backendsDir) {
@@ -558,7 +579,7 @@ void BertModel::set_weights_for_file(
 }
 
 std::vector<std::vector<int32_t>>
-BertModel::tokenizeInput(const std::vector<std::string> & prompts) const {
+BertModel::tokenizeInput(const std::vector<std::string>& prompts) const {
   uint64_t nBatch = init_.params.n_batch;
 
   // tokenize all prompts first
@@ -606,12 +627,13 @@ BertEmbeddings BertModel::processBatched(
   }
 
   // allocate output
-  std::vector<float> embeddings(embeddingCount * static_cast<std::size_t>(n_embd), 0.0F);
+  std::vector<float> embeddings(
+      embeddingCount * static_cast<std::size_t>(n_embd), 0.0F);
   float* emb = embeddings.data();
 
   // break into batches
   std::size_t numStoredEmbeddings = 0; // number of embeddings already stored
-  std::size_t numPromptsInBatch = 0; // number of prompts in current batch
+  std::size_t numPromptsInBatch = 0;   // number of prompts in current batch
   for (std::size_t k = 0; k < nPrompts; k++) {
     // clamp to n_batch tokens
     const auto& inp = inputs[k];
@@ -621,9 +643,20 @@ BertEmbeddings BertModel::processBatched(
     // encode if at capacity
     if (batch_.n_tokens + numTokensInPrompt > init_.params.n_batch) {
       std::span<float> embSpan{emb, embeddings.size()};
-      float* out = embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd)).data();
-      batchDecode(ctx_, batch_, out, static_cast<int>(numPromptsInBatch), n_embd, init_.params.embd_normalize);
-      numStoredEmbeddings += (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens : numPromptsInBatch);
+      float* out =
+          embSpan
+              .subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd))
+              .data();
+      batchDecode(
+          ctx_,
+          batch_,
+          out,
+          static_cast<int>(numPromptsInBatch),
+          n_embd,
+          init_.params.embd_normalize);
+      numStoredEmbeddings +=
+          (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens
+                                                   : numPromptsInBatch);
       numPromptsInBatch = 0;
       common_batch_clear(batch_);
     }
@@ -635,9 +668,19 @@ BertEmbeddings BertModel::processBatched(
 
   // final batch
   std::span<float> embSpan{emb, embeddings.size()};
-      float* out = embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd)).data();
-  batchDecode(ctx_, batch_, out, static_cast<int>(numPromptsInBatch), n_embd, init_.params.embd_normalize);
-  return BertEmbeddings(std::move(embeddings), BertEmbeddings::Layout{embeddingCount, static_cast<std::size_t>(n_embd)});
+  float* out =
+      embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd))
+          .data();
+  batchDecode(
+      ctx_,
+      batch_,
+      out,
+      static_cast<int>(numPromptsInBatch),
+      n_embd,
+      init_.params.embd_normalize);
+  return BertEmbeddings(
+      std::move(embeddings),
+      BertEmbeddings::Layout{embeddingCount, static_cast<std::size_t>(n_embd)});
 }
 
 BertEmbeddings
@@ -714,8 +757,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
 
     if (perf.t_p_eval_ms > 0) {
       stats.emplace_back(
-          "tokens_per_second",
-          perf.n_p_eval * msPerSecond / perf.t_p_eval_ms);
+          "tokens_per_second", perf.n_p_eval * msPerSecond / perf.t_p_eval_ms);
     }
 
     stats.emplace_back(

@@ -571,8 +571,7 @@ TEST_F(BertModelTest, ContextOverflowSingleString) {
   }
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
-  EXPECT_THROW(
-      { model.encodeHostF32(longString); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
@@ -634,8 +633,7 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
   EXPECT_THROW(
-      { model.encodeHostF32Sequences(sequences); },
-      qvac_errors::StatusError);
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ProcessWithContextOverflow) {
