@@ -46,10 +46,6 @@ class LlamaInterface {
     this._binding.activate(this._handle)
   }
 
-  async resumeFinetune () {
-    return this._binding.resumeFinetune(this._handle)
-  }
-
   /**
    * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
    */

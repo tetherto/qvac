@@ -731,8 +731,7 @@ bool LlamaModel::LoadMedia(const std::vector<uint8_t>& input) {
 #ifndef STANDALONE_TEST_BUILD
 void LlamaModel::finetune(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-    std::function<void(const std::string&)> logCallback,
-    bool allowResumeFromPause) {
+    std::function<void(const std::string&)> logCallback) {
   using namespace llama_finetuning_helpers;
 
   llama_context* ctx = getContext();
@@ -748,6 +747,15 @@ void LlamaModel::finetune(
   try {
 
     validateFinetuningParams(params);
+
+    std::filesystem::path checkpointDir =
+        params.checkpointSaveDir.empty()
+            ? std::filesystem::path{"./checkpoints"}
+            : std::filesystem::path{params.checkpointSaveDir};
+    bool allowResumeFromPause = pauseCheckpointExists(checkpointDir);
+    if (allowResumeFromPause) {
+      clearPauseRequest();
+    }
 
     auto dataset = prepareTrainingDataset(params);
     std::unique_ptr<
@@ -825,11 +833,6 @@ void LlamaModel::finetune(
 
     CheckpointMetadata resumeMeta{};
     bool resumingFromPause = false;
-    std::filesystem::path checkpointDir =
-        params.checkpointSaveDir.empty()
-            ? std::filesystem::path{"./checkpoints"}
-            : std::filesystem::path{params.checkpointSaveDir};
-
     std::filesystem::path pausePath;
 
     if (allowResumeFromPause) {
@@ -890,7 +893,7 @@ void LlamaModel::finetune(
         adapterPtr(adapter, llama_adapter_lora_free);
 
     pausedCheckpointState_.reset();
-    currentCheckpointState_ = nullptr;
+    currentCheckpointState_.store(nullptr, std::memory_order_release);
 
     auto checkpointState = initializeCheckpointing(
         params, adapterPtr.get(), &schedulerState, logCallback);
@@ -938,8 +941,9 @@ void LlamaModel::finetune(
 
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
-      currentCheckpointState_ = checkpointState.get();
-      setGlobalCheckpointState(checkpointState.get());
+      currentCheckpointState_.store(checkpointState.get(),
+                                   std::memory_order_release);
+      setCurrentCheckpointState(checkpointState.get());
     }
 
     try {
@@ -971,11 +975,11 @@ void LlamaModel::finetune(
       }
       checkpointState->pauseWaitDone.store(true);
       checkpointState->pauseDoneCv.notify_all();
-      clearGlobalCheckpointState();
+      clearCurrentCheckpointState();
       if (wasPaused) {
         pausedCheckpointState_ = std::move(checkpointState);
       } else {
-        currentCheckpointState_ = nullptr;
+        currentCheckpointState_.store(nullptr, std::memory_order_release);
         pausedCheckpointState_.reset();
       }
     }
@@ -992,10 +996,11 @@ void LlamaModel::finetune(
       }
     }
   } catch (const std::exception& ex) {
-    if (currentCheckpointState_) currentCheckpointState_->setIdle();
+    auto* state = currentCheckpointState_.load(std::memory_order_acquire);
+    if (state) state->setIdle();
     if (pausedCheckpointState_) pausedCheckpointState_->setIdle();
-    llama_finetuning_helpers::clearGlobalCheckpointState();
-    currentCheckpointState_ = nullptr;
+    llama_finetuning_helpers::clearCurrentCheckpointState();
+    currentCheckpointState_.store(nullptr, std::memory_order_release);
     if (logCallback) {
       logCallback(std::string{"Finetune error: "} + ex.what());
       logCallback(R"({"type":"FinetuneComplete","status":"ERROR"})");
@@ -1374,34 +1379,22 @@ void LlamaModel::saveLoraAdapter(
 }
 
 bool LlamaModel::requestPause() {
-  if (currentCheckpointState_ != nullptr) {
-    currentCheckpointState_->pauseRequested.store(true);
-    llama_context* ctx = getContext();
-    if (ctx != nullptr) {
-      llama_opt_request_stop(ctx);
-    }
-    return true;
+  llama_finetuning_helpers::TrainingCheckpointState* state =
+      currentCheckpointState_.load(std::memory_order_acquire);
+  if (state == nullptr) {
+    return false;
   }
-
-  llama_finetuning_helpers::TrainingCheckpointState* globalState =
-      llama_finetuning_helpers::getGlobalCheckpointState();
-  if (globalState != nullptr) {
-    globalState->pauseRequested.store(true);
-    llama_context* ctx = getContext();
-    if (ctx != nullptr) {
-      llama_opt_request_stop(ctx);
-    }
-    return true;
+  state->pauseRequested.store(true);
+  llama_context* ctx = getContext();
+  if (ctx != nullptr) {
+    llama_opt_request_stop(ctx);
   }
-
-  return false;
+  return true;
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
   llama_finetuning_helpers::TrainingCheckpointState* state =
-      currentCheckpointState_ != nullptr
-          ? currentCheckpointState_
-          : llama_finetuning_helpers::getGlobalCheckpointState();
+      currentCheckpointState_.load(std::memory_order_acquire);
   if (state == nullptr) {
     return;
   }
@@ -1414,7 +1407,7 @@ void LlamaModel::waitUntilFinetuningPauseComplete() {
 
 void LlamaModel::clearPauseRequest() {
   pausedCheckpointState_.reset();
-  currentCheckpointState_ = nullptr;
+  currentCheckpointState_.store(nullptr, std::memory_order_release);
 
   llama_context* ctx = getContext();
   if (ctx != nullptr) {
@@ -1422,11 +1415,14 @@ void LlamaModel::clearPauseRequest() {
   }
 }
 
-void LlamaModel::setShouldResumeFromPause(bool value) {
-  shouldResumeFromPause_.store(value);
+void LlamaModel::setFinetuneParams(
+    qvac_lib_inference_addon_cpp::FinetuningParameters params) {
+  finetuneParams_ = std::move(params);
 }
 
-bool LlamaModel::takeShouldResumeFromPause() {
-  return shouldResumeFromPause_.exchange(false);
+std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
+LlamaModel::getFinetuneParams() const {
+  return finetuneParams_;
 }
+
 #endif // STANDALONE_TEST_BUILD

@@ -20,7 +20,6 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  resumeFinetune(): Promise<void>
   pause(): Promise<void>
   stop(): Promise<void>
   append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>
@@ -132,10 +131,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[]): Promise<QvacResponse>
 
-  finetune(
-    finetuningOptions?: Record<string, any>,
-    options?: { resume?: boolean }
-  ): Promise<FinetuneHandle>
+  finetune(finetuningOptions?: Record<string, any>): Promise<FinetuneHandle>
 
   pauseFinetune(): Promise<void>
 

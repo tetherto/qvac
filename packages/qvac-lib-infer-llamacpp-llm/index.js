@@ -8,6 +8,9 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
+const RUN_QUEUE_BUSY_ERROR =
+  'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
+
 /**
  * GGML client implementation for Llama LLM model
  */
@@ -246,9 +249,7 @@ class LlmLlamacpp extends BaseInference {
 
   async _withExclusiveRun (fn) {
     if (this._runQueueBusy) {
-      throw new Error(
-        'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
-      )
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
     }
     const prev = this._runQueueWaiter || Promise.resolve()
     let release
@@ -307,30 +308,18 @@ class LlmLlamacpp extends BaseInference {
     })
   }
 
-  async finetune (finetuningOptions = undefined, options = {}) {
-    if (arguments.length === 1 &&
-        finetuningOptions &&
-        typeof finetuningOptions === 'object' &&
-        finetuningOptions.resume === true &&
-        Object.keys(finetuningOptions).length === 1) {
-      options = finetuningOptions
-      finetuningOptions = undefined
-    }
-    options = options ?? {}
-    const { resume = false } = options
+  async finetune (finetuningOptions = undefined) {
     const params = finetuningOptions ?? this._defaultFinetuneParams
-    if (!resume && !params) {
-      throw new Error('Finetuning parameters are required but not provided.')
+    if (!params) {
+      throw new Error(
+        'Finetuning parameters are required but not provided. Call finetune(opts) first; use finetune() with no args to resume from a pause.'
+      )
     }
-    if (resume && !this._defaultFinetuneParams) {
-      throw new Error('No stored finetuning parameters. Call finetune(opts) first before pausing.')
-    }
-
-    if (!resume) {
+    if (finetuningOptions != null) {
       this._defaultFinetuneParams = params
     }
-    this.logger?.info?.(resume ? 'finetune() called (resume)' : 'finetune() called')
-    this.logger?.info?.('Finetuning parameters:', params ?? this._defaultFinetuneParams)
+    this.logger?.info?.('finetune() called')
+    this.logger?.info?.('Finetuning parameters:', params)
 
     if (!this.addon) {
       this.logger?.info?.('Addon not loaded, calling load()...')
@@ -339,9 +328,7 @@ class LlmLlamacpp extends BaseInference {
     }
 
     if (this._runQueueBusy) {
-      throw new Error(
-        'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
-      )
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
     }
 
     const prev = this._runQueueWaiter || Promise.resolve()
@@ -374,13 +361,7 @@ class LlmLlamacpp extends BaseInference {
     }
 
     try {
-      if (resume) {
-        this.logger?.info?.('Calling addon.resumeFinetune() to resume...')
-        await this.addon.resumeFinetune()
-      } else {
-        this.logger?.info?.('Calling addon.finetune()...')
-        await this.addon.finetune(params)
-      }
+      await this.addon.finetune(params)
       return handle
     } catch (err) {
       this._finetuneRelease()

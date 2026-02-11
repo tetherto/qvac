@@ -127,9 +127,8 @@ void optEpochCallbackWrapper(
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs);
 
-void setGlobalCheckpointState(TrainingCheckpointState* state);
-TrainingCheckpointState* getGlobalCheckpointState();
-void clearGlobalCheckpointState();
+void setCurrentCheckpointState(TrainingCheckpointState* state);
+void clearCurrentCheckpointState();
 
 // Utility functions
 std::string resolveAdapterOutputPath(

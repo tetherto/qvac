@@ -329,7 +329,7 @@ async function main () {
 
     console.log('')
     console.log('▶️  Resuming finetuning...')
-    const resumeHandle = await client.finetune({ resume: true })
+    const resumeHandle = await client.finetune()
     console.log('✅ Finetuning has RESUMED')
 
     await sleep(500)

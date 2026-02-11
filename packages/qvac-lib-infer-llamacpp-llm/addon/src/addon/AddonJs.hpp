@@ -13,7 +13,6 @@
 #include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 
 #include "model-interface/LlamaModel.hpp"
-#include "FinetuneParamStore.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -127,23 +126,18 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         [](js_env_t* e, js::Object& jsObj) {
           return FinetuningParameters(e, jsObj);
         });
-    qvac_lib_inference_addon_llama_detail::put(
-        instance.addonCpp.get(), finetuningArgs);
+    llamaModel->setFinetuneParams(std::move(finetuningArgs));
   } catch (const StatusError&) {
   }
 
-  FinetuningParameters params;
-  bool hasParams = qvac_lib_inference_addon_llama_detail::take(
-      instance.addonCpp.get(), params);
-
-  if (!hasParams) {
+  std::optional<FinetuningParameters> paramsOpt =
+      llamaModel->getFinetuneParams();
+  if (!paramsOpt.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
         "Finetuning parameters not provided and not stored");
   }
-
-  qvac_lib_inference_addon_llama_detail::put(
-      instance.addonCpp.get(), params);
+  FinetuningParameters params = *paramsOpt;
 
   auto* outputQueue = instance.addonCpp->outputQueue.get();
   auto enqueueLog = [outputQueue](const string& message) {
@@ -152,11 +146,9 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
     }
   };
 
-  bool allowResume = llamaModel->takeShouldResumeFromPause();
-
-  std::thread finetuneThread([llamaModel, params, enqueueLog, allowResume]() {
+  std::thread finetuneThread([llamaModel, params, enqueueLog]() {
     try {
-      llamaModel->finetune(params, enqueueLog, allowResume);
+      llamaModel->finetune(params, enqueueLog);
     } catch (const std::exception& e) {
       std::cerr << "[ERROR] Finetuning thread exception: " << e.what() << std::endl;
     }
@@ -181,7 +173,6 @@ inline js_value_t* pauseFinetuning(js_env_t* env, js_callback_info_t* info) try 
   }
 
   bool didPause = llamaModel->requestPause();
-  llamaModel->setShouldResumeFromPause(false);
 
   if (didPause) {
     return js::JsAsyncTask::run(env, [llamaModel]() {
@@ -194,37 +185,6 @@ JSCATCH
 
 inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   return qvac_lib_inference_addon_cpp::JsInterface::activate(env, info);
-}
-JSCATCH
-
-inline js_value_t* resumeFinetune(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = getLlamaModel(instance);
-  if (llamaModel == nullptr) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "Model not available or not a LlamaModel");
-  }
-
-  FinetuningParameters params;
-  bool hasParams = qvac_lib_inference_addon_llama_detail::take(
-      instance.addonCpp.get(), params);
-  if (!hasParams) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "Finetuning parameters not provided and not stored");
-  }
-  qvac_lib_inference_addon_llama_detail::put(
-      instance.addonCpp.get(), params);
-
-  llamaModel->clearPauseRequest();
-  llamaModel->setShouldResumeFromPause(true);
-  return finetune(env, info);
 }
 JSCATCH
 

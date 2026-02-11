@@ -99,7 +99,7 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
 
   await verifyPauseCheckpoint(t, checkpointDir, 2000)
 
-  const resumeHandle = await model.finetune({ resume: true })
+  const resumeHandle = await model.finetune()
   const result = await resumeHandle.await()
 
   t.ok(result, 'Resume must return result')
