@@ -99,6 +99,9 @@ class Pipeline {
 
     std::mutex processingTimeMtx_;
     std::stack<double> processingTime_;
+    std::stack<double> detectionTime_;
+    std::stack<double> recognitionTime_;
+    std::stack<int> textRegionsCount_;
 };
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext
