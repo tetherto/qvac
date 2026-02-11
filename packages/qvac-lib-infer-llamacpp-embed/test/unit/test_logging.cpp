@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 
-#include "model-interface/logging.h"
+#include "model-interface/logging.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::logging;
 using namespace qvac_lib_inference_addon_cpp::logger;

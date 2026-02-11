@@ -1,4 +1,4 @@
-#include "BertModel.h"
+#include "BertModel.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -12,10 +12,10 @@
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "addon/BertErrors.hpp"
-#include "logging.h"
+#include "logging.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
-#include "utils.h"
+#include "utils.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 using namespace qvac_lib_infer_llamacpp_embed::logging;
@@ -70,7 +70,7 @@ void batchDecode(
       embeddingPos = i;
       if (embd == nullptr) {
         throw qvac_errors::StatusError(
-            AddonID,
+            ADDON_ID,
             toString(FailedToGetTokenEmbeddings),
             "Failed to get token embeddings");
       }
@@ -82,7 +82,7 @@ void batchDecode(
       embeddingPos = *batch.seq_id[i];
       if (embd == nullptr) {
         throw qvac_errors::StatusError(
-            AddonID,
+            ADDON_ID,
             toString(FailedToGetSequenceEmbeddings),
             "Failed to get sequence embeddings");
       }
@@ -118,7 +118,7 @@ void validateBatchLimitsOrThrow(const std::vector<std::vector<int32_t>>& inputs,
           inp.size(),
           static_cast<unsigned long long>(nBatch));
       throw qvac_errors::StatusError(
-          AddonID, toString(InputTokensExceedBatchSize), msg);
+          ADDON_ID, toString(InputTokensExceedBatchSize), msg);
     }
   }
 }
@@ -278,14 +278,14 @@ setupParams(const std::string& modelGgufPath, std::string_view config) {
   auto getDeviceStr = [&args, mainGpu](auto devToken) {
     using namespace backend_selection;
     using namespace qvac_lib_infer_llamacpp_embed::logging;
-    const BackendType PREFERRED_BACKEND =
+    const BackendType preferredBackend =
         preferredBackendTypeFromString(devToken);
-    const std::pair<BackendType, std::string> CHOSEN_BACKEND =
-        chooseBackend(PREFERRED_BACKEND, llamaLogCallback, mainGpu);
+    const std::pair<BackendType, std::string> chosenBackend =
+        chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
 
-    if (CHOSEN_BACKEND.first == BackendType::GPU ||
-        CHOSEN_BACKEND.first == BackendType::CPU) {
-      return CHOSEN_BACKEND.second;
+    if (chosenBackend.first == BackendType::GPU ||
+        chosenBackend.first == BackendType::CPU) {
+      return chosenBackend.second;
     }
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError,
@@ -335,7 +335,7 @@ setupParams(const std::string& modelGgufPath, std::string_view config) {
 
   if (!common_params_parse(
           argc, argv.data(), params, LLAMA_EXAMPLE_EMBEDDING)) {
-    throw qvac_errors::StatusError(AddonID, toString(InvalidConfiguration), "Invalid configuration parameters.");
+    throw qvac_errors::StatusError(ADDON_ID, toString(InvalidConfiguration), "Invalid configuration parameters.");
   }
 
   return params;
@@ -345,17 +345,17 @@ setupParams(const std::string& modelGgufPath, std::string_view config) {
 BertModel::BertModel(
     const std::string& modelGgufPath, const std::string& config,
     const std::string& backendsDir)
-    : _model(nullptr), _ctx(nullptr), _vocab(nullptr), _batch{},
+    : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
-      loading_context(InitLoader::getLoadingContext("BertModel")),
-      _shards(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
+      loadingContext_(InitLoader::getLoadingContext("BertModel")),
+      shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
   auto modelInit = [this](
                        const std::string& path,
                        const std::string& cfg,
                        const std::string& backendsDir) {
     this->init(path, cfg, backendsDir);
   };
-  initLoader.init(
+  initLoader_.init(
       InitLoader::LOADER_TYPE::DELAYED,
       modelInit,
       modelGgufPath,
@@ -364,13 +364,13 @@ BertModel::BertModel(
 }
 
 BertModel::BertModel(common_params &params)
-    : _model(nullptr), _ctx(nullptr), _vocab(nullptr), _batch{}, pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false), loading_context(InitLoader::getLoadingContext("BertModel")),
-      _shards(GGUFShards::expandGGUFIntoShards(params.model.path)) {
+    : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{}, pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false), loadingContext_(InitLoader::getLoadingContext("BertModel")),
+      shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
   auto modelInit = [this](common_params& commonParams) {
     this->init(commonParams);
   };
 
-  initLoader.init(InitLoader::LOADER_TYPE::DELAYED, modelInit, params);
+  initLoader_.init(InitLoader::LOADER_TYPE::DELAYED, modelInit, params);
 }
 
 void BertModel::init(
@@ -417,35 +417,35 @@ void BertModel::init(common_params &params) {
   initializeBackend();
   llama_numa_init(params.numa);
 
-  const std::string ERROR_WHEN_FAILED = toString(UnableToLoadModel);
+  const std::string errorWhenFailed = toString(UnableToLoadModel);
   common_init_result llamaInit = initFromConfig(
       params,
       params.model.path,
-      singleGgufStreamedFiles,
-      _shards,
-      loading_context,
-      isStreaming,
-      AddonID,
-      ERROR_WHEN_FAILED);
+      singleGgufStreamedFiles_,
+      shards_,
+      loadingContext_,
+      isStreaming_,
+      ADDON_ID,
+      errorWhenFailed);
 
-  _init.params = params;
-  _init.result = std::move(llamaInit);
-  _model = _init.result.model.get();
-  _ctx = _init.result.context.get();
-  _vocab = llama_model_get_vocab(_model);
-  _batch = llama_batch_init(_init.params.n_batch, 0, 1);
-  pooling_type = llama_pooling_type(_ctx);
-  n_embd = llama_model_n_embd(_model);
+  init_.params = params;
+  init_.result = std::move(llamaInit);
+  model_ = init_.result.model.get();
+  ctx_ = init_.result.context.get();
+  vocab_ = llama_model_get_vocab(model_);
+  batch_ = llama_batch_init(init_.params.n_batch, 0, 1);
+  pooling_type = llama_pooling_type(ctx_);
+  n_embd = llama_model_n_embd(model_);
 
-  int nCtxTrain = llama_model_n_ctx_train(_model);
-  int nCtx = static_cast<int>(llama_n_ctx(_ctx));
+  int nCtxTrain = llama_model_n_ctx_train(model_);
+  int nCtx = static_cast<int>(llama_n_ctx(ctx_));
 
-  if (llama_model_has_encoder(_model) && llama_model_has_decoder(_model)) {
+  if (llama_model_has_encoder(model_) && llama_model_has_decoder(model_)) {
     std::string msg = string_format(
         "%s: computing embeddings in encoder-decoder models is not supported",
         __func__);
     throw qvac_errors::StatusError(
-        AddonID, toString(UnsupportedEmbeddings), msg);
+        ADDON_ID, toString(UnsupportedEmbeddings), msg);
   }
 
   if (nCtx > nCtxTrain) {
@@ -466,22 +466,22 @@ void BertModel::init(common_params &params) {
     qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
         GGML_LOG_LEVEL_INFO,
         string_format(
-            "%s\n", common_params_get_system_info(_init.params).c_str())
+            "%s\n", common_params_get_system_info(init_.params).c_str())
             .c_str(),
         nullptr);
   }
   is_loaded_ = true;
 }
 
-BertModel::~BertModel() { llama_batch_free(_batch); }
+BertModel::~BertModel() { llama_batch_free(batch_); }
 
-const llama_context* BertModel::get_ctx() const { return _ctx; };
+const llama_context* BertModel::getCtx() const { return ctx_; };
 
-const llama_model* BertModel::get_model() const { return _model; }
+const llama_model* BertModel::getModel() const { return model_; }
 
 std::vector<std::string>
-BertModel::preprocess_prompt(const std::string& prompt) const {
-  return splitLines(prompt, _init.params.embd_sep);
+BertModel::preprocessPrompt(const std::string& prompt) const {
+  return splitLines(prompt, init_.params.embd_sep);
 }
 
 BertEmbeddings BertModel::process(
@@ -494,14 +494,14 @@ BertEmbeddings BertModel::process(
 
         if constexpr (std::is_same_v<T, std::string>) {
           // Handle string input
-          BertEmbeddings result = encode_host_f32(inputValue);
+          BertEmbeddings result = encodeHostF32(inputValue);
           if (callback) {
             callback(result);
           }
           return result;
         } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
           // Handle vector of strings input
-          BertEmbeddings result = encode_host_f32_sequences(inputValue);
+          BertEmbeddings result = encodeHostF32Sequences(inputValue);
           if (callback) {
             callback(result);
           }
@@ -512,7 +512,7 @@ BertEmbeddings BertModel::process(
 }
 
 bool BertModel::isLoaded() const {
-    return is_loaded_ && _model != nullptr && _ctx != nullptr;
+    return is_loaded_ && model_ != nullptr && ctx_ != nullptr;
 }
 
 void BertModel::initializeBackend(const std::string& backendsDir) {
@@ -521,30 +521,30 @@ void BertModel::initializeBackend(const std::string& backendsDir) {
 
 void BertModel::reset() {
   // Clear the batch state - this is the most important part
-  common_batch_clear(_batch);
+  common_batch_clear(batch_);
 
   // Clear memory and KV cache (llama_memory_clear handles both)
-  if (_ctx != nullptr) {
-    llama_memory_clear(llama_get_memory(_ctx), true);
+  if (ctx_ != nullptr) {
+    llama_memory_clear(llama_get_memory(ctx_), true);
   }
 }
 
 void BertModel::set_weights_for_file(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  isStreaming = true;
+  isStreaming_ = true;
 
-  if (_shards.gguf_files.empty()) {
+  if (shards_.gguf_files.empty()) {
     // Store it and make it available when `init` is called
-    singleGgufStreamedFiles[filename] = std::move(shard);
+    singleGgufStreamedFiles_[filename] = std::move(shard);
     return;
   }
 
   // Asynchronous shard loading - ensure background initialization has started
-  initLoader.ensureLoadInBackground();
+  initLoader_.ensureLoadInBackground();
 
   if (!llama_model_load_fulfill_split_future(
-          filename.c_str(), loading_context.c_str(), std::move(shard))) {
+          filename.c_str(), loadingContext_.c_str(), std::move(shard))) {
     std::string msg = string_format(
         "%s: failed to load model from %s", __func__, filename.c_str());
     throw std::runtime_error(msg);
@@ -552,20 +552,20 @@ void BertModel::set_weights_for_file(
 
   static int fulfilledFiles = 0;
   fulfilledFiles++;
-  if (fulfilledFiles == static_cast<int>(_shards.gguf_files.size()) + 1) {
-    initLoader.waitForLoadInitialization();
+  if (fulfilledFiles == static_cast<int>(shards_.gguf_files.size()) + 1) {
+    initLoader_.waitForLoadInitialization();
   }
 }
 
 std::vector<std::vector<int32_t>>
 BertModel::tokenizeInput(const std::vector<std::string> & prompts) const {
-  uint64_t nBatch = _init.params.n_batch;
+  uint64_t nBatch = init_.params.n_batch;
 
   // tokenize all prompts first
-  std::vector<std::vector<int32_t>> inputs = tokenizePrompts(_ctx, prompts);
+  std::vector<std::vector<int32_t>> inputs = tokenizePrompts(ctx_, prompts);
 
   // Check for context overflow: compare against model's training context size
-  int nCtxTrain = llama_model_n_ctx_train(_model);
+  int nCtxTrain = llama_model_n_ctx_train(model_);
   for (std::size_t i = 0; i < inputs.size(); ++i) {
     if (static_cast<int>(inputs[i].size()) > nCtxTrain) {
       std::string msg = string_format(
@@ -575,7 +575,7 @@ BertModel::tokenizeInput(const std::vector<std::string> & prompts) const {
           i,
           inputs[i].size(),
           nCtxTrain);
-      throw qvac_errors::StatusError(AddonID, toString(ContextOverflow), msg);
+      throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
   }
 
@@ -584,10 +584,10 @@ BertModel::tokenizeInput(const std::vector<std::string> & prompts) const {
 
   // ensure last token is the appropriate special token (SEP for BERT, EOS for
   // Gemma, etc.)
-  ensureLastTokenIsSpecial(_vocab, inputs);
+  ensureLastTokenIsSpecial(vocab_, inputs);
 
   // optionally log tokenization details
-  logTokenizationIfVerbose(_init.params.verbose_prompt, _ctx, inputs, prompts);
+  logTokenizationIfVerbose(init_.params.verbose_prompt, ctx_, inputs, prompts);
 
   return inputs;
 }
@@ -619,44 +619,44 @@ BertEmbeddings BertModel::processBatched(
     uint64_t numTokensInPrompt = inp.size();
 
     // encode if at capacity
-    if (_batch.n_tokens + numTokensInPrompt > _init.params.n_batch) {
+    if (batch_.n_tokens + numTokensInPrompt > init_.params.n_batch) {
       std::span<float> embSpan{emb, embeddings.size()};
       float* out = embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd)).data();
-      batchDecode(_ctx, _batch, out, static_cast<int>(numPromptsInBatch), n_embd, _init.params.embd_normalize);
-      numStoredEmbeddings += (pooling_type == LLAMA_POOLING_TYPE_NONE ? _batch.n_tokens : numPromptsInBatch);
+      batchDecode(ctx_, batch_, out, static_cast<int>(numPromptsInBatch), n_embd, init_.params.embd_normalize);
+      numStoredEmbeddings += (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens : numPromptsInBatch);
       numPromptsInBatch = 0;
-      common_batch_clear(_batch);
+      common_batch_clear(batch_);
     }
 
     // add to batch
-    batchAddSeq(_batch, inp, static_cast<llama_seq_id>(numPromptsInBatch));
+    batchAddSeq(batch_, inp, static_cast<llama_seq_id>(numPromptsInBatch));
     numPromptsInBatch += 1;
   }
 
   // final batch
   std::span<float> embSpan{emb, embeddings.size()};
       float* out = embSpan.subspan(numStoredEmbeddings * static_cast<std::size_t>(n_embd)).data();
-  batchDecode(_ctx, _batch, out, static_cast<int>(numPromptsInBatch), n_embd, _init.params.embd_normalize);
+  batchDecode(ctx_, batch_, out, static_cast<int>(numPromptsInBatch), n_embd, init_.params.embd_normalize);
   return BertEmbeddings(std::move(embeddings), BertEmbeddings::Layout{embeddingCount, static_cast<std::size_t>(n_embd)});
 }
 
 BertEmbeddings
-BertModel::encode_host_f32(const std::vector<std::string>& prompts) {
-  initLoader.waitForLoadInitialization();
+BertModel::encodeHostF32(const std::vector<std::string>& prompts) {
+  initLoader_.waitForLoadInitialization();
   std::vector<std::vector<int32_t>> inputTokens = tokenizeInput(prompts);
   return processBatched(inputTokens, prompts.size());
 }
 
-BertEmbeddings BertModel::encode_host_f32(const std::string& prompt) {
+BertEmbeddings BertModel::encodeHostF32(const std::string& prompt) {
   // Process as single sequence - delegate to vector version which handles
   // initialization
   std::vector<std::string> prompts = {prompt};
-  return encode_host_f32(prompts);
+  return encodeHostF32(prompts);
 }
 
-BertEmbeddings BertModel::encode_host_f32_sequences(
+BertEmbeddings BertModel::encodeHostF32Sequences(
     const std::vector<std::string>& sequenceArray) {
-  initLoader.waitForLoadInitialization();
+  initLoader_.waitForLoadInitialization();
 
   // Early return for empty array (no work needed)
   if (sequenceArray.empty()) {
@@ -669,10 +669,10 @@ BertEmbeddings BertModel::encode_host_f32_sequences(
   std::vector<std::vector<int32_t>> inputTokens;
   inputTokens.reserve(sequenceArray.size());
 
-  int nCtxTrain = llama_model_n_ctx_train(_model);
+  int nCtxTrain = llama_model_n_ctx_train(model_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
     const auto& sequence = sequenceArray[i];
-    std::vector<int32_t> tokens = common_tokenize(_ctx, sequence, true, true);
+    std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
     // Validate context size during tokenization
     if (static_cast<int>(tokens.size()) > nCtxTrain) {
@@ -683,29 +683,29 @@ BertEmbeddings BertModel::encode_host_f32_sequences(
           i,
           tokens.size(),
           nCtxTrain);
-      throw qvac_errors::StatusError(AddonID, toString(ContextOverflow), msg);
+      throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
 
     inputTokens.push_back(std::move(tokens));
   }
 
   // Apply all validations from tokenizeInput (reusing tokenized results)
-  uint64_t nBatch = _init.params.n_batch;
+  uint64_t nBatch = init_.params.n_batch;
   validateBatchLimitsOrThrow(inputTokens, nBatch);
-  ensureLastTokenIsSpecial(_vocab, inputTokens);
+  ensureLastTokenIsSpecial(vocab_, inputTokens);
   logTokenizationIfVerbose(
-      _init.params.verbose_prompt, _ctx, inputTokens, sequenceArray);
+      init_.params.verbose_prompt, ctx_, inputTokens, sequenceArray);
 
   // Process tokenized sequences directly (avoids re-tokenization)
   return processBatched(inputTokens, sequenceArray.size());
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
-  constexpr double MS_PER_SECOND = 1000.0;
+  constexpr double msPerSecond = 1000.0;
 
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
-  if (const llama_context* ctx = get_ctx()) {
+  if (const llama_context* ctx = getCtx()) {
     auto perf = llama_perf_context(ctx);
 
     // Return proper format: vector of key-value pairs
@@ -715,14 +715,14 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
     if (perf.t_p_eval_ms > 0) {
       stats.emplace_back(
           "tokens_per_second",
-          perf.n_p_eval * MS_PER_SECOND / perf.t_p_eval_ms);
+          perf.n_p_eval * msPerSecond / perf.t_p_eval_ms);
     }
 
     stats.emplace_back(
-        "batch_size", static_cast<long long>(_init.params.n_batch));
+        "batch_size", static_cast<long long>(init_.params.n_batch));
     stats.emplace_back(
         "context_size",
-        static_cast<long long>(llama_model_n_ctx_train(_model)));
+        static_cast<long long>(llama_model_n_ctx_train(model_)));
   }
 
   return stats;

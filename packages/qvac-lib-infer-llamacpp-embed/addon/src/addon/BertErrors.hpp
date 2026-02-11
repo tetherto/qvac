@@ -4,7 +4,7 @@
 #include <string>
 
 namespace qvac_lib_infer_llamacpp_embed::errors {
-constexpr const char* AddonID = /* NOLINT(readability-identifier-naming) */ "GTE";
+constexpr const char* ADDON_ID = "GTE";
 
 enum GteErrorCode : std::uint8_t {
   UnableToLoadModel,
