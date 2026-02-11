@@ -58,7 +58,9 @@ def compute_score(df):
         "accuracyScore": 0.2
     }
 
-    score = 0
+    # Initialize score as a Series of zeros with the DataFrame's index
+    # This ensures each row gets its own score calculated independently
+    score = pd.Series(0.0, index=df.index)
     for metric, weight in weights.items():
         if metric not in df.columns:
             continue
