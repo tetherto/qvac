@@ -11,7 +11,7 @@ test('OCR inference returns correct output', async t => {
     params: {
       langList: ['en'],
       pathDetector: 'detector.onnx',
-      pathRecognizer: 'recognizer_english.onnx'
+      pathRecognizer: 'recognizer_latin.onnx'
     },
     opts: {}
   }
@@ -42,7 +42,7 @@ test('OCR model state transitions are handled correctly', async t => {
     params: {
       langList: ['en'],
       pathDetector: 'detector.onnx',
-      pathRecognizer: 'recognizer_english.onnx'
+      pathRecognizer: 'recognizer_latin.onnx'
     },
     opts: {}
   }
@@ -69,7 +69,7 @@ test('OCR model validates BMP image input', async t => {
     params: {
       langList: ['en'],
       pathDetector: 'detector.onnx',
-      pathRecognizer: 'recognizer_english.onnx'
+      pathRecognizer: 'recognizer_latin.onnx'
     },
     opts: {}
   }
@@ -94,7 +94,7 @@ test('OCR model determines correct recognizer model name', async t => {
     params: {
       langList: ['en'],
       pathDetector: 'detector.onnx',
-      pathRecognizer: 'recognizer_english.onnx'
+      pathRecognizer: 'recognizer_latin.onnx'
     },
     opts: {}
   }

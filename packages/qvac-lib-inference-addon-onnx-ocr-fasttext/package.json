@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-onnx",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "OCR addon for qvac",
   "addon": true,
   "engines": {

@@ -12,10 +12,10 @@ add_executable(
   test_logging.cpp
   test_utils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cc
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cc
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/utils.cc
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/logging.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/utils.cpp
 )
 
 target_compile_options(
