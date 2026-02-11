@@ -33,7 +33,7 @@ jobs:
       package-json-path: packages/qvac-lib-inference-addon-onnx-ocr-fasttext/package.json
       changelog-path: packages/qvac-lib-inference-addon-onnx-ocr-fasttext/CHANGELOG.md
 
-  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
+  # Gate the workflow so label Events (and other PR_target quirks) don't trigger unrelated packages.
   changes:
     runs-on: ubuntu-latest
     outputs:
