@@ -11,7 +11,6 @@ namespace qvac_lib_inference_addon_tts {
 
 using Addon =
     qvac_lib_inference_addon_cpp::Addon<qvac::ttslib::addon_model::TTSModel>;
-
 }
 
 namespace qvac_lib_inference_addon_cpp {
@@ -39,7 +38,6 @@ template <>
 js_value_t *
 createOutputData<std::vector<int16_t>>(js_env_t *env,
                                        const std::vector<int16_t> &data);
-
 }
 
 } // namespace qvac_lib_inference_addon_cpp
