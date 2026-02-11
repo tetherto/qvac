@@ -30,10 +30,10 @@ public:
   static void decrementRefCount();
 
 private:
-  static std::mutex initMutex;
-  static bool initialized;
-  static std::string recordedBackendsDir;
-  static int refCount;
+  static std::mutex g_initMutex;
+  static bool g_initialized;
+  static std::string g_recordedBackendsDir;
+  static int g_refCount;
 };
 
 /**
@@ -63,5 +63,5 @@ public:
   LlamaBackendsHandle& operator=(LlamaBackendsHandle&&) noexcept;
 
 private:
-  bool ownsHandle;
+  bool ownsHandle_;
 };

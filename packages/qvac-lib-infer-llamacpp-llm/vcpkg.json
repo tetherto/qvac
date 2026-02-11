@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "llama-cpp",
-      "version>=": "7248.1.2#0"
+      "version>=": "7248.1.2"
     },
     {
       "name": "opencl",
@@ -13,7 +13,10 @@
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "0.12.2"
     },
-    "qvac-lint-cpp"
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4"
+    }
   ],
   "features": {
     "tests": {

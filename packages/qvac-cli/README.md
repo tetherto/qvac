@@ -16,13 +16,19 @@ A command-line interface for the QVAC ecosystem. QVAC CLI provides tooling for b
 Install globally:
 
 ```bash
-npm i -g qvac
+npm i -g @qvac/qvac-cli
 ```
 
-Or use directly via npx:
+Once installed, use the `qvac` command:
 
 ```bash
-npx qvac <command>
+qvac <command>
+```
+
+Or run directly via npx:
+
+```bash
+npx @qvac/qvac-cli <command>
 ```
 
 ## Command Reference

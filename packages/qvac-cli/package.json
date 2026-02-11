@@ -1,17 +1,18 @@
 {
-  "name": "qvac",
+  "name": "@qvac/cli",
   "version": "0.1.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
   "type": "module",
+  "main": "./src/index.js",
+  "exports": "./src/index.js",
   "bin": {
     "qvac": "./src/index.js"
   },
   "files": [
     "src/**/*",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
