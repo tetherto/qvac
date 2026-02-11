@@ -21,6 +21,8 @@ export function createParakeetModel(
   const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, "parakeet");
 
+  // modelName uses the directory name (not file name) because parakeet is a
+  // multi-file model — the addon resolves individual files relative to dirPath.
   const args = {
     loader,
     logger,

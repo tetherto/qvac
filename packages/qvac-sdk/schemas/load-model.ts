@@ -296,7 +296,7 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.parakeetTranscription),
-  modelConfig: parakeetConfigSchema, // parakeet has no defaults
+  modelConfig: parakeetConfigSchema, // modelType defaults to "tdt"
 });
 
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({

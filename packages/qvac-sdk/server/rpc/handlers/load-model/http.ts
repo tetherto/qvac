@@ -608,63 +608,137 @@ export async function downloadParakeetModelFromHttp(
     baseUrl = url.replace(/\/+$/, "") + "/resolve/main/";
   }
 
+  const downloadKey = createHttpDownloadKey(baseUrl);
+
+  // Dedup: reuse existing download if one is already in progress for this URL
+  const existing = getActiveDownload(downloadKey);
+  if (existing) {
+    logger.info(`📥 Reusing existing parakeet download for: ${downloadKey}`);
+    return existing.promise;
+  }
+
   // Create a dedicated cache directory for this parakeet model
   const cacheDir = getModelsCacheDir();
   const modelHash = generateShortHash(baseUrl);
   const modelDir = path.join(cacheDir, `parakeet_${modelHash}`);
+  const encoderPath = path.join(modelDir, "encoder-model.onnx");
 
-  try {
-    await fsPromises.mkdir(modelDir, { recursive: true });
-  } catch {
-    // directory may already exist
-  }
+  const abortController = new AbortController();
 
-  const downloadKey = createHttpDownloadKey(baseUrl);
-
-  // Download each required file
-  for (const fileName of PARAKEET_TDT_FILES) {
-    const filePath = path.join(modelDir, fileName);
-    const fileUrl = `${baseUrl}${fileName}`;
+  const downloadPromise = (async () => {
+    try {
+      await fsPromises.mkdir(modelDir, { recursive: true });
+    } catch {
+      // directory may already exist
+    }
 
     try {
-      await fsPromises.access(filePath);
-      const stats = await fsPromises.stat(filePath);
-      if (stats.size > 0) {
-        logger.info(`✅ Parakeet file cached: ${fileName}`);
-        continue;
+      // Download each required file
+      for (const fileName of PARAKEET_TDT_FILES) {
+        if (abortController.signal.aborted) {
+          throw new DownloadCancelledError();
+        }
+
+        const filePath = path.join(modelDir, fileName);
+        const fileUrl = `${baseUrl}${fileName}`;
+
+        try {
+          await fsPromises.access(filePath);
+          const stats = await fsPromises.stat(filePath);
+          if (stats.size > 0) {
+            logger.info(`✅ Parakeet file cached: ${fileName}`);
+            continue;
+          }
+        } catch {
+          // file doesn't exist, download it
+        }
+
+        logger.info(`📥 Downloading parakeet file: ${fileName}`);
+        await performHttpDownload(
+          fileUrl,
+          filePath,
+          downloadKey,
+          progressCallback,
+          abortController.signal,
+        );
+        logger.info(`✅ Downloaded: ${fileName}`);
       }
-    } catch {
-      // file doesn't exist, download it
+
+      // Download preprocessor (from a different HuggingFace repo)
+      if (abortController.signal.aborted) {
+        throw new DownloadCancelledError();
+      }
+
+      const preprocessorPath = path.join(modelDir, "preprocessor.onnx");
+      try {
+        await fsPromises.access(preprocessorPath);
+        const stats = await fsPromises.stat(preprocessorPath);
+        if (stats.size > 0) {
+          logger.info(`✅ Parakeet preprocessor cached`);
+        } else {
+          throw new Error("empty file");
+        }
+      } catch {
+        logger.info(`📥 Downloading parakeet preprocessor`);
+        await performHttpDownload(
+          PARAKEET_TDT_PREPROCESSOR_URL,
+          preprocessorPath,
+          downloadKey,
+          progressCallback,
+          abortController.signal,
+        );
+        logger.info(`✅ Downloaded: preprocessor.onnx`);
+      }
+
+      // Return path to the encoder file (used as modelPath by the SDK)
+      return encoderPath;
+    } catch (error) {
+      logger.error(
+        "❌ Error downloading parakeet model:",
+        error instanceof Error ? error.message : String(error),
+      );
+
+      if (error instanceof Error && error.message === "Download cancelled") {
+        if (shouldClearCache(downloadKey)) {
+          logger.info(
+            "🗑️ Clearing cache - deleting parakeet model directory",
+          );
+          try {
+            await fsPromises.rm(modelDir, { recursive: true, force: true });
+            logger.info(`✅ Deleted parakeet model directory: ${modelDir}`);
+          } catch (cleanupError) {
+            logger.debug(
+              "Failed to delete parakeet model directory during cleanup",
+              { path: modelDir, error: cleanupError },
+            );
+          }
+        } else {
+          logger.info(
+            "📥 Download paused - partial parakeet files preserved for resume",
+          );
+        }
+        clearClearCacheFlag(downloadKey);
+      }
+
+      throw error instanceof Error ? error : new Error(String(error));
+    } finally {
+      unregisterDownload(downloadKey);
     }
+  })();
 
-    logger.info(`📥 Downloading parakeet file: ${fileName}`);
-    await performHttpDownload(fileUrl, filePath, downloadKey, progressCallback);
-    logger.info(`✅ Downloaded: ${fileName}`);
-  }
+  // Register with download manager for dedup and cancellation
+  registerDownload(downloadKey, {
+    key: downloadKey,
+    promise: downloadPromise,
+    abortController,
+    startTime: Date.now(),
+    type: "http",
+    url: baseUrl,
+    modelPath: encoderPath,
+    ...(progressCallback && { onProgress: progressCallback }),
+  } as HttpDownloadEntry);
 
-  // Download preprocessor (from a different HuggingFace repo)
-  const preprocessorPath = path.join(modelDir, "preprocessor.onnx");
-  try {
-    await fsPromises.access(preprocessorPath);
-    const stats = await fsPromises.stat(preprocessorPath);
-    if (stats.size > 0) {
-      logger.info(`✅ Parakeet preprocessor cached`);
-    } else {
-      throw new Error("empty file");
-    }
-  } catch {
-    logger.info(`📥 Downloading parakeet preprocessor`);
-    await performHttpDownload(
-      PARAKEET_TDT_PREPROCESSOR_URL,
-      preprocessorPath,
-      downloadKey,
-      progressCallback,
-    );
-    logger.info(`✅ Downloaded: preprocessor.onnx`);
-  }
-
-  // Return path to the encoder file (used as modelPath by the SDK)
-  return path.join(modelDir, "encoder-model.onnx");
+  return downloadPromise;
 }
 
 async function downloadShardedModelFromHttp(
