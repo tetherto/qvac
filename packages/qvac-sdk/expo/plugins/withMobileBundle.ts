@@ -30,7 +30,8 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin that automatically generates the mobile worker bundle during build.
  *
- * Runs `npx qvac bundle sdk` (uses qvac.config.* if exists, else all built-in plugins).
+ * Runs qvac CLI (prefers local @qvac/qvac-cli, falls back to npx).
+ * Uses qvac.config.* if exists, else includes all built-in plugins.
  * Output: node_modules/@qvac/sdk/dist/worker.mobile.bundle.js
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
@@ -91,6 +92,27 @@ function findConfigFile(projectRoot: string): string | null {
   return null;
 }
 
+/**
+ * Resolves the qvac CLI command.
+ *
+ * Prefers local @qvac/cli installation for version consistency,
+ * falls back to npx for convenience when CLI is not installed.
+ */
+function resolveCliCommand(): string {
+  try {
+    const cliEntryPoint = require.resolve("@qvac/cli");
+    return `node "${cliEntryPoint}"`;
+  } catch {
+    console.log(
+      "⚠️ QVAC: @qvac/cli not found in node_modules, falling back to npx",
+    );
+    console.log(
+      "   Tip: Add @qvac/cli as a dependency for consistent versioning",
+    );
+    return "npx qvac";
+  }
+}
+
 /** Runs qvac CLI with mobile-specific options */
 function runBundler(
   projectRoot: string,
@@ -106,10 +128,11 @@ function runBundler(
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
   const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
+  const cliCommand = resolveCliCommand();
 
   try {
     execSync(
-      `npx qvac bundle sdk ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
+      `${cliCommand} bundle sdk ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
       { stdio: "inherit", cwd: projectRoot },
     );
   } catch (error) {

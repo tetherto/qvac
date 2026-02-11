@@ -119,6 +119,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@qvac/cli": "^0.1.0",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.1",
     "@lancedb/lancedb": "^0.21.3",
@@ -154,6 +155,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@qvac/cli": "^0.1.0",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.11.2",
@@ -184,6 +186,9 @@
     "tar-stream": "^3.1.7"
   },
   "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    },
     "@modelcontextprotocol/sdk": {
       "optional": true
     },
