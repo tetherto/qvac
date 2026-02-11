@@ -255,8 +255,8 @@ jobs:
         if: needs.setup.outputs.qvac_needed == 'true'
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          mkdir -p models/ocr/rec_512
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/rec_512/ models/ocr/rec_512/ --recursive --exclude "*" \
+          mkdir -p models/ocr/rec_dyn
+          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive --exclude "*" \
             --include "detector_craft.onnx" \
             --include "recognizer_latin.onnx"
           echo "Downloaded QVAC OCR models:"
