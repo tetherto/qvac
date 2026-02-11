@@ -416,9 +416,11 @@ def run_once(
     end_time = time.time()
 
     # Generation timing only covers the generate() loop; TTFT is measured earlier.
+    # generation_time measures the entire model.generate() call, which generates all tokens.
+    # total_generated_tokens already represents only the newly generated tokens (excluding the input token).
+    # Since generation_time includes time for all generated tokens, we use total_generated_tokens directly.
     generation_time = max(end_time - gen_start, 1e-6)
-    tokens_after_first = max(total_generated_tokens - 1, 0)
-    tps = tokens_after_first / generation_time
+    tps = total_generated_tokens / generation_time
     output_tokens = total_generated_tokens
 
     memory_end = capture_memory()
