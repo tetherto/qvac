@@ -77,6 +77,13 @@ class GGMLBert extends BaseInference {
     await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
   }
 
+  /**
+   * Cancel the current task.
+   */
+  async cancel () {
+    await this.addon.cancel()
+  }
+
   async _runInternal (text) {
     this.logger.info('Starting inference embeddings for text:', text)
 

@@ -251,22 +251,6 @@ async function cleanupResources (loader, inference) {
   await inference.unload()
 }
 
-/**
- * Cancels a job if it exists
- * @param {Object} inference - The inference instance
- * @param {string|null} jobId - The job ID to cancel
- * @returns {Promise<void>}
- */
-async function cancelJobIfExists (inference, jobId) {
-  if (jobId != null) {
-    try {
-      await inference.addon.cancel(jobId)
-    } catch (e) {
-      // Ignore cancel errors - job may already be completed/failed
-    }
-  }
-}
-
 module.exports = {
   downloadFile,
   ensureModel,
@@ -279,6 +263,5 @@ module.exports = {
   waitForCompletion,
   setupErrorHandlers,
   removeErrorHandlers,
-  cleanupResources,
-  cancelJobIfExists
+  cleanupResources
 }

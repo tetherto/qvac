@@ -10,7 +10,6 @@ const {
   setupErrorHandlers,
   removeErrorHandlers,
   cleanupResources,
-  cancelJobIfExists,
   getModelConfigs
 } = require('./utils')
 
@@ -138,12 +137,10 @@ createDeviceModelTest('Model inference works correctly with long string exceedin
   // Verify that an error is thrown when input exceeds model training context size
   // Expected error: "tokenizeInput: number of tokens in prompt 0 (XXX) exceeds model training context size (XXX)"
   let response = null
-  let jobId = null
   let caughtError = null
 
   try {
     response = await inference.run(longString)
-    jobId = response.jobId
 
     // Set up error handlers to prevent unhandled errors
     // The error will be emitted asynchronously, so we need to catch it here
@@ -182,7 +179,7 @@ createDeviceModelTest('Model inference works correctly with long string exceedin
   await new Promise((resolve) => setTimeout(resolve, 100))
 
   // Clean up: cancel any pending job to prevent it from affecting subsequent tests
-  await cancelJobIfExists(inference, jobId)
+  await inference.cancel()
 
   t.teardown(async () => {
     await cleanupResources(loader, inference)
@@ -207,12 +204,10 @@ createDeviceModelTest('Model inference works correctly with array input where on
   // Expected error: "encodeHostF32Sequences: number of tokens in sequence 1 (XXX)
   // exceeds model training context size (XXX)"
   let response = null
-  let jobId = null
   let caughtError = null
 
   try {
     response = await inference.run(sequences)
-    jobId = response.jobId
 
     setupErrorHandlers(response, (error) => {
       caughtError = error
@@ -252,7 +247,7 @@ createDeviceModelTest('Model inference works correctly with array input where on
   // Wait a bit to ensure all async error emissions are handled
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  await cancelJobIfExists(inference, jobId)
+  await inference.cancel()
 
   t.teardown(async () => {
     await cleanupResources(loader, inference)
@@ -552,7 +547,7 @@ createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than fu
   const cancelResponse = await inference.run(sequences)
 
   // Cancel as soon as possible
-  await inference.addon.cancel()
+  await inference.cancel()
   console.log('Finished waiting for cancel.')
 
   let cancelEmbeddings = null

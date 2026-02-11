@@ -21,7 +21,7 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
   activate(): Promise<void>
-  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<number>
+  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<void>
   cancel(): Promise<void>
   unload(): Promise<void>
 }
@@ -103,6 +103,8 @@ export default class GGMLBert extends BaseInference {
   _runInternal(text: string | string[]): Promise<QvacResponse>
 
   run(text: string | string[]): Promise<QvacResponse>
+
+  cancel(): Promise<void>
 }
 
 export { GGMLBert }
@@ -122,7 +124,7 @@ export class BertInterface implements Addon {
   
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
   activate(): Promise<void>
-  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<number>
-  cancel(jobId?: number): Promise<void>
+  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<void>
+  cancel(): Promise<void>
   unload(): Promise<void>
 }
