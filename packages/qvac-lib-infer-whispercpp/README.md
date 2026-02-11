@@ -17,7 +17,6 @@ This library simplifies running inference with the Whisper transcription model w
   - [5. Load Model](#5-load-model)
   - [6. Run Transcription](#6-run-transcription)
   - [7. Release Resources](#7-release-resources)
-- [Usage Whisper with GSTDecoder and SileroVAD](#decoder--vad--whisper-integration-addon)
 - [Quickstart example](#quickstart-example)
 - [Model registry](#model-registry)
 - [Other examples](#other-examples)
@@ -479,46 +478,6 @@ try {
 }
 ```
 
-## Decoder + VAD + Whisper Integration AddOn
-
-This package combines audio decoding, optional VAD trimming, and Whisper transcription into a single `TranscriptionFfmpegAddon`. It automatically:
-
-1. Decodes or ingests raw PCM/encoded audio
-2. (Optionally) applies Silero VAD to drop non-speech
-3. Feeds speech segments to Whisper for transcription
-
-The principles are the same than for the single Whisper addon but with some differences in the configuration interface.
-
-### Usage
-
-Import `TranscriptionFfmpegAddon` from the `transcription-ffmpeg.js` module:
-
-```javascript
-const TranscriptionFfmpegAddon = require('@qvac/transcription-whispercpp/transcription-ffmpeg')
-```
-
-### Configuration
-
-When you instantiate `TranscriptionFfmpegAddon`, pass:
-
-* `loader`: your data loader instance
-* `params.decoder.audioFormat`: one of
-  * `'decoded'` (raw PCM input - for pre-decoded audio files)
-  * `'encoded'` | `'s16le'` | `'f32le'` | `'mp3'` | `'wav'` | `'m4a'` (for encoded audio files)
-* `params.decoder.streamIndex`: stream index of the media file (default: 0)
-* `params.decoder.inputBitrate`: bitrate of the media file in bps (used to calculate buffer size)
-
-### Usage Example
-
-See `examples/example.ffmpeg.js` for a full working script that demonstrates the FFmpeg decoder + Whisper transcription pipeline with encoded audio files (MP3, etc.).
-
-### Additional Features
-
-- **Progress Tracking:** Monitor loading progress with callbacks
-- **Performance Stats:** Measure inference time with the `stats` option
-
-For a complete working example that brings all these steps together, see the [Quickstart Example](#quickstart-example) below.
-
 ## Quickstart example
 
 Follow these steps to run the Quickstart demo using the Hyperdrive loader:
@@ -579,7 +538,6 @@ Results are updated regularly as new model versions are released.
 -   [Quickstart](examples/quickstart.js) – Basic transcription example using HyperDrive loader.
 -   [HyperDrive Transcription](examples/transcription.hd.js) – Transcribes pre-decoded raw audio files using HyperDrive model loading.
 -   [VAD with HyperDrive](examples/exampleVad.hd.js) – Demonstrates Voice Activity Detection (VAD) with HyperDrive model loading.
--   [FFmpeg Decoder](examples/example.ffmpeg.js) – Transcribes encoded audio files (MP3, WAV, etc.) using the FFmpeg decoder pipeline.
 -   [Standalone Decoder](examples/example.decoder.js) – Demonstrates the FFmpeg decoder independently for audio format conversion.
 -   [Model Reload](examples/example.reload.js) – Shows how to reload models with different configurations (language, temperature).
 -   [Audio ctx chunking](examples/example.audio-ctx-chunking.js) – Processes long recordings by reloading with `offset_ms`, `duration_ms`, and `audio_ctx` per chunk (mirrors the `audio-ctx-chunking` integration test).
