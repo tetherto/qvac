@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved Portuguese OCR accuracy (minor punctuation corrections in test expected outputs).
 
+
 # [0.1.2] - 2026-01-16
 
 ### Changed
