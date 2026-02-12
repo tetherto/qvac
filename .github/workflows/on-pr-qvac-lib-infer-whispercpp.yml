@@ -64,8 +64,8 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests-coverage:

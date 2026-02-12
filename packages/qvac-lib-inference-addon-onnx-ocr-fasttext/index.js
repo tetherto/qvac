@@ -12,6 +12,9 @@ const addon = require.addon.resolve('.')
  * ONNX client implementation for OCR model
  */
 class ONNXOcr extends ONNXBase {
+  // Only one job is supported at the moment, with a single job ID
+  static JOB_ID = 'job'
+
   /**
    * Creates an instance of ONNXBase.
    * @constructor
@@ -91,8 +94,27 @@ class ONNXOcr extends ONNXBase {
       onnxOcrParams.recognizerBatchSize = this.params.recognizerBatchSize
     }
 
-    this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._outputCallback.bind(this), console.log)
+    this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before other checks, since stats event name may contain other type names)
+    if (typeof data === 'object' && data !== null && 'totalTime' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', ONNXOcr.JOB_ID, data, null)
+    }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (Array.isArray(data)) {
+      // Pipeline output is an array of InferredText
+      mappedEvent = 'Output'
+    }
+    return this._outputCallback(addon, mappedEvent, ONNXOcr.JOB_ID, data, error)
   }
 
   async unload () {
@@ -104,15 +126,16 @@ class ONNXOcr extends ONNXBase {
 
   async _runInternal (input) {
     const imageInput = this.getImage(input.path)
-    const jobId = await this.addon.append({
+    await this.addon.runJob({
       type: 'image',
       input: imageInput,
       options: input.options
     })
 
-    const response = this._createResponse(jobId)
+    // Only one job is supported at the moment, with a single job ID
+    const response = this._createResponse(ONNXOcr.JOB_ID)
 
-    this._saveJobToResponseMapping(jobId, response)
+    this._saveJobToResponseMapping(ONNXOcr.JOB_ID, response)
     return response
   }
 
