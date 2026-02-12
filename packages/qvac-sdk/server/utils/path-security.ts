@@ -10,8 +10,7 @@ export { sanitizePathComponent } from "@/utils/path-sanitize";
 
 /**
  * Check whether a target path is contained within a base directory.
- *
- * STUB: always returns true. Protection not yet implemented.
+ * Both paths are resolved to absolute before comparison.
  */
 export function isPathWithinBase(basePath: string, targetPath: string): boolean {
   return checkPathWithinBase(basePath, targetPath, path.resolve, path.sep || "/");
@@ -20,8 +19,6 @@ export function isPathWithinBase(basePath: string, targetPath: string): boolean 
 /**
  * Sanitize components, join them to a base path, and verify the result
  * stays within the base directory. Throws PathTraversalError on escape.
- *
- * STUB: just joins paths without protection.
  */
 export function validateAndJoinPath(basePath: string, ...components: string[]): string {
   const sanitized = components.map((c) => sanitizePathComponent(c));
