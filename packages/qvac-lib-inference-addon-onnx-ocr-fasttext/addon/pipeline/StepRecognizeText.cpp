@@ -1,4 +1,3 @@
-// NOLINTBEGIN(readability-identifier-naming)
 #include "StepRecognizeText.hpp"
 
 #include "Lang.hpp"
@@ -637,8 +636,8 @@ void StepRecognizeText::populateImageList(const Input &input) {
     sumHeight += height;
   }
   float meanHeight = imgListOfLists_.empty() ? 1.0F : sumHeight / static_cast<float>(imgListOfLists_.size());
-  constexpr float Y_CENTER_THRESHOLD = 0.5F; // Same as EasyOCR's ycenter_ths
-  float rowThreshold = Y_CENTER_THRESHOLD * meanHeight;
+  constexpr float yCenterThreshold = 0.5F; // Same as EasyOCR's ycenter_ths
+  float rowThreshold = yCenterThreshold * meanHeight;
 
   // Sort by y_center first, then by x for boxes on same row
   std::sort(imgListOfLists_.begin(), imgListOfLists_.end(), [rowThreshold](const std::vector<SubImage> &listA, const std::vector<SubImage> &listB) {
@@ -659,11 +658,11 @@ void StepRecognizeText::populateImageList(const Input &input) {
 }
 
 void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<int>> &rotationAngles) {
-  constexpr int RATIO_DIFFERENCE_TO_IGNORE_ROTATION = 5;
+  constexpr int ratioDifferenceToIgnoreRotation = 5;
   bool canBypassRotations = !rotationAngles.has_value();
-  constexpr int ANGLE_90 = 90;
-  constexpr int ANGLE_180 = 180;
-  constexpr int ANGLE_270 = 270;
+  constexpr int angle90 = 90;
+  constexpr int angle180 = 180;
+  constexpr int angle270 = 270;
   // Use per-image rotationAngles if provided, otherwise use config default
   const std::vector<int> &angles = rotationAngles ? *rotationAngles : config_.defaultRotationAngles;
 
@@ -671,18 +670,21 @@ void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<i
     for (auto &imageList : imgListOfLists_) {
       cv::Mat &baseImg = imageList[0].image;
       cv::Mat rotatedImg;
-      if (angle == ANGLE_90) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.cols > RATIO_DIFFERENCE_TO_IGNORE_ROTATION * baseImg.rows) {
+      if (angle == angle90) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_90_CLOCKWISE);
-      } else if (angle == ANGLE_180) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.rows > RATIO_DIFFERENCE_TO_IGNORE_ROTATION * baseImg.cols) {
+      } else if (angle == angle180) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.rows > ratioDifferenceToIgnoreRotation * baseImg.cols) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_180);
-      } else if (angle == ANGLE_270) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.cols > RATIO_DIFFERENCE_TO_IGNORE_ROTATION * baseImg.rows) {
+      } else if (angle == angle270) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_90_COUNTERCLOCKWISE);
@@ -699,53 +701,55 @@ void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<i
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(const cv::Mat &preds, int batchIdx) {
   assert(preds.dims == 3);
-  const int IMG_SUBCOLUMNS_SIZE = preds.size[1];
-  const int CHAR_SPACE_SIZE = preds.size[2];
+  const int imgSubcolumnsSize = preds.size[1];
+  const int charSpaceSize = preds.size[2];
   assert(batchIdx >= 0 && batchIdx < preds.size[0]);
 
-  std::vector<std::vector<float>> predsProb(IMG_SUBCOLUMNS_SIZE, std::vector<float>(CHAR_SPACE_SIZE, 0.0F));
-  for (int subcolumn = 0; subcolumn < IMG_SUBCOLUMNS_SIZE; subcolumn++) {
+  std::vector<std::vector<float>> predsProb(
+      imgSubcolumnsSize, std::vector<float>(charSpaceSize, 0.0F));
+  for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
     float maxVal = -std::numeric_limits<float>::infinity();
-    for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+    for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       float val = preds.at<float>(batchIdx, subcolumn, charIndex);
       maxVal = std::max(val, maxVal);
     }
 
     float subcolumnSumExp = 0.0F;
-    for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+    for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       float val = preds.at<float>(batchIdx, subcolumn, charIndex);
       float expVal = std::exp(val - maxVal);
       predsProb[subcolumn][charIndex] = expVal;
       subcolumnSumExp += expVal;
     }
-    for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+    for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       predsProb[subcolumn][charIndex] /= subcolumnSumExp;
     }
   }
 
-  for (int subcolumn = 0; subcolumn < IMG_SUBCOLUMNS_SIZE; subcolumn++) {
-    for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+  for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
+    for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       if (ignoreChars_[charIndex]) {
         predsProb[subcolumn][charIndex] = 0.0F;
       }
     }
     float subcolumnSum = 0.0F;
-    for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+    for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       subcolumnSum += predsProb[subcolumn][charIndex];
     }
     if (subcolumnSum > 0.0F) {
-      for (int charIndex = 0; charIndex < CHAR_SPACE_SIZE; charIndex++) {
+      for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
         predsProb[subcolumn][charIndex] /= subcolumnSum;
       }
     }
   }
 
-  std::vector<size_t> predsIndex(IMG_SUBCOLUMNS_SIZE, 0);
-  std::vector<float> predsMaxProb(IMG_SUBCOLUMNS_SIZE, 0.0F);
-  for (int subcolumn = 0; subcolumn < IMG_SUBCOLUMNS_SIZE; subcolumn++) {
+  std::vector<size_t> predsIndex(imgSubcolumnsSize, 0);
+  std::vector<float> predsMaxProb(imgSubcolumnsSize, 0.0F);
+  for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
     size_t charIndexMax = 0;
     float maxProbVal = predsProb[subcolumn][0];
-    for (size_t charIndex = 1; charIndex < static_cast<size_t>(CHAR_SPACE_SIZE); charIndex++) {
+    for (size_t charIndex = 1; charIndex < static_cast<size_t>(charSpaceSize);
+         charIndex++) {
       if (predsProb[subcolumn][charIndex] > maxProbVal) {
         maxProbVal = predsProb[subcolumn][charIndex];
         charIndexMax = charIndex;
@@ -788,12 +792,18 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
   Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   Ort::Value imageTensor = Ort::Value::CreateTensor<float>(memoryInfo, imageData, imageTensorSize, imageShape.data(), imageShape.size());
 
-  constexpr std::array<const char*, 1> INPUT_NAMES = {"image"};
-  constexpr std::array<const char*, 1> OUTPUT_NAMES = {"output"};
+  constexpr std::array<const char*, 1> inputNames = {"image"};
+  constexpr std::array<const char*, 1> outputNames = {"output"};
 
   std::array<Ort::Value, 1> inputTensors = {std::move(imageTensor)};
 
-  auto outputTensors = ortSession_.Run(Ort::RunOptions{nullptr}, INPUT_NAMES.data(), inputTensors.data(), 1, OUTPUT_NAMES.data(), 1);
+  auto outputTensors = ortSession_.Run(
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      inputTensors.data(),
+      1,
+      outputNames.data(),
+      1);
 
   Ort::Value &predsTensor = outputTensors[0];
   auto *predsData = predsTensor.GetTensorMutableData<float>();
@@ -848,13 +858,18 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
   Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
       memoryInfo, batchData.data(), inputTensorSize, inputShape.data(), inputShape.size());
 
-  constexpr std::array<const char*, 1> INPUT_NAMES = {"image"};
-  constexpr std::array<const char*, 1> OUTPUT_NAMES = {"output"};
+  constexpr std::array<const char*, 1> inputNames = {"image"};
+  constexpr std::array<const char*, 1> outputNames = {"output"};
 
   std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
 
   auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr}, INPUT_NAMES.data(), inputTensors.data(), 1, OUTPUT_NAMES.data(), 1);
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      inputTensors.data(),
+      1,
+      outputNames.data(),
+      1);
 
   Ort::Value &predsTensor = outputTensors[0];
   auto *predsData = predsTensor.GetTensorMutableData<float>();
@@ -1088,5 +1103,3 @@ std::string StepRecognizeText::decodeGreedy(const std::vector<size_t> &textIndex
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext
-
-// NOLINTEND(readability-identifier-naming)
