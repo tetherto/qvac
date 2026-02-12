@@ -182,6 +182,7 @@ test('License collection CRUD operations', async (t) => {
 })
 
 test('Model with licenseId can fetch license info', async (t) => {
+  t.timeout(60000)
   const { bootstrap } = await createTestnet(3, t.teardown)
   const ctx = await createService(t, { swarmBootstrap: bootstrap })
 

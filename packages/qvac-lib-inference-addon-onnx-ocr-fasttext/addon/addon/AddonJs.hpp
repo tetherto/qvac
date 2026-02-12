@@ -43,13 +43,13 @@ getJsArrayFromOutput(js_env_t* env, const Pipeline::Output& inferredTextList) {
   for (size_t i = 0; i < inferredTextListLength; i++) {
 
     // Create bounding box elements: [ [x1, y1], [x2, y2], [x3, y3], [x4, y4 ]
-    constexpr size_t BOX_COORDINATES_LENGTH = 4;
-    std::array<js_value_t*, BOX_COORDINATES_LENGTH> jsBoxCoordinatesElements{};
+    constexpr size_t boxCoordinatesLength = 4;
+    std::array<js_value_t*, boxCoordinatesLength> jsBoxCoordinatesElements{};
     for (size_t boxCoordinateIndex = 0;
-         boxCoordinateIndex < BOX_COORDINATES_LENGTH;
+         boxCoordinateIndex < boxCoordinatesLength;
          boxCoordinateIndex++) {
-      constexpr size_t COORDINATE_PAIR_LENGTH = 2;
-      std::array<js_value_t*, COORDINATE_PAIR_LENGTH> jsCoordinatePairElement{};
+      constexpr size_t coordinatePairLength = 2;
+      std::array<js_value_t*, coordinatePairLength> jsCoordinatePairElement{};
       jsCoordinatePairElement.at(0) =
           qvac_lib_inference_addon_cpp::js::Number::create(
               env, inferredTextList[i].boxCoordinates.at(boxCoordinateIndex).x);
@@ -60,8 +60,8 @@ getJsArrayFromOutput(js_env_t* env, const Pipeline::Output& inferredTextList) {
           createArrayFromElements(env, std::span{jsCoordinatePairElement});
     }
 
-    constexpr size_t INFERRED_TEXT_LENGTH = 3;
-    std::array<js_value_t*, INFERRED_TEXT_LENGTH> jsInferredTextElements{};
+    constexpr size_t inferredTextLength = 3;
+    std::array<js_value_t*, inferredTextLength> jsInferredTextElements{};
     jsInferredTextElements.at(0) =
         createArrayFromElements(env, std::span{jsBoxCoordinatesElements});
     jsInferredTextElements.at(1) =
