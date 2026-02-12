@@ -217,7 +217,16 @@ jobs:
 
   lint-and-test:
     needs: detect-changes
-    if: needs.detect-changes.outputs.client_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      (
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request_target' &&
+          contains(github.event.pull_request.labels.*.name, 'verify')
+        )
+      )
     permissions:
       contents: read
       packages: read
