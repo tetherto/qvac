@@ -1,4 +1,4 @@
-#include "logging.h"
+#include "logging.hpp"
 
 #include "common/common.h"
 
@@ -10,7 +10,7 @@ namespace qvac_lib_infer_llamacpp_embed::logging {
 // only ERROR messages will be shown, preventing log spam
 Priority g_verbosityLevel = Priority::ERROR;
 
-void SetVerbosityLevel(
+void setVerbosityLevel(
     std::unordered_map<std::string, std::string>& configFilemap) {
   // Parse verbosity level from config and set it globally
   // This must be called before initializeBackend() to ensure llamaLogCallback
@@ -57,7 +57,7 @@ void SetVerbosityLevel(
   }
 }
 
-void llamaLogCallback(ggml_log_level level, const char* text, void* user_data) {
+void llamaLogCallback(ggml_log_level level, const char* text, void* userData) {
   // Convert ggml_log_level to QLOG Priority
   Priority priority;
   switch (level) {

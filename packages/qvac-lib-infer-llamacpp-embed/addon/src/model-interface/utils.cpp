@@ -1,4 +1,4 @@
-#include "utils.h"
+#include "utils.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -13,8 +13,8 @@
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 
-std::vector<std::string> splitLines(const std::string &str,
-                                    const std::string &separator) {
+std::vector<std::string>
+splitLines(const std::string& str, const std::string& separator) {
   std::vector<std::string> lines;
   size_t start = 0;
   size_t end = str.find(separator);

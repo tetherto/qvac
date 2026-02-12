@@ -143,9 +143,34 @@ async function ensureModelPath (modelName) {
   return destPath
 }
 
+/**
+ * Formats OCR performance metrics for test output
+ * Outputs in a structured format for easy parsing by log analyzers
+ *
+ * @param {string} label - Test label prefix (e.g., '[OCR] [GPU]')
+ * @param {Object} stats - Stats object from response.stats
+ * @param {Array} outputTexts - Array of detected texts
+ * @returns {string} Formatted performance metrics string
+ */
+function formatOCRPerformanceMetrics (label, stats, outputTexts = []) {
+  const totalTimeMs = stats.totalTime ? stats.totalTime * 1000 : 0
+  const detectionTimeMs = stats.detectionTime ? stats.detectionTime * 1000 : 0
+  const recognitionTimeMs = stats.recognitionTime ? stats.recognitionTime * 1000 : 0
+  const textRegionsCount = stats.textRegionsCount || 0
+  const totalSeconds = (totalTimeMs / 1000).toFixed(2)
+
+  return `${label} Performance Metrics:
+    - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
+    - Detection time: ${detectionTimeMs.toFixed(0)}ms
+    - Recognition time: ${recognitionTimeMs.toFixed(0)}ms
+    - Text regions detected: ${textRegionsCount}
+    - Detected texts: ${JSON.stringify(outputTexts)}`
+}
+
 module.exports = {
   isMobile,
   platform,
   getImagePath,
-  ensureModelPath
+  ensureModelPath,
+  formatOCRPerformanceMetrics
 }
