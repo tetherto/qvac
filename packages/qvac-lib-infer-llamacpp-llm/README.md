@@ -15,6 +15,7 @@ This library simplifies running Large Language Models (LLMs) within QVAC runtime
   - [6. Load Model](#6-load-model)
   - [7. Run Inference](#7-run-inference)
   - [8. Release Resources](#8-release-resources)
+- [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
 - [Model Registry](#model-registry)
 - [Fine-tuning](#fine-tuning)
@@ -229,6 +230,17 @@ try {
   console.error('Failed to unload model:', error)
 }
 ```
+
+### API behavior by state
+
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+
+| Current state | Action called | What happens |
+|---------------|----------------|----------------------------------------------------------------|
+| idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
+| idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" |
+| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
 
 ## Quickstart Example
 

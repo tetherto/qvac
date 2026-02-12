@@ -260,16 +260,24 @@ const scenarios = [
   }
 ]
 
+/**
+ * @param {object} [opts] - Options
+ * @param {number} [opts.maxChunks] - Cancel after this many chunks (uses opts.model.cancel() when set)
+ * @param {object} [opts.model] - Model instance; when maxChunks triggers, cancel via model.cancel()
+ */
 async function collectResponse (response, opts = {}) {
+  const { model } = opts
   const chunks = []
   let chunkCount = 0
   await response
-    .onUpdate(data => {
+    .onUpdate(async data => {
       chunks.push(data)
       chunkCount++
       if (opts.maxChunks && chunkCount >= opts.maxChunks) {
-        if (typeof response.cancel === 'function') {
-          response.cancel()
+        if (model && typeof model.cancel === 'function') {
+          await model.cancel()
+        } else if (typeof response.cancel === 'function') {
+          await response.cancel()
         }
       }
     })
@@ -318,7 +326,10 @@ async function runInferenceOrExpectFailure (t, addon, scenario, prompt) {
   }
 
   const response = await addon.run(prompt)
-  const output = await collectResponse(response, { maxChunks: scenario.maxChunks })
+  const output = await collectResponse(response, {
+    maxChunks: scenario.maxChunks,
+    model: addon
+  })
   t.ok(output.length > 0, `${scenario.name}: produced output (length=${output.length})`)
   if (typeof scenario.assertOutput === 'function') {
     scenario.assertOutput(t, output, response.stats || {})
