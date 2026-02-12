@@ -239,7 +239,7 @@ class RegistryConfig {
   }
 
   getRemoveIndexers () {
-    const rawKeys = getEnv('QVAC_REMOVE_INDEXERS', '')
+    const rawKeys = getEnv(ENV_KEYS.QVAC_REMOVE_INDEXERS, '')
     if (!rawKeys) return []
 
     return rawKeys
