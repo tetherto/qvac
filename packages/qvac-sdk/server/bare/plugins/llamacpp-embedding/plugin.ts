@@ -2,7 +2,6 @@ import EmbedLlamacpp, {
   type Loader as EmbedLoader,
 } from "@qvac/embed-llamacpp";
 import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
-import os from "bare-os";
 import {
   definePlugin,
   defineHandler,
@@ -55,16 +54,7 @@ function createEmbeddingsModel(
   const logger = createStreamLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED);
   registerAddonLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED, logger);
 
-  let config = transformEmbedConfig(embedConfig);
-  const platform = os.platform();
-
-  if (
-    platform === "android" &&
-    !embedConfig.flashAttention &&
-    !embedConfig.rawConfig?.includes("-fa")
-  ) {
-    config = `${config}\n-fa\toff`;
-  }
+  const config = transformEmbedConfig(embedConfig);
 
   const args = {
     loader: asLoader<EmbedLoader>(loader),
