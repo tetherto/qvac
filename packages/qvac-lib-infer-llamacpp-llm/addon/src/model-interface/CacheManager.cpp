@@ -14,9 +14,9 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
 CacheManager::CacheManager(
-    LlmContext* llmContext, llama_pos configured_n_discarded,
+    LlmContext* llmContext, llama_pos configuredNDiscarded,
     std::function<void(bool)> resetStateCallback)
-    : llmContext_(llmContext), configured_n_discarded_(configured_n_discarded),
+    : llmContext_(llmContext), configuredNDiscarded_(configuredNDiscarded),
       resetStateCallback_(std::move(resetStateCallback)) {}
 
 bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
@@ -60,7 +60,7 @@ bool CacheManager::handleCache(
     return false;
   }
 
-  bool cache_loaded = false;
+  bool cacheLoaded = false;
   bool cachePathSetInThisArray = false;
 
   while (!chatMsgs.empty() && chatMsgs[0].role == "session") {
@@ -74,7 +74,7 @@ bool CacheManager::handleCache(
             "the same message array\n",
             __func__);
         throw qvac_errors::StatusError(
-            AddonID, toString(InvalidInputFormat), errorMsg);
+            ADDON_ID, toString(InvalidInputFormat), errorMsg);
       }
       resetStateCallback_(true);
       cacheUsedInLastPrompt_ = false;
@@ -85,7 +85,7 @@ bool CacheManager::handleCache(
             "the same message array\n",
             __func__);
         throw qvac_errors::StatusError(
-            AddonID, toString(InvalidInputFormat), errorMsg);
+            ADDON_ID, toString(InvalidInputFormat), errorMsg);
       }
       saveCache();
     } else if (sessionCommand == "getTokens") {
@@ -95,7 +95,7 @@ bool CacheManager::handleCache(
             "in the same message array\n",
             __func__);
         throw qvac_errors::StatusError(
-            AddonID, toString(InvalidInputFormat), errorMsg);
+            ADDON_ID, toString(InvalidInputFormat), errorMsg);
       }
       QLOG_IF(
           Priority::DEBUG,
@@ -148,18 +148,18 @@ bool CacheManager::handleCache(
                 __func__,
                 sessionPath_.c_str()));
 
-        cache_loaded = loadCache();
+        cacheLoaded = loadCache();
         cacheUsedInLastPrompt_ = true;
       } else {
         std::string errorMsg =
             string_format("%s: session msg content is empty\n", __func__);
         throw qvac_errors::StatusError(
-            AddonID, toString(InvalidInputFormat), errorMsg);
+            ADDON_ID, toString(InvalidInputFormat), errorMsg);
       }
     }
   }
 
-  return cache_loaded;
+  return cacheLoaded;
 }
 
 bool CacheManager::loadCache() {
@@ -192,7 +192,7 @@ bool CacheManager::loadCache() {
         __func__,
         sessionPath_.c_str());
     throw qvac_errors::StatusError(
-        AddonID, toString(UnableToLoadSessionFile), errorMsg);
+        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
   }
 
   QLOG_IF(Priority::DEBUG, string_format("%s: loaded a session\n", __func__));
@@ -207,17 +207,17 @@ bool CacheManager::loadCache() {
           static_cast<size_t>(sessionTokens[0]),
           llama_n_ctx(ctx));
       throw qvac_errors::StatusError(
-          AddonID, toString(ContextLengthExeeded), errorMsg);
+          ADDON_ID, toString(ContextLengthExeeded), errorMsg);
     }
     llmContext_->setNPast(sessionTokens[0]);
     llmContext_->setFirstMsgTokens(sessionTokens[1]);
 
-    if (configured_n_discarded_ >
+    if (configuredNDiscarded_ >
         llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens()) {
       llmContext_->setNDiscarded(
           llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens() - 1);
     } else {
-      llmContext_->setNDiscarded(configured_n_discarded_);
+      llmContext_->setNDiscarded(configuredNDiscarded_);
     }
 
     auto* mem = llama_get_memory(ctx);
@@ -233,7 +233,7 @@ void CacheManager::saveCache() {
         "%s: Cannot save cache - caching disabled or no session path set\n",
         __func__);
     throw qvac_errors::StatusError(
-        AddonID, toString(InvalidInputFormat), errorMsg);
+        ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
 
   auto* ctx = llmContext_->getCtx();

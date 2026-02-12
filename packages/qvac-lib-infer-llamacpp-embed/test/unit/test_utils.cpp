@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "model-interface/utils.h"
+#include "model-interface/utils.hpp"
 
 TEST(SplitLinesTest, BasicSplit) {
   std::string input = "line1\nline2\nline3";

@@ -52,7 +52,7 @@ template <>
 uint32_t qvac_lib_inference_addon_llama::Addon::append(
     int priority, LlamaModel::Input input) {
   uint32_t jobId = 0;
-  constexpr int K_DEFAULT_PRIORITY = 50;
+  constexpr int kDefaultPriority = 50;
   {
     std::scoped_lock lock{ mtx_ };
     if (lastAppendedJob_ != nullptr) {
@@ -64,7 +64,7 @@ uint32_t qvac_lib_inference_addon_llama::Addon::append(
       jobId = lastAppendedJob_->id;
       try {
         jobQueue_.emplace(
-            priority == -1 ? K_DEFAULT_PRIORITY : priority, std::move(newJob));
+            priority == -1 ? kDefaultPriority : priority, std::move(newJob));
       } catch (...) {
         lastAppendedJob_ = nullptr;
         throw;
@@ -131,9 +131,8 @@ void Addon<LlamaModel>::process() {
 
   while (running_) {
     std::unique_lock uniqueLock(mtx_);
-    constexpr int K_PROCESS_WAIT_MS = 100;
-    processCv_.wait_for(
-        uniqueLock, std::chrono::milliseconds{K_PROCESS_WAIT_MS});
+    constexpr int kProcessWaitMs = 100;
+    processCv_.wait_for(uniqueLock, std::chrono::milliseconds{kProcessWaitMs});
     if (signal_ != ProcessSignals::None) {
       switch (signal_) {
       case ProcessSignals::Activate:
