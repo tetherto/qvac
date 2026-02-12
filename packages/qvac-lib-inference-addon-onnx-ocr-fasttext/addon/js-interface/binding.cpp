@@ -4,7 +4,7 @@
 
 js_value_t* qvacLibInferenceAddonOnnxOcrFasttextExports(
     js_env_t* env,
-    js_value_t* exports) { // NOLINT(readability-identifier-naming)
+    js_value_t* exports) {
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
