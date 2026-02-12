@@ -1,6 +1,5 @@
 'use strict'
 
-const path = require('bare-path')
 const ONNXTTS = require('../')
 const { createWav, readWavAsFloat32 } = require('./wav-generator-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
@@ -13,7 +12,7 @@ const conditionalDecoderPath = 'models/chatterbox/conditional_decoder.onnx'
 const languageModelPath = 'models/chatterbox/language_model.onnx'
 
 // Reference audio path for voice cloning
-const refWavPath = path.join(__dirname, 'ref.wav')
+const refWavPath = 'ref.wav'
 
 async function main () {
   console.log('Setting up C++ logger...')
