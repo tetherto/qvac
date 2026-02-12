@@ -3,10 +3,10 @@ import {
   InvalidShardUrlPatternError,
 } from "@/utils/errors-server";
 import { generateShortHash } from "./formatting";
+import { validateAndJoinPath } from "./path-security";
 import type { ShardPatternInfo, ShardUrl } from "@/schemas";
 import { extractAndWriteTensorsFile } from "./gguf-tensor-extractor";
 import { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
 
 /**
  * Detect if model filename follows shard pattern (00001-of-0000x)
@@ -143,7 +143,7 @@ export async function checkAllShardsExist(
   const allShardsExist = await Promise.all(
     shardFilenames.map((f) =>
       fsPromises
-        .access(path.join(shardDir, f))
+        .access(validateAndJoinPath(shardDir, f))
         .then(() => true)
         .catch(() => false),
     ),
@@ -176,7 +176,7 @@ export async function validateShardedModelCache(
 
   const tensorsFile = `${shardInfo.baseFilename}.tensors.txt`;
   const tensorsExist = await fsPromises
-    .access(path.join(shardDir, tensorsFile))
+    .access(validateAndJoinPath(shardDir, tensorsFile))
     .then(() => true)
     .catch(() => false);
 
