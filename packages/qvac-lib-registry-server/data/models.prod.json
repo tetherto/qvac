@@ -1164,10 +1164,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-en-indic-1B/2025-09-09/ggml-indictrans2-en-indic-1B-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "1B",
     "license": "MIT",
     "tags": [
@@ -1179,10 +1179,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-en-indic-dist-200M/2025-09-09/ggml-indictrans2-en-indic-dist-200M-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "200M",
     "license": "MIT",
     "tags": [
@@ -1194,10 +1194,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-en-1B/2025-09-09/ggml-indictrans2-indic-en-1B-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "1B",
     "license": "MIT",
     "tags": [
@@ -1209,10 +1209,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-en-dist-200M/2025-09-09/ggml-indictrans2-indic-en-dist-200M-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "200M",
     "license": "MIT",
     "tags": [
@@ -1224,10 +1224,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-indic-1B/2025-09-09/ggml-indictrans2-indic-indic-1B-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "1B",
     "license": "MIT",
     "tags": [
@@ -1239,10 +1239,10 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q0f16/ggml-indictrans2-indic-indic-dist-320M/2025-09-09/ggml-indictrans2-indic-indic-dist-320M-q0f16.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
-    "quantization": "q0f16",
+    "quantization": "f16",
     "params": "320M",
     "license": "MIT",
     "tags": [
@@ -1254,7 +1254,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2025-09-09/ggml-indictrans2-en-indic-1B-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1269,7 +1269,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2025-09-09/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1284,7 +1284,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2025-09-09/ggml-indictrans2-indic-en-1B-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1299,7 +1299,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2025-09-09/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1314,7 +1314,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2025-09-09/ggml-indictrans2-indic-indic-1B-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1329,7 +1329,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2025-09-09/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
