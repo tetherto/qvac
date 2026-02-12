@@ -46,9 +46,9 @@ public:
 
     for (size_t i = 0; i < buffer_.size();) {
       uint8_t byte = buffer_[i];
-      int seq_len = getUTF8SequenceLength(byte);
+      int seqLen = getUTF8SequenceLength(byte);
 
-      if (seq_len == 0) {
+      if (seqLen == 0) {
         // Invalid start byte, skip it
         consumed = i + 1;
         i++;
@@ -56,10 +56,10 @@ public:
       }
 
       // Check if we have complete sequence
-      if (i + seq_len <= buffer_.size()) {
+      if (i + seqLen <= buffer_.size()) {
         // Validate continuation bytes for multi-byte sequences
         bool valid = true;
-        for (int j = 1; j < seq_len; j++) {
+        for (int j = 1; j < seqLen; j++) {
           if ((buffer_[i + j] & 0xC0) != 0x80) {
             valid = false;
             break;
@@ -68,10 +68,10 @@ public:
 
         if (valid) {
           // Complete valid sequence - add to result
-          for (int j = 0; j < seq_len; j++) {
+          for (int j = 0; j < seqLen; j++) {
             result.push_back(static_cast<char>(buffer_[i + j]));
           }
-          consumed = i + seq_len;
+          consumed = i + seqLen;
           i = consumed;
         } else {
           // Invalid sequence, skip start byte
@@ -122,14 +122,14 @@ private:
    * @param first_byte The first byte of a potential UTF-8 sequence
    * @return Length of the sequence (1-4), or 0 if invalid start byte
    */
-  int getUTF8SequenceLength(uint8_t first_byte) const {
-    if ((first_byte & 0x80) == 0) {
+  int getUTF8SequenceLength(uint8_t firstByte) const {
+    if ((firstByte & 0x80) == 0) {
       return 1; // 0xxxxxxx - ASCII
-    } else if ((first_byte & 0xE0) == 0xC0) {
+    } else if ((firstByte & 0xE0) == 0xC0) {
       return 2; // 110xxxxx - 2 bytes
-    } else if ((first_byte & 0xF0) == 0xE0) {
+    } else if ((firstByte & 0xF0) == 0xE0) {
       return 3; // 1110xxxx - 3 bytes
-    } else if ((first_byte & 0xF8) == 0xF0) {
+    } else if ((firstByte & 0xF8) == 0xF0) {
       return 4; // 11110xxx - 4 bytes (emojis!)
     } else {
       return 0; // Invalid start byte

@@ -341,4 +341,3 @@ jobs:
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
           workdir: ${{ env.WORKDIR }}
-          name-suffix: "-mono"

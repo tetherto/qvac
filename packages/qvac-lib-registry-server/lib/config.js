@@ -3,7 +3,7 @@
 const path = require('path')
 const process = require('process')
 const IdEnc = require('hypercore-id-encoding')
-const { ENV_KEYS } = require('@tetherto/qvac-registry-schema')
+const { ENV_KEYS } = require('@tetherto/qvac-registry-schema-mono')
 const { getEnv, updateEnvFile } = require('../utils/env')
 
 const AUTOBASE_ENV_KEY = ENV_KEYS.QVAC_AUTOBASE_KEY || 'QVAC_AUTOBASE_KEY'
@@ -230,6 +230,16 @@ class RegistryConfig {
 
   getAdditionalIndexers () {
     const rawKeys = getEnv(ENV_KEYS.QVAC_ADDITIONAL_INDEXERS, '')
+    if (!rawKeys) return []
+
+    return rawKeys
+      .split(',')
+      .map(key => key.trim())
+      .filter(Boolean)
+  }
+
+  getRemoveIndexers () {
+    const rawKeys = getEnv(ENV_KEYS.QVAC_REMOVE_INDEXERS, '')
     if (!rawKeys) return []
 
     return rawKeys

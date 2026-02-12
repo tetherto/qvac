@@ -3,7 +3,7 @@
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 
 namespace qvac_lib_inference_addon_llama::errors {
-constexpr const char* AddonID = "LLM";
+constexpr const char* ADDON_ID = "LLM";
 
 enum LlmErrorCode : uint32_t {
   MissingGGUFFile = 1,
