@@ -101,8 +101,8 @@ export async function* stream<T extends Request>(
   }
 }
 
-export function close() {
+export async function close() {
   if (!rpcInstance) return;
-  closeRPC();
   rpcInstance = null;
+  await closeRPC();
 }
