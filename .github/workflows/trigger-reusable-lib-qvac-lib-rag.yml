@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-rag)
+name: General CI/CD (rag)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -16,12 +16,12 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-rag/**"
+      - "packages/rag/**"
   pull_request:
     branches:
       - release-*
     paths:
-      - "packages/qvac-lib-rag/**"
+      - "packages/rag/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -42,9 +42,9 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
-      package-slug: qvac-lib-rag
-      package-json-path: packages/qvac-lib-rag/package.json
-      changelog-path: packages/qvac-lib-rag/CHANGELOG.md
+      package-slug: rag
+      package-json-path: packages/rag/package.json
+      changelog-path: packages/rag/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -110,7 +110,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-rag
+          workdir: packages/rag
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -119,7 +119,7 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-rag
+      workdir: packages/rag
 
   publish-feature-gpr:
     needs: publish-logic
@@ -139,7 +139,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-rag
+          workdir: packages/rag
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -160,5 +160,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-rag
+          workdir: packages/rag
           name-suffix: "-mono"
