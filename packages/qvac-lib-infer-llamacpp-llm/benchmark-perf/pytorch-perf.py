@@ -169,9 +169,9 @@ def load_torch_model(
         else:
             # device_map="auto" automatically selects MPS or CUDA based on availability
             kwargs = {"device_map": "auto"}
-    kwargs["torch_dtype"] = torch.float16
-    # Flash attention 2 requires the flash-attn package (CUDA kernels) and CUDA device
-    # It does not work on MPS (macOS) - flash-attn is a CUDA-only library
+        kwargs["torch_dtype"] = torch.float16
+        # Flash attention 2 requires the flash-attn package (CUDA kernels) and CUDA device
+        # It does not work on MPS (macOS) - flash-attn is a CUDA-only library
     if flash_attn and device != "cpu":
         try:
             from transformers.utils import is_flash_attn_2_available
@@ -394,8 +394,7 @@ def run_once(
             f"Prompt exceeds or fills the context window."
         )
 
-    # Transformers TextStreamer only supports batch size 1. We approximate TTFT
-    # with chunked prefill (token batching) and a single forward pass for the next token.
+    # Measure TTFT using chunked prefill (token batching) and a single forward pass for the last token.
     log(
         f"Running prefill: tokenBatch={batch_size} tokenMicroBatch={ubatch_size} "
         f"promptTokens={prompt_tokens} maxNew={max_new_tokens}"
@@ -413,11 +412,9 @@ def run_once(
             end = min(start + prefill_batch, prefill_len)
             for micro_start in range(start, end, prefill_micro_batch):
                 micro_end = min(micro_start + prefill_micro_batch, end)
-                # Skip empty chunks (shouldn't happen, but defensive check)
                 if micro_end <= micro_start:
                     continue
                 chunk_ids = input_ids[:, micro_start:micro_end]
-                # Validate chunk is not empty
                 if chunk_ids.shape[0] == 0 or chunk_ids.shape[1] == 0:
                     raise RuntimeError(
                         f"Empty chunk in prefill: micro_start={micro_start}, micro_end={micro_end}, "
@@ -433,18 +430,14 @@ def run_once(
                 past_key_values = outputs.past_key_values
         # Process the last token once to estimate first-token latency (decode step).
         # This token was excluded from the prefill loop above to avoid double-processing.
-        # Save past_key_values BEFORE processing the last token - this will be used for generation.
-        # past_key_values_for_generation contains KV cache for tokens 0 to seq_len-2 (all except last token).
         # 
         # If prefill_len == 0 (seq_len == 1), no prefill was done, so past_key_values is still
         # kv_cache_prefill (which may be None or an uninitialized QuantizedCache). Passing an
         # uninitialized QuantizedCache to model() causes "index -1" errors because the cache
         # contains empty tensors. We must pass None instead.
         if prefill_len > 0 and past_key_values is not None:
-            past_key_values_for_generation = past_key_values
             past_key_values_for_last_token = past_key_values
         else:
-            past_key_values_for_generation = None
             past_key_values_for_last_token = None
         first_token_logits = None
         if seq_len > 0:
@@ -458,8 +451,6 @@ def run_once(
                 past_key_values=past_key_values_for_last_token,
                 use_cache=True,
             )
-            # past_key_values now contains KV cache for ALL prompt tokens (0 to seq_len-1)
-            # But we use past_key_values_for_generation (without last token) for model.generate()
             first_token_logits = outputs.logits[:, -1, :]  # Shape: [batch_size, vocab_size]
         first_token_ms = (time.time() - ttft_start) * 1000.0
     log(f"Forward pass complete (TTFT={first_token_ms:.1f}ms)")
@@ -467,22 +458,15 @@ def run_once(
     total_generated_tokens = 0
     output_text = ""
 
-    # Use the populated KV cache from prefill phase for generation.
-    # past_key_values_for_generation contains KV cache for tokens 0 to seq_len-2 (all except last token).
-    # We pass the last prompt token as input_ids, and model.generate() will process it with the
-    # cached KV and then generate subsequent tokens.
+    # Generate new tokens using model.generate().
+    # Note: We don't pass past_key_values to model.generate() because the cache structure from
+    # our manual forward pass doesn't match what model.generate() expects internally, causing
+    # "index -1 is out of bounds" errors. Instead, we pass the full prompt and let model.generate()
+    # handle caching internally. This is slightly less efficient but ensures correctness.
     gen_start = time.time()
     if seq_len > 0:
-        if past_key_values_for_generation is not None and seq_len > 1:
-            # past_key_values_for_generation contains KV cache for tokens 0 to seq_len-2.
-            # Pass the last prompt token as input_ids so model.generate() can process it and continue generation.
-            generate_input_ids = input_ids[:, -1:]  # Last prompt token
-            generate_attention_mask = attention_mask[:, -1:] if attention_mask is not None else None
-        else:
-            # Fallback: if no prefill was done (seq_len==1) or kv_cache_prefill is None, use the original input_ids
-            generate_input_ids = input_ids
-            generate_attention_mask = attention_mask
-            past_key_values_for_generation = None
+        generate_input_ids = input_ids
+        generate_attention_mask = attention_mask
     else:
         raise RuntimeError(
             f"Cannot generate: seq_len={seq_len}, input_ids.shape={input_ids.shape}"
@@ -501,20 +485,17 @@ def run_once(
             do_sample=False,
             use_cache=True,
             attention_mask=generate_attention_mask,
-            past_key_values=past_key_values_for_generation,
         )
     except Exception as exc:
         raise RuntimeError(
             f"model.generate() failed: {exc}. "
             f"generate_input_ids.shape={generate_input_ids.shape}, "
             f"max_new_tokens={max_new_tokens}, "
-            f"past_key_values_for_generation={'present' if past_key_values_for_generation is not None else 'None'}, "
             f"seq_len={seq_len}, prompt_tokens={prompt_tokens}"
         ) from exc
     generated_len = int(generated.shape[1])
-    # Exclude the input token (last prompt token) from the count - only count newly generated tokens
-    input_token_count = int(generate_input_ids.shape[1])
-    total_generated_tokens = max(generated_len - input_token_count, 0)
+    # Exclude prompt tokens - only count newly generated tokens
+    total_generated_tokens = max(generated_len - seq_len, 0)
     output_text = tokenizer.decode(generated[0], skip_special_tokens=True)
     log("Generation complete")
 
