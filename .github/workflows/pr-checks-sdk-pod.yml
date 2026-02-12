@@ -13,7 +13,7 @@ on:
       - "packages/qvac-lib-rag/**"
       - "packages/qvac-lib-logging/**"
       - "packages/qvac-lib-error-base/**"
-      - "packages/qvac-docs/**"
+      - "packages/docs/**"
     branches:
       - main
       - release-*

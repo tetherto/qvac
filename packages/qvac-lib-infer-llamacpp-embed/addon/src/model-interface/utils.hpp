@@ -7,8 +7,8 @@
 
 #include <llama.h>
 
-std::vector<std::string> splitLines(const std::string &str,
-                                    const std::string &separator = "\n");
+std::vector<std::string>
+splitLines(const std::string& str, const std::string& separator = "\n");
 
 /// @brief Initializes common library only on first call. Can be called
 /// from all modules that depend on the common library and will only be
