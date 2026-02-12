@@ -30,6 +30,10 @@ async function runReasoningTest (options = {}) { // eslint-disable-line no-unuse
   return runIntegrationModule('../integration/reasoning.test.js', options)
 }
 
+async function runSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/sliding-context.test.js', options)
+}
+
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/tool-calling.test.js', options)
 }
