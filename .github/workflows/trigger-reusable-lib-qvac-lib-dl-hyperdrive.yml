@@ -119,6 +119,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
+      repo_name: dl-hyperdrive
 
   publish-feature-gpr:
     needs: publish-logic

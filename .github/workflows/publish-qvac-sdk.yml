@@ -338,6 +338,6 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: "true"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+          repo_name: sdk
           workdir: ${{ env.WORKDIR }}

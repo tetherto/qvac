@@ -119,6 +119,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-util-transcription
+      repo_name: util-transcription
 
   publish-feature-gpr:
     needs: publish-logic
