@@ -164,10 +164,16 @@ std::vector<Ort::Value> StepDetectionInference::runInference(cv::Mat inputBlob) 
   Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   Ort::Value inputTensor = Ort::Value::CreateTensor<float>(memoryInfo, inputData, inputTensorSize, inputShape.data(), inputShape.size());
 
-  constexpr std::array<const char*, 1> INPUT_NAMES = {"input"};
-  constexpr std::array<const char*, 2> OUTPUT_NAMES = {"output", "feature"};
+  constexpr std::array<const char*, 1> inputNames = {"input"};
+  constexpr std::array<const char*, 2> outputNames = {"output", "feature"};
 
-  return ortSession_.Run(Ort::RunOptions{nullptr}, INPUT_NAMES.data(), &inputTensor, 1, OUTPUT_NAMES.data(), 2);
+  return ortSession_.Run(
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      &inputTensor,
+      1,
+      outputNames.data(),
+      2);
 }
 
 StepDetectionInference::Output StepDetectionInference::process(const StepDetectionInference::Input &input) {
