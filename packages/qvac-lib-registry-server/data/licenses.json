@@ -23,11 +23,6 @@
     "spdxId": "GPL-3.0",
     "name": "GNU General Public License v3.0",
     "url": "https://www.gnu.org/licenses/gpl-3.0.html"
-  },
-  {
-    "spdxId": "LFM-1.0",
-    "name": "Liquid Foundation Models License 1.0",
-    "url": "https://www.liquid.ai/liquid-foundation-models-license-v1-0"
   }
 ]
 

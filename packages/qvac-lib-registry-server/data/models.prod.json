@@ -3951,34 +3951,6 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/blob/main/LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
-    "engine": "@qvac/llm-llamacpp",
-    "description": "LFM 2.5 1.2B instruct",
-    "quantization": "q4_k_m",
-    "params": "1.2B",
-    "license": "LFM-1.0",
-    "tags": [
-      "generation",
-      "instruct",
-      "lfm"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/blob/main/LFM2.5-1.2B-Instruct-Q4_0.gguf",
-    "engine": "@qvac/llm-llamacpp",
-    "description": "LFM 2.5 1.2B instruct",
-    "quantization": "q4_0",
-    "params": "1.2B",
-    "license": "LFM-1.0",
-    "tags": [
-      "generation",
-      "instruct",
-      "lfm"
-    ],
-    "notes": ""
-  },
-  {
     "source": "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Llama 3.2 1B with tool calling support",
@@ -4013,7 +3985,7 @@
     "description": "Qwen 3 8B instruct",
     "quantization": "q4_k_m",
     "params": "8B",
-    "license": "Qwen",
+    "license": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
