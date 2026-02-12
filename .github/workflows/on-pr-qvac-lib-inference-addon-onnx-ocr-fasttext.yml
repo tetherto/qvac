@@ -12,7 +12,6 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-      - ".github/workflows/*ocr*.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -51,7 +50,6 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-              - ".github/workflows/*ocr*.yml"
 
   sanity-checks:
     needs: changes

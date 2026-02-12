@@ -7,7 +7,6 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-      - ".github/workflows/*ocr*.yml"
 
 permissions:
   contents: write
