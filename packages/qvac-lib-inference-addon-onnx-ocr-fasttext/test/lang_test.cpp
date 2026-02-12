@@ -68,30 +68,30 @@ TEST(ValidateUnknownLanguages, ValidAndInvalidLanguages) {
 
 TEST(GetCharsInfoFromLangList, Empty) {
   std::u32string_view characters;
-  std::vector<bool> ignore_characters;
-  bool left_to_right;
+  std::vector<bool> ignoreCharacters;
+  bool leftToRight;
 
-  std::tie(characters, ignore_characters, left_to_right) =
+  std::tie(characters, ignoreCharacters, leftToRight) =
       getCharsInfoFromLangList({});
 
   EXPECT_FALSE(characters.empty());
-  EXPECT_EQ(characters.size(), ignore_characters.size());
+  EXPECT_EQ(characters.size(), ignoreCharacters.size());
 
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 }
 
 TEST(GetCharsInfoFromLangList, English) {
   std::u32string_view characters;
-  std::vector<bool> ignore_characters;
-  bool left_to_right;
+  std::vector<bool> ignoreCharacters;
+  bool leftToRight;
 
-  std::tie(characters, ignore_characters, left_to_right) =
+  std::tie(characters, ignoreCharacters, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"en"});
 
   EXPECT_FALSE(characters.empty());
-  EXPECT_EQ(characters.size(), ignore_characters.size());
+  EXPECT_EQ(characters.size(), ignoreCharacters.size());
 
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 }
 
 TEST(GetCharsInfoFromLangList, EnglishIsValidWithAnyLanguageGroup) {
@@ -155,60 +155,60 @@ TEST(GetCharsInfoFromLangList, MixingLanguageGroups) {
 }
 
 TEST(GetCharsInfoFromLangList, LeftToRight) {
-  bool left_to_right;
+  bool leftToRight;
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"en", "hu"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"th"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"ch_tra"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"ch_sim"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"ja"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"ko"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"ta"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"te"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"kn"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"bn", "as"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) =
+  std::tie(std::ignore, std::ignore, leftToRight) =
       getCharsInfoFromLangList(std::vector<std::string>{"hi", "ne"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
-  std::tie(std::ignore, std::ignore, left_to_right) = getCharsInfoFromLangList(
+  std::tie(std::ignore, std::ignore, leftToRight) = getCharsInfoFromLangList(
       std::vector<std::string>{"ru", "rs_cyrillic", "be"});
-  EXPECT_TRUE(left_to_right);
+  EXPECT_TRUE(leftToRight);
 
   // Arabic, Farsi, Uyghur and Urdu are written right to left.
-  std::tie(std::ignore, std::ignore, left_to_right) = getCharsInfoFromLangList(
+  std::tie(std::ignore, std::ignore, leftToRight) = getCharsInfoFromLangList(
       std::vector<std::string>{"ar", "fa", "ug", "ur"});
-  EXPECT_FALSE(left_to_right);
+  EXPECT_FALSE(leftToRight);
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext
