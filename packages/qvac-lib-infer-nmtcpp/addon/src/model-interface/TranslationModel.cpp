@@ -3,13 +3,22 @@
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #include "nmt_utils.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-namespace qvac_lib_inference_addon_mlc_marian {
+namespace qvac_lib_inference_addon_marian {
+
+std::string TranslationModel::getName() const {
+  switch (backendType_) {
+  case BackendType::GGML:
+    return std::string("GGML : ") + srcLang_ + "->" + tgtLang_;
+  case BackendType::BERGAMOT:
+    return std::string("BERGAMOT : ") + srcLang_ + "->" + tgtLang_;
+  }
+}
 
 TranslationModel::TranslationModel(const std::string& modelPath) {
   if (!modelPath.empty()) {
@@ -214,10 +223,6 @@ void TranslationModel::reset() {
   tgtLang_.clear();
 }
 
-void TranslationModel::initializeBackend() {
-  // No-op: backend initialized by engine construction/init
-}
-
 bool TranslationModel::isLoaded() const {
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
@@ -281,7 +286,21 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
   return input;
 }
 
-std::string TranslationModel::process(const std::string& text) {
+std::any TranslationModel::process(const std::any& input) {
+  if (auto* inputString = std::any_cast<std::string>(&input)) {
+    return processString(*inputString);
+  } else if (
+      auto* inputBatch = std::any_cast<std::vector<std::string>>(&input)) {
+    return processBatch(*inputBatch);
+  } else {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        "[TRANSLATION MODEL] ERROR: Invalid input type!");
+    throw std::runtime_error("Invalid Input type");
+  }
+}
+
+std::string TranslationModel::processString(const std::string& text) {
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
     if (!bergamotCtx_) {
@@ -354,18 +373,6 @@ std::string TranslationModel::process(const std::string& text) {
   return output;
 }
 
-std::string TranslationModel::process(
-    const std::string& text,
-    const std::function<void(const Output&)>& consumer) {
-  const auto& result = process(text);
-
-  if (consumer) {
-    consumer(result);
-  }
-
-  return result;
-}
-
 std::vector<std::string>
 TranslationModel::processBatch(const std::vector<std::string>& texts) {
 #ifdef HAVE_BERGAMOT
@@ -421,7 +428,7 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
   std::vector<std::string> results;
   results.reserve(texts.size());
   for (const auto& text : texts) {
-    results.push_back(process(text));
+    results.push_back(processString(text));
   }
   return results;
 }
@@ -492,26 +499,6 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
   return {};
 }
 
-std::string TranslationModel::runtimeStatsToString() const {
-  auto stats = runtimeStats();
-  if (stats.empty()) {
-    return "No runtime statistics available";
-  }
-
-  std::ostringstream oss;
-  for (const auto& stat : stats) {
-    oss << stat.first << ": ";
-    if (std::holds_alternative<double>(stat.second)) {
-      oss << std::get<double>(stat.second);
-    } else {
-      oss << std::get<int64_t>(stat.second);
-    }
-    oss << '\n';
-  }
-
-  return oss.str();
-}
-
 TranslationModel::~TranslationModel() { unload(); }
 
 std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
@@ -526,10 +513,6 @@ void TranslationModel::setConfig(
 }
 
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
-
-void TranslationModel::unloadWeights() {
-  // No-op, defined it for unit-testing template.
-}
 
 void TranslationModel::updateConfig() {
 #ifdef HAVE_BERGAMOT
@@ -619,4 +602,4 @@ void TranslationModel::updateConfig() {
   }
 }
 
-} // namespace qvac_lib_inference_addon_mlc_marian
+} // namespace qvac_lib_inference_addon_marian

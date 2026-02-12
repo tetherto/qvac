@@ -8,8 +8,6 @@ const { TranslationInterface } = require('./marian')
 const QvacResponse = require('@qvac/response')
 const { IndicProcessor } = require('./third-party/indic-processor')
 
-const END_OF_INPUT = 'end of job'
-
 class QvacIndicTransResponse extends QvacResponse {
   /**
    * Creates an instance of QvacIndicTransResponse.
@@ -255,11 +253,12 @@ class TranslationNmtcpp extends BaseInference {
       this._params.dstLang
     )
 
-    const jobId = await this.addon.append({
+    await this.addon.runJob({
       type: 'text',
       input: processedText
     })
 
+    const jobId = "job"
     const response = new QvacIndicTransResponse(
       processor,
       this._params.dstLang,
@@ -267,7 +266,6 @@ class TranslationNmtcpp extends BaseInference {
     )
 
     this._saveJobToResponseMapping(jobId, response)
-    await this.addon.append({ type: END_OF_INPUT })
     return response
   }
 
@@ -315,11 +313,11 @@ class TranslationNmtcpp extends BaseInference {
    */
   async _runStandardTranslation (input) {
     const text = this._prepareInputText(input)
-    const jobId = await this.addon.append({ type: 'text', input: text })
+    await this.addon.runJob({ type: 'text', input: text })
+    const jobId = "job"
     const response = this._createStandardResponse(jobId)
 
     this._saveJobToResponseMapping(jobId, response)
-    await this.addon.append({ type: END_OF_INPUT })
     return response
   }
 
@@ -385,11 +383,29 @@ class TranslationNmtcpp extends BaseInference {
   createAddon (configurationParams) {
     return new TranslationInterface(
       configurationParams,
-      this._outputCallback.bind(this),
+      this._addonOutputCallback.bind(this),
       this.logger
     )
   }
 
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
+    if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+    }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (typeof data === 'string') {
+      mappedEvent = 'Output'
+    }
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
+  }
+  
   async _downloadWeights (reportProgressCallback) {
     const models = this._getFilesToDownload()
     if (!models.length) {

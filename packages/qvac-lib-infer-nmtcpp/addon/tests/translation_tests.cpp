@@ -37,12 +37,12 @@ protected:
         "many miles I've fallen by this time?\" she said aloud.";
   }
 
-  std::unique_ptr<qvac_lib_inference_addon_mlc_marian::TranslationModel>
+  std::unique_ptr<qvac_lib_inference_addon_marian::TranslationModel>
   createModel(std::string_view ggmlFileName, bool useGpu = false) {
     auto modelPath = basePath / ggmlFileName;
 
     auto model =
-        std::make_unique<qvac_lib_inference_addon_mlc_marian::TranslationModel>(
+        std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
             modelPath.string());
     model->setUseGpu(useGpu);
     model->load();
@@ -57,7 +57,7 @@ TEST_F(TranslationModelTest, EnglishToItalianTranslation) {
   auto model = createModel(getEnToItModelPath());
   ASSERT_NE(model, nullptr);
 
-  auto output = model->process(testInput);
+  auto output = std::any_cast<std::string>(model->process(testInput));
   EXPECT_FALSE(output.empty());
   EXPECT_NE(output, testInput);
 
@@ -69,7 +69,7 @@ TEST_F(TranslationModelTest, GPUTranslation) {
   auto model = createModel(getEnToItModelPath(), true); // Enable GPU
   ASSERT_NE(model, nullptr);
 
-  auto output = model->process(testInput);
+  auto output = std::any_cast<std::string>(model->process(testInput));
   EXPECT_FALSE(output.empty());
   EXPECT_NE(output, testInput);
 
@@ -85,13 +85,14 @@ TEST_F(TranslationModelTest, ItalianToEnglishTranslation) {
   auto enItModel = createModel(getEnToItModelPath());
   ASSERT_NE(enItModel, nullptr);
 
-  auto italianText = enItModel->process(testInput);
+  auto italianText = std::any_cast<std::string>(enItModel->process(testInput));
   EXPECT_FALSE(italianText.empty());
 
   auto itEnModel = createModel(getItToEnModelPath());
   ASSERT_NE(itEnModel, nullptr);
 
-  auto backToEnglish = itEnModel->process(italianText);
+  auto backToEnglish =
+      std::any_cast<std::string>(itEnModel->process(italianText));
   EXPECT_FALSE(backToEnglish.empty());
   EXPECT_NE(backToEnglish, italianText);
 
@@ -106,7 +107,7 @@ TEST_F(TranslationModelTest, MultipleModelsManagement) {
   }
 
   std::vector<
-      std::unique_ptr<qvac_lib_inference_addon_mlc_marian::TranslationModel>>
+      std::unique_ptr<qvac_lib_inference_addon_marian::TranslationModel>>
       models;
 
   models.emplace_back(createModel(getEnToItModelPath()));
@@ -116,8 +117,8 @@ TEST_F(TranslationModelTest, MultipleModelsManagement) {
   ASSERT_NE(models[0], nullptr);
   ASSERT_NE(models[1], nullptr);
 
-  auto output1 = models[0]->process(testInput);
-  auto output2 = models[1]->process(output1);
+  auto output1 = std::any_cast<std::string>(models[0]->process(testInput));
+  auto output2 = std::any_cast<std::string>(models[1]->process(output1));
 
   EXPECT_FALSE(output1.empty());
   EXPECT_FALSE(output2.empty());
@@ -125,7 +126,7 @@ TEST_F(TranslationModelTest, MultipleModelsManagement) {
   models.erase(models.begin());
   ASSERT_EQ(models.size(), 1);
 
-  auto output3 = models[0]->process(output1);
+  auto output3 = std::any_cast<std::string>(models[0]->process(output1));
   EXPECT_FALSE(output3.empty());
 
   std::cout << "Multi-model test: " << testInput << " -> " << output1 << " -> "
@@ -136,13 +137,13 @@ TEST_F(TranslationModelTest, SaveLoadReloadFunctionality) {
   auto model = createModel(getEnToItModelPath());
   ASSERT_NE(model, nullptr);
 
-  auto outputBefore = model->process(testInput);
+  auto outputBefore = std::any_cast<std::string>(model->process(testInput));
   EXPECT_FALSE(outputBefore.empty());
 
   model->saveLoadParams((basePath / getEnToItModelPath()).string());
   model->reload();
 
-  auto outputAfter = model->process(testInput);
+  auto outputAfter = std::any_cast<std::string>(model->process(testInput));
   EXPECT_FALSE(outputAfter.empty());
   EXPECT_EQ(outputBefore, outputAfter);
 
@@ -168,13 +169,13 @@ TEST_F(TranslationModelTest, NoRepeatNgramSizeTest) {
   model->setConfig({{"norepeatngramsize", 2}});
 
   std::string input = "no no no no no";
-  auto output = model->process(input);
+  auto output = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(output.empty());
   EXPECT_NE(output, "No no no no no");
   std::cout << "EN->IT: " << input << " -> " << output << "\n";
 
   std::string input2 = "hello world hello world hello world";
-  auto output2 = model->process(input2);
+  auto output2 = std::any_cast<std::string>(model->process(input2));
   EXPECT_FALSE(output2.empty());
   EXPECT_NE(output2, "Ciao mondo Ciao mondo Ciao");
   std::cout << "EN->IT: " << input2 << " -> " << output2 << "\n";
@@ -198,7 +199,7 @@ TEST_F(TranslationModelTest, TemperatureTest) {
   model->setConfig(
       {{"temperature", 0.1}, {"beamsize", static_cast<int64_t>(1)}});
 
-  auto output_low = model->process(input);
+  auto output_low = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(output_low.empty());
   EXPECT_NE(output_low, input);
 
@@ -212,7 +213,7 @@ TEST_F(TranslationModelTest, TemperatureTest) {
   model->setConfig(
       {{"temperature", 0.8}, {"beamsize", static_cast<int64_t>(1)}});
 
-  auto output_high = model->process(input);
+  auto output_high = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(output_high.empty());
   EXPECT_NE(output_high, input);
 
@@ -230,12 +231,12 @@ TEST_F(TranslationModelTest, RepetitionPenalty) {
   std::string input =
       "He said said said said said said said said said said said said said "
       "said said said said said said it was fine.";
-  auto output = model->process(input);
+  auto output = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(output.empty());
   std::cout << "EN->IT: " << input << " -> " << output << " : " << "\n";
 
   model->setConfig({{"repetitionpenalty", 1.9}});
-  auto output2 = model->process(input);
+  auto output2 = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(output2.empty());
   std::cout << "EN->IT: " << input << " -> " << output2
             << " : With repetition penalty : " << 1.9f << "\n";
@@ -258,13 +259,13 @@ TEST_F(TranslationModelTest, LengthPenaltyBeamSearch) {
                       "discussions with regional partners, we agreed to "
                       "publish a condensed summary now and defer the full "
                       "recommendation until the next quarterly review.";
-  auto out_no_lp = model->process(input);
+  auto out_no_lp = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_no_lp.empty());
 
   // Apply length penalty
   model->setConfig(
       {{"beamsize", static_cast<int64_t>(8)}, {"lengthpenalty", 1.0}});
-  auto out_lp = model->process(input);
+  auto out_lp = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_lp.empty());
 
   // Expect a difference under length-normalized ranking
@@ -282,13 +283,13 @@ TEST_F(TranslationModelTest, MaxLengthLimitsOutputTokens) {
       "townsfolk "
       "boarded up their windows and settled in for a long, uneasy night.";
 
-  auto out = model->process(input);
+  auto out = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out.empty());
 
   model->setConfig(
       {{"maxlength", static_cast<int64_t>(10)},
        {"beamsize", static_cast<int64_t>(1)}});
-  auto out_short = model->process(input);
+  auto out_short = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_short.empty());
 
   EXPECT_TRUE(out != out_short || out_short.size() < out.size());
@@ -308,7 +309,7 @@ TEST_F(TranslationModelTest, TopKSamplingChangesOutput) {
       {{"temperature", 0.9},
        {"beamsize", static_cast<int64_t>(1)},
        {"topk", static_cast<int64_t>(1)}});
-  auto out_k1 = model->process(input);
+  auto out_k1 = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_k1.empty());
 
   // Increase top-k to allow more diverse choices
@@ -316,7 +317,7 @@ TEST_F(TranslationModelTest, TopKSamplingChangesOutput) {
       {{"temperature", 0.9},
        {"beamsize", static_cast<int64_t>(1)},
        {"topk", static_cast<int64_t>(40)}});
-  auto out_k40 = model->process(input);
+  auto out_k40 = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_k40.empty());
 
   // Expect a difference between constrained and broader sampling
@@ -337,7 +338,7 @@ TEST_F(TranslationModelTest, TopPSamplingChangesOutput) {
        {"beamsize", static_cast<int64_t>(1)},
        {"topk", static_cast<int64_t>(0)},
        {"topp", 0.7}});
-  auto out_p07 = model->process(input);
+  auto out_p07 = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_p07.empty());
 
   // Looser nucleus retains more mass
@@ -346,7 +347,7 @@ TEST_F(TranslationModelTest, TopPSamplingChangesOutput) {
        {"beamsize", static_cast<int64_t>(1)},
        {"topk", static_cast<int64_t>(0)},
        {"topp", 0.95}});
-  auto out_p095 = model->process(input);
+  auto out_p095 = std::any_cast<std::string>(model->process(input));
   EXPECT_FALSE(out_p095.empty());
 
   EXPECT_NE(out_p07, out_p095);
