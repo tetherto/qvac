@@ -2811,20 +2811,6 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/rec_dyn/detector_craft.onnx",
-    "engine": "@qvac/ocr-onnx",
-    "description": "CRAFT text detector (dynamic)",
-    "quantization": "",
-    "params": "",
-    "license": "Apache-2.0",
-    "tags": [
-      "ocr",
-      "detector",
-      "craft"
-    ],
-    "notes": ""
-  },
-  {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/rec_dyn/recognizer_arabic.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Arabic",
