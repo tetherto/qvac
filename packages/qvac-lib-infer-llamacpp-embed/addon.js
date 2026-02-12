@@ -19,10 +19,10 @@ class BertInterface {
   } ///
 
   /**
-   * Cancel current inference process.
+   * Cancel current inference process. Resolves when the job has stopped.
    */
   async cancel () {
-    this._binding.cancel(this._handle)
+    await this._binding.cancel(this._handle)
   }
 
   /**
@@ -52,11 +52,6 @@ class BertInterface {
    */
   async activate () {
     return this._binding.activate(this._handle)
-  }
-
-  // unload() alias for caller BaseInference
-  async destroyInstance () {
-    await this.unload()
   }
 
   /**

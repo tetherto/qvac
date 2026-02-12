@@ -74,10 +74,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           general_error::InvalidArgument, "Unknown input type: " + type);
     }
   }
-  JsInterface::getInstance(env, args.get(0, "instance"))
-      .addonCpp->runJob(input);
-
-  return nullptr;
+  return JsInterface::getInstance(env, args.get(0, "instance"))
+      .runJob(std::move(input));
 }
 JSCATCH
 

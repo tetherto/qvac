@@ -5,6 +5,7 @@ const os = require('bare-os')
 
 const {
   createEmbeddingsTestInstance,
+  ensureModel,
   extractErrorMessage,
   waitForCompletion,
   setupErrorHandlers,
@@ -571,4 +572,86 @@ createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than fu
   t.teardown(async () => {
     await cleanupResources(loader, inference)
   })
+})
+
+// --- API behavior by state (README): run/cancel semantics; prefer model.cancel(), response.cancel() equivalent ---
+const DEVICE_API = isDarwinX64 || isLinuxArm64 ? 'cpu' : 'gpu'
+const MODEL_NAME_API = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q8_0.gguf'
+
+async function setupModelApiBehavior (t) {
+  await ensureModel(MODEL_NAME_API)
+  const { inference, loader } = await createEmbeddingsTestInstance(
+    t,
+    MODEL_NAME_API,
+    DEVICE_API,
+    null,
+    '1024'
+  )
+  t.teardown(async () => {
+    await cleanupResources(loader, inference)
+  })
+  return { inference }
+}
+
+test('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const response = await inference.run('Hello world')
+  t.ok(response, 'run() returns a response')
+  t.ok(typeof response.await === 'function' || response._finishPromise != null, 'response has await or _finishPromise')
+  const embeddings = await waitForCompletion(response)
+  t.ok(embeddings != null && embeddings[0]?.length > 0, 'inference produces embeddings')
+})
+
+test('idle | cancel: allowed, no-op', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  await inference.cancel()
+  t.pass('cancel when idle does not throw')
+})
+
+test('run | cancel: allowed, cancels current job', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 2 }, (_, i) => `Sequence ${i} for cancel test.`)
+  const response = await inference.run(sequences)
+  const cancelPromise = inference.cancel()
+  try {
+    await waitForCompletion(response)
+  } catch (err) {
+    if (!/cancel|aborted|stopp?ed|Failed/i.test(extractErrorMessage(err))) throw err
+  }
+  await cancelPromise
+  t.pass('cancel during run resolves and stops job')
+})
+
+test('run | response.cancel(): equivalent to model.cancel(), resolves when job stopped', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 24 }, (_, i) => `Sequence ${i} for response.cancel test.`)
+  const response = await inference.run(sequences)
+  const cancelPromise = typeof response.cancel === 'function' ? response.cancel() : inference.cancel()
+  try {
+    await waitForCompletion(response)
+  } catch (err) {
+    if (!/cancel|aborted|stopp?ed|Failed/i.test(extractErrorMessage(err))) throw err
+  }
+  await cancelPromise
+  t.pass('response.cancel() resolves when job has stopped')
+})
+
+test('run | run: second run() throws', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 16 }, (_, i) => `Sequence ${i}.`)
+  const firstResponse = await inference.run(sequences)
+  let firstError = null
+  if (typeof firstResponse.onError === 'function') {
+    firstResponse.onError(err => { firstError = err })
+  }
+
+  await t.exception(
+    async () => { await inference.run('Short') },
+    /already set or being processed/,
+    'second run() throws "already set or being processed"'
+  )
+
+  const embeddings = await waitForCompletion(firstResponse)
+  t.ok(embeddings != null && embeddings[0]?.length > 0, 'first response completes with embeddings')
+  t.ok(!firstError, 'first response did not fail')
 })

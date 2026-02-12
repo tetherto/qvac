@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [6. Load the model](#6-load-the-model)
   - [7. Generate embeddings for input sequence](#7-generate-embeddings-for-input-sequence)
   - [8. Unload the model](#8-unload-the-model)
+- [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
@@ -213,6 +214,19 @@ try {
   console.error('Failed to unload model:', error)
 }
 ```
+
+### API behavior by state
+
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+
+| Current state | Action called | What happens |
+|---------------|----------------|----------------------------------------------------------------|
+| idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
+| idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves       |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" |
+| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped      |
+
+**Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
 
 ## Quickstart Example
 

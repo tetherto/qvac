@@ -93,7 +93,10 @@ class GGMLBert extends BaseInference {
       ? { type: 'sequences', input: text }
       : { type: 'text', input: text }
 
-    await this.addon.runJob(inputData)
+    const success = await this.addon.runJob(inputData)
+    if (!success) {
+      throw new Error('Cannot set new job: a job is already set or being processed')
+    }
 
     // Only one job is supported at the moment, with hardcoded jobId 'job'
     return this._createResponse('job')
@@ -122,10 +125,12 @@ class GGMLBert extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     // Map C++ mangled type names to expected event names
-    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
-    if (typeof data === 'object' && data !== null && 'tokens_per_second' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+    // Stats / job-ended: LLM uses tokens_per_second; embed uses total_tokens, total_time_ms, etc. (RuntimeStats)
+    const isStatsData = typeof data === 'object' && data !== null && (
+      'tokens_per_second' in data ||
+      ('total_tokens' in data || 'total_time_ms' in data || 'batch_size' in data || 'context_size' in data)
+    )
+    if (isStatsData) {
       return this._outputCallback(addon, 'JobEnded', 'job', data, null)
     }
 

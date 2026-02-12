@@ -505,6 +505,7 @@ void BertModel::initializeBackend(const std::string& backendsDir) {
 }
 
 void BertModel::reset() {
+  stop_cancelled_.store(false);
   // Clear the batch state - this is the most important part
   common_batch_clear(batch_);
 
@@ -693,6 +694,9 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
 
   int nCtxTrain = llama_model_n_ctx_train(model_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
+    if (stop_cancelled_.load()) {
+      throw std::runtime_error("Job cancelled");
+    }
     const auto& sequence = sequenceArray[i];
     std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
