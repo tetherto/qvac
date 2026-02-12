@@ -1,7 +1,7 @@
 [
   {
-    "package": "qvac-sdk",
-    "path": "packages/qvac-sdk",
+    "package": "sdk",
+    "path": "packages/sdk",
     "pkg_manager": "bun"
   },
   {

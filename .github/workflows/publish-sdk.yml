@@ -1,4 +1,4 @@
-name: Build and Publish QVAC SDK (Qvac-sdk)
+name: Build and Publish QVAC SDK (sdk)
 
 on:
   push:
@@ -8,13 +8,13 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
 
   pull_request:
     branches:
       - release-*
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
 
   workflow_dispatch:
     inputs:
@@ -24,7 +24,7 @@ on:
         default: "dev"
 
 env:
-  WORKDIR: packages/qvac-sdk
+  WORKDIR: packages/sdk
 
 permissions:
   contents: read
@@ -38,9 +38,9 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
-      package-slug: qvac-sdk
-      package-json-path: packages/qvac-sdk/package.json
-      changelog-path: packages/qvac-sdk/CHANGELOG.md
+      package-slug: sdk
+      package-json-path: packages/sdk/package.json
+      changelog-path: packages/sdk/CHANGELOG.md
 
   build:
     runs-on: ubuntu-latest

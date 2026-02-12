@@ -7,7 +7,7 @@ alwaysApply: true
 
 The following packages belong to the SDK pod:
 
-- `packages/qvac-sdk`
+- `packages/sdk`
 - `packages/qvac-cli`
 - `packages/docs`
 - `packages/qvac-lib-rag`
@@ -22,7 +22,7 @@ For rules that need glob patterns:
 
 ```yaml
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
   - packages/qvac-cli/**
   - packages/docs/**
   - packages/qvac-lib-rag/**

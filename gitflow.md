@@ -73,7 +73,7 @@ On merge, CI should:
 
 **Tag format (standard):**
 - `<package>-v<x.y.z>`  
-  Example: `qvac-sdk-v1.0.0`
+  Example: `sdk-v1.0.0`
 
 ### 4) Merge back into `main` (recommended)
 
@@ -200,7 +200,7 @@ To reflect the branch intent correctly:
 - Patch:
   - Fix in `main` → cherry-pick to `release-<package>-<x.y.(z+1)>`
 - Tag:
-  - `<package>-v<x.y.z>` (example: `qvac-sdk-v1.0.0`)
+  - `<package>-v<x.y.z>` (example: `sdk-v1.0.0`)
 - Publishing:
   - `main` → GitHub Packages `dev`
   - `release-*` → NPM
