@@ -56,12 +56,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          # Linux builds on Ubuntu 22.04 for glibc compatibility
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
+          # Android build requires Ubuntu 24.04 for NDK tooling
           - os: ubuntu-24.04
             platform: android
             arch: arm64
@@ -109,7 +111,7 @@ jobs:
           echo "Matrix tags: ${{ matrix.tags }}"
           echo "PKG_DIR: ${{ env.PKG_DIR }}"
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
         name: Update c++ tools
         run: |
           wget https://apt.llvm.org/llvm.sh
@@ -229,7 +231,7 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
@@ -261,14 +263,9 @@ jobs:
           env | sort
         continue-on-error: true
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm64-private' }}
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
         name: Update apt sources
         run: sudo apt-get update
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
-        name: Install tooling for cross compilation - ubuntu arm64
-        run: |
-          sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure cmake generator in windows
@@ -283,20 +280,8 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install vulkan in linux x64
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
-
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
-        name: Build Vulkan SDK for linux arm64 (with S3 cache)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
+        name: Download Vulkan SDK for ubuntu-22.04
         run: |
           sudo apt install -y xz-utils
           wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
@@ -304,6 +289,24 @@ jobs:
           mkdir -p vulkan
           cd vulkan
           tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Setup Vulkan SDK path for ubuntu-22.04 x64
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Setup vulkan sdk path in linux arm64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+          cd ~/vulkan
 
           # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
           SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
@@ -328,11 +331,9 @@ jobs:
             rm /tmp/vulkan-arm64-cache.tar.gz
           fi
 
-      - if: ${{ matrix.os == 'ubuntu-24.04-arm64-private' }}
-        name: Setup Vulkan SDK environment for linux arm64
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Export vulkan sdk variables in linux arm64
         run: |
-          VULKAN_SDK=~/vulkan/aarch64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
@@ -350,6 +351,20 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
+          restore-keys: |
+            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Apply clang-cl compatibility fixes for Windows
@@ -655,6 +670,13 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
         run: bare-make install
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
       - uses: actions/upload-artifact@v4
         with:
