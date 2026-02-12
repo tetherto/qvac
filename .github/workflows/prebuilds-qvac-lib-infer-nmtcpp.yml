@@ -297,42 +297,32 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Restore Vulkan SDK arm64 cache
+        id: cache-vulkan-arm64
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/vulkan/aarch64
+          key: vulkan-sdk-arm64-v1
+          restore-keys: vulkan-sdk-arm64-
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
         name: Build Vulkan SDK for ubuntu-22.04 arm64
         run: |
-          VULKAN_SDK=~/vulkan/aarch64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
           cd ~/vulkan
           ./vulkansdk --maxjobs
 
-          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
-          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
-        name: Download Vulkan SDK for ubuntu-22.04
-        run: |
-          sudo apt install -y xz-utils
-          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
-          cd ~
-          mkdir -p vulkan
-          cd vulkan
-          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Setup Vulkan SDK path for ubuntu-22.04 x64
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' && steps.cache-vulkan-arm64.outputs.cache-hit != 'true' }}
+        name: Save Vulkan SDK arm64 cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/vulkan/aarch64
+          key: vulkan-sdk-arm64-v1
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
-        name: Build Vulkan SDK for ubuntu-22.04 arm64
+        name: Setup Vulkan SDK path for ubuntu-22.04 arm64
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
-          cd ~/vulkan
-          ./vulkansdk --maxjobs
-
           echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
