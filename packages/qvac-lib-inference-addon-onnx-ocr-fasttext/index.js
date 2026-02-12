@@ -101,7 +101,7 @@ class ONNXOcr extends ONNXBase {
   _addonOutputCallback (addon, event, data, error) {
     // Map C++ mangled type names to expected event names
     // Check stats FIRST (before other checks, since stats event name may contain other type names)
-    if (typeof data === 'object' && data !== null && 'LastProcessingTime' in data) {
+    if (typeof data === 'object' && data !== null && 'totalTime' in data) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
       return this._outputCallback(addon, 'JobEnded', ONNXOcr.JOB_ID, data, null)
