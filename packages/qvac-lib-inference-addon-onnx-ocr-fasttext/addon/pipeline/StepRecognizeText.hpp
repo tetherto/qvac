@@ -106,13 +106,12 @@ private:
   cv::Mat runInferenceOnImg(const cv::Mat &img);
 
   /**
-   * @brief runs ONNX batch inference on multiple images with dynamic width
+   * @brief runs ONNX batch inference on multiple images
    *
    * @param images : vector of prepared recognizer inputs
-   * @param dynamicWidth : the width of input images (for dynamic-width models)
    * @return cv::Mat : the recognizer predictions with shape [batch, seq_len, num_chars]
    */
-  cv::Mat runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth);
+  cv::Mat runBatchInference(const std::vector<cv::Mat> &images);
 
   /**
    * @brief processes the sub image to run recognizer inference and populate text and confidence score

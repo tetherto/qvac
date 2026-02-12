@@ -17,7 +17,6 @@ const args = process.argv.slice(2)
 let language = 'en'
 let inputFile = null
 let outputFile = null
-let modelDir = 'rec_dyn'
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--lang' && args[i + 1]) {
@@ -28,9 +27,6 @@ for (let i = 0; i < args.length; i++) {
     i++
   } else if (args[i] === '--output' && args[i + 1]) {
     outputFile = args[i + 1]
-    i++
-  } else if (args[i] === '--model-dir' && args[i + 1]) {
-    modelDir = args[i + 1]
     i++
   }
 }
@@ -99,8 +95,8 @@ async function main () {
     model = new ONNXOcr({
       params: {
         langList: [language],
-        pathDetector: `./models/ocr/${modelDir}/detector_craft.onnx`,
-        pathRecognizerPrefix: `./models/ocr/${modelDir}/recognizer_`,
+        pathDetector: './models/ocr/rec_512/detector_craft.onnx',
+        pathRecognizerPrefix: './models/ocr/rec_512/recognizer_',
         useGPU: false,
         // Match EasyOCR defaults for fair comparison
         magRatio: 1.0,

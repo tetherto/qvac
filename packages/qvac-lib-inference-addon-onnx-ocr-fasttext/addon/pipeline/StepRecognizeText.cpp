@@ -262,35 +262,18 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
 }
 
 /**
- * @brief calculates the proportional width for EasyOCR-style resizing
+ * @brief resizes the image to fit recognizer input sizes
  *
- * Always scales height to RECOGNIZER_MODEL_HEIGHT, width is proportional to aspect ratio.
- * This matches EasyOCR's preprocessing approach.
- *
- * @param width : original image width
- * @param height : original image height
- * @return int : the proportional width after resizing to model height
- */
-int calculateProportionalWidth(int width, int height) {
-  float ratio = static_cast<float>(width) / static_cast<float>(height);
-  int newWidth = static_cast<int>(std::ceil(RECOGNIZER_MODEL_HEIGHT * ratio));
-  return std::max(1, newWidth);  // Ensure at least 1 pixel width
-}
-
-/**
- * @brief resizes the image to fit recognizer input sizes (EasyOCR-style)
- *
- * Always scales height to RECOGNIZER_MODEL_HEIGHT (64), width is proportional.
- * The image is then padded to targetWidth for batching.
+ * The image is not simply resized to recognizer input format. After height is adjusted, the portion corresponding to [new image width,
+ * recognizerImageWidth] is padded with the last column of the image
  *
  * It also receives contrast treatment according to adjustContrast
  *
  * @param subImage : image to be treated
- * @param targetWidth : target width for padding (typically max width in batch)
  * @param adjustContrast : target contrast
  * @return adjusted image
  */
-cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjustContrast = 0.0) {
+cv::Mat alignAndCollate(const SubImage &subImage, double adjustContrast = 0.0) {
   cv::Mat image = subImage.image;
   int width = image.cols;
   int height = image.rows;
@@ -302,21 +285,25 @@ cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjust
     image = adjustContrastGrey(image, adjustContrast);
   }
 
-  // EasyOCR-style resize: always scale height to model height, width proportional
-  int proportionalWidth = calculateProportionalWidth(width, height);
+  // Aspect-preserving resize (ExecutorTorch approach)
+  // Scale both dimensions by the same ratio to fit within RECOGNIZER_MODEL_WIDTH x RECOGNIZER_MODEL_HEIGHT
+  float heightRatio = static_cast<float>(RECOGNIZER_MODEL_HEIGHT) / static_cast<float>(height);
+  float widthRatio = static_cast<float>(RECOGNIZER_MODEL_WIDTH) / static_cast<float>(width);
+  float resizeRatio = std::min(heightRatio, widthRatio);
 
-  // Use LANCZOS interpolation like EasyOCR
+  int resizedW = static_cast<int>(std::round(static_cast<float>(width) * resizeRatio));
+  int resizedH = static_cast<int>(std::round(static_cast<float>(height) * resizeRatio));
+
+  // Clamp to model dimensions
+  resizedW = std::min(resizedW, RECOGNIZER_MODEL_WIDTH);
+  resizedH = std::min(resizedH, RECOGNIZER_MODEL_HEIGHT);
+
+  // Use INTER_AREA for downscaling, INTER_CUBIC for upscaling
+  int interpolation = (resizeRatio < 1.0F) ? cv::INTER_AREA : cv::INTER_CUBIC;
+
   cv::Mat resizedImage;
-  cv::resize(image, resizedImage, cv::Size(proportionalWidth, RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_LANCZOS4);
-
-  return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, targetWidth);
-}
-
-/**
- * @brief Legacy version for backward compatibility - uses fixed RECOGNIZER_MODEL_WIDTH
- */
-cv::Mat alignAndCollate(const SubImage &subImage, double adjustContrast = 0.0) {
-  return alignAndCollate(subImage, RECOGNIZER_MODEL_WIDTH, adjustContrast);
+  cv::resize(image, resizedImage, cv::Size(resizedW, resizedH), 0, 0, interpolation);
+  return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, RECOGNIZER_MODEL_WIDTH);
 }
 
 /**
@@ -812,20 +799,18 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
   return preds.clone();
 }
 
-cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth) {
+cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images) {
   auto t0 = std::chrono::high_resolution_clock::now();
   if (images.empty()) {
     return cv::Mat();
   }
 
   const int batchSize = static_cast<int>(images.size());
-  const int height = RECOGNIZER_MODEL_HEIGHT;
-  const int width = dynamicWidth;
-  const int numChannels = 1;
-
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "[Recognition] runBatchInference called with batch_size=" + std::to_string(batchSize) +
-       ", dynamic_width=" + std::to_string(width));
+       "[Recognition] runBatchInference called with batch_size=" + std::to_string(batchSize));
+  const int height = RECOGNIZER_MODEL_HEIGHT;
+  const int width = RECOGNIZER_MODEL_WIDTH;
+  const int numChannels = 1;
 
   // Create batch tensor: [batch, channels, height, width]
   std::vector<float> batchData(batchSize * numChannels * height * width);
@@ -933,28 +918,17 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
     size_t currentBatchSize = batchEnd - batchStart;
 
-    // Calculate max proportional width for this batch (EasyOCR-style dynamic batching)
-    int maxProportionalWidth = 0;
-    for (size_t i = batchStart; i < batchEnd; i++) {
-      auto &idx = allIndices[i];
-      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-      int propWidth = calculateProportionalWidth(subImage.image.cols, subImage.image.rows);
-      maxProportionalWidth = std::max(maxProportionalWidth, propWidth);
-    }
-    // Ensure minimum width for model stability
-    maxProportionalWidth = std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
-
-    // Prepare images ONLY for this batch, using dynamic max width
+    // Prepare images ONLY for this batch
     std::vector<cv::Mat> preparedImages;
     preparedImages.reserve(currentBatchSize);
     for (size_t i = batchStart; i < batchEnd; i++) {
       auto &idx = allIndices[i];
       auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-      cv::Mat preparedImg = alignAndCollate(subImage, maxProportionalWidth, 0.0);
+      cv::Mat preparedImg = alignAndCollate(subImage, 0.0);
       preparedImages.push_back(preparedImg);
     }
 
-    cv::Mat batchPreds = runBatchInference(preparedImages, maxProportionalWidth);
+    cv::Mat batchPreds = runBatchInference(preparedImages);
 
     // Decode results and populate SubImages for this batch
     for (size_t i = 0; i < currentBatchSize; i++) {
@@ -992,26 +966,16 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
       for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size(); batchStart += batchSize) {
         size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
 
-        // Calculate max proportional width for contrast batch
-        int maxProportionalWidth = 0;
-        for (size_t j = batchStart; j < batchEnd; j++) {
-          auto &idx = lowConfidenceIndices[j];
-          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-          int propWidth = calculateProportionalWidth(subImage.image.cols, subImage.image.rows);
-          maxProportionalWidth = std::max(maxProportionalWidth, propWidth);
-        }
-        maxProportionalWidth = std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
-
         std::vector<cv::Mat> contrastImages;
         contrastImages.reserve(batchEnd - batchStart);
         for (size_t j = batchStart; j < batchEnd; j++) {
           auto &idx = lowConfidenceIndices[j];
           auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-          cv::Mat contrastImg = alignAndCollate(subImage, maxProportionalWidth, TARGET_ADJUSTED_CONTRAST);
+          cv::Mat contrastImg = alignAndCollate(subImage, TARGET_ADJUSTED_CONTRAST);
           contrastImages.push_back(contrastImg);
         }
 
-        cv::Mat contrastPreds = runBatchInference(contrastImages, maxProportionalWidth);
+        cv::Mat contrastPreds = runBatchInference(contrastImages);
 
         for (size_t j = 0; j < contrastImages.size(); j++) {
           auto &idx = lowConfidenceIndices[batchStart + j];
