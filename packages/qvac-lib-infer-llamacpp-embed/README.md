@@ -86,7 +86,7 @@ const GGMLBert = require('@qvac/embed-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](https://github.com/tetherto/qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](../qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
 
 ```js
 const store = new Corestore('./store')
@@ -113,7 +113,7 @@ const args = {
 The `args` obj contains the following properties:
 
 * `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a [`QvacLogger`](https://github.com/tetherto/qvac-lib-logging) instance, which handles all logging functionality. 
+* `logger`: This property is used to create a [`QvacLogger`](../qvac-lib-logging) instance, which handles all logging functionality. 
 * `opts.stats`: This flag determines whether to calculate inference stats.
 * `diskPath`: The local directory where the model file will be downloaded to.
 * `modelName`: The name of model file in the Data Loader.
@@ -239,10 +239,10 @@ npm run quickstart
 
 ## Other Examples
 
-- [Batch Inference](examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
-- [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
-- [Native Logging](examples/nativeLog.js) – Demonstrates C++ addon logging integration.
-- [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
+- [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
+- [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
+- [Native Logging](./examples/nativeLog.js) – Demonstrates C++ addon logging integration.
+- [Sharded Loading](./examples/shardedLoading.js) – Demonstrates loading sharded model files.
 
 ## Benchmarking
 
@@ -265,10 +265,10 @@ Results are continuously updated with new releases to ensure up-to-date performa
 
 ## Tests
 
-Integration tests are located in [`test/integration/`](test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
+Integration tests are located in [`test/integration/`](./test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
 These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
-Unit tests are located in [`test/unit/`](test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
 These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary
