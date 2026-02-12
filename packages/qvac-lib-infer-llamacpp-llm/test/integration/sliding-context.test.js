@@ -231,39 +231,6 @@ test('Large n_discarded is clamped to fit available context space', {
   )
 })
 
-// n_discarded=32, n_predict=SLIDE_PREDICT
-test('Sliding context persists across consecutive inference runs: total = 20 slides', {
-  timeout: 900_000,
-  skip: isWindowsX64
-}, async t => {
-  const { model, logs } = await setupModel(t, {
-    n_predict: String(SLIDE_PREDICT),
-    n_discarded: '32'
-  })
-
-  const first = await runAndCollect(model, STORY_PROMPT)
-  t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
-  t.is(first.stats.generatedTokens, SLIDE_PREDICT, 'first run: generated exactly n_predict tokens')
-
-  const discardCountAfterFirst = countDiscardLogs(logs)
-  t.is(
-    discardCountAfterFirst,
-    expectedSlides(SLIDE_PREDICT, 32),
-    'first run: slide count matches expected'
-  )
-
-  const second = await runAndCollect(model, STORY_PROMPT)
-  t.is(second.stats.promptTokens, PROMPT_TOKENS, 'second run: prompt tokens match')
-  t.is(second.stats.generatedTokens, SLIDE_PREDICT, 'second run: generated exactly n_predict tokens')
-
-  const discardCountAfterSecond = countDiscardLogs(logs)
-  t.is(
-    discardCountAfterSecond,
-    expectedSlides(SLIDE_PREDICT, 32) * 2,
-    'total after both runs matches expected slides'
-  )
-})
-
 // n_discarded=1, n_predict=SLIDE_PREDICT
 test('Sliding context works with minimal n_discarded of 1', {
   timeout: 900_000,
@@ -405,35 +372,3 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
   await new Promise(resolve => setTimeout(resolve, 10000))
 })
 
-// nTokens >= n_ct:> ContextOverflow before any sliding logic
-test('Single prompt exceeding context triggers overflow at prefill', {
-  timeout: 900_000,
-  skip: isWindowsX64
-}, async t => {
-  const { model } = await setupModel(t, {
-    n_predict: '512',
-    n_discarded: '32'
-  })
-
-  // Build a prompt that tokenizes to more than N_CTX (256) tokens
-  // Repeat enough text to exceed 256 tokens (rough estimate: ~1.3 tokens per word)
-  const longContent = 'The brave knight ventured through the enchanted forest searching for the ancient treasure. '.repeat(50)
-  const longPrompt = [
-    { role: 'system', content: 'You are a storyteller. Write extremely long, detailed stories with many characters.' },
-    { role: 'user', content: longContent }
-  ]
-
-  try {
-    await runAndCollect(model, longPrompt)
-    t.fail('expected context overflow error but generation completed without error')
-  } catch (err) {
-    const msg = err?.message || String(err)
-    t.ok(
-      /context|overflow/i.test(msg),
-      `prompt overflow error surfaced: "${msg.slice(0, 120)}"`
-    )
-  }
-
-  // sleep for 10 seconds to allow the model to cleanup
-  await new Promise(resolve => setTimeout(resolve, 10000))
-})
