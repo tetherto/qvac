@@ -59,5 +59,5 @@ try {
   console.log("✅ Model unloaded successfully.");
 } catch (error) {
   console.error("❌ Error during OCR processing:", error);
-  close();
+  await close();
 }
