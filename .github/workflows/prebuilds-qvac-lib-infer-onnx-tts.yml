@@ -586,6 +586,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -596,7 +598,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -604,8 +606,8 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: ${{ inputs.workdir }}
-          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          workdir: ${{ env.WORKDIR }}
+          path: ${{ env.WORKDIR }}
           name-suffix: "-mono"
 
   publish-npm:
@@ -617,6 +619,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+    env:
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -627,7 +631,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
@@ -635,9 +639,10 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          path: ${{ env.WORKDIR }}
           repo_name: "onnx-tts"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
+          git-token: ${{ secrets.PAT_TOKEN }}
+          create-tag: "true"
 
   create-github-release:
     needs: [publish-npm]
