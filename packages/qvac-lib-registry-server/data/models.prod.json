@@ -2136,7 +2136,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/rec_512/recognizer_latin.onnx",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Latin (fixed-width 512px)",
     "quantization": "",
@@ -2150,7 +2150,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/rec_512/detector_craft.onnx",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "CRAFT text detector",
     "quantization": "",
