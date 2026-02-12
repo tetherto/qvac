@@ -30,7 +30,7 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin that automatically generates the mobile worker bundle during build.
  *
- * Runs qvac CLI (prefers local @qvac/qvac-cli, falls back to npx).
+ * Runs qvac CLI (prefers local @qvac/cli, falls back to npx).
  * Uses qvac.config.* if exists, else includes all built-in plugins.
  * Output: node_modules/@qvac/sdk/dist/worker.mobile.bundle.js
  */
