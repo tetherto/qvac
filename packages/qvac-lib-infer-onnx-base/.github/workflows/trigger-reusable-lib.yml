@@ -1,0 +1,30 @@
+name: General CI/CD
+# This workflow is used to call the reusable workflows in the qvac-devops repository
+# https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
+
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled]
+  workflow_dispatch:
+    inputs:
+      custom_input_1:
+        required: false
+        type: string
+      custom_input_2:
+        required: false
+        type: string
+      custom_input_3:
+        required: false
+        type: string
+
+jobs:
+  call-devops-lib:
+    uses: tetherto/qvac-devops/.github/workflows/public-reusable.yml@production-workflows-tag
+    secrets: inherit
+
+  merge-guard:
+    needs: call-devops-lib
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@production-workflows-tag
+    secrets: inherit
