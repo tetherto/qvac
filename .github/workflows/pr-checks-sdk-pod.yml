@@ -9,7 +9,7 @@ on:
       - labeled
     paths:
       - "packages/qvac-sdk/**"
-      - "packages/qvac-cli/**"
+      - "packages/cli/**"
       - "packages/qvac-lib-rag/**"
       - "packages/qvac-lib-logging/**"
       - "packages/qvac-lib-error-base/**"
