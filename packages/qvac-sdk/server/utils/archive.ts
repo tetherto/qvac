@@ -107,7 +107,7 @@ async function extractArchive(
   await extractTarStream(archivePath, extractDir, isGzipped, signal);
 }
 
-async function extractTarStream(
+export async function extractTarStream(
   archivePath: string,
   extractDir: string,
   useGunzip: boolean,

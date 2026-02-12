@@ -43,6 +43,8 @@
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
+    "test:security": "bun run scripts/run-security-tests.ts",
+    "test:security:bare": "bun run scripts/run-security-tests-bare.ts",
     "lint": "eslint . --max-warnings=0 && bun run typecheck",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint:fix": "eslint . --fix",
