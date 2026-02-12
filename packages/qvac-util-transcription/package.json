@@ -1,6 +1,7 @@
 {
   "name": "@qvac/util-transcription",
-  "version": "0.1.4",
+  "version": "0.1.5",
+  "deprecated": "This package is deprecated. Please use @qvac/sdk for transcription functionality instead.",
   "author": "Tether",
   "main": "index.js",
   "scripts": {

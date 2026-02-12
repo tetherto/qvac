@@ -28,8 +28,8 @@ export function resolvePluginSpecifiers (config, sdkName, logger) {
     const allBuiltins = BUILTIN_SUFFIXES.map((suffix) =>
       buildBuiltinSpecifier(sdkName, suffix)
     )
-    logger.log('⚠️  No plugins specified — bundling ALL built-in plugins.')
-    logger.log("   For smaller bundles, add a 'plugins' array to qvac.config.*\n")
+    logger.warn('No plugins specified — bundling ALL built-in plugins.')
+    logger.info("   For smaller bundles, add a 'plugins' array to qvac.config.*\n")
     plugins = allBuiltins
   }
 
@@ -57,7 +57,7 @@ export function resolvePluginSpecifiers (config, sdkName, logger) {
   }
 
   if (customPlugins.length > 0) {
-    logger.log(`📦 Custom plugins: ${customPlugins.join(', ')}`)
+    logger.info(`📦 Custom plugins: ${customPlugins.join(', ')}`)
   }
 
   return [...resolved, ...customPlugins]
