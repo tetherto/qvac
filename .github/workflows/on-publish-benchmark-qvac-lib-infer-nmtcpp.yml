@@ -46,35 +46,19 @@ jobs:
         id: read-opus
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          if [ ! -f .github/released-models-opus.txt ]; then
-            echo "ERROR: .github/released-models-opus.txt not found in ${{ env.PKG_DIR }}"
-            exit 1
-          fi
-          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
-          if [ -z "$pairs" ]; then
-            echo "ERROR: No language pairs found in .github/released-models-opus.txt"
-            exit 1
-          fi
+          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
-          echo "🎯 Released OPUS pairs: $pairs"
+          echo "🎯 Released OPUS model pairs: $pairs"
 
       - name: Read released Bergamot models
         id: read-bergamot
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          if [ ! -f .github/released-models-bergamot.txt ]; then
-            echo "ERROR: .github/released-models-bergamot.txt not found in ${{ env.PKG_DIR }}"
-            exit 1
-          fi
-          pairs=$(grep -v '^#' .github/released-models-bergamot.txt | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
-          if [ -z "$pairs" ]; then
-            echo "ERROR: No language pairs found in .github/released-models-bergamot.txt"
-            exit 1
-          fi
+          pairs=$(grep -v '^#' .github/released-models-bergamot.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
-          echo "🎯 Released Bergamot pairs: $pairs"
+          echo "🎯 Released Bergamot model pairs: $pairs"
 
-  benchmark-qvac:
+  benchmark-opus:
     needs: prepare
     uses: ./.github/workflows/benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
@@ -87,6 +71,7 @@ jobs:
       metric_comet: true
       use_pivot: false
       is_quantized_model: false
+      use_batch: false
       hyperparams: 'fast'
 
   benchmark-bergamot:
@@ -102,22 +87,23 @@ jobs:
       metric_comet: true
       use_pivot: false
       is_quantized_model: false
+      use_batch: false
       hyperparams: 'fast'
 
   summary:
-    needs: [prepare, benchmark-qvac, benchmark-bergamot]
+    needs: [prepare, benchmark-opus, benchmark-bergamot]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Display benchmark summary
         run: |
-          echo "✅ Automated benchmark completed"
+          echo "✅ Automated benchmark completed for all supported models"
           echo ""
           echo "📦 Addon Version: ${{ needs.prepare.outputs.version }}"
           echo "📊 Datasets: flores-devtest, conversational-phrases"
           echo "📈 Metrics: chrF++, COMET"
           echo ""
-          echo "### 🔧 OPUS/GGML (qvac)"
+          echo "### 🔧 OPUS/GGML Models (qvac)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.opus_pairs }}"
           echo ""
           echo "📍 S3 Model Paths:"
@@ -127,15 +113,17 @@ jobs:
             echo "- **$pair**: \`s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$pair/\`"
           done
           echo ""
-          echo "### 🔧 Bergamot (qvac_bergamot)"
+          echo "### 🔧 Bergamot Models (qvac_bergamot)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.bergamot_pairs }}"
           echo ""
           echo "📍 S3 Model Paths:"
           IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.bergamot_pairs }}"
           for pair in "${PAIRS[@]}"; do
             pair=$(echo "$pair" | xargs)
-            pair_code=$(echo "$pair" | tr -d '-')
-            echo "- **$pair**: \`s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-$pair_code/\`"
+            src_lang="${pair%-*}"
+            trg_lang="${pair#*-}"
+            pair_code="${src_lang}${trg_lang}"
+            echo "- **$pair**: \`s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-${pair_code}/\`"
           done
           echo ""
           echo "🔗 View results in the benchmark workflow artifacts"
