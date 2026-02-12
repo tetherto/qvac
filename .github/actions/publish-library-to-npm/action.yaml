@@ -115,9 +115,10 @@ runs:
         echo "Base branch: ${GIT_REF}"
         echo "Event name: ${EVENT_NAME}"
 
-        if [ "${EVENT_NAME}" = "push" ] && [ "${GIT_REF}" = "refs/heads/main" ]; then
-          echo "PR was merged to main, setting tag to latest"
-          TAG="latest"
+        if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.ref_name }}" == release-* ]]; then
+            TAG="latest"
+          fi
         fi
 
         if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
