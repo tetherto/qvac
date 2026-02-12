@@ -2136,22 +2136,21 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/recognizer_english.onnx",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
     "engine": "@qvac/ocr-onnx",
-    "description": "Text recognizer",
+    "description": "Text recognizer - Latin (fixed-width 512px)",
     "quantization": "",
     "params": "",
     "license": "Apache-2.0",
     "tags": [
       "ocr",
       "recognizer",
-      "craft",
-      "english"
+      "latin"
     ],
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "CRAFT text detector",
     "quantization": "",
@@ -2159,9 +2158,8 @@
     "license": "Apache-2.0",
     "tags": [
       "ocr",
-      "recognizer",
-      "craft",
-      "english"
+      "detector",
+      "craft"
     ],
     "notes": ""
   },
@@ -3990,6 +3988,188 @@
       "generation",
       "instruct",
       "qwen"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_arabic.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Arabic",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "arabic"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Bengali",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "bengali"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Cyrillic",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "cyrillic"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Devanagari",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "devanagari"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Japanese",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "japanese"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Kannada",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "kannada"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Korean",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "korean"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Latin",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "latin"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Tamil",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "tamil"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Telugu",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "telugu"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Thai",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "thai"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Chinese Simplified",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "zh_sim"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "Text recognizer - Chinese Traditional",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "zh_tra"
     ],
     "notes": ""
   }
