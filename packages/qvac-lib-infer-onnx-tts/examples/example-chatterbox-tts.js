@@ -12,7 +12,7 @@ const conditionalDecoderPath = 'models/chatterbox/conditional_decoder.onnx'
 const languageModelPath = 'models/chatterbox/language_model.onnx'
 
 // Reference audio path for voice cloning
-const refWavPath = 'ref.wav'
+const refWavPath = 'benchmarks/assets/ref.wav'
 
 async function main () {
   console.log('Setting up C++ logger...')
