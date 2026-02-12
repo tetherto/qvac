@@ -44,7 +44,7 @@ jobs:
     needs: run-integration-tests
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -58,7 +58,7 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ inputs.tag || 'latest' }}
-          git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: 'true'
+          repo_name: "decoder-audio"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: "packages/qvac-lib-decoder-audio"
 
