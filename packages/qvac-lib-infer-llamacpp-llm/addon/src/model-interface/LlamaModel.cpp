@@ -996,7 +996,7 @@ void LlamaModel::finetune(
       }
     }
   } catch (const std::exception& ex) {
-    auto* state = currentCheckpointState_.load(std::memory_order_acquire);
+    auto* state = getCurrentCheckpointState();
     if (state) state->setIdle();
     if (pausedCheckpointState_) pausedCheckpointState_->setIdle();
     llama_finetuning_helpers::clearCurrentCheckpointState();
@@ -1378,9 +1378,19 @@ void LlamaModel::saveLoraAdapter(
   }
 }
 
+llama_finetuning_helpers::TrainingCheckpointState*
+LlamaModel::getCurrentCheckpointState() const {
+  return currentCheckpointState_.load(std::memory_order_acquire);
+}
+
+bool LlamaModel::isFinetuneRunning() const {
+  auto* state = getCurrentCheckpointState();
+  return state != nullptr &&
+         state->isFinetuning.load(std::memory_order_acquire);
+}
+
 bool LlamaModel::requestPause() {
-  llama_finetuning_helpers::TrainingCheckpointState* state =
-      currentCheckpointState_.load(std::memory_order_acquire);
+  auto* state = getCurrentCheckpointState();
   if (state == nullptr) {
     return false;
   }
@@ -1393,8 +1403,7 @@ bool LlamaModel::requestPause() {
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
-  llama_finetuning_helpers::TrainingCheckpointState* state =
-      currentCheckpointState_.load(std::memory_order_acquire);
+  auto* state = getCurrentCheckpointState();
   if (state == nullptr) {
     return;
   }

@@ -83,7 +83,7 @@ test('finetune() throws when previous finetune() is still running', { timeout: F
     () => model.finetune(finetuneConfig),
     BUSY_ERROR
   )
-  await model.pauseFinetune()
+  await model.cancel()
   const result = await handle.await()
   t.ok(result && typeof result === 'object', 'Finetune completed or paused')
   t.pass()
@@ -135,7 +135,7 @@ test('run() throws when finetune() is still running', { timeout: FINETUNE_TIMEOU
     () => model.run(RUN_PROMPT),
     BUSY_ERROR
   )
-  await model.pauseFinetune()
+  await model.cancel()
   await handle.await()
   t.pass()
 })
@@ -227,7 +227,7 @@ test('run() throws when previous run() is still running', { timeout: FINETUNE_TI
   t.pass()
 })
 
-test('pauseFinetune() does not throw when not finetuning', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('cancel() does not throw when not finetuning', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
@@ -254,12 +254,12 @@ test('pauseFinetune() does not throw when not finetuning', { timeout: FINETUNE_T
   await model.load()
 
   await t.execution(async () => {
-    await model.pauseFinetune()
+    await model.cancel()
   })
   t.pass()
 })
 
-test('pauseFinetune() does not throw when finetune is running', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('cancel() does not throw when finetune is running', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
@@ -303,7 +303,7 @@ test('pauseFinetune() does not throw when finetune is running', { timeout: FINET
   const handle = await model.finetune(finetuneConfig)
   await sleep(5000)
   await t.execution(async () => {
-    await model.pauseFinetune()
+    await model.cancel()
   })
   const result = await handle.await()
   t.ok(result && typeof result === 'object', 'Finetune completed or paused')

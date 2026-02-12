@@ -33,10 +33,11 @@ function createMockAddon () {
   finetune.lastArgs = null
   finetune.callsFake = (impl) => { finetuneStub.callsFake(impl); return finetune }
   finetune.calledWith = (...expected) => finetuneStub.calledWith(...expected)
+  const cancel = createStub(() => Promise.resolve())
   return {
     finetune,
     activate: createStub(),
-    pause: createStub(() => Promise.resolve(true))
+    cancel
   }
 }
 
@@ -145,26 +146,26 @@ test('finetune(opts with resume key) passes opts to addon.finetune', async (t) =
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
 
-test('pauseFinetune() throws when addon not initialized', async (t) => {
+test('cancel() throws when addon not initialized', async (t) => {
   const model = createModelWithMockAddon(null)
   model.addon = null
   await t.exception(
-    () => model.pauseFinetune(),
+    () => model.cancel(),
     /Addon not initialized/
   )
 })
 
-test('pauseFinetune() does not throw when finetuning not running', async (t) => {
+test('cancel() does not throw when finetuning not running', async (t) => {
   const model = createModelWithMockAddon(null)
-  model.addon.pause.callsFake(() => Promise.resolve(false))
-  await t.execution(async () => { await model.pauseFinetune() })
-  t.ok(model.addon.pause.called)
+  model.addon.cancel.callsFake(() => Promise.resolve())
+  await t.execution(async () => { await model.cancel() })
+  t.ok(model.addon.cancel.called)
 })
 
-test('pauseFinetune() calls addon.pause when running', async (t) => {
+test('cancel() calls addon.cancel when running', async (t) => {
   const model = createModelWithMockAddon(null)
-  await model.pauseFinetune()
-  t.ok(model.addon.pause.called)
+  await model.cancel()
+  t.ok(model.addon.cancel.called)
 })
 
 test('finetune() resolves with PAUSED when paused', async (t) => {
