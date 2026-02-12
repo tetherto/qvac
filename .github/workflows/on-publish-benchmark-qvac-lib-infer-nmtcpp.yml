@@ -46,7 +46,7 @@ jobs:
         id: read-opus
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
+          pairs=$(grep -v '^#' .github/released-models-opus.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
           echo "🎯 Released OPUS model pairs: $pairs"
 
@@ -54,7 +54,7 @@ jobs:
         id: read-bergamot
         working-directory: ${{ env.PKG_DIR }}
         run: |
-          pairs=$(grep -v '^#' .github/released-models-bergamot.txt | grep -v '^[[:space:]]*$' | tr '\n' ',' | sed 's/,$//')
+          pairs=$(grep -v '^#' .github/released-models-bergamot.txt | grep -v '^[[:space:]]*$' | tr -d '\r' | tr '\n' ',' | sed 's/,$//')
           echo "pairs=$pairs" >> $GITHUB_OUTPUT
           echo "🎯 Released Bergamot model pairs: $pairs"
 
