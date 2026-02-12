@@ -34,9 +34,9 @@ const PROMPT = [
 ]
 
 test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
-  timeout: 1_800_000, 
-  skip: isDarwinX64 || isMobile 
-    || isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+  timeout: 1_800_000,
+  skip: isDarwinX64 || isMobile ||
+    isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name, downloadUrl: MODEL.url })
 
