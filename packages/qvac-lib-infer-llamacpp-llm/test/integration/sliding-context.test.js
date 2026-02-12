@@ -138,7 +138,7 @@ function expectedSlides (nPredict, nDiscarded) {
 // n_discarded=32, n_predict=SLIDE_PREDICT
 test('Basic generation sliding', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
@@ -161,7 +161,7 @@ test('Basic generation sliding', {
 // n_discarded=0, n_predict=SLIDE_PREDICT
 test('Generation fails with context overflow when sliding disabled', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
@@ -188,7 +188,7 @@ test('Generation fails with context overflow when sliding disabled', {
 // n_discarded=16, n_predict=MANY_SLIDES_PREDICT
 test('Many slides with small n_discarded', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: String(MANY_SLIDES_PREDICT),
@@ -211,7 +211,7 @@ test('Many slides with small n_discarded', {
 // n_discarded=99999, clamped to FREE_SLOTS - 1
 test('Large n_discarded is clamped to fit available context space', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
@@ -234,7 +234,7 @@ test('Large n_discarded is clamped to fit available context space', {
 // n_discarded=1, n_predict=SLIDE_PREDICT
 test('Sliding context works with minimal n_discarded of 1', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const { model, logs } = await setupModel(t, {
     n_predict: String(SLIDE_PREDICT),
@@ -263,7 +263,7 @@ test('Sliding context works with minimal n_discarded of 1', {
 // :> discards n_discarded (64) tokens after first message
 test('Cached follow-up discards middle tokens to fit new message', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -302,7 +302,7 @@ test('Cached follow-up discards middle tokens to fit new message', {
 // :> removes all middle tokens from pos 44 to 244
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
@@ -337,7 +337,7 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
 // :> no recovery possible, throws ContextOverflow
 test('Cached follow-up overflows when sliding is disabled and context is full', {
   timeout: 900_000,
-  skip: isWindowsX64
+  skip: isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const cachePath = path.join(
     (await ensureModel({ modelName: DEFAULT_MODEL.name, downloadUrl: DEFAULT_MODEL.url }))[1],
