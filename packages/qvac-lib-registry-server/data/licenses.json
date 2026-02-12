@@ -23,6 +23,11 @@
     "spdxId": "GPL-3.0",
     "name": "GNU General Public License v3.0",
     "url": "https://www.gnu.org/licenses/gpl-3.0.html"
+  },
+  {
+    "spdxId": "lfm1.0",
+    "name": "LFM Open License v1.0",
+    "url": "https://huggingface.co/LiquidAI/LFM2-VL-450M-GGUF/blob/main/LICENSE"
   }
 ]
 

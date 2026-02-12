@@ -4172,5 +4172,33 @@
       "zh_tra"
     ],
     "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/LiquidAI/LFM2-VL-450M-GGUF/resolve/dd83d646c705e89a48b1c6e54e03a10adb4ca581/LFM2-VL-450M-Q4_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision-language model for image understanding",
+    "quantization": "q4_0",
+    "params": "450M",
+    "license": "lfm1.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "lfm2-vl"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/LiquidAI/LFM2-VL-450M-GGUF/resolve/dd83d646c705e89a48b1c6e54e03a10adb4ca581/mmproj-LFM2-VL-450M-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "",
+    "quantization": "f16",
+    "params": "450M",
+    "license": "lfm1.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "lfm2-vl"
+    ],
+    "notes": ""
   }
 ]
