@@ -3,6 +3,7 @@
 const Corestore = require('corestore')
 const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const LlmLlamacpp = require('../index')
+const { setLogger, releaseLogger } = require('../addonLogging')
 const process = require('bare-process')
 
 // Helper functions
@@ -73,6 +74,24 @@ function printToolCallSummary (results) {
 async function main () {
   console.log('Tool Calling Example: Demonstrates tool calling capabilities')
   console.log('============================================================')
+
+  // IMPORTANT: Set up the logger FIRST, before creating any addon instances
+  console.log('Setting up C++ logger...')
+
+  setLogger((priority, message) => {
+    const priorityNames = {
+      0: 'ERROR',
+      1: 'WARNING',
+      2: 'INFO',
+      3: 'DEBUG',
+      4: 'OFF'
+    }
+
+    const priorityName = priorityNames[priority] || 'UNKNOWN'
+    const timestamp = new Date().toISOString()
+
+    console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
+  })
 
   // 1. Initializing data loader
   const store = new Corestore('./store')
@@ -368,6 +387,7 @@ async function main () {
     await store.close()
     await hdDL.close()
     await model.unload()
+    releaseLogger()
   }
 }
 

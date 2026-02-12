@@ -1,0 +1,14 @@
+[
+  {
+    "name": "searchProducts",
+    "arguments": {"query": "laptops under $1000", "category": "electronics", "maxPrice": 1000}
+  },
+  {
+    "name": "addToCart",
+    "arguments": {"items": [{"productId": "laptop-123", "quantity": 2}}
+  },
+  {
+    "name": "queryDB",
+    "arguments": {"table": "users", "conditions": {"field": "age", "operator": "greaterThan", "value": 25}, "limit": 50, "includeMetadata": true}
+  }
+]

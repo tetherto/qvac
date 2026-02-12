@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@qvac/infer-base": "^0.2.2",
+    "@qvac/llm-llamacpp": "^0.8.9",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },
