@@ -140,7 +140,7 @@ class RegistryService extends ReadyResource {
     await this.view.ready()
 
     this._logAvailableModels().catch(err => {
-      this.logger.error('RegistryService: Failed to log available models', err)
+      this.logger.error({ err }, 'RegistryService: Failed to log available models')
     })
 
     this.swarm.on('connection', (conn, peerInfo) => {
@@ -188,13 +188,32 @@ class RegistryService extends ReadyResource {
     this.swarm.join(this._rpcDiscoveryKey, { server: true, client: false })
 
     await this.swarm.flush()
-    this.logger.info('Swarm joined', {
+    this.logger.info({
       autobaseKey: IdEnc.normalize(this.base.discoveryKey),
       viewKey: IdEnc.normalize(this.view.discoveryKey),
       rpcKey: IdEnc.normalize(this._rpcDiscoveryKey)
-    })
+    }, 'Swarm joined')
 
     if (this.base.isIndexer) {
+      const linearizerIndexers = (this.base.linearizer?.indexers || [])
+        .map(idx => idx.core?.key ? IdEnc.normalize(idx.core.key) : 'unknown')
+      const pendingIndexers = (this.base.system?.pendingIndexers || [])
+        .map(k => IdEnc.normalize(k))
+
+      this.logger.info({
+        isIndexer: this.base.isIndexer,
+        localKey: this.base.localWriter ? IdEnc.normalize(this.base.localWriter.core.key) : null,
+        systemMembers: this.base.system?.members ?? 0,
+        systemLength: this.base.system?.core?.length ?? -1,
+        signedLength: this.base.system?.core?.signedLength ?? -1,
+        linearizerIndexers,
+        pendingIndexers,
+        advancing: this.base._advancing !== null,
+        writable: this.base.writable,
+        viewLength: this.view?.core?.length ?? -1
+      }, 'Pre-indexer-management diagnostics')
+
+      await this._removeIndexers()
       await this._addAdditionalIndexers()
     }
 
@@ -203,11 +222,9 @@ class RegistryService extends ReadyResource {
       const hasExistingData = this.view.core.length > 0
 
       if (memberCount <= 1 && !hasExistingData) {
-        this.logger.error(`Configuration error: QVAC_AUTOBASE_KEY is set but storage appears fresh or mismatched
-  Solutions:
-    1. Remove QVAC_AUTOBASE_KEY from .env for a fresh start
-    2. Use the original storage directory that matches this autobase key
-  Current bootstrap key: ${IdEnc.normalize(this.autobaseBootstrap)}`)
+        this.logger.error({
+          bootstrapKey: IdEnc.normalize(this.autobaseBootstrap)
+        }, 'Configuration error: QVAC_AUTOBASE_KEY is set but storage appears fresh or mismatched. Solutions: 1) Remove QVAC_AUTOBASE_KEY from .env for a fresh start, 2) Use the original storage directory that matches this autobase key')
         throw new Error('Storage/bootstrap key mismatch - cannot initialize as indexer')
       }
     }
@@ -278,7 +295,7 @@ class RegistryService extends ReadyResource {
 
     if (this.blindPeering) {
       await this.blindPeering.close().catch(err => {
-        this.logger.warn('Failed to close blind peering', { error: err.message })
+        this.logger.warn({ error: err.message }, 'Failed to close blind peering')
       })
       this.blindPeering = null
     }
@@ -290,10 +307,10 @@ class RegistryService extends ReadyResource {
 
     for (const { blobs, core } of this.blobsCores.values()) {
       await blobs.close().catch(err => {
-        this.logger.warn('Failed to close blob store', { error: err.message })
+        this.logger.warn({ error: err.message }, 'Failed to close blob store')
       })
       await core.close().catch(err => {
-        this.logger.warn('Failed to close blob core', { error: err.message })
+        this.logger.warn({ error: err.message }, 'Failed to close blob core')
       })
     }
     this.blobsCores.clear()
@@ -305,13 +322,13 @@ class RegistryService extends ReadyResource {
   _startCompactionInterval () {
     if (this._compactionInterval) return
 
-    this.logger.info('RegistryService: starting periodic compaction', {
+    this.logger.info({
       intervalMs: this.compactionIntervalMs
-    })
+    }, 'RegistryService: starting periodic compaction')
 
     this._compactionInterval = setInterval(() => {
       this.compactStorage().catch(err => {
-        this.logger.error('Periodic compaction failed', { error: err.message })
+        this.logger.error({ error: err.message }, 'Periodic compaction failed')
       })
     }, this.compactionIntervalMs)
   }
@@ -324,16 +341,16 @@ class RegistryService extends ReadyResource {
       if (this.store?.storage && typeof this.store.storage.compact === 'function') {
         await this.store.storage.compact()
         const duration = Date.now() - startTime
-        this.logger.info('RegistryService: storage compaction completed', {
+        this.logger.info({
           durationMs: duration
-        })
+        }, 'RegistryService: storage compaction completed')
       } else {
         this.logger.warn('RegistryService: storage compaction not available')
       }
     } catch (err) {
-      this.logger.error('RegistryService: storage compaction failed', {
+      this.logger.error({
         error: err.message
-      })
+      }, 'RegistryService: storage compaction failed')
     }
   }
 
@@ -361,9 +378,9 @@ class RegistryService extends ReadyResource {
         const { core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
         await this._mirrorBlobCore(core)
       } catch (err) {
-        this.logger.warn('RegistryService: failed to initialize blob core for blind peers', {
+        this.logger.warn({
           error: err.message
-        })
+        }, 'RegistryService: failed to initialize blob core for blind peers')
       }
     }
 
@@ -383,9 +400,9 @@ class RegistryService extends ReadyResource {
 
     if (this.blindPeering) {
       await this.blindPeering.close().catch(err => {
-        this.logger.warn('RegistryService: failed to close existing blind peering before reseed', {
+        this.logger.warn({
           error: err.message
-        })
+        }, 'RegistryService: failed to close existing blind peering before reseed')
       })
       this.blindPeering = null
     }
@@ -441,9 +458,9 @@ class RegistryService extends ReadyResource {
     const ensureWriterAccess = () => {
       if (this._isWriterAuthorized(remoteKeyHex)) return
 
-      this.logger.warn('RPC: unauthorized writer request', {
+      this.logger.warn({
         remoteKey: remoteKeyZ32 || remoteKeyHex || 'unknown'
-      })
+      }, 'RPC: unauthorized writer request')
 
       const err = new Error('Unauthorized writer RPC request')
       err.code = 'ERR_WRITER_UNAUTHORIZED'
@@ -469,10 +486,10 @@ class RegistryService extends ReadyResource {
 
         const result = await this.addModel(modelEntry, { skipExisting })
 
-        this.logger.info('RPC: add-model completed', {
+        this.logger.info({
           path: result.path,
           source: result.source
-        })
+        }, 'RPC: add-model completed')
 
         return {
           success: true,
@@ -493,9 +510,9 @@ class RegistryService extends ReadyResource {
         await this._ensureIndexer()
         await this.putLicense(licenseRecord)
 
-        this.logger.info('RPC: put-license completed', {
+        this.logger.info({
           spdxId: licenseRecord.spdxId
-        })
+        }, 'RPC: put-license completed')
 
         return {
           success: true,
@@ -541,7 +558,7 @@ class RegistryService extends ReadyResource {
         const viewLength = this.view?.core?.length ?? 0
         const viewContiguous = this.view?.core?.contiguousLength ?? 0
         const viewSigned = this.view?.core?.signedLength ?? 0
-        this.logger.info(`RPC: update-model-metadata completed path=${data.path} L=${viewLength} C=${viewContiguous} S=${viewSigned}`)
+        this.logger.info({ path: data.path, viewLength, viewContiguous, viewSigned }, 'RPC: update-model-metadata completed')
 
         return {
           success: true,
@@ -563,10 +580,10 @@ class RegistryService extends ReadyResource {
 
         const result = await this.deleteModel({ path: data.path, source: data.source })
 
-        this.logger.info('RPC: delete-model completed', {
+        this.logger.info({
           path: data.path,
           source: data.source
-        })
+        }, 'RPC: delete-model completed')
 
         return result
       }
@@ -639,15 +656,15 @@ class RegistryService extends ReadyResource {
         source: sourceInfo.protocol
       })
       if (existing) {
-        this.logger.info('addModel: skipping existing model', { path: sourceInfo.path })
+        this.logger.info({ path: sourceInfo.path }, 'addModel: skipping existing model')
         return existing
       }
     }
 
-    this.logger.info('addModel: starting', {
+    this.logger.info({
       source: sourceInfo.canonicalUrl,
       path: sourceInfo.path
-    })
+    }, 'addModel: starting')
 
     const tempBase = this.config.getTempStorage()
     const pathHash = crypto.createHash('sha256')
@@ -667,9 +684,9 @@ class RegistryService extends ReadyResource {
       if (isGGUFSource(sourceInfo.canonicalUrl) && isFirstShard(sourceInfo.canonicalUrl)) {
         ggufMetadata = await extractGGUFMetadata(localPath)
       } else if (isGGUFSource(sourceInfo.canonicalUrl) && !isFirstShard(sourceInfo.canonicalUrl)) {
-        this.logger.info('Skipping GGUF metadata extraction for non-first shard', {
+        this.logger.info({
           source: sourceInfo.canonicalUrl
-        })
+        }, 'Skipping GGUF metadata extraction for non-first shard')
       }
 
       const { blobs, core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
@@ -683,10 +700,10 @@ class RegistryService extends ReadyResource {
 
       if (this.reseedTracker) {
         await this.reseedTracker.waitForComplete()
-        this.logger.info('Blob core replicated to blind peers', {
+        this.logger.info({
           core: core.key.toString('hex').substring(0, 16) + '...',
           blocks: core.length
-        })
+        }, 'Blob core replicated to blind peers')
 
         if (this.clearAfterReseed && core.length > 0) {
           const blockCount = core.length
@@ -696,16 +713,16 @@ class RegistryService extends ReadyResource {
           // Force a small delay to let storage update
           await new Promise(resolve => setTimeout(resolve, 100))
 
-          this.logger.info('Cleared blob blocks after reseed', {
+          this.logger.info({
             blocks: blockCount
-          })
+          }, 'Cleared blob blocks after reseed')
         }
       }
 
-      this.logger.info('addModel: completed', {
+      this.logger.info({
         path: modelData.path,
         source: modelData.source
-      })
+      }, 'addModel: completed')
 
       return modelData
     } finally {
@@ -747,12 +764,61 @@ class RegistryService extends ReadyResource {
     }
 
     if (added > 0 || skipped > 0) {
-      this.logger.info('Additional indexers processed', {
+      this.logger.info({
         total: additionalIndexers.length,
         added,
         skipped,
         errors: errors.length
-      })
+      }, 'Additional indexers processed')
+    }
+  }
+
+  async _removeIndexers () {
+    const removeKeys = this.config.getRemoveIndexers()
+    if (removeKeys.length === 0) return
+
+    let removed = 0
+    let skipped = 0
+    const errors = []
+
+    for (const keyZ32 of removeKeys) {
+      try {
+        const key = IdEnc.decode(keyZ32)
+
+        const existingIndexers = this.base.linearizer?.indexers || []
+        const alreadyRemoved = !existingIndexers.some(idx =>
+          idx.core?.key && idx.core.key.equals(key)
+        )
+
+        if (alreadyRemoved) {
+          skipped++
+          continue
+        }
+
+        if (this.base.local?.key && this.base.local.key.equals(key)) {
+          this.logger.warn({ key: keyZ32 }, 'Cannot remove self as indexer, skipping')
+          skipped++
+          continue
+        }
+
+        await this._appendOperation(DISPATCH_REMOVE_INDEXER, { key })
+        removed++
+      } catch (err) {
+        errors.push({ key: keyZ32, error: err.message })
+        this.logger.error({
+          key: keyZ32,
+          error: err.message
+        }, 'Failed to remove indexer')
+      }
+    }
+
+    if (removed > 0 || skipped > 0) {
+      this.logger.info({
+        total: removeKeys.length,
+        removed,
+        skipped,
+        errors: errors.length
+      }, 'Remove indexers processed')
     }
   }
 
@@ -801,7 +867,7 @@ class RegistryService extends ReadyResource {
   }
 
   async _downloadFromHuggingFace (hfUrl, localPath) {
-    this.logger.info('Downloading from HuggingFace', { url: hfUrl })
+    this.logger.info({ url: hfUrl }, 'Downloading from HuggingFace')
 
     const hfToken = this.config.getHuggingFaceToken()
     const parsed = this._parseHfDownloadUrl(hfUrl)
@@ -844,7 +910,7 @@ class RegistryService extends ReadyResource {
   }
 
   async _downloadFromS3 (bucket, key, localPath) {
-    this.logger.info('Downloading from S3', { bucket, key })
+    this.logger.info({ bucket, key }, 'Downloading from S3')
 
     const s3 = await this._createS3Client()
     await this._ensureLocalPath(localPath)
@@ -884,10 +950,10 @@ class RegistryService extends ReadyResource {
       await fsPromises.unlink(localPath)
     } catch (err) {
       if (err.code !== 'ENOENT') {
-        this.logger.warn('Failed to unlink existing file', {
+        this.logger.warn({
           localPath,
           error: err.message
-        })
+        }, 'Failed to unlink existing file')
       }
     }
   }
@@ -895,12 +961,12 @@ class RegistryService extends ReadyResource {
   async _cleanupPath (targetPath) {
     try {
       await fsPromises.rm(targetPath, { recursive: true, force: true })
-      this.logger.debug('Cleaned up temp path', { targetPath })
+      this.logger.debug({ targetPath }, 'Cleaned up temp path')
     } catch (cleanupErr) {
-      this.logger.warn('Failed to clean up temp path', {
+      this.logger.warn({
         targetPath,
         error: cleanupErr.message
-      })
+      }, 'Failed to clean up temp path')
     }
   }
 
@@ -909,7 +975,7 @@ class RegistryService extends ReadyResource {
       return this.blobsCores.get(label)
     }
 
-    this.logger.debug('Getting or creating Hyperblobs core', { label })
+    this.logger.debug({ label }, 'Getting or creating Hyperblobs core')
 
     const core = this.blobsStore.get({ name: `blobs-${label}`, writable: true })
     await core.ready()
@@ -920,11 +986,11 @@ class RegistryService extends ReadyResource {
     const entry = { blobs, core }
     this.blobsCores.set(label, entry)
 
-    this.logger.debug('Hyperblobs core ready', {
+    this.logger.debug({
       label,
       key: core.key.toString('hex'),
       discoveryKey: core.discoveryKey.toString('hex')
-    })
+    }, 'Hyperblobs core ready')
 
     // Caller is responsible for mirroring after data is added
     return entry
@@ -937,10 +1003,10 @@ class RegistryService extends ReadyResource {
 
     await pipeline(readStream, writeStream)
 
-    this.logger.debug('Uploaded file to Hyperblobs', {
+    this.logger.debug({
       size: stat.size,
       path: localPath
-    })
+    }, 'Uploaded file to Hyperblobs')
 
     return writeStream.id
   }
@@ -1031,7 +1097,7 @@ class RegistryService extends ReadyResource {
 
     await this._appendOperation(DISPATCH_DELETE_MODEL, { path, source })
 
-    this.logger.info('deleteModel: completed', { path, source })
+    this.logger.info({ path, source }, 'deleteModel: completed')
 
     return { success: true, path, source }
   }
@@ -1065,9 +1131,9 @@ class RegistryService extends ReadyResource {
 
     await this._appendOperation(DISPATCH_PUT_LICENSE, licenseRecord)
 
-    this.logger.info('putLicense: license operation appended', {
+    this.logger.info({
       spdxId: licenseRecord.spdxId
-    })
+    }, 'putLicense: license operation appended')
 
     return licenseRecord
   }
@@ -1094,9 +1160,9 @@ class RegistryService extends ReadyResource {
         url: licenseMeta.url,
         text
       })
-      this.logger.info('Auto-created license', { spdxId: licenseId })
+      this.logger.info({ spdxId: licenseId }, 'Auto-created license')
     } catch (err) {
-      this.logger.error('Failed to load license', { licenseId, error: err.message })
+      this.logger.error({ licenseId, error: err.message }, 'Failed to load license')
       throw new Error(`License ${licenseId} not available: ${err.message}`)
     }
   }
@@ -1111,17 +1177,15 @@ class RegistryService extends ReadyResource {
       if (models.length === 0) {
         this.logger.info('RegistryService: No models in registry yet')
       } else {
-        this.logger.info(`RegistryService: ${models.length} model(s) available:`)
         const modelsToLog = models.length > 5 ? models.slice(-5) : models
-        if (models.length > 5) {
-          this.logger.info(`  ... showing last 5 of ${models.length} models`)
-        }
-        for (const model of modelsToLog) {
-          this.logger.info(`  - ${model.path} [${model.engine}]`)
-        }
+        this.logger.info({
+          count: models.length,
+          showing: modelsToLog.length,
+          models: modelsToLog.map(m => `${m.path} [${m.engine}]`)
+        }, 'RegistryService: models available')
       }
     } catch (err) {
-      this.logger.error('RegistryService: Failed to log models', err)
+      this.logger.error({ err }, 'RegistryService: Failed to log models')
     }
   }
 
