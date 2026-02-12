@@ -1,11 +1,6 @@
 name: C++ Tests & Coverage (TTS)
 
 on:
-  pull_request:
-    branches: [main, "release-*"]
-    types: [opened, synchronize, reopened]
-    paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
   push:
     branches: [main, "release-*"]
     paths:
