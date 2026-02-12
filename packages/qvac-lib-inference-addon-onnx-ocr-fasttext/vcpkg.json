@@ -3,42 +3,48 @@
   "version": "0.1.14",
   "dependencies": [
     {
-      "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.0.0"
+      "name": "onnxruntime",
+      "features": [
+        "nnapi-ep"
+      ],
+      "platform": "android"
     },
     {
-      "name": "opencv4",
-      "default-features": false,
-      "features": ["jpeg","png","tiff","webp","quirc" ]
+      "name": "onnxruntime",
+      "features": [
+        "dml-ep"
+      ],
+      "platform": "windows"
+    },
+    {
+      "name": "onnxruntime",
+      "features": [
+        "coreml-ep"
+      ],
+      "platform": "osx | ios"
     },
     {
       "name": "onnxruntime",
       "platform": "!(android | osx | ios | windows)"
     },
     {
-      "name": "onnxruntime",
-      "features": ["dml-ep"],
-      "platform": "windows"
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "jpeg",
+        "png",
+        "quirc",
+        "tiff",
+        "webp"
+      ]
     },
     {
-      "name": "onnxruntime",
-      "features": ["nnapi-ep"],
-      "platform": "android"
-    },
-    {
-      "name": "onnxruntime",
-      "features": ["coreml-ep"],
-      "platform": "osx | ios"
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.0.0"
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.1"
-    }
-  ],
-  "overrides": [
-    {
-      "name": "flatbuffers",
-      "version": "23.5.26"
+      "version>=": "1.4.4"
     }
   ],
   "features": {
@@ -48,5 +54,11 @@
         "gtest"
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ]
 }
