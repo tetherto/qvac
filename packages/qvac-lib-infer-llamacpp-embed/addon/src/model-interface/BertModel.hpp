@@ -15,7 +15,7 @@
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
-#include "utils.h"
+#include "utils.hpp"
 
 #if defined(_MSC_VER)
 #pragma warning(disable : 4244 4267) // possible loss of data
@@ -65,23 +65,24 @@ struct BertCommonInitResult {
 /// trained to generate general word embeddings that summarize text
 /// information and that can be used, for example, to compare text's
 /// similarity or to search for most meaningful entries on a vector database.
-// NOLINTBEGIN(readability-identifier-naming, cppcoreguidelines-non-private-member-variables-in-classes, readability-avoid-const-params-in-decls)
+// NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,
+// readability-avoid-const-params-in-decls)
 class BertModel {
 private:
-  BertCommonInitResult _init;
-  llama_model *_model;
-  llama_context *_ctx;
-  const llama_vocab *_vocab;
-  mutable struct llama_batch _batch;
+  BertCommonInitResult init_;
+  llama_model* model_;
+  llama_context* ctx_;
+  const llama_vocab* vocab_;
+  mutable struct llama_batch batch_;
   bool is_loaded_;
 
-  const std::string loading_context;
-  const GGUFShards _shards;
+  const std::string loadingContext_;
+  const GGUFShards shards_;
   friend class InitLoader;
-  InitLoader initLoader;
-  bool isStreaming = false;
+  InitLoader initLoader_;
+  bool isStreaming_ = false;
   std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
-      singleGgufStreamedFiles;
+      singleGgufStreamedFiles_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
 
 public:
@@ -91,7 +92,7 @@ public:
   using InputView = Input;
   using Output = OutputType;
 
-  using TokenizerHandle = void *;
+  using TokenizerHandle = void*;
 
   /// @brief This constructor allows to specify model to load more clearly and
   /// override default common params by a configuration string.
@@ -102,10 +103,10 @@ public:
       const std::string& backendsDir = "");
 
   /// @brief Construct with already parsed parameters.
-  explicit BertModel(common_params &params);
+  explicit BertModel(common_params& params);
 
   /// @see BertModel::BertModel(common_params)
-  void init(common_params &params);
+  void init(common_params& params);
 
   /// @see BertModel::BertModel(string, string)
   void init(
@@ -115,7 +116,6 @@ public:
   /// @brief Deletes model implementation.
   ~BertModel();
 
-  
   BertModel(const BertModel&) = delete;
   BertModel& operator=(const BertModel&) = delete;
   BertModel(BertModel&&) = delete;
@@ -127,11 +127,12 @@ public:
   /// @returns A host vector of embeddings with one embedding per prompt.
   /// @note Awaits for initialization to finish if its loading .gguf shards
   /// asynchronously.
-  BertEmbeddings encode_host_f32(const std::string& prompt);
+  BertEmbeddings encodeHostF32(const std::string& prompt);
 
   /// @brief Process text of embeddings of an already pre-processed input.
-  /// @note Awaits for initialization to finish if its loading .gguf shards asynchronously.
-  BertEmbeddings encode_host_f32(const std::vector<std::string>& prompts);
+  /// @note Awaits for initialization to finish if its loading .gguf shards
+  /// asynchronously.
+  BertEmbeddings encodeHostF32(const std::vector<std::string>& prompts);
 
   /// @brief Process an array of sequences. Each sequence is processed as-is
   /// without splitting by delimiter. Sequences are processed in batches and one
@@ -145,22 +146,22 @@ public:
   /// @note This is an internal method - call via process() which handles
   /// sequences array detection and parsing
   BertEmbeddings
-  encode_host_f32_sequences(const std::vector<std::string>& sequenceArray);
+  encodeHostF32Sequences(const std::vector<std::string>& sequenceArray);
 
   /// @brief Read-only access to the context.
-  const llama_context *get_ctx() const;
+  const llama_context* getCtx() const;
 
   /// @brief Read-only access to the model.
-  const llama_model *get_model() const;
+  const llama_model* getModel() const;
 
-  std::vector<std::string> preprocess_prompt(const std::string &prompt) const;
+  std::vector<std::string> preprocessPrompt(const std::string& prompt) const;
 
   // Methods below are accessed by the Addon<BertModel> template.
 
   void reset();
-  void reload(){}
-  void load(){}
-  void unload(){}
+  void reload() {}
+  void load() {}
+  void unload() {}
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
 
@@ -175,7 +176,8 @@ public:
 
   bool isLoaded() const;
 
-  void /* NOLINT(readability-identifier-naming) */ set_weights_for_file(
+  void set_weights_for_file( // NOLINT(readability-identifier-naming) used from
+                             // addon template / other packages
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& shard);
 
@@ -187,7 +189,7 @@ public:
   void initializeBackend(const std::string& backendsDir = "");
 
   /// @brief Ensure model is initialized
-  void waitForLoadInitialization() { initLoader.waitForLoadInitialization(); }
+  void waitForLoadInitialization() { initLoader_.waitForLoadInitialization(); }
 
 private:
   /// @param prompts_size: Number of parsed prompts after splitting into lines.
@@ -195,7 +197,9 @@ private:
   tokenizeInput(const std::vector<std::string>& prompts) const;
 
   /// @brief n_embd_count: Output parameter, the number of embeddings.
-  BertEmbeddings
-  processBatched(const std::vector<std::vector<int32_t>>& inputs, std::size_t nPrompts) const;
+  BertEmbeddings processBatched(
+      const std::vector<std::vector<int32_t>>& inputs,
+      std::size_t nPrompts) const;
 };
-// NOLINTEND(readability-identifier-naming, cppcoreguidelines-non-private-member-variables-in-classes, readability-avoid-const-params-in-decls)
+// NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes,
+// readability-avoid-const-params-in-decls)

@@ -49,16 +49,16 @@ endif()
 
 add_bare_module(qvac-lib-infer-llamacpp-embed EXPORTS ${BACKEND_DL_LIBS})
 set(ADDON_SOURCES
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cc
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
 )
 
 list(APPEND MODEL_INTERFACE_SOURCES
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cc
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cc
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cc
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
 )
 
 list(APPEND ADDON_SOURCES
