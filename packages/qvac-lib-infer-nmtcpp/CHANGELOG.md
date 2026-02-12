@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TypeScript type declarations for `addonLogging` subpath export
 
 ## [0.3.0] - 2025-01-08
-### Added
+### Added 
 - TypeScript type declarations (`index.d.ts`) - migrated from `@qvac/sdk` and aligned with runtime API
 - CI job for type declaration validation (`ts-checks`)
 - `test:dts` script for type checking
