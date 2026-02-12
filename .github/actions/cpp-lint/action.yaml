@@ -67,6 +67,7 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      continue-on-error: true
       working-directory: ${{ inputs.workdir }}
       run: npm install
 
