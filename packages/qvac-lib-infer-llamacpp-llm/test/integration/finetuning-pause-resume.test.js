@@ -90,7 +90,7 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
 
   const finetuneHandle = await model.finetune(finetuneConfig)
   await sleep(15000)
-  await model.pauseFinetune()
+  await model.cancel()
 
   const pauseResult = await finetuneHandle.await()
   if (pauseResult?.status === 'IDLE') {

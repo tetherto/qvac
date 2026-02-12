@@ -105,6 +105,25 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  LlamaModel* llamaModel = getLlamaModel(instance);
+  if (llamaModel != nullptr && llamaModel->isFinetuneRunning()) {
+    if (llamaModel->requestPause()) {
+      return js::JsAsyncTask::run(env, [llamaModel]() {
+        llamaModel->waitUntilFinetuningPauseComplete();
+      });
+    }
+  }
+  instance.addonCpp->cancelJob();
+  return js::JsAsyncTask::run(env, []() {});
+}
+JSCATCH
+
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -156,30 +175,6 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   finetuneThread.detach();
 
   return nullptr;
-}
-JSCATCH
-
-inline js_value_t* pauseFinetuning(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = getLlamaModel(instance);
-  if (llamaModel == nullptr) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "Model not available or not a LlamaModel");
-  }
-
-  bool didPause = llamaModel->requestPause();
-
-  if (didPause) {
-    return js::JsAsyncTask::run(env, [llamaModel]() {
-      llamaModel->waitUntilFinetuningPauseComplete();
-    });
-  }
-  return js::JsAsyncTask::run(env, []() {});
 }
 JSCATCH
 

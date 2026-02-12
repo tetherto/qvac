@@ -298,7 +298,7 @@ async function main () {
       await sleep(trainSeconds * 1000)
 
       console.log(`⏸️  Pausing finetuning (cycle ${cycle})...`)
-      await client.pauseFinetune()
+      await client.cancel()
       const pauseResult = await finetuneHandle.await()
       if (pauseResult?.status !== 'PAUSED') {
         console.log(`⚠️  Pause status: ${pauseResult?.status} (cycle ${cycle})`)

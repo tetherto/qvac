@@ -144,6 +144,9 @@ public:
    */
   common_params& getCommonParams();
 
+  /** True if a finetune run is active (training or pausing). */
+  bool isFinetuneRunning() const;
+
   /**
    * Request pause of finetuning (sets pause flag in checkpoint state).
    * Returns true if pause was requested, false if not finetuning.
@@ -269,6 +272,8 @@ private:
   void saveLoraAdapter(
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+
+  llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState() const;
 
   std::atomic<llama_finetuning_helpers::TrainingCheckpointState*>
       currentCheckpointState_{nullptr};

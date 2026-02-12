@@ -60,10 +60,6 @@ class LlamaInterface {
     return this._binding.finetune(this._handle)
   }
 
-  async pause () {
-    await this._binding.pause(this._handle)
-  }
-
   /**
    * @param {Object} data
    * @param {String} data.type

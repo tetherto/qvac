@@ -335,7 +335,7 @@ test('two instances: A pause/resume finetune while B runs inference (per-instanc
 
   const handleA = await modelA.finetune(finetuneConfigA)
   await sleep(8000)
-  await modelA.pauseFinetune()
+  await modelA.cancel()
   const pauseResult = await handleA.await()
   if (pauseResult?.status === 'IDLE') {
     t.comment('A completed before pause; finishing B run and exiting')

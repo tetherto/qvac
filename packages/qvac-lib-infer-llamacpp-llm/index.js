@@ -265,9 +265,12 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
-   * Cancel the current task
+   * Cancel the current task (or pause finetuning if finetune is running).
    */
   async cancel () {
+    if (!this.addon) {
+      throw new Error('Addon not initialized')
+    }
     await this.addon.cancel()
   }
 
@@ -363,8 +366,7 @@ class LlmLlamacpp extends BaseInference {
     this._finetuneCompletionResolve = resolveCompletion
 
     const handle = {
-      await: () => completionPromise.then(status => ({ status })),
-      pause: () => this.pauseFinetune()
+      await: () => completionPromise.then(status => ({ status }))
     }
 
     try {
@@ -379,12 +381,6 @@ class LlmLlamacpp extends BaseInference {
     }
   }
 
-  async pauseFinetune () {
-    if (!this.addon) {
-      throw new Error('Addon not initialized')
-    }
-    await this.addon.pause()
-  }
 }
 
 module.exports = LlmLlamacpp
