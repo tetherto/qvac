@@ -1,8 +1,11 @@
 {
   "name": "qvac-lib-inference-addon-onnx-ocr-fasttext",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "dependencies": [
-    "qvac-lib-inference-addon-cpp",
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.0.0"
+    },
     {
       "name": "opencv4",
       "default-features": false,

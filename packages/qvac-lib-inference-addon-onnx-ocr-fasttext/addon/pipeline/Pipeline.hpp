@@ -1,18 +1,20 @@
 #pragma once
 
-#include "Steps.hpp"
-#include "StepDetectionInference.hpp"
-#include "StepBoundingBox.hpp"
-#include "StepRecognizeText.hpp"
-
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
-
+#include <any>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stack>
 #include <span>
+#include <stack>
 #include <vector>
+
+#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
+#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+
+#include "StepBoundingBox.hpp"
+#include "StepDetectionInference.hpp"
+#include "StepRecognizeText.hpp"
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -62,46 +64,71 @@ struct PipelineInput {
  * This is simpler and more reliable than a multi-threaded approach since each step
  * depends on the previous step's output anyway.
  */
-class Pipeline {
-  public:
-    using Input = PipelineInput;
-    using InputView = PipelineInput;
-    using Output = std::vector<InferredText>;
-    using Config = PipelineConfig;
+class Pipeline : public qvac_lib_inference_addon_cpp::model::IModel,
+                 public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
+                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
+public:
+  using Input = PipelineInput;
+  using InputView = PipelineInput;
+  using Output = std::vector<InferredText>;
+  using Config = PipelineConfig;
 
-    Pipeline(
-        const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
-        std::span<const std::string> langList, bool useGPU = true,
-        int timeout = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
-        const PipelineConfig& config = PipelineConfig{});
+  Pipeline(
+      const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
+      std::span<const std::string> langList, bool useGPU = true,
+      int timeout = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
+      const PipelineConfig& config = PipelineConfig{});
 
-    Output process(Input input);
-    Output process(Input, std::function<void(const Output&)> callback);
+  ~Pipeline() override = default;
 
-    void initializeBackend();
-    bool isLoaded();
+  std::any process(const std::any& input) final;
 
-    void reset();
+  // Direct process method for internal use
+  Output process(Input input);
 
-    qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats();
+  void initializeBackend();
+  bool isLoaded() const;
 
-    const PipelineConfig& config() const { return config_; }
+  void reset();
 
-  private:
-    PipelineConfig config_;
+  [[nodiscard]] std::string getName() const final { return "Pipeline"; }
 
-    // Sequential pipeline steps (no threading)
-    std::unique_ptr<StepDetectionInference> stepDetection_;
-    std::unique_ptr<StepBoundingBox> stepBoundingBox_;
-    std::unique_ptr<StepRecognizeText> stepRecognition_;
+  void cancel() const final {
+    // Pipeline doesn't support cancellation during processing
+  }
 
-    int timeout_;
+  void setWeightsForFile(
+      const std::string& filename,
+      std::unique_ptr<std::basic_streambuf<char>>&& shard) final {
+    // Pipeline doesn't support streaming weights
+    (void)filename;
+    (void)shard;
+  }
 
-    std::mutex processingTimeMtx_;
-    std::stack<double> processingTime_;
-    std::stack<double> detectionTime_;
-    std::stack<double> recognitionTime_;
-    std::stack<int> textRegionsCount_;
+  void waitForLoadInitialization() final {
+    // Pipeline loads synchronously
+  }
+
+  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
+  runtimeStats() const final;
+
+  const PipelineConfig& config() const { return config_; }
+
+private:
+  PipelineConfig config_;
+
+  // Sequential pipeline steps (no threading)
+  std::unique_ptr<StepDetectionInference> stepDetection_;
+  std::unique_ptr<StepBoundingBox> stepBoundingBox_;
+  std::unique_ptr<StepRecognizeText> stepRecognition_;
+
+  int timeout_;
+
+  mutable std::mutex processingTimeMtx_;
+  mutable std::stack<double> processingTime_;
+  mutable std::stack<double> detectionTime_;
+  mutable std::stack<double> recognitionTime_;
+  mutable std::stack<int> textRegionsCount_;
 };
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext
