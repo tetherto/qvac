@@ -489,9 +489,16 @@ void optEpochCallback(
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
   const bool isFinalBatch = (ibatch == ibatchMax - 1);
-  
+  // Add +1 only when backend sent 0-indexed ibatch. That happens if we resumed mid-epoch and
+  // epoch==startEpoch (executeTrainingLoop passes resumeFromBatch only then), so batchOffsetWithinEpoch>0
+  // exactly when we are in that resumed epoch.
+  const int64_t displayBatch =
+      (checkpointState && checkpointState->batchOffsetWithinEpoch > 0)
+          ? (ibatch + 1)
+          : ibatch;
+
   ggml_opt_epoch_callback_progress_bar(
-      train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+      train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
   std::fflush(stdout);
 
   if (!train) {
@@ -528,6 +535,11 @@ void optEpochCallback(
       }
       return;
     }
+  }
+
+  // After last batch of resumed epoch, clear so next epoch uses raw (1-indexed) ibatch
+  if (state->batchOffsetWithinEpoch > 0 && isFinalBatch) {
+    state->batchOffsetWithinEpoch = -1;
   }
 
   state->globalStep += 1;
@@ -594,7 +606,7 @@ void optEpochCallback(
   if (state->checkpointInterval <= 0) {
     if (isFinalBatch) {
       ggml_opt_epoch_callback_progress_bar(
-          train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+          train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
       std::fflush(stdout);
     }
     return;
@@ -603,17 +615,17 @@ void optEpochCallback(
   if (state->globalStep % state->checkpointInterval != 0) {
     if (isFinalBatch) {
       ggml_opt_epoch_callback_progress_bar(
-          train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+          train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
       std::fflush(stdout);
     }
     return;
   }
 
   saveCheckpoint(optCtx, *state);
-  
+
   if (isFinalBatch) {
     ggml_opt_epoch_callback_progress_bar(
-        train, optCtx, dataset, result, ibatch, ibatchMax, tStartUs);
+        train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
     std::fflush(stdout);
   }
 }
