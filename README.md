@@ -103,7 +103,7 @@ node quickstart.js
 * **Download Lifecycle:** pause and resume model downloads.
 * **Sharded models:** download a model that is sharded into multiple parts.
 
-### More on using QVAC
+### Complete user docs
 
 > [!TIP]
 > For comprehensive QVAC documentation, see [https://docs.qvac.tether.io](https://docs.qvac.tether.io).
