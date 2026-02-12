@@ -105,10 +105,11 @@ endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 if(APPLE)
   message("VCPKG_OVERLAY_TRIPLETS will be override from this path for Apple vcpkg-override-triplets/triplets")
   SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
+  message("VCPKG_OVERLAY_PORTS will be override from this path for Apple vcpkg-overlay-ports")
+  SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 endif()
 
 project(qvac-lib-inference-tts C CXX)
