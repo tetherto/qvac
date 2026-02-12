@@ -21,7 +21,7 @@
     "path": "packages/qvac-lib-error-base"
   },
   {
-    "package": "qvac-docs",
-    "path": "packages/qvac-docs"
+    "package": "docs",
+    "path": "packages/docs"
   }
 ]
