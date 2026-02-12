@@ -39,6 +39,13 @@ double getStatValue(
   }
   return 0.0;
 }
+
+std::string processPromptString(
+    const std::unique_ptr<LlamaModel>& model, const std::string& input) {
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  return model->processPrompt(prompt);
+}
 } // namespace
 
 class LlmContextBaseTest : public ::testing::Test {
@@ -176,10 +183,9 @@ TEST_F(LlmContextBaseTest, TextLlmContextProcessAndReset) {
   auto stats = model->runtimeStats();
   EXPECT_GE(getStatValue(stats, "CacheTokens"), 0.0);
 
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->processPrompt(prompt);
+    std::string output =
+        processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
     auto statsAfter = model->runtimeStats();
     EXPECT_GE(statsAfter.size(), 0);
@@ -187,10 +193,9 @@ TEST_F(LlmContextBaseTest, TextLlmContextProcessAndReset) {
 
   EXPECT_NO_THROW(model->reset());
 
-  LlamaModel::Prompt prompt2;
-  prompt2.input = R"([{"role": "user", "content": "Another hello"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->processPrompt(prompt2);
+    std::string output2 = processPromptString(
+        model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
@@ -210,10 +215,9 @@ TEST_F(LlmContextBaseTest, MtmdLlmContextProcessAndReset) {
   auto stats = model->runtimeStats();
   EXPECT_GE(getStatValue(stats, "CacheTokens"), 0.0);
 
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->processPrompt(prompt);
+    std::string output =
+        processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -221,10 +225,9 @@ TEST_F(LlmContextBaseTest, MtmdLlmContextProcessAndReset) {
 
   EXPECT_NO_THROW(model->reset());
 
-  LlamaModel::Prompt prompt2;
-  prompt2.input = R"([{"role": "user", "content": "Another hello"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->processPrompt(prompt2);
+    std::string output2 = processPromptString(
+        model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
@@ -241,10 +244,9 @@ TEST_F(LlmContextBaseTest, ProcessAndGetRuntimeStats) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->processPrompt(prompt);
+    std::string output =
+        processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GT(getStatValue(stats, "promptTokens"), 0.0);
@@ -288,19 +290,17 @@ TEST_F(LlmContextBaseTest, ResetStateClearsCache) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->processPrompt(prompt);
+    std::string output =
+        processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
   });
 
   model->reset();
 
-  LlamaModel::Prompt prompt2;
-  prompt2.input = R"([{"role": "user", "content": "Another hello"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->processPrompt(prompt2);
+    std::string output2 = processPromptString(
+        model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
     auto statsAfterReset = model->runtimeStats();
     EXPECT_EQ(getStatValue(statsAfterReset, "CacheTokens"), 0.0);
@@ -337,19 +337,17 @@ TEST_F(LlmContextBaseTest, MultipleProcessCalls) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->processPrompt(prompt);
+    std::string output =
+        processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
 
-  LlamaModel::Prompt prompt2;
-  prompt2.input = R"([{"role": "user", "content": "Another hello"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->processPrompt(prompt2);
+    std::string output2 = processPromptString(
+        model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
@@ -367,10 +365,9 @@ TEST_F(LlmContextBaseTest, VirtualDestructor) {
       FAIL() << "Model failed to load";
     }
 
-    LlamaModel::Prompt prompt;
-    prompt.input = R"([{"role": "user", "content": "Hello"}])";
     EXPECT_NO_THROW({
-      std::string output = model->processPrompt(prompt);
+      std::string output = processPromptString(
+          model, R"([{"role": "user", "content": "Hello"}])");
       EXPECT_GE(output.length(), 0);
       auto stats = model->runtimeStats();
       EXPECT_GE(stats.size(), 0);
@@ -380,10 +377,9 @@ TEST_F(LlmContextBaseTest, VirtualDestructor) {
   {
     auto model2 = createModel();
     if (model2) {
-      LlamaModel::Prompt prompt;
-      prompt.input = R"([{"role": "user", "content": "Test 2"}])";
       EXPECT_NO_THROW({
-        std::string output = model2->processPrompt(prompt);
+        std::string output = processPromptString(
+            model2, R"([{"role": "user", "content": "Test 2"}])");
         EXPECT_GE(output.length(), 0);
       });
     }
@@ -401,7 +397,7 @@ TEST_F(LlmContextBaseTest, RuntimeStatsAccuracy) {
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
-  model->process(input);
+  processPromptString(model, input);
 
   auto stats = model->runtimeStats();
   double promptTokens = getStatValue(stats, "promptTokens");
@@ -427,7 +423,7 @@ TEST_F(LlmContextBaseTest, RuntimeStatsConsistency) {
   std::string input = R"([{"role": "user", "content": "Hello"}])";
 
   for (int i = 0; i < 3; ++i) {
-    model->process(input);
+    processPromptString(model, input);
     auto stats = model->runtimeStats();
 
     double promptTokens = getStatValue(stats, "promptTokens");
