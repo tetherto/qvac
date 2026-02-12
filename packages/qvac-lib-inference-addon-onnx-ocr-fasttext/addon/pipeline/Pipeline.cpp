@@ -1,14 +1,17 @@
 #include "Pipeline.hpp"
 
 #include <chrono>
-#include <string>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
+
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+
 #include "AndroidLog.hpp"
+#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -73,21 +76,20 @@ Pipeline::Pipeline(
   ALOG_INFO(anglesMsg);
 }
 
-Pipeline::Output Pipeline::process(
-    Pipeline::Input input,
-    std::function<void(const Pipeline::Output&)> callback) {
-  auto output = process(std::move(input));
-  if (callback) {
-    callback(output);
+std::any Pipeline::process(const std::any& input) {
+  if (input.type() != typeid(Input)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Pipeline::process: unsupported input type");
   }
-  return output;
+  return process(std::any_cast<Input>(input));
 }
 
 void Pipeline::initializeBackend() {
   // No initialization needed for sequential pipeline
 }
 
-bool Pipeline::isLoaded() {
+bool Pipeline::isLoaded() const {
   return stepDetection_ && stepBoundingBox_ && stepRecognition_;
 }
 
@@ -129,9 +131,12 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     // Step 1: Detection
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Running detection...");
     ALOG_INFO(std::string("[Pipeline] Step 1: Running detection..."));
+    auto detectionStart = std::chrono::high_resolution_clock::now();
     StepDetectionInference::Input detectionInput{image, input.paragraph, input.rotationAngles, input.boxMarginMultiplier, initialResizeRatio};
     StepDetectionInference::Output detectionOutput = stepDetection_->process(std::move(detectionInput));
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete");
+    auto detectionEnd = std::chrono::high_resolution_clock::now();
+    double detectionTimeSec = static_cast<double>((detectionEnd - detectionStart).count()) / NANOSECONDS_TO_SECONDS;
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete in " + std::to_string(detectionTimeSec) + "s");
     ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
     // Step 2: Bounding Box extraction
@@ -146,17 +151,23 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     // Step 3: Text recognition
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 3: Running text recognition...");
     ALOG_INFO(std::string("[Pipeline] Step 3: Running text recognition..."));
+    auto recognitionStart = std::chrono::high_resolution_clock::now();
     StepRecognizeText::Output recognitionOutput = stepRecognition_->process(std::move(boundingBoxOutput));
-    std::string step3Msg = "[Pipeline] Step 3: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions)";
+    auto recognitionEnd = std::chrono::high_resolution_clock::now();
+    double recognitionTimeSec = static_cast<double>((recognitionEnd - recognitionStart).count()) / NANOSECONDS_TO_SECONDS;
+    std::string step3Msg = "[Pipeline] Step 3: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions) in " + std::to_string(recognitionTimeSec) + "s";
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step3Msg);
     ALOG_INFO(step3Msg);
 
-    // Record processing time
+    // Record processing time and stats
     auto timeEnd = std::chrono::high_resolution_clock::now();
     double processingTimeSec = static_cast<double>((timeEnd - timeStart).count()) / NANOSECONDS_TO_SECONDS;
     {
       std::scoped_lock scopedLock(processingTimeMtx_);
       processingTime_.push(processingTimeSec);
+      detectionTime_.push(detectionTimeSec);
+      recognitionTime_.push(recognitionTimeSec);
+      textRegionsCount_.push(static_cast<int>(recognitionOutput.size()));
     }
     std::string completeMsg = "[Pipeline] Complete in " + std::to_string(processingTimeSec) + " seconds";
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, completeMsg);
@@ -182,17 +193,35 @@ void Pipeline::reset() {
   // No state to reset in sequential pipeline
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() {
+qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() const {
   double lastProcessingTime = 0;
+  double lastDetectionTime = 0;
+  double lastRecognitionTime = 0;
+  int lastTextRegionsCount = 0;
   {
     std::scoped_lock scopedLock(processingTimeMtx_);
     if (!processingTime_.empty()) {
       lastProcessingTime = processingTime_.top();
       processingTime_.pop();
     }
+    if (!detectionTime_.empty()) {
+      lastDetectionTime = detectionTime_.top();
+      detectionTime_.pop();
+    }
+    if (!recognitionTime_.empty()) {
+      lastRecognitionTime = recognitionTime_.top();
+      recognitionTime_.pop();
+    }
+    if (!textRegionsCount_.empty()) {
+      lastTextRegionsCount = textRegionsCount_.top();
+      textRegionsCount_.pop();
+    }
   }
   return {
-    {"LastProcessingTime", lastProcessingTime}
+    {"totalTime", lastProcessingTime},
+    {"detectionTime", lastDetectionTime},
+    {"recognitionTime", lastRecognitionTime},
+    {"textRegionsCount", static_cast<int64_t>(lastTextRegionsCount)}
   };
 }
 

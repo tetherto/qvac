@@ -1,6 +1,6 @@
 {
-  "name": "@qvac/qvac-cli",
-  "version": "0.1.1",
+  "name": "@qvac/cli",
+  "version": "0.1.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",

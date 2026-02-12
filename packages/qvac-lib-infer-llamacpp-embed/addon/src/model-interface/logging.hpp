@@ -14,10 +14,10 @@ extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
 
 // Parse verbosity from config map and set global level
 // This should be called before any logging callbacks are registered
-void SetVerbosityLevel(
+void setVerbosityLevel(
     std::unordered_map<std::string, std::string>& configFilemap);
 
-void llamaLogCallback(ggml_log_level level, const char* text, void* user_data);
+void llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
 } // namespace qvac_lib_infer_llamacpp_embed::logging
 //
