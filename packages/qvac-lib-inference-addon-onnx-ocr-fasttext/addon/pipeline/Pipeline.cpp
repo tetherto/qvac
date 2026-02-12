@@ -1,14 +1,17 @@
 #include "Pipeline.hpp"
 
 #include <chrono>
-#include <string>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
+
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+
 #include "AndroidLog.hpp"
+#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -73,21 +76,20 @@ Pipeline::Pipeline(
   ALOG_INFO(anglesMsg);
 }
 
-Pipeline::Output Pipeline::process(
-    Pipeline::Input input,
-    std::function<void(const Pipeline::Output&)> callback) {
-  auto output = process(std::move(input));
-  if (callback) {
-    callback(output);
+std::any Pipeline::process(const std::any& input) {
+  if (input.type() != typeid(Input)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Pipeline::process: unsupported input type");
   }
-  return output;
+  return process(std::any_cast<Input>(input));
 }
 
 void Pipeline::initializeBackend() {
   // No initialization needed for sequential pipeline
 }
 
-bool Pipeline::isLoaded() {
+bool Pipeline::isLoaded() const {
   return stepDetection_ && stepBoundingBox_ && stepRecognition_;
 }
 
@@ -191,7 +193,7 @@ void Pipeline::reset() {
   // No state to reset in sequential pipeline
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() {
+qvac_lib_inference_addon_cpp::RuntimeStats Pipeline::runtimeStats() const {
   double lastProcessingTime = 0;
   double lastDetectionTime = 0;
   double lastRecognitionTime = 0;

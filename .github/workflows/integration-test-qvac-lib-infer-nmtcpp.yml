@@ -38,10 +38,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm64-private
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
           - os: macos-14
