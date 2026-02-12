@@ -9,6 +9,7 @@ The following packages belong to the SDK pod:
 
 - `packages/sdk`
 - `packages/cli`
+- `packages/docs`
 - `packages/rag`
 - `packages/logging`
 - `packages/error`
@@ -23,6 +24,7 @@ For rules that need glob patterns:
 globs:
   - packages/sdk/**
   - packages/cli/**
+  - packages/docs/**
   - packages/rag/**
   - packages/logging/**
   - packages/error/**

@@ -10,6 +10,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/cli/**"
+      - "packages/docs/**"
       - "packages/rag/**"
       - "packages/logging/**"
       - "packages/error/**"
