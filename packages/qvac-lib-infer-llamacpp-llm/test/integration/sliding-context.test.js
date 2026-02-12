@@ -97,9 +97,6 @@ async function setupModel (t, overrides = {}) {
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     releaseLogger()
-    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
-    // (prevents exit code 139 from uv_close not completing before process exit)
-    setTimeout(() => {}, 500)
   })
 
   return { model, dirPath, logs: specLogger.logs }

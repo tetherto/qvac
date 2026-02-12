@@ -55,9 +55,6 @@ async function setupReasoningModel (t, toolsEnabled) {
     } catch (err) {
       // Ignore cleanup errors
     }
-    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
-    // (prevents exit code 139 from uv_close not completing before process exit)
-    setTimeout(() => {}, 500)
   })
 
   return { inference, loader }

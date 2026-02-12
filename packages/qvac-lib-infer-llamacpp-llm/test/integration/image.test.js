@@ -103,9 +103,6 @@ async function setupMultimodalAddon (t, device = 'gpu') {
     specLogger.release()
     await addon.unload().catch(() => {})
     await loader.close().catch(() => {})
-    // Schedule a timer to keep the event loop alive briefly for C++ async cleanup
-    // (prevents exit code 139 from uv_close not completing before process exit)
-    setTimeout(() => {}, 500)
   })
 
   return { addon, loader, llmModelPath, projModelPath }
@@ -247,3 +244,10 @@ for (const testCase of imageTestCases) {
     }
   })
 }
+
+// Keep event loop alive briefly to let pending async operations complete
+// This prevents C++ destructors from running while async cleanup is still happening
+// which can cause segfaults (exit code 139)
+setImmediate(() => {
+  setTimeout(() => {}, 500)
+})
