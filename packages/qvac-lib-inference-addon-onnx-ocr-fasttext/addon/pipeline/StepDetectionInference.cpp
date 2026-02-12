@@ -167,7 +167,13 @@ std::vector<Ort::Value> StepDetectionInference::runInference(cv::Mat inputBlob) 
   constexpr std::array<const char*, 1> inputNames = {"input"};
   constexpr std::array<const char*, 2> outputNames = {"output", "feature"};
 
-  return ortSession_.Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 2);
+  return ortSession_.Run(
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      &inputTensor,
+      1,
+      outputNames.data(),
+      2);
 }
 
 StepDetectionInference::Output StepDetectionInference::process(const StepDetectionInference::Input &input) {

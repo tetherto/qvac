@@ -11,6 +11,8 @@ namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
 namespace {
 
+// clang-format off
+// Disabled to maintain formatting of the lists.
 constexpr auto LATIN_LANG_LIST = std::to_array<std::string_view>(
     {"af", "az", "bs", "cs", "cy", "da", "de", "en", "es", "et", "fr",       "ga", "hr", "hu", "id", "is", "it", "ku", "la", "lt", "lv",
      "mi", "ms", "mt", "nl", "no", "oc", "pi", "pl", "pt", "ro", "rs_latin", "sk", "sl", "sq", "sv", "sw", "tl", "tr", "uz", "vi"});
@@ -910,6 +912,7 @@ const std::map<std::string_view, std::u32string_view> LANG_TO_CHARS_MAP = {
      U"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĐđĂăÂâÊêÔôƠơƯưÀàẰằẦầÈèỀềÌìÒòỒồỜờÙùỪừỲỳẢảẲẳẨẩẺẻỂểỈỉỎỏỔổỞởỦủỬửỶỷÃãẴẵẪẫẼẽỄễĨĩÕõỖỗỠỡŨũỮữỸỹÁáẮắ"
      U"Ấ"
      "ấÉéẾếÍíÓóỐốỚớÚúỨứÝýẠạẶặẬậẸẹỆệỊịỌọỘộỢợỤụỰựỴỵ"}};
+// clang-format on
 
 bool contains(std::span<const std::string> vec, std::string_view str) {
   return std::find(vec.begin(), vec.end(), str) != vec.end();
@@ -934,27 +937,35 @@ std::set<std::string_view> setDifference(const std::set<std::string> &setA, cons
 }
 
 bool isLatinLang(std::string_view lang) {
-  return std::find(LATIN_LANG_LIST.begin(), LATIN_LANG_LIST.end(), lang) != LATIN_LANG_LIST.end();
+  return std::find(LATIN_LANG_LIST.begin(), LATIN_LANG_LIST.end(), lang) !=
+         LATIN_LANG_LIST.end();
 }
 
 bool isArabicLang(std::string_view lang) {
-  return std::find(ARABIC_LANG_LIST.begin(), ARABIC_LANG_LIST.end(), lang) != ARABIC_LANG_LIST.end();
+  return std::find(ARABIC_LANG_LIST.begin(), ARABIC_LANG_LIST.end(), lang) !=
+         ARABIC_LANG_LIST.end();
 }
 
 bool isBengaliLang(std::string_view lang) {
-  return std::find(BENGALI_LANG_LIST.begin(), BENGALI_LANG_LIST.end(), lang) != BENGALI_LANG_LIST.end();
+  return std::find(BENGALI_LANG_LIST.begin(), BENGALI_LANG_LIST.end(), lang) !=
+         BENGALI_LANG_LIST.end();
 }
 
 bool isCyrillicLang(std::string_view lang) {
-  return std::find(CYRILLIC_LANG_LIST.begin(), CYRILLIC_LANG_LIST.end(), lang) != CYRILLIC_LANG_LIST.end();
+  return std::find(
+             CYRILLIC_LANG_LIST.begin(), CYRILLIC_LANG_LIST.end(), lang) !=
+         CYRILLIC_LANG_LIST.end();
 }
 
 bool isDevanagariLang(std::string_view lang) {
-  return std::find(DEVANAGARI_LANG_LIST.begin(), DEVANAGARI_LANG_LIST.end(), lang) != DEVANAGARI_LANG_LIST.end();
+  return std::find(
+             DEVANAGARI_LANG_LIST.begin(), DEVANAGARI_LANG_LIST.end(), lang) !=
+         DEVANAGARI_LANG_LIST.end();
 }
 
 bool isOtherLang(std::string_view lang) {
-  return std::find(OTHER_LANG_LIST.begin(), OTHER_LANG_LIST.end(), lang) != OTHER_LANG_LIST.end();
+  return std::find(OTHER_LANG_LIST.begin(), OTHER_LANG_LIST.end(), lang) !=
+         OTHER_LANG_LIST.end();
 }
 
 bool isValidLang(std::string_view lang) {
@@ -1056,7 +1067,7 @@ std::vector<bool> populateIgnoreIndexVector(std::u32string_view fullCharList, st
   std::unordered_set<char32_t> langCharsSet(symbols.begin(), symbols.end());
 
   for (const auto &lang : langList) {
-    const std::u32string_view &langChars = LANG_TO_CHARS_MAP.at(lang);
+    const std::u32string_view& langChars = LANG_TO_CHARS_MAP.at(lang);
     langCharsSet.insert(langChars.begin(), langChars.end());
   }
 

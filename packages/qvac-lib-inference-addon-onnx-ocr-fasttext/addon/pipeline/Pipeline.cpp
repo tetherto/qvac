@@ -116,7 +116,8 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     float initialResizeRatio = 1.0F;
     int maxDim = std::max(image.cols, image.rows);
     if (maxDim > maxInputSize) {
-      initialResizeRatio = static_cast<float>(maxInputSize) / static_cast<float>(maxDim);
+      initialResizeRatio =
+          static_cast<float>(maxInputSize) / static_cast<float>(maxDim);
       int newWidth = static_cast<int>(static_cast<float>(image.cols) * initialResizeRatio);
       int newHeight = static_cast<int>(static_cast<float>(image.rows) * initialResizeRatio);
       cv::Mat resized;
@@ -135,7 +136,9 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     StepDetectionInference::Input detectionInput{image, input.paragraph, input.rotationAngles, input.boxMarginMultiplier, initialResizeRatio};
     StepDetectionInference::Output detectionOutput = stepDetection_->process(std::move(detectionInput));
     auto detectionEnd = std::chrono::high_resolution_clock::now();
-    double detectionTimeSec = static_cast<double>((detectionEnd - detectionStart).count()) / nanosecondsToSeconds;
+    double detectionTimeSec =
+        static_cast<double>((detectionEnd - detectionStart).count()) /
+        nanosecondsToSeconds;
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete in " + std::to_string(detectionTimeSec) + "s");
     ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
@@ -154,14 +157,18 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     auto recognitionStart = std::chrono::high_resolution_clock::now();
     StepRecognizeText::Output recognitionOutput = stepRecognition_->process(std::move(boundingBoxOutput));
     auto recognitionEnd = std::chrono::high_resolution_clock::now();
-    double recognitionTimeSec = static_cast<double>((recognitionEnd - recognitionStart).count()) / nanosecondsToSeconds;
+    double recognitionTimeSec =
+        static_cast<double>((recognitionEnd - recognitionStart).count()) /
+        nanosecondsToSeconds;
     std::string step3Msg = "[Pipeline] Step 3: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions) in " + std::to_string(recognitionTimeSec) + "s";
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step3Msg);
     ALOG_INFO(step3Msg);
 
     // Record processing time and stats
     auto timeEnd = std::chrono::high_resolution_clock::now();
-    double processingTimeSec = static_cast<double>((timeEnd - timeStart).count()) / nanosecondsToSeconds;
+    double processingTimeSec =
+        static_cast<double>((timeEnd - timeStart).count()) /
+        nanosecondsToSeconds;
     {
       std::scoped_lock scopedLock(processingTimeMtx_);
       processingTime_.push(processingTimeSec);
@@ -183,7 +190,9 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     auto timeEnd = std::chrono::high_resolution_clock::now();
     {
       std::scoped_lock scopedLock(processingTimeMtx_);
-      processingTime_.push(static_cast<double>((timeEnd - timeStart).count()) / nanosecondsToSeconds);
+      processingTime_.push(
+          static_cast<double>((timeEnd - timeStart).count()) /
+          nanosecondsToSeconds);
     }
     throw;
   }

@@ -671,17 +671,20 @@ void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<i
       cv::Mat &baseImg = imageList[0].image;
       cv::Mat rotatedImg;
       if (angle == angle90) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_90_CLOCKWISE);
       } else if (angle == angle180) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.rows > ratioDifferenceToIgnoreRotation * baseImg.cols) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.rows > ratioDifferenceToIgnoreRotation * baseImg.cols) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_180);
       } else if (angle == angle270) {
-        if (canBypassRotations && imageList[0].isMultiCharacter && baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
+        if (canBypassRotations && imageList[0].isMultiCharacter &&
+            baseImg.cols > ratioDifferenceToIgnoreRotation * baseImg.rows) {
           continue;
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_90_COUNTERCLOCKWISE);
@@ -702,7 +705,8 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   const int charSpaceSize = preds.size[2];
   assert(batchIdx >= 0 && batchIdx < preds.size[0]);
 
-  std::vector<std::vector<float>> predsProb(imgSubcolumnsSize, std::vector<float>(charSpaceSize, 0.0F));
+  std::vector<std::vector<float>> predsProb(
+      imgSubcolumnsSize, std::vector<float>(charSpaceSize, 0.0F));
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
     float maxVal = -std::numeric_limits<float>::infinity();
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
@@ -744,7 +748,8 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
     size_t charIndexMax = 0;
     float maxProbVal = predsProb[subcolumn][0];
-    for (size_t charIndex = 1; charIndex < static_cast<size_t>(charSpaceSize); charIndex++) {
+    for (size_t charIndex = 1; charIndex < static_cast<size_t>(charSpaceSize);
+         charIndex++) {
       if (predsProb[subcolumn][charIndex] > maxProbVal) {
         maxProbVal = predsProb[subcolumn][charIndex];
         charIndexMax = charIndex;
@@ -792,7 +797,13 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
 
   std::array<Ort::Value, 1> inputTensors = {std::move(imageTensor)};
 
-  auto outputTensors = ortSession_.Run(Ort::RunOptions{nullptr}, inputNames.data(), inputTensors.data(), 1, outputNames.data(), 1);
+  auto outputTensors = ortSession_.Run(
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      inputTensors.data(),
+      1,
+      outputNames.data(),
+      1);
 
   Ort::Value &predsTensor = outputTensors[0];
   auto *predsData = predsTensor.GetTensorMutableData<float>();
@@ -853,7 +864,12 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
   std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
 
   auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr}, inputNames.data(), inputTensors.data(), 1, outputNames.data(), 1);
+      Ort::RunOptions{nullptr},
+      inputNames.data(),
+      inputTensors.data(),
+      1,
+      outputNames.data(),
+      1);
 
   Ort::Value &predsTensor = outputTensors[0];
   auto *predsData = predsTensor.GetTensorMutableData<float>();
