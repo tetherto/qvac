@@ -7,6 +7,7 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
+      - ".github/workflows/*onnx-tts*.yml"
 
 permissions:
   contents: write

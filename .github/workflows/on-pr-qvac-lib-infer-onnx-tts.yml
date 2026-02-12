@@ -6,6 +6,7 @@ on:
     branches: [main, release-*]
     paths:
       - "packages/qvac-lib-infer-onnx-tts/**"
+      - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
     inputs:
