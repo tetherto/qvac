@@ -289,6 +289,7 @@ async function downloadSingleFileToFilesystem(
 
   signal?.addEventListener("abort", cleanup);
 
+  let downloadSucceeded = false;
   try {
     const progressContext: ProgressContext | undefined = progressCallback
       ? {
@@ -325,10 +326,7 @@ async function downloadSingleFileToFilesystem(
       }
     }
 
-    // Delete corestore directory after successful download (only when not seeding, to save space)
-    if (!seed) {
-      await deleteCorestoreDirectory(setup.corestoreDir);
-    }
+    downloadSucceeded = true;
   } catch (error) {
     logger.error(
       "❌ Error during hyperdrive download:",
@@ -347,6 +345,10 @@ async function downloadSingleFileToFilesystem(
 
     if (!seed) {
       await cleanupHyperdrive(setup);
+      // Delete only after close - Windows EBUSY on LOCK if deleted before corestore.close()
+      if (downloadSucceeded) {
+        await deleteCorestoreDirectory(corestoreDir);
+      }
     }
 
     // Only delete corestore and partial file if user explicitly requested clearCache
@@ -616,6 +618,7 @@ async function downloadShardedFilesToFilesystem(
 
   signal?.addEventListener("abort", cleanup);
 
+  let downloadSucceeded = false;
   try {
     // Calculate overall progress
     const overallTotal = shardMetadata.reduce(
@@ -731,10 +734,7 @@ async function downloadShardedFilesToFilesystem(
 
     await extractTensorsFromShards(shardDir, firstShardFileName);
 
-    // Delete corestore directory after successful download (only when not seeding)
-    if (!seed) {
-      await deleteCorestoreDirectory(corestoreDir);
-    }
+    downloadSucceeded = true;
   } catch (error) {
     logger.error(
       "❌ Error during sharded hyperdrive download:",
@@ -753,6 +753,10 @@ async function downloadShardedFilesToFilesystem(
 
     if (!seed) {
       await cleanupHyperdrive(setup);
+      // Delete only after close - Windows EBUSY on LOCK if deleted before corestore.close()
+      if (downloadSucceeded) {
+        await deleteCorestoreDirectory(corestoreDir);
+      }
     }
 
     // Only delete corestore and partial files if user explicitly requested clearCache

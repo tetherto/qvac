@@ -10,18 +10,19 @@
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
 namespace {
-// NOLINTBEGIN(readability-identifier-naming)
 
-constexpr auto latinLangList = std::to_array<std::string_view>(
+// clang-format off
+// Disabled to maintain formatting of the lists.
+constexpr auto LATIN_LANG_LIST = std::to_array<std::string_view>(
     {"af", "az", "bs", "cs", "cy", "da", "de", "en", "es", "et", "fr",       "ga", "hr", "hu", "id", "is", "it", "ku", "la", "lt", "lv",
      "mi", "ms", "mt", "nl", "no", "oc", "pi", "pl", "pt", "ro", "rs_latin", "sk", "sl", "sq", "sv", "sw", "tl", "tr", "uz", "vi"});
-constexpr auto arabicLangList = std::to_array<std::string_view>({"ar", "fa", "ug", "ur"});
-constexpr auto bengaliLangList = std::to_array<std::string_view>({"bn", "as", "mni"});
-constexpr auto cyrillicLangList = std::to_array<std::string_view>(
+constexpr auto ARABIC_LANG_LIST = std::to_array<std::string_view>({"ar", "fa", "ug", "ur"});
+constexpr auto BENGALI_LANG_LIST = std::to_array<std::string_view>({"bn", "as", "mni"});
+constexpr auto CYRILLIC_LANG_LIST = std::to_array<std::string_view>(
     {"ru", "rs_cyrillic", "be", "bg", "uk", "mn", "abq", "ady", "kbd", "ava", "dar", "inh", "che", "lbe", "lez", "tab", "tjk"});
-constexpr auto devanagariLangList =
+constexpr auto DEVANAGARI_LANG_LIST =
     std::to_array<std::string_view>({"hi", "mr", "ne", "bh", "mai", "ang", "bho", "mah", "sck", "new", "gom", "sa", "bgc"});
-constexpr auto otherLangList = std::to_array<std::string_view>({"th", "ch_sim", "ch_tra", "ja", "ko", "ta", "te", "kn"});
+constexpr auto OTHER_LANG_LIST = std::to_array<std::string_view>({"th", "ch_sim", "ch_tra", "ja", "ko", "ta", "te", "kn"});
 
 /**
  * @brief represents information about a language group, such as latin, cyrillic, etc.
@@ -35,7 +36,7 @@ struct LangGroupInfo {
 using LangToLangGroupInfoMap = std::map<std::string_view, LangGroupInfo, std::less<>>;
 using GenToModelCharacteristicsMap = std::map<std::string_view, LangToLangGroupInfoMap, std::less<>>;
 
-const GenToModelCharacteristicsMap recognitionModels = {
+const GenToModelCharacteristicsMap RECOGNITION_MODELS = {
     {"gen1",
      {
          {"latin_g1",
@@ -522,7 +523,7 @@ const GenToModelCharacteristicsMap recognitionModels = {
            U"0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ €₽"}},
      }}};
 
-const std::map<std::string_view, std::u32string_view> langToCharsMap = {
+const std::map<std::string_view, std::u32string_view> LANG_TO_CHARS_MAP = {
     {"ab", U"АБВГӶҔДЕЖЗӠИКҚҞЛМНОПԤҦРСТҬУФХҲЦҴЧҶҼҾШЫҨЏЬӘабвгӷҕдежзӡикқҟлмнопԥҧрстҭуфхҳцҵчҷҽҿшыҩџьә"},
     {"abq", U"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяI"},
     {"ady", U"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяӀӏ"},
@@ -911,6 +912,7 @@ const std::map<std::string_view, std::u32string_view> langToCharsMap = {
      U"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĐđĂăÂâÊêÔôƠơƯưÀàẰằẦầÈèỀềÌìÒòỒồỜờÙùỪừỲỳẢảẲẳẨẩẺẻỂểỈỉỎỏỔổỞởỦủỬửỶỷÃãẴẵẪẫẼẽỄễĨĩÕõỖỗỠỡŨũỮữỸỹÁáẮắ"
      U"Ấ"
      "ấÉéẾếÍíÓóỐốỚớÚúỨứÝýẠạẶặẬậẸẹỆệỊịỌọỘộỢợỤụỰựỴỵ"}};
+// clang-format on
 
 bool contains(std::span<const std::string> vec, std::string_view str) {
   return std::find(vec.begin(), vec.end(), str) != vec.end();
@@ -935,27 +937,35 @@ std::set<std::string_view> setDifference(const std::set<std::string> &setA, cons
 }
 
 bool isLatinLang(std::string_view lang) {
-  return std::find(latinLangList.begin(), latinLangList.end(), lang) != latinLangList.end();
+  return std::find(LATIN_LANG_LIST.begin(), LATIN_LANG_LIST.end(), lang) !=
+         LATIN_LANG_LIST.end();
 }
 
 bool isArabicLang(std::string_view lang) {
-  return std::find(arabicLangList.begin(), arabicLangList.end(), lang) != arabicLangList.end();
+  return std::find(ARABIC_LANG_LIST.begin(), ARABIC_LANG_LIST.end(), lang) !=
+         ARABIC_LANG_LIST.end();
 }
 
 bool isBengaliLang(std::string_view lang) {
-  return std::find(bengaliLangList.begin(), bengaliLangList.end(), lang) != bengaliLangList.end();
+  return std::find(BENGALI_LANG_LIST.begin(), BENGALI_LANG_LIST.end(), lang) !=
+         BENGALI_LANG_LIST.end();
 }
 
 bool isCyrillicLang(std::string_view lang) {
-  return std::find(cyrillicLangList.begin(), cyrillicLangList.end(), lang) != cyrillicLangList.end();
+  return std::find(
+             CYRILLIC_LANG_LIST.begin(), CYRILLIC_LANG_LIST.end(), lang) !=
+         CYRILLIC_LANG_LIST.end();
 }
 
 bool isDevanagariLang(std::string_view lang) {
-  return std::find(devanagariLangList.begin(), devanagariLangList.end(), lang) != devanagariLangList.end();
+  return std::find(
+             DEVANAGARI_LANG_LIST.begin(), DEVANAGARI_LANG_LIST.end(), lang) !=
+         DEVANAGARI_LANG_LIST.end();
 }
 
 bool isOtherLang(std::string_view lang) {
-  return std::find(otherLangList.begin(), otherLangList.end(), lang) != otherLangList.end();
+  return std::find(OTHER_LANG_LIST.begin(), OTHER_LANG_LIST.end(), lang) !=
+         OTHER_LANG_LIST.end();
 }
 
 bool isValidLang(std::string_view lang) {
@@ -984,65 +994,65 @@ void validateSimultaneousSupportedLanguages(std::string_view language,
 LangGroupInfo validateAndGetInfoFromLangList(std::span<const std::string> langList) {
   if (contains(langList, "th")) {
     validateSimultaneousSupportedLanguages("thai", langList, std::set<std::string_view>{"th", "en"}, R"(["th","en"])");
-    return recognitionModels.at("gen1").at("thai_g1");
+    return RECOGNITION_MODELS.at("gen1").at("thai_g1");
   }
   if (contains(langList, "ch_tra")) {
     validateSimultaneousSupportedLanguages("chinese_tra", langList, std::set<std::string_view>{"ch_tra", "en"}, R"(["ch_tra","en"])");
-    return recognitionModels.at("gen1").at("zh_tra_g1");
+    return RECOGNITION_MODELS.at("gen1").at("zh_tra_g1");
   }
   if (contains(langList, "ch_sim")) {
     validateSimultaneousSupportedLanguages("chinese_sim", langList, std::set<std::string_view>{"ch_sim", "en"}, R"(["ch_sim","en"])");
-    return recognitionModels.at("gen2").at("zh_sim_g2");
+    return RECOGNITION_MODELS.at("gen2").at("zh_sim_g2");
   }
   if (contains(langList, "ja")) {
     validateSimultaneousSupportedLanguages("japanese", langList, std::set<std::string_view>{"ja", "en"}, R"(["ja","en"])");
-    return recognitionModels.at("gen2").at("japanese_g2");
+    return RECOGNITION_MODELS.at("gen2").at("japanese_g2");
   }
   if (contains(langList, "ko")) {
     validateSimultaneousSupportedLanguages("korean", langList, std::set<std::string_view>{"ko", "en"}, R"(["ko","en"])");
-    return recognitionModels.at("gen2").at("korean_g2");
+    return RECOGNITION_MODELS.at("gen2").at("korean_g2");
   }
   if (contains(langList, "ta")) {
     validateSimultaneousSupportedLanguages("tamil", langList, std::set<std::string_view>{"ta", "en"}, R"(["ta","en"])");
-    return recognitionModels.at("gen1").at("tamil_g1");
+    return RECOGNITION_MODELS.at("gen1").at("tamil_g1");
   }
   if (contains(langList, "te")) {
     validateSimultaneousSupportedLanguages("telugu", langList, std::set<std::string_view>{"te", "en"}, R"(["te","en"])");
-    return recognitionModels.at("gen2").at("telugu_g2");
+    return RECOGNITION_MODELS.at("gen2").at("telugu_g2");
   }
   if (contains(langList, "kn")) {
     validateSimultaneousSupportedLanguages("kannada", langList, std::set<std::string_view>{"kn", "en"}, R"(["kn","en"])");
-    return recognitionModels.at("gen2").at("kannada_g2");
+    return RECOGNITION_MODELS.at("gen2").at("kannada_g2");
   }
 
   for (const auto &lang : langList) {
-    if (contains(bengaliLangList, lang)) {
-      std::set<std::string_view> allowed = toSet(bengaliLangList);
+    if (contains(BENGALI_LANG_LIST, lang)) {
+      std::set<std::string_view> allowed = toSet(BENGALI_LANG_LIST);
       allowed.insert("en");
       validateSimultaneousSupportedLanguages("bengali", langList, allowed, R"(["bn","as","en"])");
-      return recognitionModels.at("gen1").at("bengali_g1");
+      return RECOGNITION_MODELS.at("gen1").at("bengali_g1");
     }
-    if (contains(arabicLangList, lang)) {
-      std::set<std::string_view> allowed = toSet(arabicLangList);
+    if (contains(ARABIC_LANG_LIST, lang)) {
+      std::set<std::string_view> allowed = toSet(ARABIC_LANG_LIST);
       allowed.insert("en");
       validateSimultaneousSupportedLanguages("arabic", langList, allowed, R"(["ar","fa","ur","ug","en"])");
-      return recognitionModels.at("gen1").at("arabic_g1");
+      return RECOGNITION_MODELS.at("gen1").at("arabic_g1");
     }
-    if (contains(devanagariLangList, lang)) {
-      std::set<std::string_view> allowed = toSet(devanagariLangList);
+    if (contains(DEVANAGARI_LANG_LIST, lang)) {
+      std::set<std::string_view> allowed = toSet(DEVANAGARI_LANG_LIST);
       allowed.insert("en");
       validateSimultaneousSupportedLanguages("devanagari", langList, allowed, R"(["hi","mr","ne","en"])");
-      return recognitionModels.at("gen1").at("devanagari_g1");
+      return RECOGNITION_MODELS.at("gen1").at("devanagari_g1");
     }
-    if (contains(cyrillicLangList, lang)) {
-      std::set<std::string_view> allowed = toSet(cyrillicLangList);
+    if (contains(CYRILLIC_LANG_LIST, lang)) {
+      std::set<std::string_view> allowed = toSet(CYRILLIC_LANG_LIST);
       allowed.insert("en");
       validateSimultaneousSupportedLanguages("cyrillic", langList, allowed, R"(["ru","rs_cyrillic","be","bg","uk","mn","en"])");
-      return recognitionModels.at("gen2").at("cyrillic_g2");
+      return RECOGNITION_MODELS.at("gen2").at("cyrillic_g2");
     }
   }
 
-  return recognitionModels.at("gen2").at("latin_g2");
+  return RECOGNITION_MODELS.at("gen2").at("latin_g2");
 }
 
 /**
@@ -1057,7 +1067,7 @@ std::vector<bool> populateIgnoreIndexVector(std::u32string_view fullCharList, st
   std::unordered_set<char32_t> langCharsSet(symbols.begin(), symbols.end());
 
   for (const auto &lang : langList) {
-    const std::u32string_view &langChars = langToCharsMap.at(lang);
+    const std::u32string_view& langChars = LANG_TO_CHARS_MAP.at(lang);
     langCharsSet.insert(langChars.begin(), langChars.end());
   }
 
@@ -1094,5 +1104,4 @@ std::tuple<std::u32string_view, std::vector<bool>, bool> getCharsInfoFromLangLis
   return {langInfo.characters, ignoreChars, langInfo.lang != "arabic"};
 }
 
-// NOLINTEND(readability-identifier-naming)
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

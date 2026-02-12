@@ -45,37 +45,33 @@ void WhisperModelJobsHandler::process(
           qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
           "Starting job " + std::to_string(jobId));
       status = AddonStatus::Processing;
-      queueOutput(
-          Output<typename Model::Output>{
-              OutputEvent::JobStarted, static_cast<uint32_t>(jobId)});
+      queueOutput(Output<typename Model::Output>{
+          OutputEvent::JobStarted, static_cast<uint32_t>(jobId)});
 
       model.setOnSegmentCallback(
           [&, jobId](const qvac_lib_inference_addon_whisper::Transcript& tr) {
             typename Model::Output output;
             output.push_back(tr);
-            queueOutput(
-                Output<typename Model::Output>{
-                    OutputEvent::Output,
-                    static_cast<uint32_t>(jobId),
-                    std::move(output)});
+            queueOutput(Output<typename Model::Output>{
+                OutputEvent::Output,
+                static_cast<uint32_t>(jobId),
+                std::move(output)});
           });
 
       try {
         model.load();
       } catch (const std::exception& e) {
         // Note: lk already holds the mutex, don't lock again
-        queueOutput(
-            Output<typename Model::Output>{
-                OutputEvent::Error,
-                static_cast<uint32_t>(jobId),
-                typename Output<typename Model::Output>::Error{
-                    std::string(e.what())}});
+        queueOutput(Output<typename Model::Output>{
+            OutputEvent::Error,
+            static_cast<uint32_t>(jobId),
+            typename Output<typename Model::Output>::Error{
+                std::string(e.what())}});
         // End the job after error so addon doesn't hang
-        queueOutput(
-            Output<typename Model::Output>{
-                OutputEvent::JobEnded,
-                static_cast<uint32_t>(jobId),
-                model.runtimeStats()});
+        queueOutput(Output<typename Model::Output>{
+            OutputEvent::JobEnded,
+            static_cast<uint32_t>(jobId),
+            model.runtimeStats()});
         model.reset();
         currentJob = nullptr;
         continue; // Continue the loop, don't exit
@@ -96,12 +92,11 @@ void WhisperModelJobsHandler::process(
             qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
             "Error processing job " + std::to_string(jobId) + ": " +
                 std::string(e.what()));
-        queueOutput(
-            Output<typename Model::Output>{
-                OutputEvent::Error,
-                static_cast<uint32_t>(jobId),
-                typename Output<typename Model::Output>::Error{
-                    std::string(e.what())}});
+        queueOutput(Output<typename Model::Output>{
+            OutputEvent::Error,
+            static_cast<uint32_t>(jobId),
+            typename Output<typename Model::Output>::Error{
+                std::string(e.what())}});
       }
       input.clear();
     }
@@ -111,11 +106,10 @@ void WhisperModelJobsHandler::process(
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
           "Job " + std::to_string(jobId) + " completed");
-      queueOutput(
-          Output<typename Model::Output>{
-              OutputEvent::JobEnded,
-              static_cast<uint32_t>(jobId),
-              model.runtimeStats()});
+      queueOutput(Output<typename Model::Output>{
+          OutputEvent::JobEnded,
+          static_cast<uint32_t>(jobId),
+          model.runtimeStats()});
 
       model.reset();
 
@@ -202,12 +196,10 @@ void WhisperModelJobsHandler::processJob(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "Error in processJob for job " + std::to_string(currentJob->id) + ": " +
             std::string(e.what()));
-    queueOutput(
-        Output<typename Model::Output>{
-            OutputEvent::Error,
-            currentJob->id,
-            typename Output<typename Model::Output>::Error{
-                std::string(e.what())}});
+    queueOutput(Output<typename Model::Output>{
+        OutputEvent::Error,
+        currentJob->id,
+        typename Output<typename Model::Output>::Error{std::string(e.what())}});
   }
 }
 
@@ -218,9 +210,8 @@ void WhisperModelJobsHandler::endJob(
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Ending job " + std::to_string(currentJob->id));
-  queueOutput(
-      Output<typename Model::Output>{
-          OutputEvent::JobEnded, currentJob->id, model.runtimeStats()});
+  queueOutput(Output<typename Model::Output>{
+      OutputEvent::JobEnded, currentJob->id, model.runtimeStats()});
 
   model.reset();
 

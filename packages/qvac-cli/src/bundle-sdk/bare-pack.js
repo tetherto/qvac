@@ -48,7 +48,7 @@ export async function runBarePack (options) {
 
   const majorVersion = await detectBarePackMajorVersion(barePackBin, entryPath)
   const platformFlag = majorVersion < 2 ? '--target' : '--host'
-  logger.verbose(
+  logger.debug(
     `📦 Detected bare-pack v${majorVersion} (using ${platformFlag})`
   )
 
@@ -66,10 +66,10 @@ export async function runBarePack (options) {
       entryPath
     ]
 
-    logger.verbose(`\n📦 Running: ${barePackBin} ${args.join(' ')}`)
+    logger.debug(`\n📦 Running: ${barePackBin} ${args.join(' ')}`)
 
     const proc = spawn(barePackBin, args, {
-      stdio: logLevel === 'quiet' ? 'ignore' : 'inherit'
+      stdio: logLevel === 'silent' ? 'ignore' : 'inherit'
     })
 
     proc.on('close', (code) => {
