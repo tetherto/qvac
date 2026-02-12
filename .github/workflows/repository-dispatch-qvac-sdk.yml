@@ -25,7 +25,7 @@ jobs:
         shell: bash
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }} 
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           WORKDIR: ${{ env.WORKDIR }}
         run: |
           set -euo pipefail
