@@ -15,7 +15,7 @@ import {
 } from "@/schemas";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getServerLogger } from "@/logging";
-import { DelegateProviderError } from "@/utils/errors-client";
+import { DelegateProviderError } from "@/utils/errors-server";
 
 const logger = getServerLogger();
 

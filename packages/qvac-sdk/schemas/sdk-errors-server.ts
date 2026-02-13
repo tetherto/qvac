@@ -85,6 +85,9 @@ export const SDK_SERVER_ERROR_CODES = {
   // RPC/Delegation (Server-side) (53,700-53,899)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
+  DELEGATE_PROVIDER_ERROR: 53702,
+  RPC_NO_DATA_RECEIVED: 53703,
+  RPC_UNKNOWN_REQUEST_TYPE: 53704,
 
   // Plugin Errors (53,900-53,999)
   PLUGIN_NOT_FOUND: 53900,
@@ -94,6 +97,7 @@ export const SDK_SERVER_ERROR_CODES = {
   PLUGIN_ALREADY_REGISTERED: 53904,
   PLUGIN_HANDLER_TYPE_MISMATCH: 53905,
   PLUGIN_LOGGING_INVALID: 53906,
+  PLUGIN_DEFINITION_INVALID: 53907,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -417,6 +421,21 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (details: string) =>
       `Failed to connect to delegated provider: ${details}`,
   },
+  [SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
+    name: "DELEGATE_PROVIDER_ERROR",
+    message: (details: string, providerCode?: string) =>
+      `Delegated provider error: ${details}` +
+      (providerCode ? ` (code: ${providerCode})` : ""),
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED]: {
+    name: "RPC_NO_DATA_RECEIVED",
+    message: "No data received from request",
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_UNKNOWN_REQUEST_TYPE]: {
+    name: "RPC_UNKNOWN_REQUEST_TYPE",
+    message: (requestType: string) =>
+      `Unknown request type received: ${requestType}`,
+  },
 
   // Plugin Errors (53,900-53,999)
   [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
@@ -454,6 +473,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "PLUGIN_LOGGING_INVALID",
     message: (modelType: string, reason: string) =>
       `Plugin "${modelType}" has invalid logging configuration: ${reason}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID]: {
+    name: "PLUGIN_DEFINITION_INVALID",
+    message: (modelType: string, details: string) =>
+      `Plugin definition invalid for "${modelType}": ${details}`,
   },
 };
 

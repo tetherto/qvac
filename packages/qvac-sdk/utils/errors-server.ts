@@ -762,6 +762,44 @@ export class DelegateConnectionFailedError extends QvacErrorBase {
   }
 }
 
+export class DelegateProviderError extends QvacErrorBase {
+  constructor(details: string, providerCode?: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR,
+        providerCode !== undefined
+          ? [details, String(providerCode)]
+          : [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCNoDataReceivedError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCUnknownRequestTypeError extends QvacErrorBase {
+  constructor(requestType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RPC_UNKNOWN_REQUEST_TYPE,
+        [requestType],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Plugin Errors ==============
 
 export class PluginNotFoundError extends QvacErrorBase {
@@ -853,6 +891,18 @@ export class PluginLoggingInvalidError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.PLUGIN_LOGGING_INVALID,
         [modelType, reason],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginDefinitionInvalidError extends QvacErrorBase {
+  constructor(modelType: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID,
+        [modelType, details],
         cause,
       ),
     );

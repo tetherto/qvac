@@ -8,9 +8,9 @@ import { resolveModelConfig } from "@/server/bare/registry/model-config-registry
 import type RPC from "bare-rpc";
 import { sendErrorResponse } from "@/server/error-handlers";
 import {
-  NoDataReceivedError,
-  UnknownRequestTypeError,
-} from "@/utils/errors-client";
+  RPCNoDataReceivedError,
+  RPCUnknownRequestTypeError,
+} from "@/utils/errors-server";
 import { registry } from "./handler-registry";
 import {
   executeHandler,
@@ -22,7 +22,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   try {
     const rawData = req.data?.toString();
     if (!rawData) {
-      throw new NoDataReceivedError();
+      throw new RPCNoDataReceivedError();
     }
     const jsonData: unknown = JSON.parse(rawData);
 
@@ -37,7 +37,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     const entry = registry[request.type];
 
     if (!entry) {
-      throw new UnknownRequestTypeError();
+      throw new RPCUnknownRequestTypeError(request.type);
     }
 
     await executeHandler(req, request, entry);
