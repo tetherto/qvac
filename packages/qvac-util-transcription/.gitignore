@@ -1,9 +1,0 @@
-node_modules
-build
-package-lock.json
-store
-log_mel_spectrogram.json
-.npmrc
-coverage
-test/unit/all.js
-test/integration/all.js
