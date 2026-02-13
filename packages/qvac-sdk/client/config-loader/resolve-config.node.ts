@@ -33,8 +33,8 @@ async function findProjectRoot(): Promise<string | undefined> {
         currentDir = parentDir;
       }
     }
-  } catch {
-    // Fall through
+  } catch (error) {
+    logger.debug("Project root search failed, using cwd:", { error });
   }
 
   return process.cwd();

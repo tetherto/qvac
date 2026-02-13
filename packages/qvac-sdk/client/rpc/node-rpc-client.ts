@@ -100,7 +100,7 @@ function resolveWorkerPath(): string {
   }
 
   // Prefer packaged worker entry when running as a packaged Electron app.
-  // This avoids accidental coupling to the developer's cwd, and ensures the
+  // This avoids accidental coupling to the project's cwd, and ensures the
   // bare worker reads JS modules from the filesystem (not app.asar).
   const packagedWorker = resolvePackagedWorkerPath();
   if (packagedWorker) {
