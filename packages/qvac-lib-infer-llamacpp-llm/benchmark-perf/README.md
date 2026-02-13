@@ -45,6 +45,23 @@ Both scripts use the same `perf-config.json` so parameters, prompts, and repetit
 
 ## Usage
 
+### Two Benchmark Modes
+
+**1. QVAC-Only Mode (Default)** - Primary goal: Find optimal QVAC configurations
+- Explores full parameter space without PyTorch constraints
+- Allows all quantizations QVAC supports (Q4_0, Q4_K_M, Q8_0, F16) on all platforms
+- Allows different `cache-type-k` and `cache-type-v` values
+- No `ubatch-size <= batch-size` constraint enforcement
+- **Use this to find the best QVAC configuration for each device**
+
+**2. Comparison Mode (`--compare`)** - Secondary goal: Compare with PyTorch
+- Applies PyTorch-compatible constraints to QVAC runs
+- Limits macOS to `F16` only (matches PyTorch's MPS limitation)
+- Syncs `cache-type-k` and `cache-type-v` (PyTorch requires matching)
+- Caps `ubatch-size` to `batch-size` when sweeping `batch-size`
+- Runs both QVAC and PyTorch for side-by-side comparison
+- **Use this only when you need to benchmark against PyTorch**
+
 ```bash
 cd packages/qvac-lib-infer-llamacpp-llm
 
@@ -52,8 +69,11 @@ cd packages/qvac-lib-infer-llamacpp-llm
 # quantization,device,ctx_size,no-mmap,threads,batch-size,ubatch-size,
 # no-kv-offload,flash-attn,cache-type-k,cache-type-v
 
-# All-in-one runner (macOS/Linux)
+# QVAC-only mode (default): Full parameter exploration
 ./benchmark-perf/run-perf.sh --params device,ctx_size --reps 3 --judge --analyze --addon @qvac/llm-llamacpp
+
+# Comparison mode: Run both QVAC and PyTorch with compatible constraints
+./benchmark-perf/run-perf.sh --compare --params device,ctx_size --reps 3 --judge --analyze --addon @qvac/llm-llamacpp
 
 # Quick smoke run (single model, single prompt, reps=1, minimal values per param)
 ./benchmark-perf/run-perf.sh --quick
@@ -76,13 +96,16 @@ powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -Addon @q
 # Optional: Hugging Face token for gated models
 powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1 -HfToken $env:HF_TOKEN
 
-# QVAC perf
+# QVAC perf (standalone, no constraints)
 bare benchmark-perf/qvac-perf.js --params device,ctx_size --addon @qvac/llm-llamacpp
 
-# PyTorch perf
+# QVAC perf in comparison mode (applies PyTorch constraints)
+bare benchmark-perf/qvac-perf.js --compare --params device,ctx_size --addon @qvac/llm-llamacpp
+
+# PyTorch perf (only runs in comparison mode via run-perf.sh --compare)
 python3 benchmark-perf/pytorch-perf.py --params device,ctx_size
 
-# Judge results (optional)
+# Judge results (optional) - works for both QVAC-only and comparison modes
 bare benchmark-perf/judge.js --input benchmark-perf/results/qvac_*.jsonl
 
 # Analyze
@@ -116,7 +139,24 @@ Python 3.10+ is required for the PyTorch baseline.
 KV cache quantization in the PyTorch baseline uses the `quanto` backend, which is included in `benchmark-perf/requirements.txt`.
 Transformers `QuantizedCache` support requires `transformers>=5.1.0`.
 
-On macOS, the PyTorch baseline only supports `F16` quantization. The runner limits both QVAC and PyTorch to `F16` on macOS to keep comparisons fair; Q4/Q8 should be run on Linux. This is because:
+### QVAC-Only vs Comparison Mode
+
+**QVAC-Only Mode (Default)**:
+- Explores full parameter space without PyTorch constraints
+- Allows all quantizations QVAC supports (Q4_0, Q4_K_M, Q8_0, F16) on all platforms
+- Allows different `cache-type-k` and `cache-type-v` values (QVAC/llama.cpp supports this)
+- No `ubatch-size <= batch-size` constraint enforcement
+- **Goal**: Find optimal QVAC configurations per device
+
+**Comparison Mode (`--compare`)**:
+- Applies PyTorch-compatible constraints to QVAC runs
+- Limits macOS to `F16` only (matches PyTorch's MPS limitation)
+- Syncs `cache-type-k` and `cache-type-v` (PyTorch's QuantizedCache requires matching)
+- Caps `ubatch-size` to `batch-size` when sweeping `batch-size`
+- Runs both QVAC and PyTorch for side-by-side comparison
+- **Goal**: Fair comparison between QVAC and PyTorch
+
+On macOS, the PyTorch baseline only supports `F16` quantization. In comparison mode, the runner limits both QVAC and PyTorch to `F16` on macOS to keep comparisons fair; Q4/Q8 should be run on Linux. This is because:
 
 - **MPS (Metal Performance Shaders)** on macOS natively supports FP16 and FP32, but **not** bitsandbytes 4/8-bit quantization
 - Bitsandbytes quantization on macOS falls back to CPU (very slow) and is experimental
@@ -127,6 +167,10 @@ For quantized model testing on macOS, use MLX or GGUF directly (outside this ben
 ## Analysis
 
 `analysis/analyze.py` reads all JSONL results in `benchmark-perf/results` and produces a set of plots plus CSV summaries that help compare parameters across platforms and implementations.
+
+**Works for both modes:**
+- **QVAC-only mode**: All plots work correctly. `plot_qvac_vs_torch()` gracefully skips if PyTorch data is missing. Other plots show QVAC data only.
+- **Comparison mode**: All plots work, including QVAC vs PyTorch delta comparisons.
 
 ### What It Produces
 

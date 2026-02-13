@@ -13,6 +13,7 @@ ADDON=""
 HF_TOKEN="${HF_TOKEN:-}"
 ADDON_MODULE=""
 QUICK="false"
+COMPARE="false"  # If true, runs both QVAC and PyTorch with compatible constraints
 FAILURES=0
 
 is_path_spec() {
@@ -81,6 +82,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --quick)
       QUICK="true"
+      shift 1
+      ;;
+    --compare)
+      COMPARE="true"
       shift 1
       ;;
     *)
@@ -166,30 +171,39 @@ fi
 if [[ "${QUICK}" == "true" ]]; then
   qvac_args+=(--quick)
 fi
+if [[ "${COMPARE}" == "true" ]]; then
+  qvac_args+=(--compare)
+fi
 set +e
 bare "${PERF_DIR}/qvac-perf.js" "${qvac_args[@]}"
 qvac_status=$?
 set -e
 if [[ $qvac_status -ne 0 ]]; then
   echo "⚠️  QVAC perf failed with exit code ${qvac_status}, continuing."
+  echo "   Progress saved - run again to resume from last checkpoint"
   FAILURES=1
 fi
 
-echo "==> Running PyTorch perf"
-torch_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}")
-if [[ -n "${HF_TOKEN}" ]]; then
-  torch_args+=(--hf-token "${HF_TOKEN}")
-fi
-if [[ "${QUICK}" == "true" ]]; then
-  torch_args+=(--quick)
-fi
-set +e
-"${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" "${torch_args[@]}"
-torch_status=$?
-set -e
-if [[ $torch_status -ne 0 ]]; then
-  echo "⚠️  PyTorch perf failed with exit code ${torch_status}, continuing."
-  FAILURES=1
+# Only run PyTorch in compare mode
+if [[ "${COMPARE}" == "true" ]]; then
+  echo "==> Running PyTorch perf"
+  torch_args=(--config "${CONFIG}" --params "${PARAMS}" --reps "${REPS}")
+  if [[ -n "${HF_TOKEN}" ]]; then
+    torch_args+=(--hf-token "${HF_TOKEN}")
+  fi
+  if [[ "${QUICK}" == "true" ]]; then
+    torch_args+=(--quick)
+  fi
+  set +e
+  "${VENV_PY}" "${PERF_DIR}/pytorch-perf.py" "${torch_args[@]}"
+  torch_status=$?
+  set -e
+  if [[ $torch_status -ne 0 ]]; then
+    echo "⚠️  PyTorch perf failed with exit code ${torch_status}, continuing."
+    FAILURES=1
+  fi
+else
+  echo "==> Skipping PyTorch perf (use --compare to run comparison mode)"
 fi
 
 if [[ "${RUN_JUDGE}" == "true" ]]; then

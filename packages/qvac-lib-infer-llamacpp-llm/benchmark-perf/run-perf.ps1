@@ -6,7 +6,8 @@ param(
   [string]$HfToken = "",
   [switch]$Judge,
   [switch]$Analyze,
-  [switch]$Quick
+  [switch]$Quick,
+  [switch]$Compare
 )
 
 $PerfDir = Split-Path -Parent $PSScriptRoot
@@ -107,6 +108,9 @@ if ($Addon -ne "") {
 if ($Quick) {
   $addonArgs += "--quick"
 }
+if ($Compare) {
+  $addonArgs += "--compare"
+}
 if ($HfToken -ne "") {
   $env:HF_TOKEN = $HfToken
 } elseif ($env:HF_TOKEN) {
@@ -115,22 +119,28 @@ if ($HfToken -ne "") {
 & bare "$PerfDir/benchmark-perf/qvac-perf.js" --config $Config --params $Params --reps $Reps @addonArgs
 if ($LASTEXITCODE -ne 0) {
   Write-Warning "QVAC perf failed with exit code $LASTEXITCODE, continuing."
+  Write-Host "   Progress saved - run again to resume from last checkpoint"
   $Failures = 1
 }
 
-Write-Host "==> Running PyTorch perf"
-$hfArgs = @()
-if ($HfToken -ne "") {
-  $hfArgs += "--hf-token"
-  $hfArgs += $HfToken
-}
-if ($Quick) {
-  $hfArgs += "--quick"
-}
-& $VenvPython "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
-if ($LASTEXITCODE -ne 0) {
-  Write-Warning "PyTorch perf failed with exit code $LASTEXITCODE, continuing."
-  $Failures = 1
+# Only run PyTorch in compare mode
+if ($Compare) {
+  Write-Host "==> Running PyTorch perf"
+  $hfArgs = @()
+  if ($HfToken -ne "") {
+    $hfArgs += "--hf-token"
+    $hfArgs += $HfToken
+  }
+  if ($Quick) {
+    $hfArgs += "--quick"
+  }
+  & $VenvPython "$PerfDir/benchmark-perf/pytorch-perf.py" --config $Config --params $Params --reps $Reps @hfArgs
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "PyTorch perf failed with exit code $LASTEXITCODE, continuing."
+    $Failures = 1
+  }
+} else {
+  Write-Host "==> Skipping PyTorch perf (use -Compare to run comparison mode)"
 }
 
 if ($Judge) {

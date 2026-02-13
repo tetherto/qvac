@@ -285,6 +285,17 @@ def run_once(
     resolved_value = resolve_param_value(param_value)
     config = dict(baseline)
     config[param_name] = resolved_value
+    # Sync cache-type-k and cache-type-v: PyTorch requires them to match
+    if param_name == "cache-type-k":
+        config["cache-type-v"] = resolved_value
+    elif param_name == "cache-type-v":
+        config["cache-type-k"] = resolved_value
+    # Cap ubatch-size to batch-size when batch-size is being swept
+    if param_name == "batch-size":
+        batch_size = int(resolved_value) if resolved_value else int(baseline.get("batch-size", "1"))
+        ubatch_size = int(config.get("ubatch-size", str(batch_size)))
+        if ubatch_size > batch_size:
+            config["ubatch-size"] = str(batch_size)
     if prompt.get("n_predict"):
         config["n_predict"] = str(prompt["n_predict"])
 

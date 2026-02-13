@@ -61,7 +61,8 @@ const parseArgs = (argv) => {
     output: null,
     addon: null,
     hfToken: null,
-    quick: false
+    quick: false,
+    compare: false // PyTorch-compatible mode: applies constraints for fair comparison
   }
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i]
@@ -72,6 +73,7 @@ const parseArgs = (argv) => {
     else if (arg === '--addon') args.addon = normalizeAddonSpec(argv[++i])
     else if (arg === '--hf-token') args.hfToken = argv[++i]
     else if (arg === '--quick') args.quick = true
+    else if (arg === '--compare') args.compare = true
   }
   return args
 }
@@ -93,9 +95,11 @@ const resolveParamsToRun = (config, paramsArg) => {
   return paramsArg.split(',').map(p => p.trim()).filter(Boolean)
 }
 
-const getSupportedQuantizations = (config, platform) => {
+const getSupportedQuantizations = (config, platform, compareMode) => {
   const all = config.params?.quantization || []
-  if (platform === 'darwin') {
+  // In compare mode, limit macOS to F16 to match PyTorch's limitation for fair comparison
+  // In QVAC-only mode, allow all quantizations that QVAC supports (QVAC can run Q4/Q8 on macOS GPU)
+  if (compareMode && platform === 'darwin') {
     return all.includes('F16') ? ['F16'] : []
   }
   return all
@@ -138,16 +142,51 @@ const resolveOutputPath = (outputArg, modelId) => {
   return path.join(resultsDir, `qvac_${os.hostname?.() || 'machine'}${modelTag}_${timestamp}.jsonl`)
 }
 
-const buildAddonConfig = (baseline, paramName, paramValue, prompt) => {
+const buildAddonConfig = (baseline, paramName, paramValue, prompt, compareMode) => {
   const config = { ...baseline, [paramName]: paramValue }
   if (typeof paramValue === 'undefined') {
     delete config[paramName]
+  }
+  
+  // In compare mode, apply PyTorch-compatible constraints
+  if (compareMode) {
+    // Sync cache-type-k and cache-type-v: PyTorch requires them to match
+    if (paramName === 'cache-type-k') {
+      config['cache-type-v'] = paramValue
+    } else if (paramName === 'cache-type-v') {
+      config['cache-type-k'] = paramValue
+    }
+    // Cap ubatch-size to batch-size when batch-size is being swept
+    if (paramName === 'batch-size') {
+      const batchSize = paramValue ? Number(paramValue) : Number(baseline['batch-size'] || '1')
+      const ubatchSize = Number(config['ubatch-size'] || String(batchSize))
+      if (ubatchSize > batchSize) {
+        config['ubatch-size'] = String(batchSize)
+      }
+    }
   }
   if (prompt.n_predict) {
     config.n_predict = String(prompt.n_predict)
   }
   delete config.quantization
   delete config.modelId
+  
+  // For boolean flags (no-mmap, no-kv-offload), empty string means "enabled"
+  // The C++ code at LlamaModel.cpp:390-396 pushes --flag only (no value) when value is empty
+  const booleanFlags = ['no-mmap', 'no-kv-offload']
+  for (const flag of booleanFlags) {
+    if (config[flag] === null || config[flag] === undefined) {
+      delete config[flag]
+    }
+    // If flag is '', leave it as '' (C++ code will treat empty string as enabled flag)
+  }
+  
+  // Handle flash-attn: llama.cpp's parser requires a value (not a void flag)
+  // Empty string causes parsing errors, so we delete it and let llama.cpp use default behavior
+  if (config['flash-attn'] === null || config['flash-attn'] === undefined || config['flash-attn'] === '') {
+    delete config['flash-attn']
+  }
+  
   return config
 }
 
@@ -177,7 +216,8 @@ const runOnce = async ({
   paramValue,
   repIndex,
   outputPath,
-  addonSpec
+  addonSpec,
+  compareMode = false
 }) => {
   // Always clean up addon + loader, even on error, to avoid stuck event loops.
   let loader = null
@@ -187,7 +227,7 @@ const runOnce = async ({
   let modelName = null
   let backend = null
   const resolvedValue = resolveParamValue(paramValue, baseline)
-  const config = buildAddonConfig(baseline, paramName, resolvedValue, prompt)
+  const config = buildAddonConfig(baseline, paramName, resolvedValue, prompt, compareMode)
   const quantization = paramName === 'quantization' ? resolvedValue : baseline.quantization
   const variantConfig = modelConfig.qvac?.[quantization]
   if (!variantConfig) {
@@ -300,6 +340,9 @@ const runOnce = async ({
     appendJsonl(outputPath, result)
     log(`Completed run: model=${modelConfig.id} ${paramName}=${resolvedValue} prompt=${prompt.id} rep=${repIndex}`)
   } catch (error) {
+    const errorMsg = error?.message || String(error)
+    const errorStack = error?.stack || null
+    
     appendJsonl(outputPath, {
       runId,
       timestamp: new Date().toISOString(),
@@ -317,10 +360,17 @@ const runOnce = async ({
       promptText,
       rep: repIndex,
       errorStage,
-      error: error?.message || String(error),
-      errorStack: error?.stack || null
+      error: errorMsg,
+      errorStack
     })
     log(`Run failed: model=${modelConfig.id} ${paramName}=${resolvedValue} prompt=${prompt.id} rep=${repIndex} stage=${errorStage}`)
+    
+    // Context overflow errors require a long delay before cleanup to prevent segfaults
+    // Pattern from integration tests (config-parameters.test.js:162)
+    const isContextOverflow = errorMsg && /context|ctx[- ]?size|overflow/i.test(errorMsg)
+    if (isContextOverflow) {
+      await new Promise(resolve => setTimeout(resolve, 15000))
+    }
   } finally {
     if (addon?.unload) {
       await addon.unload().catch(() => {})
@@ -344,7 +394,8 @@ const run = async () => {
   const outputPath = resolveOutputPath(args.output, config.baseline.modelId)
   const addonSpec = args.addon
   const platform = os.platform()
-  const supportedQuantizations = getSupportedQuantizations(config, platform)
+  const compareMode = args.compare
+  const supportedQuantizations = getSupportedQuantizations(config, platform, compareMode)
   let modelsToRun = config.models || []
   if (modelsToRun.length === 0) {
     throw new Error('perf-config.json must include at least one model in "models"')
@@ -354,6 +405,26 @@ const run = async () => {
     const baselineModel = modelsToRun.find(model => model.id === baselineModelId)
     modelsToRun = baselineModel ? [baselineModel] : [modelsToRun[0]]
     config.prompts = config.prompts?.length ? [config.prompts[0]] : []
+  }
+
+  // Track progress to resume after crashes
+  const progressFile = outputPath.replace('.jsonl', '.progress.json')
+  let completedRuns = new Set()
+  try {
+    const progressData = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
+    completedRuns = new Set(progressData.completedRuns || [])
+    log(`Resuming: ${completedRuns.size} runs already completed`)
+  } catch {
+    // No progress file, start fresh
+  }
+  
+  // Helper to save progress (called only after state changes: success or failure)
+  const saveProgress = () => {
+    try {
+      fs.writeFileSync(progressFile, JSON.stringify({ completedRuns: Array.from(completedRuns) }, null, 2))
+    } catch {
+      // Ignore write errors - progress tracking is best-effort
+    }
   }
 
   for (const modelConfig of modelsToRun) {
@@ -383,16 +454,60 @@ const run = async () => {
         const value = rawValue === null ? undefined : rawValue
         for (const prompt of config.prompts) {
           for (let rep = 1; rep <= reps; rep++) {
-            await runOnce({
-              baseline: { ...config.baseline, quantization: baselineQuantization, modelId: modelConfig.id },
-              modelConfig,
-              prompt,
-              paramName,
-              paramValue: value,
-              repIndex: rep,
-              outputPath,
-              addonSpec
-            })
+            // Create unique run identifier
+            const runKey = `${modelConfig.id}:${paramName}:${resolveParamValue(value, config.baseline)}:${prompt.id}:${rep}`
+            
+            // Skip if already completed successfully
+            if (completedRuns.has(runKey)) {
+              log(`Skipping already completed: ${runKey}`)
+              continue
+            }
+            // If it was started but not completed, it likely crashed - retry it
+            if (completedRuns.has(runKey + ':started')) {
+              log(`Retrying previously crashed run: ${runKey}`)
+              completedRuns.delete(runKey + ':started')
+            }
+            // If it was marked as failed, skip it to avoid infinite retry loops
+            // To retry failed runs instead, change this to: completedRuns.delete(runKey + ':failed')
+            if (completedRuns.has(runKey + ':failed')) {
+              log(`Skipping previously failed run: ${runKey}`)
+              continue
+            }
+
+            // Mark as started (before attempting) so we can detect if it crashes
+            // This way, if the process segfaults, we know this run was attempted
+            completedRuns.add(runKey + ':started')
+
+            try {
+              await runOnce({
+                baseline: { ...config.baseline, quantization: baselineQuantization, modelId: modelConfig.id },
+                modelConfig,
+                prompt,
+                paramName,
+                paramValue: value,
+                repIndex: rep,
+                outputPath,
+                addonSpec,
+                compareMode
+              })
+              // Mark as completed (replace :started with :completed)
+              completedRuns.delete(runKey + ':started')
+              completedRuns.add(runKey)
+              saveProgress()
+              // Add delay between runs to allow cleanup to complete fully
+              // This prevents segfaults from C++ destructors running while async cleanup is still happening
+              // Pattern from integration tests (multi-instance.test.js shows delays between cycles)
+              await new Promise(resolve => setTimeout(resolve, 200))
+            } catch (error) {
+              // Log crash but continue to next run
+              const errorMsg = error?.message || String(error)
+              log(`⚠️  Run crashed: ${runKey} - ${errorMsg}`)
+              // Mark as attempted but failed (remove :started, add :failed)
+              completedRuns.delete(runKey + ':started')
+              completedRuns.add(runKey + ':failed')
+              saveProgress()
+              // Continue to next run instead of crashing
+            }
           }
         }
       }
