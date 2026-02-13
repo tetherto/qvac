@@ -92,7 +92,8 @@ TEST_F(AddonCppTest, SimplePromptWithAddonCpp) {
   EXPECT_TRUE(result.has_value()) << "Response timed out";
   if (result.has_value()) {
     EXPECT_EQ(result->size(), 1u) << "Should have one embedding";
-    EXPECT_GT(result->embeddingSize(), 0u) << "Embedding dimension should be > 0";
+    EXPECT_GT(result->embeddingSize(), 0u)
+        << "Embedding dimension should be > 0";
   }
 }
 
@@ -122,7 +123,8 @@ TEST_F(AddonCppTest, StopDuringGeneration) {
 
   addonInstance.addon->runJob(std::any(sequences));
 
-  // cancelJob() delegates to model->cancel(); same semantics as JS model.cancel()
+  // cancelJob() delegates to model->cancel(); same semantics as JS
+  // model.cancel()
   EXPECT_NO_THROW(addonInstance.addon->cancelJob());
 
   // May get partial result or none
@@ -150,6 +152,6 @@ TEST_F(AddonCppTest, CancelWhenIdle) {
 
   addonInstance.addon->activate();
 
-  // Cancel when idle (no job): must not throw; addon->cancelJob() -> model->cancel()
+  // Cancel when idle (no job): must not throw;
   EXPECT_NO_THROW(addonInstance.addon->cancelJob());
 }

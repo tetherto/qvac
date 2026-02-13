@@ -90,7 +90,7 @@ private:
   std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
       singleGgufStreamedFiles_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
-  mutable std::atomic<bool> stop_cancelled_{false};
+  mutable std::atomic<bool> stopCancelled_{false};
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.

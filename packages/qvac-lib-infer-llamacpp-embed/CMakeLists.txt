@@ -53,7 +53,7 @@ target_sources(
   ${qvac-lib-infer-llamacpp-embed}
   PRIVATE
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cc
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp

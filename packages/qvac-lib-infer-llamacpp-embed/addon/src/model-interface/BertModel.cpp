@@ -266,7 +266,7 @@ common_params setupParams(
     std::string errorMsg =
         string_format("%s: must specify a device: 'gpu' or 'cpu'.\n", __func__);
     throw qvac_errors::StatusError(
-        AddonID,
+        ADDON_ID,
         qvac_errors::general_error::toString(
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
@@ -349,7 +349,7 @@ BertModel::BertModel(common_params& params)
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
       shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
-  auto modelInit = [this](common_params& commonParams) {
+  auto modelInit = [this](common_params commonParams) {
     this->init(commonParams);
   };
 
@@ -420,12 +420,12 @@ void BertModel::init(common_params& params) {
   n_embd = llama_model_n_embd(model_);
 
   // Set up abort callback for cancellation support during llama_decode
-  // The callback checks stop_cancelled_ and returns true to abort if set
+  // The callback checks stopCancelled_ and returns true to abort if set
   llama_set_abort_callback(
-      _ctx,
+      ctx_,
       [](void* data) -> bool {
         const auto* model = static_cast<const BertModel*>(data);
-        return model->stop_cancelled_.load();
+        return model->stopCancelled_.load();
       },
       const_cast<BertModel*>(this));
 
@@ -487,12 +487,12 @@ std::any BertModel::process(const std::any& input) {
 
   if (input.type() == typeid(std::string)) {
     auto text = std::any_cast<std::string>(input);
-    BertEmbeddings result = encode_host_f32(text);
+    BertEmbeddings result = encodeHostF32(text);
     return result;
   }
   if (input.type() == typeid(std::vector<std::string>)) {
     auto sequences = std::any_cast<std::vector<std::string>>(input);
-    BertEmbeddings result = encode_host_f32_sequences(sequences);
+    BertEmbeddings result = encodeHostF32Sequences(sequences);
     return result;
   }
   throw qvac_errors::StatusError(
@@ -505,7 +505,7 @@ void BertModel::initializeBackend(const std::string& backendsDir) {
 }
 
 void BertModel::reset() {
-  stop_cancelled_.store(false);
+  stopCancelled_.store(false);
   // Clear the batch state - this is the most important part
   common_batch_clear(batch_);
 
@@ -515,7 +515,7 @@ void BertModel::reset() {
   }
 }
 
-void BertModel::cancel() const { stop_cancelled_.store(true); }
+void BertModel::cancel() const { stopCancelled_.store(true); }
 
 void BertModel::setWeightsForFile(
     const std::string& filename,
@@ -603,14 +603,14 @@ BertEmbeddings BertModel::processBatched(
   std::size_t numPromptsInBatch = 0;   // number of prompts in current batch
 
   auto earlyReturn = [&]() {
-    stop_cancelled_.store(false);
+    stopCancelled_.store(false);
     return BertEmbeddings(
         std::move(embeddings),
         BertEmbeddings::Layout{
             numStoredEmbeddings, static_cast<std::size_t>(n_embd)});
   };
 
-  for (std::size_t k = 0; k < nPrompts && !stop_cancelled_.load(); k++) {
+  for (std::size_t k = 0; k < nPrompts && !stopCancelled_.load(); k++) {
     // clamp to n_batch tokens
     const auto& inp = inputs[k];
 
@@ -642,7 +642,7 @@ BertEmbeddings BertModel::processBatched(
     numPromptsInBatch += 1;
   }
 
-  if (stop_cancelled_.load()) {
+  if (stopCancelled_.load()) {
     return earlyReturn();
   }
 
@@ -694,7 +694,7 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
 
   int nCtxTrain = llama_model_n_ctx_train(model_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
-    if (stop_cancelled_.load()) {
+    if (stopCancelled_.load()) {
       throw std::runtime_error("Job cancelled");
     }
     const auto& sequence = sequenceArray[i];

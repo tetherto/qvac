@@ -10,7 +10,7 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
-#include "model-interface/BertModel.h"
+#include "model-interface/BertModel.hpp"
 
 namespace qvac_lib_inference_addon_embed {
 
@@ -45,7 +45,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
-  auto parseSequences = [&](js::Object&& inputObj) -> std::vector<std::string> {
+  auto parseSequences = [&](js::Object inputObj) -> std::vector<std::string> {
     if (!js::is<js::Array>(env, inputObj)) {
       throw StatusError{
           general_error::InvalidArgument, "Expected array for sequences type"};

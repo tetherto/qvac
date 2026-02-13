@@ -9,7 +9,7 @@
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp>
 
-#include "model-interface/BertModel.h"
+#include "model-interface/BertModel.hpp"
 
 namespace qvac_lib_inference_addon_embed {
 
@@ -41,6 +41,6 @@ inline AddonInstance createInstance(
 
   auto addon = make_unique<AddonCpp>(std::move(callback), std::move(model));
 
-  return {std::move(addon), std::move(outHandler)};
+  return {.addon = std::move(addon), .outputHandler = std::move(outHandler)};
 }
 } // namespace qvac_lib_inference_addon_embed
