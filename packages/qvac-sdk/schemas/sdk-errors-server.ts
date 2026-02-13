@@ -85,6 +85,9 @@ export const SDK_SERVER_ERROR_CODES = {
   // RPC/Delegation (Server-side) (53,700-53,899)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
+
+  // Security (53,900-54,000)
+  PATH_TRAVERSAL: 53900,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -406,6 +409,13 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "DELEGATE_CONNECTION_FAILED",
     message: (details: string) =>
       `Failed to connect to delegated provider: ${details}`,
+  },
+
+  // Security (53,900-54,000)
+  [SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL]: {
+    name: "PATH_TRAVERSAL",
+    message: (component: string, basePath: string) =>
+      `Path traversal detected: "${component}" escapes base directory "${basePath}"`,
   },
 };
 

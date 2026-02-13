@@ -120,6 +120,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-rag
+      repo_name: rag
 
   publish-feature-gpr:
     needs: publish-logic

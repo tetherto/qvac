@@ -120,6 +120,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-error-base
+      repo_name: error-base
 
   publish-feature-gpr:
     needs: publish-logic

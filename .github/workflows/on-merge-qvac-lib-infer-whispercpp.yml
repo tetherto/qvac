@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
+      - ".github/workflows/*whispercpp*.yml"
 
   workflow_dispatch:
     inputs:
