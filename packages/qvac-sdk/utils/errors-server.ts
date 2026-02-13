@@ -531,6 +531,18 @@ export class HyperdriveDownloadFailedError extends QvacErrorBase {
   }
 }
 
+export class RegistryDownloadFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REGISTRY_DOWNLOAD_FAILED,
+        [details],
+        cause,
+      ),
+    );
+  }
+}
+
 export class InvalidShardUrlPatternError extends QvacErrorBase {
   constructor(url: string, cause?: unknown) {
     super(
@@ -782,6 +794,22 @@ export class PathTraversalError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL,
         [component, basePath],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== QVAC Model Registry Operation Errors ==============
+// Registry client errors (19,001-20,000) are re-thrown directly from @qvac/registry-client
+// Only SDK-specific errors are defined here
+
+export class ModelRegistryQueryFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED,
+        details ? [details] : undefined,
         cause,
       ),
     );

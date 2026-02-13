@@ -1,7 +1,7 @@
 import {
   LLAMA_3_2_1B_INST_Q4_0,
   downloadAsset,
-  WHISPER_LARGE_3,
+  WHISPER_TINY,
   close,
 } from "@qvac/sdk";
 
@@ -14,7 +14,7 @@ try {
   });
 
   const whisperDownloadPromise = downloadAsset({
-    assetSrc: WHISPER_LARGE_3,
+    assetSrc: WHISPER_TINY,
     onProgress: (progress) => {
       console.log("🔊 Whisper progress:", progress);
     },

@@ -166,7 +166,7 @@ jobs:
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
       # integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }} # keep disabled if still noisy
     secrets: inherit
