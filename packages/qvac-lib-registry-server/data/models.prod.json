@@ -1176,7 +1176,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-f16.bin",
@@ -1191,7 +1192,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-f16.bin",
@@ -1206,7 +1208,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-f16.bin",
@@ -1221,7 +1224,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-f16.bin",
@@ -1236,7 +1240,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-f16.bin",
@@ -1251,7 +1256,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-q4_0.bin",
@@ -1266,7 +1272,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
@@ -1281,7 +1288,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-q4_0.bin",
@@ -1296,7 +1304,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
@@ -1311,7 +1320,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-q4_0.bin",
@@ -1326,7 +1336,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
@@ -1341,7 +1352,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
     "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx",
@@ -1806,7 +1818,8 @@
       "marian",
       "en-ru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
@@ -1821,7 +1834,8 @@
       "marian",
       "ru-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
@@ -1836,7 +1850,8 @@
       "marian",
       "en-ru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
@@ -1851,7 +1866,8 @@
       "marian",
       "ru-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en"
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-f16.gguf",
@@ -1953,7 +1969,8 @@
       "marian",
       "en-pt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
@@ -1968,7 +1985,8 @@
       "marian",
       "pt-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
@@ -1983,7 +2001,8 @@
       "marian",
       "en-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
@@ -1998,7 +2017,8 @@
       "marian",
       "de-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
@@ -2013,7 +2033,8 @@
       "marian",
       "de-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
@@ -2028,7 +2049,8 @@
       "marian",
       "es-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
@@ -2043,7 +2065,8 @@
       "marian",
       "es-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
@@ -2058,7 +2081,8 @@
       "marian",
       "fr-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
@@ -2073,7 +2097,8 @@
       "marian",
       "fr-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
@@ -2088,7 +2113,8 @@
       "marian",
       "fr-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
@@ -2103,7 +2129,8 @@
       "marian",
       "fr-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
@@ -2118,7 +2145,8 @@
       "marian",
       "fr-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
@@ -2133,7 +2161,8 @@
       "marian",
       "en-pt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-pt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
@@ -2176,7 +2205,8 @@
       "marian",
       "en-it"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-it"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
@@ -2191,7 +2221,8 @@
       "marian",
       "it-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-it-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
@@ -2206,7 +2237,8 @@
       "marian",
       "en-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
@@ -2221,7 +2253,8 @@
       "marian",
       "de-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
@@ -2236,7 +2269,8 @@
       "marian",
       "en-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
@@ -2251,7 +2285,8 @@
       "marian",
       "es-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
@@ -2266,7 +2301,8 @@
       "marian",
       "en-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
@@ -2281,7 +2317,8 @@
       "marian",
       "fr-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
@@ -2296,7 +2333,8 @@
       "marian",
       "en-ar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
@@ -2311,7 +2349,8 @@
       "marian",
       "ar-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ar-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
@@ -2326,7 +2365,8 @@
       "marian",
       "en-zh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
@@ -2341,7 +2381,8 @@
       "marian",
       "zh-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
@@ -2356,7 +2397,8 @@
       "marian",
       "ja-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
@@ -2386,7 +2428,8 @@
       "marian",
       "roa-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
@@ -2851,7 +2894,8 @@
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/metadata.json",
@@ -2866,7 +2910,8 @@
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/model.aren.intgemm.alphas.bin",
@@ -2881,7 +2926,8 @@
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/vocab.aren.spm",
@@ -2896,7 +2942,8 @@
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/lex.50.50.csen.s2t.bin",
@@ -2911,7 +2958,8 @@
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/metadata.json",
@@ -2926,7 +2974,8 @@
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/model.csen.intgemm.alphas.bin",
@@ -2941,7 +2990,8 @@
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/vocab.csen.spm",
@@ -2956,7 +3006,8 @@
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/lex.50.50.enar.s2t.bin",
@@ -2971,7 +3022,8 @@
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/metadata.json",
@@ -2986,7 +3038,8 @@
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/model.enar.intgemm.alphas.bin",
@@ -3001,7 +3054,8 @@
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/vocab.enar.spm",
@@ -3016,7 +3070,8 @@
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/lex.50.50.encs.s2t.bin",
@@ -3031,7 +3086,8 @@
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/metadata.json",
@@ -3046,7 +3102,8 @@
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/model.encs.intgemm.alphas.bin",
@@ -3061,7 +3118,8 @@
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/vocab.encs.spm",
@@ -3076,7 +3134,8 @@
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/lex.50.50.enes.s2t.bin",
@@ -3091,7 +3150,8 @@
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/metadata.json",
@@ -3106,7 +3166,8 @@
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/model.enes.intgemm.alphas.bin",
@@ -3121,7 +3182,8 @@
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/vocab.enes.spm",
@@ -3136,7 +3198,8 @@
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/lex.50.50.enfr.s2t.bin",
@@ -3151,7 +3214,8 @@
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/metadata.json",
@@ -3166,7 +3230,8 @@
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/model.enfr.intgemm.alphas.bin",
@@ -3181,7 +3246,8 @@
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/vocab.enfr.spm",
@@ -3196,7 +3262,8 @@
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
@@ -3211,7 +3278,8 @@
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
@@ -3226,7 +3294,8 @@
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
@@ -3241,7 +3310,8 @@
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
@@ -3256,7 +3326,8 @@
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
@@ -3271,7 +3342,8 @@
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/metadata.json",
@@ -3286,7 +3358,8 @@
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/model.enja.intgemm.alphas.bin",
@@ -3301,7 +3374,8 @@
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/srcvocab.enja.spm",
@@ -3316,7 +3390,8 @@
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/trgvocab.enja.spm",
@@ -3331,7 +3406,8 @@
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/lex.50.50.enpt.s2t.bin",
@@ -3346,7 +3422,8 @@
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/metadata.json",
@@ -3361,7 +3438,8 @@
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/model.enpt.intgemm.alphas.bin",
@@ -3376,7 +3454,8 @@
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/vocab.enpt.spm",
@@ -3391,7 +3470,8 @@
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/lex.50.50.enru.s2t.bin",
@@ -3406,7 +3486,8 @@
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/metadata.json",
@@ -3421,7 +3502,8 @@
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/model.enru.intgemm.alphas.bin",
@@ -3436,7 +3518,8 @@
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/vocab.enru.spm",
@@ -3451,7 +3534,8 @@
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
@@ -3466,7 +3550,8 @@
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
@@ -3481,7 +3566,8 @@
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
@@ -3496,7 +3582,8 @@
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
@@ -3511,7 +3598,8 @@
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
@@ -3526,7 +3614,8 @@
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
@@ -3541,7 +3630,8 @@
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
@@ -3556,7 +3646,8 @@
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
@@ -3571,7 +3662,8 @@
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
@@ -3586,7 +3678,8 @@
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",
@@ -3601,7 +3694,8 @@
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/metadata.json",
@@ -3616,7 +3710,8 @@
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/model.fren.intgemm.alphas.bin",
@@ -3631,7 +3726,8 @@
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/vocab.fren.spm",
@@ -3646,7 +3742,8 @@
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/lex.50.50.iten.s2t.bin",
@@ -3661,7 +3758,8 @@
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/metadata.json",
@@ -3676,7 +3774,8 @@
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/model.iten.intgemm.alphas.bin",
@@ -3691,7 +3790,8 @@
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/vocab.iten.spm",
@@ -3706,7 +3806,8 @@
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/lex.50.50.jaen.s2t.bin",
@@ -3721,7 +3822,8 @@
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/metadata.json",
@@ -3736,7 +3838,8 @@
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/model.jaen.intgemm.alphas.bin",
@@ -3751,7 +3854,8 @@
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/vocab.jaen.spm",
@@ -3766,7 +3870,8 @@
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/lex.50.50.pten.s2t.bin",
@@ -3781,7 +3886,8 @@
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/metadata.json",
@@ -3796,7 +3902,8 @@
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/model.pten.intgemm.alphas.bin",
@@ -3811,7 +3918,8 @@
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/vocab.pten.spm",
@@ -3826,7 +3934,8 @@
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/lex.50.50.ruen.s2t.bin",
@@ -3841,7 +3950,8 @@
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/metadata.json",
@@ -3856,7 +3966,8 @@
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/model.ruen.intgemm.alphas.bin",
@@ -3871,7 +3982,8 @@
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/vocab.ruen.spm",
@@ -3886,7 +3998,8 @@
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
@@ -3901,7 +4014,8 @@
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
@@ -3916,7 +4030,8 @@
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
@@ -3931,7 +4046,8 @@
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
@@ -3946,7 +4062,8 @@
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
