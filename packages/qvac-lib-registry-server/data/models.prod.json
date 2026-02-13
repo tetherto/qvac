@@ -60,7 +60,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Whisper tiny multilingual transcription model (f16).",
     "quantization": "",
     "params": "",
     "license": "MIT",
@@ -74,7 +74,7 @@
   {
     "source": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "",
+    "description": "Whisper tiny multilingual transcription model (q8).",
     "quantization": "q8_0",
     "params": "",
     "license": "MIT",
