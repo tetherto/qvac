@@ -1,6 +1,6 @@
 {
-  "name": "@tetherto/qvac-lib-registry-server",
-  "version": "0.1.1",
+  "name": "@qvac/registry-server",
+  "version": "0.1.0",
   "description": "QVAC Registry server: exposes replication endpoints and lifecycle scripts for bare/pear",
   "license": "Apache-2.0",
   "type": "commonjs",
@@ -54,7 +54,7 @@
     "@aws-sdk/client-s3": "^3.864.0",
     "@huggingface/gguf": "^0.3.3",
     "@huggingface/hub": "^2.4.1",
-    "@tetherto/qvac-registry-schema-mono": "^0.2.1",
+    "@qvac/registry-schema": "^0.1.1",
     "autobase": "^7.18.1",
     "b4a": "^1.6.7",
     "blind-peer": "^2.9.4",
