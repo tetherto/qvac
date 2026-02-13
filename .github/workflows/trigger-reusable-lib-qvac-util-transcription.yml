@@ -81,8 +81,10 @@ jobs:
           gpr_tag="dev"
           if [ "$ref_name" = "main" ]; then
             gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="$ref_name"
+          elif [[ "$ref_name" == feature-* ]]; then
+            gpr_tag="feature"
+          elif [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="temp"
           fi
 
           echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"

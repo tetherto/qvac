@@ -4,36 +4,111 @@ on:
   push:
     branches:
       - main
+      - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish with"
-        required: true
-        default: "latest"
+        description: "GPR tag override (optional)"
+        required: false
+        default: ""
         type: choice
         options:
-          - latest
+          - ""
           - dev
+          - feature
+          - temp
+          - latest
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   packages: write
 
 jobs:
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+          input_tag="${INPUT_TAG}"
+
+          publish_main="false"
+          publish_release="false"
+          publish_feature="false"
+          publish_tmp="false"
+
+          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+            if [ "$ref_name" = "main" ]; then
+              publish_main="true"
+            elif [[ "$ref_name" == release-* ]]; then
+              publish_release="true"
+            elif [[ "$ref_name" == feature-* ]]; then
+              publish_feature="true"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              publish_tmp="true"
+            fi
+          fi
+
+          gpr_tag="$input_tag"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
+          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
   run-integration-tests:
+    needs: publish-logic
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
     permissions:
       contents: read
       packages: read
     uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-decoder-audio"
 
   mobile-integration-tests:
+    needs: publish-logic
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_release == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
     secrets: inherit
     with:
@@ -41,8 +116,36 @@ jobs:
       ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-decoder-audio"
 
-  publish-npm:
-    needs: run-integration-tests
+  publish-gpr:
+    needs: [publish-logic, run-integration-tests, mobile-integration-tests]
+    if: |
+      needs.publish-logic.outputs.publish_main == 'true' ||
+      needs.publish-logic.outputs.publish_feature == 'true' ||
+      needs.publish-logic.outputs.publish_tmp == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Publish to GitHub Packages
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: "packages/qvac-lib-decoder-audio"
+          name-suffix: "-mono"
+
+  publish-release-npm:
+    needs: [publish-logic, run-integration-tests, mobile-integration-tests]
+    if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,7 +161,7 @@ jobs:
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: ${{ inputs.tag || 'latest' }}
+          tag: "latest"
           repo_name: "decoder-audio"
           git-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: "packages/qvac-lib-decoder-audio"

@@ -6,4 +6,5 @@ export * from "./config-transform";
 export * from "./formatting";
 export * from "./gguf-tensor-extractor";
 export * from "./model-path";
+export * from "./path-security";
 export * from "./shard-utils";
