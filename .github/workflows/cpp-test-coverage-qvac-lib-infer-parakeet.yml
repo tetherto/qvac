@@ -1,4 +1,4 @@
-name: C++ Tests & Coverage (Parakeet)
+name: CPP Tests (Parakeet)
 
 on:
   workflow_call:
