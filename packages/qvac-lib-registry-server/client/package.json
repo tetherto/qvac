@@ -1,6 +1,6 @@
 {
   "name": "@qvac/registry-client",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "QVAC Registry client library for read-only queries via Hyperswarm",
   "license": "Apache-2.0",
   "type": "commonjs",
