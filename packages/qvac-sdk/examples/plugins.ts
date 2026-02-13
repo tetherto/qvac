@@ -67,7 +67,7 @@ const {
   loadModel,
   unloadModel,
   LLAMA_3_2_1B_INST_Q4_0,
-  MARIAN_OPUS_EN_IT_Q0F32,
+  MARIAN_OPUS_EN_IT_Q4_0,
   GTE_LARGE_FP16,
 } = await import("@qvac/sdk");
 
@@ -110,7 +110,7 @@ console.log("2. Translation (nmtcpp-translation plugin)");
 
 try {
   const nmtModelId = await loadModel({
-    modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
+    modelSrc: MARIAN_OPUS_EN_IT_Q4_0,
     modelType: "nmt",
     modelConfig: {
       engine: "Opus",

@@ -1,7 +1,7 @@
 import crypto from "bare-crypto";
 import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getKVCacheDir } from "@/server/utils";
+import { getKVCacheDir, validateAndJoinPath } from "@/server/utils";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -97,8 +97,8 @@ export async function getCacheFilePath(
   cacheKey: string,
 ): Promise<string> {
   const cacheDir = getKVCacheDir();
-  const sessionCacheDir = path.join(cacheDir, cacheKey);
-  const modelCacheDir = path.join(sessionCacheDir, modelId);
+  const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey);
+  const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId);
 
   try {
     await fsPromises.mkdir(sessionCacheDir, { recursive: true });
@@ -197,10 +197,10 @@ export async function deleteCache(
       );
     }
   } else if ("kvCacheKey" in options) {
-    const kvCacheDir = path.join(cacheDir, options.kvCacheKey);
+    const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey);
 
     if (options.modelId) {
-      const modelCacheDir = path.join(kvCacheDir, options.modelId);
+      const modelCacheDir = validateAndJoinPath(kvCacheDir, options.modelId);
       try {
         await fsPromises.rm(modelCacheDir, { recursive: true });
       } catch (error) {
