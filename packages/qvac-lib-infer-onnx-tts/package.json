@@ -40,6 +40,7 @@
     "test/integration",
     "test/reference-audio",
     "test/utils/runTTS.js",
+    "test/utils/runChatterboxTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/loader.fake.js",
