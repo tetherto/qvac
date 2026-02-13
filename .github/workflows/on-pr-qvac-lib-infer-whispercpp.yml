@@ -12,6 +12,7 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
+      - ".github/workflows/*whispercpp*.yml"
   workflow_dispatch:
   workflow_call:
 

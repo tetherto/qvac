@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "packages/qvac-lib-decoder-audio/**"
+      - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
     inputs:
       tag:

@@ -46,8 +46,12 @@ jobs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Fetch PR head commits
@@ -156,9 +160,13 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{  github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
         shell: bash
@@ -183,9 +191,13 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{  github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
         shell: bash
@@ -233,10 +245,22 @@ jobs:
       packages: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout base repository
+        uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Checkout PR head
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/remotes/origin/pr-head
+          git checkout --detach ${{ github.event.pull_request.head.sha }}
+
 
       - uses: actions/setup-node@v4
         with:
@@ -295,9 +319,13 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{  github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Configure npm for package registries
         shell: bash
@@ -329,9 +357,13 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{  github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Configure npm for package registries
         shell: bash
