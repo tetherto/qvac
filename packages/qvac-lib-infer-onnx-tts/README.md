@@ -30,11 +30,11 @@ The TTS system uses the Chatterbox neural text-to-speech engine to convert text 
 
 | Platform | Architecture | Min Version | Status | GPU Support |
 |----------|-------------|-------------|--------|-------------|
-| macOS | arm64, x64 | 14.0+ | Tier 1 | CoreML |
-| iOS | arm64 | 17.0+ | Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA, ROCm |
-| Android | arm64 | 12+ | Tier 1 | NNAPI |
-| Windows | x64 | 10+ | Tier 1 | DirectML, CUDA |
+| macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
+| iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
@@ -147,6 +147,8 @@ npm run test:integration  # Requires model files
 
 ```js
 const { ONNXTTS } = require('@qvac/tts-onnx')
+// or if importing directly:
+// const ONNXTTS = require('./')
 ```
 
 ### 2. Create a Data Loader
@@ -259,9 +261,11 @@ try {
     type: 'text'
   })
 
+  // Process output using callback to collect audio samples
   await response
     .onUpdate(data => {
       if (data.outputArray) {
+        // Collect raw PCM audio samples
         const samples = Array.from(data.outputArray)
         audioSamples = audioSamples.concat(samples)
         console.log(`Received ${samples.length} audio samples`)
@@ -270,10 +274,14 @@ try {
         console.log('TTS synthesis completed:', data.stats)
       }
     })
-    .await()
+    .await() // Wait for the entire process to complete
 
   console.log(`Total audio samples generated: ${audioSamples.length}`)
+    
+  // audioSamples now contains the complete audio as PCM data (16-bit, 16kHz, mono)
+  // You can create WAV files, stream to audio APIs, etc.
 
+  // Access performance stats if enabled
   if (response.stats) {
     console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
   }
@@ -307,8 +315,9 @@ The system generates different types of events during TTS synthesis:
 When audio data is available, the callback receives raw PCM samples:
 
 ```javascript
+// Audio output event - contains only the raw PCM data
 {
-  outputArray: Int16Array([1234, -567, 890, -123, ...])
+  outputArray: Int16Array([1234, -567, 890, -123, ...]) // 16-bit PCM samples
 }
 ```
 
@@ -316,12 +325,13 @@ When audio data is available, the callback receives raw PCM samples:
 When synthesis completes, performance statistics are provided:
 
 ```javascript
+// Job completion event - contains performance statistics
 {
-  totalTime: 0.624621926,
-  tokensPerSecond: 219.33267837286903,
-  realTimeFactor: 0.05818013468703428,
-  audioDurationMs: 10736,
-  totalSamples: 171776
+  totalTime: 0.624621926,              // Total processing time in seconds
+  tokensPerSecond: 219.33267837286903, // Processing speed
+  realTimeFactor: 0.05818013468703428, // Real-time performance factor. Less than 1 means that streaming is possible
+  audioDurationMs: 10736,              // Generated audio duration in milliseconds
+  totalSamples: 171776                 // Total number of audio samples generated
 }
 ```
 
@@ -345,15 +355,19 @@ const response = await model.run({
 await response
   .onUpdate(data => {
     if (data.outputArray) {
+      // Check if this is an audio output event
       const samples = Array.from(data.outputArray)
       audioSamples = audioSamples.concat(samples)
       console.log(`Received ${samples.length} audio samples`)
     } else {
+      // This is a completion event with statistics
       console.log('TTS completed with stats:', data)
     }
   })
   .await()
 
+// audioSamples now contains all PCM samples as 16-bit integers
+// Sample rate: 16000 Hz, Format: mono PCM
 console.log(`Total audio samples generated: ${audioSamples.length}`)
 ```
 

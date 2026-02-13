@@ -172,7 +172,23 @@ function createWav (samples, sampleRate = 16000, outputPath = 'test.wav') {
 
   fs.writeFileSync(outputPath, buffer)
 }
+function resampleLinear (samples, fromRate, toRate) {
+  if (fromRate === toRate) return samples
+  const ratio = fromRate / toRate
+  const outputLen = Math.round(samples.length / ratio)
+  const output = new Float32Array(outputLen)
+  for (let i = 0; i < outputLen; i++) {
+    const srcIdx = i * ratio
+    const lo = Math.floor(srcIdx)
+    const hi = Math.min(lo + 1, samples.length - 1)
+    const frac = srcIdx - lo
+    output[i] = samples[lo] * (1 - frac) + samples[hi] * frac
+  }
+  return output
+}
+
 module.exports = {
   createWav,
-  readWavAsFloat32
+  readWavAsFloat32,
+  resampleLinear
 }

@@ -33,7 +33,6 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
     conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
     languageModelPath: path.join(modelDir, 'language_model.onnx'),
-    useSyntheticAudio: true, // Use synthetic reference audio for testing
     language: 'en'
   }
 
@@ -49,10 +48,10 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
 
   // Note: Synthetic reference audio causes longer outputs than real speech reference
   const expectation = {
-    minSamples: 10000, // At least ~0.4 seconds at 24kHz
-    maxSamples: 1000000, // At most ~42 seconds at 24kHz (synthetic audio produces longer output)
+    minSamples: 10000,
+    maxSamples: 500000,
     minDurationMs: 400,
-    maxDurationMs: 45000
+    maxDurationMs: 20000
   }
 
   const result = await runChatterboxTTS(model, { text, saveWav: true }, expectation)
@@ -101,7 +100,6 @@ test('Chatterbox TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
     conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
     languageModelPath: path.join(modelDir, 'language_model.onnx'),
-    useSyntheticAudio: true, // Use synthetic reference audio for testing
     language: 'en'
   }
 
@@ -112,12 +110,11 @@ test('Chatterbox TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     'The weather is beautiful outside.'
   ]
 
-  // Note: Synthetic reference audio causes longer outputs than real speech reference
   const expectation = {
     minSamples: 5000,
-    maxSamples: 1000000, // Synthetic audio produces longer output
+    maxSamples: 500000,
     minDurationMs: 200,
-    maxDurationMs: 45000
+    maxDurationMs: 20000
   }
 
   // Load model
@@ -179,13 +176,10 @@ test('Chatterbox TTS: Reference audio is passed correctly', { timeout: 900000 },
     embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
     conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
     languageModelPath: path.join(modelDir, 'language_model.onnx'),
-    useSyntheticAudio: true, // Use synthetic reference audio for testing
     language: 'en'
   }
 
-  // Load model - this will fail if reference audio is not passed correctly
-  // since the C++ side requires non-empty referenceAudio for Chatterbox
-  console.log('\n=== Testing reference audio is passed to addon (using synthetic audio) ===')
+  console.log('\n=== Testing reference audio is passed to addon ===')
 
   let model
   try {
