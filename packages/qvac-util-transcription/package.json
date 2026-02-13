@@ -20,12 +20,14 @@
     "vad",
     "decoder"
   ],
-  "license": "ISC",
+  "license": "Apache-2.0",
   "description": "Transcription utility for Qvac, to pipe audio from decoder, to silero vad, to whisper",
   "files": [
     "index.js",
     "index.d.ts",
-    "src"
+    "src",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",

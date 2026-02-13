@@ -29,6 +29,8 @@
   "bugs": "https://github.com/tetherto/qvac-lib-langdetect-text/issues",
   "files": [
     "src",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ]
 }

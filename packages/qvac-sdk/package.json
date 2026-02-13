@@ -39,7 +39,9 @@
     "!**/package-lock.json",
     "!**/yarn.lock",
     "!**/pnpm-lock.yaml",
-    "!**/bun.lock"
+    "!**/bun.lock",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
