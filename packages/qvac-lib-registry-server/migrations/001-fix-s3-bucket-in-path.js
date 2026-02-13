@@ -33,7 +33,7 @@ const Corestore = require('corestore')
 const Autobase = require('autobase')
 const IdEnc = require('hypercore-id-encoding')
 
-const schema = require('@tetherto/qvac-registry-schema')
+const schema = require('@qvac/registry-schema')
 const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
 const { QVAC_MAIN_REGISTRY } = schema
@@ -44,7 +44,7 @@ const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_REMOVE_INDEXER = `@${QVAC_MAIN_REGISTRY}/remove-indexer`
 const DISPATCH_DELETE_MODEL = `@${QVAC_MAIN_REGISTRY}/delete-model`
 
-function readEnvFile () {
+function readEnvFile() {
   const envPath = path.resolve('.env')
   const env = {}
   try {
@@ -65,7 +65,7 @@ function readEnvFile () {
   return env
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = process.argv.slice(2)
   const env = readEnvFile()
 
@@ -98,7 +98,7 @@ function parseArgs () {
   return result
 }
 
-function printUsage () {
+function printUsage() {
   console.log('Usage: node migrations/001-fix-s3-bucket-in-path.js --bucket=<name> --storage=<path> [--bootstrap=<key>] [--dry-run]')
   console.log('')
   console.log('Options:')
@@ -111,7 +111,7 @@ function printUsage () {
   console.log('  node migrations/001-fix-s3-bucket-in-path.js --bucket=tether-ai-dev --storage=./storage --dry-run')
 }
 
-async function runMigration () {
+async function runMigration() {
   const opts = parseArgs()
 
   if (!opts.bucket || !opts.storage) {
@@ -170,16 +170,16 @@ async function runMigration () {
     await context.view.deleteModel(path, source)
   })
 
-  function openView (store) {
+  function openView(store) {
     const dbCore = store.get('db-view')
     return new RegistryDatabase(dbCore, { extension: false })
   }
 
-  async function closeView (view) {
+  async function closeView(view) {
     await view.close()
   }
 
-  async function apply (nodes, view, base) {
+  async function apply(nodes, view, base) {
     if (!view.opened) await view.ready()
     for (const node of nodes) {
       const op = node.value
