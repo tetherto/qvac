@@ -120,6 +120,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-base
+      repo_name: infer-base
 
   publish-feature-gpr:
     needs: publish-logic

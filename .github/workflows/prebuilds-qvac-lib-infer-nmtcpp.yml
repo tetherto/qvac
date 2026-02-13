@@ -811,7 +811,7 @@ jobs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -834,7 +834,9 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
-          name-suffix: "-mono"
+          repo_name: "nmtcpp"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+          
 
   check-version-change:
     needs: [publish-npm]

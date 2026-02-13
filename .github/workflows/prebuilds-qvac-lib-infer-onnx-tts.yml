@@ -531,9 +531,9 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
-          git-token: ${{ secrets.PAT_TOKEN }}
-          create-tag: "true"
           path: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          repo_name: "onnx-tts"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
 
   create-github-release:
     needs: [publish-npm]
