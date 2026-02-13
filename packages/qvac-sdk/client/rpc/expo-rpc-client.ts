@@ -5,6 +5,7 @@ import { RPCConnectionFailedError } from "@/utils/errors-client";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.expo";
 import { getClientLogger } from "@/logging";
+import { getDeviceInfo } from "@/client/rpc/expo-device-info";
 import type { RuntimeContext } from "@/schemas";
 
 const logger = getClientLogger();
@@ -22,33 +23,7 @@ async function getRuntimeContext(): Promise<RuntimeContext> {
     return cachedRuntimeContext;
   }
 
-  // expo-device is optional - gracefully handle if not installed
-  let deviceModel: string | undefined;
-  let deviceBrand: string | undefined;
-  let platform: "android" | "ios" | undefined;
-  try {
-    const expoModulesCore = await import("expo-modules-core");
-    // this looks odd, but is necessary to ensure that import can be used safely.
-    // It will crash the app if the module is not installed, but the node dependency is present.
-    const nativeDeviceModule: unknown =
-      expoModulesCore.requireOptionalNativeModule("ExpoDevice");
-    if (nativeDeviceModule) {
-      const Device = await import("expo-device");
-      logger.info(
-        `Device: ${Device.modelName} ${Device.brand} ${Device.osName}`,
-      );
-      const osName = Device?.osName?.toLowerCase();
-      if (osName?.includes("ios")) {
-        platform = "ios";
-      } else if (osName?.includes("android")) {
-        platform = "android";
-      }
-      deviceModel = Device.modelName ?? undefined;
-      deviceBrand = Device.brand ?? undefined;
-    }
-  } catch {
-    logger.debug("expo-device not available, device info will be omitted");
-  }
+  const { platform, deviceModel, deviceBrand } = await getDeviceInfo();
 
   cachedRuntimeContext = {
     runtime: "react-native",

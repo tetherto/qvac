@@ -1,3 +1,4 @@
+export { default as withDeviceInfo } from "./withDeviceInfo";
 export { default as withMobileBundle } from "./withMobileBundle";
 export { default as withOpenCL } from "./withOpenCL";
 export { default as withQvacSDK } from "./withQvacSDK";
