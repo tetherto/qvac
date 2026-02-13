@@ -177,21 +177,26 @@ async function runChatterboxTTS (model, params, expectation = {}) {
     // Create WAV buffer from samples (Chatterbox uses 24kHz)
     const wavBuffer = createWavBuffer(outputArray, sampleRate)
 
-    // Save WAV file if requested
+    // Save WAV file if requested (skip on mobile unless explicit path provided)
     if (params.saveWav === true) {
-      const defaultWavPath = path.join(__dirname, '../output/chatterbox-test.wav')
-      const wavPath = params.wavOutputPath || defaultWavPath
+      // On mobile, only save if an explicit writable path is provided
+      if (isMobile && !params.wavOutputPath) {
+        console.log('[Chatterbox] Skipping WAV save on mobile (no writable path provided)')
+      } else {
+        const defaultWavPath = path.join(__dirname, '../output/chatterbox-test.wav')
+        const wavPath = params.wavOutputPath || defaultWavPath
 
-      // Ensure output directory exists
-      const outputDir = path.dirname(wavPath)
-      try {
-        fs.mkdirSync(outputDir, { recursive: true })
-      } catch (err) {
-        // Directory might already exist, ignore error
+        // Ensure output directory exists
+        const outputDir = path.dirname(wavPath)
+        try {
+          fs.mkdirSync(outputDir, { recursive: true })
+        } catch (err) {
+          // Directory might already exist, ignore error
+        }
+
+        fs.writeFileSync(wavPath, wavBuffer)
+        console.log(`[Chatterbox] Saved WAV to: ${wavPath}`)
       }
-
-      fs.writeFileSync(wavPath, wavBuffer)
-      console.log(`[Chatterbox] Saved WAV to: ${wavPath}`)
     }
 
     // Build output message
