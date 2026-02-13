@@ -15,7 +15,7 @@ export const ttsConfigSchema = z.object({
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),
   inputType: z.string().default("text"),
-  text: z.string(),
+  text: z.string().trim().min(1, "text must not be empty or whitespace-only"),
   stream: z.boolean().default(true),
 });
 
