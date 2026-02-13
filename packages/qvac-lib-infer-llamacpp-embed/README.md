@@ -263,9 +263,7 @@ These tests validate the native implementation and help catch issues early in de
 
 ## Glossary
 
-* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview). 
-* **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).
-* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
+* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
 
 ## License
 
