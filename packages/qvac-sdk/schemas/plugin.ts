@@ -131,3 +131,49 @@ export function defineHandler<
 ): PluginHandlerDefinition<TRequest, TResponse> {
   return definition;
 }
+
+// ============================================
+// Worker runtime validation
+// ============================================
+
+const functionRuntimeSchema = z.instanceof(Function, {
+  error: "must be a function",
+});
+
+const zodSchemaLikeRuntimeSchema = z
+  .object({
+    safeParse: functionRuntimeSchema,
+  })
+  .catchall(z.unknown());
+
+export const pluginHandlerDefinitionRuntimeSchema = z
+  .object({
+    requestSchema: zodSchemaLikeRuntimeSchema,
+    responseSchema: zodSchemaLikeRuntimeSchema,
+    streaming: z.boolean({ error: "streaming must be a boolean" }),
+    handler: functionRuntimeSchema,
+  })
+  .catchall(z.unknown());
+
+export const pluginDefinitionRuntimeSchema = z
+  .object({
+    modelType: z
+      .string({ error: "modelType must be a string" })
+      .min(1, "modelType must be a non-empty string"),
+    displayName: z
+      .string({ error: "displayName must be a string" })
+      .min(1, "displayName must be a non-empty string"),
+    addonPackage: z
+      .string({ error: "addonPackage must be a string" })
+      .min(1, "addonPackage must be a non-empty string"),
+    createModel: functionRuntimeSchema,
+    handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
+    logging: z
+      .object({
+        module: z.unknown().optional(),
+        namespace: z.string().optional(),
+      })
+      .catchall(z.unknown())
+      .optional(),
+  })
+  .catchall(z.unknown());

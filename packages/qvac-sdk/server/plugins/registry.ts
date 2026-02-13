@@ -1,13 +1,40 @@
-import type { QvacPlugin, PluginHandlerDefinition } from "@/schemas/plugin";
+import {
+  pluginDefinitionRuntimeSchema,
+  type QvacPlugin,
+  type PluginHandlerDefinition,
+} from "@/schemas/plugin";
 import {
   PluginAlreadyRegisteredError,
+  PluginDefinitionInvalidError,
   PluginLoggingInvalidError,
 } from "@/utils/errors-server";
 import { createAddonLoggerCallback } from "@/logging/addon";
 
 const plugins = new Map<string, QvacPlugin>();
 
+function getModelTypeForError(plugin: unknown) {
+  if (!plugin || typeof plugin !== "object") return "(unknown)";
+  if (!("modelType" in plugin)) return "(unknown)";
+  const modelType = (plugin as { modelType?: unknown }).modelType;
+  return typeof modelType === "string" && modelType.length > 0
+    ? modelType
+    : "(unknown)";
+}
+
+function validatePluginDefinition(plugin: QvacPlugin): void {
+  const result = pluginDefinitionRuntimeSchema.safeParse(plugin);
+  if (result.success) return;
+
+  const details = result.error.issues
+    .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+    .join(", ");
+
+  throw new PluginDefinitionInvalidError(getModelTypeForError(plugin), details);
+}
+
 export function registerPlugin(plugin: QvacPlugin): void {
+  validatePluginDefinition(plugin);
+
   if (plugins.has(plugin.modelType)) {
     throw new PluginAlreadyRegisteredError(plugin.modelType);
   }
