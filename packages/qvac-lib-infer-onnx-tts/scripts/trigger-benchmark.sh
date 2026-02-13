@@ -350,7 +350,7 @@ if [ "$WATCH" = "true" ]; then
     
     # Extract Model name from header or Model field
     MODEL_NAME=$(echo "$ADDON_CONTENT" | grep -E '^\*\*Model:\*\*' | awk -F':**' '{print $2}' | tr -d ' ' | head -1)
-    [ -z "$MODEL_NAME" ] && MODEL_NAME="piper-tts"
+    [ -z "$MODEL_NAME" ] && MODEL_NAME="chatterbox-tts"
     
     # Parse Python metrics if results file exists
     PYTHON_RTF="N/A"
