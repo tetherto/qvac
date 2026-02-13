@@ -14,10 +14,16 @@ A benchmark suite comparing **TTS ONNX Addon** (@qvac/tts-onnx) against **Python
 
 ### 1. Install Server Dependencies & Download Resources
 
+**Piper TTS:**
 ```bash
 cd server
 npm install
-npm run setup  # Downloads eSpeak-ng data and models via HyperDrive
+npm run setup   # or: npm run setup:tts — downloads eSpeak-ng data and Piper models (uses config/config-tts.yaml)
+```
+
+**Chatterbox TTS:**
+```bash
+npm run setup:chatterbox  # Downloads Chatterbox ONNX models (uses config/config-chatterbox.yaml)
 ```
 
 ### 2. Install Python Dependencies
@@ -55,12 +61,25 @@ python main.py  # Runs on port 8081
 **Terminal 3 - Client:**
 ```bash
 cd client
+# Piper TTS (addon vs Python native)
 python -m src.tts.main --config config/config.yaml
+# Or explicitly use TTS config
+python -m src.tts.main --config config/config-tts.yaml
+# Chatterbox TTS
+python -m src.tts.main --config config/config-chatterbox.yaml
 ```
 
 ## Configuration
 
-Edit `client/config/config.yaml`:
+### Config files
+
+| File | Purpose |
+|------|---------|
+| `client/config/config.yaml` | Default Piper TTS benchmark (addon + Python comparison) |
+| `client/config/config-tts.yaml` | Piper TTS benchmark (same endpoints as default; use for explicit TTS-only setup) |
+| `client/config/config-chatterbox.yaml` | Chatterbox TTS benchmark |
+
+Edit `client/config/config.yaml` (or the config you pass to `--config`):
 
 ```yaml
 server:
@@ -164,7 +183,6 @@ Example comparison:
 ```
 
 Note: In this example, Python is faster (higher RTF = better).
-```
 
 ## Metrics
 
@@ -194,6 +212,10 @@ This validates that the generated audio is intelligible and matches the original
 - WER < 20%: Acceptable quality ⚠️
 - WER > 20%: Poor quality ❌
 
+### Chatterbox: reference audio
+
+For Chatterbox benchmarks, place a reference WAV file at `benchmarks/assets/ref.wav` (or set `model.referenceAudioPath` in `config-chatterbox.yaml` to your path). The server uses this for voice cloning.
+
 ## Running Individual Servers
 
 You can run just one server by disabling the other in `config.yaml`:
@@ -220,15 +242,23 @@ The benchmark uses [LJSpeech](https://huggingface.co/datasets/lj_speech) from Hu
 
 ```
 benchmarks/
-├── server/              # Node.js addon server (port 8080)
-│   ├── setup.js        # Downloads shared resources
-│   └── src/            # Server implementation
-├── python-server/       # Python native server (port 8081)
-│   └── src/            # Server implementation
-├── client/              # Python benchmark client
-│   └── src/tts/        # Client implementation
-├── shared-data/         # Downloaded eSpeak + models (gitignored)
-└── results/             # Benchmark reports
+├── server/                  # Node.js addon server (port 8080)
+│   ├── tts-setup.js        # Piper TTS: eSpeak-ng + models (config-tts.yaml)
+│   ├── chatterbox-setup.js # Chatterbox: ONNX models only
+│   └── src/                # Server implementation (/synthesize, /synthesize-chatterbox)
+├── python-server/           # Python native server (port 8081)
+│   ├── requirements.txt    # Piper TTS
+│   ├── requirements-tts.txt
+│   └── requirements-chatterbox.txt
+├── client/
+│   ├── config/
+│   │   ├── config.yaml           # Default Piper TTS
+│   │   ├── config-tts.yaml       # Piper TTS (explicit)
+│   │   └── config-chatterbox.yaml # Chatterbox TTS
+│   └── src/tts/             # Benchmark client
+├── assets/                  # Place ref.wav here for Chatterbox (referenceAudioPath in config-chatterbox.yaml)
+├── shared-data/             # Downloaded eSpeak + models (gitignored)
+└── results/                 # Benchmark reports
 ```
 
 ## License

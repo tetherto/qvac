@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.2.12",
+  "version": "0.3.0",
   "description": "TTS addon skeleton for qvac",
   "addon": true,
   "engines": {
@@ -15,7 +15,7 @@
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
-    "test:integration": "brittle-bare test/integration/addon.test.js && brittle-bare test/integration/reload-model.test.js",
+    "test:integration": "brittle-bare test/integration/addon.piper.test.js && brittle-bare test/integration/reload-model.test.js && brittle-bare test/integration/addon.chatterbox.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",

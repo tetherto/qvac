@@ -63,12 +63,20 @@ class TTSClient:
         # This finds the benchmarks/ directory regardless of where the script is run from
         benchmarks_dir = Path(__file__).resolve().parents[3]  # Go up: tts/ -> src/ -> client/ -> benchmarks/
         
-        if not Path(model_cfg.modelPath).is_absolute():
-            self.model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
-        if not Path(model_cfg.configPath).is_absolute():
-            self.model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
-        if not Path(model_cfg.eSpeakDataPath).is_absolute():
-            self.model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
+        if model_cfg.is_chatterbox:
+            # Chatterbox: resolve modelDir and referenceAudioPath
+            if model_cfg.modelDir and not Path(model_cfg.modelDir).is_absolute():
+                self.model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
+            if model_cfg.referenceAudioPath and not Path(model_cfg.referenceAudioPath).is_absolute():
+                self.model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
+        else:
+            # Piper TTS: resolve modelPath, configPath, eSpeakDataPath
+            if model_cfg.modelPath and not Path(model_cfg.modelPath).is_absolute():
+                self.model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
+            if model_cfg.configPath and not Path(model_cfg.configPath).is_absolute():
+                self.model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
+            if model_cfg.eSpeakDataPath and not Path(model_cfg.eSpeakDataPath).is_absolute():
+                self.model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
     
     def synthesize_batch(self, texts: List[str]) -> TTSResults:
         """
@@ -82,18 +90,33 @@ class TTSClient:
         """
         logger.info(f"Sending {len(texts)} texts to {self.url}")
         
-        request_data = {
-            "texts": texts,
-            "config": {
-                "modelPath": self.model_cfg.modelPath,
-                "configPath": self.model_cfg.configPath,
-                "eSpeakDataPath": self.model_cfg.eSpeakDataPath,
-                "language": self.model_cfg.language,
-                "sampleRate": self.model_cfg.sampleRate,
-                "useGPU": self.model_cfg.useGPU
-            },
-            "includeSamples": self.include_samples  # Request samples if needed
-        }
+        # Build config based on whether this is Chatterbox or Piper TTS
+        if self.model_cfg.is_chatterbox:
+            request_data = {
+                "texts": texts,
+                "config": {
+                    "modelDir": self.model_cfg.modelDir,
+                    "referenceAudioPath": self.model_cfg.referenceAudioPath,
+                    "language": self.model_cfg.language,
+                    "sampleRate": self.model_cfg.sampleRate,
+                    "useGPU": self.model_cfg.useGPU,
+                    "variant": self.model_cfg.variant
+                },
+                "includeSamples": self.include_samples
+            }
+        else:
+            request_data = {
+                "texts": texts,
+                "config": {
+                    "modelPath": self.model_cfg.modelPath,
+                    "configPath": self.model_cfg.configPath,
+                    "eSpeakDataPath": self.model_cfg.eSpeakDataPath,
+                    "language": self.model_cfg.language,
+                    "sampleRate": self.model_cfg.sampleRate,
+                    "useGPU": self.model_cfg.useGPU
+                },
+                "includeSamples": self.include_samples  # Request samples if needed
+            }
         
         resp = self.client.post(self.url, json=request_data)
         resp.raise_for_status()

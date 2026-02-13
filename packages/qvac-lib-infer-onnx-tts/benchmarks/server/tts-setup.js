@@ -10,7 +10,7 @@ const BENCHMARKS_DIR = path.join(__dirname, '..')
 const SHARED_DATA_DIR = path.join(BENCHMARKS_DIR, 'shared-data')
 const ESPEAK_DATA_PATH = path.join(SHARED_DATA_DIR, 'espeak-ng-data')
 const MODELS_PATH = path.join(SHARED_DATA_DIR, 'models')
-const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', 'config.yaml')
+const CONFIG_PATH = path.join(BENCHMARKS_DIR, 'client', 'config', 'config-tts.yaml')
 
 // Load configuration
 let config

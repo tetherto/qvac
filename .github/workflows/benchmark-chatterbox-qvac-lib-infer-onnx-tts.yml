@@ -1,0 +1,532 @@
+name: Benchmark Chatterbox (qvac-lib-infer-onnx-tts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      addon_version:
+        description: 'Version of @qvac/tts-onnx to benchmark (e.g., 0.1.0, latest, ^0.2.0)'
+        required: false
+        type: string
+        default: 'latest'
+      dataset:
+        description: 'Dataset for benchmarking'
+        required: true
+        type: choice
+        default: harvard
+        options:
+          - harvard
+          - ag_news
+          - librispeech
+      max_samples:
+        description: 'Maximum number of samples to test (0 = unlimited)'
+        required: false
+        type: number
+        default: 10
+      round_trip_test:
+        description: 'Enable round-trip quality test (TTS → Whisper → Text)'
+        required: true
+        type: boolean
+        default: true
+      whisper_model:
+        description: 'Whisper model for round-trip test'
+        required: false
+        type: choice
+        default: medium
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      num_runs:
+        description: 'Number of runs per sample (for determinism testing)'
+        required: false
+        type: number
+        default: 1
+      use_gpu:
+        description: 'Enable GPU acceleration'
+        required: true
+        type: boolean
+        default: false
+      model_variant:
+        description: 'Chatterbox model variant'
+        required: false
+        type: choice
+        default: fp32
+        options:
+          - fp32
+          - fp16
+          - q4
+      run_python:
+        description: 'Run Python Native baseline benchmark (disabled by default - chatterbox-tts has Python 3.12 issues)'
+        required: true
+        type: boolean
+        default: false
+
+  pull_request:
+    types: [closed]
+  release:
+    types: [published]
+
+jobs:
+  benchmark-chatterbox:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: macos-14-xlarge
+    timeout-minutes: 180
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          mkdir -p packages/qvac-lib-infer-onnx-tts/benchmarks/server
+          cp .npmrc packages/qvac-lib-infer-onnx-tts/benchmarks/server/.npmrc
+
+          echo "=== .npmrc contents ==="
+          cat .npmrc
+
+      - name: Install system dependencies
+        run: |
+          brew install ffmpeg cmake
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g bare-dev
+          npm install -g bare bare-make
+
+      - name: Determine addon version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.addon_version || 'latest' }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Addon version to benchmark: $VERSION"
+
+      - name: Update addon version in package.json
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "$VERSION" = "latest" ]; then
+            npm pkg set dependencies.@qvac/tts-onnx="latest"
+            echo "Set @qvac/tts-onnx to latest version"
+          else
+            npm pkg set dependencies.@qvac/tts-onnx="$VERSION"
+            echo "Set @qvac/tts-onnx to version $VERSION"
+          fi
+
+          echo "=== Updated package.json dependencies ==="
+          npm pkg get dependencies
+
+      - name: Update benchmark configuration
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          DATASET="${{ github.event.inputs.dataset || 'harvard' }}"
+          MAX_SAMPLES="${{ github.event.inputs.max_samples || 10 }}"
+          RUN_PYTHON="${{ github.event.inputs.run_python || 'true' }}"
+          ROUND_TRIP_TEST="${{ github.event.inputs.round_trip_test || 'true' }}"
+          WHISPER_MODEL="${{ github.event.inputs.whisper_model || 'medium' }}"
+          NUM_RUNS="${{ github.event.inputs.num_runs || 1 }}"
+          USE_GPU="${{ github.event.inputs.use_gpu || 'false' }}"
+          MODEL_VARIANT="${{ github.event.inputs.model_variant || 'fp32' }}"
+
+          if [ "$ROUND_TRIP_TEST" = "true" ]; then
+            TIMEOUT=180
+          else
+            TIMEOUT=120
+          fi
+
+          sed -i '' "s|addon_version:.*|addon_version: \"${VERSION}\"|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "s|timeout:.*|timeout: ${TIMEOUT}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^dataset:/,/^[^ ]/ s|  name:.*|  name: \"${DATASET}\"|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  run_python:.*|  run_python: ${RUN_PYTHON}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  round_trip_test:.*|  round_trip_test: ${ROUND_TRIP_TEST}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  whisper_model:.*|  whisper_model: \"${WHISPER_MODEL}\"|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  num_runs:.*|  num_runs: ${NUM_RUNS}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^model:/,/^[^ ]/ s|  useGPU:.*|  useGPU: ${USE_GPU}|" benchmarks/client/config/config-chatterbox.yaml
+          sed -i '' "/^model:/,/^[^ ]/ s|  variant:.*|  variant: \"${MODEL_VARIANT}\"|" benchmarks/client/config/config-chatterbox.yaml
+
+          echo "=== Updated config-chatterbox.yaml ==="
+          cat benchmarks/client/config/config-chatterbox.yaml
+
+      - name: Install benchmark server dependencies
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          npm install
+
+      - name: Download Chatterbox models
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          npm run setup:chatterbox
+
+      - name: Install Python server dependencies
+        if: github.event.inputs.run_python == 'true'
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements-chatterbox.txt
+
+      - name: Install benchmark client dependencies
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+
+      - name: Start Python Native server
+        if: github.event.inputs.run_python == 'true'
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        run: |
+          nohup python main.py > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 10
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Python server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Python server started successfully on port 8081"
+
+      - name: Start TTS Addon server
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Addon server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Addon server started successfully on port 8080"
+
+      - name: Clean old benchmark results
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          rm -rf benchmarks/results/*.md || true
+          echo "Cleaned old benchmark results"
+
+      - name: Run benchmark
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          python -u -m src.tts.main --config config/config-chatterbox.yaml
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop servers
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          if [ -f benchmarks/python-server/server.pid ]; then
+            kill $(cat benchmarks/python-server/server.pid) || true
+            rm benchmarks/python-server/server.pid
+          fi
+
+          if [ -f benchmarks/server/server.pid ]; then
+            kill $(cat benchmarks/server/server.pid) || true
+            rm benchmarks/server/server.pid
+          fi
+
+      - name: Display server logs
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          if [ -f benchmarks/server/server.log ]; then
+            echo "=== Addon Server Logs ==="
+            cat benchmarks/server/server.log
+          fi
+
+          if [ -f benchmarks/python-server/server.log ]; then
+            echo "=== Python Server Logs ==="
+            cat benchmarks/python-server/server.log
+          fi
+
+      - name: Display results summary
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          MODEL_NAME="chatterbox"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          DATASET="${{ github.event.inputs.dataset || 'harvard' }}"
+          MAX_SAMPLES="${{ github.event.inputs.max_samples || 10 }}"
+          ROUND_TRIP_TEST="${{ github.event.inputs.round_trip_test || 'true' }}"
+          WHISPER_MODEL="${{ github.event.inputs.whisper_model || 'medium' }}"
+          NUM_RUNS="${{ github.event.inputs.num_runs || 1 }}"
+          USE_GPU="${{ github.event.inputs.use_gpu || 'false' }}"
+          MODEL_VARIANT="${{ github.event.inputs.model_variant || 'fp32' }}"
+
+          echo "=== Chatterbox Benchmark Configuration ==="
+          echo "Addon Version: $VERSION"
+          echo "Dataset: $DATASET"
+          echo "Max Samples: $MAX_SAMPLES"
+          echo "Round-Trip Test: $ROUND_TRIP_TEST"
+          echo "Whisper Model: $WHISPER_MODEL"
+          echo "Number of Runs: $NUM_RUNS"
+          echo "Use GPU: $USE_GPU"
+          echo "Model Variant: $MODEL_VARIANT"
+          echo "Language: en (Chatterbox is English-only)"
+          echo ""
+
+          if [ -f "benchmarks/results/${MODEL_NAME}_addon.md" ]; then
+            echo "=== Chatterbox Addon Results ==="
+            cat "benchmarks/results/${MODEL_NAME}_addon.md"
+            echo ""
+          fi
+
+      - name: Add results to job summary
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          MODEL_NAME="chatterbox"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          DATASET="${{ github.event.inputs.dataset || 'harvard' }}"
+          MAX_SAMPLES="${{ github.event.inputs.max_samples || 10 }}"
+          ROUND_TRIP_TEST="${{ github.event.inputs.round_trip_test || 'true' }}"
+          WHISPER_MODEL="${{ github.event.inputs.whisper_model || 'medium' }}"
+          NUM_RUNS="${{ github.event.inputs.num_runs || 1 }}"
+          USE_GPU="${{ github.event.inputs.use_gpu || 'false' }}"
+          MODEL_VARIANT="${{ github.event.inputs.model_variant || 'fp32' }}"
+
+          echo "## Chatterbox TTS Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Addon Version | ${VERSION} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dataset | ${DATASET} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Max Samples | ${MAX_SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Round-Trip Test | ${ROUND_TRIP_TEST} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Whisper Model | ${WHISPER_MODEL} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Number of Runs | ${NUM_RUNS} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Use GPU | ${USE_GPU} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Model Variant | ${MODEL_VARIANT} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Language | en (English-only) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "benchmarks/results/${MODEL_NAME}_addon.md" ]; then
+            echo "### Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat "benchmarks/results/${MODEL_NAME}_addon.md" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatterbox-benchmark-results-v${{ steps.version.outputs.version }}
+          path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
+          retention-days: 30
+
+      - name: Post results to Google Sheets
+        if: success()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        env:
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          SHEET_NAME: "chatterbox-benchmark-history"
+        run: |
+          if [ -z "$GOOGLE_SHEETS_CREDENTIALS" ] || [ -z "$GOOGLE_SHEET_ID" ]; then
+            echo "Google Sheets credentials not configured. Skipping..."
+            exit 0
+          fi
+
+          pip install -q cryptography
+
+          MODEL_NAME="chatterbox"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          DATASET="${{ github.event.inputs.dataset || 'harvard' }}"
+          MODEL_VARIANT="${{ github.event.inputs.model_variant || 'fp32' }}"
+
+          ADDON_RESULTS_FILE="benchmarks/results/${MODEL_NAME}_addon.md"
+          if [ ! -f "$ADDON_RESULTS_FILE" ]; then
+            echo "Addon results file not found. Skipping Google Sheets update."
+            exit 0
+          fi
+
+          echo "Parsing benchmark results..."
+          ADDON_CONTENT=$(cat "$ADDON_RESULTS_FILE")
+
+          ADDON_RTF=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average RTF:\*\*' | sed 's/.*\*\*Average RTF:\*\*[[:space:]]*//' | tr -d ' *' | head -1)
+          [ -z "$ADDON_RTF" ] && ADDON_RTF="N/A"
+
+          AVG_WER=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average WER:\*\*' | sed 's/.*\*\*Average WER:\*\*[[:space:]]*//' | tr -d ' *' | head -1)
+          [ -z "$AVG_WER" ] && AVG_WER="N/A"
+
+          AVG_CER=$(echo "$ADDON_CONTENT" | grep -E '\*\*Average CER:\*\*' | sed 's/.*\*\*Average CER:\*\*[[:space:]]*//' | tr -d ' *' | head -1)
+          [ -z "$AVG_CER" ] && AVG_CER="N/A"
+
+          DATE=$(date '+%Y-%m-%d %H:%M:%S')
+          RUN_ID="${{ github.run_id }}"
+          BRANCH="${{ github.ref_name }}"
+
+          echo "Parsed Results:"
+          echo "  Date:           $DATE"
+          echo "  Model Variant:  $MODEL_VARIANT"
+          echo "  Addon RTF:      $ADDON_RTF"
+          echo "  Addon WER:      $AVG_WER"
+          echo "  Addon CER:      $AVG_CER"
+          echo "  Run ID:         $RUN_ID"
+          echo "  Branch:         $BRANCH"
+          echo "  Dataset:        $DATASET"
+          echo "  Version:        $VERSION"
+
+          echo "$GOOGLE_SHEETS_CREDENTIALS" > /tmp/sa-credentials.json
+
+          echo "Authenticating with Google Sheets API..."
+
+          cat > /tmp/get_token.py << 'PYTHON_SCRIPT_END'
+import json
+import time
+import urllib.request
+import urllib.parse
+import base64
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.backends import default_backend
+
+def base64url_encode(data):
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return base64.urlsafe_b64encode(data).rstrip(b'=').decode('utf-8')
+
+with open('/tmp/sa-credentials.json', 'r') as f:
+    creds = json.load(f)
+
+header = {"alg": "RS256", "typ": "JWT"}
+now = int(time.time())
+claims = {
+    "iss": creds['client_email'],
+    "scope": "https://www.googleapis.com/auth/spreadsheets",
+    "aud": "https://oauth2.googleapis.com/token",
+    "iat": now,
+    "exp": now + 3600
+}
+
+unsigned_jwt = base64url_encode(json.dumps(header)) + '.' + base64url_encode(json.dumps(claims))
+private_key = serialization.load_pem_private_key(
+    creds['private_key'].encode('utf-8'),
+    password=None,
+    backend=default_backend()
+)
+signature = private_key.sign(
+    unsigned_jwt.encode('utf-8'),
+    padding.PKCS1v15(),
+    hashes.SHA256()
+)
+signed_jwt = unsigned_jwt + '.' + base64url_encode(signature)
+
+data = urllib.parse.urlencode({
+    'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    'assertion': signed_jwt
+}).encode('utf-8')
+
+req = urllib.request.Request('https://oauth2.googleapis.com/token', data=data)
+with urllib.request.urlopen(req) as response:
+    token_data = json.loads(response.read().decode('utf-8'))
+    print(token_data['access_token'])
+PYTHON_SCRIPT_END
+
+          ACCESS_TOKEN=$(python3 /tmp/get_token.py)
+
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get access token"
+            rm -f /tmp/sa-credentials.json
+            exit 1
+          fi
+
+          echo "Successfully authenticated."
+
+          ROW_DATA="{\"values\": [[\"$DATE\", \"chatterbox\", \"$MODEL_VARIANT\", \"$ADDON_RTF\", \"$AVG_WER\", \"$AVG_CER\", \"$RUN_ID\", \"$BRANCH\", \"$DATASET\", \"$VERSION\"]]}"
+
+          ENCODED_SHEET_NAME=$(echo "$SHEET_NAME" | sed 's/ /%20/g')
+
+          SHEETS_API_URL="https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values/${ENCODED_SHEET_NAME}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+
+          echo "Sending results to Google Sheets..."
+          SHEET_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$ROW_DATA" \
+            "$SHEETS_API_URL" 2>&1)
+
+          if echo "$SHEET_RESPONSE" | grep -q '"updatedRows"'; then
+            echo "Results added to Google Sheets successfully!"
+          elif echo "$SHEET_RESPONSE" | grep -q '"error"'; then
+            echo "Warning: Failed to add to Google Sheets"
+            echo "Response: $SHEET_RESPONSE"
+
+            if echo "$SHEET_RESPONSE" | grep -q "Unable to parse range"; then
+              echo "Sheet '$SHEET_NAME' may not exist. Creating with headers..."
+
+              HEADER_DATA='{"values": [["Date", "Model", "Variant", "RTF", "WER", "CER", "Run_ID", "Branch", "Dataset", "Addon_Version"]]}'
+
+              curl -s -X PUT \
+                -H "Authorization: Bearer $ACCESS_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$HEADER_DATA" \
+                "https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values/${ENCODED_SHEET_NAME}!A1?valueInputOption=USER_ENTERED" > /dev/null
+
+              SHEET_RESPONSE=$(curl -s -X POST \
+                -H "Authorization: Bearer $ACCESS_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$ROW_DATA" \
+                "$SHEETS_API_URL" 2>&1)
+
+              if echo "$SHEET_RESPONSE" | grep -q '"updatedRows"'; then
+                echo "Results added to Google Sheets successfully!"
+              else
+                echo "Failed to add results after creating sheet"
+                echo "Response: $SHEET_RESPONSE"
+              fi
+            fi
+          else
+            echo "Results added to Google Sheets!"
+          fi
+
+          rm -f /tmp/sa-credentials.json

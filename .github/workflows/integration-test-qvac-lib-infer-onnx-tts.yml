@@ -54,13 +54,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04 # ai-run-linux-gpu - to be updated once the new runner is available
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-          - os: windows-2022 # ai-run-windows-gpu - to be updated once the new runner is available
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+          - os: windows-2022
             platform: win32
             arch: x64
 
@@ -140,8 +149,15 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Update c++ tools to install GLIBC++ (Ubuntu 22.04)
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Update c++ tools to install GLIBC++
+        name: Update c++ tools to install GLIBC++ (Ubuntu 24.04)
         run: |
           sudo add-apt-repository ppa:ubuntu-toolchain-r/test
           sudo apt update

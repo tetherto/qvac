@@ -9,9 +9,9 @@ public:
   PiperEngineMock() = default;
   ~PiperEngineMock() = default;
 
-  MOCK_METHOD(void, load, (const TTSConfig& cfg), (override));
+  MOCK_METHOD(void, load, (const TTSConfig &cfg), (override));
   MOCK_METHOD(void, unload, (), (override));
-  MOCK_METHOD(AudioResult, synthesize, (const std::string& text), (override));
+  MOCK_METHOD(AudioResult, synthesize, (const std::string &text), (override));
 };
 
 } // namespace qvac::ttslib::piper::testing

@@ -11,7 +11,9 @@ Node.js server using `@qvac/tts-onnx` addon for benchmarking.
 
 ```bash
 npm install
-npm run setup  # Download eSpeak data and models
+npm run setup        # Piper TTS: eSpeak-ng + models (uses config-tts.yaml) — same as setup:tts
+npm run setup:tts    # Piper TTS (same as setup)
+npm run setup:chatterbox  # Chatterbox: ONNX models only
 ```
 
 ## Usage
@@ -59,7 +61,8 @@ Response:
   "version": "0.1.0",
   "endpoints": {
     "/": "Health check",
-    "/synthesize": "POST - Run TTS synthesis"
+    "/synthesize": "POST - Run Piper TTS synthesis",
+    "/synthesize-chatterbox": "POST - Run Chatterbox TTS synthesis"
   }
 }
 ```

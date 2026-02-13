@@ -5,21 +5,31 @@ This provides a baseline implementation for comparison with the Node.js addon.
 """
 
 import os
-import sys
 import time
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
 
-try:
-    from piper import PiperVoice
-except ImportError:
-    print("ERROR: piper-tts not installed")
-    print("Install with: pip install piper-tts")
-    sys.exit(1)
-
 logger = logging.getLogger(__name__)
+
+# Lazy import to avoid loading piper on startup if not needed
+PiperVoice = None
+
+
+def _lazy_import_piper():
+    """Lazily import PiperVoice to avoid requiring piper-tts unless needed"""
+    global PiperVoice
+    if PiperVoice is None:
+        try:
+            from piper import PiperVoice as _PiperVoice
+            PiperVoice = _PiperVoice
+            logger.info("Piper TTS module loaded successfully")
+        except ImportError as e:
+            logger.error(f"Failed to import piper-tts: {e}")
+            logger.error("Install with: pip install piper-tts")
+            raise
+    return PiperVoice
 
 # Path to shared eSpeak data
 SHARED_DATA_DIR = Path(__file__).parent.parent.parent / "shared-data"
@@ -140,7 +150,7 @@ class PythonTTSRunner:
     """TTS runner using piper-tts for benchmarking"""
     
     def __init__(self):
-        self.voice: Optional[PiperVoice] = None
+        self.voice = None  # PiperVoice instance, lazy loaded
         self.load_time_ms: float = 0
         self.current_model_path: Optional[str] = None
         self.current_language: Optional[str] = None
@@ -205,9 +215,10 @@ class PythonTTSRunner:
         if not Path(config_path).exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
         
-        # Load Piper voice
+        # Lazy import and load Piper voice
+        _PiperVoice = _lazy_import_piper()
         logger.info(f"Loading Piper model: {model_path}")
-        self.voice = PiperVoice.load(model_path, config_path)
+        self.voice = _PiperVoice.load(model_path, config_path)
         
         self.load_time_ms = (time.perf_counter() - load_start) * 1000
         self.current_model_path = model_path

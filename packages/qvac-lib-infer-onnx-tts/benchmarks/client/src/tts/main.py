@@ -42,7 +42,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/config.yaml",
+        default="config/config-tts.yaml",
         help="Path to config file"
     )
     args = parser.parse_args()
@@ -245,10 +245,10 @@ def main():
         addon_results = addon_runs[0]
         python_results = python_runs[0]
         
-        # Calculate comparison metrics
-        speedup = python_results.total_generation_ms / addon_results.total_generation_ms
-        load_time_diff = ((addon_results.load_time_ms - python_results.load_time_ms) / python_results.load_time_ms) * 100
-        rtf_diff = ((addon_results.avg_rtf - python_results.avg_rtf) / python_results.avg_rtf) * 100
+        # Calculate comparison metrics (with guards for division by zero)
+        speedup = python_results.total_generation_ms / addon_results.total_generation_ms if addon_results.total_generation_ms > 0 else 0
+        load_time_diff = ((addon_results.load_time_ms - python_results.load_time_ms) / python_results.load_time_ms) * 100 if python_results.load_time_ms > 0 else 0
+        rtf_diff = ((addon_results.avg_rtf - python_results.avg_rtf) / python_results.avg_rtf) * 100 if python_results.avg_rtf > 0 else 0
         
         logger.info("\nComparison Summary (Run 1):")
         logger.info(f"  Model Load Time:")

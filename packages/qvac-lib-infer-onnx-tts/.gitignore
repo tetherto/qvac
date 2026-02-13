@@ -29,6 +29,7 @@ Makefile
 *.swp
 *.swo
 *~
+.cache/
 
 # OS generated files
 .DS_Store
@@ -88,6 +89,7 @@ vcpkg_installed/*
 
 # Integration test outputs
 *.wav
+!benchmarks/assets/ref.wav
 
 # Package lock file
 package-lock.json

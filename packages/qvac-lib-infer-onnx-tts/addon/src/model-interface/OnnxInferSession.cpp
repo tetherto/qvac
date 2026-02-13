@@ -1,0 +1,185 @@
+#include "OnnxInferSession.hpp"
+
+#include <iostream>
+
+namespace qvac::ttslib::chatterbox {
+
+namespace {
+
+ONNXTensorElementDataType ourTypeToOnnxType(OrtElementType elementType) {
+  switch (elementType) {
+  case OrtElementType::Fp16:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
+  case OrtElementType::Fp32:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+  case OrtElementType::Fp64:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE;
+  case OrtElementType::Int4:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT4;
+  case OrtElementType::Int8:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8;
+  case OrtElementType::Int16:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16;
+  case OrtElementType::Int32:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
+  case OrtElementType::Int64:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
+  case OrtElementType::UInt4:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT4;
+  case OrtElementType::UInt8:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8;
+  case OrtElementType::UInt16:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16;
+  case OrtElementType::UInt32:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32;
+  case OrtElementType::UInt64:
+    return ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64;
+  default:
+    throw std::runtime_error("Invalid our tensor element data type");
+  }
+}
+
+OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
+  switch (onnxType) {
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+    return OrtElementType::Fp16;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+    return OrtElementType::Fp32;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+    return OrtElementType::Fp64;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT4:
+    return OrtElementType::Int4;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+    return OrtElementType::Int8;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+    return OrtElementType::Int16;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+    return OrtElementType::Int32;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+    return OrtElementType::Int64;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT4:
+    return OrtElementType::UInt4;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+    return OrtElementType::UInt8;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+    return OrtElementType::UInt16;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+    return OrtElementType::UInt32;
+  case ONNXTensorElementDataType::ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+    return OrtElementType::UInt64;
+  default:
+    throw std::runtime_error("Invalid ONNX tensor element data type");
+  }
+}
+
+} // namespace
+
+OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
+  static Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING,
+                      "ChatterboxEngine");
+
+  Ort::SessionOptions options;
+  options.SetIntraOpNumThreads(1);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+#ifdef _WIN32
+  // For Windows, Ort::Session expects a wide string (wchar_t*) for the model
+  // path
+  std::wstring wModelPath(modelPath.begin(), modelPath.end());
+  session_ = std::make_unique<Ort::Session>(env, wModelPath.c_str(), options);
+#else
+  session_ = std::make_unique<Ort::Session>(env, modelPath.c_str(), options);
+#endif
+
+  // collect input names
+  for (size_t i = 0; i < session_->GetInputCount(); i++) {
+    const Ort::AllocatedStringPtr inputName =
+        session_->GetInputNameAllocated(i, allocator_);
+    inputNames_.push_back(std::string(inputName.get()));
+  }
+
+  // collect output names
+  for (size_t i = 0; i < session_->GetOutputCount(); i++) {
+    Ort::AllocatedStringPtr outputName =
+        session_->GetOutputNameAllocated(i, allocator_);
+    outputNames_.push_back(std::string(outputName.get()));
+  }
+}
+
+OrtTensor OnnxInferSession::getInput(const std::string &inputName) {
+  for (const auto &input : inputTensors_) {
+    if (input.name == inputName) {
+      return input;
+    }
+  }
+  throw std::runtime_error("Input not found");
+}
+
+OrtTensor OnnxInferSession::getOutput(const std::string &outputName) {
+  for (const auto &output : outputTensors_) {
+    if (output.name == outputName) {
+      return output;
+    }
+  }
+  throw std::runtime_error("Output not found");
+}
+
+void OnnxInferSession::run() {
+  std::vector<const char *> inputNames;
+  for (const auto &name : inputNames_) {
+    inputNames.push_back(name.c_str());
+  }
+
+  std::vector<const char *> outputNames;
+  for (const auto &name : outputNames_) {
+    outputNames.push_back(name.c_str());
+  }
+
+  outputsTensorsValues_ = session_->Run(
+      Ort::RunOptions{nullptr}, inputNames.data(), inputTensorsValues_.data(),
+      inputTensorsValues_.size(), outputNames.data(), outputNames.size());
+
+  outputTensors_.clear();
+
+  for (size_t i = 0; i < outputsTensorsValues_.size(); i++) {
+    outputTensors_.emplace_back(OrtTensor{
+        outputsTensorsValues_[i].GetTensorMutableData<void>(), outputNames_[i],
+        outputsTensorsValues_[i].GetTensorTypeAndShapeInfo().GetShape(),
+        onnxTypeToOurType(outputsTensorsValues_[i]
+                              .GetTensorTypeAndShapeInfo()
+                              .GetElementType())});
+  }
+}
+
+std::vector<std::string> OnnxInferSession::getInputNames() const {
+  return inputNames_;
+}
+
+std::vector<std::string> OnnxInferSession::getOutputNames() const {
+  return outputNames_;
+}
+
+void OnnxInferSession::initInputTensors(
+    const std::vector<std::vector<int64_t>> &inputShapes) {
+  inputTensors_.clear();
+  inputTensorsValues_.clear();
+
+  for (size_t i = 0; i < session_->GetInputCount(); i++) {
+    const Ort::TypeInfo inputTypeInfo = session_->GetInputTypeInfo(i);
+    const Ort::ConstTensorTypeAndShapeInfo inputShapeInfo =
+        inputTypeInfo.GetTensorTypeAndShapeInfo();
+
+    std::vector<int64_t> inputShape = inputShapes[i];
+    ONNXTensorElementDataType onnxType = inputShapeInfo.GetElementType();
+
+    Ort::Value inputValue = Ort::Value::CreateTensor(
+        allocator_, inputShape.data(), inputShape.size(), onnxType);
+    inputTensorsValues_.push_back(std::move(inputValue));
+
+    inputTensors_.emplace_back(
+        OrtTensor{inputTensorsValues_[i].GetTensorMutableData<void>(),
+                  inputNames_[i], inputShape, onnxTypeToOurType(onnxType)});
+  }
+}
+
+} // namespace qvac::ttslib::chatterbox

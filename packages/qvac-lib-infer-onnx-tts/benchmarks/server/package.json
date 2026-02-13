@@ -4,7 +4,9 @@
   "description": "Benchmark server for TTS ONNX addon",
   "main": "index.js",
   "scripts": {
-    "setup": "bare setup.js",
+    "setup": "bare tts-setup.js",
+    "setup:tts": "bare tts-setup.js",
+    "setup:chatterbox": "bare chatterbox-setup.js",
     "start": "bare index.js",
     "lint": "standard",
     "lint:fix": "standard --fix"
