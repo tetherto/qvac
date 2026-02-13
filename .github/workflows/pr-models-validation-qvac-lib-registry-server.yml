@@ -98,7 +98,10 @@ jobs:
 
   validate-json:
     needs: detect-changes
-    if: needs.detect-changes.outputs.models_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.models_changed == 'true' &&
+      (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +136,10 @@ jobs:
 
   test:
     needs: detect-changes
-    if: needs.detect-changes.outputs.other_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.other_changed == 'true' &&
+      (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
