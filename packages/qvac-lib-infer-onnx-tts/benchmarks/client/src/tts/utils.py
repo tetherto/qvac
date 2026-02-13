@@ -20,6 +20,13 @@ def _get_results_root() -> Path:
     return results_root
 
 
+def _get_model_name(cfg: Config) -> str:
+    """Get model name from config (handles both Piper and Chatterbox configs)"""
+    # Chatterbox uses modelDir, Piper uses modelPath
+    model_path = getattr(cfg.model, 'modelPath', None) or getattr(cfg.model, 'modelDir', None)
+    return Path(model_path).stem if model_path else "chatterbox"
+
+
 def calculate_percentiles(values: List[float]) -> Dict[str, float]:
     """Calculate percentile statistics"""
     if not values:
@@ -45,7 +52,7 @@ def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_
     """
     results_root = _get_results_root()
     
-    model_name = Path(cfg.model.modelPath).stem
+    model_name = _get_model_name(cfg)
     md_path = results_root / f"{model_name}_{label}.md"
     
     rtf_values = [r.rtf for r in results.results]
@@ -226,7 +233,7 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
     """Save comparison report between addon and python implementations"""
     results_root = _get_results_root()
     
-    model_name = Path(cfg.model.modelPath).stem
+    model_name = _get_model_name(cfg)
     md_path = results_root / f"{model_name}_comparison.md"
     
     # Use first run for base comparison

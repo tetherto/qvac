@@ -106,6 +106,103 @@ const fs = require('fs')
 result.artifact.stream.pipe(fs.createWriteStream('./model.ggml'))
 ```
 
+## CLI
+
+The package includes a CLI for querying and downloading models from the registry.
+
+```bash
+npx qvac-registry --help
+```
+
+### List models
+
+By default, `list` prints a compact table with path, source, quantization, and params:
+
+```bash
+$ qvac-registry list
+Found 195 model(s)
+
+PATH	SOURCE	QUANT	PARAMS
+BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf	hf	q4	2B
+Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf	hf	q4_k_m	8B
+ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin	hf	q8_0
+...
+```
+
+Use `--full` for detailed output per model:
+
+```bash
+$ qvac-registry list --full
+Found 195 model(s)
+
+  Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf
+    source:       hf
+    engine:       @qvac/llm-llamacpp
+    quantization: q4_k_m
+    params:       8B
+    size:         4.68 GB
+    license:      Apache-2.0
+    sha256:       d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785
+...
+```
+
+### Filter models
+
+```bash
+# By engine
+$ qvac-registry list --engine @qvac/transcription-whispercpp
+
+# By quantization
+$ qvac-registry list -q q4_k_m
+
+# By name (case-sensitive prefix match on filename)
+$ qvac-registry list -n Qwen3
+
+# Combined
+$ qvac-registry list -e @qvac/llm-llamacpp -q q4_k_m --full
+```
+
+### Get a specific model
+
+```bash
+$ qvac-registry get \
+    "ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin" hf
+
+  ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin
+    source:       hf
+    engine:       @qvac/transcription-whispercpp
+    quantization: q8_0
+    size:         41.52 MB
+    license:      MIT
+    sha256:       ...
+```
+
+### Download a model
+
+```bash
+$ qvac-registry download \
+    "ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q8_0.bin" hf \
+    --output ./ggml-tiny-q8_0.bin
+Downloading ... -> /absolute/path/ggml-tiny-q8_0.bin
+Download complete: 41.52 MB
+```
+
+### JSON output
+
+All commands support `--json` for machine-readable output:
+
+```bash
+$ qvac-registry list --engine @qvac/transcription-whispercpp --json | jq '.[0].path'
+```
+
+### Global flags
+
+```
+--key|-k [key]        Registry core key (overrides QVAC_REGISTRY_CORE_KEY env)
+--storage|-s [path]   Client storage path
+--verbose|-v          Enable verbose/debug logging
+```
+
 ## Examples
 
 See the `examples/` folder for complete working examples:

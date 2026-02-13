@@ -1,0 +1,33 @@
+server:
+  addon_url: "http://localhost:8080/synthesize-chatterbox"
+  addon_version: "^0.1.0"
+  python_url: "http://localhost:8081/synthesize-chatterbox"
+  timeout: 600
+  batch_size: 1
+
+comparison:
+  enabled: true
+  run_addon: true
+  run_python: true
+  round_trip_test: true
+  whisper_model: "tiny"
+  seed: 42
+  num_runs: 1
+
+dataset:
+  name: "harvard"
+  split: "test"
+  max_samples: 1
+
+model:
+  modelDir: "shared-data/models/chatterbox"
+  tokenizerPath: "shared-data/models/chatterbox/tokenizer.json"
+  speechEncoderPath: "shared-data/models/chatterbox/speech_encoder.onnx"
+  embedTokensPath: "shared-data/models/chatterbox/embed_tokens.onnx"
+  conditionalDecoderPath: "shared-data/models/chatterbox/conditional_decoder.onnx"
+  languageModelPath: "shared-data/models/chatterbox/language_model.onnx"
+  referenceAudioPath: "assets/ref.wav"
+  language: "en"
+  sampleRate: 24000
+  useGPU: false
+  variant: "fp32"

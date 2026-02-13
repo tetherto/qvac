@@ -3,8 +3,8 @@
 #include <string>
 
 #include "cli/AddonShim.hpp"
-#include "src/model-interface/TTSModel.hpp"
 #include "src/model-interface/PiperEngine.hpp"
+#include "src/model-interface/TTSModel.hpp"
 
 namespace fs = std::filesystem;
 
@@ -14,8 +14,7 @@ static int run_direct_tts() {
   std::string modelPath =
       "/Users/freddy/Work/Tether/models/piper/en_US-amy-low.onnx";
   std::string language = "en";
-  std::string eSpeakDataPath =
-      "/Users/freddy/Work/Tether/models/piper";
+  std::string eSpeakDataPath = "/Users/freddy/Work/Tether/models/piper";
   std::string modelConfigPath =
       "/Users/freddy/Work/Tether/models/piper/en_US-amy-low.onnx.json";
   std::string text = "Hello world - TTS test from CLI";
@@ -33,7 +32,7 @@ static int run_direct_tts() {
     std::string outPath = model.process(text);
     std::cerr << "[qvac-tts-cli] Synthesis complete. Output WAV: " << outPath
               << std::endl;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     std::cerr << "[qvac-tts-cli] Error: " << e.what() << std::endl;
     return 1;
   }
@@ -48,8 +47,7 @@ static int run_addon_tts() {
   std::string modelPath =
       "/Users/freddy/Work/Tether/models/piper/en_US-amy-low.onnx";
   std::string language = "en";
-  std::string eSpeakDataPath =
-      "/Users/freddy/Work/Tether/models/piper";
+  std::string eSpeakDataPath = "/Users/freddy/Work/Tether/models/piper";
   std::string modelConfigPath =
       "/Users/freddy/Work/Tether/models/piper/en_US-amy-low.onnx.json";
   std::string text = "Hello world - TTS test from AddonShim";
@@ -70,7 +68,7 @@ static int run_addon_tts() {
   while (!done) {
     std::vector<qvac::ttslib::cli_shim::TTSAddonShim::Event> events;
     if (shim.poll(events)) {
-      for (auto& ev : events) {
+      for (auto &ev : events) {
         switch (ev.type) {
         case qvac::ttslib::cli_shim::TTSAddonShim::EventType::JobStarted:
           std::cerr << "[addon-shim] JobStarted id=" << ev.jobId << std::endl;
@@ -94,7 +92,7 @@ static int run_addon_tts() {
   return 0;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   bool useAddon = false;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--mode=addon")
