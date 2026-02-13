@@ -1,14 +1,6 @@
 name: Prebuilds (TTS)
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
     inputs:
       tag:
