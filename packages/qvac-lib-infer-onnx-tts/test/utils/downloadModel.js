@@ -157,7 +157,7 @@ function getFileSizeFromUrl (url) {
   return null
 }
 
-async function downloadRealModel (url, filepath) {
+async function ensureFileDownloaded (url, filepath) {
   const isJson = filepath.endsWith('.json')
 
   // Ensure the directory exists
@@ -304,10 +304,10 @@ async function ensureTTSModelPair (modelName) {
   console.log(`\nEnsuring model files for ${modelName}...`)
 
   // Download .onnx file
-  const onnxResult = await downloadRealModel(onnxUrl, onnxPath)
+  const onnxResult = await ensureFileDownloaded(onnxUrl, onnxPath)
 
   // Download .json file
-  const jsonResult = await downloadRealModel(jsonUrl, jsonPath)
+  const jsonResult = await ensureFileDownloaded(jsonUrl, jsonPath)
 
   return {
     onnx: onnxResult,
@@ -577,4 +577,191 @@ async function ensureWhisperModel (targetPath = null) {
   return { success: false, path: targetPath }
 }
 
-module.exports = { downloadRealModel, ensureTTSModelPair, ensureEspeakData, ensureWhisperModel }
+/**
+ * Download Chatterbox ONNX models from HuggingFace
+ * Models are downloaded from: https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
+ * @param {Object} options - Download options
+ * @param {string} [options.variant='fp32'] - Model variant: 'fp32', 'fp16', 'q4', 'quantized'
+ * @param {string} [options.targetDir] - Target directory for models
+ * @returns {Promise<Object>} Download result with success status and paths
+ */
+async function ensureChatterboxModels (options = {}) {
+  const variant = options.variant || 'fp32'
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'chatterbox')
+
+  console.log(`\nEnsuring Chatterbox models (variant: ${variant})...`)
+
+  // Ensure target directory exists
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true })
+  }
+
+  const baseUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/onnx'
+
+  // Define file suffixes based on variant
+  const suffix = variant === 'fp32' ? '' : `_${variant}`
+
+  // Files to download (each model has .onnx and .onnx_data files)
+  const modelFiles = [
+    { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
+    { name: `speech_encoder${suffix}.onnx_data`, minSize: 100000000 }, // ~1GB for fp32
+    { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
+    { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 }, // ~233MB for fp32
+    { name: `conditional_decoder${suffix}.onnx`, minSize: 1000 },
+    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 100000000 }, // ~769MB for fp32
+    { name: `language_model${suffix}.onnx`, minSize: 100000 },
+    { name: `language_model${suffix}.onnx_data`, minSize: 100000000 } // ~1.27GB for fp32
+  ]
+
+  // Adjust minimum sizes for smaller variants
+  if (variant === 'fp16') {
+    modelFiles[1].minSize = 50000000 // ~522MB
+    modelFiles[3].minSize = 5000000 // ~116MB
+    modelFiles[5].minSize = 50000000 // ~384MB
+    modelFiles[7].minSize = 50000000 // ~635MB
+  } else if (variant === 'q4' || variant === 'quantized') {
+    modelFiles[1].minSize = 20000000
+    modelFiles[3].minSize = 2000000
+    modelFiles[5].minSize = 20000000
+    modelFiles[7].minSize = 20000000
+  }
+
+  const results = {}
+  let allSuccess = true
+
+  for (const file of modelFiles) {
+    const url = `${baseUrl}/${file.name}`
+    // Save with standard names (without variant suffix) for easier usage
+    const targetName = file.name.replace(suffix, '')
+    const targetPath = path.join(targetDir, targetName)
+
+    console.log(`\n Downloading ${file.name}...`)
+
+    // Check if file already exists with sufficient size
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Using cached: ${targetName} (${stats.size} bytes)`)
+        results[targetName] = { success: true, path: targetPath, cached: true }
+        continue
+      } else {
+        console.log(` Cached file too small (${stats.size} bytes), re-downloading...`)
+        fs.unlinkSync(targetPath)
+      }
+    }
+
+    // Download the file
+    let downloadSuccess = false
+
+    if (isMobile) {
+      try {
+        const result = await downloadWithHttp(url, targetPath)
+        downloadSuccess = result.success && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` HTTP download error: ${e.message}`)
+      }
+    } else {
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const downloadResult = spawnSync('curl', [
+          '-L', '-o', targetPath, url,
+          '--fail', '--show-error',
+          '--connect-timeout', '30',
+          '--max-time', '1800' // 30 minutes for large files
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+        if (!downloadSuccess) {
+          console.log(` Download failed with exit code: ${downloadResult.status}`)
+        }
+      } catch (e) {
+        console.log(` Curl error: ${e.message}`)
+      }
+    }
+
+    if (downloadSuccess) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Downloaded: ${targetName} (${stats.size} bytes)`)
+        results[targetName] = { success: true, path: targetPath, cached: false }
+      } else {
+        console.log(` Downloaded file too small: ${stats.size} bytes (expected >${file.minSize})`)
+        fs.unlinkSync(targetPath)
+        results[targetName] = { success: false, path: targetPath }
+        allSuccess = false
+      }
+    } else {
+      results[targetName] = { success: false, path: targetPath }
+      allSuccess = false
+    }
+  }
+
+  // Download tokenizer.json separately (it's in a different location)
+  const tokenizerUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/tokenizer.json'
+  const tokenizerPath = path.join(targetDir, 'tokenizer.json')
+
+  console.log('\n Downloading tokenizer.json...')
+
+  if (fs.existsSync(tokenizerPath)) {
+    const stats = fs.statSync(tokenizerPath)
+    if (stats.size > 1000) {
+      console.log(` ✓ Using cached: tokenizer.json (${stats.size} bytes)`)
+      results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
+    } else {
+      fs.unlinkSync(tokenizerPath)
+    }
+  }
+
+  if (!results['tokenizer.json']?.success) {
+    let downloadSuccess = false
+
+    if (isMobile) {
+      try {
+        const result = await downloadWithHttp(tokenizerUrl, tokenizerPath)
+        downloadSuccess = result.success && fs.existsSync(tokenizerPath)
+      } catch (e) {
+        console.log(` HTTP download error: ${e.message}`)
+      }
+    } else {
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const downloadResult = spawnSync('curl', [
+          '-L', '-o', tokenizerPath, tokenizerUrl,
+          '--fail', '--show-error',
+          '--connect-timeout', '30',
+          '--max-time', '300'
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        downloadSuccess = downloadResult.status === 0 && fs.existsSync(tokenizerPath)
+      } catch (e) {
+        console.log(` Curl error: ${e.message}`)
+      }
+    }
+
+    if (downloadSuccess) {
+      const stats = fs.statSync(tokenizerPath)
+      console.log(` ✓ Downloaded: tokenizer.json (${stats.size} bytes)`)
+      results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: false }
+    } else {
+      results['tokenizer.json'] = { success: false, path: tokenizerPath }
+      allSuccess = false
+    }
+  }
+
+  // Summary
+  console.log('\n' + '='.repeat(50))
+  console.log('CHATTERBOX MODEL DOWNLOAD SUMMARY')
+  console.log('='.repeat(50))
+  for (const [name, result] of Object.entries(results)) {
+    const status = result.success ? '✓' : '✗'
+    const cached = result.cached ? ' (cached)' : ''
+    console.log(` ${status} ${name}${cached}`)
+  }
+  console.log('='.repeat(50))
+
+  return {
+    success: allSuccess,
+    results,
+    targetDir
+  }
+}
+
+module.exports = { ensureFileDownloaded, ensureTTSModelPair, ensureEspeakData, ensureWhisperModel, ensureChatterboxModels }

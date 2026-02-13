@@ -11,7 +11,9 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/PiperEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TashkeelDiacritizer.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
 )
@@ -23,11 +25,14 @@ target_include_directories(
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
 )
 
+find_package(tokenizers_cpp CONFIG REQUIRED)
+
 target_link_libraries(
   qvac-lib-inference-tts-unit-test
   PRIVATE
     piper_core
     onnxruntime::onnxruntime_static
+    tokenizers::tokenizers_cpp
     GTest::gtest
     GTest::gtest_main
     GTest::gmock

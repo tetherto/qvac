@@ -23,11 +23,11 @@ on:
         type: string
         required: false
         default: main
-      version:
-        description: "NPM package version to test (default: latest)"
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/tts-onnx@... for npm, @tetherto/tts-onnx@... for GPR"
         type: string
         required: false
-        default: latest
+        default: "@qvac/tts-onnx@latest"
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -171,28 +171,45 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.ADDON_DIR }}
         run: |
-          VERSION="${{ inputs.version || 'latest' }}"
-          echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
+          PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/tts-onnx@latest' }}"
+          echo "📦 Downloading $PACKAGE_SPEC for manual trigger..."
 
-          # Download package from npm
-          if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then
-            echo "ERROR: Failed to download version $VERSION from npm"
-            echo "Please check that the version exists at https://www.npmjs.com/package/${{ env.ADDON_NAME }}"
+          # Download package (npm or GPR depending on scope in package_spec)
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC"
+            echo "For npm use @qvac/tts-onnx@<version>, for GPR use @tetherto/tts-onnx@<version>"
             exit 1
           fi
 
           # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
-          # Validate prebuilds directory exists
-          if [ ! -d "package/prebuilds" ]; then
+          # Find prebuilds: addon layout has package/prebuilds; mono layout may nest under package/packages/.../prebuilds
+          PREBUILDS_SRC=""
+          if [ -d "package/prebuilds" ]; then
+            PREBUILDS_SRC="package/prebuilds"
+          else
+            # Search for prebuilds under package/ (e.g. mono: package/packages/qvac-lib-infer-onnx-tts/prebuilds)
+            CANDIDATE=$(find package -type d -name prebuilds 2>/dev/null | head -1)
+            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
+              PREBUILDS_SRC="$CANDIDATE"
+              echo "Using prebuilds from mono/nested layout: $PREBUILDS_SRC"
+            fi
+          fi
+
+          if [ -z "$PREBUILDS_SRC" ] || [ ! -d "$PREBUILDS_SRC" ]; then
             echo "ERROR: No prebuilds directory found in package"
-            echo "The downloaded package may not contain prebuilt binaries"
+            echo "Contents of downloaded package:"
+            ls -la package/ 2>/dev/null || true
+            find package -type d -name prebuilds 2>/dev/null || true
+            echo ""
+            echo "Use a package that includes prebuilt binaries (e.g. @qvac/tts-onnx, @tetherto/tts-onnx, or @tetherto/tts-onnx-mono with prebuilds)."
             exit 1
           fi
 
           # Move prebuilds to expected location
-          mv package/prebuilds ./prebuilds
+          rm -rf ./prebuilds
+          cp -r "$PREBUILDS_SRC" ./prebuilds
 
           # Cleanup
           rm -rf package *.tgz
