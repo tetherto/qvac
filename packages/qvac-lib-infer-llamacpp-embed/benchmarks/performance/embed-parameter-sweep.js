@@ -1,0 +1,712 @@
+'use strict'
+
+const fs = require('bare-fs')
+const path = require('bare-path')
+const process = require('bare-process')
+const FilesystemDL = require('@qvac/dl-filesystem')
+
+function loadLocalEmbedAddon () {
+  return require('../../index')
+}
+
+function loadNpmEmbedAddon () {
+  return require('@qvac/embed-llamacpp')
+}
+
+function createDebugLogger (enabled) {
+  return {
+    log: (...msgs) => {
+      if (enabled) console.log(...msgs)
+    },
+    warn: (...msgs) => {
+      if (enabled) console.warn(...msgs)
+    }
+  }
+}
+
+function parseAddonSource (value) {
+  const normalized = String(value || 'local').trim().toLowerCase()
+  if (normalized === 'local' || normalized === 'npm') return normalized
+  throw new Error(`Invalid --addon-source value "${value}". Expected "local" or "npm".`)
+}
+
+function resolveAddonCtor (addonSource) {
+  try {
+    return addonSource === 'npm' ? loadNpmEmbedAddon() : loadLocalEmbedAddon()
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error)
+    throw new Error(
+      `Failed to load addon source "${addonSource}": ${message}. ` +
+      (addonSource === 'local'
+        ? 'Run `npm run build` for local addon artifacts.'
+        : 'Run `npm run performance:install` to install npm addon package.')
+    )
+  }
+}
+
+const {
+  DEFAULT_RESULTS_DIR,
+  DEFAULT_REPEATS,
+  DEFAULT_INPUTS_FILE,
+  MODELS,
+  PARAMETER_SWEEP
+} = require('./embed-parameter-sweep.config')
+
+function createAddonRuntimeLogger (debugEnabled) {
+  if (!debugEnabled) {
+    return {
+      error: () => {},
+      warn: () => {},
+      info: () => {},
+      debug: () => {}
+    }
+  }
+
+  return {
+    error: (...msgs) => console.error(...msgs),
+    warn: (...msgs) => console.warn(...msgs),
+    info: (...msgs) => console.log(...msgs),
+    debug: (...msgs) => console.debug(...msgs)
+  }
+}
+
+function parseArgs (argv) {
+  const parsed = {}
+  for (let i = 2; i < argv.length; i++) {
+    const token = argv[i]
+    if (!token.startsWith('--')) continue
+    const key = token.slice(2)
+    const next = argv[i + 1]
+    if (!next || next.startsWith('--')) {
+      parsed[key] = true
+    } else {
+      parsed[key] = next
+      i++
+    }
+  }
+  return parsed
+}
+
+function ensureDir (dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true })
+}
+
+function elapsedMs (hrStart) {
+  const [sec, nano] = process.hrtime(hrStart)
+  return sec * 1000 + nano / 1e6
+}
+
+function round (num, digits = 4) {
+  if (typeof num !== 'number' || Number.isNaN(num)) return null
+  const scale = Math.pow(10, digits)
+  return Math.round(num * scale) / scale
+}
+
+function parsePositiveInt (value, name) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${name}: ${value}. Expected a positive integer.`)
+  }
+  return parsed
+}
+
+function cosineSimilarity (a, b) {
+  if (a.length !== b.length) {
+    throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`)
+  }
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB)
+  if (denominator < 1e-12) return 1.0 * Math.sign(dotProduct)
+  return dotProduct / denominator
+}
+
+function estimateTokens (inputs) {
+  let total = 0
+  for (const text of inputs) {
+    const words = String(text).trim().split(/\s+/).filter(Boolean).length
+    total += Math.max(1, words)
+  }
+  return total
+}
+
+function normalizeEmbeddings (rawEmbeddings) {
+  if (!Array.isArray(rawEmbeddings) || !Array.isArray(rawEmbeddings[0])) {
+    throw new Error('Invalid embedding response structure')
+  }
+  return rawEmbeddings[0].map((vector) => Array.from(vector))
+}
+
+function buildConfigString (runtimeConfig, options = {}) {
+  const debugEnabled = !!options.debugEnabled
+  const parts = []
+  if (runtimeConfig.device != null) parts.push(`-dev\t${runtimeConfig.device}`)
+  if (runtimeConfig.batchSize != null) parts.push(`--batch-size\t${runtimeConfig.batchSize}`)
+  if (runtimeConfig.verbosity != null) parts.push(`verbosity\t${runtimeConfig.verbosity}`)
+  if (runtimeConfig.flashAttn != null) parts.push(`-fa\t${runtimeConfig.flashAttn}`)
+  if (runtimeConfig.ngl != null) parts.push(`-ngl\t${runtimeConfig.ngl}`)
+  if (runtimeConfig.noMmap) parts.push('--no-mmap')
+  if (!debugEnabled) {
+    // Suppress native llama.cpp startup logs in benchmark mode.
+    parts.push('--log-disable')
+  }
+  return parts.join('\n')
+}
+
+function resolveModelName (modelDef, quantization) {
+  return modelDef.quantizationFiles[quantization] || null
+}
+
+function checkModelExists (modelDir, modelName) {
+  return fs.existsSync(path.join(modelDir, modelName))
+}
+
+function memorySnapshot () {
+  if (typeof process.memoryUsage !== 'function') {
+    return { rssMb: null, heapUsedMb: null, externalMb: null }
+  }
+  const mem = process.memoryUsage()
+  return {
+    rssMb: round(mem.rss / (1024 * 1024), 2),
+    heapUsedMb: round(mem.heapUsed / (1024 * 1024), 2),
+    externalMb: round(mem.external / (1024 * 1024), 2)
+  }
+}
+
+function similarityStats (baseline, candidate) {
+  if (!baseline || !candidate) return null
+  if (baseline.length !== candidate.length) return null
+  const scores = []
+  for (let i = 0; i < baseline.length; i++) {
+    scores.push(cosineSimilarity(baseline[i], candidate[i]))
+  }
+  if (scores.length === 0) return null
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  let sum = 0
+  for (const score of scores) {
+    if (score < min) min = score
+    if (score > max) max = score
+    sum += score
+  }
+  return {
+    avg: round(sum / scores.length, 6),
+    min: round(min, 6),
+    max: round(max, 6),
+    count: scores.length
+  }
+}
+
+function cartesianProduct (arrays) {
+  return arrays.reduce(
+    (acc, curr) => acc.flatMap((prefix) => curr.map((x) => [...prefix, x])),
+    [[]]
+  )
+}
+
+function uniqueValuesWithDefault (values, defaultValue) {
+  const out = []
+  const seen = new Set()
+  for (const value of [defaultValue, ...(values || [])]) {
+    const key = typeof value === 'string' ? `s:${value}` : `j:${JSON.stringify(value)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(value)
+  }
+  return out
+}
+
+function buildCases (modelDef, sweep) {
+  const baseQuant = modelDef.defaultQuantization
+  const defaults = modelDef.defaults || {}
+  const supportedQuants = uniqueValuesWithDefault(sweep.quantization, baseQuant)
+    .filter((quant) => !!resolveModelName(modelDef, quant))
+
+  if (supportedQuants.length === 0) {
+    throw new Error(`No supported quantizations found for model "${modelDef.id}"`)
+  }
+
+  const devices = uniqueValuesWithDefault(sweep.device, defaults.device)
+  const batchSizes = uniqueValuesWithDefault(sweep.batchSize, defaults.batchSize)
+  const noMmapValues = uniqueValuesWithDefault(sweep.noMmap, defaults.noMmap)
+  const flashAttnValues = uniqueValuesWithDefault(sweep.flashAttn, defaults.flashAttn)
+  const verbosityValues = uniqueValuesWithDefault(sweep.verbosity, defaults.verbosity)
+
+  const cases = []
+  cases.push({
+    caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults`,
+    parameter: 'baseline',
+    value: 'default',
+    quantization: baseQuant,
+    modelName: resolveModelName(modelDef, baseQuant),
+    runtimeConfig: { ...defaults },
+    isBaseline: true
+  })
+
+  if (devices.length > 0 && batchSizes.length > 0 && noMmapValues.length > 0 && flashAttnValues.length > 0 && verbosityValues.length > 0) {
+    const combos = cartesianProduct([
+      supportedQuants,
+      devices,
+      batchSizes,
+      noMmapValues,
+      flashAttnValues,
+      verbosityValues
+    ])
+
+    for (const [quantization, device, batchSize, noMmap, flashAttn, verbosity] of combos) {
+      cases.push({
+        caseId: `${modelDef.id}__q=${quantization}__dev=${device}__bs=${batchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}__v=${verbosity}`,
+        parameter: 'full-grid',
+        value: 'combination',
+        quantization,
+        modelName: resolveModelName(modelDef, quantization),
+        runtimeConfig: {
+          ...defaults,
+          device,
+          batchSize,
+          noMmap,
+          flashAttn,
+          verbosity
+        },
+        isBaseline: false
+      })
+    }
+  }
+
+  cases.sort((a, b) => Number(b.isBaseline) - Number(a.isBaseline))
+  return cases
+}
+
+function average (values) {
+  if (!values.length) return null
+  let sum = 0
+  for (const value of values) sum += value
+  return sum / values.length
+}
+
+function stddev (values) {
+  if (values.length <= 1) return 0
+  const avg = average(values)
+  let varianceSum = 0
+  for (const value of values) {
+    const diff = value - avg
+    varianceSum += diff * diff
+  }
+  return Math.sqrt(varianceSum / values.length)
+}
+
+function formatDurationMs (ms) {
+  if (typeof ms !== 'number' || Number.isNaN(ms) || ms < 0) return '?:??:??'
+  const totalSeconds = Math.round(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function truncateText (text, maxLen) {
+  const value = String(text ?? '')
+  if (!Number.isInteger(maxLen) || maxLen <= 0) return ''
+  if (value.length <= maxLen) return value
+  if (maxLen <= 3) return value.slice(0, maxLen)
+  return `${value.slice(0, maxLen - 3)}...`
+}
+
+function createProgressReporter (totalRuns) {
+  const startTime = Date.now()
+  let completedRuns = 0
+  let lastNonTtyPercent = -1
+  let lastRenderedLength = 0
+  const canRewriteLine = !!(process.stdout && typeof process.stdout.write === 'function')
+  const barWidth = 24
+
+  function render (context) {
+    const percent = totalRuns > 0 ? (completedRuns / totalRuns) * 100 : 100
+    const elapsedMs = Date.now() - startTime
+    const etaMs = completedRuns > 0
+      ? (elapsedMs / completedRuns) * (totalRuns - completedRuns)
+      : null
+
+    const modelLabel = context && context.modelId ? truncateText(context.modelId, 24) : 'unknown'
+    const caseLabel = context && typeof context.caseIndex === 'number' && typeof context.caseCount === 'number'
+      ? `${context.caseIndex}/${context.caseCount}`
+      : '?/?'
+    const repeatLabel = context && typeof context.repeat === 'number' && typeof context.repeats === 'number'
+      ? `${context.repeat}/${context.repeats}`
+      : '?/?'
+    const etaLabel = etaMs == null ? '--:--:--' : formatDurationMs(etaMs)
+
+    if (!canRewriteLine) {
+      const flooredPercent = Math.floor(percent)
+      if (flooredPercent === lastNonTtyPercent && completedRuns !== totalRuns) return
+      lastNonTtyPercent = flooredPercent
+      console.log(
+        `[progress] ${completedRuns}/${totalRuns} (${percent.toFixed(1)}%)` +
+        ` | model=${modelLabel} case=${caseLabel} repeat=${repeatLabel} | eta=${etaLabel}`
+      )
+      return
+    }
+
+    const filled = Math.round((percent / 100) * barWidth)
+    const bar = `${'#'.repeat(filled)}${'-'.repeat(Math.max(0, barWidth - filled))}`
+    let line =
+      `[progress] [${bar}] ${completedRuns}/${totalRuns} (${percent.toFixed(1)}%)` +
+      ` | m=${modelLabel} c=${caseLabel} r=${repeatLabel} eta=${etaLabel}`
+    const columns = process.stdout && Number.isInteger(process.stdout.columns) ? process.stdout.columns : null
+    if (columns && columns > 0 && line.length >= columns) {
+      line = truncateText(line, columns - 1)
+    }
+    const clearPadding = lastRenderedLength > line.length ? ' '.repeat(lastRenderedLength - line.length) : ''
+    process.stdout.write(`\r${line}${clearPadding}`)
+    lastRenderedLength = line.length
+    if (completedRuns === totalRuns) {
+      process.stdout.write('\n')
+    }
+  }
+
+  return {
+    tick (context) {
+      completedRuns += 1
+      render(context)
+    },
+    start () {
+      render({})
+    }
+  }
+}
+
+function aggregateRunMetrics (runMetrics) {
+  const loadMsValues = runMetrics.map((x) => x.loadMs)
+  const runMsValues = runMetrics.map((x) => x.runMs)
+  const unloadMsValues = runMetrics.map((x) => x.unloadMs)
+  const epsValues = runMetrics.map((x) => x.embeddingsPerSecond)
+  const tpsValues = runMetrics.map((x) => x.tps)
+  const rssValues = runMetrics.map((x) => x.runtimeMemory.rssMb).filter((x) => x != null)
+  const heapValues = runMetrics.map((x) => x.runtimeMemory.heapUsedMb).filter((x) => x != null)
+  const extValues = runMetrics.map((x) => x.runtimeMemory.externalMb).filter((x) => x != null)
+
+  return {
+    repeats: runMetrics.length,
+    loadMs: round(average(loadMsValues), 3),
+    runMs: round(average(runMsValues), 3),
+    unloadMs: round(average(unloadMsValues), 3),
+    loadMsStd: round(stddev(loadMsValues), 3),
+    runMsStd: round(stddev(runMsValues), 3),
+    unloadMsStd: round(stddev(unloadMsValues), 3),
+    embeddingsPerSecond: round(average(epsValues), 3),
+    tps: round(average(tpsValues), 3),
+    runtimeMemory: {
+      rssMb: round(average(rssValues), 2),
+      heapUsedMb: round(average(heapValues), 2),
+      externalMb: round(average(extValues), 2)
+    }
+  }
+}
+
+async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runtimeConfig, inputs, debugEnabled }) {
+  const loader = new FilesystemDL({ dirPath: modelDir })
+  const configString = buildConfigString(runtimeConfig, { debugEnabled })
+  const estimatedTokens = estimateTokens(inputs)
+  const addonRuntimeLogger = createAddonRuntimeLogger(debugEnabled)
+
+  let model = null
+  let loadMs = null
+  let runMs = null
+  let unloadMs = null
+  let embeddings = null
+  let primaryError = null
+  const cleanupErrors = []
+
+  try {
+    model = new addonCtor({
+      modelName,
+      loader,
+      logger: addonRuntimeLogger,
+      diskPath: modelDir,
+      opts: { stats: false }
+    }, configString)
+
+    const loadStart = process.hrtime()
+    await model.load()
+    loadMs = elapsedMs(loadStart)
+
+    const runStart = process.hrtime()
+    const response = await model.run(inputs)
+    const rawEmbeddings = await response.await()
+    runMs = elapsedMs(runStart)
+    embeddings = normalizeEmbeddings(rawEmbeddings)
+  } catch (err) {
+    primaryError = err
+  } finally {
+    try {
+      if (model) {
+        const unloadStart = process.hrtime()
+        await model.unload()
+        unloadMs = elapsedMs(unloadStart)
+      }
+    } catch (unloadError) {
+      cleanupErrors.push(`unload_error=${unloadError && unloadError.message ? unloadError.message : String(unloadError)}`)
+    }
+    try {
+      await loader.close()
+    } catch (closeError) {
+      cleanupErrors.push(`loader_close_error=${closeError && closeError.message ? closeError.message : String(closeError)}`)
+    }
+  }
+
+  if (primaryError || cleanupErrors.length > 0) {
+    const primary = primaryError ? (primaryError.message || String(primaryError)) : null
+    const joined = [primary, ...cleanupErrors].filter(Boolean).join('; ')
+    throw new Error(`Case failed with addon=${addonSource} for model=${modelName} config="${configString.replace(/\n/g, ', ')}": ${joined}`)
+  }
+
+  const runS = runMs ? runMs / 1000 : null
+  return {
+    metrics: {
+      loadMs: round(loadMs, 3),
+      runMs: round(runMs, 3),
+      unloadMs: round(unloadMs, 3),
+      estimatedTokens,
+      inputsCount: inputs.length,
+      embeddingsPerSecond: round(runS ? inputs.length / runS : null, 3),
+      tps: round(runS ? estimatedTokens / runS : null, 3),
+      runtimeMemory: memorySnapshot()
+    },
+    embeddings
+  }
+}
+
+async function runCase ({ addonCtor, addonSource, modelDir, modelName, runtimeConfig, inputs, repeats, onRepeatComplete, debugEnabled }) {
+  const runMetrics = []
+  let firstEmbeddings = null
+
+  for (let repeat = 1; repeat <= repeats; repeat++) {
+    const result = await runCaseOnce({
+      addonCtor,
+      addonSource,
+      modelDir,
+      modelName,
+      runtimeConfig,
+      inputs,
+      debugEnabled
+    })
+    runMetrics.push(result.metrics)
+    if (!firstEmbeddings) {
+      firstEmbeddings = result.embeddings
+    }
+    if (typeof onRepeatComplete === 'function') {
+      onRepeatComplete({ repeat, repeats })
+    }
+  }
+
+  return {
+    metrics: aggregateRunMetrics(runMetrics),
+    embeddings: firstEmbeddings
+  }
+}
+
+function tsFileStamp () {
+  const d = new Date()
+  const yyyy = String(d.getFullYear())
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`
+}
+
+function toMarkdown (report) {
+  const lines = []
+  lines.push('# Embed Parameter Sweep Benchmark Report')
+  lines.push('')
+  lines.push(`- Started: ${report.startedAt}`)
+  lines.push(`- Finished: ${report.finishedAt}`)
+  lines.push(`- Repeats per case: ${report.repeats}`)
+  lines.push(`- Sweep mode: full-grid`)
+  lines.push(`- Input prompts: ${report.inputsCount}`)
+  lines.push('')
+  lines.push('> Runtime memory currently reports process-level JS memory only.')
+  lines.push('')
+  for (const model of report.models) {
+    lines.push(`## Model: ${model.modelId}`)
+    lines.push('| Quantization | Device | Batch Size | No Mmap | Flash Attn | Verbosity | Load ms (avg) | Run ms (avg) | Unload ms (avg) | Memory RSS MB (avg) | TPS (avg) | Avg CosSim |')
+    lines.push('|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|')
+    for (const item of model.cases) {
+      const cos = item.similarity && typeof item.similarity.avg === 'number' ? item.similarity.avg : ''
+      const quantizationCell = item.isBaseline ? 'default' : (item.quantization ?? '')
+      const deviceCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.device != null ? String(item.runtimeConfig.device) : '')
+      const batchSizeCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.batchSize != null ? String(item.runtimeConfig.batchSize) : '')
+      const noMmapCell = item.isBaseline
+        ? 'default'
+        : (
+            item.runtimeConfig && item.runtimeConfig.noMmap != null
+              ? (item.runtimeConfig.noMmap ? 'on' : 'off')
+              : ''
+          )
+      const flashAttnCell = item.isBaseline
+        ? 'default'
+        : (item.runtimeConfig && item.runtimeConfig.flashAttn != null ? String(item.runtimeConfig.flashAttn) : '')
+      const verbosityCell = item.isBaseline
+        ? 'default'
+        : (item.runtimeConfig && item.runtimeConfig.verbosity != null ? String(item.runtimeConfig.verbosity) : '')
+      const memoryRssMb = item.metrics && item.metrics.runtimeMemory
+        ? item.metrics.runtimeMemory.rssMb
+        : ''
+      lines.push(
+        `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${verbosityCell}` +
+        ` | ${item.metrics.loadMs ?? ''} | ${item.metrics.runMs ?? ''} | ${item.metrics.unloadMs ?? ''}` +
+        ` | ${memoryRssMb ?? ''} | ${item.metrics.tps ?? ''} | ${cos} |`
+      )
+    }
+    lines.push('')
+  }
+  return `${lines.join('\n')}\n`
+}
+
+function loadInputsFromFile (filePath) {
+  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  if (!Array.isArray(parsed) || parsed.some((x) => typeof x !== 'string')) {
+    throw new Error(`Invalid inputs JSON at ${filePath}; expected string[]`)
+  }
+  return parsed
+}
+
+async function main () {
+  const args = parseArgs(process.argv)
+  const debugEnabled = Boolean(args.debug)
+  const debugLogger = createDebugLogger(debugEnabled)
+  const addonSource = parseAddonSource(args['addon-source'])
+  const addonCtor = resolveAddonCtor(addonSource)
+  const repeats = args.repeats ? parsePositiveInt(args.repeats, 'repeats') : DEFAULT_REPEATS
+  const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
+  const inputsFilePath = args['inputs-file']
+    ? path.resolve(args['inputs-file'])
+    : DEFAULT_INPUTS_FILE
+  if (!fs.existsSync(inputsFilePath)) {
+    throw new Error(
+      `Missing inputs file: ${inputsFilePath}. ` +
+      'Run `npm run run:param-sweep` to auto-generate MTEB inputs, or pass --inputs-file <path>.'
+    )
+  }
+  const inputs = loadInputsFromFile(inputsFilePath)
+  const selectedModelIds = args.models
+    ? String(args.models).split(',').map((x) => x.trim()).filter(Boolean)
+    : MODELS.map((m) => m.id)
+
+  const selectedModels = MODELS.filter((m) => selectedModelIds.includes(m.id))
+  if (selectedModels.length === 0) {
+    throw new Error(`No matching models for --models=${selectedModelIds.join(',')}`)
+  }
+
+  ensureDir(resultsDir)
+  const report = {
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    repeats,
+    inputsCount: inputs.length,
+    selectedModelIds,
+    models: []
+  }
+
+  const plannedRunsByModel = selectedModels.map((modelDef) => {
+    const cases = buildCases(modelDef, PARAMETER_SWEEP)
+    return { modelDef, cases }
+  })
+  const totalPlannedRuns = plannedRunsByModel.reduce((acc, item) => acc + (item.cases.length * repeats), 0)
+  const progress = createProgressReporter(totalPlannedRuns)
+
+  debugLogger.log(`Running full-grid parameter sweep for: ${selectedModels.map((m) => m.id).join(', ')}`)
+  debugLogger.log(`Addon source: ${addonSource}`)
+  debugLogger.log(`Repeats per case: ${repeats}`)
+  debugLogger.log(`Total planned runs: ${totalPlannedRuns}`)
+  progress.start()
+
+  for (const plan of plannedRunsByModel) {
+    const modelDef = plan.modelDef
+    const cases = plan.cases
+    debugLogger.log(`\n=== ${modelDef.id} ===`)
+    debugLogger.log(`Cases to run: ${cases.length}`)
+    let baselineEmbeddings = null
+    const caseResults = []
+
+    for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
+      const testCase = cases[caseIndex]
+      if (!testCase.modelName) {
+        throw new Error(
+          `Quantization "${testCase.quantization}" is not configured for model "${modelDef.id}" (case ${testCase.caseId})`
+        )
+      }
+      if (!checkModelExists(modelDef.modelDir, testCase.modelName)) {
+        throw new Error(
+          `Missing model file for case ${testCase.caseId}: ${path.join(modelDef.modelDir, testCase.modelName)}. ` +
+          'Run model preparation first (npm run performance:prepare-models).'
+        )
+      }
+
+      debugLogger.log(`Running: ${testCase.caseId}`)
+      const result = await runCase({
+        addonCtor,
+        addonSource,
+        modelDir: modelDef.modelDir,
+        modelName: testCase.modelName,
+        runtimeConfig: testCase.runtimeConfig,
+        inputs,
+        repeats,
+        debugEnabled,
+        onRepeatComplete: ({ repeat, repeats: repeatsForCase }) => {
+          progress.tick({
+            modelId: modelDef.id,
+            caseIndex: caseIndex + 1,
+            caseCount: cases.length,
+            repeat,
+            repeats: repeatsForCase
+          })
+        }
+      })
+
+      if (testCase.parameter === 'baseline') {
+        baselineEmbeddings = result.embeddings
+      }
+
+      const similarity = testCase.parameter === 'baseline'
+        ? { avg: 1, min: 1, max: 1, count: baselineEmbeddings ? baselineEmbeddings.length : 0 }
+        : similarityStats(baselineEmbeddings, result.embeddings)
+
+      caseResults.push({
+        ...testCase,
+        metrics: result.metrics,
+        similarity
+      })
+    }
+
+    report.models.push({
+      modelId: modelDef.id,
+      source: modelDef.source,
+      modelDir: modelDef.modelDir,
+      cases: caseResults
+    })
+  }
+
+  report.finishedAt = new Date().toISOString()
+  const stamp = tsFileStamp()
+  const jsonPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.json`)
+  const mdPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.md`)
+  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2))
+  fs.writeFileSync(mdPath, toMarkdown(report))
+  debugLogger.log('\nDone.')
+  debugLogger.log(`JSON: ${jsonPath}`)
+  debugLogger.log(`MD:   ${mdPath}`)
+}
+
+main().catch((error) => {
+  console.error('Parameter sweep failed:')
+  console.error(error && error.stack ? error.stack : String(error))
+  process.exit(1)
+})
