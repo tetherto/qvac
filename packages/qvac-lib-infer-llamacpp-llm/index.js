@@ -11,9 +11,44 @@ const noop = () => { }
 const RUN_QUEUE_BUSY_ERROR =
   'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
 
-/**
- * GGML client implementation for Llama LLM model
- */
+const VALIDATION_TYPES = ['none', 'split', 'dataset']
+const DEFAULT_VALIDATION_FRACTION = 0.05
+
+function normalizeFinetuneParams (opts) {
+  const validation = opts.validation
+  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
+    throw new Error(
+      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number] }. ' +
+      'Example: validation: { type: \'split\', fraction: 0.05 } or validation: { type: \'none\' }.'
+    )
+  }
+  const out = { ...opts }
+  const type = validation.type
+  if (!VALIDATION_TYPES.includes(type)) {
+    throw new Error(
+      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
+    )
+  }
+  if (type === 'none') {
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = false
+  } else if (type === 'split') {
+    const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
+    out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
+    out.useEvalDatasetForValidation = false
+  } else {
+    if (!opts.evalDatasetDir || opts.evalDatasetDir === opts.trainDatasetDir) {
+      throw new Error(
+        "validation.type is 'dataset' but evalDatasetDir is missing or same as trainDatasetDir. Provide a separate eval dataset path."
+      )
+    }
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = true
+  }
+  delete out.validation
+  return out
+}
+
 class LlmLlamacpp extends BaseInference {
   /**
    * Creates an instance of LlmLlamacpp.
@@ -328,6 +363,7 @@ class LlmLlamacpp extends BaseInference {
     if (finetuningOptions != null) {
       this._defaultFinetuneParams = params
     }
+    const paramsToSend = normalizeFinetuneParams(params)
     this.logger?.info?.('finetune() called')
     this.logger?.info?.('Finetuning parameters:', params)
 
@@ -370,7 +406,7 @@ class LlmLlamacpp extends BaseInference {
     }
 
     try {
-      await this.addon.finetune(params)
+      await this.addon.finetune(paramsToSend)
       return handle
     } catch (err) {
       this._finetuneRelease()

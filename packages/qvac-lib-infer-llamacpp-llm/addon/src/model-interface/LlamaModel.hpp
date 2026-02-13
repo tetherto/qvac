@@ -241,7 +241,13 @@ private:
 
   // Finetuning private methods
   void validateFinetuningParams(const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  ggml_opt_dataset_t prepareDatasetFromPath(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const std::string& datasetPath,
+      const char* errorLabel,
+      const char* constructKind);
   ggml_opt_dataset_t prepareTrainingDataset(const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  ggml_opt_dataset_t prepareEvalDataset(const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
   void initializeLoraAdapter(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       uint32_t targetModules,
@@ -264,11 +270,14 @@ private:
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       ggml_opt_dataset_t dataset,
       int64_t trainSplit,
+      int64_t evalSplit,
       llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
       std::function<void(const std::string&)> logCallback,
       uint32_t startEpoch = 0,
-      bool resumingFromPause = false);
+      bool resumingFromPause = false,
+      ggml_opt_dataset_t evalDataset = nullptr,
+      int64_t evalDatasetSampleCount = 0);
   void saveLoraAdapter(
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params);

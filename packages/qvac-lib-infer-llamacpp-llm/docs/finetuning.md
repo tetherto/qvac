@@ -30,6 +30,7 @@ The library supports **LoRA finetuning** of GGUF models. LoRA trains small adapt
 **Key capabilities:**
 - LoRA finetuning with configurable target modules
 - Chat-format (SFT) or causal (next-token) training
+- Validation: none, percentage of training data, or separate eval dataset; `val_loss` logged each epoch when enabled
 - Pause and resume from checkpoints
 - Periodic checkpoint saving during training
 - Run inference while finetuning is paused (see [examples/simple-lora-finetune-pause-inference-resume.js](../examples/simple-lora-finetune-pause-inference-resume.js))
@@ -41,9 +42,9 @@ The library supports **LoRA finetuning** of GGUF models. LoRA trains small adapt
 ### Architecture
 
 1. **Model loading**: Load a base GGUF model (e.g., Qwen3-0.6B-Q8_0.gguf) with `model.load()`.
-2. **Dataset preparation**: Training data is read from JSONL (chat format) or plain text files.
+2. **Dataset preparation**: Training data is read from JSONL (chat format) or plain text files. Validation uses either a fraction of that data (when `validation.type` is `'split'`), a separate eval file (`'dataset'`), or none (`'none'`).
 3. **LoRA adapter**: A LoRA adapter is initialized and attached to the model. Only the specified modules (e.g., attention, FFN) are trained.
-4. **Training loop**: The optimizer runs for the configured number of epochs. Progress is streamed to stdout (e.g. `data=X/Y loss=...` where X/Y is current batch / total batches per epoch).
+4. **Training loop**: The optimizer runs for the configured number of epochs. Progress is streamed to stdout (e.g. `data=X/Y loss=...`). When validation is enabled, `val_loss` is logged after each epoch.
 5. **Output**: The trained LoRA adapter is saved to `outputParametersDir` (e.g., `./finetuned-model-direct/trained-lora-adapter.gguf`).
 
 ### Training Modes
@@ -109,7 +110,8 @@ await model.cancel()
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `trainDatasetDir` | string | Yes | — | Path to training dataset file (e.g. `.jsonl` for SFT, `.txt` for causal) |
-| `evalDatasetDir` | string | Yes | — | Path to eval dataset file. When different from `trainDatasetDir`, disables the automatic 5% validation split from training data. |
+| `evalDatasetDir` | string | No | `""` | Path to a separate eval dataset file. Required when `validation.type` is `'dataset'`; must differ from `trainDatasetDir`. Same format as train. **Coming change:** the eval dataset path will be provided inside the `validation` object (e.g. `validation.path`) instead of this top-level option. |
+| `validation` | object | Yes | — | How to run validation. See [Validation](#validation) below. |
 | `outputParametersDir` | string | Yes | — | Directory (or file path) for the final LoRA adapter |
 | `numberOfEpochs` | number | Yes | — | Number of training epochs |
 | `learningRate` | number | Yes | — | Initial learning rate (e.g., 1e-5) |
@@ -133,6 +135,55 @@ await model.cancel()
 | `warmupSteps` | number | No | 0 | Explicit warmup steps (used when `warmupStepsSet: true`). |
 | `weightDecay` | number | No | 0 | Weight decay |
 
+### Validation
+
+You **must** provide a `validation` object. It is required and there is no default.
+
+**Current shape:**
+
+```js
+validation: {
+  type: 'none' | 'split' | 'dataset',
+  fraction?: number   // only when type === 'split'; default 0.05
+}
+```
+
+When `type` is `'dataset'`, the eval dataset path is currently provided as the top-level option `evalDatasetDir` (see table above).
+
+**Coming change:** The eval dataset path will be provided inside the `validation` object, for example:
+
+```js
+validation: {
+  type: 'dataset',
+  path: './eval.jsonl'   // planned: eval dataset path inside validation
+}
+```
+
+Until then, use `validation: { type: 'dataset' }` together with top-level `evalDatasetDir`.
+
+| `type` | Behavior |
+|--------|----------|
+| **`'none'`** | No validation. All data is used for training; no `val_loss` is computed. |
+| **`'split'`** | Reserve a fraction of the training data for validation (holdout). Use `fraction` (0–1); default `0.05` (5%). Logs `val_loss` each epoch. |
+| **`'dataset'`** | Use a separate eval file for validation. Currently requires top-level `evalDatasetDir` (different from `trainDatasetDir`). The eval dataset is loaded and validated after each epoch; logs `val_loss`. |
+
+**Examples:**
+
+```js
+// No validation
+validation: { type: 'none' }
+
+// 5% of train data for validation (default)
+validation: { type: 'split' }
+
+// 10% of train data for validation
+validation: { type: 'split', fraction: 0.1 }
+
+// Separate eval file for validation (current: path at top level)
+validation: { type: 'dataset' },
+evalDatasetDir: './eval.jsonl'
+```
+
 ---
 
 ## Implementation Notes
@@ -154,7 +205,7 @@ The finetuning and pause/resume flow uses **wait conditions** and **events** onl
 
 | API | Backend behavior |
 |-----|------------------|
-| **`finetune(opts?)`** | Calls `addon.finetune(params)` (params from opts or stored). C++ auto-detects resume when a pause checkpoint exists in `checkpointSaveDir`. Returns a handle; `handle.await()` resolves when `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED) is emitted. Call `finetune()` only after awaiting `cancel()` when resuming. |
+| **`finetune(opts?)`** | Normalizes opts (required `validation` object → `validationSplit`, `useEvalDatasetForValidation`), then calls `addon.finetune(params)`. Params come from opts or stored. C++ auto-detects resume when a pause checkpoint exists in `checkpointSaveDir`. Returns a handle; `handle.await()` resolves when `FinetuneComplete` (IDLE/ERROR) or `FinetunePaused` (PAUSED) is emitted. Call `finetune()` only after awaiting `cancel()` when resuming. |
 | **`cancel()`** | Unified stop: during finetuning calls C++ `requestPause()` then `waitUntilFinetuningPauseComplete()` on a background thread (Promise resolves when pause path is done); otherwise calls `cancelJob()`. Always returns a Promise. Does not throw when nothing is running. |
 
 ### Fresh run vs resume
@@ -183,7 +234,7 @@ sequenceDiagram
     participant Queue as outputQueue
 
     User->>LlamaModel: finetune(opts) or finetune() (no args → stored params)
-    LlamaModel->>LlamaModel: _runQueueBusy check, store params
+    LlamaModel->>LlamaModel: _runQueueBusy check, store params, normalize opts (validation → validationSplit, useEvalDatasetForValidation)
     LlamaModel->>Addon: finetune(params)
 
     Addon->>Binding: _binding.finetune(handle, params)
@@ -259,11 +310,11 @@ sequenceDiagram
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| JS | `index.js` → `LlamaModel` | Public API: `finetune()`, `cancel()` (unified stop; during finetune internally pauses and saves checkpoint). Run-queue busy check; handle has `await()`. Wires `_outputCallback` to resolve finetune completion and release queue. |
+| JS | `index.js` → `LlamaModel` | Public API: `finetune()`, `cancel()` (unified stop; during finetune pauses and saves checkpoint). Normalizes opts: `validation` object → `validationSplit` and `useEvalDatasetForValidation` before calling addon. Run-queue busy check; handle has `await()`. Wires `_outputCallback` to resolve finetune completion and release queue. |
 | JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `cancel()` → `_binding.cancel(handle)`. |
-| C++ | `binding.cpp` | BARE exports: `finetune`, `cancel` (unified) → `qvac_lib_inference_addon_llama::*`. |
+| C++ | `binding.cpp` | BARE exports: `finetune`, `cancel` → `qvac_lib_inference_addon_llama::*`. |
 | C++ | `AddonJs.hpp` | Parses JS args, gets `LlamaModel*` via `getLlamaModel(instance)`; optional args set `setFinetuneParams`, then `getFinetuneParams()` for params; `finetune` spawns thread calling `LlamaModel::finetune`. C++ auto-detects resume via `pauseCheckpointExists(checkpointSaveDir)`. `cancel()`: if `isFinetuneRunning()` then `requestPause()` + `JsAsyncTask::run(waitUntilFinetuningPauseComplete)`, else `cancelJob()`; always returns Promise via `JsAsyncTask::run`. |
-| C++ | `LlamaModel.cpp` | `finetune(params, logCallback)` runs training; at start, checks `pauseCheckpointExists(checkpointSaveDir)` to choose resume vs fresh. `isFinetuneRunning()`, `requestPause()`, `waitUntilFinetuningPauseComplete()`, `clearPauseRequest()`. Emits completion via `logCallback` (e.g. `FinetuneComplete`, progress). |
+| C++ | `LlamaModel.cpp` | `finetune(params, logCallback)` runs training; at start, checks `pauseCheckpointExists(checkpointSaveDir)` to choose resume vs fresh. Uses `params.validationSplit` and `params.useEvalDatasetForValidation` to split train/eval or load a separate eval dataset; logs `val_loss` each epoch when validation is enabled. `requestPause()`, `waitUntilFinetuningPauseComplete()`, `clearPauseRequest()`. Emits completion via `logCallback`. |
 | C++ | `LlamaFinetuningHelpers.cpp` | Training loop; on pause writes checkpoint and emits `{"type":"FinetunePaused"}` via `state->logFn`, then signals `pauseDoneCv`. |
 | C++ → JS | `outputQueue` + `OutputCallBackJs` | `enqueueLog` → `queueResult(any(string))`; addon drains queue and invokes JS `outputCallback`. JS parses JSON for `FinetuneComplete` / `FinetunePaused` and resolves `handle.await()`. |
 
@@ -273,7 +324,7 @@ sequenceDiagram
 |-----------|------|
 | `batchSize` | Batch size is controlled by `microBatchSize`. |
 | `warmupRatio` | Warmup steps = `warmupRatio × totalSteps` when `warmupRatioSet: true`. |
-| `evalDatasetDir` | When different from `trainDatasetDir`, disables the 5% validation split. |
+| `evalDatasetDir` | Required when `validation.type` is `'dataset'`; must be a path different from `trainDatasetDir`. Same format as the training file. Planned: eval path will move into `validation` (e.g. `validation.path`). |
 
 ### C++ Backend Overview
 
@@ -287,11 +338,11 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 
 **Training flow**
 
-1. **Dataset** — `prepareTrainingDataset()`: SFT mode reads JSONL and builds chat-formatted samples; causal mode tokenizes plain text and builds next-token pairs via `buildNextTokenDataset()`.
+1. **Dataset** — `prepareTrainingDataset()`: SFT mode reads JSONL and builds chat-formatted samples; causal mode tokenizes plain text and builds next-token pairs via `buildNextTokenDataset()`. Validation: when `validationSplit` > 0 the same dataset is split (first N samples train, rest eval); when `useEvalDatasetForValidation` is true, `prepareEvalDataset()` loads a separate file and validation runs on it after each epoch.
 2. **Checkpoint state** — `initializeCheckpointing()` creates `TrainingCheckpointState` (ctx, model, adapter, checkpoint dir, atomic flags). Stored in `LlamaModel`; the per-batch callback receives the current state via a thread-local pointer (`setCurrentCheckpointState` / `tlsCurrentCheckpointState`) so each finetune thread sees its own state.
-3. **Resume** — At the start of `finetune()`, C++ calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true: `clearPauseRequest()`; then `findLatestPauseCheckpoint()` locates the latest `pause_checkpoint_step_*` dir; `parseCheckpointMetadata()` loads epoch/step and LoRA config; adapter and optimizer state are restored from the checkpoint. Training continues from the saved position. Session params (dataset paths, `numberOfEpochs`, learning rate, etc.) are **not** replaced—they come from the current `params` (the same as the original run when you call `finetune()` with no args). Only the resume **position** and saved LoRA layout (rank, alpha, target modules) come from the checkpoint.
+3. **Resume** — At the start of `finetune()`, C++ calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true: `clearPauseRequest()`; then `findLatestPauseCheckpoint()` locates the latest `pause_checkpoint_step_*` dir; `parseCheckpointMetadata()` loads epoch/step and LoRA config; adapter and optimizer state are restored from the checkpoint. Training continues from the saved position. Session params (dataset paths, `numberOfEpochs`, learning rate, validation settings, etc.) come from the current `params`. Only the resume **position** and saved LoRA layout (rank, alpha, target modules) come from the checkpoint.
 4. **Optimizer** — `configureOptimizer()` sets up `llama_opt_params` (AdamW, LoRA param filter, LR scheduler). `schedulerOptimizerParams` provides per-step learning rate.
-5. **Training loop** — `executeTrainingLoop()` calls `llama_opt_epoch()` for each epoch. The per-batch callback is `optEpochCallbackWrapper` → `optEpochCallback()`.
+5. **Training loop** — `executeTrainingLoop()` calls `llama_opt_epoch()` for each epoch (train split, optional eval split or separate eval dataset). When validation is enabled, `val_loss` is computed and logged after each epoch. The per-batch callback is `optEpochCallbackWrapper` → `optEpochCallback()`.
 6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; on first batch, emits `FinetuningStarted` and sets `isFinetuning=true`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json), sets `shouldExit`, `pauseCheckpointSaved`, `isPaused` (and clears `isFinetuning`), notifies the pause waiter, and emits `FinetunePaused`; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
 7. **Cancel (finetune pause path)** — `requestPause()`: if `currentCheckpointState_` (atomic, per instance) is non-null, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir`; emits `FinetuneComplete` (IDLE). On error: emits `FinetuneComplete` (ERROR).
@@ -367,6 +418,7 @@ async function main() {
   const finetuneOptions = {
     trainDatasetDir: './examples/input/small_train_HF.jsonl',
     evalDatasetDir: './examples/input/eval_HF.jsonl',
+    validation: { type: 'dataset' },
     numberOfEpochs: 8,
     learningRate: 1e-5,
     lrMin: 1e-8,
