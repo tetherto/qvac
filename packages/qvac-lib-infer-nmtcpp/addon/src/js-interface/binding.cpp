@@ -34,6 +34,4 @@ js_value_t* qvac_lib_infer_nmtcpp_exports(
   return exports;
 }
 
-BARE_MODULE(
-    qvac-lib-infer-nmtcpp,
-    qvac_lib_infer_nmtcpp_exports)
+BARE_MODULE(qvac - lib - infer - nmtcpp, qvac_lib_infer_nmtcpp_exports)
