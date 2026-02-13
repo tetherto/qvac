@@ -2839,7 +2839,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/lex.50.50.aren.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ar-en",
     "quantization": "",
@@ -2854,7 +2854,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ar-en",
     "quantization": "",
@@ -2869,7 +2869,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/model.aren.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/model.aren.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ar-en",
     "quantization": "",
@@ -2884,7 +2884,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/vocab.aren.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/vocab.aren.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ar-en",
     "quantization": "",
@@ -2899,7 +2899,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/lex.50.50.csen.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/lex.50.50.csen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist cs-en",
     "quantization": "",
@@ -2914,7 +2914,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata cs-en",
     "quantization": "",
@@ -2929,7 +2929,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/model.csen.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/model.csen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model cs-en",
     "quantization": "",
@@ -2944,7 +2944,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/vocab.csen.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/vocab.csen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary cs-en",
     "quantization": "",
@@ -2959,7 +2959,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/lex.50.50.enar.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/lex.50.50.enar.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ar",
     "quantization": "",
@@ -2974,7 +2974,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ar",
     "quantization": "",
@@ -2989,7 +2989,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/model.enar.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/model.enar.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ar",
     "quantization": "",
@@ -3004,7 +3004,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/vocab.enar.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/vocab.enar.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ar",
     "quantization": "",
@@ -3019,7 +3019,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/lex.50.50.encs.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/lex.50.50.encs.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-cs",
     "quantization": "",
@@ -3034,7 +3034,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-cs",
     "quantization": "",
@@ -3049,7 +3049,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/model.encs.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/model.encs.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-cs",
     "quantization": "",
@@ -3064,7 +3064,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/vocab.encs.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/vocab.encs.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-cs",
     "quantization": "",
@@ -3079,7 +3079,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/lex.50.50.enes.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/lex.50.50.enes.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-es",
     "quantization": "",
@@ -3094,7 +3094,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-es",
     "quantization": "",
@@ -3109,7 +3109,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/model.enes.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/model.enes.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-es",
     "quantization": "",
@@ -3124,7 +3124,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/vocab.enes.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/vocab.enes.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-es",
     "quantization": "",
@@ -3139,7 +3139,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/lex.50.50.enfr.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/lex.50.50.enfr.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-fr",
     "quantization": "",
@@ -3154,7 +3154,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-fr",
     "quantization": "",
@@ -3169,7 +3169,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/model.enfr.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/model.enfr.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-fr",
     "quantization": "",
@@ -3184,7 +3184,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/vocab.enfr.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/vocab.enfr.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-fr",
     "quantization": "",
@@ -3199,7 +3199,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/lex.50.50.enit.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
@@ -3214,7 +3214,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-it",
     "quantization": "",
@@ -3229,7 +3229,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/model.enit.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-it",
     "quantization": "",
@@ -3244,7 +3244,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/vocab.enit.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
@@ -3259,7 +3259,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/lex.50.50.enja.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ja",
     "quantization": "",
@@ -3274,7 +3274,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ja",
     "quantization": "",
@@ -3289,7 +3289,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/model.enja.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/model.enja.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ja",
     "quantization": "",
@@ -3304,7 +3304,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/srcvocab.enja.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/srcvocab.enja.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
@@ -3319,7 +3319,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/trgvocab.enja.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/trgvocab.enja.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
@@ -3334,7 +3334,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/lex.50.50.enpt.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/lex.50.50.enpt.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-pt",
     "quantization": "",
@@ -3349,7 +3349,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-pt",
     "quantization": "",
@@ -3364,7 +3364,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/model.enpt.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/model.enpt.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-pt",
     "quantization": "",
@@ -3379,7 +3379,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/vocab.enpt.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/vocab.enpt.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-pt",
     "quantization": "",
@@ -3394,7 +3394,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/lex.50.50.enru.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/lex.50.50.enru.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ru",
     "quantization": "",
@@ -3409,7 +3409,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ru",
     "quantization": "",
@@ -3424,7 +3424,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/model.enru.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/model.enru.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ru",
     "quantization": "",
@@ -3439,7 +3439,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/vocab.enru.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/vocab.enru.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ru",
     "quantization": "",
@@ -3454,7 +3454,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/lex.50.50.enzh.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-zh",
     "quantization": "",
@@ -3469,7 +3469,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-zh",
     "quantization": "",
@@ -3484,7 +3484,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/model.enzh.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-zh",
     "quantization": "",
@@ -3499,7 +3499,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/srcvocab.enzh.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
@@ -3514,7 +3514,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/trgvocab.enzh.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
@@ -3529,7 +3529,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/lex.50.50.esen.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
@@ -3544,7 +3544,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata es-en",
     "quantization": "",
@@ -3559,7 +3559,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/model.esen.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model es-en",
     "quantization": "",
@@ -3574,7 +3574,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/vocab.esen.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
@@ -3589,7 +3589,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/lex.50.50.fren.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist fr-en",
     "quantization": "",
@@ -3604,7 +3604,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata fr-en",
     "quantization": "",
@@ -3619,7 +3619,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/model.fren.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/model.fren.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model fr-en",
     "quantization": "",
@@ -3634,7 +3634,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/vocab.fren.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/vocab.fren.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary fr-en",
     "quantization": "",
@@ -3649,7 +3649,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/lex.50.50.iten.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/lex.50.50.iten.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist it-en",
     "quantization": "",
@@ -3664,7 +3664,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata it-en",
     "quantization": "",
@@ -3679,7 +3679,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/model.iten.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/model.iten.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model it-en",
     "quantization": "",
@@ -3694,7 +3694,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/vocab.iten.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/vocab.iten.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary it-en",
     "quantization": "",
@@ -3709,7 +3709,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/lex.50.50.jaen.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/lex.50.50.jaen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ja-en",
     "quantization": "",
@@ -3724,7 +3724,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ja-en",
     "quantization": "",
@@ -3739,7 +3739,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/model.jaen.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/model.jaen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ja-en",
     "quantization": "",
@@ -3754,7 +3754,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/vocab.jaen.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/vocab.jaen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ja-en",
     "quantization": "",
@@ -3769,7 +3769,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/lex.50.50.pten.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/lex.50.50.pten.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist pt-en",
     "quantization": "",
@@ -3784,7 +3784,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata pt-en",
     "quantization": "",
@@ -3799,7 +3799,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/model.pten.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/model.pten.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model pt-en",
     "quantization": "",
@@ -3814,7 +3814,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/vocab.pten.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/vocab.pten.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary pt-en",
     "quantization": "",
@@ -3829,7 +3829,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/lex.50.50.ruen.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/lex.50.50.ruen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ru-en",
     "quantization": "",
@@ -3844,7 +3844,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ru-en",
     "quantization": "",
@@ -3859,7 +3859,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/model.ruen.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/model.ruen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ru-en",
     "quantization": "",
@@ -3874,7 +3874,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/vocab.ruen.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/vocab.ruen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ru-en",
     "quantization": "",
@@ -3889,7 +3889,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/lex.50.50.zhen.s2t.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist zh-en",
     "quantization": "",
@@ -3904,7 +3904,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/metadata.json",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata zh-en",
     "quantization": "",
@@ -3919,7 +3919,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/model.zhen.intgemm.alphas.bin",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model zh-en",
     "quantization": "",
@@ -3934,7 +3934,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/vocab.zhen.spm",
+    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary zh-en",
     "quantization": "",
