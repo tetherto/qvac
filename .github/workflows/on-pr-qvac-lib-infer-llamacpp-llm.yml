@@ -113,7 +113,7 @@ jobs:
       tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: needs.prebuild.result == 'success'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
@@ -122,7 +122,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: needs.prebuild.result == 'success'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
