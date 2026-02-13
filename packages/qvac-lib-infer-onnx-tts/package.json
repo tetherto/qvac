@@ -43,7 +43,9 @@
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/loader.fake.js",
-    "test/utils/runWhisper.js"
+    "test/utils/runWhisper.js",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     "./package": "./package.json",

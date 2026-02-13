@@ -32,7 +32,9 @@
     "prebuilds",
     "models",
     "lib",
-    "test/mobile"
+    "test/mobile",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
