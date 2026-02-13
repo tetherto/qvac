@@ -553,7 +553,7 @@ jobs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
@@ -577,6 +577,8 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.WORKDIR }}
+          repo_name: "whispercpp"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Capture published version
         id: capture_version
