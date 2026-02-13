@@ -5,6 +5,9 @@
   "license": "Apache-2.0",
   "type": "commonjs",
   "main": "index.js",
+  "bin": {
+    "qvac-registry": "./bin/cli.js"
+  },
   "exports": {
     ".": "./index.js",
     "./types": "./index.d.ts"
@@ -12,6 +15,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "bin/",
     "lib/",
     "utils/",
     "README.md",
@@ -39,6 +43,7 @@
     "hyperdb": "^4.16.1",
     "hyperswarm": "^4.14.0",
     "os": "npm:bare-node-os",
+    "paparam": "^1.10.0",
     "path": "npm:bare-node-path",
     "process": "npm:bare-node-process",
     "ready-resource": "^1.0.1"
