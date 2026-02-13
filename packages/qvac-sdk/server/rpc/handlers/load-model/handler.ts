@@ -6,7 +6,7 @@ import type {
 } from "@/schemas";
 import { normalizeModelType, ModelType } from "@/schemas";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
-import { loadModel } from "@/server/bare/addons";
+import { loadModel } from "@/server/bare/ops/load-model";
 import { resolveModelPath } from "@/server/rpc/handlers/load-model/resolve";
 import {
   getModelEntry,
