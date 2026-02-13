@@ -1,7 +1,7 @@
 [
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -15,7 +15,7 @@
   },
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -233,8 +233,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
     "description": "Multimodal 4B model, good for tool calls",
-    "quantization": "q4",
+    "quantization": "q4_K_M",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -375,6 +376,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
@@ -390,6 +392,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
@@ -405,6 +408,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
@@ -420,6 +424,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
@@ -435,6 +440,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
@@ -465,8 +471,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -480,8 +487,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -495,8 +503,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -510,8 +519,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -525,8 +535,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -541,7 +552,7 @@
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -555,6 +566,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -570,6 +582,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -585,6 +598,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -600,6 +614,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -615,6 +630,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -645,6 +661,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -660,6 +677,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -675,6 +693,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -690,6 +709,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00004-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -705,6 +725,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00005-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -720,6 +741,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00006-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -735,6 +757,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00007-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -750,6 +773,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
@@ -780,6 +804,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -795,6 +820,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -810,6 +836,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -825,6 +852,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -840,6 +868,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -869,7 +898,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00001-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -884,7 +914,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00002-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -899,7 +930,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00003-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -914,7 +946,7 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4.tensors.txt",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
     "params": "2B",
@@ -929,7 +961,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00001-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -944,7 +977,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00002-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -959,7 +993,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00003-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -974,7 +1009,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00004-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -989,7 +1025,7 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8.tensors.txt",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8",
     "params": "2B",
@@ -1005,6 +1041,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1020,6 +1057,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1035,6 +1073,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1050,6 +1089,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1065,6 +1105,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1718,6 +1759,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1733,6 +1775,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1748,6 +1791,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1763,6 +1807,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1778,6 +1823,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
