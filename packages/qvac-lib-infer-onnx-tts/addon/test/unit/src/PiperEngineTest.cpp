@@ -6,25 +6,29 @@ namespace qvac::ttslib::piper::testing {
 
 class PiperEngineTest : public ::testing::Test {
 public:
-  const std::filesystem::path basePath_ = std::filesystem::path("../../../../models/tts/");
+  const std::filesystem::path basePath_ =
+      std::filesystem::path("../../../../models/tts/");
   const std::filesystem::path modelPath_ = basePath_ / "en_US-amy-low.onnx";
   const std::filesystem::path eSpeakDataPath_ = basePath_ / "espeak-ng-data";
-  const std::filesystem::path configJsonPath_ = basePath_ / "en_US-amy-low.onnx.json";
+  const std::filesystem::path configJsonPath_ =
+      basePath_ / "en_US-amy-low.onnx.json";
 
-  TTSConfig validConfig_ {
-    modelPath_.string(), configJsonPath_.string(), "en", eSpeakDataPath_.string(), "", false
-  };
+  TTSConfig validConfig_{modelPath_.string(),
+                         configJsonPath_.string(),
+                         "en",
+                         eSpeakDataPath_.string(),
+                         "",
+                         false};
 
-  TTSConfig emptyConfig_ {};
+  TTSConfig emptyConfig_{};
 
-  TTSConfig invalidModelPathConfig_ {
-    "invalid", configJsonPath_.string(), "en", eSpeakDataPath_.string(), "", false
-  };
+  TTSConfig invalidModelPathConfig_{"invalid", configJsonPath_.string(),
+                                    "en",      eSpeakDataPath_.string(),
+                                    "",        false};
 
-  TTSConfig invalidConfigJsonPathConfig_ {
-    modelPath_.string(), "invalid", "en", eSpeakDataPath_.string(), "", false
-  };
-
+  TTSConfig invalidConfigJsonPathConfig_{
+      modelPath_.string(),      "invalid", "en",
+      eSpeakDataPath_.string(), "",        false};
 };
 
 TEST_F(PiperEngineTest, negativeEmptyConfig) {
@@ -36,7 +40,8 @@ TEST_F(PiperEngineTest, negativeInvalidModelPathConfig) {
 }
 
 TEST_F(PiperEngineTest, negativeInvalidConfigJsonPathConfig) {
-  EXPECT_THROW(PiperEngine engine(invalidConfigJsonPathConfig_), std::runtime_error);
+  EXPECT_THROW(PiperEngine engine(invalidConfigJsonPathConfig_),
+               std::runtime_error);
 }
 
 TEST_F(PiperEngineTest, positiveConstruct) {

@@ -46,7 +46,7 @@ on:
         description: 'Whisper model for round-trip test'
         required: false
         type: choice
-        default: base
+        default: medium
         options:
           - tiny
           - base
@@ -68,11 +68,14 @@ on:
         type: string
         default: 'en-us'
 
+  pull_request:
+    types: [closed]
   release:
     types: [published]
 
 jobs:
   benchmark-tts:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: macos-14-xlarge
     timeout-minutes: 120
 
@@ -92,7 +95,7 @@ jobs:
       RUN_ADDON: ${{ github.event.inputs.run_addon || 'true' }}
       RUN_PYTHON: ${{ github.event.inputs.run_python || 'true' }}
       ROUND_TRIP_TEST: ${{ github.event.inputs.round_trip_test || 'true' }}
-      WHISPER_MODEL: ${{ github.event.inputs.whisper_model || 'base' }}
+      WHISPER_MODEL: ${{ github.event.inputs.whisper_model || 'medium' }}
       NUM_RUNS: ${{ github.event.inputs.num_runs || 3 }}
       USE_GPU: ${{ github.event.inputs.use_gpu || 'true' }}
       LANGUAGE: ${{ github.event.inputs.language || 'en-us' }}

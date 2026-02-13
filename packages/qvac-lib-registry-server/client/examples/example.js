@@ -25,13 +25,19 @@ async function example () {
 
   const allModels = await client.findModels({})
   console.log('Total models found:', allModels.length)
+
   const totalBytes = allModels.reduce((sum, m) => sum + (m.blobBinding?.byteLength || 0), 0)
   console.log('Total size:', totalBytes, 'bytes', (totalBytes / 1024 / 1024 / 1024).toFixed(2), 'GB')
 
   if (allModels.length > 0) {
     const { path: modelPath, source: modelSource } = allModels[0]
     const model = await client.getModel(modelPath, modelSource)
-    console.log('Found model:', model)
+    console.log('Found model:', {
+      ...model,
+      blobBinding: model.blobBinding
+        ? { ...model.blobBinding, coreKey: model.blobBinding.coreKey ? IdEnc.normalize(model.blobBinding.coreKey) : undefined }
+        : undefined
+    })
   }
 
   const modelsByEngine = await client.findModelsByEngine({

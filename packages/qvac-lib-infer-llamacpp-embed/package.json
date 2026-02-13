@@ -42,7 +42,9 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "prebuilds",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",

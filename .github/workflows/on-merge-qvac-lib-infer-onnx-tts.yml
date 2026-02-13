@@ -138,6 +138,7 @@ jobs:
       publish_target: "npm"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   publish-release:
     needs: [publish-release-npm]
@@ -149,7 +150,7 @@ jobs:
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-onnx-tts"
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   prebuild:
     name: Prebuild Gate

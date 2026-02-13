@@ -5,6 +5,9 @@
   "license": "Apache-2.0",
   "type": "commonjs",
   "main": "index.js",
+  "bin": {
+    "qvac-registry": "./bin/cli.js"
+  },
   "exports": {
     ".": "./index.js",
     "./types": "./index.d.ts"
@@ -12,6 +15,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "bin/",
     "lib/",
     "utils/",
     "README.md",
@@ -27,7 +31,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@tetherto/qvac-registry-schema-mono": "^0.2.1",
+    "@qvac/registry-schema": "^0.1.1",
     "b4a": "^1.6.7",
     "bare-fs": "^2.1.5",
     "bare-os": "^2.2.0",
@@ -39,6 +43,7 @@
     "hyperdb": "^4.16.1",
     "hyperswarm": "^4.14.0",
     "os": "npm:bare-node-os",
+    "paparam": "^1.10.0",
     "path": "npm:bare-node-path",
     "process": "npm:bare-node-process",
     "ready-resource": "^1.0.1"

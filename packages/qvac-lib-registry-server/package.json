@@ -31,7 +31,8 @@
     "lib/",
     "scripts/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build:spec": "node scripts/build-db-spec.js",
