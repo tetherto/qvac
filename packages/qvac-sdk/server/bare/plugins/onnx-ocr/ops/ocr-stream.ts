@@ -102,7 +102,8 @@ export async function* ocr(params: OCRParams): AsyncGenerator<
   switch (params.image.type) {
     case "base64": {
       const tempDir = getCacheDir("tmp");
-      const tempPath = path.join(tempDir, `ocr-${Date.now()}.png`);
+      const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const tempPath = path.join(tempDir, `ocr-${suffix}.png`);
       fs.writeFileSync(tempPath, Buffer.from(params.image.value, "base64"));
       imagePath = tempPath;
       cleanupPath = tempPath;

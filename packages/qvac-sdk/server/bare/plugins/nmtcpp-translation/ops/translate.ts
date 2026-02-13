@@ -45,10 +45,11 @@ export async function* translate(
     );
 
     // Yield each translation with a newline separator
-    for (const translation of translations) {
+    for (let i = 0; i < translations.length; i++) {
+      const translation = translations[i]!;
       processedTokens++;
       yield translation;
-      if (translations.indexOf(translation) < translations.length - 1) {
+      if (i < translations.length - 1) {
         yield "\n";
       }
     }
