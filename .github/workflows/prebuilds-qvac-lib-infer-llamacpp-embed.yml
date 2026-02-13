@@ -496,7 +496,7 @@ jobs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -519,3 +519,6 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.WORKDIR }}
+          repo_name: "llamacpp-embed"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+          

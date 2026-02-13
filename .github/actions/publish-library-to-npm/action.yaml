@@ -27,9 +27,13 @@ inputs:
     required: false
 
   create-tag:
-    description: "Set to 'true' to create a git tag v<version> after successful npm release"
+    description: "Set to 'true' to create a git tag after successful npm release"
     required: false
-    default: "false"
+    default: "true"
+
+  repo_name:
+    description: "repo suffix name appended to created git tag"
+    required: false
 
 runs:
   using: composite
@@ -53,8 +57,8 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         GIT_REF: ${{ github.ref }}
         GIT_REPO: ${{ github.repository }}
+        REPO_NAME: ${{ inputs.repo_name }}
       run: |
-        set -x
         set -euo pipefail
 
         ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
@@ -115,8 +119,8 @@ runs:
         echo "Base branch: ${GIT_REF}"
         echo "Event name: ${EVENT_NAME}"
 
-        if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          if [[ "${{ github.ref_name }}" == release-* ]]; then
+        if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
             TAG="latest"
           fi
         fi
@@ -166,7 +170,7 @@ runs:
           exit 0
         fi
 
-        TAG_NAME="v${VERSION}"
+        TAG_NAME="${REPO_NAME}-v${VERSION}"
 
         echo "Preparing to create git tag: ${TAG_NAME}"
 
@@ -176,8 +180,9 @@ runs:
         if git -C "$ROOT" rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
           echo "Tag ${TAG_NAME} already exists locally"
         else
-          git -C "$ROOT" tag -a "${TAG_NAME}" -m "Release ${PACKAGE_NAME} ${TAG_NAME}"
-          echo "Created local tag ${TAG_NAME}"
+          FULL_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+          git -C "$ROOT" tag "${TAG_NAME}" "${FULL_SHA}"
+          echo "Created lightweight tag ${TAG_NAME} -> ${FULL_SHA}"
         fi
 
         if git -C "$ROOT" ls-remote --tags origin "${TAG_NAME}" | grep -q "${TAG_NAME}"; then
@@ -186,5 +191,5 @@ runs:
         fi
 
         echo "Pushing tag ${TAG_NAME} to origin"
-        git -C "$ROOT" push "https://x-access-token:${GIT_PUSH_TOKEN}@github.com/${GIT_REPO}.git" "${TAG_NAME}"
+        git -C "$ROOT" push "https://x-access-token:${GIT_PUSH_TOKEN}@github.com/${GIT_REPO}.git" "refs/tags/${TAG_NAME}"
         echo "Tag ${TAG_NAME} pushed successfully"

@@ -124,6 +124,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-cli
+      repo_name: "qvac-cli"
 
   publish-feature-gpr:
     needs: publish-logic
