@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "exclude": ["node_modules", "dist", "../dist", "../tests-qvac", "../examples"],
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmitOnError": false
+  }
+}

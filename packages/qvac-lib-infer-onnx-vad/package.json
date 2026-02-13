@@ -22,7 +22,9 @@
     "utils",
     "prebuilds",
     "model",
-    "lib"
+    "lib",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     "./package": "./package.json",

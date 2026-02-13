@@ -49,6 +49,14 @@ import {
   getModelInfoResponseSchema,
 } from "./get-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
+import {
+  modelRegistryListRequestSchema,
+  modelRegistryListResponseSchema,
+  modelRegistrySearchRequestSchema,
+  modelRegistrySearchResponseSchema,
+  modelRegistryGetModelRequestSchema,
+  modelRegistryGetModelResponseSchema,
+} from "./registry";
 
 export const requestSchema = z.union([
   pingRequestSchema,
@@ -68,6 +76,9 @@ export const requestSchema = z.union([
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
+  modelRegistryListRequestSchema,
+  modelRegistrySearchRequestSchema,
+  modelRegistryGetModelRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -91,6 +102,9 @@ export const responseSchema = z.discriminatedUnion("type", [
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
+  modelRegistryListResponseSchema,
+  modelRegistrySearchResponseSchema,
+  modelRegistryGetModelResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

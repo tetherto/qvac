@@ -17,6 +17,7 @@ env:
 
 jobs:
   run-unit-tests:
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:

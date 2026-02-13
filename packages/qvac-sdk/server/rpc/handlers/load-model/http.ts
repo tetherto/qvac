@@ -18,6 +18,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
   isArchiveUrl,
+  sanitizePathComponent,
   extractAndValidateShardedArchive,
   validateShardedModelCache,
   checkAllShardsExist,
@@ -65,7 +66,8 @@ function extractFilenameFromUrl(url: string): string {
   // Remove query parameters if present
   const cleanFilename = filename.split("?")[0] || "model.gguf";
 
-  return cleanFilename;
+  // Sanitize to prevent path traversal via crafted URLs
+  return sanitizePathComponent(cleanFilename);
 }
 
 async function validateCachedFile(

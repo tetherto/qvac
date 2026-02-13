@@ -44,7 +44,9 @@
     "index.d.ts",
     "lib",
     "transcription-addon",
-    "test/mobile"
+    "test/mobile",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",

@@ -12,6 +12,7 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-decoder-audio/**"
+      - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -40,6 +41,7 @@ jobs:
     secrets: inherit
 
   sanity-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

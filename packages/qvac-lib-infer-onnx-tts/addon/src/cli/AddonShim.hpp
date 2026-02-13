@@ -26,7 +26,7 @@ public:
     std::string payload; // output path or error message; runtime stats omitted
   };
 
-  explicit TTSAddonShim(const TTSConfig& config);
+  explicit TTSAddonShim(const TTSConfig &config);
 
   ~TTSAddonShim();
 
@@ -34,10 +34,13 @@ public:
 
   uint32_t append(std::string_view text);
 
-  bool poll(std::vector<Event>& outEvents);
+  bool poll(std::vector<Event> &outEvents);
 
 private:
-  struct Job { uint32_t id; std::string text; };
+  struct Job {
+    uint32_t id;
+    std::string text;
+  };
 
   void processLoop();
 
@@ -52,5 +55,3 @@ private:
 };
 
 } // namespace qvac::ttslib::cli_shim
-
-
