@@ -78,6 +78,11 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   console.log(`Samples: ${result.data.sampleCount}`)
   console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
   console.log(`Sample rate: ${result.data.sampleRate}Hz`)
+  if (result.data.stats) {
+    console.log(`Total time: ${result.data.stats.totalTime}s`)
+    console.log(`Real-time factor: ${result.data.stats.realTimeFactor}`)
+    console.log(`Tokens/sec: ${result.data.stats.tokensPerSecond}`)
+  }
   console.log('='.repeat(60))
 })
 
@@ -138,7 +143,8 @@ test('Chatterbox TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     results.push({
       text,
       sampleCount: result.data.sampleCount,
-      durationMs: result.data.durationMs
+      durationMs: result.data.durationMs,
+      stats: result.data.stats
     })
   }
 
@@ -152,7 +158,8 @@ test('Chatterbox TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
   console.log('='.repeat(60))
   console.log(`Total sentences: ${dataset.length}`)
   for (let i = 0; i < results.length; i++) {
-    console.log(`  ${i + 1}. "${results[i].text.substring(0, 40)}..." - ${results[i].sampleCount} samples, ${results[i].durationMs?.toFixed(0) || 'N/A'}ms`)
+    const rtf = results[i].stats?.realTimeFactor ?? 'N/A'
+    console.log(`  ${i + 1}. "${results[i].text.substring(0, 40)}..." - ${results[i].sampleCount} samples, ${results[i].durationMs?.toFixed(0) || 'N/A'}ms, RTF: ${rtf}`)
   }
   console.log('='.repeat(60))
 })
@@ -194,7 +201,11 @@ test('Chatterbox TTS: Reference audio is passed correctly', { timeout: 900000 },
   const result = await runChatterboxTTS(model, { text: 'Test.' }, {})
 
   if (result.passed && result.data.sampleCount > 0) {
-    t.pass('Synthesis succeeded - synthetic reference audio is being used correctly')
+    t.pass('Synthesis succeeded - reference audio is being used correctly')
+    console.log(result.output)
+    if (result.data.stats) {
+      console.log(`Total time: ${result.data.stats.totalTime}s, RTF: ${result.data.stats.realTimeFactor}`)
+    }
   } else {
     t.fail(`Synthesis failed: ${result.output}`)
   }
