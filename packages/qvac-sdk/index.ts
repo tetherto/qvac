@@ -74,12 +74,8 @@ export {
   definePlugin,
   defineHandler,
   type QvacPlugin,
-  type PluginHandlerDefinition,
   type CreateModelParams,
   type PluginModelResult,
-  type PluginLogging,
-  type PluginInvokeRequest,
-  type PluginInvokeResponse,
   type ModelRegistryEntry,
   type ModelRegistryEntryAddon,
 } from "./schemas";
