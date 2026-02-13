@@ -443,16 +443,14 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: bare-make install
 
-      - name: Replace vcpkg S3 cache
+      - name: Update vcpkg S3 cache hash
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           if [ -f /tmp/vcpkg-hash-new.txt ]; then
-            echo "Clearing old vcpkg cache for ${{ matrix.platform }}-${{ matrix.arch }}..."
-            aws s3 rm $S3_CACHE_PREFIX --recursive || true
-            echo "Uploading vcpkg config hash to S3 cache..."
+            echo "Uploading new vcpkg config hash to S3 cache..."
             aws s3 cp /tmp/vcpkg-hash-new.txt ${S3_CACHE_PREFIX}vcpkg-hash.txt
-            echo "✅ vcpkg hash uploaded"
+            echo "vcpkg hash uploaded"
           else
             echo "No new hash to upload (cache was already valid)"
           fi
