@@ -24,7 +24,11 @@ function withAndroidArchitecture(config: ExpoConfig): ExpoConfig {
     );
 
     if (propIndex >= 0) {
-      config.modResults[propIndex]!.value = architectureString;
+      config.modResults.splice(propIndex, 1, {
+        type: "property",
+        key: "reactNativeArchitectures",
+        value: architectureString,
+      });
     } else {
       config.modResults.push({
         type: "property",
