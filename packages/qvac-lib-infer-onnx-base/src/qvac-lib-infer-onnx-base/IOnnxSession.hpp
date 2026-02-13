@@ -9,8 +9,8 @@ namespace onnx_addon {
 
 /**
  * Abstract interface for ONNX sessions.
- * Other addons should use this interface (via virtual methods) to avoid
- * direct symbol dependencies on the ONNX addon.
+ * This interface has no ONNX Runtime dependency - consumers can use it
+ * for type-erased access to sessions via virtual dispatch.
  */
 class IOnnxSession {
  public:

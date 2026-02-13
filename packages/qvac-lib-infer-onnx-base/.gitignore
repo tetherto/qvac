@@ -1,16 +1,8 @@
-node_modules
-.npmrc
-package-lock.json
 .idea/
-
-# Build artifacts
+.vs/
 build/
 
-# Prebuilds (binary files)
-prebuilds/**/*.bare
-
-# OS
-.DS_Store
-
-# Test models (generated)
-models/
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

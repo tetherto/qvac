@@ -1,6 +1,6 @@
 {
-  "name": "onnx-addon",
-  "version": "0.1.0",
+  "name": "qvac-lib-infer-onnx-base",
+  "version": "1.0.0",
   "dependencies": [
     {
       "name": "onnxruntime",
@@ -20,6 +20,18 @@
       "name": "onnxruntime",
       "features": ["coreml-ep"],
       "platform": "osx | ios"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.1"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
     }
   ],
   "overrides": [
@@ -27,5 +39,13 @@
       "name": "flatbuffers",
       "version": "23.5.26"
     }
-  ]
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
 }
