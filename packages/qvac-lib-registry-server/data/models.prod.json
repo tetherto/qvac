@@ -2413,7 +2413,8 @@
       "marian",
       "en-roa"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
