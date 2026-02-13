@@ -19,6 +19,7 @@ import {
   ModelNotFoundError,
   SeedingNotSupportedError,
 } from "@/utils/errors-server";
+import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -42,7 +43,7 @@ async function resolveLocalOrCachedFile(modelIdOrPath: string) {
 
   // Check if it's a cached file or local file
   const cacheDir = getModelsCacheDir();
-  const cachedPath = path.join(cacheDir, modelIdOrPath);
+  const cachedPath = validateAndJoinPath(cacheDir, modelIdOrPath);
 
   try {
     await fsPromises.access(cachedPath);

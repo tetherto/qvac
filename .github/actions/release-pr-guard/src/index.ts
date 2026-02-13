@@ -12,7 +12,11 @@ function parseVersion(v: string): [number, number, number] {
 function isGreater(a: string, b: string): boolean {
   const pa = parseVersion(a)
   const pb = parseVersion(b)
-  return pa > pb
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] > pb[i]) return true
+    if (pa[i] < pb[i]) return false
+  }
+  return false
 }
 
 async function run() {

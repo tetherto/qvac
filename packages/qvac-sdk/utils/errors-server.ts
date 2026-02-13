@@ -773,3 +773,17 @@ export class DelegateConnectionFailedError extends QvacErrorBase {
     );
   }
 }
+
+// ============== Security Errors ==============
+
+export class PathTraversalError extends QvacErrorBase {
+  constructor(component: string, basePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL,
+        [component, basePath],
+        cause,
+      ),
+    );
+  }
+}

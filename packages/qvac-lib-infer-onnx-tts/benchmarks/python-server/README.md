@@ -10,7 +10,8 @@ Python server using `piper-tts` for baseline TTS benchmarking.
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # Piper TTS (default)
+# Or: pip install -r requirements-tts.txt (Piper only), requirements-chatterbox.txt (Chatterbox only)
 ```
 
 ## Usage
