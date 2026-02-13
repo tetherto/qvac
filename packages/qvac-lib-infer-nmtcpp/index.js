@@ -8,6 +8,8 @@ const { TranslationInterface } = require('./marian')
 const QvacResponse = require('@qvac/response')
 const { IndicProcessor } = require('./third-party/indic-processor')
 
+const JOB_ID = 'job'
+
 class QvacIndicTransResponse extends QvacResponse {
   /**
    * Creates an instance of QvacIndicTransResponse.
@@ -258,14 +260,13 @@ class TranslationNmtcpp extends BaseInference {
       input: processedText
     })
 
-    const jobId = "job"
     const response = new QvacIndicTransResponse(
       processor,
       this._params.dstLang,
-      this._createResponseHandlers(jobId)
+      this._createResponseHandlers(JOB_ID)
     )
 
-    this._saveJobToResponseMapping(jobId, response)
+    this._saveJobToResponseMapping(JOB_ID, response)
     return response
   }
 
@@ -314,10 +315,9 @@ class TranslationNmtcpp extends BaseInference {
   async _runStandardTranslation (input) {
     const text = this._prepareInputText(input)
     await this.addon.runJob({ type: 'text', input: text })
-    const jobId = "job"
-    const response = this._createStandardResponse(jobId)
+    const response = this._createStandardResponse(JOB_ID)
 
-    this._saveJobToResponseMapping(jobId, response)
+    this._saveJobToResponseMapping(JOB_ID, response)
     return response
   }
 
@@ -394,7 +394,7 @@ class TranslationNmtcpp extends BaseInference {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+      return this._outputCallback(addon, 'JobEnded', JOB_ID, data, null)
     }
 
     let mappedEvent = event
@@ -403,7 +403,7 @@ class TranslationNmtcpp extends BaseInference {
     } else if (typeof data === 'string') {
       mappedEvent = 'Output'
     }
-    return this._outputCallback(addon, mappedEvent, 'job', data, error)
+    return this._outputCallback(addon, mappedEvent, JOB_ID, data, error)
   }
   
   async _downloadWeights (reportProgressCallback) {
