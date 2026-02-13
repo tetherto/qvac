@@ -67,6 +67,8 @@
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
+Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
+
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥0.12.2): C++ addon framework
 - llama.cpp (≥7248.1.0): Inference engine
