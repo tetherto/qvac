@@ -20,7 +20,10 @@ export function sanitizePathComponent(component: string): string {
   let sanitized = component;
 
   // Decode common URL-encoded traversal sequences
-  sanitized = sanitized.replace(/%2e/gi, ".").replace(/%2f/gi, "/").replace(/%5c/gi, "\\");
+  sanitized = sanitized
+    .replace(/%2e/gi, ".")
+    .replace(/%2f/gi, "/")
+    .replace(/%5c/gi, "\\");
 
   // Normalize backslashes to forward slashes
   sanitized = sanitized.replace(/\\/g, "/");

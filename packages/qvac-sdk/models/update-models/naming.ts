@@ -396,9 +396,7 @@ function generateEmbeddingsName({
   quantization,
 }: BaseNameInput): string {
   const name = tagName || modelName || "";
-  const nameParts = [name, params, quantization].filter(
-    (p) => p && p !== "",
-  );
+  const nameParts = [name, params, quantization].filter((p) => p && p !== "");
   return nameParts.map(cleanPart).join("_");
 }
 
@@ -434,8 +432,6 @@ function generateOcrName({
   } else if (filename.includes("recognizer")) {
     fileType = "RECOGNIZER";
   }
-  const nameParts = [name, language, fileType].filter(
-    (p) => p && p !== "",
-  );
+  const nameParts = [name, language, fileType].filter((p) => p && p !== "");
   return `OCR_${nameParts.map(cleanPart).join("_")}`;
 }

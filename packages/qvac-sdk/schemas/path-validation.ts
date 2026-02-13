@@ -17,5 +17,8 @@ export const safePathComponent = z.string().refine(
     if (/%2e/i.test(s)) return false;
     return true;
   },
-  { message: "Path component must not contain traversal sequences ('..', '%2e'), null bytes, or '%00'" },
+  {
+    message:
+      "Path component must not contain traversal sequences ('..', '%2e'), null bytes, or '%00'",
+  },
 );

@@ -4,7 +4,11 @@ import { processRegistryModel } from "./processing";
 import type { CollectOptions, ProcessedModel } from "./types";
 
 // Re-export for backward compat
-export { processRegistryModel, extractModelName, toHexString } from "./processing";
+export {
+  processRegistryModel,
+  extractModelName,
+  toHexString,
+} from "./processing";
 
 const DEFAULT_REGISTRY_CORE_KEY =
   "u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y";

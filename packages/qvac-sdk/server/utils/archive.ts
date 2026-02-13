@@ -151,7 +151,9 @@ export async function extractTarStream(
       const filePath = path.resolve(path.join(extractDir, header.name));
 
       if (!isPathWithinBase(extractDir, filePath)) {
-        logger.warn(`⚠️ Skipping archive entry with path traversal: ${header.name}`);
+        logger.warn(
+          `⚠️ Skipping archive entry with path traversal: ${header.name}`,
+        );
         stream.resume();
         next();
         return;
