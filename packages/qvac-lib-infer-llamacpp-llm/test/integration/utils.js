@@ -402,6 +402,7 @@ function getDefaultFinetuneConfig (overrides = {}) {
     loraModules: 'attn_q,attn_k,attn_v,attn_o',
     assistantLossOnly: true,
     checkpointSaveSteps: 5,
+    validation: { type: 'split', fraction: 0.05 },
     ...overrides
   }
 }
@@ -416,6 +417,27 @@ function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
   cleanupCheckpoints(checkpointDir)
 
   return { trainDatasetPath, evalDatasetPath, checkpointDir }
+}
+
+function parsePauseCheckpointMetadata (pauseCheckpointPath) {
+  const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
+  if (!fs.existsSync(metadataPath)) {
+    return null
+  }
+  const content = fs.readFileSync(metadataPath, 'utf8')
+  const meta = {}
+  for (const line of content.split('\n')) {
+    const eq = line.indexOf('=')
+    if (eq > 0) {
+      const key = line.slice(0, eq).trim()
+      const value = line.slice(eq + 1).trim()
+      meta[key] = value
+    }
+  }
+  return {
+    epoch: meta.epoch != null ? parseInt(meta.epoch, 10) : undefined,
+    global_step: meta.global_step != null ? parseInt(meta.global_step, 10) : undefined
+  }
 }
 
 function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
@@ -474,6 +496,7 @@ module.exports = {
   cleanupCheckpoints,
   verifyCheckpointExists,
   findPauseCheckpoint,
+  parsePauseCheckpointMetadata,
   getDefaultFinetuneConfig,
   setupFinetuneTestData,
   setupPauseResumeTestData,

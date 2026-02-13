@@ -784,13 +784,16 @@ void LlamaModel::finetune(
     actualMicroBatch = std::max<int64_t>(
         int64_t{1}, std::gcd(datasetSampleCount, actualMicroBatch));
 
-    constexpr double kDefaultValSplit = 0.05;
-    double validationSplit = kDefaultValSplit;
+    double validationSplit = 0.05;
     const bool hasSeparateEvalDataset =
         !params.evalDatasetDir.empty() &&
         params.evalDatasetDir != params.trainDatasetDir;
-    if (hasSeparateEvalDataset) {
+    if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
       validationSplit = 0.0;
+    } else if (hasSeparateEvalDataset) {
+      validationSplit = 0.0;
+    } else {
+      validationSplit = std::clamp(params.validationSplit, 0.0, 1.0);
     }
 
     int64_t trainSplit = datasetSampleCount;
@@ -946,16 +949,37 @@ void LlamaModel::finetune(
       setCurrentCheckpointState(checkpointState.get());
     }
 
+    int64_t evalDatasetSampleCount = 0;
+    std::unique_ptr<
+        std::remove_pointer_t<ggml_opt_dataset_t>,
+        decltype(&ggml_opt_dataset_free)>
+        evalDatasetPtr(nullptr, ggml_opt_dataset_free);
+    if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
+      evalDatasetPtr.reset(prepareEvalDataset(params));
+      evalDatasetSampleCount = ggml_opt_dataset_ndata(evalDatasetPtr.get());
+      if (evalDatasetSampleCount <= 0) {
+        throw std::runtime_error("Eval dataset has no samples");
+      }
+      if (logCallback) {
+        std::ostringstream evalMsg;
+        evalMsg << "Eval dataset loaded | samples=" << evalDatasetSampleCount;
+        logCallback(evalMsg.str());
+      }
+    }
+
     try {
       executeTrainingLoop(
         params,
         datasetPtr.get(),
         trainSplit,
+        evalSplit,
         schedulerState,
         checkpointState.get(),
         logCallback,
         resumingFromPause ? resumeMeta.epoch : 0,
-        resumingFromPause);
+        resumingFromPause,
+        evalDatasetPtr.get(),
+        evalDatasetSampleCount);
     } catch (...) {
       if (checkpointState) {
         checkpointState->pauseWaitDone.store(true);
@@ -1035,8 +1059,11 @@ void LlamaModel::validateFinetuningParams(
   }
 }
 
-ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
-    const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
+ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
+    const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+    const std::string& datasetPath,
+    const char* errorLabel,
+    const char* constructKind) {
   using namespace llama_finetuning_helpers;
 
   llama_context* ctx = getContext();
@@ -1054,32 +1081,39 @@ ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
   ggml_opt_dataset_t datasetRaw = nullptr;
 
   if (params.assistantLossOnly) {
-    const std::string jsonContent = readTextFile(params.trainDatasetDir);
+    const std::string jsonContent = readTextFile(datasetPath);
     datasetRaw = common_opt_sft_dataset_init(
         ctx, jsonContent, datasetStride, params.chatTemplatePath);
   } else {
     datasetStride = std::max<int64_t>(sequenceLength / 2, int64_t{1});
-    auto tokens = tokenizeDataset(ctx, params.trainDatasetDir);
+    auto tokens = tokenizeDataset(ctx, datasetPath);
     const int64_t availableTokens = static_cast<int64_t>(tokens.size());
     if (availableTokens <= sequenceLength) {
-      throw std::runtime_error("Training dataset does not contain enough "
-                               "tokens for the selected context length");
+      throw std::runtime_error(std::string(errorLabel) +
+          " dataset does not contain enough tokens for the selected context length");
     }
-
     const int64_t maxDatasetOffset = availableTokens - sequenceLength - 1;
     if (maxDatasetOffset < datasetStride) {
-      throw std::runtime_error("Training dataset does not contain enough "
-                               "tokens for the selected stride");
+      throw std::runtime_error(std::string(errorLabel) +
+          " dataset does not contain enough tokens for the selected stride");
     }
-
     datasetRaw = buildNextTokenDataset(tokens, sequenceLength, datasetStride);
   }
 
   if (datasetRaw == nullptr) {
-    throw std::runtime_error("Unable to construct finetuning dataset");
+    throw std::runtime_error(std::string("Unable to construct ") + constructKind + " dataset");
   }
-
   return datasetRaw;
+}
+
+ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
+    const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
+  return prepareDatasetFromPath(params, params.trainDatasetDir, "Training", "finetuning");
+}
+
+ggml_opt_dataset_t LlamaModel::prepareEvalDataset(
+    const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
+  return prepareDatasetFromPath(params, params.evalDatasetDir, "Eval", "eval");
 }
 
 void LlamaModel::initializeLoraAdapter(
@@ -1270,26 +1304,34 @@ void LlamaModel::configureOptimizer(
 
 void LlamaModel::executeTrainingLoop(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-    ggml_opt_dataset_t dataset, int64_t trainSplit,
+    ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
     llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
     llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
     std::function<void(const std::string&)> logCallback, uint32_t startEpoch,
-    bool resumingFromPause) {
+    bool resumingFromPause,
+    ggml_opt_dataset_t evalDataset,
+    int64_t evalDatasetSampleCount) {
   using namespace llama_finetuning_helpers;
+  using OptResultPtr = std::unique_ptr<
+      std::remove_pointer_t<ggml_opt_result_t>,
+      decltype(&ggml_opt_result_free)>;
 
   llama_context* ctx = getContext();
   if (ctx == nullptr) {
     throw std::runtime_error("Context not available");
   }
 
-  ggml_opt_result_t trainResultRaw = ggml_opt_result_init();
-  std::unique_ptr<
-      std::remove_pointer_t<ggml_opt_result_t>,
-      decltype(&ggml_opt_result_free)>
-      trainResult(trainResultRaw, ggml_opt_result_free);
+  OptResultPtr trainResult(ggml_opt_result_init(), ggml_opt_result_free);
+  OptResultPtr evalResult(nullptr, ggml_opt_result_free);
+  const bool hasEval = evalSplit > 0 || (evalDataset != nullptr && evalDatasetSampleCount > 0);
+  if (hasEval) {
+    evalResult.reset(ggml_opt_result_init());
+  }
 
   const int64_t idataSplit = trainSplit;
-  bool checkpointEnabled = checkpointState != nullptr;
+  const bool checkpointEnabled = checkpointState != nullptr;
+  const auto callbackTrain = checkpointEnabled ? optEpochCallbackWrapper
+                                             : ggml_opt_epoch_callback_progress_bar;
 
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
     if (checkpointState && checkpointState->shouldExit.load()) {
@@ -1321,12 +1363,24 @@ void LlamaModel::executeTrainingLoop(
         ctx,
         dataset,
         trainResult.get(),
-        nullptr,
+        evalResult.get(),
         idataSplit,
-        checkpointEnabled ? optEpochCallbackWrapper
-                          : ggml_opt_epoch_callback_progress_bar,
-        nullptr,
+        callbackTrain,
+        evalSplit > 0 ? callbackTrain : nullptr,
         resumeFromBatch);
+
+    if (evalDataset != nullptr && evalDatasetSampleCount > 0 &&
+        (!checkpointState || !checkpointState->shouldExit.load())) {
+      llama_opt_epoch(
+          ctx,
+          evalDataset,
+          trainResult.get(),
+          evalResult.get(),
+          0,
+          nullptr,
+          callbackTrain,
+          -1);
+    }
 
     if (!checkpointState || !checkpointState->shouldExit.load()) {
       if (checkpointEnabled) {
@@ -1345,11 +1399,19 @@ void LlamaModel::executeTrainingLoop(
     ggml_opt_result_loss(trainResult.get(), &lossValue, nullptr);
     if (logCallback) {
       std::ostringstream epochMsg;
-      epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue
-               << " | lr=" << scheduler.lastLr;
+      epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
+      if (hasEval) {
+        double valLoss = 0.0;
+        ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
+        epochMsg << " | val_loss=" << valLoss;
+      }
+      epochMsg << " | lr=" << scheduler.lastLr;
       logCallback(epochMsg.str());
     }
     ggml_opt_result_reset(trainResult.get());
+    if (hasEval) {
+      ggml_opt_result_reset(evalResult.get());
+    }
   }
 
   if (checkpointState && checkpointState->shouldExit.load() &&

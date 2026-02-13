@@ -379,7 +379,8 @@ bool parseCheckpointMetadata(
 }
 
 bool savePauseCheckpoint(
-    ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
+    ggml_opt_context_t optCtx, TrainingCheckpointState& state,
+    bool pausedDuringValidation) {
   if (state.adapter == nullptr || state.ctx == nullptr ||
       state.model == nullptr) {
     return false;
@@ -423,11 +424,14 @@ bool savePauseCheckpoint(
   std::ofstream metadata(metadataPath);
   if (metadata.is_open()) {
     CheckpointMetadata meta{};
-    meta.epoch = state.currentEpoch;
+    meta.epoch = pausedDuringValidation
+                     ? state.currentEpoch + 1
+                     : state.currentEpoch;
     meta.loraRank = state.loraRank;
     meta.loraAlpha = state.loraAlpha;
     meta.targetModules = state.targetModules;
-    meta.globalStep = state.globalStep;
+    meta.globalStep = pausedDuringValidation ? state.globalStep + 1
+                                             : state.globalStep;
     meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
 
     metadata << "epoch=" << meta.epoch << '\n';
@@ -451,6 +455,47 @@ bool savePauseCheckpoint(
     state.logFn(msg.str());
   }
 
+  return true;
+}
+
+bool tryHandlePauseRequest(
+    ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
+    int64_t ibatch, int64_t ibatchMax) {
+  if (state == nullptr || !state->pauseRequested.load()) {
+    return false;
+  }
+  if (state->pauseCheckpointSaved.load()) {
+    return true;
+  }
+  if (state->ctx != nullptr) {
+    llama_opt_request_stop(state->ctx);
+  }
+  const bool pausedDuringValidation = !train;
+  const bool saved =
+      savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
+  if (saved) {
+    state->pauseCheckpointSaved.store(true);
+    state->shouldExit.store(true);
+    state->isFinetuning.store(false);
+    state->isPaused.store(true);
+    if (state->logFn) {
+      std::ostringstream pauseMsg;
+      pauseMsg << "Training paused";
+      if (pausedDuringValidation) {
+        pauseMsg << " during validation";
+      }
+      pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
+               << " | epoch " << (state->currentEpoch + 1)
+               << " | Checkpoint saved at: "
+               << state->pauseCheckpointPath.string();
+      state->logFn(pauseMsg.str());
+      state->logFn(R"({"type":"FinetunePaused"})");
+    }
+  } else if (state->logFn) {
+    state->logFn("Warning: Failed to save pause checkpoint");
+  }
+  state->pauseWaitDone.store(true);
+  state->pauseDoneCv.notify_all();
   return true;
 }
 
@@ -500,6 +545,12 @@ void optEpochCallback(
   ggml_opt_epoch_callback_progress_bar(
       train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
   std::fflush(stdout);
+
+  if (checkpointState != nullptr &&
+      tryHandlePauseRequest(optCtx, checkpointState, train, ibatch,
+                            ibatchMax)) {
+    return;
+  }
 
   if (!train) {
     return;
@@ -565,69 +616,19 @@ void optEpochCallback(
     }
   }
 
-  bool pauseRequestedValue = state->pauseRequested.load();
-  
-  if (pauseRequestedValue) {
-    bool checkpointAlreadySaved = state->pauseCheckpointSaved.load();
-    
-    if (!checkpointAlreadySaved) {
-      if (state->ctx != nullptr) {
-        llama_opt_request_stop(state->ctx);
-      }
-
-      if (savePauseCheckpoint(optCtx, *state)) {
-        state->pauseCheckpointSaved.store(true);
-        state->shouldExit.store(true);
-        state->isFinetuning.store(false);
-        state->isPaused.store(true);
-        
-        if (state->logFn) {
-          std::ostringstream pauseMsg;
-          pauseMsg << "Training paused at batch " << (ibatch + 1) << "/" << ibatchMax
-                   << " | epoch " << (state->currentEpoch + 1)
-                   << " | Checkpoint saved at: "
-                   << state->pauseCheckpointPath.string();
-          state->logFn(pauseMsg.str());
-          state->logFn(R"({"type":"FinetunePaused"})");
-        }
-        state->pauseWaitDone.store(true);
-        state->pauseDoneCv.notify_all();
-      } else {
-        if (state->logFn) {
-          state->logFn("Warning: Failed to save pause checkpoint");
-        }
-        state->pauseWaitDone.store(true);
-        state->pauseDoneCv.notify_all();
-      }
-    }
+  if (tryHandlePauseRequest(optCtx, state, true, ibatch, ibatchMax)) {
     return;
   }
 
   if (state->checkpointInterval <= 0) {
-    if (isFinalBatch) {
-      ggml_opt_epoch_callback_progress_bar(
-          train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
-      std::fflush(stdout);
-    }
     return;
   }
 
   if (state->globalStep % state->checkpointInterval != 0) {
-    if (isFinalBatch) {
-      ggml_opt_epoch_callback_progress_bar(
-          train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
-      std::fflush(stdout);
-    }
     return;
   }
 
   saveCheckpoint(optCtx, *state);
-
-  if (isFinalBatch) {
-    ggml_opt_epoch_callback_progress_bar(
-        train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
-    std::fflush(stdout);
-  }
 }
 
 void optEpochCallbackWrapper(

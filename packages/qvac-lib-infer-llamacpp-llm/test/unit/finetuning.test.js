@@ -87,7 +87,7 @@ test('finetune() with no args throws when no stored params', async (t) => {
   t.ok(!model.addon.finetune.called)
 })
 
-test('finetune(opts) stores params and calls addon.finetune', async (t) => {
+test('finetune(opts) throws when validation object is missing', async (t) => {
   const model = createModelWithMockAddon(null)
   const opts = {
     trainDatasetDir: '/tmp/train.jsonl',
@@ -96,12 +96,31 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
     numberOfEpochs: 1,
     learningRate: 1e-5
   }
+  await t.exception(
+    () => model.finetune(opts),
+    /must include validation/
+  )
+  t.ok(!model.addon.finetune.called)
+})
+
+test('finetune(opts) stores params and calls addon.finetune', async (t) => {
+  const model = createModelWithMockAddon(null)
+  const opts = {
+    trainDatasetDir: '/tmp/train.jsonl',
+    evalDatasetDir: '/tmp/eval.jsonl',
+    outputParametersDir: '/tmp/out',
+    numberOfEpochs: 1,
+    learningRate: 1e-5,
+    validation: { type: 'split' }
+  }
 
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
   const handle = await model.finetune(opts)
   t.ok(model.addon.finetune.called)
-  t.ok(model.addon.finetune.calledWith(opts))
+  const expectedParams = { ...opts, validationSplit: 0.05, useEvalDatasetForValidation: false }
+  delete expectedParams.validation
+  t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
   t.alike(model._defaultFinetuneParams, opts)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle with await()')
   const result = await handle.await()
@@ -114,7 +133,8 @@ test('finetune() with no args uses stored params and calls addon.finetune', asyn
     evalDatasetDir: '/tmp/eval.jsonl',
     outputParametersDir: '/tmp/out',
     numberOfEpochs: 1,
-    learningRate: 1e-5
+    learningRate: 1e-5,
+    validation: { type: 'split' }
   }
   const model = createModelWithMockAddon(opts)
 
@@ -122,7 +142,9 @@ test('finetune() with no args uses stored params and calls addon.finetune', asyn
 
   const handle = await model.finetune()
   t.ok(model.addon.finetune.called)
-  t.ok(model.addon.finetune.calledWith(opts))
+  const expectedParams = { ...opts, validationSplit: 0.05, useEvalDatasetForValidation: false }
+  delete expectedParams.validation
+  t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
   const result = await handle.await()
   t.alike(result, { status: 'IDLE' })
 })
@@ -134,7 +156,8 @@ test('finetune(opts with resume key) passes opts to addon.finetune', async (t) =
     outputParametersDir: '/tmp/out',
     numberOfEpochs: 1,
     learningRate: 1e-5,
-    resume: true
+    resume: true,
+    validation: { type: 'split' }
   }
   const model = createModelWithMockAddon(null)
 
@@ -142,7 +165,9 @@ test('finetune(opts with resume key) passes opts to addon.finetune', async (t) =
 
   const handle = await model.finetune(opts)
   t.ok(model.addon.finetune.called)
-  t.ok(model.addon.finetune.calledWith(opts))
+  const expectedParams = { ...opts, validationSplit: 0.05, useEvalDatasetForValidation: false }
+  delete expectedParams.validation
+  t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
 
@@ -174,9 +199,10 @@ test('finetune() resolves with PAUSED when paused', async (t) => {
     evalDatasetDir: '/tmp/eval.jsonl',
     outputParametersDir: '/tmp/out',
     numberOfEpochs: 1,
-    learningRate: 1e-5
+    learningRate: 1e-5,
+    validation: { type: 'none' }
   }
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon(opts)
   model.addon.finetune.callsFake(completeFinetuneWith(model, 'PAUSED'))
 
   const handle = await model.finetune(opts)

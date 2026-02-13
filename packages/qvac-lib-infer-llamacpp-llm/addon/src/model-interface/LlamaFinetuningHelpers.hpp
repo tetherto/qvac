@@ -110,7 +110,11 @@ std::filesystem::path pauseCheckpointDirectory(
 std::filesystem::path
 findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir);
 bool savePauseCheckpoint(
-    ggml_opt_context_t optCtx, TrainingCheckpointState& state);
+    ggml_opt_context_t optCtx, TrainingCheckpointState& state,
+    bool pausedDuringValidation = false);
+bool tryHandlePauseRequest(
+    ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
+    int64_t ibatch, int64_t ibatchMax);
 bool loadPauseCheckpoint(
     const std::filesystem::path& checkpointPath, llama_adapter_lora* adapter,
     llama_model* model, llama_context* ctx, ggml_opt_context_t* optCtx,
