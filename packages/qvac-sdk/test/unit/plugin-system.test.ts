@@ -55,7 +55,7 @@ test("registerPlugin: rejects invalid plugin definitions (fail-fast)", function 
     t.fail("Expected registerPlugin to throw");
   } catch (error) {
     t.ok(error instanceof PluginDefinitionInvalidError);
-    t.is((error as PluginDefinitionInvalidError).code, 53907);
+    t.is((error as PluginDefinitionInvalidError).code, 53857);
   } finally {
     clearPlugins();
   }
