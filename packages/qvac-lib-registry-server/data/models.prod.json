@@ -1962,6 +1962,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/NbAiLab/nb-whisper-tiny/blob/main/ggml-model.bin",
     "description": "Fine-tuned for Norwegian",
     "quantization": "",
     "params": "",
@@ -1977,6 +1978,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
@@ -1991,6 +1993,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
@@ -2481,6 +2484,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "Fine-tuned for French",
     "quantization": "f16",
     "params": "",
@@ -2496,6 +2500,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2511,6 +2516,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "Fine-tuned for German",
     "quantization": "f16",
     "params": "",
@@ -2526,6 +2532,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2541,6 +2548,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2556,6 +2564,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2571,6 +2580,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2586,6 +2596,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2601,6 +2612,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2616,6 +2628,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2631,6 +2644,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2646,6 +2660,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2661,6 +2676,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2676,6 +2692,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2691,6 +2708,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2706,6 +2724,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2721,6 +2740,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2736,6 +2756,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2751,6 +2772,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2766,6 +2788,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2781,6 +2804,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2796,6 +2820,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2811,6 +2836,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2826,6 +2852,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2841,6 +2868,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2856,6 +2884,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2871,6 +2900,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2886,6 +2916,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
     "quantization": "q8_0",
     "params": "",
