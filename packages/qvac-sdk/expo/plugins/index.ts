@@ -1,3 +1,4 @@
+export { default as withAndroidArchitecture } from "./withAndroidArchitecture";
 export { default as withAndroidNdkVersion } from "./withAndroidNdkVersion";
 export { default as withDeviceInfo } from "./withDeviceInfo";
 export { default as withMobileBundle } from "./withMobileBundle";
