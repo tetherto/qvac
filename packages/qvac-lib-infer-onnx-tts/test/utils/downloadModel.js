@@ -1,30 +1,9 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const fflate = require('fflate')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-
-/**
- * Extract a zip file to a directory using fflate (no subprocess).
- * Works on iOS/Android where unzip command may be unavailable or sandboxed.
- */
-function extractZipToDir (zipPath, extractDir) {
-  const buf = fs.readFileSync(zipPath)
-  const entries = fflate.unzipSync(new Uint8Array(buf))
-  const extractDirResolved = path.resolve(extractDir)
-  for (const name of Object.keys(entries)) {
-    const normalized = name.replace(/\\/g, '/')
-    if (normalized.endsWith('/')) continue // directory entry only
-    const outPath = path.resolve(extractDir, normalized)
-    const rel = path.relative(extractDirResolved, outPath)
-    if (rel.startsWith('..') || path.isAbsolute(rel)) continue // path traversal
-    const dir = path.dirname(outPath)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(outPath, Buffer.from(entries[name]))
-  }
-}
 
 // Returns base directory for models - uses global.testDir on mobile, current dir otherwise
 function getBaseDir () {
