@@ -65,7 +65,7 @@ const loadModelOptionsBaseSchema = z.union([
     modelSrc: modelSrcInputSchema,
     modelType: ttsModelTypeSchema,
     modelConfig: ttsConfigSchema,
-    configSrc: modelSrcInputSchema,
+    configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
     eSpeakDataPath: z.string(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
@@ -192,7 +192,7 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelSrcInputSchema,
       modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
-      configSrc: modelSrcInputSchema,
+      configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
       eSpeakDataPath: z.string(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
@@ -208,7 +208,9 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      configSrc: modelInputToSrcSchema.parse(data.configSrc),
+      configSrc: data.configSrc
+        ? modelInputToSrcSchema.parse(data.configSrc)
+        : undefined,
       eSpeakDataPath: data.eSpeakDataPath,
     })),
   z
@@ -277,8 +279,8 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsConfigSchema, // tts has no defaults
-  configSrc: z.string(),
+  modelConfig: ttsConfigSchema,
+  configSrc: z.string().optional(), // Optional - auto-derived from registry:// URLs
   eSpeakDataPath: z.string(),
 });
 
@@ -342,6 +344,25 @@ export const hyperdriveUrlSchema = z
   .transform((url) => {
     const match = url.match(/^pear:\/\/([0-9a-fA-F]{64})\/(.+)$/)!;
     return { key: match[1]!, path: match[2]! };
+  });
+
+/**
+ * Schema for registry:// URLs (internal use only).
+ * Users should use model constants from @qvac/sdk instead of raw URLs.
+ * Format: registry://source/path/to/model.gguf
+ */
+export const registryUrlSchema = z
+  .string()
+  .regex(
+    /^registry:\/\/([^/]+)\/(.+)$/,
+    "Invalid registry URL. Expected format: registry://source/path/to/model.gguf",
+  )
+  .transform((url) => {
+    const match = url.match(/^registry:\/\/([^/]+)\/(.+)$/)!;
+    return {
+      registrySource: match[1]!,
+      registryPath: match[2]!, // Path without source prefix
+    };
   });
 
 export const loadModelServerParamsSchema = z.object({

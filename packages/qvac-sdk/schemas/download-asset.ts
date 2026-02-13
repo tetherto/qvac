@@ -45,7 +45,7 @@ export const downloadAssetResponseSchema = z.object({
   error: z.string().optional(),
 });
 
-export const downloadTypeSchema = z.enum(["hyperdrive", "http"]);
+export const downloadTypeSchema = z.enum(["hyperdrive", "http", "registry"]);
 
 export const downloadMetadataSchema = z.object({
   key: z.string(),
@@ -65,6 +65,11 @@ export const httpDownloadMetadataSchema = downloadMetadataSchema.extend({
   modelPath: z.string(),
 });
 
+export const registryDownloadMetadataSchema = downloadMetadataSchema.extend({
+  type: z.literal("registry"),
+  registryPath: z.string(),
+});
+
 export type DownloadAssetOptions = z.input<
   typeof downloadAssetOptionsSchema
 > & {
@@ -82,4 +87,9 @@ export type HyperdriveDownloadEntry = BaseDownloadEntry &
   z.infer<typeof hyperdriveDownloadMetadataSchema>;
 export type HttpDownloadEntry = BaseDownloadEntry &
   z.infer<typeof httpDownloadMetadataSchema>;
-export type DownloadEntry = HyperdriveDownloadEntry | HttpDownloadEntry;
+export type RegistryDownloadEntry = BaseDownloadEntry &
+  z.infer<typeof registryDownloadMetadataSchema>;
+export type DownloadEntry =
+  | HyperdriveDownloadEntry
+  | HttpDownloadEntry
+  | RegistryDownloadEntry;

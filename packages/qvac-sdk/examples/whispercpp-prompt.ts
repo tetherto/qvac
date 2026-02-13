@@ -1,20 +1,13 @@
-import {
-  loadModel,
-  unloadModel,
-  transcribe,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-} from "@qvac/sdk";
+import { loadModel, unloadModel, transcribe, WHISPER_TINY } from "@qvac/sdk";
 
 try {
   console.log("🎤 Starting Whisper transcription with prompt example...");
 
-  // Load the Whisper model with VAD
+  // Load the Whisper model
   console.log("📥 Loading Whisper model...");
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelType: "whisper",
-    vadModelSrc: VAD_SILERO_5_1_2,
     modelConfig: {
       audio_format: "f32le",
       // Sampling strategy

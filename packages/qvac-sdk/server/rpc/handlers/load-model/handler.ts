@@ -22,6 +22,7 @@ import {
   ModelNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { OCR_CRAFT_DETECTOR } from "@/models/registry";
 
 const logger = getServerLogger();
 
@@ -85,7 +86,26 @@ export async function handleLoadModel(
     }
 
     let ttsConfigModelPath: string | undefined;
-    if (configSrc) {
+    if (canonicalModelType === ModelType.onnxTts) {
+      if (configSrc) {
+        ttsConfigModelPath = await resolveModelPath(
+          configSrc,
+          progressCallback,
+          seed,
+        );
+      } else if (modelSrc.startsWith("registry://")) {
+        // Registry: config is the model path + ".json"
+        // e.g., registry://hf/path/model.onnx -> registry://hf/path/model.onnx.json
+        const derivedConfigSrc = `${modelSrc}.json`;
+        logger.info(`Auto-deriving TTS config from: ${derivedConfigSrc}`);
+        ttsConfigModelPath = await resolveModelPath(
+          derivedConfigSrc,
+          progressCallback,
+          seed,
+        );
+      }
+    } else if (configSrc) {
+      // For non-TTS models, still resolve configSrc if provided
       ttsConfigModelPath = await resolveModelPath(
         configSrc,
         progressCallback,
@@ -93,7 +113,7 @@ export async function handleLoadModel(
       );
     }
 
-    // For OCR models: use provided detectorModelSrc or auto-derive from same hyperdrive key
+    // For OCR models: use provided detectorModelSrc or auto-derive
     let detectorModelPath: string | undefined;
     if (canonicalModelType === ModelType.onnxOcr) {
       if (detectorModelSrc) {
@@ -107,6 +127,12 @@ export async function handleLoadModel(
         const derivedDetectorSrc = `pear://${key}/${OCR_DETECTOR_FILENAME}`;
         detectorModelPath = await resolveModelPath(
           derivedDetectorSrc,
+          progressCallback,
+          seed,
+        );
+      } else if (modelSrc.startsWith("registry://")) {
+        detectorModelPath = await resolveModelPath(
+          OCR_CRAFT_DETECTOR,
           progressCallback,
           seed,
         );
@@ -135,8 +161,12 @@ export async function handleLoadModel(
         let resolvedSrcVocabSrc = srcVocabSrc;
         let resolvedDstVocabSrc = dstVocabSrc;
 
-        if ((!srcVocabSrc || !dstVocabSrc) && modelSrc.startsWith("pear://")) {
-          const derivedVocabSrcs = deriveBergamotVocabSources(modelSrc);
+        if (!srcVocabSrc || !dstVocabSrc) {
+          const derivedVocabSrcs = modelSrc.startsWith("pear://")
+            ? deriveBergamotVocabSources(modelSrc)
+            : modelSrc.startsWith("registry://")
+              ? deriveBergamotRegistryVocabSources(modelSrc)
+              : null;
           if (derivedVocabSrcs) {
             resolvedSrcVocabSrc = srcVocabSrc ?? derivedVocabSrcs.srcVocabSrc;
             resolvedDstVocabSrc = dstVocabSrc ?? derivedVocabSrcs.dstVocabSrc;
@@ -276,6 +306,30 @@ function deriveBergamotVocabSources(modelSrc: string) {
   }
 
   const sharedVocab = `pear://${key}/vocab.${langPair}.spm`;
+  return {
+    srcVocabSrc: sharedVocab,
+    dstVocabSrc: sharedVocab,
+  };
+}
+
+function deriveBergamotRegistryVocabSources(modelSrc: string) {
+  // registry://s3/path/to/model.enfr.intgemm.alphas.bin
+  const match = modelSrc.match(
+    /^(registry:\/\/.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/,
+  );
+  if (!match || !match[1] || !match[2]) return null;
+
+  const basePath = match[1];
+  const langPair = match[2];
+
+  if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
+    return {
+      srcVocabSrc: `${basePath}srcvocab.${langPair}.spm`,
+      dstVocabSrc: `${basePath}trgvocab.${langPair}.spm`,
+    };
+  }
+
+  const sharedVocab = `${basePath}vocab.${langPair}.spm`;
   return {
     srcVocabSrc: sharedVocab,
     dstVocabSrc: sharedVocab,

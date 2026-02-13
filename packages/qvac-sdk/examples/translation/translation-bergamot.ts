@@ -1,13 +1,13 @@
-import { loadModel, translate, unloadModel, BERGAMOT_ENFR } from "@qvac/sdk";
+import { loadModel, translate, unloadModel, BERGAMOT_EN_FR } from "@qvac/sdk";
 
 try {
-  // Bergamot models automatically derive vocabulary files from the model source
-  // when using pear:// URLs. You can still override them explicitly if needed:
+  // Bergamot models automatically derive vocabulary files from the model source.
+  // You can still override them explicitly if needed:
   // - srcVocabSrc: source vocabulary file (optional)
   // - dstVocabSrc: target vocabulary file (optional)
 
   const modelId = await loadModel({
-    modelSrc: BERGAMOT_ENFR,
+    modelSrc: BERGAMOT_EN_FR,
     modelType: "nmt",
     modelConfig: {
       engine: "Bergamot",

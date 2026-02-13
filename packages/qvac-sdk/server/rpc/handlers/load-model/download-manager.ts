@@ -29,6 +29,10 @@ export function createHttpDownloadKey(url: string): string {
   return `http:${url}`;
 }
 
+export function createRegistryDownloadKey(registryPath: string): string {
+  return `registry:${registryPath}`;
+}
+
 export function setClearCacheFlag(downloadKey: string, clearCache: boolean) {
   if (clearCache) {
     clearCacheFlags.set(downloadKey, true);

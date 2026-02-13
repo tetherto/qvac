@@ -26,6 +26,11 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
+import {
+  handleModelRegistryList,
+  handleModelRegistrySearch,
+  handleModelRegistryGetModel,
+} from "@/server/rpc/handlers/registry";
 import type RPC from "bare-rpc";
 import {
   sendErrorResponse,
@@ -359,6 +364,36 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
           stream.end();
         } catch (error) {
           sendStreamErrorResponse(stream, error);
+        }
+        break;
+      }
+
+      case "modelRegistryList": {
+        try {
+          const response = await handleModelRegistryList();
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
+        }
+        break;
+      }
+
+      case "modelRegistrySearch": {
+        try {
+          const response = await handleModelRegistrySearch(request);
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
+        }
+        break;
+      }
+
+      case "modelRegistryGetModel": {
+        try {
+          const response = await handleModelRegistryGetModel(request);
+          req.reply(JSON.stringify(responseSchema.parse(response)), "utf-8");
+        } catch (error) {
+          sendErrorResponse(req, error);
         }
         break;
       }
