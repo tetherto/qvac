@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@tetherto/qvac-registry-schema-mono": "^0.2.1",
+    "@qvac/registry-schema": "^0.1.1",
     "b4a": "^1.6.7",
     "bare-fs": "^2.1.5",
     "bare-os": "^2.2.0",
