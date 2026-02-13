@@ -13,6 +13,10 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-parakeet
 
+permissions:
+  pull-requests: read
+  contents: read
+
 jobs:
   check-release-notes:
     runs-on: ubuntu-latest

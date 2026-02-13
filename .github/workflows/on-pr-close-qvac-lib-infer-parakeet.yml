@@ -7,6 +7,10 @@ on:
       - "packages/qvac-lib-infer-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   cleanup:
     if: github.event.pull_request.merged == false

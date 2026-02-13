@@ -35,6 +35,9 @@ on:
 env:
   PKG_DIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
