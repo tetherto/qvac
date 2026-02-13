@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/embed-llamacpp-performance",
+  "private": true,
+  "description": "Performance and parameter sweep runners for embed addon",
+  "scripts": {
+    "prepare:models:addon": "python3 ./prepare_models.py --target addon",
+    "prepare:models:all": "python3 ./prepare_models.py --target all",
+    "prepare:client-env": "bash -lc 'cd ../client && PYBIN=\"\" && for CAND in /opt/homebrew/bin/python3 /usr/local/bin/python3 python3.12 python3.11 python3.10 python3; do if command -v \"$CAND\" >/dev/null 2>&1; then if \"$CAND\" -c \"import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)\"; then PYBIN=\"$CAND\"; break; fi; fi; done && if [ -z \"$PYBIN\" ]; then echo \"Error: Python 3.10+ is required for benchmarks/client\"; echo \"Hint: install python and ensure /opt/homebrew/bin/python3 (or equivalent) is available\"; exit 1; fi && if [ -d venv ]; then if ! venv/bin/python -c \"import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)\" >/dev/null 2>&1; then echo \"Recreating client venv with Python 3.10+\"; rm -rf venv; fi; fi && if [ ! -d venv ]; then \"$PYBIN\" -m venv venv; fi && . venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt'",
+    "prepare:inputs:mteb": "npm run prepare:client-env && ../client/venv/bin/python ./prepare_mteb_inputs.py",
+    "run:param-sweep": "python3 ./prepare_models.py --target addon && npm run prepare:inputs:mteb && bare ./embed-parameter-sweep.js",
+    "run:pytorch-placeholder": "python3 ./pytorch-parameter-sweep.py"
+  },
+  "dependencies": {
+    "@qvac/dl-filesystem": "latest",
+    "@qvac/embed-llamacpp": "latest",
+    "bare-fs": "latest",
+    "bare-path": "latest",
+    "bare-process": "latest"
+  }
+}
