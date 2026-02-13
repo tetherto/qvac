@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 'use strict'
 
 const { command, flag, arg, summary, header, footer, description } = require('paparam')
