@@ -64,7 +64,9 @@ async function loadChatterboxTTS (params = {}) {
   }
 
   if (!referenceAudio) {
-    const defaultRefPath = params.refWavPath || path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+    const defaultRefPath = params.refWavPath || (isMobile
+      ? path.join(getBaseDir(), 'jfk.wav')
+      : path.join(__dirname, '..', 'reference-audio', 'jfk.wav'))
     const { samples, sampleRate: refRate } = readWavAsFloat32(defaultRefPath)
     if (refRate !== 24000) {
       console.log(`[Chatterbox] Resampling reference audio from ${refRate}Hz to 24000Hz`)
