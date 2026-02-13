@@ -3,6 +3,8 @@ import spawn, {
   type ChildProcess as BareChildProcess,
 } from "bare-runtime/spawn";
 import type { Duplex, DuplexEvents } from "bare-stream";
+import { randomBytes } from "node:crypto";
+import { existsSync, unlinkSync } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +24,8 @@ let rpcInstance: RPC | null = null;
 let rpcPromise: Promise<RPC> | null = null;
 let bareWorkerProc: BareChildProcess | null = null;
 let ipcServer: ReturnType<typeof createServer> | null = null;
+let currentSocketPath: string | null = null;
+let closePromise: Promise<void> | null = null;
 
 // Smart path resolution for worker
 let WORKER_PATH: string;
@@ -34,14 +38,73 @@ if (__dirname.includes("/dist/") || __dirname.includes("\\dist\\")) {
   WORKER_PATH = path.resolve(__dirname, "../../dist/server/worker.js");
 }
 
-const SOCKET_PATH =
-  process.platform === "win32"
-    ? `\\\\.\\pipe\\qvac-worker-${process.pid}`
-    : path.join(os.tmpdir(), `qvac-worker-${process.pid}.sock`);
+function createSocketPath() {
+  const timestamp = Date.now().toString(36);
+  const randomSuffix = randomBytes(2).toString("hex");
+  const socketName = `qvac-worker-${process.pid}-${timestamp}-${randomSuffix}`;
+  return process.platform === "win32"
+    ? `\\\\.\\pipe\\${socketName}`
+    : path.join(os.tmpdir(), `${socketName}.sock`);
+}
+
+function bestEffortUnlinkSocket(socketPath: string | null) {
+  // Windows named pipes are not filesystem paths, so unlink is Unix-only.
+  if (!socketPath || process.platform === "win32") return;
+  try {
+    if (existsSync(socketPath)) {
+      unlinkSync(socketPath);
+    }
+  } catch (error) {
+    logger.debug("Failed to unlink IPC socket path", { socketPath, error });
+  }
+}
+
+function snapshotAndResetState() {
+  const workerToClose = bareWorkerProc;
+  const serverToClose = ipcServer;
+  const socketPathToClose = currentSocketPath;
+
+  rpcInstance = null;
+  rpcPromise = null;
+  bareWorkerProc = null;
+  ipcServer = null;
+  currentSocketPath = null;
+
+  return { workerToClose, serverToClose, socketPathToClose };
+}
+
+function closeSyncForExit() {
+  const { workerToClose, serverToClose, socketPathToClose } =
+    snapshotAndResetState();
+
+  if (workerToClose) {
+    try {
+      workerToClose.kill("SIGTERM");
+    } catch (error) {
+      logger.debug("Failed to kill bare worker during process exit", { error });
+    }
+  }
+
+  if (serverToClose) {
+    try {
+      serverToClose.close();
+    } catch (error) {
+      logger.debug("Failed to close IPC server during process exit", { error });
+    }
+  }
+
+  bestEffortUnlinkSocket(socketPathToClose);
+}
 
 async function ensureRPC(): Promise<RPC> {
   if (rpcInstance) return rpcInstance;
   if (rpcPromise) return rpcPromise;
+  if (closePromise) {
+    await closePromise;
+  }
+
+  const socketPath = createSocketPath();
+  currentSocketPath = socketPath;
 
   rpcPromise = new Promise((resolve, reject) => {
     ipcServer = createServer((socket) => {
@@ -52,14 +115,21 @@ async function ensureRPC(): Promise<RPC> {
       resolve(rpcInstance);
     });
 
-    ipcServer.on("error", reject);
+    ipcServer.on("error", (error) => {
+      rpcPromise = null;
+      rpcInstance = null;
+      bareWorkerProc = null;
+      ipcServer = null;
+      currentSocketPath = null;
+      reject(error);
+    });
 
-    ipcServer.listen(SOCKET_PATH, () => {
+    ipcServer.listen(socketPath, () => {
       bareWorkerProc = spawn("bare", {
         args: [
           WORKER_PATH,
           JSON.stringify({
-            QVAC_IPC_SOCKET_PATH: SOCKET_PATH,
+            QVAC_IPC_SOCKET_PATH: socketPath,
             HOME_DIR: os.homedir(),
           }),
         ],
@@ -135,21 +205,58 @@ export function getRPC() {
   return mockRPC;
 }
 
-export function close() {
+export async function close() {
+  if (closePromise) {
+    await closePromise;
+    return;
+  }
+
+  if (!rpcInstance && !rpcPromise && !bareWorkerProc && !ipcServer) return;
+
   logger.info("🧹 Closing RPC client");
-  if (bareWorkerProc) {
-    logger.info("🐻🔫 Killing bare worker process");
-    bareWorkerProc.kill("SIGTERM");
-    bareWorkerProc = null;
+
+  const { workerToClose, serverToClose, socketPathToClose } =
+    snapshotAndResetState();
+
+  closePromise = (async () => {
+    if (workerToClose) {
+      logger.info("🐻🔫 Killing bare worker process");
+      try {
+        workerToClose.kill("SIGTERM");
+      } catch (error) {
+        logger.debug("Failed to kill bare worker process", { error });
+      }
+    }
+
+    if (serverToClose) {
+      logger.info("🔌 Closing IPC server");
+      await new Promise<void>((resolve) => {
+        try {
+          serverToClose.close(() => resolve());
+        } catch (error) {
+          logger.debug("Failed to close IPC server", { error });
+          resolve();
+        }
+      });
+    }
+
+    bestEffortUnlinkSocket(socketPathToClose);
+  })();
+
+  try {
+    await closePromise;
+  } finally {
+    closePromise = null;
   }
-  if (ipcServer) {
-    logger.info("🔌 Closing IPC server");
-    ipcServer.close();
-    ipcServer = null;
-  }
-  rpcInstance = null;
-  rpcPromise = null;
 }
 
-// Register cleanup handlers for the parent process
-process.once("exit", close);
+function handleTerminationSignal(signal: NodeJS.Signals) {
+  logger.info(`Received ${signal}, closing RPC resources...`);
+  closeSyncForExit();
+  process.kill(process.pid, signal);
+}
+
+process.once("SIGINT", () => handleTerminationSignal("SIGINT"));
+process.once("SIGTERM", () => handleTerminationSignal("SIGTERM"));
+process.once("SIGHUP", () => handleTerminationSignal("SIGHUP"));
+process.once("exit", closeSyncForExit);

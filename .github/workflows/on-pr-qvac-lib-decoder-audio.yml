@@ -12,6 +12,7 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-decoder-audio/**"
+      - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
   workflow_call:
 

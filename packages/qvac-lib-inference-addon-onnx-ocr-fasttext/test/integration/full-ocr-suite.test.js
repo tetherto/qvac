@@ -63,8 +63,8 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
 
     const onnxOcr = new ONNXOcr({
       params: {
-        pathDetector: 'models/ocr/rec_512/detector_craft.onnx',
-        pathRecognizer: `models/ocr/rec_512/recognizer_${recognizerModelName}.onnx`,
+        pathDetector: 'models/ocr/rec_dyn/detector_craft.onnx',
+        pathRecognizer: `models/ocr/rec_dyn/recognizer_${recognizerModelName}.onnx`,
         langList: testCase.langList,
         useGPU: false,
         timeout
@@ -111,7 +111,7 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
     } finally {
       try {
         if (isMacCI && onnxOcr && onnxOcr.addon) {
-          await onnxOcr.addon.stop()
+          await onnxOcr.addon.cancel()
           await new Promise(resolve => setTimeout(resolve, 2000))
           t.comment('OCR Stop complete')
         }

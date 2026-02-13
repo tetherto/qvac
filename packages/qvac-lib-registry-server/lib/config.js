@@ -238,6 +238,16 @@ class RegistryConfig {
       .filter(Boolean)
   }
 
+  getRemoveIndexers () {
+    const rawKeys = getEnv(ENV_KEYS.QVAC_REMOVE_INDEXERS, '')
+    if (!rawKeys) return []
+
+    return rawKeys
+      .split(',')
+      .map(key => key.trim())
+      .filter(Boolean)
+  }
+
   /**
    * Optionally load writer keypair from env (CI use-case)
    */

@@ -9,7 +9,8 @@ on:
       - reopened
     paths:
       - "packages/qvac-sdk/**"
-      - "packages/qvac-docs/**"
+      - "packages/qvac-cli/**"
+      - "packages/docs/**"
       - "packages/qvac-lib-rag/**"
       - "packages/qvac-lib-logging/**"
       - "packages/qvac-lib-error-base/**"

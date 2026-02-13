@@ -47,63 +47,25 @@ class OcrFasttextInterface {
   }
 
   /**
-   * Pauses current inference process
+   * Cancel current inference process.
    */
-  async pause () {
-    try {
-      binding.pause(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonOcr({
-        code: ERR_CODES.FAILED_TO_PAUSE,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Cancel an inference process by jobId, if no jobId is provided it cancel the whole queue
-   */
-  async cancel (jobId) {
+  async cancel () {
     binding.cancel(this._handle)
   }
 
   /**
-   * Stop an inference process
-   */
-  async stop () {
-    binding.stop(this._handle)
-  }
-
-  /**
-   * Adds new input to the processing queue
+   * Processes new input
    * @param {Object} data
-   * @param {String} data.type
-   * @param {String} data.input
-   * @returns {Number} - job ID
+   * @param {String} data.type - Either 'image' for image input
+   * @param {Object} data.input - The input image data
+   * @param {Object} data.options - Optional processing options
    */
-  async append (data) {
+  async runJob (data) {
     try {
-      return binding.append(this._handle, data)
+      return binding.runJob(this._handle, data)
     } catch (err) {
       throw new QvacErrorAddonOcr({
-        code: ERR_CODES.FAILED_TO_APPEND,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Addon process status
-   * @returns {String}
-   */
-  async status () {
-    try {
-      return binding.status(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonOcr({
-        code: ERR_CODES.FAILED_TO_GET_STATUS,
+        code: ERR_CODES.FAILED_TO_RUN_JOB,
         adds: err.message,
         cause: err
       })

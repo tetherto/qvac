@@ -275,20 +275,125 @@ After all writers are indexers:
 
 ## Operations
 
-### Adding a Writer
+### Adding an Indexer
 
-1. Start new writer with `--bootstrap <autobase-key>`
-2. Copy its local key from logs
-3. Add to `QVAC_ADDITIONAL_INDEXERS` on primary indexer
-4. Restart primary indexer
-5. Wait for `I have become an indexer` on new writer
+Full walkthrough: add **Server 2** to a running **Server 1** cluster.
 
-### Removing a Writer
+**Server 1** (existing primary indexer, already running):
 
-1. Stop the writer to be removed
-2. Remove its key from `QVAC_ADDITIONAL_INDEXERS`
-3. Restart an existing indexer
-4. Optionally start a replacement writer
+```bash
+# 1. Note the Autobase key and writer local key from logs
+#    (also in .env as QVAC_AUTOBASE_KEY)
+pm2 logs registry | grep "Autobase key"
+```
+
+**Server 2** (new machine):
+
+```bash
+# 2. Start the new indexer, joining server 1's autobase
+pm2 start scripts/bin.js --name registry -- run \
+  --storage ./corestore \
+  --bootstrap <AUTOBASE_KEY_FROM_SERVER_1>
+
+# 3. Note the "Writer local key" from server 2's logs — this is
+#    the key you will promote to indexer
+pm2 logs registry | grep "Writer local key"
+```
+
+**Back on Server 1** — promote server 2:
+
+```bash
+# 4. Add server 2's local key to .env on server 1
+#    (z-base-32 format, as printed in server 2's logs)
+echo 'QVAC_ADDITIONAL_INDEXERS=<SERVER_2_LOCAL_KEY>' >> .env
+
+# 5. Restart server 1 — it promotes the key on startup
+pm2 restart registry
+```
+
+Server 2 logs should print: `RegistryService: I have become an indexer`
+
+**Optional: authorize RPC writer clients**
+
+If both servers need to accept `add-model` RPC calls, add the writer key(s) to each server's `.env` and restart:
+
+```bash
+# On each server that should accept RPC writes:
+#   QVAC_ALLOWED_WRITER_KEYS=<writer-hex-key-1>,<writer-hex-key-2>
+pm2 restart registry
+```
+
+Writer keypairs are created once (see [Step 3](#step-3-authorize-writer-rpc-clients)). Only the hex key needs to be copied to each server's `.env`.
+
+**Adding a third (or Nth) indexer** follows the same pattern. Append extra keys to `QVAC_ADDITIONAL_INDEXERS` (comma-separated) and restart the promoting indexer:
+
+```bash
+QVAC_ADDITIONAL_INDEXERS=<SERVER_2_LOCAL_KEY>,<SERVER_3_LOCAL_KEY>
+```
+
+Already-promoted keys are skipped automatically.
+
+### Removing an Indexer
+
+Removing an indexer is a two-part operation: the key must be removed from the Autobase quorum via `QVAC_REMOVE_INDEXERS`, and cleaned from `QVAC_ADDITIONAL_INDEXERS` so it is not re-promoted on the next restart.
+
+**On any active indexer** (not the one being removed):
+
+```bash
+# 1. Add the key of the indexer to remove
+echo 'QVAC_REMOVE_INDEXERS=<KEY_TO_REMOVE>' >> .env
+
+# 2. Also remove the key from QVAC_ADDITIONAL_INDEXERS if present
+#    (prevents re-promotion on next restart)
+
+# 3. Restart — removal is executed during startup
+pm2 restart registry
+```
+
+The removed node fires `is-non-indexer` and can no longer write to the log. Existing data remains intact.
+
+**After removal completes**, clean up `.env`:
+
+```bash
+# 4. Remove QVAC_REMOVE_INDEXERS (one-shot operation, not needed after restart)
+sed -i '' '/QVAC_REMOVE_INDEXERS/d' .env
+```
+
+**Constraints:**
+
+- A node cannot remove itself — self-removal is rejected with a warning
+- The last indexer cannot be removed — Autobase enforces at least one indexer
+- A removed node can be re-added later via `QVAC_ADDITIONAL_INDEXERS`
+
+### Example: Two-Server Setup with pm2
+
+```bash
+# ── Server 1 ──────────────────────────────────────────────
+# Start the primary indexer
+pm2 start scripts/bin.js --name registry -- run --storage ./corestore
+# → .env gets QVAC_AUTOBASE_KEY and QVAC_REGISTRY_CORE_KEY
+# → Logs print Autobase key, writer local key, RPC server key
+
+# Add pre-existing writer key(s) to .env for RPC authorization
+#   QVAC_ALLOWED_WRITER_KEYS=<writer-hex-key>
+pm2 restart registry
+
+# ── Server 2 ──────────────────────────────────────────────
+# Start, joining server 1's autobase
+pm2 start scripts/bin.js --name registry -- run \
+  --storage ./corestore \
+  --bootstrap <AUTOBASE_KEY_FROM_SERVER_1>
+# → Logs print writer local key
+
+# Add the same writer key(s) to server 2's .env
+#   QVAC_ALLOWED_WRITER_KEYS=<writer-hex-key>
+pm2 restart registry
+
+# ── Back on Server 1 ─────────────────────────────────────
+# Promote server 2 to indexer
+#   QVAC_ADDITIONAL_INDEXERS=<SERVER_2_LOCAL_KEY>
+pm2 restart registry
+```
 
 ### Sync Models from JSON Config
 
@@ -419,6 +524,7 @@ node scripts/bin.js run --storage ./new-writer --bootstrap <key> --skip-storage-
 | `QVAC_AUTOBASE_KEY` | Autobase bootstrap key (auto-generated on first run) |
 | `QVAC_REGISTRY_CORE_KEY` | Registry view key (auto-generated on first run) |
 | `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers |
+| `QVAC_REMOVE_INDEXERS` | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
 | `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC |
 | `QVAC_BLIND_PEER_KEYS` | Comma-separated blind peer public keys for replication |
 | `QVAC_PRIMARY_KEY` | Optional: Deterministic key generation (testing only) |

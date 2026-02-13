@@ -12,6 +12,7 @@ on:
       - release-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
+      - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
 
 concurrency:
@@ -51,6 +52,7 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
+              - ".github/workflows/*nmtcpp*.yml"
 
   sanity-checks:
     needs: changes

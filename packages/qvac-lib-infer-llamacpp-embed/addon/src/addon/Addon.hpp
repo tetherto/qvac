@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model-interface/BertModel.h"
+#include "model-interface/BertModel.hpp"
 #include "qvac-lib-inference-addon-cpp/Addon.hpp"
 
 namespace qvac_lib_inference_addon_cpp {

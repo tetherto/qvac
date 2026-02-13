@@ -12,6 +12,7 @@ Generate changelogs for SDK pod packages following the monorepo GitFlow.
 **Applies to SDK pod packages** as defined in `.cursor/rules/sdk/sdk-pod-packages.mdc`.
 
 **Use when:**
+
 - Preparing a release for any SDK pod package
 - User asks to generate changelog
 - User asks to create human-readable/presentable changelog
@@ -52,12 +53,12 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md) for
 
 ## CLI Parameters
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--package` | Yes | Package name (e.g., `qvac-sdk`) |
-| `--base-commit` | No | Initial commit SHA for migration (overrides tag lookup) |
-| `--base-version` | No | Version label for base commit (display only) |
-| `--dry-run` | No | Preview output without writing files |
+| Flag             | Required | Description                                             |
+| ---------------- | -------- | ------------------------------------------------------- |
+| `--package`      | Yes      | Package name (e.g., `qvac-sdk`)                         |
+| `--base-commit`  | No       | Initial commit SHA for migration (overrides tag lookup) |
+| `--base-version` | No       | Version label for base commit (display only)            |
+| `--dry-run`      | No       | Preview output without writing files                    |
 
 ## Output
 
@@ -74,8 +75,9 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 Tags follow the pattern: `<package>-v<x.y.z>`
 
 Examples:
+
 - `qvac-sdk-v1.0.0`
-- `qvac-docs-v0.1.0`
+- `docs-v0.1.0`
 - `qvac-lib-rag-v2.0.0`
 
 ## Quality Checklist
