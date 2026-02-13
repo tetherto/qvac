@@ -12,6 +12,7 @@ const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isMobile = platform === 'ios' || platform === 'android'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isWindowsX64 = platform === 'win32' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const MODEL = {
@@ -32,7 +33,11 @@ const PROMPT = [
   { role: 'user', content: 'Hello, say something brief.' }
 ]
 
-test('llm addon can run MoE models [dolphin-mixtral-2x7b]', { timeout: 1_800_000, skip: isDarwinX64 || isMobile }, async t => {
+test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
+  timeout: 1_800_000,
+  skip: isDarwinX64 || isMobile ||
+    isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
+}, async t => {
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name, downloadUrl: MODEL.url })
 
   const loader = new FilesystemDL({ dirPath })

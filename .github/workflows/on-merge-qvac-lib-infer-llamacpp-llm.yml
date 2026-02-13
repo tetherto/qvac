@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - ".github/workflows/*llamacpp-llm*.yml"
 
   workflow_dispatch:
     inputs:

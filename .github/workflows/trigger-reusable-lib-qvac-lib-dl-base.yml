@@ -120,6 +120,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-dl-base
+      repo_name: "dl-base"
 
   publish-feature-gpr:
     needs: publish-logic
