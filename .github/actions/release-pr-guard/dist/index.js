@@ -29973,7 +29973,11 @@ function parseVersion(v) {
 function isGreater(a, b) {
     const pa = parseVersion(a);
     const pb = parseVersion(b);
-    return pa > pb;
+    for (let i = 0; i < 3; i++) {
+        if (pa[i] > pb[i]) return true;
+        if (pa[i] < pb[i]) return false;
+    }
+    return false;
 }
 async function run() {
     const token = core.getInput('github-token', { required: true });

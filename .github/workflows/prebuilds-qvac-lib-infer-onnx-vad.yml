@@ -14,6 +14,15 @@ on:
         description: "Tag to publish with (default: dev; push to main becomes latest inside publish action logic)"
         type: string
         required: false
+      publish_target:
+        description: "Where to publish: 'npm', 'gpr' or 'both'"
+        type: string
+        required: false
+        default: ""
+    outputs:
+      published_version:
+        description: "The version that was published"
+        value: ${{ jobs.publish-gpr.outputs.published_version }}
   workflow_dispatch:
     inputs:
       tag:
@@ -24,14 +33,6 @@ on:
         options:
           - latest
           - dev
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-onnx-vad/**"
 
 env:
   PKG_DIR: packages/qvac-lib-infer-onnx-vad
@@ -359,8 +360,10 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
             else
               gpr_tag="dev"
             fi
@@ -373,6 +376,8 @@ jobs:
     needs: [prebuild, merge, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
     runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: read
       packages: write
@@ -413,6 +418,7 @@ jobs:
           ls -la "${{ env.PKG_DIR }}/model"
 
       - name: Publish to GitHub Package Registry
+        id: publish
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}

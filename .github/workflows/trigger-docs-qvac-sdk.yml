@@ -38,7 +38,7 @@ jobs:
         if: steps.changed.outputs.readme_changed == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.pat_token }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: tetherto/qvac-docs
 
           event-type: readme-changed

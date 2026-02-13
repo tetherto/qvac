@@ -143,7 +143,6 @@ Legend:
 | lib-logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
-| util-transcription | Flexible transcription pipeline combining audio decoding and Whisper inference with VAD support | Tool |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 
 ### Development

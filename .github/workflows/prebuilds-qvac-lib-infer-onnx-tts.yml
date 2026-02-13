@@ -1,14 +1,6 @@
 name: Prebuilds (TTS)
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
   workflow_dispatch:
     inputs:
       tag:
@@ -462,8 +454,10 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
             else
               gpr_tag="dev"
             fi
