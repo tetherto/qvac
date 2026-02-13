@@ -1,0 +1,21 @@
+name: On PR Close (Parakeet)
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/qvac-lib-infer-parakeet/**"
+      - ".github/workflows/*parakeet*.yml"
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete dev package from GPR
+        continue-on-error: true
+        run: |
+          echo "Cleaning up dev package for closed PR"
+          # Cleanup logic would go here if needed

@@ -1,0 +1,61 @@
+name: On Merge Trigger (Parakeet)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/qvac-lib-infer-parakeet/**"
+      - ".github/workflows/*parakeet*.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - latest
+          - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  prebuild:
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    secrets: inherit
+    with:
+      tag: ${{ inputs.tag || 'latest' }}
+      publish_target: ${{ github.ref == 'refs/heads/main' && 'npm' || 'gpr' }}
+      workdir: "packages/qvac-lib-infer-parakeet"
+
+  publish-release:
+    needs: prebuild
+    if: needs.prebuild.result == 'success' && needs.prebuild.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-parakeet.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.prebuild.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-parakeet"
+
+  integration-tests:
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    needs: prebuild
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
+
+  mobile-tests:
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    needs: prebuild
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
