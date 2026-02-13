@@ -12,6 +12,7 @@ import {
   PluginHandlerTypeMismatchError,
   PluginRequestValidationFailedError,
   PluginResponseValidationFailedError,
+  ModelIsDelegatedError,
   ModelNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
@@ -20,8 +21,11 @@ const logger = getServerLogger();
 
 function resolvePluginHandler(modelId: string, handlerName: string) {
   const modelEntry = getModelEntry(modelId);
-  if (!modelEntry || !modelEntry.local) {
+  if (!modelEntry) {
     throw new ModelNotFoundError(modelId);
+  }
+  if (modelEntry.isDelegated || !modelEntry.local) {
+    throw new ModelIsDelegatedError(modelId);
   }
 
   const modelType = modelEntry.local.modelType;
@@ -108,9 +112,17 @@ export async function* handlePluginInvokeStream(
   ) as AsyncGenerator<unknown>;
 
   for await (const chunk of generator) {
+    const responseParseResult = handlerDef.responseSchema.safeParse(chunk);
+    if (!responseParseResult.success) {
+      const details = responseParseResult.error.issues
+        .map((i) => `${String(i.path.join("."))}: ${i.message}`)
+        .join(", ");
+      throw new PluginResponseValidationFailedError(handlerName, details);
+    }
+
     yield {
       type: "pluginInvokeStream",
-      result: chunk,
+      result: responseParseResult.data,
       done: false,
     };
   }
