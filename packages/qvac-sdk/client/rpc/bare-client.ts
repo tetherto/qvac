@@ -9,6 +9,7 @@ import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
 import { handlers } from "@/server/rpc/handlers";
 import {
+  PearWorkerEntryRequiredError,
   RPCNoHandlerError,
   RPCRequestNotSentError,
 } from "@/utils/errors-client";
@@ -53,10 +54,7 @@ async function loadWorkerEntry() {
 
   const { isPear } = await import("which-runtime");
   if (isPear) {
-    throw new Error(
-      "No plugins registered. Pear apps must spawn qvac/worker.pear.entry.mjs as the worker entry. " +
-        "Run `npx qvac bundle sdk` to generate it, then spawn the generated file instead of your worker directly.",
-    );
+    throw new PearWorkerEntryRequiredError("qvac/worker.pear.entry.mjs");
   }
 
   // Fallback: load default worker (all built-in plugins)
