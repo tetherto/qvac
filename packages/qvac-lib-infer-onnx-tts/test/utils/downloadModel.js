@@ -57,9 +57,15 @@ async function downloadWithHttp (url, filepath, maxRedirects = 10) {
           return
         }
         const location = res.headers.location
-        const redirectUrl = location.startsWith('http://') || location.startsWith('https://')
-          ? location
-          : new URL(location, parsedUrl.origin + parsedUrl.pathname).href
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
         console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
         downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
           .then(resolve)
