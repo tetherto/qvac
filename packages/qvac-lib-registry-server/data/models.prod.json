@@ -251,7 +251,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -265,7 +265,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -279,7 +279,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -307,7 +307,7 @@
     "description": "Multimodal for text, image, and audio",
     "quantization": "",
     "params": "3B",
-    "license": "Qwen",
+    "license": "qwen-research",
     "tags": [
       "generation",
       "multimodal",
@@ -321,7 +321,7 @@
     "description": "",
     "quantization": "",
     "params": "3B",
-    "license": "Qwen",
+    "license": "qwen-research",
     "tags": [
       "generation",
       "multimodal",
@@ -380,7 +380,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -396,7 +396,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -412,7 +412,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -428,7 +428,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -444,7 +444,7 @@
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -459,7 +459,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -475,7 +475,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -491,7 +491,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -507,7 +507,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -523,7 +523,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -539,7 +539,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -554,7 +554,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -665,7 +665,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -681,7 +681,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -697,7 +697,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -713,7 +713,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -729,7 +729,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -745,7 +745,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -761,7 +761,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -777,7 +777,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -792,7 +792,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -1139,7 +1139,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1153,7 +1153,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1167,7 +1167,7 @@
     "description": "",
     "quantization": "BF16",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1181,7 +1181,7 @@
     "description": "",
     "quantization": "F32",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -4118,7 +4118,7 @@
     "description": "Llama 3.2 1B with tool calling support",
     "quantization": "q4_k",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "apache-2.0",
     "tags": [
       "generation",
       "instruct",
