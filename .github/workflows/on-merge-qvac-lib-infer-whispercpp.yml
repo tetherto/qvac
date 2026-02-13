@@ -188,3 +188,22 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
+
+  benchmark:
+    name: Trigger Benchmark (Whispercpp)
+    runs-on: ubuntu-latest
+    needs: prebuild
+    if: always() && needs.prebuild.outputs.should_run_tests == 'true'
+    steps:
+      - name: Trigger benchmark workflow
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh workflow run benchmark-qvac-lib-infer-whispercpp.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            -f dataset_type=librispeech \
+            -f language=english \
+            -f model_size=tiny \
+            -f streaming_mode=false \
+            -f workdir=packages/qvac-lib-infer-whispercpp
