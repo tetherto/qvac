@@ -55,6 +55,14 @@ import {
   pluginInvokeStreamRequestSchema,
   pluginInvokeStreamResponseSchema,
 } from "./plugin";
+import {
+  modelRegistryListRequestSchema,
+  modelRegistryListResponseSchema,
+  modelRegistrySearchRequestSchema,
+  modelRegistrySearchResponseSchema,
+  modelRegistryGetModelRequestSchema,
+  modelRegistryGetModelResponseSchema,
+} from "./registry";
 
 export const requestSchema = z.union([
   pingRequestSchema,
@@ -76,6 +84,9 @@ export const requestSchema = z.union([
   ocrStreamRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
+  modelRegistryListRequestSchema,
+  modelRegistrySearchRequestSchema,
+  modelRegistryGetModelRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -101,6 +112,9 @@ export const responseSchema = z.discriminatedUnion("type", [
   ocrStreamResponseSchema,
   pluginInvokeResponseSchema,
   pluginInvokeStreamResponseSchema,
+  modelRegistryListResponseSchema,
+  modelRegistrySearchResponseSchema,
+  modelRegistryGetModelResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({

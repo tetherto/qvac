@@ -8,6 +8,7 @@ import { initEnv, getValidatedEnv } from "@/server/env";
 import { closeAllRagInstances } from "@/server/bare/rag-hyperdb";
 import { cleanupDownloads } from "@/server/rpc/handlers/load-model/download-manager";
 import { unloadAllModels } from "@/server/bare/registry/model-registry";
+import { closeRegistryClient } from "@/server/bare/registry/registry-client";
 import {
   clearAllLoggingStreams,
   startLogBuffering,
@@ -95,6 +96,7 @@ function setupShutdownHandlers() {
         closeAllRagInstances(),
         cleanupDownloads(),
         unloadAllModels(),
+        closeRegistryClient(),
       ]);
       logger.info("✅ Cleanup completed successfully");
     } catch (error) {

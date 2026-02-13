@@ -23,7 +23,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
-import { getModelBySrc } from "@/models/hyperdrive";
+import { getModelBySrc } from "@/models/registry";
 import {
   getActiveDownload,
   registerDownload,

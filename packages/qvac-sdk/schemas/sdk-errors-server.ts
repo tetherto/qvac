@@ -66,6 +66,7 @@ export const SDK_SERVER_ERROR_CODES = {
   ARCHIVE_UNSUPPORTED_TYPE: 53012,
   ARCHIVE_MISSING_SHARDS: 53013,
   PARTIAL_DOWNLOAD_OFFLINE: 53014,
+  REGISTRY_DOWNLOAD_FAILED: 53015,
 
   // Cache Operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -82,25 +83,29 @@ export const SDK_SERVER_ERROR_CODES = {
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
 
-  // RPC/Delegation (Server-side) (53,700-53,899)
+  // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
   DELEGATE_PROVIDER_ERROR: 53702,
   RPC_NO_DATA_RECEIVED: 53703,
   RPC_UNKNOWN_REQUEST_TYPE: 53704,
 
-  // Plugin Errors (53,900-53,949)
-  PLUGIN_NOT_FOUND: 53900,
-  PLUGIN_HANDLER_NOT_FOUND: 53901,
-  PLUGIN_REQUEST_VALIDATION_FAILED: 53902,
-  PLUGIN_RESPONSE_VALIDATION_FAILED: 53903,
-  PLUGIN_ALREADY_REGISTERED: 53904,
-  PLUGIN_HANDLER_TYPE_MISMATCH: 53905,
-  PLUGIN_LOGGING_INVALID: 53906,
-  PLUGIN_DEFINITION_INVALID: 53907,
+  // Plugin Errors (53,850-53,899)
+  PLUGIN_NOT_FOUND: 53850,
+  PLUGIN_HANDLER_NOT_FOUND: 53851,
+  PLUGIN_REQUEST_VALIDATION_FAILED: 53852,
+  PLUGIN_RESPONSE_VALIDATION_FAILED: 53853,
+  PLUGIN_ALREADY_REGISTERED: 53854,
+  PLUGIN_HANDLER_TYPE_MISMATCH: 53855,
+  PLUGIN_LOGGING_INVALID: 53856,
+  PLUGIN_DEFINITION_INVALID: 53857,
 
-  // Security (53,950-54,000)
-  PATH_TRAVERSAL: 53950,
+  // Security (53,900-53,949)
+  PATH_TRAVERSAL: 53900,
+
+  // QVAC Model Registry Operations (53,950-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -341,6 +346,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "HYPERDRIVE_DOWNLOAD_FAILED",
     message: (details: string) => `Hyperdrive download failed: ${details}`,
   },
+  [SDK_SERVER_ERROR_CODES.REGISTRY_DOWNLOAD_FAILED]: {
+    name: "REGISTRY_DOWNLOAD_FAILED",
+    message: (details: string) => `Registry download failed: ${details}`,
+  },
   [SDK_SERVER_ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
     name: "INVALID_SHARD_URL_PATTERN",
     message: (url: string) =>
@@ -440,7 +449,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `Unknown request type received: ${requestType}`,
   },
 
-  // Plugin Errors (53,900-53,949)
+  // Plugin Errors (53,850-53,899)
   [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
     name: "PLUGIN_NOT_FOUND",
     message: (modelType: string) =>
@@ -483,11 +492,19 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `Plugin definition invalid for "${modelType}": ${details}`,
   },
 
-  // Security (53,950-54,000)
+  // Security (53,900-53,949)
   [SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL]: {
     name: "PATH_TRAVERSAL",
     message: (component: string, basePath: string) =>
       `Path traversal detected: "${component}" escapes base directory "${basePath}"`,
+  },
+
+  // QVAC Model Registry Operations (53,950-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED]: {
+    name: "QVAC_MODEL_REGISTRY_QUERY_FAILED",
+    message: (details?: string) =>
+      `QVAC model registry query failed${details ? `: ${details}` : ""}`,
   },
 };
 

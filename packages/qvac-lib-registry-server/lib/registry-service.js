@@ -27,7 +27,7 @@ function deriveRpcDiscoveryKey (autobaseKey) {
     .digest()
 }
 
-const schema = require('@tetherto/qvac-registry-schema-mono')
+const schema = require('@qvac/registry-schema')
 const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
 const ReseedTracker = require('./reseed-tracker')

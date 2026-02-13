@@ -1,15 +1,16 @@
 #include "PiperEngine.hpp"
-#include <filesystem>
+
 #include <cstdio>
-#include <iostream>
 #include <cstdlib>
+#include <filesystem>
+#include <iostream>
 #include <stdexcept>
 
-#include "src/addon/TTSErrors.hpp"
 #include <onnxruntime_c_api.h>
 #include <onnxruntime_cxx_api.h>
 
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "src/addon/TTSErrors.hpp"
 
 #ifdef __ANDROID__
 #include <onnxruntime/nnapi_provider_factory.h>
@@ -19,31 +20,23 @@
 #include <dml_provider_factory.h>
 #endif
 
-namespace fs = std::filesystem;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace qvac::ttslib::piper {
 
-PiperEngine::PiperEngine(const TTSConfig& cfg)
- : IPiperEngine() {
-  load(cfg);
-}
+PiperEngine::PiperEngine(const TTSConfig &cfg) : IPiperEngine() { load(cfg); }
 
-PiperEngine::~PiperEngine() {
-  unload();
-}
+PiperEngine::~PiperEngine() { unload(); }
 
-void PiperEngine::load(const TTSConfig& cfg) {
+void PiperEngine::load(const TTSConfig &cfg) {
   loadVoice(cfg);
   initialize();
 }
 
-void PiperEngine::unload() {
-  cleanup();
-}
+void PiperEngine::unload() { cleanup(); }
 
-AudioResult PiperEngine::synthesize(const std::string& text) {
-  const std::vector<int16_t>& wav = generateAudio(text);
+AudioResult PiperEngine::synthesize(const std::string &text) {
+  const std::vector<int16_t> &wav = generateAudio(text);
 
   AudioResult result;
   result.sampleRate = voice_.synthesisConfig.sampleRate;
@@ -51,23 +44,28 @@ AudioResult PiperEngine::synthesize(const std::string& text) {
   result.channels = voice_.synthesisConfig.channels;
 
   if (result.sampleRate > 0) {
-    result.durationMs = (static_cast<double>(wav.size()) / result.sampleRate) * 1000.0;
+    result.durationMs =
+        (static_cast<double>(wav.size()) / result.sampleRate) * 1000.0;
     result.samples = wav.size();
   }
 
   return result;
 }
 
-void PiperEngine::loadVoice(const TTSConfig& cfg) {
-  if (initialized_) return;
+void PiperEngine::loadVoice(const TTSConfig &cfg) {
+  if (initialized_)
+    return;
 
   std::filesystem::path model(cfg.modelPath);
   if (!std::filesystem::exists(model)) {
-    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelFileNotFound, "Model file not found: " + cfg.modelPath);
+    throw qvac_errors::createTTSError(qvac_errors::tts_error::ModelFileNotFound,
+                                      "Model file not found: " + cfg.modelPath);
   }
 
   if (!std::filesystem::exists(cfg.configJsonPath)) {
-    throw qvac_errors::createTTSError(qvac_errors::tts_error::ConfigFileNotFound, "Model config (.json) not found: " + cfg.configJsonPath);
+    throw qvac_errors::createTTSError(
+        qvac_errors::tts_error::ConfigFileNotFound,
+        "Model config (.json) not found: " + cfg.configJsonPath);
   }
 
   constexpr bool useCuda = false;
@@ -85,8 +83,9 @@ void PiperEngine::loadVoice(const TTSConfig& cfg) {
 
   Ort::SessionOptions opts = getOrtSessionOptions(cfg.useGPU);
   voice_.session.options = std::move(opts);
-  ::piper::loadVoice(piperConfig_, model.string(), cfg.configJsonPath, voice_, speakerId_, false);
-  
+  ::piper::loadVoice(piperConfig_, model.string(), cfg.configJsonPath, voice_,
+                     speakerId_, false);
+
   configureESpeak(cfg.language, cfg.eSpeakDataPath);
 
   // Initialize our custom Tashkeel for Arabic
@@ -104,14 +103,16 @@ void PiperEngine::loadVoice(const TTSConfig& cfg) {
 }
 
 void PiperEngine::initialize() {
-  if (initialized_) return;
+  if (initialized_)
+    return;
 
   ::piper::initialize(piperConfig_);
   initialized_ = true;
 }
 
 void PiperEngine::cleanup() {
-  if (!initialized_) return;
+  if (!initialized_)
+    return;
 
   ::piper::terminate(piperConfig_);
 
@@ -170,17 +171,19 @@ std::string PiperEngine::preprocessText(const std::string &text) {
   return text;
 }
 
-void PiperEngine::configureESpeak(const std::string& lang, const std::string& espeakNgDataPath) {
+void PiperEngine::configureESpeak(const std::string &lang,
+                                  const std::string &espeakNgDataPath) {
   piperConfig_.useESpeak = true;
   piperConfig_.eSpeakDataPath = espeakNgDataPath;
   voice_.phonemizeConfig.eSpeak.voice = lang;
 }
 
 void PiperEngine::audioCallback() {
-  collectedAudio_.insert(collectedAudio_.end(), audioBuffer_.begin(), audioBuffer_.end());
+  collectedAudio_.insert(collectedAudio_.end(), audioBuffer_.begin(),
+                         audioBuffer_.end());
 }
 
-std::vector<int16_t> PiperEngine::generateAudio(const std::string& text) {
+std::vector<int16_t> PiperEngine::generateAudio(const std::string &text) {
   collectedAudio_.clear();
   audioBuffer_.clear();
 
@@ -195,7 +198,8 @@ std::vector<int16_t> PiperEngine::generateAudio(const std::string& text) {
 
 Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
   Ort::SessionOptions sessionOptions;
-  sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+  sessionOptions.SetGraphOptimizationLevel(
+      GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
   if (!useGPU) {
     return sessionOptions;
@@ -206,27 +210,32 @@ Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
 #if defined(__ANDROID__)
   try {
     const bool nnapiAvailable =
-        std::find(providers.begin(), providers.end(), "NnapiExecutionProvider") != providers.end();
+        std::find(providers.begin(), providers.end(),
+                  "NnapiExecutionProvider") != providers.end();
     if (nnapiAvailable) {
       uint32_t nnapiFlags = NNAPI_FLAG_USE_FP16 | NNAPI_FLAG_CPU_DISABLED;
-      Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions, nnapiFlags));
+      Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(
+          sessionOptions, nnapiFlags));
       QLOG(Priority::INFO, "Using NNAPI execution provider");
     }
-  } catch (const std::exception& e) {
-    QLOG(Priority::ERROR, "Error setting up NNAPI provider: " + std::string(e.what()));
+  } catch (const std::exception &e) {
+    QLOG(Priority::ERROR,
+         "Error setting up NNAPI provider: " + std::string(e.what()));
   }
 
 #elif defined(__APPLE__)
 
   try {
     const bool coremlAvailable =
-        std::find(providers.begin(), providers.end(), "CoreMLExecutionProvider") != providers.end();
+        std::find(providers.begin(), providers.end(),
+                  "CoreMLExecutionProvider") != providers.end();
     if (coremlAvailable) {
       sessionOptions.AppendExecutionProvider("CoreML");
       QLOG(Priority::INFO, "Using CoreML execution provider");
     }
-  } catch (const std::exception& e) {
-    QLOG(Priority::ERROR, "Error setting up CoreML provider: " + std::string(e.what()));
+  } catch (const std::exception &e) {
+    QLOG(Priority::ERROR,
+         "Error setting up CoreML provider: " + std::string(e.what()));
   }
 
 #elif defined(_WIN32) || defined(_WIN64)
@@ -243,11 +252,11 @@ Ort::SessionOptions PiperEngine::getOrtSessionOptions(bool useGPU) {
       QLOG(Priority::INFO, "Using DirectML execution provider");
     }
   } catch (const std::exception &e) {
-    QLOG(Priority::ERROR, "Error setting up DirectML provider: " + std::string(e.what()));
+    QLOG(Priority::ERROR,
+         "Error setting up DirectML provider: " + std::string(e.what()));
   }
 #endif
   return sessionOptions;
 }
-
 
 } // namespace qvac::ttslib::piper

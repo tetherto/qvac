@@ -16,6 +16,11 @@ import { handleGetModelInfo } from "./get-model-info";
 import { handleOCRStream } from "./ocr-stream";
 import { handlePing } from "./ping";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
+import {
+  handleModelRegistryList,
+  handleModelRegistrySearch,
+  handleModelRegistryGetModel,
+} from "./registry";
 
 export const handlers = {
   ping: handlePing,
@@ -37,4 +42,7 @@ export const handlers = {
   ocrStream: handleOCRStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
+  modelRegistryList: handleModelRegistryList,
+  modelRegistrySearch: handleModelRegistrySearch,
+  modelRegistryGetModel: handleModelRegistryGetModel,
 };
