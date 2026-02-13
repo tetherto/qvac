@@ -120,6 +120,7 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/qvac-lib-langdetect-text
+      repo_name: langdetect-text
 
   publish-feature-gpr:
     needs: publish-logic

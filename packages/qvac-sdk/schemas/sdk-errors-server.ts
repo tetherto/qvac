@@ -89,7 +89,7 @@ export const SDK_SERVER_ERROR_CODES = {
   RPC_NO_DATA_RECEIVED: 53703,
   RPC_UNKNOWN_REQUEST_TYPE: 53704,
 
-  // Plugin Errors (53,900-53,999)
+  // Plugin Errors (53,900-53,949)
   PLUGIN_NOT_FOUND: 53900,
   PLUGIN_HANDLER_NOT_FOUND: 53901,
   PLUGIN_REQUEST_VALIDATION_FAILED: 53902,
@@ -98,6 +98,9 @@ export const SDK_SERVER_ERROR_CODES = {
   PLUGIN_HANDLER_TYPE_MISMATCH: 53905,
   PLUGIN_LOGGING_INVALID: 53906,
   PLUGIN_DEFINITION_INVALID: 53907,
+
+  // Security (53,950-54,000)
+  PATH_TRAVERSAL: 53950,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -437,7 +440,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
       `Unknown request type received: ${requestType}`,
   },
 
-  // Plugin Errors (53,900-53,999)
+  // Plugin Errors (53,900-53,949)
   [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
     name: "PLUGIN_NOT_FOUND",
     message: (modelType: string) =>
@@ -478,6 +481,13 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "PLUGIN_DEFINITION_INVALID",
     message: (modelType: string, details: string) =>
       `Plugin definition invalid for "${modelType}": ${details}`,
+  },
+
+  // Security (53,950-54,000)
+  [SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL]: {
+    name: "PATH_TRAVERSAL",
+    message: (component: string, basePath: string) =>
+      `Path traversal detected: "${component}" escapes base directory "${basePath}"`,
   },
 };
 

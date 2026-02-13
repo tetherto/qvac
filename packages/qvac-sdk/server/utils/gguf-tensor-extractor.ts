@@ -1,7 +1,7 @@
 import { promises as fsPromises, createReadStream } from "bare-fs";
-import path from "bare-path";
 import { getServerLogger } from "@/logging";
 import { ModelLoadFailedError } from "@/utils/errors-server";
+import { validateAndJoinPath } from "./path-security";
 
 const logger = getServerLogger();
 
@@ -315,7 +315,7 @@ export async function extractAndWriteTensorsFile(
   shardFilenames: string[],
   baseFilename: string,
 ): Promise<string> {
-  const tensorsFilePath = path.join(shardDir, `${baseFilename}.tensors.txt`);
+  const tensorsFilePath = validateAndJoinPath(shardDir, `${baseFilename}.tensors.txt`);
 
   try {
     await fsPromises.access(tensorsFilePath);
@@ -331,7 +331,7 @@ export async function extractAndWriteTensorsFile(
   const failedShards: string[] = [];
 
   for (const filename of shardFilenames) {
-    const shardPath = path.join(shardDir, filename);
+    const shardPath = validateAndJoinPath(shardDir, filename);
 
     try {
       logger.debug(`Extracting tensors from ${filename}...`);

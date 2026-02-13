@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
+      - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
     inputs:
       tag:

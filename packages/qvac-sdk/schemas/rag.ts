@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safePathComponent } from "./path-validation";
 import type {
   Doc,
   EmbeddedDoc,
@@ -34,7 +35,7 @@ const saveEmbeddingsResultSchema = z.object({
 // modelId is optional - only needed if no cached RAG instance exists
 const ragStorageOnlyBaseSchema = z.object({
   modelId: z.string().optional(),
-  workspace: z.string().optional(),
+  workspace: safePathComponent.optional(),
 });
 
 // For operations that need the embedding model (ingest, search)
@@ -155,7 +156,7 @@ const ragListWorkspacesOperationSchema = z.object({
 // ============== Close Workspace Operation ==============
 
 export const ragCloseWorkspaceParamsSchema = z.object({
-  workspace: z.string().optional(),
+  workspace: safePathComponent.optional(),
   deleteOnClose: z.boolean().optional(),
 });
 
@@ -167,7 +168,7 @@ const ragCloseWorkspaceOperationSchema = ragCloseWorkspaceParamsSchema.extend({
 // ============== Delete Workspace Operation ==============
 
 export const ragDeleteWorkspaceParamsSchema = z.object({
-  workspace: z.string().min(1, "Workspace name cannot be empty"),
+  workspace: z.string().min(1, "Workspace name cannot be empty").pipe(safePathComponent),
 });
 
 const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(
