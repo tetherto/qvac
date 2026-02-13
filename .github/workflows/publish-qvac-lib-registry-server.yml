@@ -26,9 +26,11 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+  release-pr-guard-schema:
+    name: Release PR Guard (Schema)
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.head_ref, 'release-qvac-registry-schema')
     permissions:
       pull-requests: write
       contents: read
@@ -36,7 +38,39 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
-      package-slug: qvac-lib-registry-server
+      package-slug: qvac-registry-schema
+      package-json-path: packages/qvac-lib-registry-server/shared/package.json
+      changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
+
+  release-pr-guard-client:
+    name: Release PR Guard (Client)
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.head_ref, 'release-qvac-registry-client')
+    permissions:
+      pull-requests: write
+      contents: read
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-registry-client
+      package-json-path: packages/qvac-lib-registry-server/client/package.json
+      changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
+
+  release-pr-guard-server:
+    name: Release PR Guard (Server)
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.head_ref, 'release-qvac-registry-server')
+    permissions:
+      pull-requests: write
+      contents: read
+    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      package-slug: qvac-registry-server
       package-json-path: packages/qvac-lib-registry-server/package.json
       changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
 
