@@ -1,6 +1,6 @@
 {
-  "name": "@tetherto/qvac-registry-schema",
-  "version": "0.2.1",
+  "name": "@qvac/registry-schema",
+  "version": "0.1.0",
   "description": "HyperDB schema and database wrapper for QVAC Registry",
   "license": "Apache-2.0",
   "type": "commonjs",
