@@ -1,29 +1,45 @@
 #include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
-#include "src/model-interface/PiperEngine.hpp"
+#include "mocks/ChatterboxEngineMock.hpp"
 #include "src/model-interface/TTSModel.hpp"
 
-#include <filesystem>
-
 using namespace qvac::ttslib::addon_model;
-using namespace qvac::ttslib::piper;
+using namespace qvac::ttslib::chatterbox::testing;
 
 namespace qvac_model_api_tests {
 
+static std::shared_ptr<ChatterboxEngineMock> g_validMock;
+static std::shared_ptr<ChatterboxEngineMock> g_invalidMock;
+
 TTSModel make_valid_model() {
-  const std::filesystem::path basePath =
-      std::filesystem::path("../../../../models/tts/");
-  const std::filesystem::path modelPath = basePath / "en_US-amy-low.onnx";
-  const std::filesystem::path eSpeakDataPath = basePath / "espeak-ng-data";
-  const std::filesystem::path configJsonPath =
-      basePath / "en_US-amy-low.onnx.json";
+  g_validMock = std::make_shared<ChatterboxEngineMock>();
+
+  EXPECT_CALL(*g_validMock, load(::testing::_)).Times(::testing::AnyNumber());
+  EXPECT_CALL(*g_validMock, unload()).Times(::testing::AnyNumber());
+  EXPECT_CALL(*g_validMock, isLoaded())
+      .WillRepeatedly(::testing::Return(true));
+
+  qvac::ttslib::AudioResult mockResult;
+  mockResult.pcm16 = {1, 2, 3, 4, 5};
+  mockResult.sampleRate = 24000;
+  mockResult.channels = 1;
+  mockResult.samples = 5;
+  mockResult.durationMs = 100.0;
+
+  EXPECT_CALL(*g_validMock, synthesize(::testing::_))
+      .Times(::testing::AnyNumber())
+      .WillRepeatedly(::testing::Return(mockResult));
 
   const std::unordered_map<std::string, std::string> config{
-      {"modelPath", modelPath.string()},
       {"language", "en"},
-      {"eSpeakDataPath", eSpeakDataPath.string()},
-      {"configJsonPath", configJsonPath.string()}};
+      {"tokenizerPath", "dummy"},
+      {"speechEncoderPath", "dummy"},
+      {"embedTokensPath", "dummy"},
+      {"conditionalDecoderPath", "dummy"},
+      {"languageModelPath", "dummy"}};
 
-  return TTSModel(config);
+  std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+
+  return TTSModel(config, referenceAudio, g_validMock);
 }
 
 TTSModel make_invalid_model() {

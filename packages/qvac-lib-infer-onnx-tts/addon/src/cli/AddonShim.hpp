@@ -11,7 +11,6 @@
 #include <thread>
 #include <vector>
 
-#include "src/model-interface/PiperEngine.hpp"
 #include "src/model-interface/TTSModel.hpp"
 
 namespace qvac::ttslib::cli_shim {
@@ -26,7 +25,9 @@ public:
     std::string payload; // output path or error message; runtime stats omitted
   };
 
-  explicit TTSAddonShim(const TTSConfig &config);
+  explicit TTSAddonShim(
+      const std::unordered_map<std::string, std::string> &configMap,
+      const std::vector<float> &referenceAudio = {});
 
   ~TTSAddonShim();
 

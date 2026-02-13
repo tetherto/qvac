@@ -196,8 +196,6 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
   std::cout << "Sampling ... " << text << std::endl;
   for (size_t i = 0; i < MAX_NEW_TOKENS; i++) {
-    std::cout << "Iteration: " << i << std::endl;
-    // 1.
     runEmbedTokensInfer(inputIds);
 
     OrtTensor inputsEmbsTensor =

@@ -1,12 +1,12 @@
 #include "cli/AddonShim.hpp"
 
-#include "src/addon/TTSModel.hpp"
-
-using qvac::ttslib::TTSConfig;
 using qvac::ttslib::addon_model::TTSModel;
 using qvac::ttslib::cli_shim::TTSAddonShim;
 
-TTSAddonShim::TTSAddonShim(const TTSConfig &config) : model_(config) {
+TTSAddonShim::TTSAddonShim(
+    const std::unordered_map<std::string, std::string> &configMap,
+    const std::vector<float> &referenceAudio)
+    : model_(configMap, referenceAudio) {
   processingThread_ = std::thread([this]() { this->processLoop(); });
 }
 

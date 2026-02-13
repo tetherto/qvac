@@ -2,7 +2,7 @@
 
 This library simplifies running Text-to-Speech (TTS) models within QVAC runtime applications. It provides an easy interface to load, execute, and manage TTS instances, supporting multiple data sources (called data loaders) and leveraging ONNX Runtime for efficient inference.
 
-The TTS system uses the Piper neural text-to-speech model to convert text into natural-sounding speech audio files.
+The TTS system uses the Chatterbox neural text-to-speech engine to convert text into natural-sounding speech audio with voice cloning capabilities.
 
 ## Table of Contents
 
@@ -18,7 +18,6 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
   - [6. Load Model](#6-load-model)
   - [7. Run TTS Synthesis](#7-run-tts-synthesis)
   - [8. Release Resources](#8-release-resources)
-- [Quickstart Example](#quickstart-example)
 - [Output Format](#output-format)
 - [Other Examples](#other-examples)
 - [Tests](#tests)
@@ -40,8 +39,8 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
-- Piper TTS: Neural text-to-speech model
-- Bare Runtime (≥1.17.3): JavaScript runtime
+- Chatterbox TTS: Neural text-to-speech engine with voice cloning
+- Bare Runtime (>=1.17.3): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
 ## Installation
@@ -160,7 +159,6 @@ Data Loaders abstract the way model files are accessed. It is recommended to uti
 const store = new Corestore('./store')
 const hdStore = store.namespace('hd')
 
-// see examples folder for existing keys
 const hdDL = new HyperDriveDL({
   key: 'hd://your-hyperdrive-key-here',
   store: hdStore
@@ -171,13 +169,16 @@ const hdDL = new HyperDriveDL({
 
 ```js
 const args = {
-  loader: hdDL,                              // Data loader instance
-  opts: { stats: true },                     // Enable performance statistics
-  logger: console,                           // Logger instance
-  cache: './models/',                        // Local cache directory
-  mainModelUrl: 'en_US-amy-low.onnx',        // Main ONNX model file
-  configJsonPath: 'en_US-amy-low.onnx.json', // Model configuration file
-  eSpeakDataPath: 'espeak-ng-data'           // eSpeak data directory
+  loader: hdDL,
+  opts: { stats: true },
+  logger: console,
+  cache: './models/',
+  tokenizerPath: 'chatterbox/tokenizer.json',
+  speechEncoderPath: 'chatterbox/speech_encoder.onnx',
+  embedTokensPath: 'chatterbox/embed_tokens.onnx',
+  conditionalDecoderPath: 'chatterbox/conditional_decoder.onnx',
+  languageModelPath: 'chatterbox/language_model.onnx',
+  referenceAudio: referenceAudioFloat32Array
 }
 ```
 
@@ -187,28 +188,28 @@ The `args` obj contains the following properties:
 * `logger`: This property is used to create logging functionality. 
 * `opts.stats`: This flag determines whether to calculate inference stats.
 * `cache`: The local directory where the model files will be downloaded to.
-* `mainModelUrl`: The name of the main TTS ONNX model file in the Data Loader (the model used for inference).
-* `configJsonPath`: The name of the model configuration JSON file in the Data Loader (the file used to configure the ONNX model).
-* `eSpeakDataPath`: The name of the espeak-ng-data directory in the Data Loader (which contains language data such as dictionaries, phonemes, voices, etc.)
+* `tokenizerPath`: Path to the Chatterbox tokenizer JSON file.
+* `speechEncoderPath`: Path to the speech encoder ONNX model.
+* `embedTokensPath`: Path to the embed tokens ONNX model.
+* `conditionalDecoderPath`: Path to the conditional decoder ONNX model.
+* `languageModelPath`: Path to the language model ONNX model.
+* `referenceAudio`: Float32Array of reference audio samples for voice cloning.
 
 ### 4. Create the `config` obj
 
 The `config` obj consists of a set of parameters which can be used to tweak the behaviour of the TTS model.
 
 ```js
-// an example of possible configuration
 const config = {
-  language: 'en',                    // Language code (ISO 639-1 format)
-  engine: 'piper',                   // TTS engine to use (currently supports 'piper')
-  useGPU: true,                   // Boolean to useGPU and it selects EP as per platform otherwise fallbacks to CPU from version 0.3.4 for both Android / iOS
+  language: 'en',
+  useGPU: true,
 }
 ```
 
 | Parameter        | Type    | Default | Description                                    |
 |------------------|---------|---------|------------------------------------------------|
 | language         | string  | 'en'    | Language code (ISO 639-1 format)               |
-| engine           | string  | 'piper' | TTS engine to use (currently supports 'piper') |
-| useGPU           | boolean | true    | Enable Piper to use GPU based on EP provider   |
+| useGPU           | boolean | false   | Enable GPU acceleration based on EP provider   |
 
 ### 5. Create Model Instance
 
@@ -276,7 +277,7 @@ try {
     .await() // Wait for the entire process to complete
 
   console.log(`Total audio samples generated: ${audioSamples.length}`)
-  
+    
   // audioSamples now contains the complete audio as PCM data (16-bit, 16kHz, mono)
   // You can create WAV files, stream to audio APIs, etc.
 
@@ -297,108 +298,9 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  // Close P2P resources if applicable
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
-```
-
-## Quickstart Example
-
-Follow these simple steps to run the Quickstart demo:
-
-### 0. Install Bare
-
-```bash
-npm install -g bare
-```
-
-### 1. Create a new Project
-
-```bash
-mkdir qvac-tts-quickstart
-cd qvac-tts-quickstart
-npm init -y
-```
-
-### 2. Install Dependencies
-
-```bash
-npm install @qvac/tts-onnx
-```
-
-### 3. Copy Quickstart code into `index.js`
-```js
-'use strict'
-
-const { ONNXTTS } = require('@qvac/tts-onnx')
-
-async function main () {
-  // Configure TTS parameters
-  const args = {
-    mainModelUrl: './path/to/your/model.onnx',
-    configJsonPath: './path/to/your/model.onnx.json',
-    eSpeakDataPath: './path/to/espeak-ng-data',
-    opts: { stats: true }
-  }
-
-  const config = {
-    language: 'en',
-    engine: 'piper',
-    streamingEnabled: false
-  }
-
-  const model = new ONNXTTS(args, config)
-
-  try {
-    console.log('Loading TTS model...')
-    await model.load()
-    console.log('Model loaded successfully.')
-
-    const textToSynthesize = 'Hello world! This is a test of the TTS system using ONNX.'
-    console.log(`Running TTS on: "${textToSynthesize}"`)
-    
-    let audioSamples = []
-    const response = await model.run({
-      input: textToSynthesize,
-      type: 'text'
-    })
-
-    console.log('Waiting for TTS results...')
-    await response
-      .onUpdate(data => {
-        if (data.outputArray) {
-          const samples = Array.from(data.outputArray)
-          audioSamples = audioSamples.concat(samples)
-          console.log(`Received ${samples.length} audio samples`)
-        }
-        if (data.event === 'JobEnded') {
-          console.log('Job completed with stats:', data.stats)
-        }
-      })
-      .await() // Wait for the final result
-
-    console.log('TTS synthesis completed!')
-    console.log(`Total audio samples: ${audioSamples.length}`)
-    if (response.stats) {
-      console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
-    }
-  } catch (err) {
-    console.error('Error during TTS processing:', err)
-  } finally {
-    console.log('Unloading model...')
-    await model.unload()
-    console.log('Model unloaded.')
-  }
-}
-
-main().catch(console.error)
-```
-
-### 4. Run `index.js`
-
-```bash
-bare index.js
 ```
 
 ## Output Format
@@ -434,7 +336,7 @@ When synthesis completes, performance statistics are provided:
 ```
 
 **Audio Format Specifications:**
-- **Sample Rate:** 16000 Hz
+- **Sample Rate:** 24000 Hz
 - **Format:** 16-bit signed PCM, mono channel
 - **Data Type:** Int16Array containing raw audio samples
 
@@ -452,9 +354,8 @@ const response = await model.run({
 
 await response
   .onUpdate(data => {
-    // Check if this is an audio output event
     if (data.outputArray) {
-      // Collect raw PCM audio samples
+      // Check if this is an audio output event
       const samples = Array.from(data.outputArray)
       audioSamples = audioSamples.concat(samples)
       console.log(`Received ${samples.length} audio samples`)
@@ -472,33 +373,10 @@ console.log(`Total audio samples generated: ${audioSamples.length}`)
 
 ## Other Examples
 
--   [Basic TTS](examples/example-onnx-tts.js) – Demonstrates basic text-to-speech synthesis.
--   [Hyperdrive TTS](examples/example-hd-onnx-tts.js) – Demonstrates TTS with Hyperdrive data loader.
+-   [Chatterbox TTS](examples/example-chatterbox-tts.js) - Demonstrates Chatterbox text-to-speech synthesis with voice cloning.
 -   Check the `examples/` directory for more usage examples.
 
-### Setting up eSpeak-ng Data
-
-The TTS system requires eSpeak-ng phoneme data to function properly. You need to download and compile the espeak-ng data from the official repository.
-It can be fetched from: https://github.com/rhasspy/espeak-ng/tree/0f65aa301e0d6bae5e172cc74197d32a6182200f
-
-#### Using the eSpeak Data in Your Project
-
-Once you have the espeak-ng-data directory, reference it in your TTS configuration:
-
-```javascript
-const args = {
-  mainModelUrl: './path/to/your/model.onnx',
-  configJsonPath: './path/to/your/model.onnx.json',
-  eSpeakDataPath: './espeak-ng-data',  // Path to your espeak data
-  opts: { stats: true }
-}
-```
-
-**Important Notes:**
-- The `eSpeakDataPath` parameter is **required** and must point to a valid espeak-ng-data directory
-
 ## Tests
-
 
 ```bash
 # js integration tests
@@ -515,19 +393,19 @@ npm run coverage:cpp
 
 ## Glossary
 
-• **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
-• **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.  
-• **ONNX** – Open Neural Network Exchange is an open format built to represent machine learning models. [Learn more](https://onnx.ai/).  
-• **Piper** – A fast, local neural text-to-speech system. [Learn more](https://github.com/rhasspy/piper).  
-• **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
-• **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
+- **Bare** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
+- **QVAC** - QVAC is our open-source AI-SDK for building decentralized AI applications.  
+- **ONNX** - Open Neural Network Exchange is an open format built to represent machine learning models. [Learn more](https://onnx.ai/).  
+- **Chatterbox** - A neural text-to-speech system with voice cloning capabilities. [Learn more](https://github.com/ResembleAI/chatterbox).  
+- **Hyperdrive** - Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
+- **Corestore** - Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
 
 ## Resources
 
 *   **QVAC Examples Repo:** [https://github.com/tetherto/qvac-examples](https://github.com/tetherto/qvac-examples)
 *   **ONNX Runtime:** [https://onnxruntime.ai/](https://onnxruntime.ai/)
 *   **Base ONNX Addon:** [https://github.com/tetherto/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac-lib-infer-onnx-base)
-*   **Piper TTS:** [https://github.com/rhasspy/piper](https://github.com/rhasspy/piper)
+*   **Chatterbox TTS:** [https://github.com/ResembleAI/chatterbox](https://github.com/ResembleAI/chatterbox)
 
 ## Contributing
 
@@ -535,6 +413,6 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the Apache-2.0 License – see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the Apache-2.0 License - see the [LICENSE](./LICENSE) file for details.
 
 _For questions or issues, please open an issue on the GitHub repository._

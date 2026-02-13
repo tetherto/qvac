@@ -163,14 +163,6 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      - name: Download onnx model files
-        working-directory: ${{ inputs.workdir }}
-        run: |
-          mkdir -p models/tts
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-09-04/ models/tts --recursive
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-12-05/es_ES-davefx-medium/ models/tts --recursive
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-11-26/en_US-lessac-medium/ models/tts --recursive
-
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration

@@ -15,16 +15,15 @@ function getBaseDir () {
 }
 
 async function loadTTS (params = {}) {
-  // Set default paths if not provided
-  const defaultPath = path.join(getBaseDir(), 'models', 'tts')
-  const mainModelUrl = params.mainModelUrl || path.join(defaultPath, 'en_US-amy-low.onnx')
-  const eSpeakDataPath = params.eSpeakDataPath || path.join(defaultPath, 'espeak-ng-data')
-  const configJsonPath = params.configJsonPath || path.join(defaultPath, 'en_US-amy-low.onnx.json')
+  const defaultPath = path.join(getBaseDir(), 'models', 'chatterbox')
 
   const args = {
-    mainModelUrl,
-    configJsonPath,
-    eSpeakDataPath,
+    tokenizerPath: params.tokenizerPath || path.join(defaultPath, 'tokenizer.json'),
+    speechEncoderPath: params.speechEncoderPath || path.join(defaultPath, 'speech_encoder.onnx'),
+    embedTokensPath: params.embedTokensPath || path.join(defaultPath, 'embed_tokens.onnx'),
+    conditionalDecoderPath: params.conditionalDecoderPath || path.join(defaultPath, 'conditional_decoder.onnx'),
+    languageModelPath: params.languageModelPath || path.join(defaultPath, 'language_model.onnx'),
+    referenceAudio: params.referenceAudio,
     opts: { stats: true }
   }
 
@@ -80,7 +79,7 @@ async function runTTS (model, params, expectation = {}) {
     let passed = true
     const sampleCount = outputArray.length
     // Get duration from response.stats (which has audioDurationMs) or calculate from samples
-    const durationMs = response.stats?.audioDurationMs || jobStats?.audioDurationMs || (sampleCount / 16) // 16kHz = 16 samples per ms
+    const durationMs = response.stats?.audioDurationMs || jobStats?.audioDurationMs || (sampleCount / 24) // 24kHz = 24 samples per ms
 
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) {
       passed = false
@@ -95,8 +94,7 @@ async function runTTS (model, params, expectation = {}) {
       passed = false
     }
 
-    // Create WAV buffer from samples
-    const wavBuffer = createWavBuffer(outputArray, 22050)
+    const wavBuffer = createWavBuffer(outputArray, 24000)
 
     // Save WAV file if requested
     if (params.saveWav === true) {

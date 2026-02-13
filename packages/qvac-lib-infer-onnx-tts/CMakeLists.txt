@@ -126,10 +126,8 @@ if(WIN32)
 endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
-find_package(piper CONFIG REQUIRED)
 
 add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)
-add_library(piper_core ALIAS piper::piper_core)
 
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
@@ -141,9 +139,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-inference-addon-tts.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/PiperEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TashkeelDiacritizer.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
 )
@@ -191,13 +187,9 @@ if(ANDROID)
   endif()
 endif()
 
-## Do not link system espeak-ng into addon target while only building deps
-
-# Link addon against our internal piper_core static lib and dynamic libraries
 target_link_libraries(
   ${qvac-lib-inference-tts}
   PRIVATE
-    piper_core
     onnxruntime::onnxruntime_static
     tokenizers::tokenizers_cpp
 )
@@ -216,16 +208,6 @@ if(APPLE)
     ${qvac-lib-inference-tts}
     PRIVATE "-Wl,-rpath,@loader_path"
   )
-  # piper_phonemize is built as a shared lib; prefer same rpath policy
-  if(TARGET piper_phonemize)
-    set_target_properties(
-      piper_phonemize
-      PROPERTIES
-        BUILD_RPATH "@loader_path"
-        INSTALL_RPATH "@loader_path"
-        MACOSX_RPATH ON
-    )
-  endif()
 endif()
 
 if(WIN32)
