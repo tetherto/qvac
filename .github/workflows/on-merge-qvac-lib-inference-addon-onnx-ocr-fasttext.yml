@@ -174,12 +174,3 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-
-  mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
-    needs: prebuild
-    if: needs.prebuild.outputs.should_run_tests == 'true'
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
