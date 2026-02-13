@@ -312,7 +312,8 @@
       "multimodal",
       "qwen2.5-omni"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF"
   },
   {
     "source": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF/blob/75f1b73b657a50f5092502799457ccb4a4a1f9df/mmproj-Qwen2.5-Omni-3B-Q8_0.gguf",
@@ -326,7 +327,8 @@
       "multimodal",
       "qwen2.5-omni"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf",
@@ -355,7 +357,8 @@
       "smolvlm2",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
@@ -370,7 +373,8 @@
       "smolvlm2",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
@@ -2147,7 +2151,8 @@
       "recognizer",
       "latin"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
@@ -2161,7 +2166,8 @@
       "detector",
       "craft"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
@@ -2821,7 +2827,8 @@
       "qwen3-vl",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
   },
   {
     "source": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
@@ -2836,7 +2843,8 @@
       "qwen3-vl",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin",
@@ -4003,7 +4011,8 @@
       "recognizer",
       "arabic"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
@@ -4017,7 +4026,8 @@
       "recognizer",
       "bengali"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
@@ -4031,7 +4041,8 @@
       "recognizer",
       "cyrillic"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
@@ -4045,7 +4056,8 @@
       "recognizer",
       "devanagari"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
@@ -4059,7 +4071,8 @@
       "recognizer",
       "japanese"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
@@ -4073,7 +4086,8 @@
       "recognizer",
       "kannada"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
@@ -4087,7 +4101,8 @@
       "recognizer",
       "korean"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
@@ -4101,7 +4116,8 @@
       "recognizer",
       "latin"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
@@ -4115,7 +4131,8 @@
       "recognizer",
       "tamil"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
@@ -4129,7 +4146,8 @@
       "recognizer",
       "telugu"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
@@ -4143,7 +4161,8 @@
       "recognizer",
       "thai"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
@@ -4157,7 +4176,8 @@
       "recognizer",
       "zh_sim"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
@@ -4171,6 +4191,7 @@
       "recognizer",
       "zh_tra"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   }
 ]
