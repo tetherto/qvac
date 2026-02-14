@@ -1,1 +1,19 @@
+This software includes ONNX Runtime
+(https://github.com/microsoft/onnxruntime) which is licensed
+under the MIT License.
+See https://github.com/microsoft/onnxruntime/blob/main/LICENSE for details.
 
+This software includes OpenCV
+(https://github.com/opencv/opencv) which is licensed
+under the Apache License 2.0.
+See https://github.com/opencv/opencv/blob/master/LICENSE for details.
+
+This software includes Protocol Buffers (protobuf)
+(https://github.com/protocolbuffers/protobuf) which is licensed
+under the BSD 3-Clause License.
+See https://github.com/protocolbuffers/protobuf/blob/main/LICENSE for details.
+
+This software includes FlatBuffers
+(https://github.com/google/flatbuffers) which is licensed
+under the Apache License 2.0.
+See https://github.com/google/flatbuffers/blob/master/LICENSE for details.
