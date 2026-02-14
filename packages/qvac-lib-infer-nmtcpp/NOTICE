@@ -6,8 +6,9 @@ This software includes components ported from indic_nlp_library
 (https://github.com/anoopkunchukuttan/indic_nlp_library) which is licensed
 under the MIT License. See ./third-party/indic-processor-deps/indicnlp/INDIC_NLP_LICENCE for details.
 
-This software includes bergamot-translator
-(https://github.com/browsermt/bergamot-translator) which is licensed
+This software includes a fork of bergamot-translator
+(https://github.com/tetherto/qvac-ext-bergamot-translator, forked from
+https://github.com/browsermt/bergamot-translator) which is licensed
 under the Mozilla Public License 2.0 (MPL-2.0).
 See https://github.com/browsermt/bergamot-translator/blob/main/LICENSE for details.
 
