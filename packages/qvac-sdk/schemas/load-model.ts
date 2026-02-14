@@ -23,7 +23,14 @@ import {
   ttsModelTypeSchema,
   ocrModelTypeSchema,
   ModelType,
+  ModelTypeAliases,
 } from "./model-types";
+
+// Set of all built-in model types (canonical + aliases) for catch-all exclusion
+const builtInModelTypes = new Set([
+  ...Object.values(ModelType),
+  ...Object.keys(ModelTypeAliases),
+]);
 import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
@@ -78,10 +85,14 @@ const loadModelOptionsBaseSchema = z.union([
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
-  // Custom plugin catch-all: accepts any modelType string with generic config
+  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z.string(),
+    modelType: z
+      .string()
+      .refine((val) => !builtInModelTypes.has(val), {
+        message: "Built-in model types must use their specific schema",
+      }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
@@ -245,11 +256,15 @@ export const loadModelOptionsToRequestSchema = z.union([
         ? modelInputToSrcSchema.parse(data.detectorModelSrc)
         : undefined,
     })),
-  // Custom plugin catch-all: accepts any modelType string with generic config
+  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z.string(),
+      modelType: z
+        .string()
+        .refine((val) => !builtInModelTypes.has(val), {
+          message: "Built-in model types must use their specific schema",
+        }),
       modelConfig: z.record(z.string(), z.unknown()).optional(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
@@ -318,10 +333,14 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
   modelConfig: ocrConfigSchema, // ocr has no defaults
 });
 
-// Custom plugin catch-all: accepts any modelType string with generic config
+// Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema =
   commonModelConfigSchema.extend({
-    modelType: z.string(),
+    modelType: z
+      .string()
+      .refine((val) => !builtInModelTypes.has(val), {
+        message: "Built-in model types must use their specific schema",
+      }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
   });
 
