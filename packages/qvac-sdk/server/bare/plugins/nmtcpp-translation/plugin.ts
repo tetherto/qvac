@@ -18,7 +18,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { TranslationFailedError } from "@/utils/errors-server";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
-import { translate } from "@/server/bare/plugins/nmtcpp-translation/ops/translate";
+import { translate } from "@/server/bare/ops/translate";
 
 function createNmtModel(
   modelId: string,

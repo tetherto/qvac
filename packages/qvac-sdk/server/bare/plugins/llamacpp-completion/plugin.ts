@@ -5,12 +5,15 @@ import {
   defineHandler,
   completionStreamRequestSchema,
   completionStreamResponseSchema,
+  translateRequestSchema,
+  translateResponseSchema,
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
   type LlmConfig,
   type CompletionStats,
   type ToolCall,
+  type TranslationStats,
 } from "@/schemas";
 import {
   ADDON_NAMESPACES,
@@ -21,6 +24,7 @@ import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { asLoader } from "@/server/bare/utils/loader-adapter";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
+import { translate } from "@/server/bare/ops/translate";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -152,6 +156,39 @@ export const llmPlugin = definePlugin({
           done: true,
           ...(stats && { stats }),
           ...(toolCalls.length > 0 && { toolCalls }),
+        };
+      },
+    }),
+
+    translate: defineHandler({
+      requestSchema: translateRequestSchema,
+      responseSchema: translateResponseSchema,
+      streaming: true,
+
+      handler: async function* (request) {
+        const stream = translate(request);
+        let done = false;
+        let stats: TranslationStats | undefined;
+
+        while (!done) {
+          const result = await stream.next();
+
+          if (result.done) {
+            stats = result.value;
+            done = true;
+          } else {
+            yield {
+              type: "translate" as const,
+              token: result.value,
+            };
+          }
+        }
+
+        yield {
+          type: "translate" as const,
+          token: "",
+          done: true,
+          ...(stats && { stats }),
         };
       },
     }),
