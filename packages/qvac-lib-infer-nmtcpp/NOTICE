@@ -12,6 +12,12 @@ https://github.com/browsermt/bergamot-translator) which is licensed
 under the Mozilla Public License 2.0 (MPL-2.0).
 See https://github.com/browsermt/bergamot-translator/blob/main/LICENSE for details.
 
+This software includes a fork of Marian NMT
+(https://github.com/tetherto/qvac-ext-marian-dev, forked from
+https://github.com/marian-nmt/marian-dev) which is licensed
+under the MIT License.
+See https://github.com/marian-nmt/marian-dev/blob/master/LICENSE.md for details.
+
 This software includes sentencepiece
 (https://github.com/google/sentencepiece) which is licensed
 under the Apache License 2.0.
@@ -31,6 +37,27 @@ This software includes whisper.cpp
 (https://github.com/ggerganov/whisper.cpp) which is licensed
 under the MIT License.
 See https://github.com/ggerganov/whisper.cpp/blob/master/LICENSE for details.
+
+This software includes intgemm
+(https://github.com/kpu/intgemm) which is licensed
+under the MIT License.
+See https://github.com/kpu/intgemm/blob/master/LICENSE for details.
+
+This software includes ruy
+(https://github.com/google/ruy) which is licensed
+under the Apache License 2.0.
+See https://github.com/google/ruy/blob/master/LICENSE for details.
+
+This software includes simd_utils
+(https://github.com/browsermt/simd_utils, forked from
+https://github.com/JishinMaster/simd_utils) which is licensed
+under the BSD 2-Clause License.
+See https://github.com/JishinMaster/simd_utils/blob/master/LICENSE for details.
+
+This software includes Abseil C++ Library
+(https://github.com/abseil/abseil-cpp) which is licensed
+under the Apache License 2.0.
+See https://github.com/abseil/abseil-cpp/blob/master/LICENSE for details.
 
 This software includes Protocol Buffers (protobuf)
 (https://github.com/protocolbuffers/protobuf) which is licensed
