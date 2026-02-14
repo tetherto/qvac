@@ -32,17 +32,6 @@ on:
         type: string
         required: false
         default: "packages/qvac-lib-decoder-audio"
-  pull_request:
-    paths:
-      - "packages/qvac-lib-decoder-audio/**"
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-decoder-audio/**"
 
 env:
   NODE_VERSION: "lts/*"
