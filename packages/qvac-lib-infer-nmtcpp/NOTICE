@@ -26,6 +26,11 @@ This software includes ssplit-cpp
 under the Apache License 2.0 (C++ code) and LGPL 2.1 (nonbreaking_prefixes data).
 See https://github.com/browsermt/ssplit-cpp/blob/master/LICENSE.md for details.
 
+This software includes whisper.cpp
+(https://github.com/ggerganov/whisper.cpp) which is licensed
+under the MIT License.
+See https://github.com/ggerganov/whisper.cpp/blob/master/LICENSE for details.
+
 This software includes Protocol Buffers (protobuf)
 (https://github.com/protocolbuffers/protobuf) which is licensed
 under the BSD 3-Clause License.
