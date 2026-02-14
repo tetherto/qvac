@@ -23,6 +23,11 @@ import {
   handlePluginInvoke,
   handlePluginInvokeStream,
 } from "@/server/rpc/handlers/plugin-invoke";
+import {
+  handleModelRegistryList,
+  handleModelRegistrySearch,
+  handleModelRegistryGetModel,
+} from "@/server/rpc/handlers/registry";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
@@ -47,6 +52,9 @@ export const registry: Record<string, HandlerEntry> = {
   deleteCache: { type: "reply", handler: handleDeleteCache },
   getModelInfo: { type: "reply", handler: handleGetModelInfo },
   pluginInvoke: { type: "reply", handler: handlePluginInvoke },
+  modelRegistryList: { type: "reply", handler: handleModelRegistryList },
+  modelRegistrySearch: { type: "reply", handler: handleModelRegistrySearch },
+  modelRegistryGetModel: { type: "reply", handler: handleModelRegistryGetModel },
 
   // Simple Stream handlers
   transcribeStream: { type: "stream", handler: handleTranscribeStream },
