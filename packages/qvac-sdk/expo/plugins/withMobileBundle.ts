@@ -68,9 +68,13 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
 
     // Copy the generated bundle to SDK location
     const generatedBundle = path.join(projectRoot, "qvac", "worker.bundle.js");
-    if (fs.existsSync(generatedBundle)) {
-      fs.copyFileSync(generatedBundle, outputPath);
+    if (!fs.existsSync(generatedBundle)) {
+      throw new Error(
+        `QVAC: Bundle generation failed — ${generatedBundle} not found. ` +
+          `Check qvac CLI output above for errors.`,
+      );
     }
+    fs.copyFileSync(generatedBundle, outputPath);
 
     console.log("🫡 QVAC: Mobile bundle generated");
     return config;
