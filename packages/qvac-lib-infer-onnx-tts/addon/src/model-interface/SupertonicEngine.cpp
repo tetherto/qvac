@@ -149,7 +149,7 @@ void SupertonicEngine::unload() {
 bool SupertonicEngine::isLoaded() const { return loaded_; }
 
 std::string SupertonicEngine::prepText(const std::string &text) const {
-  return "<" + config_.language + ">" + text + " ";
+  return text + " ";
 }
 
 void SupertonicEngine::tokenize(const std::string &text,
