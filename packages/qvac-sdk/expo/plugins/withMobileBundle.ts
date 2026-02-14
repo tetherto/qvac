@@ -98,19 +98,27 @@ function findConfigFile(projectRoot: string): string | null {
  * Prefers local @qvac/cli installation for version consistency,
  * falls back to npx for convenience when CLI is not installed.
  */
-function resolveCliCommand(): string {
-  try {
-    const cliEntryPoint = require.resolve("@qvac/cli");
-    return `node "${cliEntryPoint}"`;
-  } catch {
-    console.log(
-      "⚠️ QVAC: @qvac/cli not found in node_modules, falling back to npx",
-    );
-    console.log(
-      "   Tip: Add @qvac/cli as a dependency for consistent versioning",
-    );
-    return "npx qvac";
+function resolveCliCommand(projectRoot: string): string {
+  const cliPath = path.join(
+    projectRoot,
+    "node_modules",
+    "@qvac",
+    "cli",
+    "src",
+    "index.js",
+  );
+
+  if (fs.existsSync(cliPath)) {
+    return `node "${cliPath}"`;
   }
+
+  console.log(
+    "⚠️ QVAC: @qvac/cli not found in node_modules, falling back to npx",
+  );
+  console.log(
+    "   Tip: Add @qvac/cli as a dependency for consistent versioning",
+  );
+  return "npx qvac";
 }
 
 /** Runs qvac CLI with mobile-specific options */
@@ -128,7 +136,7 @@ function runBundler(
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
   const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
-  const cliCommand = resolveCliCommand();
+  const cliCommand = resolveCliCommand(projectRoot);
 
   try {
     execSync(
