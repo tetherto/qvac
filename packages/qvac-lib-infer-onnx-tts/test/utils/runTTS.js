@@ -9,27 +9,37 @@ const { createWavBuffer } = require('./wav-helper')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
+/** Supertonic output sample rate (Hz) */
+const SUPERTONIC_SAMPLE_RATE = 44100
+
 // Returns base directory for models - uses global.testDir on mobile, current dir otherwise
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+/**
+ * Load Supertonic TTS model.
+ * @param {Object} params - Model parameters
+ * @param {string} [params.modelDir] - Base model directory (default: getBaseDir()/models/supertonic)
+ * @param {string} [params.voiceName='F1'] - Voice name
+ * @param {string} [params.language='en'] - Language code (en, ko, es, pt, fr)
+ * @param {number} [params.speed=1] - Speech speed
+ * @param {number} [params.numInferenceSteps=5] - Denoising steps
+ * @returns {Promise<ONNXTTS>} Loaded TTS model
+ */
 async function loadTTS (params = {}) {
-  const defaultPath = path.join(getBaseDir(), 'models', 'chatterbox')
+  const defaultModelDir = path.join(getBaseDir(), 'models', 'supertonic')
 
   const args = {
-    tokenizerPath: params.tokenizerPath || path.join(defaultPath, 'tokenizer.json'),
-    speechEncoderPath: params.speechEncoderPath || path.join(defaultPath, 'speech_encoder.onnx'),
-    embedTokensPath: params.embedTokensPath || path.join(defaultPath, 'embed_tokens.onnx'),
-    conditionalDecoderPath: params.conditionalDecoderPath || path.join(defaultPath, 'conditional_decoder.onnx'),
-    languageModelPath: params.languageModelPath || path.join(defaultPath, 'language_model.onnx'),
-    referenceAudio: params.referenceAudio,
+    modelDir: params.modelDir || defaultModelDir,
+    voiceName: params.voiceName || 'F1',
+    speed: params.speed != null ? params.speed : 1,
+    numInferenceSteps: params.numInferenceSteps != null ? params.numInferenceSteps : 5,
     opts: { stats: true }
   }
 
   const config = {
-    language: params.language || 'en',
-    useGPU: params.useGPU || false
+    language: params.language || 'en'
   }
 
   const model = new ONNXTTS(args, config)
@@ -78,8 +88,8 @@ async function runTTS (model, params, expectation = {}) {
     // Validate expectations if provided
     let passed = true
     const sampleCount = outputArray.length
-    // Get duration from response.stats (which has audioDurationMs) or calculate from samples
-    const durationMs = response.stats?.audioDurationMs || jobStats?.audioDurationMs || (sampleCount / 24) // 24kHz = 24 samples per ms
+    // Get duration from response.stats (which has audioDurationMs) or calculate from samples (Supertonic: 44.1 kHz)
+    const durationMs = response.stats?.audioDurationMs || jobStats?.audioDurationMs || (sampleCount / (SUPERTONIC_SAMPLE_RATE / 1000))
 
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) {
       passed = false
@@ -94,7 +104,7 @@ async function runTTS (model, params, expectation = {}) {
       passed = false
     }
 
-    const wavBuffer = createWavBuffer(outputArray, 24000)
+    const wavBuffer = createWavBuffer(outputArray, SUPERTONIC_SAMPLE_RATE)
 
     // Save WAV file if requested
     if (params.saveWav === true) {
