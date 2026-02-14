@@ -266,4 +266,6 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
   } else {
     console.log(`WER test passed: ${werPct}% <= ${WER_THRESHOLD * 100}%`)
   }
+
+  await whisperModel.unload()
 })
