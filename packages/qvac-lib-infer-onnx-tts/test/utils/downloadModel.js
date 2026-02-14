@@ -741,7 +741,7 @@ async function ensureSupertonicModels (options = {}) {
   console.log('\n Downloading tokenizer.json (fetch content and write file)...')
 
   if (fs.existsSync(tokenizerPath) && isValidJsonCache(tokenizerPath)) {
-    console.log(` ✓ Using cached: tokenizer.json`)
+    console.log(' ✓ Using cached: tokenizer.json')
     results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
   } else {
     if (fs.existsSync(tokenizerPath)) fs.unlinkSync(tokenizerPath)

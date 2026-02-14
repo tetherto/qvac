@@ -37,7 +37,7 @@ class ONNXTTS extends InferBase {
     this._config = config
     this._logger = logger
 
-    const hasSupertonicPaths = textEncoderPath != null && textEncoderPath !== '' ||
+    const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
       (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
     this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
 
