@@ -6,3 +6,27 @@ This software includes components ported from indic_nlp_library
 (https://github.com/anoopkunchukuttan/indic_nlp_library) which is licensed
 under the MIT License. See ./third-party/indic-processor-deps/indicnlp/INDIC_NLP_LICENCE for details.
 
+This software includes bergamot-translator
+(https://github.com/browsermt/bergamot-translator) which is licensed
+under the Mozilla Public License 2.0 (MPL-2.0).
+See https://github.com/browsermt/bergamot-translator/blob/main/LICENSE for details.
+
+This software includes sentencepiece
+(https://github.com/google/sentencepiece) which is licensed
+under the Apache License 2.0.
+See https://github.com/google/sentencepiece/blob/master/LICENSE for details.
+
+This software includes ggml
+(https://github.com/ggml-org/ggml) which is licensed
+under the MIT License.
+See https://github.com/ggml-org/ggml/blob/master/LICENSE for details.
+
+This software includes ssplit-cpp
+(https://github.com/browsermt/ssplit-cpp) which is licensed
+under the Apache License 2.0 (C++ code) and LGPL 2.1 (nonbreaking_prefixes data).
+See https://github.com/browsermt/ssplit-cpp/blob/master/LICENSE.md for details.
+
+This software includes Protocol Buffers (protobuf)
+(https://github.com/protocolbuffers/protobuf) which is licensed
+under the BSD 3-Clause License.
+See https://github.com/protocolbuffers/protobuf/blob/main/LICENSE for details.
