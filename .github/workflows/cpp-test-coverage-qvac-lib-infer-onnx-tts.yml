@@ -149,12 +149,6 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
-      - name: Download test models
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          mkdir -p models/tts
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/tts/2025-09-04/ models/tts --recursive
-
       - name: Run C++ Unit Tests
         id: cpp_tests
         working-directory: ${{ env.WORKDIR }}

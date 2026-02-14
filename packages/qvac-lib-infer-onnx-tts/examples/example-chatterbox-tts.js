@@ -1,22 +1,21 @@
 'use strict'
 
+const path = require('bare-path')
 const ONNXTTS = require('../')
-const { createWav, readWavAsFloat32 } = require('./wav-generator-helper')
+const { createWav, readWavAsFloat32, resampleLinear } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
 
-// Chatterbox model paths
+const CHATTERBOX_SAMPLE_RATE = 24000
+
 const tokenizerPath = 'models/chatterbox/tokenizer.json'
 const speechEncoderPath = 'models/chatterbox/speech_encoder.onnx'
 const embedTokensPath = 'models/chatterbox/embed_tokens.onnx'
 const conditionalDecoderPath = 'models/chatterbox/conditional_decoder.onnx'
 const languageModelPath = 'models/chatterbox/language_model.onnx'
 
-// Reference audio path for voice cloning
-const refWavPath = 'benchmarks/assets/ref.wav'
+const refWavPath = path.join(__dirname, '..', 'test', 'reference-audio', 'jfk.wav')
 
 async function main () {
-  console.log('Setting up C++ logger...')
-
   setLogger((priority, message) => {
     const priorityNames = {
       0: 'ERROR',
@@ -30,18 +29,18 @@ async function main () {
     console.log(`[${timestamp}] [C++ log] [${priorityName}]: ${message}`)
   })
 
-  // Reference audio for Chatterbox voice cloning.
-  // Load from ref.wav; falls back to synthetic tone if missing.
   let referenceAudio
   try {
     const { samples, sampleRate } = readWavAsFloat32(refWavPath)
-    referenceAudio = samples
-    console.log(`Loaded reference audio: ${refWavPath} (${samples.length} samples, ${sampleRate} Hz)`)
-    if (sampleRate !== 24000) {
-      console.log('Note: Chatterbox expects 24 kHz; resample ref.wav if output sounds wrong.')
+    if (sampleRate !== CHATTERBOX_SAMPLE_RATE) {
+      console.log(`Resampling reference audio from ${sampleRate}Hz to ${CHATTERBOX_SAMPLE_RATE}Hz`)
+      referenceAudio = resampleLinear(samples, sampleRate, CHATTERBOX_SAMPLE_RATE)
+    } else {
+      referenceAudio = samples
     }
+    console.log(`Loaded reference audio: ${refWavPath} (${referenceAudio.length} samples @ ${CHATTERBOX_SAMPLE_RATE}Hz)`)
   } catch (err) {
-    console.log('Could not load ref.wav: ', err.message)
+    console.error('Could not load reference audio:', err.message)
     throw err
   }
 
@@ -81,7 +80,6 @@ async function main () {
 
     await response
       .onUpdate(data => {
-        console.log('--- TTS Update ---')
         if (data && data.outputArray) {
           buffer = buffer.concat(Array.from(data.outputArray))
         }
@@ -94,8 +92,7 @@ async function main () {
     }
 
     console.log('Writing to .wav file...')
-    // Chatterbox uses 24kHz sample rate
-    createWav(buffer, 24000, 'chatterbox-output.wav')
+    createWav(buffer, CHATTERBOX_SAMPLE_RATE, 'chatterbox-output.wav')
     console.log('Finished writing to chatterbox-output.wav')
   } catch (err) {
     console.error('Error during TTS processing:', err)

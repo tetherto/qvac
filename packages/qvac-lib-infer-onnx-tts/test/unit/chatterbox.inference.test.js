@@ -568,12 +568,4 @@ test('Chatterbox: Engine type is detected correctly', async (t) => {
   }
   const chatterboxModel = new ONNXTTS(chatterboxArgs, {})
   t.is(chatterboxModel._engineType, 'chatterbox', 'Should detect Chatterbox engine when Chatterbox paths are provided')
-
-  const piperArgs = {
-    mainModelUrl: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data'
-  }
-  const piperModel = new ONNXTTS(piperArgs, {})
-  t.is(piperModel._engineType, 'piper', 'Should detect Piper engine when Piper paths are provided')
 })

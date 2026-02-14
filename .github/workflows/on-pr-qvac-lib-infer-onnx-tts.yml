@@ -50,6 +50,7 @@ permissions:
   contents: write
   pull-requests: write
   packages: write
+  checks: write
 
 env:
   # Keep for step-level convenience; do NOT reference env.* inside job-level `uses:`
