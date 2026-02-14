@@ -104,7 +104,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
 find_package(onnxruntime CONFIG REQUIRED)
 
@@ -113,9 +113,7 @@ add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
 target_sources(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
   PRIVATE
-    addon/addon/Addon.cpp
     addon/js-interface/binding.cpp
-    addon/js-interface/qvac-lib-inference-addon-onnx-ocr-fasttext.cpp
     addon/pipeline/Lang.cpp
     addon/pipeline/Pipeline.cpp
     addon/pipeline/Steps.cpp

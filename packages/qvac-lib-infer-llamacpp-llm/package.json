@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -42,7 +42,9 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "prebuilds",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",

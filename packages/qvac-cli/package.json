@@ -1,5 +1,5 @@
 {
-  "name": "@qvac/qvac-cli",
+  "name": "@qvac/cli",
   "version": "0.1.1",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
@@ -13,7 +13,8 @@
   "files": [
     "src/**/*",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "engines": {
     "node": ">=18.0.0"

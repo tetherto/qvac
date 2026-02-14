@@ -1,4 +1,0 @@
-[submodule "packages/qvac-lib-infer-nmtcpp/third-party/bergamot-translator"]
-	path = packages/qvac-lib-infer-nmtcpp/third-party/bergamot-translator
-	url = https://github.com/tetherto/qvac-ext-bergamot-translator.git
-	branch = main

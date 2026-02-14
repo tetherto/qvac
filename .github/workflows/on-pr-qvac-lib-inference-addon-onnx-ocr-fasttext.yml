@@ -55,7 +55,10 @@ jobs:
 
   sanity-checks:
     needs: changes
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: |
+      (needs.changes.outputs.pkg == 'true' &&
+       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
       contents: read

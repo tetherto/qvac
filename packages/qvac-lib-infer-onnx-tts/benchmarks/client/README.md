@@ -15,7 +15,7 @@ poetry install
 
 ## Configuration
 
-Edit `config/config.yaml`:
+Config files: `config/config.yaml` (default Piper TTS), `config/config-tts.yaml` (Piper TTS), `config/config-chatterbox.yaml` (Chatterbox TTS). Edit the one you use:
 
 ```yaml
 server:
@@ -48,7 +48,9 @@ model:
 Ensure both servers are running, then:
 
 ```bash
-python -m src.tts.main --config config/config.yaml
+python -m src.tts.main --config config/config.yaml          # Piper TTS
+python -m src.tts.main --config config/config-tts.yaml     # Piper TTS (explicit)
+python -m src.tts.main --config config/config-chatterbox.yaml  # Chatterbox TTS
 ```
 
 Or with Poetry:
@@ -68,13 +70,10 @@ Reports are saved to `../results/`:
 
 **RTF (Real-Time Factor)** = `audio_duration / generation_time`
 
-- RTF < 1.0 = faster than real-time
-- Lower is better
-
-**Speed** = `1 / RTF`
-
-- How many times faster than real-time
+- RTF > 1.0 = faster than real-time (generate more than 1 s of audio per 1 s of compute)
 - Higher is better
+
+**Speed** = `1 / RTF` = how many times faster than real-time (higher is better)
 
 ## Datasets
 

@@ -295,7 +295,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qvac-addon-build
+          name: qvac-addon-build-${{ inputs.translators }}
           path: |
             ${{ env.PKG_DIR }}/prebuilds/
             ${{ env.PKG_DIR }}/node_modules/
@@ -345,7 +345,7 @@ jobs:
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          name: qvac-addon-build
+          name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
 
       - name: Install system dependencies
@@ -817,6 +817,6 @@ jobs:
       - name: Upload consolidated results
         uses: actions/upload-artifact@v4
         with:
-          name: consolidated-results
+          name: consolidated-results-${{ inputs.translators }}
           path: all-results
           retention-days: 90

@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "llama-cpp",
-      "version>=": "7248.1.2#0"
+      "version>=": "7248.1.2"
     },
     {
       "name": "opencl",
@@ -14,16 +14,14 @@
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.1"
+      "version>=": "1.4.4"
     }
   ],
   "features": {
     "tests": {
       "description": "Build and run unit tests",
       "dependencies": [
-        {
-          "name": "gtest"
-        }
+        "gtest"
       ]
     },
     "vk-profiling": {

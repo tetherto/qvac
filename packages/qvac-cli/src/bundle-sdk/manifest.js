@@ -148,7 +148,7 @@ export function extractBarePackHeader (packed) {
 export async function generateAddonsManifest (options) {
   const { bundlePath, outputDir, projectRoot, logger } = options
 
-  logger.log('\n📦 Generating addons manifest...')
+  logger.info('\n📦 Generating addons manifest...')
 
   const bundleJsText = await fsp.readFile(bundlePath, 'utf8')
   const packed = extractPackedString(bundleJsText)
@@ -183,7 +183,7 @@ export async function generateAddonsManifest (options) {
         }
       }
     } catch (err) {
-      logger.verbose(`   ⚠️  Could not read ${pkgName}/package.json: ${err.message}`)
+      logger.warn(`   Could not read ${pkgName}/package.json: ${err.message}`)
     }
   }
 
@@ -204,11 +204,11 @@ export async function generateAddonsManifest (options) {
   const manifestPath = path.join(outputDir, 'addons.manifest.json')
   await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 
-  logger.log(`   Found ${packageNames.size} packages in bundle graph`)
-  logger.log(
+  logger.info(`   Found ${packageNames.size} packages in bundle graph`)
+  logger.info(
     `   Identified ${addons.length} native addons: ${addons.join(', ') || '(none)'}`
   )
-  logger.log(`   Wrote ${manifestPath}`)
+  logger.info(`   Wrote ${manifestPath}`)
 
   return { manifestPath, addons }
 }

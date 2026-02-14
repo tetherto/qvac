@@ -25,7 +25,9 @@
     "constants.d.ts",
     "utils",
     "index.d.ts",
-    "test/mobile"
+    "test/mobile",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     "./package": "./package.json",
