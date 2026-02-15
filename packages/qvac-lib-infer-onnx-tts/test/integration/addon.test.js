@@ -109,7 +109,7 @@ test('Chatterbox TTS: Multiple sentences synthesis with WER verification', { tim
     return
   }
 
-  if (isDarwin) {  // TODO - let it verify WER for all desktop platforms once adding ai-run-linux-gpu and ai-run-windows-gpu runners
+  if (isDarwin) { // TODO - let it verify WER for all desktop platforms once adding ai-run-linux-gpu and ai-run-windows-gpu runners
     console.log('\n=== Ensuring Whisper model ===')
     const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
     await ensureWhisperModel(whisperModelPath)
@@ -165,7 +165,7 @@ test('Chatterbox TTS: Multiple sentences synthesis with WER verification', { tim
   console.log('\nChatterbox TTS model unloaded')
 
   const werResults = []
-  if (isDarwin) {  // TODO - let it verify WER for all desktop platforms once adding ai-run-linux-gpu and ai-run-windows-gpu runners
+  if (isDarwin) { // TODO - let it verify WER for all desktop platforms once adding ai-run-linux-gpu and ai-run-windows-gpu runners
     console.log('\n=== Loading Whisper model for WER verification ===')
     const whisperParams = {
       modelName: 'ggml-small.bin',
