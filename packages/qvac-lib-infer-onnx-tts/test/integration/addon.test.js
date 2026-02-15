@@ -325,7 +325,9 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     maxDurationMs: 20000
   }
 
-  const result = await runSupertonicTTS(model, { text, saveWav: true, wavOutputPath: path.join(__dirname, '../output/supertonic-test.wav') }, expectation)
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav ? path.join(__dirname, '../output/supertonic-test.wav') : undefined
+  const result = await runSupertonicTTS(model, { text, saveWav, wavOutputPath }, expectation)
   console.log(result.output)
 
   t.ok(result.passed, 'Supertonic TTS synthesis should pass expectations')
@@ -416,50 +418,6 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
     console.log(`  ${i + 1}. "${results[i].text.substring(0, 40)}..." - ${results[i].sampleCount} samples, ${results[i].durationMs?.toFixed(0) || 'N/A'}ms, RTF: ${rtf}`)
   }
   console.log('='.repeat(60))
-})
-
-test('Supertonic TTS: Model loads and synthesis runs with default config', { timeout: 900000 }, async (t) => {
-  const baseDir = getBaseDir()
-  const modelDir = path.join(baseDir, 'models', 'supertonic')
-
-  console.log('\n=== Ensuring Supertonic models ===')
-  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
-  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
-  if (!downloadResult.success) {
-    console.log('Failed to download Supertonic models, skipping test')
-    return
-  }
-
-  const modelParams = {
-    modelDir,
-    language: 'en'
-  }
-
-  console.log('\n=== Testing Supertonic load and synthesis ===')
-
-  let model
-  try {
-    model = await loadSupertonicTTS(modelParams)
-    t.ok(model, 'Model loaded successfully')
-  } catch (err) {
-    t.fail(`Failed to load model: ${err.message}`)
-    return
-  }
-
-  const result = await runSupertonicTTS(model, { text: 'Test.' }, {})
-
-  if (result.passed && result.data.sampleCount > 0) {
-    t.pass('Synthesis succeeded')
-    console.log(result.output)
-    if (result.data.stats) {
-      console.log(`Total time: ${result.data.stats.totalTime}s, RTF: ${result.data.stats.realTimeFactor}`)
-    }
-  } else {
-    t.fail(`Synthesis failed: ${result.output}`)
-  }
-
-  await model.unload()
-  t.pass('Model unloaded')
 })
 
 test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t) => {

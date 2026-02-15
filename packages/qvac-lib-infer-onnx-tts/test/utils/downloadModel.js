@@ -561,7 +561,17 @@ async function fetchUrlBody (url) {
       }
       const req = https.request(options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          fetchUrlBody(res.headers.location).then(resolve).catch((e) => resolve({ success: false, error: e.message }))
+          const location = res.headers.location
+          let redirectUrl
+          if (location.startsWith('http://') || location.startsWith('https://')) {
+            redirectUrl = location
+          } else if (location.startsWith('/')) {
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+          } else {
+            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+          }
+          fetchUrlBody(redirectUrl).then(resolve).catch((e) => resolve({ success: false, error: e.message }))
           return
         }
         if (res.statusCode !== 200) {
