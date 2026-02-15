@@ -19,7 +19,6 @@ public:
   AudioResult synthesize(const std::string &text) override;
 
 private:
-  std::string prepText(const std::string &text) const;
   void tokenize(const std::string &text, std::vector<int64_t> &inputIds,
                 std::vector<int64_t> &attentionMask);
   void loadVoiceStyle(const std::string &voicePath);

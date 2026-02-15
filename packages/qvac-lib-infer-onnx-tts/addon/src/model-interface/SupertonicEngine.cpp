@@ -51,9 +51,16 @@ std::vector<float> loadVoiceBin(const std::string &path) {
 std::string resolvePath(const std::string &baseDir, const std::string &rel) {
   if (rel.empty())
     return baseDir;
-  if (rel[0] == '/' || (rel.size() >= 2 && rel[1] == ':'))
+  if (rel[0] == '/' || rel[0] == '\\' || (rel.size() >= 2 && rel[1] == ':'))
     return rel;
-  return baseDir.back() == '/' ? baseDir + rel : baseDir + "/" + rel;
+#ifdef _WIN32
+  constexpr char sep = '\\';
+  const bool trailing = baseDir.back() == '/' || baseDir.back() == '\\';
+#else
+  constexpr char sep = '/';
+  const bool trailing = baseDir.back() == '/';
+#endif
+  return trailing ? baseDir + rel : baseDir + sep + rel;
 }
 
 } // namespace
@@ -148,14 +155,10 @@ void SupertonicEngine::unload() {
 
 bool SupertonicEngine::isLoaded() const { return loaded_; }
 
-std::string SupertonicEngine::prepText(const std::string &text) const {
-  return text + " ";
-}
-
 void SupertonicEngine::tokenize(const std::string &text,
                                 std::vector<int64_t> &inputIds,
                                 std::vector<int64_t> &attentionMask) {
-  const std::string prepped = prepText(text);
+  const std::string prepped = text + " ";
   TokenizerEncodeResult result;
   tokenizers_encode(tokenizerHandle_, prepped.data(), prepped.size(), 1,
                     &result);

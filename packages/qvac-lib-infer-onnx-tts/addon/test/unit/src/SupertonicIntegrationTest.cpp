@@ -11,6 +11,8 @@
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #elif defined(__linux__)
 #include <unistd.h>
 #endif
@@ -35,6 +37,13 @@ static std::string getExecutablePath() {
     return "";
   }
   return std::string(buf);
+#elif defined(_WIN32)
+  char buf[MAX_PATH];
+  DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) {
+    return "";
+  }
+  return std::string(buf, n);
 #elif defined(__linux__)
   char buf[4096];
   ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
@@ -161,11 +170,12 @@ protected:
 
 TEST_F(SupertonicIntegrationTest, loadAndSynthesize) {
   std::unordered_map<std::string, std::string> config;
-  config["textEncoderPath"] = baseDir_ + "/onnx/text_encoder.onnx";
-  config["latentDenoiserPath"] = baseDir_ + "/onnx/latent_denoiser.onnx";
-  config["voiceDecoderPath"] = baseDir_ + "/onnx/voice_decoder.onnx";
-  config["tokenizerPath"] = baseDir_ + "/tokenizer.json";
-  config["voicesDir"] = baseDir_ + "/voices";
+  fs::path base(baseDir_);
+  config["textEncoderPath"] = (base / "onnx" / "text_encoder.onnx").string();
+  config["latentDenoiserPath"] = (base / "onnx" / "latent_denoiser.onnx").string();
+  config["voiceDecoderPath"] = (base / "onnx" / "voice_decoder.onnx").string();
+  config["tokenizerPath"] = (base / "tokenizer.json").string();
+  config["voicesDir"] = (base / "voices").string();
   config["voiceName"] = voiceName_;
   config["language"] = "en";
   config["speed"] = "1.0";
@@ -183,11 +193,12 @@ TEST_F(SupertonicIntegrationTest, loadAndSynthesize) {
 
 TEST_F(SupertonicIntegrationTest, unloadAfterSynthesize) {
   std::unordered_map<std::string, std::string> config;
-  config["textEncoderPath"] = baseDir_ + "/onnx/text_encoder.onnx";
-  config["latentDenoiserPath"] = baseDir_ + "/onnx/latent_denoiser.onnx";
-  config["voiceDecoderPath"] = baseDir_ + "/onnx/voice_decoder.onnx";
-  config["tokenizerPath"] = baseDir_ + "/tokenizer.json";
-  config["voicesDir"] = baseDir_ + "/voices";
+  fs::path base(baseDir_);
+  config["textEncoderPath"] = (base / "onnx" / "text_encoder.onnx").string();
+  config["latentDenoiserPath"] = (base / "onnx" / "latent_denoiser.onnx").string();
+  config["voiceDecoderPath"] = (base / "onnx" / "voice_decoder.onnx").string();
+  config["tokenizerPath"] = (base / "tokenizer.json").string();
+  config["voicesDir"] = (base / "voices").string();
   config["voiceName"] = voiceName_;
   config["language"] = "en";
 
