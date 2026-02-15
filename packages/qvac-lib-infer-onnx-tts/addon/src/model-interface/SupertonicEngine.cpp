@@ -7,6 +7,10 @@
 #include <random>
 #include <stdexcept>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace qvac::ttslib::supertonic {
 
 namespace {
@@ -105,7 +109,11 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
 
 #ifdef _WIN32
   auto loadSession = [&options](const std::string &path) {
-    std::wstring w(path.begin(), path.end());
+    int len = MultiByteToWideChar(CP_UTF8, 0, path.c_str(),
+                                  static_cast<int>(path.size()), nullptr, 0);
+    std::wstring w(len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(),
+                        static_cast<int>(path.size()), w.data(), len);
     return std::make_unique<Ort::Session>(env, w.c_str(), options);
   };
 #else

@@ -2,6 +2,10 @@
 
 #include <iostream>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace qvac::ttslib::chatterbox {
 
 namespace {
@@ -83,9 +87,11 @@ OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
   options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
 #ifdef _WIN32
-  // For Windows, Ort::Session expects a wide string (wchar_t*) for the model
-  // path
-  std::wstring wModelPath(modelPath.begin(), modelPath.end());
+  int wLen = MultiByteToWideChar(CP_UTF8, 0, modelPath.c_str(),
+                                 static_cast<int>(modelPath.size()), nullptr, 0);
+  std::wstring wModelPath(wLen, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, modelPath.c_str(),
+                      static_cast<int>(modelPath.size()), wModelPath.data(), wLen);
   session_ = std::make_unique<Ort::Session>(env, wModelPath.c_str(), options);
 #else
   session_ = std::make_unique<Ort::Session>(env, modelPath.c_str(), options);
