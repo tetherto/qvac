@@ -471,7 +471,7 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
 
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'supertonic')
-  const whisperPath = path.join(baseDir, 'models', 'whisper', 'ggml-medium.bin')
+  const whisperPath = path.join(baseDir, 'models', 'whisper', 'ggml-small.bin')
 
   console.log('\n=== Ensuring Supertonic models ===')
   const supertonicResult = await ensureSupertonicModels({ targetDir: modelDir })
@@ -506,7 +506,7 @@ test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t)
 
   console.log('\n=== Loading Whisper and transcribing ===')
   const whisperModel = await loadWhisper({
-    modelName: 'ggml-medium.bin',
+    modelName: 'ggml-small.bin',
     diskPath: path.join(baseDir, 'models', 'whisper'),
     language: 'en'
   })
