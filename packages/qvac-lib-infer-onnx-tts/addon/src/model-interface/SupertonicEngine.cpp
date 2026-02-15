@@ -1,15 +1,14 @@
 #include "SupertonicEngine.hpp"
 
+#include "FileUtils.hpp"
+#include "OrtSessionFactory.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <numeric>
 #include <random>
 #include <stdexcept>
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace qvac::ttslib::supertonic {
 
@@ -24,18 +23,6 @@ constexpr int STYLE_DIM = 128;
 constexpr int LATENT_CHANNELS = LATENT_DIM * CHUNK_COMPRESS_FACTOR; // 144
 
 const std::vector<std::string> LANGUAGES = {"en", "ko", "es", "pt", "fr"};
-
-std::string loadFileBytes(const std::string &path) {
-  std::ifstream f(path, std::ios::binary | std::ios::ate);
-  if (!f)
-    throw std::runtime_error("Cannot open file: " + path);
-  const size_t size = static_cast<size_t>(f.tellg());
-  f.seekg(0);
-  std::string data(size, '\0');
-  if (!f.read(data.data(), size))
-    throw std::runtime_error("Failed to read file: " + path);
-  return data;
-}
 
 std::vector<float> loadVoiceBin(const std::string &path) {
   std::ifstream f(path, std::ios::binary);
@@ -83,7 +70,7 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
   const std::string tokenizerPath = cfg.tokenizerPath.empty()
                                         ? resolvePath(cfg.modelDir, "tokenizer.json")
                                         : cfg.tokenizerPath;
-  const std::string blob = loadFileBytes(tokenizerPath);
+  const std::string blob = qvac::ttslib::loadFileBytes(tokenizerPath);
   tokenizerHandle_ = tokenizers_new_from_str(blob.data(), blob.length());
   if (!tokenizerHandle_)
     throw std::runtime_error("Failed to load tokenizer: " + tokenizerPath);
@@ -102,27 +89,11 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
           ? resolvePath(onnxDir, "voice_decoder.onnx")
           : cfg.voiceDecoderPath;
 
-  static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "SupertonicEngine");
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-#ifdef _WIN32
-  auto loadSession = [&options](const std::string &path) {
-    int len = MultiByteToWideChar(CP_UTF8, 0, path.c_str(),
-                                  static_cast<int>(path.size()), nullptr, 0);
-    std::wstring w(len, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, path.c_str(),
-                        static_cast<int>(path.size()), w.data(), len);
-    return std::make_unique<Ort::Session>(env, w.c_str(), options);
-  };
-#else
-  auto loadSession = [&options](const std::string &path) {
-    return std::make_unique<Ort::Session>(env, path.c_str(), options);
-  };
-#endif
-
-  textEncoderSession_ = loadSession(textEncoderPath);
+  textEncoderSession_ = qvac::ttslib::createOrtSession(textEncoderPath, options);
   {
     Ort::AllocatorWithDefaultOptions alloc;
     const size_t numOut = textEncoderSession_->GetOutputCount();
@@ -134,8 +105,8 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
       textEncoderOutputNames_.push_back(name.get());
     }
   }
-  latentDenoiserSession_ = loadSession(latentDenoiserPath);
-  voiceDecoderSession_ = loadSession(voiceDecoderPath);
+  latentDenoiserSession_ = qvac::ttslib::createOrtSession(latentDenoiserPath, options);
+  voiceDecoderSession_ = qvac::ttslib::createOrtSession(voiceDecoderPath, options);
 
   const std::string voicePath =
       resolvePath(cfg.voicesDir.empty() ? resolvePath(cfg.modelDir, "voices")
@@ -221,13 +192,8 @@ AudioResult SupertonicEngine::synthesize(const std::string &text) {
       Ort::RunOptions{nullptr}, textEncInputNames, textEncInputs.data(),
       textEncInputs.size(), textEncOutputNames, 2);
 
-  const auto &hiddenStateInfo =
-      textEncOutputs[0].GetTensorTypeAndShapeInfo();
   const auto &rawDurationsInfo =
       textEncOutputs[1].GetTensorTypeAndShapeInfo();
-  const int64_t hiddenSize =
-      hiddenStateInfo.GetShape().back();
-  const int64_t encSeqLen = hiddenStateInfo.GetShape()[1];
   const float *rawDurationsPtr =
       textEncOutputs[1].GetTensorData<float>();
   const int64_t numDurations = rawDurationsInfo.GetElementCount();
