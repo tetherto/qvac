@@ -53,7 +53,7 @@ on:
     outputs:
       published_version:
         description: "The version that was published"
-        value: ${{ jobs.publish-npm.outputs.npm_published_version || jobs.publish-gpr.outputs.npm_published_version }}
+        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -473,7 +473,7 @@ jobs:
             ) }}
     continue-on-error: true
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -527,10 +527,10 @@ jobs:
             ) }}
     continue-on-error: false
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -567,3 +567,5 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
           workdir: ${{ env.WORKDIR }}
+          repo_name: "llamacpp-llm"
+          git-token: ${{ secrets.GITHUB_TOKEN }}

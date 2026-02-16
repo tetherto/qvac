@@ -1,15 +1,6 @@
 name: "Prebuilds (OCR)"
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-
   workflow_dispatch:
     inputs:
       tag:
@@ -507,8 +498,10 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
             else
               gpr_tag="dev"
             fi
@@ -559,7 +552,7 @@ jobs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -582,6 +575,9 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}
+          repo_name: "onnx-ocr"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
 
   create-github-release:
     needs: [publish-npm]

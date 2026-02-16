@@ -2,5 +2,6 @@
 /.sync-repos
 sync-monorepo.sh
 reset_history.sh
+confirmed.txt
 /node_modules
 packages/**/.npmrc

@@ -67,7 +67,7 @@ try {
     `Blind relays helped establish peer connections through NAT/firewalls\n`,
   );
 
-  close();
+  await close();
 } catch (error) {
   console.error("❌ Error:", error);
   console.log(`\nIf download failed, check the relay public keys in:`);
