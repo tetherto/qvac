@@ -75,6 +75,12 @@ declare module "bare-fs" {
     options?: { encoding?: BufferEncoding; withFileTypes?: boolean },
   ): string[] | Buffer[];
   export function renameSync(oldPath: string, newPath: string): void;
+  export function symlinkSync(
+    target: string,
+    path: string,
+    type?: string,
+  ): void;
+  export function copyFileSync(src: string, dest: string, mode?: number): void;
   export function createReadStream(
     path: string,
     options?: ReadStreamOptions,
