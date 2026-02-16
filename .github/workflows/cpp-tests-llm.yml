@@ -163,25 +163,18 @@ jobs:
           npm install
           npm install -g bare bare-make
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download test models
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "Creating models directory..."
           mkdir -p models/unit-test
-          echo "Downloading Llama-3.2-1B-Instruct-Q4_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf
-          echo "Downloading SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
-          echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
+          echo "Downloading Llama-3.2-1B-Instruct-Q4_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf" -o models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf
+          echo "Downloading SmolVLM-500M-Instruct-Q8_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
+          echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
