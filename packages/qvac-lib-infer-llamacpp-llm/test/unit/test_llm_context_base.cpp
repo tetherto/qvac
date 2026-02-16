@@ -322,7 +322,7 @@ TEST_F(LlmContextBaseTest, TextContextRejectsBinaryInput) {
   if (test_projection_path.empty()) {
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "Hello"}])";
-    prompt.media = media;
+    prompt.media.push_back(std::move(media));
     EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }

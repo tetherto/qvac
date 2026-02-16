@@ -253,7 +253,7 @@ TEST_F(LlamaModelTest, ProcessBinaryInput) {
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media = binary_input;
+  prompt.media.push_back(std::move(binary_input));
   if (test_projection_path.empty()) {
     EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
   } else {
@@ -619,7 +619,8 @@ TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
   EXPECT_THROW(
       {
         LlamaModel model(
-            getValidModelPath(), std::string(test_projection_path),
+            getValidModelPath(),
+            std::string(test_projection_path),
             std::unordered_map<std::string, std::string>(config_no_device));
         model.waitForLoadInitialization();
       },
@@ -648,8 +649,10 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                         std::unordered_map<std::string, std::string>(config));
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
@@ -677,8 +680,10 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                         std::unordered_map<std::string, std::string>(config));
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
@@ -689,8 +694,10 @@ TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                   std::unordered_map<std::string, std::string>(config_files));
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
@@ -729,7 +736,8 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
   }
 
   LlamaModel model(
-      multimodalModelPath.string(), projectionPath.string(),
+      multimodalModelPath.string(),
+      projectionPath.string(),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
@@ -771,7 +779,8 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
   }
 
   LlamaModel model(
-      multimodalModelPath.string(), projectionPath.string(),
+      multimodalModelPath.string(),
+      projectionPath.string(),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
@@ -803,8 +812,10 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                   std::unordered_map<std::string, std::string>(small_ctx_config));
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(small_ctx_config));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
@@ -838,8 +849,10 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                   std::unordered_map<std::string, std::string>(small_ctx_config));
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(small_ctx_config));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
@@ -860,8 +873,8 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
   overflow_prompt.input =
       R"([{"role": "user", "content": ")" + long_content + R"("}])";
 
-  EXPECT_THROW({ model.processPrompt(overflow_prompt); },
-               qvac_errors::StatusError);
+  EXPECT_THROW(
+      { model.processPrompt(overflow_prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
@@ -869,8 +882,10 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                   std::unordered_map<std::string, std::string>(config_files));
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
@@ -911,8 +926,10 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(getValidModelPath(), std::string(test_projection_path),
-                         std::unordered_map<std::string, std::string>(config));
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);

@@ -222,8 +222,8 @@ LlamaModel::resolveChatAndTools(const std::string& input) {
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
-  if (prompt.media.has_value()) {
-    loadMedia(*(prompt.media));
+  for (const auto& media : prompt.media) {
+    loadMedia(media);
   }
 
   if (prompt.prefill) {

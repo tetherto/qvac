@@ -65,14 +65,11 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   auto parseMedia = [&](js::Object& inputObj) {
-    if (prompt.media.has_value()) {
-      throw StatusError(
-          general_error::InvalidArgument, "Only one media input is allowed");
-    }
-    prompt.media =
+    std::vector<uint8_t> mediaBytes =
         js::TypedArray<uint8_t>(
             env, inputObj.getProperty<js::TypedArray<uint8_t>>(env, "content"))
             .as<std::vector<uint8_t>>(env);
+    prompt.media.push_back(std::move(mediaBytes));
   };
 
   for (auto& input : inputs) {
@@ -86,7 +83,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  if (prompt.input.empty() && !prompt.media.has_value()) {
+  if (prompt.input.empty() && prompt.media.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
         "At least one of text or media input is required");

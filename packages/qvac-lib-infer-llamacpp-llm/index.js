@@ -160,16 +160,13 @@ class LlmLlamacpp extends BaseInference {
     return this._withExclusiveRun(async () => {
       // Separate media messages from text messages
       const textMessages = []
-      let mediaData = null
+      const mediaItems = []
 
       for (const message of prompt) {
         if (message.role === 'user' &&
             message.type === 'media' &&
             message.content instanceof Uint8Array) {
-          if (mediaData !== null) {
-            throw new Error('Only one media message is supported at the moment')
-          }
-          mediaData = message.content
+          mediaItems.push(message.content)
           // Keep the message as a placeholder marker (with empty content) for tokenization
           textMessages.push({ ...message, content: '' })
         } else {
@@ -179,8 +176,8 @@ class LlmLlamacpp extends BaseInference {
 
       const promptMessages = []
 
-      // Send media first if present
-      if (mediaData) {
+      // Send media first (in order) if present
+      for (const mediaData of mediaItems) {
         promptMessages.push({ type: 'media', content: mediaData })
       }
 
