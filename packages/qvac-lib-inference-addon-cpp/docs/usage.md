@@ -67,7 +67,6 @@ namespace my_addon {
         env,
         args.get(0, "jsHandle"),
         args.getFunction(2, "outputCallback"),
-        args.get(3, "transitionCb"),
         std::move(outHandlers)
     );
     
