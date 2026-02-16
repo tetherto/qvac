@@ -131,6 +131,7 @@ async function main () {
   })
 
   const trainDatasetPath = './examples/input/small_train_HF.jsonl'
+  const evalDatasetPath = './examples/input/small_eval_HF.jsonl'
 
   const loader = new FilesystemDL({ dirPath: modelDir })
 
@@ -171,7 +172,7 @@ async function main () {
 
     const finetuneOptions = {
       trainDatasetDir: trainDatasetPath,
-      validation: { type: 'dataset' },
+      validation: { type: 'dataset', path: evalDatasetPath },
       numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,

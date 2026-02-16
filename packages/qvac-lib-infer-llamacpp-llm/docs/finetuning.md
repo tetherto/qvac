@@ -313,7 +313,7 @@ sequenceDiagram
 |-----------|------|
 | `batchSize` | Batch size is controlled by `microBatchSize`. |
 | `warmupRatio` | Warmup steps = `warmupRatio × totalSteps` when `warmupRatioSet: true`. |
-| `validation.path` | When `validation.type` is `'dataset'`, set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as the training file. The JS layer copies this to `evalDatasetDir` when calling the addon. |
+| `validation.path` | When `validation.type` is `'dataset'`, set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as the training file. The JS layer passes this as `evalDatasetPath` to the addon. |
 
 ### C++ Backend Overview
 
