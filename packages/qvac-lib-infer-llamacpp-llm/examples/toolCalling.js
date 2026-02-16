@@ -1,9 +1,9 @@
 'use strict'
 
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const LlmLlamacpp = require('../index')
+const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
+const { downloadModel } = require('./utils')
 
 // Helper functions
 function createSeparator (char = '=', length = 80) {
@@ -74,23 +74,22 @@ async function main () {
   console.log('Tool Calling Example: Demonstrates tool calling capabilities')
   console.log('============================================================')
 
-  // 1. Initializing data loader
-  const store = new Corestore('./store')
-  const hdStore = store.namespace('hd')
+  // 1. Downloading model
+  const [modelName, dirPath] = await downloadModel(
+    'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf',
+    'Qwen3-1.7B-Q4_0.gguf'
+  )
 
-  const hdKey = '05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9'
-  const hdDL = new HyperDriveDL({
-    key: `hd://${hdKey}`,
-    store: hdStore
-  })
+  // 2. Initializing data loader
+  const fsDL = new FilesystemDL({ dirPath })
 
-  // 2. Configuring model settings
+  // 3. Configuring model settings
   const args = {
-    loader: hdDL,
+    loader: fsDL,
     opts: { stats: true },
     logger: console,
-    modelName: 'Qwen3-1.7B-Q4_0.gguf',
-    diskPath: './models'
+    diskPath: dirPath,
+    modelName
   }
 
   const config = {
@@ -100,26 +99,12 @@ async function main () {
     tools: 'true'
   }
 
-  // 3. Loading model
-  await hdDL.ready()
+  // 4. Loading model
   const model = new LlmLlamacpp(args, config)
-  const closeLoader = true
-  let totalProgress = 0
-  const reportProgressCallback = (report) => {
-    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
-      process.stdout.write(
-        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
-      )
-      if (Number(report.currentFileProgress) === 100) {
-        process.stdout.write('\n')
-      }
-      totalProgress = Number(report.overallProgress)
-    }
-  }
-  await model.load(closeLoader, reportProgressCallback)
+  await model.load()
 
   try {
-    // 4. Defining tool queries with function schemas
+    // 5. Defining tool queries with function schemas
     const systemMessageAmbiguous = {
       role: 'system',
       content: 'You are a helpful assistant with access to various tools. If request is ambiguous,skip tool calls.'
@@ -291,7 +276,7 @@ async function main () {
       }
     ]
 
-    // 5. Running tool calling queries
+    // 6. Running tool calling queries
     const queries = [
       { name: 'Query 1: Complex tool calling with multiple parameters', prompt: toolQuery1 },
       { name: 'Query 2: Math calculation and ambiguous query', prompt: toolQuery2 },
@@ -311,10 +296,9 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 6. Cleaning up resources
-    await store.close()
-    await hdDL.close()
+    // 7. Cleaning up resources
     await model.unload()
+    await fsDL.close()
   }
 }
 
