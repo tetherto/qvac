@@ -559,6 +559,20 @@ All the errors from this library are in the range of 6001-7000
 *   PoC Repo: [tetherto/qvac-transcription-poc](https://github.com/tetherto/qvac-transcription-poc)
 *   Pear app (Desktop): TBD
 
+## Model License Notices
+
+### Built with Llama
+
+Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+### Built with Gemma
+
+Gemma is provided under and subject to the Gemma Terms of Use found at [ai.google.dev/gemma/terms](https://ai.google.dev/gemma/terms).
+
+### Built with Health AI Developer Foundations (MedGemma)
+
+HAI-DEF is provided under and subject to the Health AI Developer Foundations Terms of Use found at [https://developers.google.com/health-ai-developer-foundations/terms](https://developers.google.com/health-ai-developer-foundations/terms).
+
 ## License
 
 This project is licensed under the Apache-2.0 License – see the LICENSE file for details.

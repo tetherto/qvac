@@ -360,6 +360,20 @@ See `supportedLanguages.js` for the complete language definitions.
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
+## Model License Notices
+
+### Built with Llama
+
+Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+### Built with Gemma
+
+Gemma is provided under and subject to the Gemma Terms of Use found at [ai.google.dev/gemma/terms](https://ai.google.dev/gemma/terms).
+
+### Built with Health AI Developer Foundations (MedGemma)
+
+HAI-DEF is provided under and subject to the Health AI Developer Foundations Terms of Use found at [https://developers.google.com/health-ai-developer-foundations/terms](https://developers.google.com/health-ai-developer-foundations/terms).
+
 ## License
 
 This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.

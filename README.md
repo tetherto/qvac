@@ -150,6 +150,20 @@ Legend:
 - For the standard development workflow used in this monorepo, see [`gitflow.md`](gitflow.md).
 - For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
 
+## Model License Notices
+
+### Built with Llama
+
+Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+### Built with Gemma
+
+Gemma is provided under and subject to the Gemma Terms of Use found at [ai.google.dev/gemma/terms](https://ai.google.dev/gemma/terms).
+
+### Built with Health AI Developer Foundations (MedGemma)
+
+HAI-DEF is provided under and subject to the Health AI Developer Foundations Terms of Use found at [https://developers.google.com/health-ai-developer-foundations/terms](https://developers.google.com/health-ai-developer-foundations/terms).
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

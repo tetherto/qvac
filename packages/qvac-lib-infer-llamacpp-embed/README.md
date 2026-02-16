@@ -277,6 +277,20 @@ These tests validate the native implementation and help catch issues early in de
 * **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).
 * **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
 
+## Model License Notices
+
+### Built with Llama
+
+Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+### Built with Gemma
+
+Gemma is provided under and subject to the Gemma Terms of Use found at [ai.google.dev/gemma/terms](https://ai.google.dev/gemma/terms).
+
+### Built with Health AI Developer Foundations (MedGemma)
+
+HAI-DEF is provided under and subject to the Health AI Developer Foundations Terms of Use found at [https://developers.google.com/health-ai-developer-foundations/terms](https://developers.google.com/health-ai-developer-foundations/terms).
+
 ## License
 
 This project is licensed under the Apache-2.0 [License](./LICENSE) – see the LICENSE file for details.

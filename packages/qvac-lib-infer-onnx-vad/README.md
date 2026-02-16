@@ -259,6 +259,20 @@ Benchmark results are kept up to date to reflect improvements in model architect
 * GitHub Repo: [tetherto/qvac-lib-infer-onnx-vad](https://github.com/tetherto/qvac-lib-infer-onnx-vad)
 * Silero VAD Paper & Model: [snakers4/silero-vad](https://github.com/snakers4/silero-vad)
 
+## Model License Notices
+
+### Built with Llama
+
+Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+### Built with Gemma
+
+Gemma is provided under and subject to the Gemma Terms of Use found at [ai.google.dev/gemma/terms](https://ai.google.dev/gemma/terms).
+
+### Built with Health AI Developer Foundations (MedGemma)
+
+HAI-DEF is provided under and subject to the Health AI Developer Foundations Terms of Use found at [https://developers.google.com/health-ai-developer-foundations/terms](https://developers.google.com/health-ai-developer-foundations/terms).
+
 ## License
 
 This project is licensed under the Apache-2.0 License – see the [LICENSE](LICENSE) file for details.
