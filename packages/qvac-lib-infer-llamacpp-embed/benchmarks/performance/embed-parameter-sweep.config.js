@@ -16,7 +16,6 @@ const BENCH_DEFAULT_RUNTIME = {
   batchSize: 512,
   noMmap: false,
   flashAttn: 'off',
-  verbosity: 0,
   ngl: 99
 }
 
@@ -78,7 +77,7 @@ const MODELS = loadModelsFromManifest()
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
   device: ['cpu','gpu'],
-  batchSize: [512, 2048],
+  batchSize: [256, 512, 1024, 2048],
   noMmap: [false, true],
   flashAttn: ['off', 'on']
 }

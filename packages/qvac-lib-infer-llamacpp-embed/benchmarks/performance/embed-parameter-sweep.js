@@ -34,7 +34,7 @@ function resolveAddonCtor (addonSource) {
   try {
     return addonSource === 'npm' ? loadNpmEmbedAddon() : loadLocalEmbedAddon()
   } catch (error) {
-    const message = error && error.message ? error.message : String(error)
+    const message = error.message || String(error)
     throw new Error(
       `Failed to load addon source "${addonSource}": ${message}. ` +
       (addonSource === 'local'
@@ -51,6 +51,8 @@ const {
   MODELS,
   PARAMETER_SWEEP
 } = require('./embed-parameter-sweep.config')
+
+const INPUT_MODES = ['single', 'array']
 
 function createAddonRuntimeLogger (debugEnabled) {
   if (!debugEnabled) {
@@ -114,15 +116,6 @@ function cosineSimilarity (a, b) {
   return dotProduct / denominator
 }
 
-function estimateTokens (inputs) {
-  let total = 0
-  for (const text of inputs) {
-    const words = String(text).trim().split(/\s+/).filter(Boolean).length
-    total += Math.max(1, words)
-  }
-  return total
-}
-
 function normalizeEmbeddings (rawEmbeddings) {
   if (!Array.isArray(rawEmbeddings) || !Array.isArray(rawEmbeddings[0])) {
     throw new Error('Invalid embedding response structure')
@@ -184,63 +177,45 @@ function cartesianProduct (arrays) {
   )
 }
 
-function uniqueValuesWithDefault (values, defaultValue) {
-  const out = []
-  const seen = new Set()
-  for (const value of [defaultValue, ...(values || [])]) {
-    const key = typeof value === 'string' ? `s:${value}` : `j:${JSON.stringify(value)}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(value)
-  }
-  return out
-}
-
 function buildCases (modelDef, sweep) {
-  const baseQuant = Array.isArray(modelDef.quantizations) && modelDef.quantizations.length > 0
-    ? modelDef.quantizations[0]
-    : null
-  const defaults = modelDef.defaults || {}
-  if (!baseQuant) {
+  const baseQuant = modelDef.quantizations[0]
+  const defaults = modelDef.defaults
+  if (baseQuant == null) {
     throw new Error(`No baseline quantization configured for model "${modelDef.id}"`)
   }
-  const supportedQuants = uniqueValuesWithDefault(sweep.quantization, baseQuant)
+  const supportedQuants = sweep.quantization
     .filter((quant) => !!resolveModelName(modelDef, quant))
 
   if (supportedQuants.length === 0) {
     throw new Error(`No supported quantizations found for model "${modelDef.id}"`)
   }
 
-  const devices = uniqueValuesWithDefault(sweep.device, defaults.device)
-  const batchSizes = uniqueValuesWithDefault(sweep.batchSize, defaults.batchSize)
-  const noMmapValues = uniqueValuesWithDefault(sweep.noMmap, defaults.noMmap)
-  const flashAttnValues = uniqueValuesWithDefault(sweep.flashAttn, defaults.flashAttn)
-
   const cases = []
-  cases.push({
-    caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults`,
-    parameter: 'baseline',
-    value: 'default',
-    quantization: baseQuant,
-    modelName: resolveModelName(modelDef, baseQuant),
-    runtimeConfig: { ...defaults },
-    isBaseline: true
-  })
+  for (const inputMode of INPUT_MODES) {
+    cases.push({
+      caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults__input=${inputMode}`,
+      parameter: 'baseline',
+      quantization: baseQuant,
+      modelName: resolveModelName(modelDef, baseQuant),
+      runtimeConfig: { ...defaults },
+      inputMode,
+      isBaseline: true
+    })
+  }
 
-  if (devices.length > 0 && batchSizes.length > 0 && noMmapValues.length > 0 && flashAttnValues.length > 0) {
-    const combos = cartesianProduct([
-      supportedQuants,
-      devices,
-      batchSizes,
-      noMmapValues,
-      flashAttnValues,
-    ])
+  const combos = cartesianProduct([
+    supportedQuants,
+    sweep.device,
+    sweep.batchSize,
+    sweep.noMmap,
+    sweep.flashAttn,
+  ])
 
-    for (const [quantization, device, batchSize, noMmap, flashAttn] of combos) {
+  for (const [quantization, device, batchSize, noMmap, flashAttn] of combos) {
+    for (const inputMode of INPUT_MODES) {
       cases.push({
-        caseId: `${modelDef.id}__q=${quantization}__dev=${device}__bs=${batchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}`,
+        caseId: `${modelDef.id}__q=${quantization}__dev=${device}__bs=${batchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}__input=${inputMode}`,
         parameter: 'full-grid',
-        value: 'combination',
         quantization,
         modelName: resolveModelName(modelDef, quantization),
         runtimeConfig: {
@@ -250,6 +225,7 @@ function buildCases (modelDef, sweep) {
           noMmap,
           flashAttn,
         },
+        inputMode,
         isBaseline: false
       })
     }
@@ -361,7 +337,6 @@ function aggregateRunMetrics (runMetrics) {
   const loadMsValues = runMetrics.map((x) => x.loadMs)
   const runMsValues = runMetrics.map((x) => x.runMs)
   const unloadMsValues = runMetrics.map((x) => x.unloadMs)
-  const epsValues = runMetrics.map((x) => x.embeddingsPerSecond).filter((x) => x != null)
   const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
 
   return {
@@ -372,7 +347,6 @@ function aggregateRunMetrics (runMetrics) {
     loadMsStd: round(stddev(loadMsValues), 3),
     runMsStd: round(stddev(runMsValues), 3),
     unloadMsStd: round(stddev(unloadMsValues), 3),
-    embeddingsPerSecond: round(average(epsValues), 3),
     tps: round(average(tpsValues), 3)
   }
 }
@@ -380,7 +354,6 @@ function aggregateRunMetrics (runMetrics) {
 async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runtimeConfig, inputs, debugEnabled }) {
   const loader = new FilesystemDL({ dirPath: modelDir })
   const configString = buildConfigString(runtimeConfig, { debugEnabled })
-  const estimatedTokens = estimateTokens(inputs)
   const addonRuntimeLogger = createAddonRuntimeLogger(debugEnabled)
 
   let model = null
@@ -405,12 +378,10 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
     await model.load()
     loadMs = elapsedMs(loadStart)
 
-    const runStart = process.hrtime()
     const response = await model.run(inputs)
     const rawEmbeddings = await response.await()
     const runtimeStats = response.stats
-    const wallClockRunMs = elapsedMs(runStart)
-    runMs = runtimeStats.total_time_ms ?? wallClockRunMs
+    runMs = runtimeStats.total_time_ms
     embeddings = normalizeEmbeddings(rawEmbeddings)
     nativeTps = runtimeStats.tokens_per_second
   } catch (err) {
@@ -435,19 +406,15 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
   if (primaryError || cleanupErrors.length > 0) {
     const primary = primaryError ? (primaryError.message || String(primaryError)) : null
     const joined = [primary, ...cleanupErrors].filter(Boolean).join('; ')
-    throw new Error(`Case failed with addon=${addonSource} for model=${modelName} config="${configString.replace(/\n/g, ', ')}": ${joined}`)
+    throw new Error(`Case failed: ${joined}`)
   }
 
-  const runS = runMs ? runMs / 1000 : null
   return {
     metrics: {
       loadMs: round(loadMs, 3),
       runMs: round(runMs, 3),
       unloadMs: round(unloadMs, 3),
-      estimatedTokens,
-      inputsCount: inputs.length,
-      embeddingsPerSecond: round(runS ? inputs.length / runS : null, 3),
-      tps: round(nativeTps != null ? nativeTps : (runS ? estimatedTokens / runS : null), 3)
+      tps: round(nativeTps, 3)
     },
     embeddings
   }
@@ -474,7 +441,7 @@ async function runCase ({ addonCtor, addonSource, modelDir, modelName, runtimeCo
         firstEmbeddings = result.embeddings
       }
     } catch (error) {
-      const message = error && error.message ? error.message : String(error)
+      const message = error.message || String(error)
       errors.push({
         repeat,
         message
@@ -514,49 +481,39 @@ function toMarkdown (report) {
   lines.push(`- Finished: ${report.finishedAt}`)
   lines.push(`- Repeats per case: ${report.repeats}`)
   lines.push(`- Sweep mode: full-grid`)
-  lines.push(`- Input prompts: ${report.inputsCount}`)
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Batch Size | No Mmap | Flash Attn | Status | Load ms (avg) | Run ms (avg) | Unload ms (avg) | TPS (avg) | Avg CosSim | Error |')
-    lines.push('|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---|')
+    lines.push('| Quantization | Device | Batch Size | Input | No Mmap | Flash Attn | Status | Load ms (avg) | Run ms (avg) | Unload ms (avg) | TPS (avg) | Avg CosSim | Error |')
+    lines.push('|---|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
-      const cos = item.similarity && typeof item.similarity.avg === 'number' ? item.similarity.avg : ''
-      const quantizationCell = item.isBaseline ? 'default' : (item.quantization ?? '')
-      const deviceCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.device != null ? String(item.runtimeConfig.device) : '')
-      const batchSizeCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.batchSize != null ? String(item.runtimeConfig.batchSize) : '')
+      const metrics = item.metrics || {}
+      const runtimeConfig = item.runtimeConfig
+      const cos = item.similarity ? item.similarity.avg : ''
+      const quantizationCell = item.isBaseline ? 'default' : item.quantization
+      const deviceCell = item.isBaseline ? 'default' : String(runtimeConfig.device)
+      const batchSizeCell = item.isBaseline ? 'default' : String(runtimeConfig.batchSize)
+      const inputCell = item.inputMode || 'single'
       const noMmapCell = item.isBaseline
         ? 'default'
-        : (
-            item.runtimeConfig && item.runtimeConfig.noMmap != null
-              ? (item.runtimeConfig.noMmap ? 'on' : 'off')
-              : ''
-          )
+        : (runtimeConfig.noMmap ? 'on' : 'off')
       const flashAttnCell = item.isBaseline
         ? 'default'
-        : (item.runtimeConfig && item.runtimeConfig.flashAttn != null ? String(item.runtimeConfig.flashAttn) : '')
-      const statusCell = item.status || 'ok'
-      const errorCell = item.error && item.error.message ? truncateText(item.error.message, 120) : ''
+        : String(runtimeConfig.flashAttn)
+      const statusCell = item.status
+      const errorCell = item.error ? truncateText(item.error.message, 120) : ''
       lines.push(
-        `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${noMmapCell} | ${flashAttnCell}` +
-        ` | ${statusCell} | ${item.metrics && item.metrics.loadMs != null ? item.metrics.loadMs : ''}` +
-        ` | ${item.metrics && item.metrics.runMs != null ? item.metrics.runMs : ''}` +
-        ` | ${item.metrics && item.metrics.unloadMs != null ? item.metrics.unloadMs : ''}` +
-        ` | ${item.metrics && item.metrics.tps != null ? item.metrics.tps : ''}` +
+        `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${inputCell} | ${noMmapCell} | ${flashAttnCell}` +
+        ` | ${statusCell} | ${metrics.loadMs ?? ''}` +
+        ` | ${metrics.runMs ?? ''}` +
+        ` | ${metrics.unloadMs ?? ''}` +
+        ` | ${metrics.tps ?? ''}` +
         ` | ${cos} | ${errorCell} |`
       )
     }
     lines.push('')
   }
   return `${lines.join('\n')}\n`
-}
-
-function loadInputsFromFile (filePath) {
-  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
-  if (!Array.isArray(parsed) || parsed.some((x) => typeof x !== 'string')) {
-    throw new Error(`Invalid inputs JSON at ${filePath}; expected string[]`)
-  }
-  return parsed
 }
 
 async function main () {
@@ -573,10 +530,10 @@ async function main () {
   if (!fs.existsSync(inputsFilePath)) {
     throw new Error(
       `Missing inputs file: ${inputsFilePath}. ` +
-      'Provide --inputs-file <path> or place a JSON string[] at benchmarks/performance/inputs.json.'
+      'Provide --inputs-file <path> or place a JSON object { "<batchSize>": string[5], ... } at benchmarks/performance/inputs.json.'
     )
   }
-  const inputs = loadInputsFromFile(inputsFilePath)
+  const inputsByBatchSize = JSON.parse(fs.readFileSync(inputsFilePath, 'utf8'))
   const selectedModelIds = args.models
     ? String(args.models).split(',').map((x) => x.trim()).filter(Boolean)
     : MODELS.map((m) => m.id)
@@ -591,7 +548,6 @@ async function main () {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     repeats,
-    inputsCount: inputs.length,
     selectedModelIds,
     models: []
   }
@@ -614,7 +570,7 @@ async function main () {
     const cases = plan.cases
     debugLogger.log(`\n=== ${modelDef.id} ===`)
     debugLogger.log(`Cases to run: ${cases.length}`)
-    let baselineEmbeddings = null
+    const baselineEmbeddingsByInputMode = new Map()
     const caseResults = []
 
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
@@ -633,6 +589,8 @@ async function main () {
         }
 
         debugLogger.log(`Running: ${testCase.caseId}`)
+        const inputsRaw = inputsByBatchSize[testCase.runtimeConfig.batchSize]
+        const inputs = testCase.inputMode === 'single' ? inputsRaw[0] : inputsRaw
         const result = await runCase({
           addonCtor,
           addonSource,
@@ -654,7 +612,7 @@ async function main () {
         })
 
         if (testCase.parameter === 'baseline' && result.embeddings) {
-          baselineEmbeddings = result.embeddings
+          baselineEmbeddingsByInputMode.set(testCase.inputMode, result.embeddings)
         }
 
         const similarity = testCase.parameter === 'baseline'
@@ -663,17 +621,26 @@ async function main () {
                 ? { avg: 1, min: 1, max: 1, count: result.embeddings.length }
                 : null
             )
-          : similarityStats(baselineEmbeddings, result.embeddings)
+          : similarityStats(
+              baselineEmbeddingsByInputMode.get(testCase.inputMode),
+              result.embeddings
+            )
 
         const hasRepeatErrors = Array.isArray(result.errors) && result.errors.length > 0
         const status = hasRepeatErrors
           ? (result.repeatsSucceeded > 0 ? 'partial-failure' : 'failed')
           : 'ok'
         const error = hasRepeatErrors
-          ? {
-              message: `${result.errors.length}/${result.repeatsAttempted} repeats failed`,
-              repeats: result.errors
-            }
+          ? (() => {
+              const uniqueMessages = [...new Set(result.errors.map((entry) => entry.message))]
+              const detail = uniqueMessages.length === 1
+                ? uniqueMessages[0]
+                : `${uniqueMessages.length} distinct errors (first: ${uniqueMessages[0]})`
+              return {
+                message: `${result.errors.length}/${result.repeatsAttempted} repeats failed: ${detail}`,
+                repeats: result.errors
+              }
+            })()
           : null
 
         caseResults.push({
@@ -686,7 +653,7 @@ async function main () {
           error
         })
       } catch (error) {
-        const message = error && error.message ? error.message : String(error)
+      const message = error.message || String(error)
         debugLogger.warn(`Case failed: ${testCase.caseId}: ${message}`)
         for (let repeat = 1; repeat <= repeats; repeat++) {
           progress.tick({
@@ -732,6 +699,6 @@ async function main () {
 
 main().catch((error) => {
   console.error('Parameter sweep failed:')
-  console.error(error && error.stack ? error.stack : String(error))
+  console.error(error.stack || String(error))
   process.exit(1)
 })
