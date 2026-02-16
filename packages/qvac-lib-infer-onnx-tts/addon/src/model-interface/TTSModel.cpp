@@ -5,6 +5,7 @@
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "src/addon/TTSErrors.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
+#include "src/model-interface/SupertonicEngine.hpp"
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -12,7 +13,8 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 TTSModel::TTSModel(
     const std::unordered_map<std::string, std::string> &configMap,
     const std::vector<float> &referenceAudio,
-    std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine) {
+    std::shared_ptr<chatterbox::IChatterboxEngine> chatterboxEngine,
+    std::shared_ptr<qvac::ttslib::supertonic::ISupertonicEngine> supertonicEngine) {
   engineType_ = detectEngineType(configMap);
 
   chatterboxConfig_.referenceAudio = referenceAudio;
@@ -27,6 +29,14 @@ TTSModel::TTSModel(
           std::make_shared<chatterbox::ChatterboxEngine>(chatterboxConfig_);
     }
     QLOG(Priority::INFO, "TTSModel initialized with Chatterbox engine");
+  } else if (engineType_ == EngineType::Supertonic) {
+    if (supertonicEngine) {
+      supertonicEngine_ = supertonicEngine;
+    } else {
+      supertonicEngine_ =
+          std::make_shared<qvac::ttslib::supertonic::SupertonicEngine>(supertonicConfig_);
+    }
+    QLOG(Priority::INFO, "TTSModel initialized with Supertonic engine");
   }
 
   load();
@@ -35,6 +45,10 @@ TTSModel::TTSModel(
 
 EngineType TTSModel::detectEngineType(
     const std::unordered_map<std::string, std::string> &configMap) const {
+  auto it = configMap.find("textEncoderPath");
+  if (it != configMap.end() && !it->second.empty()) {
+    return EngineType::Supertonic;
+  }
   return EngineType::Chatterbox;
 }
 
@@ -77,11 +91,70 @@ bool TTSModel::isChatterboxConfigValid(
          !config.languageModelPath.empty();
 }
 
+qvac::ttslib::supertonic::SupertonicConfig TTSModel::createSupertonicConfig(
+    const std::unordered_map<std::string, std::string> &configMap) {
+  qvac::ttslib::supertonic::SupertonicConfig config = supertonicConfig_;
+
+  auto updateConfig = [&](const std::string &key, std::string &configField) {
+    auto it = configMap.find(key);
+    if (it != configMap.end()) {
+      configField = it->second;
+    }
+  };
+  updateConfig("modelDir", config.modelDir);
+  updateConfig("tokenizerPath", config.tokenizerPath);
+  updateConfig("textEncoderPath", config.textEncoderPath);
+  updateConfig("latentDenoiserPath", config.latentDenoiserPath);
+  updateConfig("voiceDecoderPath", config.voiceDecoderPath);
+  updateConfig("voicesDir", config.voicesDir);
+  updateConfig("voiceName", config.voiceName);
+  updateConfig("language", config.language);
+
+  auto it = configMap.find("speed");
+  if (it != configMap.end() && !it->second.empty()) {
+    try {
+      config.speed = std::stof(it->second);
+    } catch (...) {
+    }
+  }
+  it = configMap.find("numInferenceSteps");
+  if (it != configMap.end() && !it->second.empty()) {
+    try {
+      config.numInferenceSteps = std::stoi(it->second);
+    } catch (...) {
+    }
+  }
+
+  std::stringstream ss;
+  ss << "Supertonic config: modelDir='" << config.modelDir
+     << "' tokenizerPath='" << config.tokenizerPath << "' textEncoderPath='"
+     << config.textEncoderPath << "' latentDenoiserPath='"
+     << config.latentDenoiserPath << "' voiceDecoderPath='"
+     << config.voiceDecoderPath << "' voicesDir='" << config.voicesDir
+     << "' voiceName='" << config.voiceName << "' language='" << config.language
+     << "' speed=" << config.speed
+     << " numInferenceSteps=" << config.numInferenceSteps;
+  QLOG(Priority::INFO, ss.str());
+
+  return config;
+}
+
+bool TTSModel::isSupertonicConfigValid(
+    const qvac::ttslib::supertonic::SupertonicConfig &config) const {
+  return !config.tokenizerPath.empty() && !config.textEncoderPath.empty() &&
+         !config.latentDenoiserPath.empty() &&
+         !config.voiceDecoderPath.empty() && !config.voicesDir.empty() &&
+         !config.voiceName.empty() && !config.language.empty();
+}
+
 void TTSModel::saveLoadParams(
     const std::unordered_map<std::string, std::string> &configMap) {
   if (engineType_ == EngineType::Chatterbox) {
     chatterboxConfig_ = createChatterboxConfig(configMap);
     configSet_ = isChatterboxConfigValid(chatterboxConfig_);
+  } else if (engineType_ == EngineType::Supertonic) {
+    supertonicConfig_ = createSupertonicConfig(configMap);
+    configSet_ = isSupertonicConfigValid(supertonicConfig_);
   }
 }
 
@@ -95,6 +168,10 @@ void TTSModel::load() {
     chatterboxEngine_->load(chatterboxConfig_);
     loaded_ = chatterboxEngine_->isLoaded();
     QLOG(Priority::INFO, "Chatterbox TTS model loaded successfully");
+  } else if (engineType_ == EngineType::Supertonic) {
+    supertonicEngine_->load(supertonicConfig_);
+    loaded_ = supertonicEngine_->isLoaded();
+    QLOG(Priority::INFO, "Supertonic TTS model loaded successfully");
   }
 }
 
@@ -107,6 +184,10 @@ void TTSModel::unload() {
   if (engineType_ == EngineType::Chatterbox) {
     if (chatterboxEngine_) {
       chatterboxEngine_->unload();
+    }
+  } else if (engineType_ == EngineType::Supertonic) {
+    if (supertonicEngine_) {
+      supertonicEngine_->unload();
     }
   }
   loaded_ = false;
@@ -138,6 +219,8 @@ TTSModel::Output TTSModel::process(const Input &text) {
   AudioResult result;
   if (engineType_ == EngineType::Chatterbox) {
     result = chatterboxEngine_->synthesize(text);
+  } else if (engineType_ == EngineType::Supertonic) {
+    result = supertonicEngine_->synthesize(text);
   }
 
   auto endTime = std::chrono::high_resolution_clock::now();
@@ -195,7 +278,9 @@ void TTSModel::resetRuntimeStats() {
 }
 
 void TTSModel::setReferenceAudio(const std::vector<float> &referenceAudio) {
-  chatterboxConfig_.referenceAudio = referenceAudio;
-  QLOG(Priority::INFO,
-       "Reference audio set, size: " + std::to_string(referenceAudio.size()));
+  if (engineType_ == EngineType::Chatterbox) {
+    chatterboxConfig_.referenceAudio = referenceAudio;
+    QLOG(Priority::INFO,
+         "Reference audio set, size: " + std::to_string(referenceAudio.size()));
+  }
 }
