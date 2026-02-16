@@ -14,7 +14,7 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test:integration": "npx patch-package && bare test/integration/addon.test.js",
+    "test:integration": "bare test/integration/addon.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -61,7 +61,6 @@
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",
-    "patch-package": "^8.0.0",
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
   },
