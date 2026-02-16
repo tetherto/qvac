@@ -1,7 +1,7 @@
 #pragma once
+#include <functional>
 #include <iostream>
 #include <memory>
-#include <thread>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
@@ -17,7 +17,14 @@
 namespace qvac_lib_inference_addon_llama {
 
 inline LlamaModel* getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return dynamic_cast<LlamaModel*>(&instance.addonCpp->model.get());
+  return static_cast<LlamaModel*>(&instance.addonCpp->model.get());
+}
+
+inline std::function<void(const std::string&)> makeQueueOutputCallback(
+    qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return [&instance](const std::string& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s));
+  };
 }
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -55,9 +62,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   vector<pair<string, js::Object>> inputs = JsInterface::getInputsArray(args);
 
   LlamaModel::Prompt prompt;
-  prompt.outputCallback = [&](const string& tokenOut) {
-    instance.addonCpp->outputQueue->queueResult(any(tokenOut));
-  };
+  prompt.outputCallback = makeQueueOutputCallback(instance);
 
   auto parseText = [&](js::Object& inputObj) {
     if (!prompt.input.empty()) {
@@ -110,17 +115,15 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
   LlamaModel* llamaModel = getLlamaModel(instance);
-  if (llamaModel != nullptr && llamaModel->isFinetuneRunning()) {
-    if (llamaModel->requestPause()) {
-      return js::JsAsyncTask::run(env, [llamaModel]() {
-        llamaModel->waitUntilFinetuningPauseComplete();
-      });
-    }
-  }
-  instance.addonCpp->cancelJob();
-  return js::JsAsyncTask::run(env, []() {});
+  auto* addonCpp = instance.addonCpp.get();
+
+  return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
+    if (llamaModel && llamaModel->isFinetuneRunning() && llamaModel->requestPause())
+      llamaModel->waitUntilFinetuningPauseComplete();
+    else
+      addonCpp->cancelJob();
+  });
 }
 JSCATCH
 
@@ -129,7 +132,6 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace std;
 
   JsArgsParser args(env, info);
-
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
   LlamaModel* llamaModel = getLlamaModel(instance);
@@ -139,41 +141,24 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         "Model not available or not a LlamaModel");
   }
 
-  try {
-    FinetuningParameters finetuningArgs = args.getObject<FinetuningParameters>(
-        1, "finetuningParams",
-        [](js_env_t* e, js::Object& jsObj) {
-          return FinetuningParameters(e, jsObj);
-        });
-    llamaModel->setFinetuneParams(std::move(finetuningArgs));
-  } catch (const StatusError&) {
+  auto paramsOpt = args.tryGetObject<FinetuningParameters>(
+      1, "finetuningParams",
+      [](js_env_t* e, js::Object& jsObj) { return FinetuningParameters(e, jsObj); });
+  if (paramsOpt.has_value()) {
+    llamaModel->setFinetuneParams(std::move(*paramsOpt));
   }
-
-  std::optional<FinetuningParameters> paramsOpt =
-      llamaModel->getFinetuneParams();
+  paramsOpt = llamaModel->getFinetuneParams();
   if (!paramsOpt.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
         "Finetuning parameters not provided and not stored");
   }
-  FinetuningParameters params = *paramsOpt;
 
-  auto* outputQueue = instance.addonCpp->outputQueue.get();
-  auto enqueueLog = [outputQueue](const string& message) {
-    if (outputQueue != nullptr) {
-      outputQueue->queueResult(any(message));
-    }
-  };
+  LlamaModel::Prompt prompt;
+  prompt.finetuningParams = *paramsOpt;
+  prompt.outputCallback = makeQueueOutputCallback(instance);
 
-  std::thread finetuneThread([llamaModel, params, enqueueLog]() {
-    try {
-      llamaModel->finetune(params, enqueueLog);
-    } catch (const std::exception& e) {
-      std::cerr << "[ERROR] Finetuning thread exception: " << e.what() << std::endl;
-    }
-  });
-  finetuneThread.detach();
-
+  instance.addonCpp->runJob(any(std::move(prompt)));
   return nullptr;
 }
 JSCATCH

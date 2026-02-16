@@ -76,8 +76,7 @@ class LlmLlamacpp extends BaseInference {
     this._projectionModel = projectionModel
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._runQueueWaiter = Promise.resolve()
-    this._runQueueBusy = false
+    this._jobInProgress = false
     this._defaultFinetuneParams = finetuningParams ?? null
   }
 
@@ -210,26 +209,21 @@ class LlmLlamacpp extends BaseInference {
 
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
+      if (eventType === 'JobEnded' || eventType === 'Error') {
+        this._jobInProgress = false
+      }
       if (typeof data === 'string') {
         try {
           const obj = JSON.parse(data)
           if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
             this._finetuneCompletionResolve(obj.status)
             this._finetuneCompletionResolve = null
-            if (this._finetuneRelease) {
-              this._finetuneRelease()
-              this._finetuneRelease = null
-            }
             return
           }
           if (obj?.type === 'FinetunePaused') {
             if (this._finetuneCompletionResolve) {
               this._finetuneCompletionResolve('PAUSED')
               this._finetuneCompletionResolve = null
-            }
-            if (this._finetuneRelease) {
-              this._finetuneRelease()
-              this._finetuneRelease = null
             }
             return
           }
@@ -282,23 +276,6 @@ class LlmLlamacpp extends BaseInference {
     return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 
-  async _withExclusiveRun (fn) {
-    if (this._runQueueBusy) {
-      throw new Error(RUN_QUEUE_BUSY_ERROR)
-    }
-    const prev = this._runQueueWaiter || Promise.resolve()
-    let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    this._runQueueBusy = true
-    await prev
-    try {
-      return await fn()
-    } finally {
-      this._runQueueBusy = false
-      release()
-    }
-  }
-
   /**
    * Cancel the current task (or pause finetuning if finetune is running).
    */
@@ -315,42 +292,49 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
+    if (this._jobInProgress) {
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
+    }
     this.logger.info('Starting inference with prompt:', prompt)
-    return this._withExclusiveRun(async () => {
-      const textMessages = []
-      let mediaData = null
+    const textMessages = []
+    let mediaData = null
 
-      for (const message of prompt) {
-        if (message.role === 'user' &&
-            message.type === 'media' &&
-            message.content instanceof Uint8Array) {
-          if (mediaData !== null) {
-            throw new Error('Only one media message is supported at the moment')
-          }
-          mediaData = message.content
-          // Keep the message as a placeholder marker (with empty content) for tokenization
-          textMessages.push({ ...message, content: '' })
-        } else {
-          textMessages.push(message)
+    for (const message of prompt) {
+      if (message.role === 'user' &&
+          message.type === 'media' &&
+          message.content instanceof Uint8Array) {
+        if (mediaData !== null) {
+          throw new Error('Only one media message is supported at the moment')
         }
+        mediaData = message.content
+        // Keep the message as a placeholder marker (with empty content) for tokenization
+        textMessages.push({ ...message, content: '' })
+      } else {
+        textMessages.push(message)
       }
+    }
 
-      const promptMessages = []
+    const promptMessages = []
 
-      if (mediaData) {
-        promptMessages.push({ type: 'media', content: mediaData })
-      }
+    if (mediaData) {
+      promptMessages.push({ type: 'media', content: mediaData })
+    }
 
-      promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+    promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+    this._jobInProgress = true
+    try {
       await this.addon.runJob(promptMessages)
+    } catch (err) {
+      this._jobInProgress = false
+      throw err
+    }
 
-      // Only one job is supported at the moment, with hardcoded jobId 'job'
-      const response = this._createResponse('job')
+    // Only one job is supported at the moment, with hardcoded jobId 'job'
+    const response = this._createResponse('job')
 
-      this.logger.info('Inference job started successfully')
+    this.logger.info('Inference job started successfully')
 
-      return response
-    })
+    return response
   }
 
   async finetune (finetuningOptions = undefined) {
@@ -373,24 +357,8 @@ class LlmLlamacpp extends BaseInference {
       this.logger?.info?.('Addon loaded')
     }
 
-    if (this._runQueueBusy) {
+    if (this._jobInProgress) {
       throw new Error(RUN_QUEUE_BUSY_ERROR)
-    }
-
-    const prev = this._runQueueWaiter || Promise.resolve()
-    let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    this._runQueueBusy = true
-    this._finetuneRelease = () => {
-      this._runQueueBusy = false
-      release()
-    }
-
-    try {
-      await prev
-    } catch (e) {
-      this._finetuneRelease()
-      throw e
     }
 
     let resolveCompletion
@@ -405,12 +373,12 @@ class LlmLlamacpp extends BaseInference {
       await: () => completionPromise.then(status => ({ status }))
     }
 
+    this._jobInProgress = true
     try {
       await this.addon.finetune(paramsToSend)
       return handle
     } catch (err) {
-      this._finetuneRelease()
-      this._finetuneRelease = null
+      this._jobInProgress = false
       this._finetuneCompletionResolve = null
       rejectCompletion(err)
       throw err

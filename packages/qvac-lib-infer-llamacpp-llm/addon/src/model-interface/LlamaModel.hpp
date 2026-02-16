@@ -69,6 +69,8 @@ public:
     bool prefill = false;
     std::optional<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
+    std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
+        finetuningParams;
   };
 
   std::any process(const std::any& input) final;
@@ -124,8 +126,9 @@ public:
    * Finetune the model using LoRA.
    * @param params - finetuning parameters
    * @param logCallback - callback function for logging messages
+   * @return "IDLE" on success, "PAUSED" when paused, "ERROR" on failure
    */
-  void finetune(
+  std::string finetune(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       std::function<void(const std::string&)> logCallback = {});
 

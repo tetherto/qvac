@@ -227,7 +227,11 @@ std::any LlamaModel::process(const std::any& input) {
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
   }
-  return processPrompt(std::any_cast<Prompt>(input));
+  const Prompt& prompt = std::any_cast<const Prompt&>(input);
+  if (prompt.finetuningParams.has_value()) {
+    return std::any(finetune(*prompt.finetuningParams, prompt.outputCallback));
+  }
+  return processPrompt(prompt);
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
@@ -729,7 +733,7 @@ bool LlamaModel::LoadMedia(const std::vector<uint8_t>& input) {
 
 // Finetuning implementation
 #ifndef STANDALONE_TEST_BUILD
-void LlamaModel::finetune(
+std::string LlamaModel::finetune(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
     std::function<void(const std::string&)> logCallback) {
   using namespace llama_finetuning_helpers;
@@ -741,7 +745,7 @@ void LlamaModel::finetune(
     if (logCallback) {
       logCallback("ERROR: " + errorMsg);
     }
-    throw std::runtime_error(errorMsg);
+    return "ERROR";
   }
 
   try {
@@ -1019,6 +1023,7 @@ void LlamaModel::finetune(
         logCallback(R"({"type":"FinetuneComplete","status":"IDLE"})");
       }
     }
+    return wasPaused ? "PAUSED" : "IDLE";
   } catch (const std::exception& ex) {
     auto* state = getCurrentCheckpointState();
     if (state) state->setIdle();
@@ -1029,7 +1034,7 @@ void LlamaModel::finetune(
       logCallback(std::string{"Finetune error: "} + ex.what());
       logCallback(R"({"type":"FinetuneComplete","status":"ERROR"})");
     }
-    throw;
+    return "ERROR";
   }
 }
 

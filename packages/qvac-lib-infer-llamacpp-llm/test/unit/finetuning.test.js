@@ -45,10 +45,6 @@ function completeFinetuneWith (model, status = 'IDLE') {
   return () => {
     setImmediate(() => {
       if (model._finetuneCompletionResolve) model._finetuneCompletionResolve(status)
-      if (model._finetuneRelease) {
-        model._finetuneRelease()
-        model._finetuneRelease = null
-      }
     })
   }
 }
