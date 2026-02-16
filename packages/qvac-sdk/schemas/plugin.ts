@@ -177,3 +177,28 @@ export const pluginDefinitionRuntimeSchema = z
       .optional(),
   })
   .catchall(z.unknown());
+
+// ============================================
+// Plugin Path Constants
+// ============================================
+
+export const PLUGIN_LLM_PATH = "@qvac/sdk/llamacpp-completion/plugin" as const;
+export const PLUGIN_EMBEDDING_PATH =
+  "@qvac/sdk/llamacpp-embedding/plugin" as const;
+export const PLUGIN_WHISPER_PATH =
+  "@qvac/sdk/whispercpp-transcription/plugin" as const;
+export const PLUGIN_NMT_PATH = "@qvac/sdk/nmtcpp-translation/plugin" as const;
+export const PLUGIN_TTS_PATH = "@qvac/sdk/onnx-tts/plugin" as const;
+export const PLUGIN_OCR_PATH = "@qvac/sdk/onnx-ocr/plugin" as const;
+
+/** All built-in SDK plugin paths */
+export const SDK_DEFAULT_PLUGIN_PATHS = [
+  PLUGIN_LLM_PATH,
+  PLUGIN_EMBEDDING_PATH,
+  PLUGIN_WHISPER_PATH,
+  PLUGIN_NMT_PATH,
+  PLUGIN_TTS_PATH,
+  PLUGIN_OCR_PATH,
+] as const;
+
+export type BuiltinPluginPath = (typeof SDK_DEFAULT_PLUGIN_PATHS)[number];
