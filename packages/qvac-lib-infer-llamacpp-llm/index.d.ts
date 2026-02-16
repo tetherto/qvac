@@ -135,19 +135,7 @@ export default class LlmLlamacpp extends BaseInference {
 
   unload(): Promise<void>
 
-  pause(): Promise<void>
-
-  unpause(): Promise<void>
-
-  stop(): Promise<void>
-
   cancel(): Promise<void>
-
-  status(): Promise<any>
-
-  destroy(): Promise<void>
-
-  getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
 
   getApiDefinition(): string
 }
