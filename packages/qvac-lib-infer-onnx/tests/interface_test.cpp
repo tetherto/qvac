@@ -1,7 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "qvac-lib-infer-onnx-base/IOnnxSession.hpp"
+#include "qvac-onnx/IOnnxSession.hpp"
 
 using namespace onnx_addon;
 

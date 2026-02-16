@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "qvac-lib-infer-onnx-base/OnnxRuntime.hpp"
+#include "qvac-onnx/OnnxRuntime.hpp"
 
 namespace oa = onnx_addon;
 

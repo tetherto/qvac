@@ -5,8 +5,8 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-project(qvac-lib-infer-onnx-base
-  VERSION 2.0.0
+project(qvac-onnx
+  VERSION 1.0.0
   LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -26,40 +26,40 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(onnxruntime CONFIG REQUIRED)
 
-add_library(qvac-lib-infer-onnx-base INTERFACE)
+add_library(qvac-onnx INTERFACE)
 target_include_directories(
-  qvac-lib-infer-onnx-base
+  qvac-onnx
   INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(qvac-lib-infer-onnx-base INTERFACE onnxruntime::onnxruntime)
+target_link_libraries(qvac-onnx INTERFACE onnxruntime::onnxruntime)
 
-install(TARGETS qvac-lib-infer-onnx-base
-        EXPORT qvac-lib-infer-onnx-base_Targets
+install(TARGETS qvac-onnx
+        EXPORT qvac-onnx_Targets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file("qvac-lib-infer-onnx-baseConfigVersion.cmake"
+write_basic_package_version_file("qvac-onnxConfigVersion.cmake"
                                  VERSION ${PROJECT_VERSION}
                                  COMPATIBILITY SameMajorVersion)
 
 configure_package_config_file(
-  "${PROJECT_SOURCE_DIR}/cmake/qvac-lib-infer-onnx-baseConfig.cmake.in"
-  "${PROJECT_BINARY_DIR}/qvac-lib-infer-onnx-baseConfig.cmake"
+  "${PROJECT_SOURCE_DIR}/cmake/qvac-onnxConfig.cmake.in"
+  "${PROJECT_BINARY_DIR}/qvac-onnxConfig.cmake"
   INSTALL_DESTINATION
-  ${CMAKE_INSTALL_DATAROOTDIR}/qvac-lib-infer-onnx-base/cmake)
+  ${CMAKE_INSTALL_DATAROOTDIR}/qvac-onnx/cmake)
 
-install(EXPORT qvac-lib-infer-onnx-base_Targets
-        FILE qvac-lib-infer-onnx-baseTargets.cmake
-        NAMESPACE qvac-lib-infer-onnx-base::
-        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-lib-infer-onnx-base/cmake)
+install(EXPORT qvac-onnx_Targets
+        FILE qvac-onnxTargets.cmake
+        NAMESPACE qvac-onnx::
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-onnx/cmake)
 
-install(FILES "${PROJECT_BINARY_DIR}/qvac-lib-infer-onnx-baseConfig.cmake"
-              "${PROJECT_BINARY_DIR}/qvac-lib-infer-onnx-baseConfigVersion.cmake"
-        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-lib-infer-onnx-base/cmake)
+install(FILES "${PROJECT_BINARY_DIR}/qvac-onnxConfig.cmake"
+              "${PROJECT_BINARY_DIR}/qvac-onnxConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-onnx/cmake)
 
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/qvac-lib-infer-onnx-base DESTINATION include)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/qvac-onnx DESTINATION include)
 
 if(BUILD_TESTING)
     find_package(GTest CONFIG REQUIRED)
@@ -91,6 +91,6 @@ if(BUILD_TESTING)
         TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
     target_link_libraries(ort_tests PRIVATE
         GTest::gmock_main
-        qvac-lib-infer-onnx-base)
+        qvac-onnx)
     gtest_discover_tests(ort_tests)
 endif()

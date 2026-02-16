@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "qvac-lib-infer-onnx-base/OnnxTensor.hpp"
+#include "qvac-onnx/OnnxTensor.hpp"
 
 using namespace onnx_addon;
 

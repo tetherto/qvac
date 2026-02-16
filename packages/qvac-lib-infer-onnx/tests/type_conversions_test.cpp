@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "qvac-lib-infer-onnx-base/OnnxTypeConversions.hpp"
+#include "qvac-onnx/OnnxTypeConversions.hpp"
 
 namespace oa = onnx_addon;
 

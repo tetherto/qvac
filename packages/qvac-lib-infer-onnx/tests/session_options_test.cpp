@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "qvac-lib-infer-onnx-base/OnnxSessionOptionsBuilder.hpp"
+#include "qvac-onnx/OnnxSessionOptionsBuilder.hpp"
 
 // Do not use "using namespace onnx_addon" here because the ORT C API
 // defines a global GraphOptimizationLevel typedef that collides with

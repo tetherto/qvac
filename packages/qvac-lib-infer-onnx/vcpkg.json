@@ -1,6 +1,6 @@
 {
-  "name": "qvac-lib-infer-onnx-base",
-  "version": "2.0.0",
+  "name": "qvac-onnx",
+  "version": "1.0.0",
   "dependencies": [
     {
       "name": "onnxruntime",

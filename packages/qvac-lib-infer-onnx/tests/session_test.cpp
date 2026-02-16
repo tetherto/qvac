@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "qvac-lib-infer-onnx-base/OnnxSession.hpp"
+#include "qvac-onnx/OnnxSession.hpp"
 
 // Do not use "using namespace onnx_addon" because ORT C API defines a global
 // GraphOptimizationLevel typedef that collides with onnx_addon's.

@@ -1,4 +1,4 @@
-# qvac-lib-infer-onnx-base
+# qvac-lib-infer-onnx
 
 Header-only C++ library providing ONNX Runtime session management for QVAC inference addons.
 
@@ -24,8 +24,8 @@ Add to your `vcpkg.json`:
 {
   "dependencies": [
     {
-      "name": "qvac-lib-infer-onnx-base",
-      "version>=": "2.0.0"
+      "name": "qvac-onnx",
+      "version>=": "1.0.0"
     }
   ]
 }
@@ -36,14 +36,14 @@ Consumer addons should **not** add `onnxruntime` as a direct dependency. The bas
 ### CMake
 
 ```cmake
-find_package(qvac-lib-infer-onnx-base CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE qvac-lib-infer-onnx-base::qvac-lib-infer-onnx-base)
+find_package(qvac-lib-infer-onnx CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE qvac-lib-infer-onnx::qvac-lib-infer-onnx)
 ```
 
 ### C++ API
 
 ```cpp
-#include <qvac-lib-infer-onnx-base/OnnxSession.hpp>
+#include <qvac-lib-infer-onnx/OnnxSession.hpp>
 
 // Create a session
 onnx_addon::SessionConfig config{
@@ -72,7 +72,7 @@ auto results = session.run(input);
 Consumers that only need to accept sessions by reference can use the interface headers without pulling in ONNX Runtime:
 
 ```cpp
-#include <qvac-lib-infer-onnx-base/IOnnxSession.hpp>
+#include <qvac-lib-infer-onnx/IOnnxSession.hpp>
 
 void process(onnx_addon::IOnnxSession& session) {
     auto results = session.run(input);
@@ -118,7 +118,7 @@ onnx_addon::SessionConfig config{
 ## Building
 
 ```bash
-cmake --preset default
+cmake --preset default -B build
 cmake --build build
 ctest --test-dir build
 ```
