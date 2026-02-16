@@ -38,9 +38,9 @@ export function generateWorkerEntry (pluginSpecifiers, sdkName) {
 ${pluginsList}
  */
 
-import { initializeWorkerCore, ensureRPCSetup } from "${sdkName}/dist/server/worker-core.js";
-import { registerPlugin } from "${sdkName}/dist/server/plugins/index.js";
-import { getServerLogger } from "${sdkName}/dist/logging/index.js";
+import { initializeWorkerCore, ensureRPCSetup } from "${sdkName}/worker-core";
+import { registerPlugin } from "${sdkName}/plugins";
+import { getServerLogger } from "${sdkName}/logging";
 
 ${importsStr}
 
@@ -98,7 +98,7 @@ export function generatePearWorkerEntry (pluginSpecifiers, sdkName, appWorkerImp
 ${pluginsList}
  */
 
-import { registerPlugin } from "${sdkName}/dist/server/plugins/index.js";
+import { registerPlugin } from "${sdkName}/plugins";
 
 ${importsStr}
 
