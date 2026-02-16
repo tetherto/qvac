@@ -5,7 +5,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const ONNXTTS = require('../..')
 const { createWavBuffer } = require('./wav-helper')
-const { readWavAsFloat32 } = require('../../examples/wav-generator-helper')
+const { readWavAsFloat32, resampleLinear } = require('./wav-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -16,24 +16,6 @@ function getBaseDir () {
 }
 
 /**
- * Generate synthetic reference audio for testing purposes.
- * Creates a sine wave tone that can be used as reference audio when no real audio file is available.
- * @param {number} [durationSec=1.0] - Duration in seconds
- * @param {number} [sampleRate=24000] - Sample rate (Chatterbox expects 24kHz)
- * @param {number} [frequency=440] - Frequency of sine wave in Hz (default A4 note)
- * @returns {Float32Array} Audio samples in range [-1, 1]
- */
-function generateSyntheticReferenceAudio (durationSec = 1.0, sampleRate = 24000, frequency = 440) {
-  const numSamples = Math.floor(sampleRate * durationSec)
-  const samples = new Float32Array(numSamples)
-  for (let i = 0; i < numSamples; i++) {
-    // Generate sine wave with amplitude 0.5 to avoid clipping
-    samples[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.5
-  }
-  return samples
-}
-
-/**
  * Load Chatterbox TTS model
  * @param {Object} params - Model parameters
  * @param {string} params.tokenizerPath - Path to tokenizer JSON
@@ -41,9 +23,8 @@ function generateSyntheticReferenceAudio (durationSec = 1.0, sampleRate = 24000,
  * @param {string} params.embedTokensPath - Path to embed tokens ONNX
  * @param {string} params.conditionalDecoderPath - Path to conditional decoder ONNX
  * @param {string} params.languageModelPath - Path to language model ONNX
- * @param {string} [params.refWavPath] - Path to reference audio WAV file (optional if referenceAudio provided)
- * @param {Float32Array} [params.referenceAudio] - Reference audio samples directly (optional if refWavPath provided)
- * @param {boolean} [params.useSyntheticAudio=false] - Generate synthetic audio if no ref audio available
+ * @param {string} [params.refWavPath] - Path to reference audio WAV file (defaults to test/reference-audio/jfk.wav)
+ * @param {Float32Array} [params.referenceAudio] - Reference audio samples directly
  * @param {string} [params.language='en'] - Language code
  * @param {boolean} [params.useGPU=false] - Whether to use GPU
  * @returns {Promise<ONNXTTS>} Loaded TTS model
@@ -82,14 +63,27 @@ async function loadChatterboxTTS (params = {}) {
     }
   }
 
-  // Generate synthetic audio if needed and allowed
-  if (!referenceAudio && params.useSyntheticAudio) {
-    referenceAudio = generateSyntheticReferenceAudio(1.0, 24000, 440)
-    console.log(`[Chatterbox] Using synthetic reference audio (${referenceAudio.length} samples, 24000 Hz)`)
-  }
-
   if (!referenceAudio) {
-    throw new Error('No reference audio provided. Provide refWavPath, referenceAudio, or set useSyntheticAudio=true')
+    let defaultRefPath = params.refWavPath
+    if (!defaultRefPath) {
+      if (isMobile && global.assetPaths) {
+        const assetKey = '../../testAssets/jfk.wav'
+        if (global.assetPaths[assetKey]) {
+          defaultRefPath = global.assetPaths[assetKey].replace('file://', '')
+        }
+      }
+      if (!defaultRefPath) {
+        defaultRefPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+      }
+    }
+    const { samples, sampleRate: refRate } = readWavAsFloat32(defaultRefPath)
+    if (refRate !== 24000) {
+      console.log(`[Chatterbox] Resampling reference audio from ${refRate}Hz to 24000Hz`)
+      referenceAudio = resampleLinear(samples, refRate, 24000)
+    } else {
+      referenceAudio = samples
+    }
+    console.log(`[Chatterbox] Using reference audio: ${defaultRefPath} (${referenceAudio.length} samples @ 24kHz)`)
   }
 
   const args = {
@@ -183,21 +177,26 @@ async function runChatterboxTTS (model, params, expectation = {}) {
     // Create WAV buffer from samples (Chatterbox uses 24kHz)
     const wavBuffer = createWavBuffer(outputArray, sampleRate)
 
-    // Save WAV file if requested
+    // Save WAV file if requested (skip on mobile unless explicit path provided)
     if (params.saveWav === true) {
-      const defaultWavPath = path.join(__dirname, '../output/chatterbox-test.wav')
-      const wavPath = params.wavOutputPath || defaultWavPath
+      // On mobile, only save if an explicit writable path is provided
+      if (isMobile && !params.wavOutputPath) {
+        console.log('[Chatterbox] Skipping WAV save on mobile (no writable path provided)')
+      } else {
+        const defaultWavPath = path.join(__dirname, '../output/chatterbox-test.wav')
+        const wavPath = params.wavOutputPath || defaultWavPath
 
-      // Ensure output directory exists
-      const outputDir = path.dirname(wavPath)
-      try {
-        fs.mkdirSync(outputDir, { recursive: true })
-      } catch (err) {
-        // Directory might already exist, ignore error
+        // Ensure output directory exists
+        const outputDir = path.dirname(wavPath)
+        try {
+          fs.mkdirSync(outputDir, { recursive: true })
+        } catch (err) {
+          // Directory might already exist, ignore error
+        }
+
+        fs.writeFileSync(wavPath, wavBuffer)
+        console.log(`[Chatterbox] Saved WAV to: ${wavPath}`)
       }
-
-      fs.writeFileSync(wavPath, wavBuffer)
-      console.log(`[Chatterbox] Saved WAV to: ${wavPath}`)
     }
 
     // Build output message
@@ -240,4 +239,4 @@ async function runChatterboxTTS (model, params, expectation = {}) {
   }
 }
 
-module.exports = { loadChatterboxTTS, runChatterboxTTS, generateSyntheticReferenceAudio }
+module.exports = { loadChatterboxTTS, runChatterboxTTS }

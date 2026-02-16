@@ -1,2 +1,2 @@
-// Simplified re-exports
+// Re-export all models
 export * from "./models";

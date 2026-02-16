@@ -1,0 +1,8 @@
+commit=47aca0a86e3639240111ef788768bdd86b35d89b
+timestamp=2026-02-13T10:29:54.367Z
+previous_count=237
+new_count=238
+
+[added]
+BERGAMOT_ZH_EN_VOCAB
+
