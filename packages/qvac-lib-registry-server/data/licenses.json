@@ -33,5 +33,10 @@
     "spdxId": "CC-BY-4.0",
     "name": "Creative Commons Attribution 4.0 International",
     "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  {
+    "spdxId": "openrail",
+    "name": "Open RAIL License",
+    "url": "https://huggingface.co/spaces/bigscience/license"
   }
 ]
