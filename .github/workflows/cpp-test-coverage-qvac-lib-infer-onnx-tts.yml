@@ -153,7 +153,7 @@ jobs:
         id: cpp_tests
         working-directory: ${{ env.WORKDIR }}
         run: |
-          npm run test:cpp:run
+          npm run coverage:cpp:run
         continue-on-error: true
 
       - name: Generate Coverage Report

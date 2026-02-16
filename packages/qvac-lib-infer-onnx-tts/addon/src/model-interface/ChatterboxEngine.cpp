@@ -1,4 +1,5 @@
 #include "ChatterboxEngine.hpp"
+#include "FileUtils.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -40,23 +41,6 @@ void validateConfigs(const qvac::ttslib::chatterbox::ChatterboxConfig &cfg) {
                 cfg.language) == SUPPORTED_LANGUAGES.end()) {
     throw std::invalid_argument("Unsupported language: " + cfg.language);
   }
-}
-
-std::string LoadBytesFromFile(const std::string &path) {
-  std::ifstream fs(path, std::ios::in | std::ios::binary);
-
-  if (fs.fail()) {
-    throw std::runtime_error("Cannot open tokenizer file: " + path);
-  }
-
-  std::string data;
-  fs.seekg(0, std::ios::end);
-  const size_t size = static_cast<size_t>(fs.tellg());
-  fs.seekg(0, std::ios::beg);
-  data.resize(size);
-  fs.read(data.data(), size);
-
-  return data;
 }
 
 void penalizeRepetitionLogits(std::vector<float> &logits,
@@ -130,7 +114,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   config_ = cfg;
   language_ = cfg.language;
 
-  const std::string blob = LoadBytesFromFile(cfg.tokenizerPath);
+  const std::string blob = qvac::ttslib::loadFileBytes(cfg.tokenizerPath);
   tokenizerHandle_ = tokenizers_new_from_str(blob.data(), blob.length());
 
   speechEncoderSession_ =
