@@ -1401,366 +1401,6 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Norman voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-norman",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-norman",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Lessac voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-lessac",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-lessac",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Amy voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Sharvard voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Davefx voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-davefx",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-davefx",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Thorsten voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-thorsten",
-      "de_de"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-thorsten",
-      "de_de"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Paola voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Irina voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-irina",
-      "ru_ru"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-irina",
-      "ru_ru"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx",
-    "engine": "@qvac/tts",
-    "description": "Gilles voice (low quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-gilles",
-      "fr_fr"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-gilles",
-      "fr_fr"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-tugao",
-      "pt_pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-tugao",
-      "pt_pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Cadu voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-cadu",
-      "pt_br"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-cadu",
-      "pt_br"
-    ],
-    "notes": ""
-  },
-  {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
@@ -1877,7 +1517,7 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
@@ -1909,7 +1549,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
@@ -1970,7 +1610,7 @@
     "description": "Fine-tuned for Norwegian",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2207,7 +1847,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus-ggml",
@@ -2285,7 +1925,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
@@ -2429,7 +2069,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
@@ -2494,7 +2134,7 @@
     "description": "Fine-tuned for French",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2510,7 +2150,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2526,7 +2166,7 @@
     "description": "Fine-tuned for German",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2542,7 +2182,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2558,7 +2198,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2574,7 +2214,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2782,7 +2422,7 @@
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -2798,7 +2438,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -2973,7 +2613,7 @@
     "description": "Bergamot lexical shortlist ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -2989,7 +2629,7 @@
     "description": "Bergamot metadata ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3005,7 +2645,7 @@
     "description": "Bergamot NMT model ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3021,7 +2661,7 @@
     "description": "Bergamot vocabulary ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3037,7 +2677,7 @@
     "description": "Bergamot lexical shortlist cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3053,7 +2693,7 @@
     "description": "Bergamot metadata cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3069,7 +2709,7 @@
     "description": "Bergamot NMT model cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3085,7 +2725,7 @@
     "description": "Bergamot vocabulary cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3101,7 +2741,7 @@
     "description": "Bergamot lexical shortlist en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3117,7 +2757,7 @@
     "description": "Bergamot metadata en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3133,7 +2773,7 @@
     "description": "Bergamot NMT model en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3149,7 +2789,7 @@
     "description": "Bergamot vocabulary en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3165,7 +2805,7 @@
     "description": "Bergamot lexical shortlist en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3181,7 +2821,7 @@
     "description": "Bergamot metadata en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3197,7 +2837,7 @@
     "description": "Bergamot NMT model en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3213,7 +2853,7 @@
     "description": "Bergamot vocabulary en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3229,7 +2869,7 @@
     "description": "Bergamot lexical shortlist en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3245,7 +2885,7 @@
     "description": "Bergamot metadata en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3261,7 +2901,7 @@
     "description": "Bergamot NMT model en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3277,7 +2917,7 @@
     "description": "Bergamot vocabulary en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3293,7 +2933,7 @@
     "description": "Bergamot lexical shortlist en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3309,7 +2949,7 @@
     "description": "Bergamot metadata en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3325,7 +2965,7 @@
     "description": "Bergamot NMT model en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3341,7 +2981,7 @@
     "description": "Bergamot vocabulary en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3357,7 +2997,7 @@
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3373,7 +3013,7 @@
     "description": "Bergamot metadata en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3389,7 +3029,7 @@
     "description": "Bergamot NMT model en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3405,7 +3045,7 @@
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3421,7 +3061,7 @@
     "description": "Bergamot lexical shortlist en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3437,7 +3077,7 @@
     "description": "Bergamot metadata en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3453,7 +3093,7 @@
     "description": "Bergamot NMT model en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3469,7 +3109,7 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3485,7 +3125,7 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3501,7 +3141,7 @@
     "description": "Bergamot lexical shortlist en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3517,7 +3157,7 @@
     "description": "Bergamot metadata en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3533,7 +3173,7 @@
     "description": "Bergamot NMT model en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3549,7 +3189,7 @@
     "description": "Bergamot vocabulary en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3565,7 +3205,7 @@
     "description": "Bergamot lexical shortlist en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3581,7 +3221,7 @@
     "description": "Bergamot metadata en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3597,7 +3237,7 @@
     "description": "Bergamot NMT model en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3613,7 +3253,7 @@
     "description": "Bergamot vocabulary en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3629,7 +3269,7 @@
     "description": "Bergamot lexical shortlist en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3645,7 +3285,7 @@
     "description": "Bergamot metadata en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3661,7 +3301,7 @@
     "description": "Bergamot NMT model en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3677,7 +3317,7 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3693,7 +3333,7 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3709,7 +3349,7 @@
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3725,7 +3365,7 @@
     "description": "Bergamot metadata es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3741,7 +3381,7 @@
     "description": "Bergamot NMT model es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3757,7 +3397,7 @@
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3773,7 +3413,7 @@
     "description": "Bergamot lexical shortlist fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3789,7 +3429,7 @@
     "description": "Bergamot metadata fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3805,7 +3445,7 @@
     "description": "Bergamot NMT model fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3821,7 +3461,7 @@
     "description": "Bergamot vocabulary fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3837,7 +3477,7 @@
     "description": "Bergamot lexical shortlist it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3853,7 +3493,7 @@
     "description": "Bergamot metadata it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3869,7 +3509,7 @@
     "description": "Bergamot NMT model it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3885,7 +3525,7 @@
     "description": "Bergamot vocabulary it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3901,7 +3541,7 @@
     "description": "Bergamot lexical shortlist ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3917,7 +3557,7 @@
     "description": "Bergamot metadata ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3933,7 +3573,7 @@
     "description": "Bergamot NMT model ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3949,7 +3589,7 @@
     "description": "Bergamot vocabulary ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3965,7 +3605,7 @@
     "description": "Bergamot lexical shortlist pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3981,7 +3621,7 @@
     "description": "Bergamot metadata pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -3997,7 +3637,7 @@
     "description": "Bergamot NMT model pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4013,7 +3653,7 @@
     "description": "Bergamot vocabulary pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4029,7 +3669,7 @@
     "description": "Bergamot lexical shortlist ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4045,7 +3685,7 @@
     "description": "Bergamot metadata ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4061,7 +3701,7 @@
     "description": "Bergamot NMT model ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4077,7 +3717,7 @@
     "description": "Bergamot vocabulary ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4093,7 +3733,7 @@
     "description": "Bergamot lexical shortlist zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4109,7 +3749,7 @@
     "description": "Bergamot metadata zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4125,7 +3765,7 @@
     "description": "Bergamot NMT model zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
@@ -4141,7 +3781,7 @@
     "description": "Bergamot vocabulary zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
