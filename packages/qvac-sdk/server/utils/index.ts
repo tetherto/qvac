@@ -1,5 +1,4 @@
 export * from "./archive";
-export * from "./audio/decoder";
 export * from "./cache";
 export * from "./checksum";
 export * from "./config-transform";

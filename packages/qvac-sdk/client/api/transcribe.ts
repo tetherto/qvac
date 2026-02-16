@@ -4,7 +4,6 @@ import {
   type TranscribeClientParams,
 } from "@/schemas";
 import { stream } from "@/client/rpc/rpc-client";
-import { TranscriptionFailedError } from "@/utils/errors-client";
 
 /**
  * This function streams audio transcription results in real-time, yielding
@@ -31,10 +30,6 @@ export async function* transcribeStream(params: TranscribeClientParams) {
   for await (const response of stream(request)) {
     if (response.type === "transcribeStream") {
       const streamResponse = transcribeStreamResponseSchema.parse(response);
-
-      if (streamResponse.error) {
-        throw new TranscriptionFailedError(streamResponse.error);
-      }
 
       if (streamResponse.text) {
         yield streamResponse.text;

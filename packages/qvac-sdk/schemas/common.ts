@@ -50,6 +50,12 @@ import {
 } from "./get-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
+  pluginInvokeRequestSchema,
+  pluginInvokeResponseSchema,
+  pluginInvokeStreamRequestSchema,
+  pluginInvokeStreamResponseSchema,
+} from "./plugin";
+import {
   modelRegistryListRequestSchema,
   modelRegistryListResponseSchema,
   modelRegistrySearchRequestSchema,
@@ -76,6 +82,8 @@ export const requestSchema = z.union([
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   ocrStreamRequestSchema,
+  pluginInvokeRequestSchema,
+  pluginInvokeStreamRequestSchema,
   modelRegistryListRequestSchema,
   modelRegistrySearchRequestSchema,
   modelRegistryGetModelRequestSchema,
@@ -102,6 +110,8 @@ export const responseSchema = z.discriminatedUnion("type", [
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   ocrStreamResponseSchema,
+  pluginInvokeResponseSchema,
+  pluginInvokeStreamResponseSchema,
   modelRegistryListResponseSchema,
   modelRegistrySearchResponseSchema,
   modelRegistryGetModelResponseSchema,

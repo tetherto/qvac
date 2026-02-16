@@ -52,18 +52,6 @@ export class ModelIsDelegatedError extends QvacErrorBase {
   }
 }
 
-export class UnknownModelTypeError extends QvacErrorBase {
-  constructor(modelType: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE,
-        [modelType],
-        cause,
-      ),
-    );
-  }
-}
-
 // ============== Model Loading Errors ==============
 
 export class ModelLoadFailedError extends QvacErrorBase {
@@ -780,6 +768,153 @@ export class DelegateConnectionFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.DELEGATE_CONNECTION_FAILED,
         [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class DelegateProviderError extends QvacErrorBase {
+  constructor(details: string, providerCode?: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR,
+        providerCode !== undefined
+          ? [details, String(providerCode)]
+          : [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCNoDataReceivedError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCUnknownRequestTypeError extends QvacErrorBase {
+  constructor(requestType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.RPC_UNKNOWN_REQUEST_TYPE,
+        [requestType],
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== Plugin Errors ==============
+
+export class PluginNotFoundError extends QvacErrorBase {
+  constructor(modelType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND,
+        [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginHandlerNotFoundError extends QvacErrorBase {
+  constructor(
+    modelType: string,
+    handler: string,
+    availableHandlers?: string[],
+    cause?: unknown,
+  ) {
+    const serializedHandlers = availableHandlers?.join(", ") ?? "";
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND,
+        [modelType, handler, serializedHandlers],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginRequestValidationFailedError extends QvacErrorBase {
+  constructor(handler: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED,
+        details ? [handler, details] : [handler],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginResponseValidationFailedError extends QvacErrorBase {
+  constructor(handler: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED,
+        details ? [handler, details] : [handler],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginAlreadyRegisteredError extends QvacErrorBase {
+  constructor(modelType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED,
+        [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginHandlerTypeMismatchError extends QvacErrorBase {
+  constructor(
+    handlerName: string,
+    expected: string,
+    actual: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_TYPE_MISMATCH,
+        [handlerName, expected, actual],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginLoggingInvalidError extends QvacErrorBase {
+  constructor(modelType: string, reason: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_LOGGING_INVALID,
+        [modelType, reason],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginDefinitionInvalidError extends QvacErrorBase {
+  constructor(modelType: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID,
+        [modelType, details],
         cause,
       ),
     );

@@ -83,9 +83,22 @@ export const SDK_SERVER_ERROR_CODES = {
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
 
-  // RPC/Delegation (Server-side) (53,700-53,899)
+  // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
+  DELEGATE_PROVIDER_ERROR: 53702,
+  RPC_NO_DATA_RECEIVED: 53703,
+  RPC_UNKNOWN_REQUEST_TYPE: 53704,
+
+  // Plugin Errors (53,850-53,899)
+  PLUGIN_NOT_FOUND: 53850,
+  PLUGIN_HANDLER_NOT_FOUND: 53851,
+  PLUGIN_REQUEST_VALIDATION_FAILED: 53852,
+  PLUGIN_RESPONSE_VALIDATION_FAILED: 53853,
+  PLUGIN_ALREADY_REGISTERED: 53854,
+  PLUGIN_HANDLER_TYPE_MISMATCH: 53855,
+  PLUGIN_LOGGING_INVALID: 53856,
+  PLUGIN_DEFINITION_INVALID: 53857,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -117,7 +130,8 @@ const serverErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE]: {
     name: "UNKNOWN_MODEL_TYPE",
-    message: (modelType: string) => `Unknown model type: ${modelType}`,
+    message: (modelType: string) =>
+      `Unknown model type: ${modelType}. If using a custom worker bundle, ensure the plugin for "${modelType}" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`,
   },
 
   // Model Loading Errors (52,200-52,399)
@@ -418,6 +432,64 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "DELEGATE_CONNECTION_FAILED",
     message: (details: string) =>
       `Failed to connect to delegated provider: ${details}`,
+  },
+  [SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
+    name: "DELEGATE_PROVIDER_ERROR",
+    message: (details: string, providerCode?: string) =>
+      `Delegated provider error: ${details}` +
+      (providerCode ? ` (code: ${providerCode})` : ""),
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED]: {
+    name: "RPC_NO_DATA_RECEIVED",
+    message: "No data received from request",
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_UNKNOWN_REQUEST_TYPE]: {
+    name: "RPC_UNKNOWN_REQUEST_TYPE",
+    message: (requestType: string) =>
+      `Unknown request type received: ${requestType}`,
+  },
+
+  // Plugin Errors (53,850-53,899)
+  [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
+    name: "PLUGIN_NOT_FOUND",
+    message: (modelType: string) =>
+      `Plugin not found for model type "${modelType}". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND]: {
+    name: "PLUGIN_HANDLER_NOT_FOUND",
+    message: (modelType: string, handler: string, availableHandlers?: string) =>
+      `Handler "${handler}" not found in plugin "${modelType}"` +
+      (availableHandlers ? `. Available handlers: ${availableHandlers}` : ""),
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED]: {
+    name: "PLUGIN_REQUEST_VALIDATION_FAILED",
+    message: (handler: string, details?: string) =>
+      `Request validation failed for handler "${handler}"${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED]: {
+    name: "PLUGIN_RESPONSE_VALIDATION_FAILED",
+    message: (handler: string, details?: string) =>
+      `Response validation failed for handler "${handler}"${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED]: {
+    name: "PLUGIN_ALREADY_REGISTERED",
+    message: (modelType: string) =>
+      `Plugin already registered for modelType: ${modelType}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_TYPE_MISMATCH]: {
+    name: "PLUGIN_HANDLER_TYPE_MISMATCH",
+    message: (handlerName: string, expected: string, actual: string) =>
+      `Handler "${handlerName}" is ${actual}, but was called as ${expected}. Use invokePlugin() for reply handlers and invokePluginStream() for streaming handlers.`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_LOGGING_INVALID]: {
+    name: "PLUGIN_LOGGING_INVALID",
+    message: (modelType: string, reason: string) =>
+      `Plugin "${modelType}" has invalid logging configuration: ${reason}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID]: {
+    name: "PLUGIN_DEFINITION_INVALID",
+    message: (modelType: string, details: string) =>
+      `Plugin definition invalid for "${modelType}": ${details}`,
   },
 
   // Security (53,900-53,949)
