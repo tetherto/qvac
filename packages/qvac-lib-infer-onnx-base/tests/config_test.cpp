@@ -12,6 +12,7 @@ TEST(SessionConfigTest, Defaults) {
   EXPECT_EQ(config.interOpThreads, 0);
   EXPECT_TRUE(config.enableMemoryPattern);
   EXPECT_TRUE(config.enableCpuMemArena);
+  EXPECT_TRUE(config.enableXnnpack);
 }
 
 TEST(SessionConfigTest, CustomValues) {
@@ -21,7 +22,8 @@ TEST(SessionConfigTest, CustomValues) {
       .intraOpThreads = 4,
       .interOpThreads = 2,
       .enableMemoryPattern = false,
-      .enableCpuMemArena = false};
+      .enableCpuMemArena = false,
+      .enableXnnpack = false};
 
   EXPECT_EQ(config.provider, ExecutionProvider::CPU);
   EXPECT_EQ(config.optimization, GraphOptimizationLevel::ALL);
@@ -29,6 +31,7 @@ TEST(SessionConfigTest, CustomValues) {
   EXPECT_EQ(config.interOpThreads, 2);
   EXPECT_FALSE(config.enableMemoryPattern);
   EXPECT_FALSE(config.enableCpuMemArena);
+  EXPECT_FALSE(config.enableXnnpack);
 }
 
 TEST(ExecutionProviderTest, AllValues) {

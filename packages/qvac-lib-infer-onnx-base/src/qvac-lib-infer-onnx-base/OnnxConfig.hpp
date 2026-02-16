@@ -26,6 +26,7 @@ struct SessionConfig {
   int interOpThreads = 0;  // 0 = auto
   bool enableMemoryPattern = true;
   bool enableCpuMemArena = true;
+  bool enableXnnpack = true;  // XNNPack EP for optimized CPU inference
 };
 
 }  // namespace onnx_addon

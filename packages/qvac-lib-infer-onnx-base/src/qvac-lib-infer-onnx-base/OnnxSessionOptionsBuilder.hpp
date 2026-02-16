@@ -12,6 +12,21 @@
 
 namespace onnx_addon {
 
+// Try to append XNNPack execution provider if available and enabled
+inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
+  try {
+    const auto providers = Ort::GetAvailableProviders();
+    const bool available =
+        std::find(providers.begin(), providers.end(),
+                  "XnnpackExecutionProvider") != providers.end();
+    if (available) {
+      sessionOptions.AppendExecutionProvider("XNNPACK", {});
+    }
+  } catch (const std::exception& /*e*/) {
+    // XNNPack not available, fall through to default CPU
+  }
+}
+
 // Build session options based on config
 inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
   Ort::SessionOptions sessionOptions;
@@ -38,6 +53,9 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
 
   // CPU-only mode
   if (config.provider == ExecutionProvider::CPU) {
+    if (config.enableXnnpack) {
+      tryAppendXnnpack(sessionOptions);
+    }
     sessionOptions.SetIntraOpNumThreads(config.intraOpThreads);
     sessionOptions.SetInterOpNumThreads(config.interOpThreads);
     return sessionOptions;
@@ -99,6 +117,11 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
     }
   }
 #endif
+
+  // XNNPack as CPU fallback accelerator alongside GPU providers
+  if (config.enableXnnpack) {
+    tryAppendXnnpack(sessionOptions);
+  }
 
   // Set threading options (applies to CPU fallback as well)
   sessionOptions.SetIntraOpNumThreads(config.intraOpThreads);

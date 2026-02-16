@@ -9,8 +9,9 @@ This library provides:
 - **`IOnnxSession`** - Abstract interface (no ONNX Runtime dependency)
 - **`OnnxConfig`** - Session configuration types (no ONNX Runtime dependency)
 - **`OnnxTensor`** - Tensor data types (no ONNX Runtime dependency)
+- **`OnnxRuntime`** - Singleton ONNX Runtime environment (shared across all sessions)
 - **`OnnxSession`** - Concrete session implementation (requires ONNX Runtime)
-- **`OnnxSessionOptionsBuilder`** - Platform-aware session options builder
+- **`OnnxSessionOptionsBuilder`** - Platform-aware session options builder (XNNPack enabled by default)
 - **`OnnxTypeConversions`** - Conversion between internal and ORT tensor types
 
 ## Usage
@@ -24,11 +25,13 @@ Add to your `vcpkg.json`:
   "dependencies": [
     {
       "name": "qvac-lib-infer-onnx-base",
-      "version>=": "1.0.0"
+      "version>=": "2.0.0"
     }
   ]
 }
 ```
+
+Consumer addons should **not** add `onnxruntime` as a direct dependency. The base library transitively provides it with the correct platform-specific features including XNNPack.
 
 ### CMake
 
@@ -76,6 +79,20 @@ void process(onnx_addon::IOnnxSession& session) {
 }
 ```
 
+### Singleton runtime
+
+All `OnnxSession` instances share a single process-wide `Ort::Env` via `OnnxRuntime::instance()`. This is automatic — consumers do not need to manage the environment. Multiple sessions across different addons loaded in the same process will reuse the same ONNX Runtime environment and thread pools.
+
+### XNNPack
+
+XNNPack is enabled by default for optimized CPU inference on all platforms. To disable it:
+
+```cpp
+onnx_addon::SessionConfig config{
+    .enableXnnpack = false
+};
+```
+
 ## Headers
 
 | Header | ORT Required | Description |
@@ -83,19 +100,20 @@ void process(onnx_addon::IOnnxSession& session) {
 | `IOnnxSession.hpp` | No | Abstract session interface |
 | `OnnxConfig.hpp` | No | Configuration types |
 | `OnnxTensor.hpp` | No | Tensor data types |
+| `OnnxRuntime.hpp` | Yes | Singleton ORT environment |
 | `OnnxSession.hpp` | Yes | Concrete session (header-only) |
-| `OnnxSessionOptionsBuilder.hpp` | Yes | Session options builder |
+| `OnnxSessionOptionsBuilder.hpp` | Yes | Session options builder + XNNPack |
 | `OnnxTypeConversions.hpp` | Yes | Type conversion utilities |
 
 ## Platform Support
 
 | Platform | Provider |
 |----------|----------|
-| Linux | CPU |
-| macOS | CPU, CoreML |
-| Windows | CPU, DirectML |
-| Android | CPU, NNAPI |
-| iOS | CPU, CoreML |
+| Linux | XNNPack, CPU |
+| macOS | CoreML, XNNPack, CPU |
+| Windows | DirectML, XNNPack, CPU |
+| Android | NNAPI, XNNPack, CPU |
+| iOS | CoreML, XNNPack, CPU |
 
 ## Building
 

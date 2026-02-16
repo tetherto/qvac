@@ -12,6 +12,8 @@
       "packages": [
         "directx-headers",
         "flatbuffers",
+        "fp16",
+        "fxdiv",
         "benchmark",
         "boost-config",
         "boost-mp11",
@@ -21,6 +23,8 @@
         "ms-gsl",
         "nlohmann-json",
         "optional-lite",
+        "psimd",
+        "pthreadpool",
         "re2",
         "safeint",
         "boost-cmake",

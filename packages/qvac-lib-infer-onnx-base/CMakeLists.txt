@@ -6,7 +6,7 @@ if(BUILD_TESTING)
 endif()
 
 project(qvac-lib-infer-onnx-base
-  VERSION 1.0.0
+  VERSION 2.0.0
   LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -66,12 +66,31 @@ if(BUILD_TESTING)
     include(GoogleTest)
     enable_testing()
 
+    # Unit tests: ORT-free (config, tensor types, interface mock)
     add_executable(
         unit_tests
         tests/tensor_types_test.cpp
         tests/config_test.cpp
+        tests/interface_test.cpp
     )
     target_include_directories(unit_tests PRIVATE src)
     target_link_libraries(unit_tests PRIVATE GTest::gmock_main)
     gtest_discover_tests(unit_tests)
+
+    # ORT tests: require ONNX Runtime (runtime singleton, type conversions,
+    # session options, session integration with test model fixtures)
+    add_executable(
+        ort_tests
+        tests/runtime_test.cpp
+        tests/type_conversions_test.cpp
+        tests/session_options_test.cpp
+        tests/session_test.cpp
+    )
+    target_include_directories(ort_tests PRIVATE src)
+    target_compile_definitions(ort_tests PRIVATE
+        TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    target_link_libraries(ort_tests PRIVATE
+        GTest::gmock_main
+        qvac-lib-infer-onnx-base)
+    gtest_discover_tests(ort_tests)
 endif()

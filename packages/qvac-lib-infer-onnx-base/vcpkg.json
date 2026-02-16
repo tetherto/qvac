@@ -1,6 +1,6 @@
 {
   "name": "qvac-lib-infer-onnx-base",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "dependencies": [
     {
       "name": "onnxruntime",
@@ -41,6 +41,15 @@
     }
   ],
   "features": {
+    "xnnpack": {
+      "description": "Enable XNNPack execution provider for optimized CPU inference",
+      "dependencies": [
+        {
+          "name": "onnxruntime",
+          "features": ["xnnpack-ep"]
+        }
+      ]
+    },
     "tests": {
       "description": "Build tests",
       "dependencies": [

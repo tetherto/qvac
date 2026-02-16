@@ -11,6 +11,7 @@
 
 #include "IOnnxSession.hpp"
 #include "OnnxConfig.hpp"
+#include "OnnxRuntime.hpp"
 #include "OnnxSessionOptionsBuilder.hpp"
 #include "OnnxTensor.hpp"
 #include "OnnxTypeConversions.hpp"
@@ -62,7 +63,6 @@ class OnnxSession : public IOnnxSession {
 
  private:
   std::string modelPath_;
-  Ort::Env env_{ORT_LOGGING_LEVEL_WARNING, "OnnxAddon"};
   std::unique_ptr<Ort::Session> session_;
   Ort::AllocatorWithDefaultOptions allocator_;
   std::vector<std::string> inputNames_;
@@ -78,15 +78,17 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     : modelPath_(modelPath) {
   Ort::SessionOptions sessionOptions = buildSessionOptions(config);
 
+  auto& env = OnnxRuntime::instance().env();
+
   // Create session
 #if defined(_WIN32) || defined(_WIN64)
   // Windows uses wide strings for paths
   std::wstring wideModelPath(modelPath.begin(), modelPath.end());
   session_ =
-      std::make_unique<Ort::Session>(env_, wideModelPath.c_str(), sessionOptions);
+      std::make_unique<Ort::Session>(env, wideModelPath.c_str(), sessionOptions);
 #else
   session_ =
-      std::make_unique<Ort::Session>(env_, modelPath.c_str(), sessionOptions);
+      std::make_unique<Ort::Session>(env, modelPath.c_str(), sessionOptions);
 #endif
 
   // Cache input names
