@@ -23,8 +23,7 @@ class LlamaInterface {
     this._handle = this._binding.createInstance(
       this,
       configurationParams,
-      outputCb,
-      null
+      outputCb
     )
   }
 
