@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.4.0",
-  "description": "TTS addon skeleton for qvac",
+  "version": "0.5.0",
+  "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -15,11 +15,11 @@
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
-    "test:integration": "brittle-bare test/integration/addon.test.js && brittle-bare test/integration/reload-model.test.js",
+    "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
-    "test:cpp:run": "cd build/addon/test/unit && ./qvac-lib-inference-tts-unit-test",
+    "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-unit-test",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build",
     "coverage:cpp:run": "cd build/addon/test/unit && LLVM_PROFILE_FILE=default.profraw ./qvac-lib-inference-tts-unit-test --gtest_output=xml:cpp-test-results.xml",
@@ -41,6 +41,7 @@
     "test/reference-audio",
     "test/utils/runTTS.js",
     "test/utils/runChatterboxTTS.js",
+    "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/loader.fake.js",

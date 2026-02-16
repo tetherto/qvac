@@ -1,4 +1,5 @@
 #include "OnnxInferSession.hpp"
+#include "OrtSessionFactory.hpp"
 
 #include <iostream>
 
@@ -75,21 +76,11 @@ OrtElementType onnxTypeToOurType(ONNXTensorElementDataType onnxType) {
 } // namespace
 
 OnnxInferSession::OnnxInferSession(const std::string &modelPath) {
-  static Ort::Env env(OrtLoggingLevel::ORT_LOGGING_LEVEL_WARNING,
-                      "ChatterboxEngine");
-
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
   options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-#ifdef _WIN32
-  // For Windows, Ort::Session expects a wide string (wchar_t*) for the model
-  // path
-  std::wstring wModelPath(modelPath.begin(), modelPath.end());
-  session_ = std::make_unique<Ort::Session>(env, wModelPath.c_str(), options);
-#else
-  session_ = std::make_unique<Ort::Session>(env, modelPath.c_str(), options);
-#endif
+  session_ = qvac::ttslib::createOrtSession(modelPath, options);
 
   // collect input names
   for (size_t i = 0; i < session_->GetInputCount(); i++) {

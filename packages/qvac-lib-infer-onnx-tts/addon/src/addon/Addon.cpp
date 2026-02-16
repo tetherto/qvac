@@ -13,7 +13,9 @@ template <>
 std::string
 qvac_lib_inference_addon_tts::Addon::getNextPiece(std::string &input,
                                                   size_t lastPieceEnd) {
-  auto pieceEnd = input.find_first_of(".!?", lastPieceEnd);
+  constexpr size_t minPieceSize = 25;
+  size_t searchFrom = std::min(lastPieceEnd + minPieceSize, input.size());
+  auto pieceEnd = input.find_first_of(".!?", searchFrom);
   if (pieceEnd != input.npos) {
     ++pieceEnd;
   }
