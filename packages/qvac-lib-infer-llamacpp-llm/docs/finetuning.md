@@ -112,8 +112,7 @@ await model.cancel()
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `trainDatasetDir` | string | Yes | — | Path to training dataset file (e.g. `.jsonl` for SFT, `.txt` for causal) |
-| `evalDatasetDir` | string | No | `""` | Path to a separate eval dataset file. Required when `validation.type` is `'dataset'`; must differ from `trainDatasetDir`. Same format as train. **Coming change:** the eval dataset path will be provided inside the `validation` object (e.g. `validation.path`) instead of this top-level option. |
-| `validation` | object | Yes | — | How to run validation. See [Validation](#validation) below. |
+| `validation` | object | Yes | — | How to run validation. When `type` is `'dataset'`, include `path` with the eval dataset file path. See [Validation](#validation) below. |
 | `outputParametersDir` | string | Yes | — | Directory (or file path) for the final LoRA adapter |
 | `numberOfEpochs` | number | Yes | — | Number of training epochs |
 | `learningRate` | number | Yes | — | Initial learning rate (e.g., 1e-5) |
@@ -141,33 +140,21 @@ await model.cancel()
 
 You **must** provide a `validation` object. It is required and there is no default.
 
-**Current shape:**
+**Shape:**
 
 ```js
 validation: {
   type: 'none' | 'split' | 'dataset',
-  fraction?: number   // only when type === 'split'; default 0.05
+  fraction?: number,   // only when type === 'split'; default 0.05
+  path?: string        // required when type === 'dataset'; path to eval dataset file
 }
 ```
-
-When `type` is `'dataset'`, the eval dataset path is currently provided as the top-level option `evalDatasetDir` (see table above).
-
-**Coming change:** The eval dataset path will be provided inside the `validation` object, for example:
-
-```js
-validation: {
-  type: 'dataset',
-  path: './eval.jsonl'   // planned: eval dataset path inside validation
-}
-```
-
-Until then, use `validation: { type: 'dataset' }` together with top-level `evalDatasetDir`.
 
 | `type` | Behavior |
 |--------|----------|
 | **`'none'`** | No validation. All data is used for training; no `val_loss` is computed. |
 | **`'split'`** | Reserve a fraction of the training data for validation (holdout). Use `fraction` (0–1); default `0.05` (5%). Logs `val_loss` each epoch. |
-| **`'dataset'`** | Use a separate eval file for validation. Currently requires top-level `evalDatasetDir` (different from `trainDatasetDir`). The eval dataset is loaded and validated after each epoch; logs `val_loss`. |
+| **`'dataset'`** | Use a separate eval file for validation. Set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as train. The eval dataset is loaded and validated after each epoch; logs `val_loss`. |
 
 **Examples:**
 
@@ -181,9 +168,8 @@ validation: { type: 'split' }
 // 10% of train data for validation
 validation: { type: 'split', fraction: 0.1 }
 
-// Separate eval file for validation (current: path at top level)
-validation: { type: 'dataset' },
-evalDatasetDir: './eval.jsonl'
+// Separate eval file for validation
+validation: { type: 'dataset', path: './eval.jsonl' }
 ```
 
 ---
@@ -327,7 +313,7 @@ sequenceDiagram
 |-----------|------|
 | `batchSize` | Batch size is controlled by `microBatchSize`. |
 | `warmupRatio` | Warmup steps = `warmupRatio × totalSteps` when `warmupRatioSet: true`. |
-| `evalDatasetDir` | Required when `validation.type` is `'dataset'`; must be a path different from `trainDatasetDir`. Same format as the training file. Planned: eval path will move into `validation` (e.g. `validation.path`). |
+| `validation.path` | When `validation.type` is `'dataset'`, set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as the training file. The JS layer copies this to `evalDatasetDir` when calling the addon. |
 
 ### C++ Backend Overview
 
@@ -420,8 +406,7 @@ async function main() {
 
   const finetuneOptions = {
     trainDatasetDir: './examples/input/small_train_HF.jsonl',
-    evalDatasetDir: './examples/input/eval_HF.jsonl',
-    validation: { type: 'dataset' },
+    validation: { type: 'dataset', path: './examples/input/eval_HF.jsonl' },
     numberOfEpochs: 8,
     learningRate: 1e-5,
     lrMin: 1e-8,

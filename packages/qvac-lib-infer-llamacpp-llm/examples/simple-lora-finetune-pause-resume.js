@@ -171,8 +171,7 @@ async function main () {
 
     const finetuneOptions = {
       trainDatasetDir: trainDatasetPath,
-    //  evalDatasetDir: evalDatasetPath,
-      validation: { type: 'split'},
+      validation: { type: 'dataset' },
       numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,
