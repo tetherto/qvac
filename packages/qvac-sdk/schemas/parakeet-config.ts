@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Only TDT is currently supported
-// Other variants (ctc, eou, sortformer) can be added once tested upstream
+// Other variants (ctc, eou, sortformer) can be added once available upstream
 // and their download logic is implemented in http.ts.
 export const parakeetModelTypeEnumSchema = z.enum(["tdt"]);
 export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
