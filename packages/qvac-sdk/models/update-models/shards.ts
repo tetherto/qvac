@@ -21,9 +21,7 @@ export function detectShardedModel(filename: string): ShardDetection {
   return { isSharded: false };
 }
 
-export function groupShardedModels(
-  models: ProcessedModel[],
-): ProcessedModel[] {
+export function groupShardedModels(models: ProcessedModel[]): ProcessedModel[] {
   const shardGroups = new Map<string, ProcessedModel[]>();
   const nonShardedModels: ProcessedModel[] = [];
 

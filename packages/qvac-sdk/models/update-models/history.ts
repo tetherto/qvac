@@ -49,12 +49,8 @@ export function compareModels(
   const currentPaths = new Set(currentModels.map((m) => m.registryPath));
   const remotePaths = new Set(remoteModels.map((m) => m.registryPath));
 
-  const added = remoteModels.filter(
-    (m) => !currentPaths.has(m.registryPath),
-  );
-  const removed = currentModels.filter(
-    (m) => !remotePaths.has(m.registryPath),
-  );
+  const added = remoteModels.filter((m) => !currentPaths.has(m.registryPath));
+  const removed = currentModels.filter((m) => !remotePaths.has(m.registryPath));
 
   return { added, removed };
 }

@@ -1,6 +1,6 @@
 import fs from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import {
   CacheDirNotAbsoluteError,
   CacheDirNotWritableError,

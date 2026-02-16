@@ -51,7 +51,8 @@ function processAndName(entry: TestModelEntry): {
   // processRegistryModel expects QVACModelEntry — our TestModelEntry is
   // structurally compatible so we cast through `any`.
   const model = processRegistryModel(entry as any);
-  if (!model) throw new Error(`processRegistryModel returned null for ${entry.path}`);
+  if (!model)
+    throw new Error(`processRegistryModel returned null for ${entry.path}`);
 
   const exportName = generateExportName({
     path: model.registryPath,
@@ -93,14 +94,18 @@ test("toHexString: returns empty string for undefined", (t: any) => {
 
 test("extractModelName: extracts second path segment", (t: any) => {
   t.is(
-    extractModelName("ChristianAzinn/gte-large-gguf/blob/abc123/gte-large_fp16.gguf"),
+    extractModelName(
+      "ChristianAzinn/gte-large-gguf/blob/abc123/gte-large_fp16.gguf",
+    ),
     "gte-large-gguf",
   );
 });
 
 test("extractModelName: extracts from s3-style path", (t: any) => {
   t.is(
-    extractModelName("qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf"),
+    extractModelName(
+      "qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
+    ),
     "ggml",
   );
 });
@@ -136,16 +141,25 @@ test("embeddings: GTE-Large FP16 — full field mapping", (t: any) => {
   });
 
   // Field mapping
-  t.is(model.registryPath, "ChristianAzinn/gte-large-gguf/blob/f9fa5479908e72c2a8b9d6ba112911cd1e51be53/gte-large_fp16.gguf");
+  t.is(
+    model.registryPath,
+    "ChristianAzinn/gte-large-gguf/blob/f9fa5479908e72c2a8b9d6ba112911cd1e51be53/gte-large_fp16.gguf",
+  );
   t.is(model.registrySource, "hf");
-  t.is(model.blobCoreKey, "34b0ed5cad561852a8a42288eb9b24a9d7859ab633a184ef0f433bf3bf19045e");
+  t.is(
+    model.blobCoreKey,
+    "34b0ed5cad561852a8a42288eb9b24a9d7859ab633a184ef0f433bf3bf19045e",
+  );
   t.is(model.blobBlockOffset, 278131);
   t.is(model.blobBlockLength, 10218);
   t.is(model.blobByteOffset, 18226816682);
   t.is(model.modelId, "gte-large_fp16.gguf");
   t.is(model.addon, "embeddings");
   t.is(model.expectedSize, 669603712);
-  t.is(model.sha256Checksum, "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb");
+  t.is(
+    model.sha256Checksum,
+    "939f1fb3fcc70f2a250a7e7ad7c2fbdc1397d46f9a8055d053e451829c5293fb",
+  );
   t.is(model.engine, "llamacpp-embedding");
   t.is(model.quantization, "fp16");
   t.is(model.params, "");
@@ -185,15 +199,25 @@ test("whisper: tiny — full field mapping with legacy engine", (t: any) => {
     },
   });
 
-  t.is(model.registryPath, "ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin");
+  t.is(
+    model.registryPath,
+    "ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin",
+  );
   t.is(model.registrySource, "hf");
   t.is(model.blobCoreKey, "aa".repeat(32));
   t.is(model.blobBlockOffset, 1000);
   t.is(model.blobBlockLength, 50);
   t.is(model.blobByteOffset, 5000000);
   t.is(model.expectedSize, 78161756);
-  t.is(model.sha256Checksum, "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21");
-  t.is(model.engine, "whispercpp-transcription", "legacy engine resolved to canonical");
+  t.is(
+    model.sha256Checksum,
+    "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+  );
+  t.is(
+    model.engine,
+    "whispercpp-transcription",
+    "legacy engine resolved to canonical",
+  );
   t.is(model.addon, "whisper");
   t.is(model.modelId, "ggml-tiny.bin");
   t.is(model.quantization, "");
@@ -233,7 +257,10 @@ test("whisper: English-only small.en q8_0 — full field mapping", (t: any) => {
   t.is(model.engine, "whispercpp-transcription");
   t.is(model.addon, "whisper");
   t.is(model.modelId, "ggml-small.en-q8_0.bin");
-  t.is(model.sha256Checksum, "aabb1122334455667788aabb1122334455667788aabb1122334455667788aabb");
+  t.is(
+    model.sha256Checksum,
+    "aabb1122334455667788aabb1122334455667788aabb1122334455667788aabb",
+  );
   t.is(model.expectedSize, 487662476);
   t.is(model.blobCoreKey, "bb".repeat(32));
 
@@ -270,7 +297,10 @@ test("whisper: large-v3-turbo — full field mapping", (t: any) => {
   t.is(model.addon, "whisper");
   t.is(model.engine, "whispercpp-transcription");
   t.is(model.expectedSize, 1626244956);
-  t.is(model.sha256Checksum, "ccdd1122334455667788ccdd1122334455667788ccdd1122334455667788ccdd");
+  t.is(
+    model.sha256Checksum,
+    "ccdd1122334455667788ccdd1122334455667788ccdd1122334455667788ccdd",
+  );
 
   t.is(exportName, "WHISPER_LARGE_V3_TURBO");
 });
@@ -308,7 +338,10 @@ test("vad: silero model — engine whisper but filename silero overrides to VAD"
   t.is(model.engine, "whispercpp-transcription");
   t.is(model.addon, "whisper");
   t.is(model.modelId, "ggml-silero-v5.1.2.bin");
-  t.is(model.sha256Checksum, "ddee1122334455667788ddee1122334455667788ddee1122334455667788ddee");
+  t.is(
+    model.sha256Checksum,
+    "ddee1122334455667788ddee1122334455667788ddee1122334455667788ddee",
+  );
   t.is(model.blobCoreKey, "dd".repeat(32));
   t.is(model.expectedSize, 6400000);
 
@@ -344,16 +377,26 @@ test("llm: Qwen3-4B — full field mapping with legacy engine + s3 source", (t: 
     },
   });
 
-  t.is(model.registryPath, "qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf");
+  t.is(
+    model.registryPath,
+    "qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
+  );
   t.is(model.registrySource, "s3");
-  t.is(model.engine, "llamacpp-completion", "legacy @qvac/llm-llamacpp resolved");
+  t.is(
+    model.engine,
+    "llamacpp-completion",
+    "legacy @qvac/llm-llamacpp resolved",
+  );
   t.is(model.addon, "llm");
   t.is(model.blobCoreKey, "ee".repeat(32));
   t.is(model.blobBlockOffset, 5000);
   t.is(model.blobBlockLength, 500);
   t.is(model.blobByteOffset, 40000000);
   t.is(model.expectedSize, 2700000000);
-  t.is(model.sha256Checksum, "eeff1122334455667788eeff1122334455667788eeff1122334455667788eeff");
+  t.is(
+    model.sha256Checksum,
+    "eeff1122334455667788eeff1122334455667788eeff1122334455667788eeff",
+  );
   t.is(model.modelId, "Qwen3-4B-Q4_K_M.gguf");
   t.is(model.quantization, "q4");
   t.is(model.params, "4B");
@@ -392,7 +435,10 @@ test("llm: Llama-3.2-1B — tag 'llama-ggml' version recovery from filename", (t
   t.is(model.engine, "llamacpp-completion");
   t.is(model.addon, "llm");
   t.is(model.modelId, "Llama-3.2-1B-Instruct-Q4_0.gguf");
-  t.is(model.sha256Checksum, "1122334455667788aabb1122334455667788aabb1122334455667788aabb1122");
+  t.is(
+    model.sha256Checksum,
+    "1122334455667788aabb1122334455667788aabb1122334455667788aabb1122",
+  );
 
   // Tag "llama-ggml" → strip "-ggml" → "llama" → filename "Llama-3.2" extends it
   t.is(exportName, "LLAMA_3_2_1B_INST_Q4_0");
@@ -429,8 +475,14 @@ test("llm: mmproj Qwen2.5-Omni — MMPROJ prefix + multimodal tag", (t: any) => 
   t.is(model.addon, "llm");
   t.is(model.modelId, "mmproj-Qwen2.5-Omni-3B-Q8_0.gguf");
 
-  t.ok(exportName.startsWith("MMPROJ_"), `expected MMPROJ_ prefix, got: ${exportName}`);
-  t.ok(exportName.includes("QWEN2_5_OMNI"), `expected QWEN2_5_OMNI, got: ${exportName}`);
+  t.ok(
+    exportName.startsWith("MMPROJ_"),
+    `expected MMPROJ_ prefix, got: ${exportName}`,
+  );
+  t.ok(
+    exportName.includes("QWEN2_5_OMNI"),
+    `expected QWEN2_5_OMNI, got: ${exportName}`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -464,7 +516,10 @@ test("llm: medgemma sharded — shard detection + _SHARD suffix", (t: any) => {
   t.is(model.engine, "llamacpp-completion");
   t.is(model.addon, "llm");
   t.is(model.modelId, "medgemma-4b-it-Q4_1-00001-of-00005.gguf");
-  t.is(model.sha256Checksum, "cdcdcdcd11223344cdcdcdcd11223344cdcdcdcd11223344cdcdcdcd11223344");
+  t.is(
+    model.sha256Checksum,
+    "cdcdcdcd11223344cdcdcdcd11223344cdcdcdcd11223344cdcdcdcd11223344",
+  );
 
   // Shard detection
   t.ok(model.isShardPart, "should be detected as shard part");
@@ -475,8 +530,14 @@ test("llm: medgemma sharded — shard detection + _SHARD suffix", (t: any) => {
   t.is(model.shardInfo!.baseFilename, "medgemma-4b-it-Q4_1");
 
   // Naming includes _SHARD, not the shard number
-  t.ok(exportName.endsWith("_SHARD"), `expected _SHARD suffix, got: ${exportName}`);
-  t.ok(!exportName.includes("00001"), `should not contain shard number, got: ${exportName}`);
+  t.ok(
+    exportName.endsWith("_SHARD"),
+    `expected _SHARD suffix, got: ${exportName}`,
+  );
+  t.ok(
+    !exportName.includes("00001"),
+    `should not contain shard number, got: ${exportName}`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -496,7 +557,8 @@ test("llm: medgemma tensors.txt — _TENSORS suffix", (t: any) => {
     sha256: "dededede11223344dededede11223344dededede11223344dededede11223344",
     quantization: "q4_1",
     params: "4B",
-    description: "Required for Llamacpp to create the model layers before the weights are loaded",
+    description:
+      "Required for Llamacpp to create the model layers before the weights are loaded",
     tags: ["generation", "it", "medgemma", "shard"],
     notes: "tensors config",
     blobBinding: {
@@ -514,8 +576,14 @@ test("llm: medgemma tensors.txt — _TENSORS suffix", (t: any) => {
   t.is(model.expectedSize, 12345);
 
   // Naming adds _TENSORS suffix
-  t.ok(exportName.endsWith("_TENSORS"), `expected _TENSORS suffix, got: ${exportName}`);
-  t.ok(exportName.includes("MEDGEMMA"), `expected MEDGEMMA, got: ${exportName}`);
+  t.ok(
+    exportName.endsWith("_TENSORS"),
+    `expected _TENSORS suffix, got: ${exportName}`,
+  );
+  t.ok(
+    exportName.includes("MEDGEMMA"),
+    `expected MEDGEMMA, got: ${exportName}`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -549,11 +617,20 @@ test("llm override: SmolVLM2 with translation engine + multimodal tag → treate
   // (the override happens in the naming step)
   t.is(model.engine, "nmtcpp-translation");
   t.is(model.addon, "nmt");
-  t.is(model.sha256Checksum, "efefefef11223344efefefef11223344efefefef11223344efefefef11223344");
+  t.is(
+    model.sha256Checksum,
+    "efefefef11223344efefefef11223344efefefef11223344efefefef11223344",
+  );
 
   // Naming overrides to LLM path → no NMT_ prefix
-  t.ok(!exportName.startsWith("NMT_"), `should not start with NMT_, got: ${exportName}`);
-  t.ok(exportName.includes("SMOLVLM2"), `should include SMOLVLM2, got: ${exportName}`);
+  t.ok(
+    !exportName.startsWith("NMT_"),
+    `should not start with NMT_, got: ${exportName}`,
+  );
+  t.ok(
+    exportName.includes("SMOLVLM2"),
+    `should include SMOLVLM2, got: ${exportName}`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -623,7 +700,10 @@ test("nmt: Indictrans en-indic 1B q0f16 — full field mapping", (t: any) => {
   t.is(model.engine, "nmtcpp-translation");
   t.is(model.addon, "nmt");
   t.is(model.registrySource, "s3");
-  t.is(model.sha256Checksum, "22222222223344552222222222334455222222222233445522222222aabbccdd");
+  t.is(
+    model.sha256Checksum,
+    "22222222223344552222222222334455222222222233445522222222aabbccdd",
+  );
 
   t.is(exportName, "MARIAN_EN_HI_INDIC_1B_Q0F16");
 });
@@ -695,7 +775,10 @@ test("nmt: Bergamot ar-en model file — full field mapping", (t: any) => {
   t.is(model.engine, "nmtcpp-translation");
   t.is(model.addon, "nmt");
   t.is(model.modelId, "model.aren.intgemm.alphas.bin");
-  t.is(model.sha256Checksum, "44444444223344554444444422334455444444442233445544444444aabbccdd");
+  t.is(
+    model.sha256Checksum,
+    "44444444223344554444444422334455444444442233445544444444aabbccdd",
+  );
 
   t.is(exportName, "BERGAMOT_AR_EN");
 });
@@ -799,7 +882,10 @@ test("tts: Piper Norman medium — full field mapping", (t: any) => {
   t.is(model.engine, "onnx-tts", "legacy @qvac/tts resolved to onnx-tts");
   t.is(model.addon, "tts");
   t.is(model.modelId, "en_US-norman-medium.onnx");
-  t.is(model.sha256Checksum, "77777777223344557777777722334455777777772233445577777777aabbccdd");
+  t.is(
+    model.sha256Checksum,
+    "77777777223344557777777722334455777777772233445577777777aabbccdd",
+  );
   t.is(model.expectedSize, 60000000);
   t.is(model.blobCoreKey, "77".repeat(32));
   t.is(model.blobBlockOffset, 17000);
@@ -840,8 +926,14 @@ test("tts: Piper config file — _CONFIG suffix", (t: any) => {
   t.is(model.modelId, "en_US-norman-medium.onnx.json");
   t.is(model.expectedSize, 2000);
 
-  t.ok(exportName.endsWith("_CONFIG"), `expected _CONFIG suffix, got: ${exportName}`);
-  t.ok(exportName.includes("TTS_PIPER_NORMAN"), `expected TTS_PIPER_NORMAN, got: ${exportName}`);
+  t.ok(
+    exportName.endsWith("_CONFIG"),
+    `expected _CONFIG suffix, got: ${exportName}`,
+  );
+  t.ok(
+    exportName.includes("TTS_PIPER_NORMAN"),
+    `expected TTS_PIPER_NORMAN, got: ${exportName}`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -875,7 +967,10 @@ test("ocr: recognizer english — full field mapping", (t: any) => {
   t.is(model.engine, "onnx-ocr", "legacy @qvac/ocr-onnx resolved to onnx-ocr");
   t.is(model.addon, "ocr");
   t.is(model.modelId, "recognizer_english.onnx");
-  t.is(model.sha256Checksum, "99999999223344559999999922334455999999992233445599999999aabbccdd");
+  t.is(
+    model.sha256Checksum,
+    "99999999223344559999999922334455999999992233445599999999aabbccdd",
+  );
   t.is(model.blobCoreKey, "99".repeat(32));
   t.is(model.expectedSize, 25000000);
 
@@ -930,7 +1025,7 @@ test("sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty"
     license: "MIT",
     name: "test",
     sizeBytes: 100,
-    sha256: "",  // empty on model
+    sha256: "", // empty on model
     quantization: "q4",
     params: "1B",
     tags: ["generation", "instruct", "test"],
@@ -940,7 +1035,8 @@ test("sha256 fallback: reads from blobBinding.sha256 when model.sha256 is empty"
       blockLength: 1,
       byteOffset: 1,
       byteLength: 100,
-      sha256: "fallback_hash_from_blob_binding_runtime_only_field_0000000000000000",
+      sha256:
+        "fallback_hash_from_blob_binding_runtime_only_field_0000000000000000",
     },
   };
 
@@ -1027,7 +1123,13 @@ test("collision: two identical whisper tiny models get unique names", (t: any) =
     sizeBytes: 100,
     sha256: "aaaa",
     tags: ["transcription", "tiny-silero", "whisper"],
-    blobBinding: { coreKey, blockOffset: 1, blockLength: 1, byteOffset: 1, byteLength: 100 },
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 100,
+    },
   };
 
   const entry2 = {
@@ -1039,7 +1141,13 @@ test("collision: two identical whisper tiny models get unique names", (t: any) =
     sizeBytes: 200,
     sha256: "bbbb",
     tags: ["transcription", "tiny-silero", "whisper"],
-    blobBinding: { coreKey, blockOffset: 2, blockLength: 2, byteOffset: 2, byteLength: 200 },
+    blobBinding: {
+      coreKey,
+      blockOffset: 2,
+      blockLength: 2,
+      byteOffset: 2,
+      byteLength: 200,
+    },
   };
 
   const m1 = processRegistryModel(entry1 as any)!;
@@ -1135,7 +1243,10 @@ test("embeddings: EmbeddingGemma 300M BF16 — canonical engine name", (t: any) 
   t.is(model.addon, "embeddings");
   t.is(model.quantization, "BF16");
   t.is(model.params, "300M");
-  t.is(model.sha256Checksum, "95a1f284251f78a1409a9c9e52dd4026c2180b13a90a5ede2a878bb8141fba08");
+  t.is(
+    model.sha256Checksum,
+    "95a1f284251f78a1409a9c9e52dd4026c2180b13a90a5ede2a878bb8141fba08",
+  );
 
   t.is(exportName, "EMBEDDINGGEMMA_300M_BF16");
 });
@@ -1350,8 +1461,14 @@ test("shard grouping → codegen: generated output includes shardMetadata array"
 
   // Verify shardMetadata appears in the generated code
   t.ok(output.includes("shardMetadata"), "output contains shardMetadata");
-  t.ok(output.includes("test-Q4-00001-of-00002.gguf"), "shard1 filename in metadata");
-  t.ok(output.includes("test-Q4-00002-of-00002.gguf"), "shard2 filename in metadata");
+  t.ok(
+    output.includes("test-Q4-00001-of-00002.gguf"),
+    "shard1 filename in metadata",
+  );
+  t.ok(
+    output.includes("test-Q4-00002-of-00002.gguf"),
+    "shard2 filename in metadata",
+  );
   t.ok(output.includes("hash_shard1"), "shard1 sha256 in metadata");
   t.ok(output.includes("hash_shard2"), "shard2 sha256 in metadata");
 

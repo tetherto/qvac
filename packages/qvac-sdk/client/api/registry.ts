@@ -83,8 +83,4 @@ async function modelRegistryGetModel(
   return response.model!;
 }
 
-export {
-  modelRegistryList,
-  modelRegistrySearch,
-  modelRegistryGetModel,
-};
+export { modelRegistryList, modelRegistrySearch, modelRegistryGetModel };

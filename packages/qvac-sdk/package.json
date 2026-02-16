@@ -16,43 +16,47 @@
       "import": "./dist/server/worker.js",
       "require": "./dist/server/worker.js"
     },
+    "./llamacpp-completion/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+    },
+    "./llamacpp-embedding/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+    },
+    "./whispercpp-transcription/plugin": {
+      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+    },
+    "./nmtcpp-translation/plugin": {
+      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+    },
+    "./onnx-tts/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-tts/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-tts/plugin.js"
+    },
+    "./onnx-ocr/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-ocr/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-ocr/plugin.js"
+    },
+    "./plugin-utils": {
+      "types": "./dist/schemas/plugin.d.ts",
+      "import": "./dist/schemas/plugin.js"
+    },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
-    "./models": "./dist/models/registry/models.js"
+    "./models": "./dist/models/hyperdrive/models.js",
+    "./electron-builder": {
+      "require": "./electron-builder/index.cjs"
+    },
+    "./dist/*": "./dist/*"
   },
   "imports": {
     "#rpc": {
       "react-native": "./dist/client/rpc/expo-rpc-client.js",
       "bare": "./dist/client/rpc/bare-client.js",
       "default": "./dist/client/rpc/node-rpc-client.js"
-    },
-    "child_process": {
-      "bare": "bare-subprocess",
-      "default": "child_process"
-    },
-    "crypto": {
-      "bare": "bare-crypto",
-      "default": "crypto"
-    },
-    "fs": {
-      "bare": "bare-fs",
-      "default": "fs"
-    },
-    "os": {
-      "bare": "bare-os",
-      "default": "os"
-    },
-    "path": {
-      "bare": "bare-path",
-      "default": "path"
-    },
-    "process": {
-      "bare": "bare-process",
-      "default": "process"
-    },
-    "readline": {
-      "bare": "bare-readline",
-      "default": "readline"
     }
   },
   "expo": {
@@ -63,6 +67,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -119,6 +124,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@qvac/cli": "^0.1.1",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.1",
     "@lancedb/lancedb": "^0.21.3",
@@ -126,7 +132,7 @@
     "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
     "@types/node": "^24.2.1",
     "@types/tar-stream": "^3.1.4",
-    "bare-pack": "^1.5.1",
+    "bare-pack": "^2.0.0",
     "bare-readline": "^1.2.0",
     "brittle": "^3.19.1",
     "chromadb": "^3.0.14",
@@ -155,6 +161,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@qvac/cli": "^0.1.1",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.11.2",
@@ -186,6 +193,9 @@
     "tar-stream": "^3.1.7"
   },
   "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    },
     "@modelcontextprotocol/sdk": {
       "optional": true
     },

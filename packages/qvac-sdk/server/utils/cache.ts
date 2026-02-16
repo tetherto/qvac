@@ -1,6 +1,6 @@
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
 import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";

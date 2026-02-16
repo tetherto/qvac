@@ -45,15 +45,11 @@ export const modelRegistryEntrySchema = z.object({
   params: z.string(),
 });
 
-export type ModelRegistryEntry = z.infer<
-  typeof modelRegistryEntrySchema
->;
+export type ModelRegistryEntry = z.infer<typeof modelRegistryEntrySchema>;
 export type ModelRegistryEntryAddon = z.infer<
   typeof modelRegistryEntryAddonSchema
 >;
-export type ModelRegistryEngine = z.infer<
-  typeof modelRegistryEngineSchema
->;
+export type ModelRegistryEngine = z.infer<typeof modelRegistryEngineSchema>;
 
 // QVAC Model Registry list request/response
 export const modelRegistryListRequestSchema = z.object({
@@ -132,9 +128,5 @@ export const modelRegistryResponseSchema = z.discriminatedUnion("type", [
   modelRegistryGetModelResponseSchema,
 ]);
 
-export type ModelRegistryRequest = z.infer<
-  typeof modelRegistryRequestSchema
->;
-export type ModelRegistryResponse = z.infer<
-  typeof modelRegistryResponseSchema
->;
+export type ModelRegistryRequest = z.infer<typeof modelRegistryRequestSchema>;
+export type ModelRegistryResponse = z.infer<typeof modelRegistryResponseSchema>;

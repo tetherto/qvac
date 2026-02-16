@@ -1,4 +1,4 @@
-import { unloadModel } from "@/server/bare/addons";
+import { unloadModel } from "@/server/bare/ops/unload-model";
 import { getRegistryStats } from "@/server/bare/registry/model-registry";
 import { hasActiveProviders } from "@/server/bare/hyperswarm";
 import type { UnloadModelRequest, UnloadModelResponse } from "@/schemas";
