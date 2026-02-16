@@ -798,9 +798,11 @@ std::string LlamaModel::finetune(
         int64_t{1}, std::gcd(datasetSampleCount, actualMicroBatch));
 
     double validationSplit = 0.05;
+    const std::string evalPath = !params.evalDatasetPath.empty()
+        ? params.evalDatasetPath
+        : params.evalDatasetDir;
     const bool hasSeparateEvalDataset =
-        !params.evalDatasetDir.empty() &&
-        params.evalDatasetDir != params.trainDatasetDir;
+        !evalPath.empty() && evalPath != params.trainDatasetDir;
     if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
       validationSplit = 0.0;
     } else if (hasSeparateEvalDataset) {
@@ -1127,7 +1129,10 @@ ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
 
 ggml_opt_dataset_t LlamaModel::prepareEvalDataset(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
-  return prepareDatasetFromPath(params, params.evalDatasetDir, "Eval", "eval");
+  const std::string path = !params.evalDatasetPath.empty()
+      ? params.evalDatasetPath
+      : params.evalDatasetDir;
+  return prepareDatasetFromPath(params, path, "Eval", "eval");
 }
 
 void LlamaModel::initializeLoraAdapter(

@@ -123,14 +123,14 @@ test('finetune(opts) with validation.type dataset throws when path same as train
   t.ok(!model.addon.finetune.called)
 })
 
-test('finetune(opts) with validation.type dataset and validation.path passes evalDatasetDir to addon', async (t) => {
+test('finetune(opts) with validation.type dataset and validation.path passes evalDatasetPath to addon', async (t) => {
   const model = createModelWithMockAddon(null)
   const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/eval.jsonl' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
   const handle = await model.finetune(opts)
   t.ok(model.addon.finetune.called)
   const params = model.addon.finetune.lastArgs[0]
-  t.is(params.evalDatasetDir, '/tmp/eval.jsonl')
+  t.is(params.evalDatasetPath, '/tmp/eval.jsonl')
   t.ok(params.useEvalDatasetForValidation === true)
   t.is(params.validationSplit, 0)
   t.ok(!('validation' in params))

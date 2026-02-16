@@ -48,7 +48,7 @@ function normalizeFinetuneParams (opts) {
         "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
       )
     }
-    out.evalDatasetDir = evalPath
+    out.evalDatasetPath = evalPath
     out.validationSplit = 0
     out.useEvalDatasetForValidation = true
   }

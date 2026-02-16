@@ -12,6 +12,7 @@ struct FinetuningParameters
     learningRate(finetuningParametersObj.getProperty<js::Number>(env, "learningRate").as<double>(env)),
     trainDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "trainDatasetDir").as<std::string>(env)),
     evalDatasetDir(finetuningParametersObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir").value_or("")),
+    evalDatasetPath(finetuningParametersObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetPath").value_or("")),
     contextLength(finetuningParametersObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength").value_or(0)),
     microBatchSize(finetuningParametersObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize").value_or(0)),
     assistantLossOnly(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly").value_or(false)),
@@ -46,6 +47,7 @@ struct FinetuningParameters
   double learningRate{0.0};
   std::string trainDatasetDir;
   std::string evalDatasetDir;
+  std::string evalDatasetPath;
   int64_t contextLength{0};
   int64_t microBatchSize{0};
   bool assistantLossOnly{false};
