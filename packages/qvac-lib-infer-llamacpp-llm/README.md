@@ -268,8 +268,6 @@ npm run quickstart
 -   [Multimodal](./examples/multiModal.js) – Demonstrates how to run multimodal inference.
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
--   [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
--   [Sharded Loading](./examples/shardedLoading.js) – Demonstrates loading sharded model files.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
 
 ## Architecture
