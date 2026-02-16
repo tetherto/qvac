@@ -1,5 +1,6 @@
 import { QvacErrorBase } from "@qvac/error";
 import { SDK_CLIENT_ERROR_CODES } from "@/schemas/sdk-errors-client";
+import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
 import { createErrorOptions } from "./errors-base";
 
 // ============== Response Validation Errors ==============
@@ -33,18 +34,6 @@ export class StreamEndedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.STREAM_ENDED_WITHOUT_RESPONSE,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
-export class NoDataReceivedError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.NO_DATA_RECEIVED,
         undefined,
         cause,
       ),
@@ -150,18 +139,6 @@ export class RPCConnectionFailedError extends QvacErrorBase {
   }
 }
 
-export class UnknownRequestTypeError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.UNKNOWN_REQUEST_TYPE,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
 // ============== Provider/Delegation Errors ==============
 
 export class ProviderStartFailedError extends QvacErrorBase {
@@ -250,6 +227,18 @@ export class WorkerFileNotFoundError extends QvacErrorBase {
   }
 }
 
+export class PearWorkerEntryRequiredError extends QvacErrorBase {
+  constructor(workerEntry: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED,
+        [workerEntry],
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
     super(
@@ -301,8 +290,6 @@ export class ConfigValidationFailedError extends QvacErrorBase {
 // ============== Operation Errors (Client-side wrappers for server operations) ==============
 // These are used by client API to throw errors based on server responses
 // They reference server error codes but are thrown on client side
-
-import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
 
 export class ModelUnloadFailedError extends QvacErrorBase {
   constructor(modelId?: string, cause?: unknown) {
@@ -525,6 +512,22 @@ export class SetConfigFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.SET_CONFIG_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+// ============== QVAC Model Registry Operation Errors ==============
+// Registry client errors (19,001-20,000) are re-thrown directly from @qvac/registry-client
+// Only SDK-specific errors are defined here
+
+export class ModelRegistryQueryFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED,
         details ? [details] : undefined,
         cause,
       ),

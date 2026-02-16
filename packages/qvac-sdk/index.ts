@@ -26,6 +26,12 @@ export {
   getModelInfo,
   loggingStream,
   ocr,
+  invokePlugin,
+  invokePluginStream,
+  modelRegistryList,
+  modelRegistrySearch,
+  modelRegistryGetModel,
+  type ModelRegistrySearchParams,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -65,15 +71,22 @@ export {
   type OCRClientParams,
   type OCRTextBlock,
   type OCROptions,
+  definePlugin,
+  defineHandler,
+  type QvacPlugin,
+  type CreateModelParams,
+  type PluginModelResult,
+  type ModelRegistryEntry,
+  type ModelRegistryEntryAddon,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
 
 // Model types - canonical naming with backward-compatible aliases
-export { PUBLIC_MODEL_TYPES as MODEL_TYPES } from "./schemas";
+export { MODEL_TYPES, ModelType } from "./schemas";
 
-// Hyperdrive model constants
-export * from "./models/hyperdrive";
+// Model registry constants
+export * from "./models/registry";
 
 export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 

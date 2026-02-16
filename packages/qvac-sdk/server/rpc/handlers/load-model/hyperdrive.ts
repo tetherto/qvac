@@ -11,7 +11,7 @@ import Hyperdrive from "hyperdrive";
 import type { Entry } from "hyperdrive";
 import { type Readable, type Writable } from "bare-stream";
 import { AbortController, type AbortSignal } from "bare-abort-controller";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import {
   getModelsCacheDir,
   generateShortHash,
@@ -23,7 +23,7 @@ import {
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
-import { getModelBySrc } from "@/models/hyperdrive";
+import { getModelBySrc } from "@/models/registry";
 import {
   getActiveDownload,
   registerDownload,

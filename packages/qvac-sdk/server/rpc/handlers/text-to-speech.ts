@@ -1,12 +1,12 @@
 import type { TtsRequest, TtsResponse } from "@/schemas";
-import { textToSpeech } from "@/server/bare/addons/onnx-tts";
+import { dispatchPluginStream } from "@/server/rpc/handlers/plugin-dispatch";
 
 export async function* handleTextToSpeech(
   request: TtsRequest,
 ): AsyncGenerator<TtsResponse> {
-  const stream = textToSpeech(request);
-
-  for await (const response of stream) {
-    yield response;
-  }
+  yield* dispatchPluginStream<TtsRequest, TtsResponse>(
+    request.modelId,
+    "textToSpeech",
+    request,
+  );
 }

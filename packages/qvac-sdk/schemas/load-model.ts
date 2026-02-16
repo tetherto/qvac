@@ -23,7 +23,14 @@ import {
   ttsModelTypeSchema,
   ocrModelTypeSchema,
   ModelType,
+  ModelTypeAliases,
 } from "./model-types";
+
+// Set of all built-in model types (canonical + aliases) for catch-all exclusion
+const builtInModelTypes = new Set([
+  ...Object.values(ModelType),
+  ...Object.keys(ModelTypeAliases),
+]);
 import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
@@ -65,7 +72,7 @@ const loadModelOptionsBaseSchema = z.union([
     modelSrc: modelSrcInputSchema,
     modelType: ttsModelTypeSchema,
     modelConfig: ttsConfigSchema,
-    configSrc: modelSrcInputSchema,
+    configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
     eSpeakDataPath: z.string(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
@@ -75,6 +82,18 @@ const loadModelOptionsBaseSchema = z.union([
     modelType: ocrModelTypeSchema,
     modelConfig: ocrConfigSchema.partial().strict().optional(),
     detectorModelSrc: modelSrcInputSchema.optional(),
+    seed: z.boolean().optional(),
+    delegate: delegateSchema,
+  }),
+  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
+  z.object({
+    modelSrc: modelSrcInputSchema,
+    modelType: z
+      .string()
+      .refine((val) => !builtInModelTypes.has(val), {
+        message: "Built-in model types must use their specific schema",
+      }),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -192,7 +211,7 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelSrcInputSchema,
       modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
-      configSrc: modelSrcInputSchema,
+      configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
       eSpeakDataPath: z.string(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
@@ -208,7 +227,9 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      configSrc: modelInputToSrcSchema.parse(data.configSrc),
+      configSrc: data.configSrc
+        ? modelInputToSrcSchema.parse(data.configSrc)
+        : undefined,
       eSpeakDataPath: data.eSpeakDataPath,
     })),
   z
@@ -234,6 +255,31 @@ export const loadModelOptionsToRequestSchema = z.union([
       detectorModelSrc: data.detectorModelSrc
         ? modelInputToSrcSchema.parse(data.detectorModelSrc)
         : undefined,
+    })),
+  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
+  z
+    .object({
+      modelSrc: modelSrcInputSchema,
+      modelType: z
+        .string()
+        .refine((val) => !builtInModelTypes.has(val), {
+          message: "Built-in model types must use their specific schema",
+        }),
+      modelConfig: z.record(z.string(), z.unknown()).optional(),
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: data.modelType,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig ?? {},
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
     })),
 ]);
 
@@ -277,8 +323,8 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsConfigSchema, // tts has no defaults
-  configSrc: z.string(),
+  modelConfig: ttsConfigSchema,
+  configSrc: z.string().optional(), // Optional - auto-derived from registry:// URLs
   eSpeakDataPath: z.string(),
 });
 
@@ -286,6 +332,17 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxOcr),
   modelConfig: ocrConfigSchema, // ocr has no defaults
 });
+
+// Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
+export const loadCustomPluginModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z
+      .string()
+      .refine((val) => !builtInModelTypes.has(val), {
+        message: "Built-in model types must use their specific schema",
+      }),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
+  });
 
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
@@ -296,6 +353,7 @@ export const loadModelSrcRequestSchema = z
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
+    loadCustomPluginModelRequestSchema,
   ])
   .transform((data) => ({
     ...data,
@@ -342,6 +400,25 @@ export const hyperdriveUrlSchema = z
   .transform((url) => {
     const match = url.match(/^pear:\/\/([0-9a-fA-F]{64})\/(.+)$/)!;
     return { key: match[1]!, path: match[2]! };
+  });
+
+/**
+ * Schema for registry:// URLs (internal use only).
+ * Users should use model constants from @qvac/sdk instead of raw URLs.
+ * Format: registry://source/path/to/model.gguf
+ */
+export const registryUrlSchema = z
+  .string()
+  .regex(
+    /^registry:\/\/([^/]+)\/(.+)$/,
+    "Invalid registry URL. Expected format: registry://source/path/to/model.gguf",
+  )
+  .transform((url) => {
+    const match = url.match(/^registry:\/\/([^/]+)\/(.+)$/)!;
+    return {
+      registrySource: match[1]!,
+      registryPath: match[2]!, // Path without source prefix
+    };
   });
 
 export const loadModelServerParamsSchema = z.object({

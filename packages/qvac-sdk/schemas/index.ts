@@ -27,6 +27,7 @@ export * from "./ocr";
 export * from "./shard";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
+export { REGISTRY_ERROR_CODES } from "./sdk-errors-registry";
 export {
   qvacConfigSchema,
   deviceMatchSchema,
@@ -42,29 +43,14 @@ export * from "./get-model-info";
 export * from "./model-src-utils";
 export * from "./json-schema";
 export { type McpClient, type McpClientInput } from "./mcp-adapter";
-// Model types - new canonical naming system
 export {
+  PUBLIC_MODEL_TYPES as MODEL_TYPES,
   ModelType,
-  ModelTypeAliases,
-  PUBLIC_MODEL_TYPES,
-  modelTypeInputSchema,
-  modelTypeSchema,
-  normalizeModelType,
-  isModelTypeAlias,
-  // Per-model-type schemas for discriminated unions
-  llmModelTypeSchema,
-  whisperModelTypeSchema,
-  embeddingsModelTypeSchema,
-  nmtModelTypeSchema,
-  ttsModelTypeSchema,
-  ocrModelTypeSchema,
   type CanonicalModelType,
-  type AliasKey,
   type ModelTypeInput,
-  type LlmModelTypeInput,
-  type WhisperModelTypeInput,
-  type EmbeddingsModelTypeInput,
-  type NmtModelTypeInput,
-  type TtsModelTypeInput,
-  type OcrModelTypeInput,
+  normalizeModelType,
+  isCanonicalModelType,
+  isModelTypeAlias,
 } from "./model-types";
+export * from "./plugin";
+export * from "./registry";

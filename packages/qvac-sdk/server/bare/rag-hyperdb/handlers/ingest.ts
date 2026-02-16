@@ -1,5 +1,5 @@
 import { getRagInstance } from "@/server/bare/rag-hyperdb/rag-workspace-manager";
-import { embed } from "@/server/bare/addons/llamacpp-embedding";
+import { embed } from "@/server/bare/ops/embed";
 import { ragIngestParamsSchema, type RagIngestParams } from "@/schemas";
 import type { IngestOpts, IngestStage } from "@qvac/rag";
 

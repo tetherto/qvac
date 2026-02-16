@@ -6,7 +6,7 @@ import type {
 import { modelInputToSrcSchema } from "@/schemas";
 import { registerModel } from "@/server/bare/registry/model-registry";
 import { getRPC } from "@/server/bare/delegate-rpc-client";
-import { send, stream } from "@/client/rpc/rpc-client";
+import { send, stream } from "@/server/rpc/delegate-transport";
 import { handleLoadModel } from "./load-model";
 import {
   ModelLoadFailedError,

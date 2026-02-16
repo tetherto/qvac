@@ -25,3 +25,10 @@ export {
 export { textToSpeech } from "./text-to-speech";
 export { getModelInfo } from "./get-model-info";
 export { ocr } from "./ocr";
+export { invokePlugin, invokePluginStream } from "./invoke-plugin";
+export {
+  modelRegistryList,
+  modelRegistrySearch,
+  modelRegistryGetModel,
+  type ModelRegistrySearchParams,
+} from "./registry";
