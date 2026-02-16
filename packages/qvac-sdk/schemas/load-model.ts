@@ -108,11 +108,9 @@ const loadModelOptionsBaseSchema = z.union([
   // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
   z.object({
     modelSrc: modelSrcInputSchema,
-    modelType: z
-      .string()
-      .refine((val) => !builtInModelTypes.has(val), {
-        message: "Built-in model types must use their specific schema",
-      }),
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: "Built-in model types must use their specific schema",
+    }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
@@ -326,11 +324,9 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
-      modelType: z
-        .string()
-        .refine((val) => !builtInModelTypes.has(val), {
-          message: "Built-in model types must use their specific schema",
-        }),
+      modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+        message: "Built-in model types must use their specific schema",
+      }),
       modelConfig: z.record(z.string(), z.unknown()).optional(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
@@ -425,11 +421,9 @@ export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema =
   commonModelConfigSchema.extend({
-    modelType: z
-      .string()
-      .refine((val) => !builtInModelTypes.has(val), {
-        message: "Built-in model types must use their specific schema",
-      }),
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: "Built-in model types must use their specific schema",
+    }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
   });
 

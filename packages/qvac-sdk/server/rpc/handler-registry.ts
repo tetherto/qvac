@@ -54,7 +54,10 @@ export const registry: Record<string, HandlerEntry> = {
   pluginInvoke: { type: "reply", handler: handlePluginInvoke },
   modelRegistryList: { type: "reply", handler: handleModelRegistryList },
   modelRegistrySearch: { type: "reply", handler: handleModelRegistrySearch },
-  modelRegistryGetModel: { type: "reply", handler: handleModelRegistryGetModel },
+  modelRegistryGetModel: {
+    type: "reply",
+    handler: handleModelRegistryGetModel,
+  },
 
   // Simple Stream handlers
   transcribeStream: { type: "stream", handler: handleTranscribeStream },
