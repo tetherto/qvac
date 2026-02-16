@@ -1,33 +1,48 @@
-import {
-  loadModel,
-  textToSpeech,
-  unloadModel,
-  TTS_PIPER_AMY_EN_US_ONNX_MEDIUM,
-  TTS_PIPER_AMY_EN_US_ONNX_MEDIUM_CONFIG,
-} from "@qvac/sdk";
+import { loadModel, textToSpeech, unloadModel } from "@qvac/sdk";
 import { writeFileSync, unlinkSync } from "fs";
 import { spawnSync } from "child_process";
 import { platform } from "os";
 
-// Get eSpeakDataPath from command line arguments or use default
-const eSpeakDataPath = process.argv[2];
+// Chatterbox TTS requires five model artifact sources + reference audio WAV (path or URL).
+// Pass as args: <modelSrc> <tokenizerSrc> <speechEncoderSrc> <embedTokensSrc> <conditionalDecoderSrc> <languageModelSrc> <referenceAudioSrc>
+const [
+  modelSrc,
+  ttsTokenizerSrc,
+  ttsSpeechEncoderSrc,
+  ttsEmbedTokensSrc,
+  ttsConditionalDecoderSrc,
+  ttsLanguageModelSrc,
+  referenceAudioSrc,
+] = process.argv.slice(2);
 
-console.log(`Using eSpeak data path: ${eSpeakDataPath}`);
-
-if (!eSpeakDataPath) {
-  console.error("eSpeakDataPath is required");
+if (
+  !modelSrc ||
+  !ttsTokenizerSrc ||
+  !ttsSpeechEncoderSrc ||
+  !ttsEmbedTokensSrc ||
+  !ttsConditionalDecoderSrc ||
+  !ttsLanguageModelSrc ||
+  !referenceAudioSrc
+) {
+  console.error(
+    "Usage: node text-to-speech.js <modelSrc> <ttsTokenizerSrc> <ttsSpeechEncoderSrc> <ttsEmbedTokensSrc> <ttsConditionalDecoderSrc> <ttsLanguageModelSrc> <referenceAudioSrc>",
+  );
   process.exit(1);
 }
 
+const CHATTERBOX_SAMPLE_RATE = 24000;
+
 try {
   const modelId = await loadModel({
-    modelSrc: TTS_PIPER_AMY_EN_US_ONNX_MEDIUM,
+    modelSrc,
     modelType: "tts",
-    configSrc: TTS_PIPER_AMY_EN_US_ONNX_MEDIUM_CONFIG,
-    eSpeakDataPath,
-    modelConfig: {
-      language: "en",
-    },
+    modelConfig: { language: "en" },
+    ttsTokenizerSrc,
+    ttsSpeechEncoderSrc,
+    ttsEmbedTokensSrc,
+    ttsConditionalDecoderSrc,
+    ttsLanguageModelSrc,
+    referenceAudioSrc,
     onProgress: (progress) => {
       console.log(progress);
     },
@@ -47,15 +62,15 @@ try {
   const audioBuffer = await result.buffer;
   console.log(`TTS complete. Total bytes: ${audioBuffer.length}`);
 
-  // Save and play audio
+  // Save and play audio (Chatterbox outputs 24kHz)
   console.log("💾 Saving audio to file...");
-  createWav(audioBuffer, 22050, "tts-output.wav");
+  createWav(audioBuffer, CHATTERBOX_SAMPLE_RATE, "tts-output.wav");
   console.log("✅ Audio saved to tts-output.wav");
 
   console.log("🔊 Playing audio...");
   const audioData = int16ArrayToBuffer(audioBuffer);
   const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length),
+    createWavHeader(audioData.length, CHATTERBOX_SAMPLE_RATE),
     audioData,
   ]);
   playAudio(wavBuffer);
@@ -72,7 +87,7 @@ try {
 // Function to create WAV header for 16-bit PCM audio
 function createWavHeader(
   dataLength: number,
-  sampleRate: number = 22050,
+  sampleRate: number = CHATTERBOX_SAMPLE_RATE,
 ): Buffer {
   const header = Buffer.alloc(44);
 
@@ -111,7 +126,7 @@ function int16ArrayToBuffer(int16Array: number[]): Buffer {
 // Function to create and save WAV file (similar to reference implementation)
 export function createWav(
   audioBuffer: number[],
-  sampleRate: number = 22050,
+  sampleRate: number = CHATTERBOX_SAMPLE_RATE,
   filename: string = "output.wav",
 ): void {
   const audioData = int16ArrayToBuffer(audioBuffer);

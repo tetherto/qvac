@@ -14,8 +14,8 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { generateShortHash, transformConfigForReload } from "@/server/utils";
 import {
-  TTSConfigModelRequiredError,
-  ESpeakDataPathRequiredError,
+  TtsArtifactsRequiredError,
+  TtsReferenceAudioRequiredError,
   ConfigReloadNotSupportedError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
@@ -44,7 +44,6 @@ export async function handleLoadModel(
     seed,
     projectionModelSrc,
     vadModelSrc,
-    configSrc,
   } = request;
   const canonicalModelType = normalizeModelType(request.modelType);
   const srcVocabSrc =
@@ -55,9 +54,16 @@ export async function handleLoadModel(
     canonicalModelType === ModelType.nmtcppTranslation
       ? (request as { dstVocabSrc?: string }).dstVocabSrc
       : undefined;
-  const eSpeakDataPath =
+  const ttsTtsSrcs =
     canonicalModelType === ModelType.onnxTts
-      ? (request as { eSpeakDataPath?: string }).eSpeakDataPath
+      ? (request as {
+          ttsTokenizerSrc?: string;
+          ttsSpeechEncoderSrc?: string;
+          ttsEmbedTokensSrc?: string;
+          ttsConditionalDecoderSrc?: string;
+          ttsLanguageModelSrc?: string;
+          referenceAudioSrc?: string;
+        })
       : undefined;
   const detectorModelSrc =
     canonicalModelType === ModelType.onnxOcr
@@ -85,29 +91,60 @@ export async function handleLoadModel(
       );
     }
 
-    let ttsConfigModelPath: string | undefined;
-    if (canonicalModelType === ModelType.onnxTts) {
-      if (configSrc) {
-        ttsConfigModelPath = await resolveModelPath(
-          configSrc,
-          progressCallback,
-          seed,
-        );
-      } else if (modelSrc.startsWith("registry://")) {
-        // Registry: config is the model path + ".json"
-        // e.g., registry://hf/path/model.onnx -> registry://hf/path/model.onnx.json
-        const derivedConfigSrc = `${modelSrc}.json`;
-        logger.info(`Auto-deriving TTS config from: ${derivedConfigSrc}`);
-        ttsConfigModelPath = await resolveModelPath(
-          derivedConfigSrc,
-          progressCallback,
-          seed,
-        );
+    let ttsTokenizerPath: string | undefined;
+    let ttsSpeechEncoderPath: string | undefined;
+    let ttsEmbedTokensPath: string | undefined;
+    let ttsConditionalDecoderPath: string | undefined;
+    let ttsLanguageModelPath: string | undefined;
+    let referenceAudioPath: string | undefined;
+    if (canonicalModelType === ModelType.onnxTts && ttsTtsSrcs) {
+      const {
+        ttsTokenizerSrc,
+        ttsSpeechEncoderSrc,
+        ttsEmbedTokensSrc,
+        ttsConditionalDecoderSrc,
+        ttsLanguageModelSrc,
+        referenceAudioSrc,
+      } = ttsTtsSrcs;
+      if (
+        !ttsTokenizerSrc ||
+        !ttsSpeechEncoderSrc ||
+        !ttsEmbedTokensSrc ||
+        !ttsConditionalDecoderSrc ||
+        !ttsLanguageModelSrc
+      ) {
+        throw new TtsArtifactsRequiredError();
       }
-    } else if (configSrc) {
-      // For non-TTS models, still resolve configSrc if provided
-      ttsConfigModelPath = await resolveModelPath(
-        configSrc,
+      if (!referenceAudioSrc) {
+        throw new TtsReferenceAudioRequiredError();
+      }
+      ttsTokenizerPath = await resolveModelPath(
+        ttsTokenizerSrc,
+        progressCallback,
+        seed,
+      );
+      ttsSpeechEncoderPath = await resolveModelPath(
+        ttsSpeechEncoderSrc,
+        progressCallback,
+        seed,
+      );
+      ttsEmbedTokensPath = await resolveModelPath(
+        ttsEmbedTokensSrc,
+        progressCallback,
+        seed,
+      );
+      ttsConditionalDecoderPath = await resolveModelPath(
+        ttsConditionalDecoderSrc,
+        progressCallback,
+        seed,
+      );
+      ttsLanguageModelPath = await resolveModelPath(
+        ttsLanguageModelSrc,
+        progressCallback,
+        seed,
+      );
+      referenceAudioPath = await resolveModelPath(
+        referenceAudioSrc,
         progressCallback,
         seed,
       );
@@ -137,14 +174,6 @@ export async function handleLoadModel(
           seed,
         );
       }
-    }
-
-    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
-    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
-      throw new TTSConfigModelRequiredError();
-    }
-    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
-      throw new ESpeakDataPathRequiredError();
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths
@@ -195,17 +224,29 @@ export async function handleLoadModel(
       request.modelConfig,
       Object.keys(request.modelConfig as object).sort(),
     );
-    const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
+    const modelHashInput =
+      canonicalModelType === ModelType.onnxTts && ttsTtsSrcs
+        ? `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsSpeechEncoderSrc}:${ttsTtsSrcs.ttsEmbedTokensSrc}:${ttsTtsSrcs.ttsConditionalDecoderSrc}:${ttsTtsSrcs.ttsLanguageModelSrc}:${ttsTtsSrcs.referenceAudioSrc ?? ""}:${configStr}`
+        : `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
+
+    const effectiveModelPath =
+      canonicalModelType === ModelType.onnxTts && ttsTokenizerPath
+        ? ttsTokenizerPath
+        : modelPath;
 
     await loadModel({
       modelId,
-      modelPath,
+      modelPath: effectiveModelPath,
       options: request,
       projectionModelPath,
       vadModelPath,
-      ttsConfigModelPath,
-      eSpeakDataPath,
+      ttsTokenizerPath,
+      ttsSpeechEncoderPath,
+      ttsEmbedTokensPath,
+      ttsConditionalDecoderPath,
+      ttsLanguageModelPath,
+      referenceAudioPath,
       detectorModelPath,
       modelName,
     });

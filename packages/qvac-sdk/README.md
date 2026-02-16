@@ -203,7 +203,7 @@ bun run examples/path/to/example.ts
 
 ### Text-to-Speech
 
-- TTS with [eSpeak](https://github.com/espeak-ng/espeak-ng): [`examples/text-to-speech.ts`](examples/text-to-speech.ts)
+- TTS (Chatterbox): [`examples/text-to-speech.ts`](examples/text-to-speech.ts)
 
 ### Multimodel
 

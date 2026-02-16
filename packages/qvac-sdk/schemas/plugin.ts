@@ -29,8 +29,8 @@ export interface PluginHandlerDefinition<
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
  * - `vadModelPath` - Whisper voice activity detection model
- * - `ttsConfigModelPath` - TTS config.json path
- * - `eSpeakDataPath` - TTS eSpeak data directory
+ * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
+ * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
  * - `detectorModelPath` - OCR detector model
  *
  * Custom plugins can define their own artifact keys.

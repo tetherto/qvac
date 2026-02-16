@@ -11,38 +11,42 @@ import {
   type TtsConfig,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
+import { TtsReferenceAudioRequiredError } from "@/utils/errors-server";
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
+import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
 
 function createTtsModel(
   modelId: string,
-  modelPath: string,
   ttsConfig: TtsConfig,
-  ttsConfigModelPath: string,
-  eSpeakDataPath: string,
-) {
-  const { dirPath, basePath: fileName } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
+  tokenizerPath: string,
+  speechEncoderPath: string,
+  embedTokensPath: string,
+  conditionalDecoderPath: string,
+  languageModelPath: string,
+  referenceAudio: Float32Array,
+): PluginModelResult {
   const logger = createStreamLogger(modelId, "tts");
 
   const args = {
-    loader,
+    tokenizerPath,
+    speechEncoderPath,
+    embedTokensPath,
+    conditionalDecoderPath,
+    languageModelPath,
+    referenceAudio,
     logger,
-    mainModelUrl: fileName,
-    configJsonPath: parseModelPath(ttsConfigModelPath).basePath,
-    cache: dirPath,
-    eSpeakDataPath: eSpeakDataPath,
     opts: { stats: true },
   };
 
   const config = {
     language: ttsConfig.language,
+    useGPU: false,
   };
 
-  const model = new ONNXTTS(args, config);
+  // Chatterbox-only args; @qvac/tts-onnx types may still declare legacy Piper fields until package is republished
+  const model = new ONNXTTS(args as never, config);
 
-  return { model, loader };
+  return { model, loader: undefined };
 }
 
 export const ttsPlugin = definePlugin({
@@ -52,16 +56,28 @@ export const ttsPlugin = definePlugin({
 
   createModel(params: CreateModelParams): PluginModelResult {
     const ttsConfig = (params.modelConfig ?? {}) as TtsConfig;
+    const artifacts = params.artifacts ?? {};
+    const tokenizerPath = artifacts["tokenizerPath"] ?? "";
+    const speechEncoderPath = artifacts["speechEncoderPath"] ?? "";
+    const embedTokensPath = artifacts["embedTokensPath"] ?? "";
+    const conditionalDecoderPath = artifacts["conditionalDecoderPath"] ?? "";
+    const languageModelPath = artifacts["languageModelPath"] ?? "";
+    const referenceAudioPath = artifacts["referenceAudioPath"] ?? "";
+    if (!referenceAudioPath) {
+      throw new TtsReferenceAudioRequiredError();
+    }
+    const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
 
-    const { model, loader } = createTtsModel(
+    return createTtsModel(
       params.modelId,
-      params.modelPath,
       ttsConfig,
-      params.artifacts?.["ttsConfigModelPath"] ?? "",
-      params.artifacts?.["eSpeakDataPath"] ?? "",
+      tokenizerPath,
+      speechEncoderPath,
+      embedTokensPath,
+      conditionalDecoderPath,
+      languageModelPath,
+      referenceAudio,
     );
-
-    return { model, loader };
   },
 
   handlers: {

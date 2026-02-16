@@ -72,8 +72,12 @@ const loadModelOptionsBaseSchema = z.union([
     modelSrc: modelSrcInputSchema,
     modelType: ttsModelTypeSchema,
     modelConfig: ttsConfigSchema,
-    configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
-    eSpeakDataPath: z.string(),
+    ttsTokenizerSrc: modelSrcInputSchema,
+    ttsSpeechEncoderSrc: modelSrcInputSchema,
+    ttsEmbedTokensSrc: modelSrcInputSchema,
+    ttsConditionalDecoderSrc: modelSrcInputSchema,
+    ttsLanguageModelSrc: modelSrcInputSchema,
+    referenceAudioSrc: modelSrcInputSchema,
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -211,8 +215,12 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelSrcInputSchema,
       modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
-      configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
-      eSpeakDataPath: z.string(),
+      ttsTokenizerSrc: modelSrcInputSchema,
+      ttsSpeechEncoderSrc: modelSrcInputSchema,
+      ttsEmbedTokensSrc: modelSrcInputSchema,
+      ttsConditionalDecoderSrc: modelSrcInputSchema,
+      ttsLanguageModelSrc: modelSrcInputSchema,
+      referenceAudioSrc: modelSrcInputSchema,
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
@@ -227,10 +235,14 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      configSrc: data.configSrc
-        ? modelInputToSrcSchema.parse(data.configSrc)
-        : undefined,
-      eSpeakDataPath: data.eSpeakDataPath,
+      ttsTokenizerSrc: modelInputToSrcSchema.parse(data.ttsTokenizerSrc),
+      ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.ttsSpeechEncoderSrc),
+      ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.ttsEmbedTokensSrc),
+      ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
+        data.ttsConditionalDecoderSrc,
+      ),
+      ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.ttsLanguageModelSrc),
+      referenceAudioSrc: modelInputToSrcSchema.parse(data.referenceAudioSrc),
     })),
   z
     .object({
@@ -324,8 +336,12 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
   modelConfig: ttsConfigSchema,
-  configSrc: z.string().optional(), // Optional - auto-derived from registry:// URLs
-  eSpeakDataPath: z.string(),
+  ttsTokenizerSrc: z.string(),
+  ttsSpeechEncoderSrc: z.string(),
+  ttsEmbedTokensSrc: z.string(),
+  ttsConditionalDecoderSrc: z.string(),
+  ttsLanguageModelSrc: z.string(),
+  referenceAudioSrc: z.string(),
 });
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
@@ -427,8 +443,12 @@ export const loadModelServerParamsSchema = z.object({
   options: loadModelOptionsSchema,
   projectionModelPath: z.string().optional(),
   vadModelPath: z.string().optional(),
-  ttsConfigModelPath: z.string().optional(),
-  eSpeakDataPath: z.string().optional(),
+  ttsTokenizerPath: z.string().optional(),
+  ttsSpeechEncoderPath: z.string().optional(),
+  ttsEmbedTokensPath: z.string().optional(),
+  ttsConditionalDecoderPath: z.string().optional(),
+  ttsLanguageModelPath: z.string().optional(),
+  referenceAudioPath: z.string().optional(),
   detectorModelPath: z.string().optional(),
   modelName: z.string().optional(),
 });

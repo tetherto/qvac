@@ -155,6 +155,30 @@ export class ESpeakDataPathRequiredError extends QvacErrorBase {
   }
 }
 
+export class TtsArtifactsRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TTS_ARTIFACTS_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TtsReferenceAudioRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TTS_REFERENCE_AUDIO_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Model Unloading Errors ==============
 
 export class ModelUnloadFailedError extends QvacErrorBase {

@@ -20,12 +20,13 @@ import {
   validateShardedModelCache,
 } from "@/server/utils";
 import {
-  ESpeakDataPathRequiredError,
   ModelLoadFailedError,
   PluginNotFoundError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError,
+  TtsArtifactsRequiredError,
+  TtsReferenceAudioRequiredError,
 } from "@/utils/errors-server";
 import { getPlugin } from "@/server/plugins";
 import type FilesystemDL from "@qvac/dl-filesystem";
@@ -42,8 +43,12 @@ export async function loadModel(params: LoadModelServerParams) {
     options,
     projectionModelPath,
     vadModelPath,
-    ttsConfigModelPath,
-    eSpeakDataPath,
+    ttsTokenizerPath,
+    ttsSpeechEncoderPath,
+    ttsEmbedTokensPath,
+    ttsConditionalDecoderPath,
+    ttsLanguageModelPath,
+    referenceAudioPath,
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
@@ -74,8 +79,8 @@ export async function loadModel(params: LoadModelServerParams) {
         `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`,
       );
     }
-  } else {
-    // For non-sharded models, validate single file exists
+  } else if (modelType !== ModelType.onnxTts) {
+    // For non-sharded, non-TTS models, validate single file exists
     try {
       const modelDir = path.dirname(modelPath);
       const modelFile = path.basename(modelPath);
@@ -93,10 +98,22 @@ export async function loadModel(params: LoadModelServerParams) {
       throw new ModelFileLocateFailedError(modelType, modelPath, error);
     }
   }
+  // TTS (Chatterbox): modelPath is tokenizer path; all 5 artifacts validated below
 
   // Model-type-specific validation
-  if (modelType === ModelType.onnxTts && !eSpeakDataPath) {
-    throw new ESpeakDataPathRequiredError();
+  if (modelType === ModelType.onnxTts) {
+    const hasAllTtsArtifacts =
+      ttsTokenizerPath &&
+      ttsSpeechEncoderPath &&
+      ttsEmbedTokensPath &&
+      ttsConditionalDecoderPath &&
+      ttsLanguageModelPath;
+    if (!hasAllTtsArtifacts) {
+      throw new TtsArtifactsRequiredError();
+    }
+    if (!referenceAudioPath) {
+      throw new TtsReferenceAudioRequiredError();
+    }
   }
   if (modelType === ModelType.onnxOcr && !detectorModelPath) {
     throw new ModelLoadFailedError(
@@ -114,8 +131,15 @@ export async function loadModel(params: LoadModelServerParams) {
   if (projectionModelPath)
     artifacts["projectionModelPath"] = projectionModelPath;
   if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
-  if (ttsConfigModelPath) artifacts["ttsConfigModelPath"] = ttsConfigModelPath;
-  if (eSpeakDataPath) artifacts["eSpeakDataPath"] = eSpeakDataPath;
+  if (ttsTokenizerPath) artifacts["tokenizerPath"] = ttsTokenizerPath;
+  if (ttsSpeechEncoderPath)
+    artifacts["speechEncoderPath"] = ttsSpeechEncoderPath;
+  if (ttsEmbedTokensPath) artifacts["embedTokensPath"] = ttsEmbedTokensPath;
+  if (ttsConditionalDecoderPath)
+    artifacts["conditionalDecoderPath"] = ttsConditionalDecoderPath;
+  if (ttsLanguageModelPath)
+    artifacts["languageModelPath"] = ttsLanguageModelPath;
+  if (referenceAudioPath) artifacts["referenceAudioPath"] = referenceAudioPath;
   if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
 
   const result = plugin.createModel({
