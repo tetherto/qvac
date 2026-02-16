@@ -87,27 +87,14 @@ function parseArgs (argv) {
   return parsed
 }
 
-function ensureDir (dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true })
-}
-
 function elapsedMs (hrStart) {
   const [sec, nano] = process.hrtime(hrStart)
   return sec * 1000 + nano / 1e6
 }
 
 function round (num, digits = 4) {
-  if (typeof num !== 'number' || Number.isNaN(num)) return null
   const scale = Math.pow(10, digits)
   return Math.round(num * scale) / scale
-}
-
-function parsePositiveInt (value, name) {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`Invalid ${name}: ${value}. Expected a positive integer.`)
-  }
-  return parsed
 }
 
 function cosineSimilarity (a, b) {
@@ -145,10 +132,9 @@ function normalizeEmbeddings (rawEmbeddings) {
 
 function buildConfigString (runtimeConfig, options = {}) {
   const debugEnabled = !!options.debugEnabled
-  const parts = []
+  const parts = ['verbosity\t0']
   if (runtimeConfig.device != null) parts.push(`-dev\t${runtimeConfig.device}`)
   if (runtimeConfig.batchSize != null) parts.push(`--batch-size\t${runtimeConfig.batchSize}`)
-  if (runtimeConfig.verbosity != null) parts.push(`verbosity\t${runtimeConfig.verbosity}`)
   if (runtimeConfig.flashAttn != null) parts.push(`-fa\t${runtimeConfig.flashAttn}`)
   if (runtimeConfig.ngl != null) parts.push(`-ngl\t${runtimeConfig.ngl}`)
   if (runtimeConfig.noMmap) parts.push('--no-mmap')
@@ -165,18 +151,6 @@ function resolveModelName (modelDef, quantization) {
 
 function checkModelExists (modelDir, modelName) {
   return fs.existsSync(path.join(modelDir, modelName))
-}
-
-function memorySnapshot () {
-  if (typeof process.memoryUsage !== 'function') {
-    return { rssMb: null, heapUsedMb: null, externalMb: null }
-  }
-  const mem = process.memoryUsage()
-  return {
-    rssMb: round(mem.rss / (1024 * 1024), 2),
-    heapUsedMb: round(mem.heapUsed / (1024 * 1024), 2),
-    externalMb: round(mem.external / (1024 * 1024), 2)
-  }
 }
 
 function similarityStats (baseline, candidate) {
@@ -223,8 +197,13 @@ function uniqueValuesWithDefault (values, defaultValue) {
 }
 
 function buildCases (modelDef, sweep) {
-  const baseQuant = modelDef.defaultQuantization
+  const baseQuant = Array.isArray(modelDef.quantizations) && modelDef.quantizations.length > 0
+    ? modelDef.quantizations[0]
+    : null
   const defaults = modelDef.defaults || {}
+  if (!baseQuant) {
+    throw new Error(`No baseline quantization configured for model "${modelDef.id}"`)
+  }
   const supportedQuants = uniqueValuesWithDefault(sweep.quantization, baseQuant)
     .filter((quant) => !!resolveModelName(modelDef, quant))
 
@@ -236,7 +215,6 @@ function buildCases (modelDef, sweep) {
   const batchSizes = uniqueValuesWithDefault(sweep.batchSize, defaults.batchSize)
   const noMmapValues = uniqueValuesWithDefault(sweep.noMmap, defaults.noMmap)
   const flashAttnValues = uniqueValuesWithDefault(sweep.flashAttn, defaults.flashAttn)
-  const verbosityValues = uniqueValuesWithDefault(sweep.verbosity, defaults.verbosity)
 
   const cases = []
   cases.push({
@@ -249,19 +227,18 @@ function buildCases (modelDef, sweep) {
     isBaseline: true
   })
 
-  if (devices.length > 0 && batchSizes.length > 0 && noMmapValues.length > 0 && flashAttnValues.length > 0 && verbosityValues.length > 0) {
+  if (devices.length > 0 && batchSizes.length > 0 && noMmapValues.length > 0 && flashAttnValues.length > 0) {
     const combos = cartesianProduct([
       supportedQuants,
       devices,
       batchSizes,
       noMmapValues,
       flashAttnValues,
-      verbosityValues
     ])
 
-    for (const [quantization, device, batchSize, noMmap, flashAttn, verbosity] of combos) {
+    for (const [quantization, device, batchSize, noMmap, flashAttn] of combos) {
       cases.push({
-        caseId: `${modelDef.id}__q=${quantization}__dev=${device}__bs=${batchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}__v=${verbosity}`,
+        caseId: `${modelDef.id}__q=${quantization}__dev=${device}__bs=${batchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}`,
         parameter: 'full-grid',
         value: 'combination',
         quantization,
@@ -272,7 +249,6 @@ function buildCases (modelDef, sweep) {
           batchSize,
           noMmap,
           flashAttn,
-          verbosity
         },
         isBaseline: false
       })
@@ -385,11 +361,8 @@ function aggregateRunMetrics (runMetrics) {
   const loadMsValues = runMetrics.map((x) => x.loadMs)
   const runMsValues = runMetrics.map((x) => x.runMs)
   const unloadMsValues = runMetrics.map((x) => x.unloadMs)
-  const epsValues = runMetrics.map((x) => x.embeddingsPerSecond)
-  const tpsValues = runMetrics.map((x) => x.tps)
-  const rssValues = runMetrics.map((x) => x.runtimeMemory.rssMb).filter((x) => x != null)
-  const heapValues = runMetrics.map((x) => x.runtimeMemory.heapUsedMb).filter((x) => x != null)
-  const extValues = runMetrics.map((x) => x.runtimeMemory.externalMb).filter((x) => x != null)
+  const epsValues = runMetrics.map((x) => x.embeddingsPerSecond).filter((x) => x != null)
+  const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
 
   return {
     repeats: runMetrics.length,
@@ -400,12 +373,7 @@ function aggregateRunMetrics (runMetrics) {
     runMsStd: round(stddev(runMsValues), 3),
     unloadMsStd: round(stddev(unloadMsValues), 3),
     embeddingsPerSecond: round(average(epsValues), 3),
-    tps: round(average(tpsValues), 3),
-    runtimeMemory: {
-      rssMb: round(average(rssValues), 2),
-      heapUsedMb: round(average(heapValues), 2),
-      externalMb: round(average(extValues), 2)
-    }
+    tps: round(average(tpsValues), 3)
   }
 }
 
@@ -420,6 +388,7 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
   let runMs = null
   let unloadMs = null
   let embeddings = null
+  let nativeTps = null
   let primaryError = null
   const cleanupErrors = []
 
@@ -429,7 +398,7 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
       loader,
       logger: addonRuntimeLogger,
       diskPath: modelDir,
-      opts: { stats: false }
+      opts: { stats: true }
     }, configString)
 
     const loadStart = process.hrtime()
@@ -439,8 +408,11 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
     const runStart = process.hrtime()
     const response = await model.run(inputs)
     const rawEmbeddings = await response.await()
-    runMs = elapsedMs(runStart)
+    const runtimeStats = response.stats
+    const wallClockRunMs = elapsedMs(runStart)
+    runMs = runtimeStats.total_time_ms ?? wallClockRunMs
     embeddings = normalizeEmbeddings(rawEmbeddings)
+    nativeTps = runtimeStats.tokens_per_second
   } catch (err) {
     primaryError = err
   } finally {
@@ -475,8 +447,7 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
       estimatedTokens,
       inputsCount: inputs.length,
       embeddingsPerSecond: round(runS ? inputs.length / runS : null, 3),
-      tps: round(runS ? estimatedTokens / runS : null, 3),
-      runtimeMemory: memorySnapshot()
+      tps: round(nativeTps != null ? nativeTps : (runS ? estimatedTokens / runS : null), 3)
     },
     embeddings
   }
@@ -485,29 +456,42 @@ async function runCaseOnce ({ addonCtor, addonSource, modelDir, modelName, runti
 async function runCase ({ addonCtor, addonSource, modelDir, modelName, runtimeConfig, inputs, repeats, onRepeatComplete, debugEnabled }) {
   const runMetrics = []
   let firstEmbeddings = null
+  const errors = []
 
   for (let repeat = 1; repeat <= repeats; repeat++) {
-    const result = await runCaseOnce({
-      addonCtor,
-      addonSource,
-      modelDir,
-      modelName,
-      runtimeConfig,
-      inputs,
-      debugEnabled
-    })
-    runMetrics.push(result.metrics)
-    if (!firstEmbeddings) {
-      firstEmbeddings = result.embeddings
-    }
-    if (typeof onRepeatComplete === 'function') {
-      onRepeatComplete({ repeat, repeats })
+    try {
+      const result = await runCaseOnce({
+        addonCtor,
+        addonSource,
+        modelDir,
+        modelName,
+        runtimeConfig,
+        inputs,
+        debugEnabled
+      })
+      runMetrics.push(result.metrics)
+      if (!firstEmbeddings) {
+        firstEmbeddings = result.embeddings
+      }
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error)
+      errors.push({
+        repeat,
+        message
+      })
+    } finally {
+      if (typeof onRepeatComplete === 'function') {
+        onRepeatComplete({ repeat, repeats })
+      }
     }
   }
 
   return {
     metrics: aggregateRunMetrics(runMetrics),
-    embeddings: firstEmbeddings
+    embeddings: firstEmbeddings,
+    errors,
+    repeatsAttempted: repeats,
+    repeatsSucceeded: runMetrics.length
   }
 }
 
@@ -532,12 +516,10 @@ function toMarkdown (report) {
   lines.push(`- Sweep mode: full-grid`)
   lines.push(`- Input prompts: ${report.inputsCount}`)
   lines.push('')
-  lines.push('> Runtime memory currently reports process-level JS memory only.')
-  lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Batch Size | No Mmap | Flash Attn | Verbosity | Load ms (avg) | Run ms (avg) | Unload ms (avg) | Memory RSS MB (avg) | TPS (avg) | Avg CosSim |')
-    lines.push('|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|')
+    lines.push('| Quantization | Device | Batch Size | No Mmap | Flash Attn | Status | Load ms (avg) | Run ms (avg) | Unload ms (avg) | TPS (avg) | Avg CosSim | Error |')
+    lines.push('|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
       const cos = item.similarity && typeof item.similarity.avg === 'number' ? item.similarity.avg : ''
       const quantizationCell = item.isBaseline ? 'default' : (item.quantization ?? '')
@@ -553,16 +535,15 @@ function toMarkdown (report) {
       const flashAttnCell = item.isBaseline
         ? 'default'
         : (item.runtimeConfig && item.runtimeConfig.flashAttn != null ? String(item.runtimeConfig.flashAttn) : '')
-      const verbosityCell = item.isBaseline
-        ? 'default'
-        : (item.runtimeConfig && item.runtimeConfig.verbosity != null ? String(item.runtimeConfig.verbosity) : '')
-      const memoryRssMb = item.metrics && item.metrics.runtimeMemory
-        ? item.metrics.runtimeMemory.rssMb
-        : ''
+      const statusCell = item.status || 'ok'
+      const errorCell = item.error && item.error.message ? truncateText(item.error.message, 120) : ''
       lines.push(
-        `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${verbosityCell}` +
-        ` | ${item.metrics.loadMs ?? ''} | ${item.metrics.runMs ?? ''} | ${item.metrics.unloadMs ?? ''}` +
-        ` | ${memoryRssMb ?? ''} | ${item.metrics.tps ?? ''} | ${cos} |`
+        `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${noMmapCell} | ${flashAttnCell}` +
+        ` | ${statusCell} | ${item.metrics && item.metrics.loadMs != null ? item.metrics.loadMs : ''}` +
+        ` | ${item.metrics && item.metrics.runMs != null ? item.metrics.runMs : ''}` +
+        ` | ${item.metrics && item.metrics.unloadMs != null ? item.metrics.unloadMs : ''}` +
+        ` | ${item.metrics && item.metrics.tps != null ? item.metrics.tps : ''}` +
+        ` | ${cos} | ${errorCell} |`
       )
     }
     lines.push('')
@@ -584,7 +565,7 @@ async function main () {
   const debugLogger = createDebugLogger(debugEnabled)
   const addonSource = parseAddonSource(args['addon-source'])
   const addonCtor = resolveAddonCtor(addonSource)
-  const repeats = args.repeats ? parsePositiveInt(args.repeats, 'repeats') : DEFAULT_REPEATS
+  const repeats = args.repeats ? Number(args.repeats) : DEFAULT_REPEATS
   const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
   const inputsFilePath = args['inputs-file']
     ? path.resolve(args['inputs-file'])
@@ -592,7 +573,7 @@ async function main () {
   if (!fs.existsSync(inputsFilePath)) {
     throw new Error(
       `Missing inputs file: ${inputsFilePath}. ` +
-      'Run `npm run run:param-sweep` to auto-generate MTEB inputs, or pass --inputs-file <path>.'
+      'Provide --inputs-file <path> or place a JSON string[] at benchmarks/performance/inputs.json.'
     )
   }
   const inputs = loadInputsFromFile(inputsFilePath)
@@ -605,7 +586,7 @@ async function main () {
     throw new Error(`No matching models for --models=${selectedModelIds.join(',')}`)
   }
 
-  ensureDir(resultsDir)
+  fs.mkdirSync(resultsDir, { recursive: true })
   const report = {
     startedAt: new Date().toISOString(),
     finishedAt: null,
@@ -638,52 +619,96 @@ async function main () {
 
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
       const testCase = cases[caseIndex]
-      if (!testCase.modelName) {
-        throw new Error(
-          `Quantization "${testCase.quantization}" is not configured for model "${modelDef.id}" (case ${testCase.caseId})`
-        )
-      }
-      if (!checkModelExists(modelDef.modelDir, testCase.modelName)) {
-        throw new Error(
-          `Missing model file for case ${testCase.caseId}: ${path.join(modelDef.modelDir, testCase.modelName)}. ` +
-          'Run model preparation first (npm run performance:prepare-models).'
-        )
-      }
+      try {
+        if (!testCase.modelName) {
+          throw new Error(
+            `Quantization "${testCase.quantization}" is not configured for model "${modelDef.id}" (case ${testCase.caseId})`
+          )
+        }
+        if (!checkModelExists(modelDef.modelDir, testCase.modelName)) {
+          throw new Error(
+            `Missing model file for case ${testCase.caseId}: ${path.join(modelDef.modelDir, testCase.modelName)}. ` +
+            'Run model preparation first (npm run performance:prepare-models).'
+          )
+        }
 
-      debugLogger.log(`Running: ${testCase.caseId}`)
-      const result = await runCase({
-        addonCtor,
-        addonSource,
-        modelDir: modelDef.modelDir,
-        modelName: testCase.modelName,
-        runtimeConfig: testCase.runtimeConfig,
-        inputs,
-        repeats,
-        debugEnabled,
-        onRepeatComplete: ({ repeat, repeats: repeatsForCase }) => {
+        debugLogger.log(`Running: ${testCase.caseId}`)
+        const result = await runCase({
+          addonCtor,
+          addonSource,
+          modelDir: modelDef.modelDir,
+          modelName: testCase.modelName,
+          runtimeConfig: testCase.runtimeConfig,
+          inputs,
+          repeats,
+          debugEnabled,
+          onRepeatComplete: ({ repeat, repeats: repeatsForCase }) => {
+            progress.tick({
+              modelId: modelDef.id,
+              caseIndex: caseIndex + 1,
+              caseCount: cases.length,
+              repeat,
+              repeats: repeatsForCase
+            })
+          }
+        })
+
+        if (testCase.parameter === 'baseline' && result.embeddings) {
+          baselineEmbeddings = result.embeddings
+        }
+
+        const similarity = testCase.parameter === 'baseline'
+          ? (
+              result.embeddings
+                ? { avg: 1, min: 1, max: 1, count: result.embeddings.length }
+                : null
+            )
+          : similarityStats(baselineEmbeddings, result.embeddings)
+
+        const hasRepeatErrors = Array.isArray(result.errors) && result.errors.length > 0
+        const status = hasRepeatErrors
+          ? (result.repeatsSucceeded > 0 ? 'partial-failure' : 'failed')
+          : 'ok'
+        const error = hasRepeatErrors
+          ? {
+              message: `${result.errors.length}/${result.repeatsAttempted} repeats failed`,
+              repeats: result.errors
+            }
+          : null
+
+        caseResults.push({
+          ...testCase,
+          metrics: result.metrics,
+          similarity,
+          status,
+          repeatsAttempted: result.repeatsAttempted,
+          repeatsSucceeded: result.repeatsSucceeded,
+          error
+        })
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error)
+        debugLogger.warn(`Case failed: ${testCase.caseId}: ${message}`)
+        for (let repeat = 1; repeat <= repeats; repeat++) {
           progress.tick({
             modelId: modelDef.id,
             caseIndex: caseIndex + 1,
             caseCount: cases.length,
             repeat,
-            repeats: repeatsForCase
+            repeats
           })
         }
-      })
-
-      if (testCase.parameter === 'baseline') {
-        baselineEmbeddings = result.embeddings
+        caseResults.push({
+          ...testCase,
+          metrics: null,
+          similarity: null,
+          status: 'failed',
+          repeatsAttempted: repeats,
+          repeatsSucceeded: 0,
+          error: {
+            message
+          }
+        })
       }
-
-      const similarity = testCase.parameter === 'baseline'
-        ? { avg: 1, min: 1, max: 1, count: baselineEmbeddings ? baselineEmbeddings.length : 0 }
-        : similarityStats(baselineEmbeddings, result.embeddings)
-
-      caseResults.push({
-        ...testCase,
-        metrics: result.metrics,
-        similarity
-      })
     }
 
     report.models.push({

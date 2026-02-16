@@ -6,12 +6,7 @@
       "gguf": {
         "repo": "unsloth/embeddinggemma-300m-GGUF",
         "revision": "main",
-        "defaultQuantization": "Q8_0",
-        "files": {
-          "Q4_0": "embeddinggemma-300m-Q4_0.gguf",
-          "Q8_0": "embeddinggemma-300M-Q8_0.gguf",
-          "F16": "embeddinggemma-300M-BF16.gguf"
-        }
+        "quantizations": ["Q8_0", "Q4_0"]
       },
       "pytorch": {
         "repo": "google/embeddinggemma-300m",
@@ -23,11 +18,7 @@
       "gguf": {
         "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
         "revision": "main",
-        "defaultQuantization": "Q8_0",
-        "files": {
-          "Q8_0": "Qwen3-Embedding-0.6B-Q8_0.gguf",
-          "F16": "Qwen3-Embedding-0.6B-f16.gguf"
-        }
+        "quantizations": ["Q8_0", "F16"]
       },
       "pytorch": {
         "repo": "Qwen/Qwen3-Embedding-0.6B",
@@ -39,12 +30,7 @@
       "gguf": {
         "repo": "Qwen/Qwen3-Embedding-4B-GGUF",
         "revision": "main",
-        "defaultQuantization": "Q8_0",
-        "files": {
-          "Q4_K_M": "Qwen3-Embedding-4B-Q4_K_M.gguf",
-          "Q8_0": "Qwen3-Embedding-4B-Q8_0.gguf",
-          "F16": "Qwen3-Embedding-4B-f16.gguf"
-        }
+        "quantizations": ["Q8_0", "Q4_K_M", "F16"]
       },
       "pytorch": {
         "repo": "Qwen/Qwen3-Embedding-4B",

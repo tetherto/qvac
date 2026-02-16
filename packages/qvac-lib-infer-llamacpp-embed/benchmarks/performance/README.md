@@ -20,13 +20,9 @@ npm run benchmarks:param-sweep
 
 This command runs:
 
-1. `prepare_models.py --target addon`
-2. MTEB input generation to `benchmarks/performance/mteb-inputs.json`
-3. Bare benchmark runner (`embed-parameter-sweep.js`)
-
-MTEB input generation reuses the same benchmark client logic from `benchmarks/client/utils.py`.
-If needed, it bootstraps `benchmarks/client/venv` with Python 3.10+ and installs
-`benchmarks/client/requirements.txt`.
+1. `prepare-models.js --target addon`
+2. Bare benchmark runner (`embed-parameter-sweep.js`) with static inputs from
+   `benchmarks/performance/inputs.json`
 
 ## Addon Source Selection
 
@@ -73,8 +69,6 @@ Model list and quantization files come from:
 
 - `npm run prepare:models:addon`
 - `npm run prepare:models:all`
-- `npm run prepare:client-env`
-- `npm run prepare:inputs:mteb`
 - `npm run run:param-sweep`
 
 ## PyTorch Placeholder

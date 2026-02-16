@@ -4,10 +4,10 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
-const DEFAULT_MODELS_DIR = path.resolve(__dirname, '..', '..', 'test', 'model')
+const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
 const MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
 const RESOLVED_MODELS_PATH = path.resolve(__dirname, 'resolved-models.json')
-const DEFAULT_INPUTS_FILE = path.resolve(__dirname, 'mteb-inputs.json')
+const DEFAULT_INPUTS_FILE = path.resolve(__dirname, 'inputs.json')
 const DEFAULT_REPEATS = 3
 
 // Benchmark-controlled runtime defaults used as the baseline reference.
@@ -26,6 +26,10 @@ const MODEL_RUNTIME_OVERRIDES = {
 }
 
 function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
+  const manifestQuants = Array.isArray(manifestModel.gguf && manifestModel.gguf.quantizations)
+    ? manifestModel.gguf.quantizations
+    : []
+
   if (resolvedModelEntry && resolvedModelEntry.gguf && resolvedModelEntry.gguf.files) {
     const normalized = {}
     for (const [quantization, localPath] of Object.entries(resolvedModelEntry.gguf.files)) {
@@ -33,7 +37,14 @@ function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
     }
     return normalized
   }
-  return manifestModel.gguf.files || {}
+
+  // Without resolved-models.json, keep supported quantization keys but mark
+  // filenames as null so checks can fail with a clear "missing model file" error.
+  const fallback = {}
+  for (const quantization of manifestQuants) {
+    fallback[quantization] = null
+  }
+  return fallback
 }
 
 function loadModelsFromManifest () {
@@ -55,7 +66,7 @@ function loadModelsFromManifest () {
       id: model.id,
       source: `https://huggingface.co/${model.gguf.repo}`,
       modelDir: DEFAULT_MODELS_DIR,
-      defaultQuantization: model.gguf.defaultQuantization,
+      quantizations: Array.isArray(model.gguf.quantizations) ? model.gguf.quantizations : [],
       quantizationFiles,
       defaults
     }
@@ -65,12 +76,11 @@ function loadModelsFromManifest () {
 const MODELS = loadModelsFromManifest()
 
 const PARAMETER_SWEEP = {
-  quantization: ['Q4_0', 'F16'],
-  device: ['cpu', 'gpu'],
-  batchSize: [512, 1024],
+  quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
+  device: ['cpu','gpu'],
+  batchSize: [512, 2048],
   noMmap: [false, true],
-  flashAttn: ['off', 'on'],
-  verbosity: [0]
+  flashAttn: ['off', 'on']
 }
 
 module.exports = {
