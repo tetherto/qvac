@@ -12,7 +12,11 @@ import {
   getModelEntry,
   updateModelConfig,
 } from "@/server/bare/registry/model-registry";
-import { generateShortHash, transformConfigForReload } from "@/server/utils";
+import {
+  generateShortHash,
+  transformConfigForReload,
+  getModelsCacheDir,
+} from "@/server/utils";
 import {
   TTSConfigModelRequiredError,
   ESpeakDataPathRequiredError,
@@ -24,10 +28,93 @@ import {
 import { getServerLogger } from "@/logging";
 import { OCR_CRAFT_DETECTOR } from "@/models/registry";
 import { downloadParakeetModelFromHttp } from "@/server/rpc/handlers/load-model/http";
+import fs, { promises as fsPromises } from "bare-fs";
+import path from "bare-path";
 
 const logger = getServerLogger();
 
 const OCR_DETECTOR_FILENAME = "detector_craft.onnx";
+
+/**
+ * Sibling files that must be co-located with the Parakeet encoder.
+ * "nemo128.onnx" is the preprocessor, renamed to "preprocessor.onnx" in the
+ * assembled model directory because that is what the addon expects.
+ */
+const PARAKEET_SIBLING_FILES: readonly { src: string; dst: string }[] = [
+  { src: "encoder-model.onnx.data", dst: "encoder-model.onnx.data" },
+  { src: "decoder_joint-model.onnx", dst: "decoder_joint-model.onnx" },
+  { src: "vocab.txt", dst: "vocab.txt" },
+  { src: "nemo128.onnx", dst: "preprocessor.onnx" },
+];
+
+/**
+ * Downloads all Parakeet model files from the registry, assembles them in a
+ * shared directory, and returns the path to encoder-model.onnx.
+ *
+ * The primary modelSrc points to encoder-model.onnx; sibling files are
+ * auto-derived from the same base path (same HuggingFace repo / commit).
+ */
+async function downloadParakeetFromRegistry(
+  modelSrc: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  seed?: boolean,
+): Promise<string> {
+  const lastSlash = modelSrc.lastIndexOf("/");
+  const basePath = modelSrc.substring(0, lastSlash + 1);
+
+  const assemblyKey = generateShortHash(basePath);
+  const modelDir = path.join(getModelsCacheDir(), `parakeet_${assemblyKey}`);
+
+  try {
+    await fsPromises.mkdir(modelDir, { recursive: true });
+  } catch {
+    // directory may already exist
+  }
+
+  // Download encoder-model.onnx (the primary file)
+  const encoderCachePath = await resolveModelPath(
+    modelSrc,
+    progressCallback,
+    seed,
+  );
+  ensureLinkSync(encoderCachePath, path.join(modelDir, "encoder-model.onnx"));
+
+  // Download and link each sibling
+  for (const { src, dst } of PARAKEET_SIBLING_FILES) {
+    const siblingUrl = `${basePath}${src}`;
+    logger.info(`Auto-deriving parakeet sibling: ${siblingUrl}`);
+
+    const siblingCachePath = await resolveModelPath(
+      siblingUrl,
+      progressCallback,
+      seed,
+    );
+    ensureLinkSync(siblingCachePath, path.join(modelDir, dst));
+  }
+
+  logger.info(`✅ Parakeet model assembled in: ${modelDir}`);
+  return path.join(modelDir, "encoder-model.onnx");
+}
+
+/**
+ * Create a symlink from `target` to `linkPath` if it does not already exist.
+ * Falls back to copying if symlinks are not supported.
+ */
+function ensureLinkSync(target: string, linkPath: string): void {
+  try {
+    fs.accessSync(linkPath);
+    return; // already exists
+  } catch {
+    // does not exist yet
+  }
+
+  try {
+    fs.symlinkSync(target, linkPath);
+  } catch {
+    // symlink may fail on some filesystems; fall back to copy
+    fs.copyFileSync(target, linkPath);
+  }
+}
 
 export async function handleLoadModel(
   request: LoadModelRequest,
@@ -66,7 +153,7 @@ export async function handleLoadModel(
       : undefined;
 
   try {
-    // Parakeet models are multi-file and need a dedicated downloader for HTTP
+    // Parakeet models are multi-file: auto-derive siblings for HTTP and registry
     let modelPath: string;
     if (
       canonicalModelType === ModelType.parakeetTranscription &&
@@ -76,6 +163,16 @@ export async function handleLoadModel(
       modelPath = await downloadParakeetModelFromHttp(
         modelSrc,
         progressCallback,
+      );
+    } else if (
+      canonicalModelType === ModelType.parakeetTranscription &&
+      typeof modelSrc === "string" &&
+      modelSrc.startsWith("registry://")
+    ) {
+      modelPath = await downloadParakeetFromRegistry(
+        modelSrc,
+        progressCallback,
+        seed,
       );
     } else {
       modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
