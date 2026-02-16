@@ -315,7 +315,10 @@ export async function extractAndWriteTensorsFile(
   shardFilenames: string[],
   baseFilename: string,
 ): Promise<string> {
-  const tensorsFilePath = validateAndJoinPath(shardDir, `${baseFilename}.tensors.txt`);
+  const tensorsFilePath = validateAndJoinPath(
+    shardDir,
+    `${baseFilename}.tensors.txt`,
+  );
 
   try {
     await fsPromises.access(tensorsFilePath);

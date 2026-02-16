@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.5]
+
+Release Date: 2026-02-14
+
+### 🔧 Changed
+
+- Upgraded Bare ecosystem dependencies:
+  - `bare-fs`: ^2.1.5 → ^4.5.2
+  - `bare-os`: ^2.2.0 → ^3.6.2
+  - `bare-process`: ^1.3.0 → ^4.2.2
+  - `corestore`: ^6.18.4 → ^7.4.5
+
 ## [0.1.4]
 
 Release Date: 2026-02-13

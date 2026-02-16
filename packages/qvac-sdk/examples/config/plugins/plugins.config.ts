@@ -1,0 +1,6 @@
+export default {
+  plugins: [
+    "@qvac/sdk/llamacpp-completion/plugin",
+    "@qvac/sdk/nmtcpp-translation/plugin",
+  ],
+};

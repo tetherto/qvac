@@ -11,10 +11,14 @@ const testDistDir = join(testDistRoot, "test", "unit");
 // Step 1: Compile
 console.log("Compiling tests...");
 spawnSync("rm", ["-rf", testDistRoot], { cwd: pkgRoot });
-const compile = spawnSync("tsc", ["--project", join(pkgRoot, "test", "tsconfig.json")], {
-  stdio: "inherit",
-  cwd: pkgRoot,
-});
+const compile = spawnSync(
+  "tsc",
+  ["--project", join(pkgRoot, "test", "tsconfig.json")],
+  {
+    stdio: "inherit",
+    cwd: pkgRoot,
+  },
+);
 // tsc exits non-zero for pre-existing issues in other test files (unused @ts-expect-error,
 // index signature access, etc.) but emits JS via noEmitOnError: false — verify output exists
 if (compile.status !== 0 && !existsSync(testDistDir)) {
@@ -46,12 +50,16 @@ for (const file of walk(testDistRoot)) {
   const content = readFileSync(file, "utf-8");
   let updated = content;
   // Static imports/exports: from "@/..."
-  updated = updated.replace(/((?:from|import)\s*["'])@\/([^"']+)(["'])/g, (_m: string, pre: string, spec: string, suf: string) =>
-    `${pre}${resolveTarget(file, spec)}${suf}`,
+  updated = updated.replace(
+    /((?:from|import)\s*["'])@\/([^"']+)(["'])/g,
+    (_m: string, pre: string, spec: string, suf: string) =>
+      `${pre}${resolveTarget(file, spec)}${suf}`,
   );
   // Dynamic imports: import("@/...")
-  updated = updated.replace(/(import\s*\(\s*["'])@\/([^"']+)(["']\s*\))/g, (_m: string, pre: string, spec: string, suf: string) =>
-    `${pre}${resolveTarget(file, spec)}${suf}`,
+  updated = updated.replace(
+    /(import\s*\(\s*["'])@\/([^"']+)(["']\s*\))/g,
+    (_m: string, pre: string, spec: string, suf: string) =>
+      `${pre}${resolveTarget(file, spec)}${suf}`,
   );
   if (updated !== content) writeFileSync(file, updated);
 }
@@ -63,7 +71,9 @@ if (!existsSync(testDistDir)) {
 }
 
 const testFiles = readdirSync(testDistDir).filter(
-  (f) => (f.startsWith("path-traversal") || f.startsWith("path-security")) && f.endsWith(".test.js"),
+  (f) =>
+    (f.startsWith("path-traversal") || f.startsWith("path-security")) &&
+    f.endsWith(".test.js"),
 );
 
 if (testFiles.length === 0) {

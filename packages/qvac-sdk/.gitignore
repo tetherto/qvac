@@ -12,4 +12,5 @@ tests-qvac/reports/*
 .env
 .secrets
 .artifacts
+qvac/
 PR_DESCRIPTION.md
