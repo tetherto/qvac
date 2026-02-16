@@ -49,6 +49,12 @@ export async function loadModel(params: LoadModelServerParams) {
     ttsConditionalDecoderPath,
     ttsLanguageModelPath,
     referenceAudioPath,
+    ttsVoicePath,
+    ttsSpeed,
+    ttsNumInferenceSteps,
+    ttsTextEncoderPath,
+    ttsLatentDenoiserPath,
+    ttsVoiceDecoderPath,
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
@@ -98,21 +104,35 @@ export async function loadModel(params: LoadModelServerParams) {
       throw new ModelFileLocateFailedError(modelType, modelPath, error);
     }
   }
-  // TTS (Chatterbox): modelPath is tokenizer path; all 5 artifacts validated below
+  // TTS: Chatterbox (5 artifacts + reference) or Supertonic (5 explicit artifact paths)
+  const isTtsSupertonic =
+    modelType === ModelType.onnxTts &&
+    ttsTextEncoderPath != null;
 
-  // Model-type-specific validation
   if (modelType === ModelType.onnxTts) {
-    const hasAllTtsArtifacts =
-      ttsTokenizerPath &&
-      ttsSpeechEncoderPath &&
-      ttsEmbedTokensPath &&
-      ttsConditionalDecoderPath &&
-      ttsLanguageModelPath;
-    if (!hasAllTtsArtifacts) {
-      throw new TtsArtifactsRequiredError();
-    }
-    if (!referenceAudioPath) {
-      throw new TtsReferenceAudioRequiredError();
+    if (isTtsSupertonic) {
+      if (
+        !ttsTokenizerPath ||
+        !ttsTextEncoderPath ||
+        !ttsLatentDenoiserPath ||
+        !ttsVoiceDecoderPath ||
+        !ttsVoicePath
+      ) {
+        throw new TtsArtifactsRequiredError();
+      }
+    } else {
+      const hasAllChatterboxArtifacts =
+        ttsTokenizerPath &&
+        ttsSpeechEncoderPath &&
+        ttsEmbedTokensPath &&
+        ttsConditionalDecoderPath &&
+        ttsLanguageModelPath;
+      if (!hasAllChatterboxArtifacts) {
+        throw new TtsArtifactsRequiredError();
+      }
+      if (!referenceAudioPath) {
+        throw new TtsReferenceAudioRequiredError();
+      }
     }
   }
   if (modelType === ModelType.onnxOcr && !detectorModelPath) {
@@ -140,6 +160,15 @@ export async function loadModel(params: LoadModelServerParams) {
   if (ttsLanguageModelPath)
     artifacts["languageModelPath"] = ttsLanguageModelPath;
   if (referenceAudioPath) artifacts["referenceAudioPath"] = referenceAudioPath;
+  if (ttsVoicePath) artifacts["voicePath"] = ttsVoicePath;
+  if (ttsSpeed != null) artifacts["speed"] = String(ttsSpeed);
+  if (ttsNumInferenceSteps != null)
+    artifacts["numInferenceSteps"] = String(ttsNumInferenceSteps);
+  if (ttsTextEncoderPath) artifacts["textEncoderPath"] = ttsTextEncoderPath;
+  if (ttsLatentDenoiserPath)
+    artifacts["latentDenoiserPath"] = ttsLatentDenoiserPath;
+  if (ttsVoiceDecoderPath)
+    artifacts["voiceDecoderPath"] = ttsVoiceDecoderPath;
   if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
 
   const result = plugin.createModel({

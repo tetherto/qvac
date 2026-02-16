@@ -31,6 +31,9 @@ export interface PluginHandlerDefinition<
  * - `vadModelPath` - Whisper voice activity detection model
  * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
  * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
+ * - `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
+ * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
+ * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
  * - `detectorModelPath` - OCR detector model
  *
  * Custom plugins can define their own artifact keys.

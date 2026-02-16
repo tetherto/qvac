@@ -57,12 +57,19 @@ export async function handleLoadModel(
   const ttsTtsSrcs =
     canonicalModelType === ModelType.onnxTts
       ? (request as {
+          ttsEngine?: "chatterbox" | "supertonic";
           ttsTokenizerSrc?: string;
           ttsSpeechEncoderSrc?: string;
           ttsEmbedTokensSrc?: string;
           ttsConditionalDecoderSrc?: string;
           ttsLanguageModelSrc?: string;
           referenceAudioSrc?: string;
+          ttsVoiceSrc?: string;
+          ttsSpeed?: number;
+          ttsNumInferenceSteps?: number;
+          ttsTextEncoderSrc?: string;
+          ttsLatentDenoiserSrc?: string;
+          ttsVoiceDecoderSrc?: string;
         })
       : undefined;
   const detectorModelSrc =
@@ -97,57 +104,109 @@ export async function handleLoadModel(
     let ttsConditionalDecoderPath: string | undefined;
     let ttsLanguageModelPath: string | undefined;
     let referenceAudioPath: string | undefined;
+    let ttsVoicePath: string | undefined;
+    let ttsSpeed: number | undefined;
+    let ttsNumInferenceSteps: number | undefined;
+    let ttsTextEncoderPath: string | undefined;
+    let ttsLatentDenoiserPath: string | undefined;
+    let ttsVoiceDecoderPath: string | undefined;
     if (canonicalModelType === ModelType.onnxTts && ttsTtsSrcs) {
-      const {
-        ttsTokenizerSrc,
-        ttsSpeechEncoderSrc,
-        ttsEmbedTokensSrc,
-        ttsConditionalDecoderSrc,
-        ttsLanguageModelSrc,
-        referenceAudioSrc,
-      } = ttsTtsSrcs;
-      if (
-        !ttsTokenizerSrc ||
-        !ttsSpeechEncoderSrc ||
-        !ttsEmbedTokensSrc ||
-        !ttsConditionalDecoderSrc ||
-        !ttsLanguageModelSrc
-      ) {
-        throw new TtsArtifactsRequiredError();
+      if (ttsTtsSrcs.ttsEngine === "supertonic") {
+        const {
+          ttsTokenizerSrc,
+          ttsTextEncoderSrc,
+          ttsLatentDenoiserSrc,
+          ttsVoiceDecoderSrc,
+          ttsVoiceSrc,
+        } = ttsTtsSrcs;
+        if (
+          !ttsTokenizerSrc ||
+          !ttsTextEncoderSrc ||
+          !ttsLatentDenoiserSrc ||
+          !ttsVoiceDecoderSrc ||
+          !ttsVoiceSrc
+        ) {
+          throw new TtsArtifactsRequiredError();
+        }
+        ttsSpeed = ttsTtsSrcs.ttsSpeed;
+        ttsNumInferenceSteps = ttsTtsSrcs.ttsNumInferenceSteps;
+        ttsTokenizerPath = await resolveModelPath(
+          ttsTokenizerSrc,
+          progressCallback,
+          seed,
+        );
+        ttsTextEncoderPath = await resolveModelPath(
+          ttsTextEncoderSrc,
+          progressCallback,
+          seed,
+        );
+        ttsLatentDenoiserPath = await resolveModelPath(
+          ttsLatentDenoiserSrc,
+          progressCallback,
+          seed,
+        );
+        ttsVoiceDecoderPath = await resolveModelPath(
+          ttsVoiceDecoderSrc,
+          progressCallback,
+          seed,
+        );
+        ttsVoicePath = await resolveModelPath(
+          ttsVoiceSrc,
+          progressCallback,
+          seed,
+        );
+      } else {
+        const {
+          ttsTokenizerSrc,
+          ttsSpeechEncoderSrc,
+          ttsEmbedTokensSrc,
+          ttsConditionalDecoderSrc,
+          ttsLanguageModelSrc,
+          referenceAudioSrc,
+        } = ttsTtsSrcs;
+        if (
+          !ttsTokenizerSrc ||
+          !ttsSpeechEncoderSrc ||
+          !ttsEmbedTokensSrc ||
+          !ttsConditionalDecoderSrc ||
+          !ttsLanguageModelSrc
+        ) {
+          throw new TtsArtifactsRequiredError();
+        }
+        if (!referenceAudioSrc) {
+          throw new TtsReferenceAudioRequiredError();
+        }
+        ttsTokenizerPath = await resolveModelPath(
+          ttsTokenizerSrc,
+          progressCallback,
+          seed,
+        );
+        ttsSpeechEncoderPath = await resolveModelPath(
+          ttsSpeechEncoderSrc,
+          progressCallback,
+          seed,
+        );
+        ttsEmbedTokensPath = await resolveModelPath(
+          ttsEmbedTokensSrc,
+          progressCallback,
+          seed,
+        );
+        ttsConditionalDecoderPath = await resolveModelPath(
+          ttsConditionalDecoderSrc,
+          progressCallback,
+          seed,
+        );
+        ttsLanguageModelPath = await resolveModelPath(
+          ttsLanguageModelSrc,
+          progressCallback,
+          seed,
+        );
+        referenceAudioPath = await resolveModelPath(
+          referenceAudioSrc,
+          progressCallback,
+          seed,
+        );
       }
-      if (!referenceAudioSrc) {
-        throw new TtsReferenceAudioRequiredError();
-      }
-      ttsTokenizerPath = await resolveModelPath(
-        ttsTokenizerSrc,
-        progressCallback,
-        seed,
-      );
-      ttsSpeechEncoderPath = await resolveModelPath(
-        ttsSpeechEncoderSrc,
-        progressCallback,
-        seed,
-      );
-      ttsEmbedTokensPath = await resolveModelPath(
-        ttsEmbedTokensSrc,
-        progressCallback,
-        seed,
-      );
-      ttsConditionalDecoderPath = await resolveModelPath(
-        ttsConditionalDecoderSrc,
-        progressCallback,
-        seed,
-      );
-      ttsLanguageModelPath = await resolveModelPath(
-        ttsLanguageModelSrc,
-        progressCallback,
-        seed,
-      );
-      referenceAudioPath = await resolveModelPath(
-        referenceAudioSrc,
-        progressCallback,
-        seed,
-      );
     }
 
     // For OCR models: use provided detectorModelSrc or auto-derive
@@ -226,13 +285,15 @@ export async function handleLoadModel(
     );
     const modelHashInput =
       canonicalModelType === ModelType.onnxTts && ttsTtsSrcs
-        ? `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsSpeechEncoderSrc}:${ttsTtsSrcs.ttsEmbedTokensSrc}:${ttsTtsSrcs.ttsConditionalDecoderSrc}:${ttsTtsSrcs.ttsLanguageModelSrc}:${ttsTtsSrcs.referenceAudioSrc ?? ""}:${configStr}`
+        ? ttsTtsSrcs.ttsEngine === "supertonic"
+          ? `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsTextEncoderSrc}:${ttsTtsSrcs.ttsLatentDenoiserSrc}:${ttsTtsSrcs.ttsVoiceDecoderSrc}:${ttsTtsSrcs.ttsVoiceSrc}:${configStr}`
+          : `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsSpeechEncoderSrc}:${ttsTtsSrcs.ttsEmbedTokensSrc}:${ttsTtsSrcs.ttsConditionalDecoderSrc}:${ttsTtsSrcs.ttsLanguageModelSrc}:${ttsTtsSrcs.referenceAudioSrc ?? ""}:${configStr}`
         : `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
     const effectiveModelPath =
-      canonicalModelType === ModelType.onnxTts && ttsTokenizerPath
-        ? ttsTokenizerPath
+      canonicalModelType === ModelType.onnxTts
+        ? ttsTokenizerPath ?? modelPath
         : modelPath;
 
     await loadModel({
@@ -247,6 +308,12 @@ export async function handleLoadModel(
       ttsConditionalDecoderPath,
       ttsLanguageModelPath,
       referenceAudioPath,
+      ttsVoicePath,
+      ttsSpeed,
+      ttsNumInferenceSteps,
+      ttsTextEncoderPath,
+      ttsLatentDenoiserPath,
+      ttsVoiceDecoderPath,
       detectorModelPath,
       modelName,
     });
