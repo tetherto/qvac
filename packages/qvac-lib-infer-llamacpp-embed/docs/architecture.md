@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.8.9  
+**Package:** `@qvac/embed-llamacpp` v0.10.7  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -25,8 +25,8 @@
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
 - [Decision 3: Pluggable Data Loader Architecture](#decision-3-pluggable-data-loader-architecture)
 - [Decision 4: Incremental Buffer-Based Weight Loading](#decision-4-incremental-buffer-based-weight-loading)
-- [Decision 5: Chat Message Format](#decision-5-chat-message-format-json-serialization)
-- [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue-indexjs)
+- [Decision 5: Batch Processing as Primary Use Case](#decision-5-batch-processing-as-primary-use-case)
+- [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue)
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
 
 ### Technical Debt
@@ -38,24 +38,24 @@
 
 ## Purpose
 
-`@qvac/llm-llamacpp` is a cross-platform npm package providing Large Language Model (LLM) inference for Bare runtime applications. It wraps llama.cpp in a JavaScript-friendly API, enabling local LLM execution on desktop and mobile with CPU/GPU acceleration.
+`@qvac/embed-llamacpp` is a cross-platform npm package providing text embedding generation for Bare runtime applications. It wraps llama.cpp in a JavaScript-friendly API, enabling local embedding model execution on desktop and mobile with CPU/GPU acceleration.
 
 **Core value:**
-- High-level JavaScript API for LLM inference
+- High-level JavaScript API for embedding generation
 - Peer-to-peer model distribution via Hyperdrive
-- Streaming token-by-token output
-- Text and multimodal (vision + text) models
+- Batch processing for high-throughput use cases
 - Pluggable model weight loaders
+- Vector embeddings for semantic search and similarity
 
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
 - **Multiple loaders**: Hyperdrive (P2P), filesystem, custom
-- **Streaming responses**: Async iterators or callbacks
+- **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
-- **Quantized models**: GGUF format
-- **Multimodal**: Vision models (i.e. Qwen3-VL, SmolVLM, etc.)
+- **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
 - **Sharded loading**: Automatic split GGUF handling
+- **Encoder-only models**: Optimized for embedding generation
 
 ## Target Platforms
 
@@ -67,11 +67,12 @@
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
+Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
+
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- qvac-lib-inference-addon-cpp (≥0.12.2): C++ addon framework
+- llama.cpp (≥7248.1.0): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
 
 ---
 
@@ -88,8 +89,8 @@ graph TB
     end
     
     subgraph "Inference Addons"
-        LLM[llm-llamacpp<br/>LLMs]
         EMBED[embed-llamacpp<br/>Embeddings]
+        LLM[llm-llamacpp<br/>LLMs]
         WHISPER[whispercpp<br/>STT]
         NMT[nmtcpp<br/>Translation]
     end
@@ -108,14 +109,14 @@ graph TB
         LLAMA[llama.cpp]
     end
     
-    APP --> LLM
-    LLM --> BASE
-    LLM --> DL
-    LLM --> ADDON
+    APP --> EMBED
+    EMBED --> BASE
+    EMBED --> DL
+    EMBED --> ADDON
     ADDON --> BARE
     ADDON --> LLAMA
     
-    style LLM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
+    style EMBED fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
 ```
 
 <details>
@@ -125,20 +126,20 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
+| @qvac/infer-base | Framework | ^0.2.2 | Base classes, WeightsProvider, QvacResponse |
+| @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
 | qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework |
-| llama.cpp | Native | ≥7248.1.2 | Inference engine |
+| llama.cpp | Native | ≥7248.1.0 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
-| JavaScript | LlmLlamacpp | Constructor | args, config objects |
-| LlmLlamacpp | BaseInference | Inheritance | Template method pattern |
-| LlmLlamacpp | LlamaInterface | Composition | Method calls |
-| LlamaInterface | C++ Addon | require.addon() | Native binding |
+| JavaScript | GGMLBert | Constructor | args, config objects |
+| GGMLBert | BaseInference | Inheritance | Template method pattern |
+| GGMLBert | BertInterface | Composition | Method calls |
+| BertInterface | C++ Addon | require.addon() | Native binding |
 | WeightsProvider | Data Loader | Interface | Stream protocol |
 
 </details>
@@ -147,14 +148,14 @@ graph TB
 
 ## Public API
 
-### Main Class: LlmLlamacpp
+### Main Class: GGMLBert
 
 ```mermaid
 classDiagram
-    class LlmLlamacpp {
+    class GGMLBert {
         +constructor(args, config)
         +load(closeLoader, onProgress) Promise~void~
-        +run(messages) Promise~QvacResponse~
+        +run(text) Promise~QvacResponse~
         +unload() Promise~void~
         +downloadWeights(onProgress, opts) Promise~string~
     }
@@ -167,9 +168,7 @@ classDiagram
     }
     
     class QvacResponse {
-        +iterate() AsyncIterator~string~
-        +onUpdate(callback) QvacResponse
-        +await() Promise~void~
+        +await() Promise~Array~
         +cancel() Promise~void~
         +stats object
     }
@@ -179,9 +178,9 @@ classDiagram
         +streamFiles(shards, onChunk, onProgress) Promise~void~
     }
     
-    LlmLlamacpp --|> BaseInference
-    LlmLlamacpp *-- WeightsProvider
-    LlmLlamacpp ..> QvacResponse : creates
+    GGMLBert --|> BaseInference
+    GGMLBert *-- WeightsProvider
+    GGMLBert ..> QvacResponse : creates
 ```
 
 <details>
@@ -191,18 +190,18 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| LlmLlamacpp | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, LlamaInterface |
+| GGMLBert | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, BertInterface |
 | BaseInference | Define standard inference API | Abstract base class | None |
-| QvacResponse | Stream inference output | Created per run() call, short-lived | None |
-| WeightsProvider | Abstract model weight loading | Created by LlmLlamacpp | DataLoader |
+| QvacResponse | Return embedding results | Created per run() call, short-lived | None |
+| WeightsProvider | Abstract model weight loading | Created by GGMLBert | DataLoader |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| LlmLlamacpp | BaseInference | Inheritance | Standard QVAC inference API |
-| LlmLlamacpp | WeightsProvider | Composition | Model weight acquisition |
-| LlmLlamacpp | QvacResponse | Creates | Streaming output per inference |
+| GGMLBert | BaseInference | Inheritance | Standard QVAC inference API |
+| GGMLBert | WeightsProvider | Composition | Model weight acquisition |
+| GGMLBert | QvacResponse | Creates | Embedding output per inference |
 
 </details>
 
@@ -218,27 +217,26 @@ The package follows a **layered architecture** with clear separation of concerns
 graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
-        LLMCLASS["LlmLlamacpp<br/>(index.js)"]
+        BERTCLASS["GGMLBert<br/>(index.js)"]
         BASEINF["BaseInference<br/>(@qvac/infer-base)"]
         WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
     end
     
     subgraph "Layer 2: Bridge"
-        LLAMAIF["LlamaInterface<br/>(addon.js)"]
+        BERTIF["BertInterface<br/>(addon.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
     
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
-        ADDON["Addon<LlamaModel><br/>(addon/Addon.cpp)"]
+        ADDON["Addon<BertModel><br/>(addon/Addon.cpp)"]
         WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
     
     subgraph "Layer 4: Model"
-        LLAMAMODEL["LlamaModel<br/>(model-interface/LlamaModel.cpp)"]
-        TEXTCTX["TextLlmContext<br/>(model-interface/TextLlmContext.cpp)"]
-        MTMDCTX["MtmdLlmContext<br/>(model-interface/MtmdLlmContext.cpp)"]
+        BERTMODEL["BertModel<br/>(model-interface/BertModel.cpp)"]
+        ENCODE["encode_host_f32<br/>encode_host_f32_sequences"]
     end
     
     subgraph "Layer 5: Backend"
@@ -247,31 +245,29 @@ graph TB
         GPU["GPU Backends"]
     end
     
-    APP --> LLMCLASS
-    LLMCLASS --> BASEINF
-    LLMCLASS --> WEIGHTSPR
-    LLMCLASS --> LLAMAIF
-    LLMCLASS -.-> RESPONSE
+    APP --> BERTCLASS
+    BERTCLASS --> BASEINF
+    BERTCLASS --> WEIGHTSPR
+    BERTCLASS --> BERTIF
+    BERTCLASS -.-> RESPONSE
     
-    LLAMAIF --> BINDING
+    BERTIF --> BINDING
     BINDING --> JSINTERFACE
     WEIGHTSPR --> WEIGHTSLOAD
     
     JSINTERFACE --> ADDON
     ADDON --> WEIGHTSLOAD
-    ADDON --> LLAMAMODEL
+    ADDON --> BERTMODEL
     
-    LLAMAMODEL --> TEXTCTX
-    LLAMAMODEL --> MTMDCTX
-    TEXTCTX --> LLAMACPP
-    MTMDCTX --> LLAMACPP
+    BERTMODEL --> ENCODE
+    ENCODE --> LLAMACPP
     
     LLAMACPP --> GGML
     GGML --> GPU
     
-    style LLMCLASS fill:#e1f5ff
+    style BERTCLASS fill:#e1f5ff
     style ADDON fill:#ffe1e1
-    style LLAMAMODEL fill:#ffe1e1
+    style BERTMODEL fill:#ffe1e1
     style LLAMACPP fill:#e1ffe1
 ```
 
@@ -282,23 +278,23 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | LlmLlamacpp, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
-| 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
+| 1. JavaScript API | GGMLBert, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 2. Bridge | BertInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, Addon<T> | Job queue, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | LlamaModel, Contexts | Inference logic, chat formatting | C++ | Direct llama.cpp integration |
+| 4. Model | BertModel, encode methods | Inference logic, batch processing | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
 
 | Direction | Path | Data Format | Transform |
 |-----------|------|-------------|-----------|
-| Input → | JS → Bridge → Addon | JSON string | Serialize messages |
-| Input → | Addon → Model | parsed chat_msg | Parse JSON, format template |
-| Input → | Model → llama.cpp | tokens | Tokenize |
-| Output ← | llama.cpp → Model | token IDs | Sample |
-| Output ← | Model → Addon | UTF-8 string | Decode token |
-| Output ← | Addon → Bridge | string | Queue output |
-| Output ← | Bridge → JS | string | Emit via callback |
+| Input → | JS → Bridge → Addon | string or string[] | Serialize input |
+| Input → | Addon → Model | variant<string, vector<string>> | Parse input type |
+| Input → | Model → llama.cpp | tokens | Tokenize, batch |
+| Output ← | llama.cpp → Model | embedding vectors | Pool, normalize |
+| Output ← | Model → Addon | BertEmbeddings | Convert to Float32Array |
+| Output ← | Addon → Bridge | ArrayBuffer[] | Queue output |
+| Output ← | Bridge → JS | Float32Array[] | Emit via callback |
 
 </details>
 
@@ -308,19 +304,17 @@ graph TB
 
 ### JavaScript Components
 
-#### **LlmLlamacpp (index.js)**
+#### **GGMLBert (index.js)**
 
 **Responsibility:** Main API class, orchestrates model lifecycle, manages data loaders
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
 - Promise/async-await integration
-- Event loop integration for streaming
 - Configuration parsing
+- Batch input detection and routing
 
-
-
-#### **LlamaInterface (addon.js)**
+#### **BertInterface (addon.js)**
 
 **Responsibility:** JavaScript wrapper around native addon, manages handle lifecycle
 
@@ -331,17 +325,22 @@ graph TB
 
 ### C++ Components
 
-#### **LlamaModel (model-interface/LlamaModel.cpp)**
+#### **BertModel (model-interface/BertModel.cpp)**
 
-**Responsibility:** Core inference implementation wrapping llama.cpp
+**Responsibility:** Core embedding implementation wrapping llama.cpp
 
 **Why C++:**
 - Direct integration with llama.cpp C API
-- Performance-critical inference loop
+- Performance-critical batch processing
 - Memory-efficient token processing
 - Native GPU backend access
 
-#### **Addon<LlamaModel> (addon/Addon.cpp)**
+**Key Methods:**
+- `encode_host_f32(string)`: Single text embedding
+- `encode_host_f32_sequences(vector<string>)`: Batch embedding generation
+- `process(Input)`: Unified processing via std::visit
+
+#### **Addon<BertModel> (addon/Addon.cpp)**
 
 **Responsibility:** Template specialization of addon framework
 
@@ -351,7 +350,7 @@ graph TB
 - Thread-safe state machine
 - Output dispatching via uv_async
 
-**Specialization:** Constructor parses config into llama.cpp `common_params`
+**Specialization:** Handles variant input (string or vector<string>), merges batch inputs
 
 #### **WeightsProvider (@qvac/infer-base)**
 
@@ -363,15 +362,7 @@ graph TB
 - Handles sharded GGUF expansion
 - Streaming chunk delivery
 
-#### **CacheManager (model-interface/CacheManager.cpp)**
-
-**Responsibility:** KV cache persistence and session management
-
-- Saves/loads llama.cpp KV cache to disk for conversation continuity
-- Handles cache invalidation on context changes
-- Configurable discard policy via `n_discarded` parameter
-
-#### **BackendSelection (utils/BackendSelection.cpp)**
+#### **BackendSelection (model-interface/BackendSelection.cpp)**
 
 **Responsibility:** GPU backend selection at runtime (Android)
 
@@ -379,7 +370,7 @@ graph TB
 - Prefers OpenCL for Adreno 700+ GPUs, Vulkan otherwise
 - Supports `main-gpu` config for integrated vs dedicated GPU selection
 - Metal is compiled statically into macOS/iOS binaries (no runtime selection)
-- Dynamic loading currently enabled on Android only (Linux disabled due to Pear runtime compatibility)
+- Dynamic loading currently enabled on Android only
 
 #### **LlamaLazyInitializeBackend (model-interface/LlamaLazyInitializeBackend.cpp)**
 
@@ -397,14 +388,14 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant JS as JavaScript
-    participant IF as LlamaInterface
+    participant IF as BertInterface
     participant Bind as Native Binding
-    participant Addon as Addon<LlamaModel>
-    participant Model as LlamaModel
+    participant Addon as Addon<BertModel>
+    participant Model as BertModel
     participant Llama as llama.cpp
     
-    JS->>IF: run(messages)
-    IF->>Bind: append({type:'text', input:json})
+    JS->>IF: run(text or text[])
+    IF->>Bind: append({type:'text'|'sequences', input})
     Bind->>Addon: append() [lock mutex]
     Addon->>Addon: Enqueue job
     Addon->>Addon: cv.notify_one()
@@ -415,20 +406,19 @@ sequenceDiagram
     Addon->>Addon: Dequeue job
     Addon->>Addon: uv_async_send (JobStarted)
     
-    loop For each token
-        Addon->>Model: process(input)
-        Model->>Llama: llama_decode()
-        Llama-->>Model: tokens
-        Model->>Model: Sample token
-        Model->>Addon: outputCallback(token)
-        Addon->>Addon: Queue output [lock]
-        Addon->>Addon: uv_async_send()
-    end
+    Addon->>Model: process(input)
+    Model->>Model: std::visit (string or vector)
+    Model->>Llama: llama_decode() [batch]
+    Llama-->>Model: embeddings
+    Model->>Model: Pool, normalize
+    Model->>Addon: outputCallback(embeddings)
+    Addon->>Addon: Queue output [lock]
+    Addon->>Addon: uv_async_send()
     
     Note over Addon: UV async callback
     Addon->>Bind: jsOutputCallback()
-    Bind->>IF: outputCb('Output', jobId, token)
-    IF->>JS: Response emits token
+    Bind->>IF: outputCb('Output', jobId, embeddings)
+    IF->>JS: Response emits embeddings
 ```
 
 <details>
@@ -475,11 +465,11 @@ sequenceDiagram
 
 ### Context
 
-Need high-performance, cross-platform LLM inference for resource-constrained environments (laptops, mobile devices) with support for:
-- Various model architectures (LLaMA, Mistral, Qwen, etc.)
+Need high-performance, cross-platform embedding generation for resource-constrained environments (laptops, mobile devices) with support for:
+- Various embedding model architectures (BERT, GTE, E5, etc.)
 - Quantization for reduced memory footprint
 - GPU acceleration on diverse hardware
-- Multimodal capabilities (vision + text)
+- Batch processing for high-throughput use cases
 
 ### Decision
 
@@ -491,9 +481,10 @@ Use llama.cpp (via vcpkg) as the core inference engine instead of MLC-LLM, ONNX 
 - Industry-leading inference speed through highly optimized C++ and platform-specific SIMD
 - Supports 1-8 bit quantization reducing memory by 2-8x with minimal accuracy loss
 - GPU acceleration via Metal (Apple) and Vulkan (cross-platform)
+- Efficient batch processing for multiple texts
 
 **Model Support:**
-- Supports all major open-source LLMs and finetuned variants
+- Supports all major embedding models (GTE, E5, BGE, etc.) and finetuned variants
 - Active community adding new model support rapidly
 - GGUF format is becoming de facto standard for quantized models
 
@@ -502,59 +493,13 @@ Use llama.cpp (via vcpkg) as the core inference engine instead of MLC-LLM, ONNX 
 - Large community identifying and fixing issues quickly
 - Comprehensive examples and documentation
 
-
-
-### Alternatives Considered
-
-A comprehensive evaluation was conducted comparing six inference runtimes across multiple criteria.
-
-1. **MLC-LLM** ([github](https://github.com/mlc-ai/mlc-llm))
-   - ✅ Good performance (17-18 TPS on tested platforms)
-   - ✅ Multi-GPU support with tensor and pipeline parallelism
-   - ❌ No CPU-only support
-   - ❌ Known build errors on iOS
-   - ❌ Requires model compilation for each target platform
-   - ❌ More complex build system and integration
-
-2. **ExecuTorch** ([github](https://github.com/pytorch/executorch))
-   - ✅ Excellent mobile support (iOS, Android)
-   - ✅ Support for embedded devices (ARM microcontrollers)
-   - ❌ Metal/CoreML backends don't support dynamic input shapes (falls back to CPU-only)
-   - ❌ Limited model support (mainly Llama variants)
-   - ❌ Cannot finetune on device
-   - ❌ Lower performance (4-12.5 TPS vs 14-21 TPS for llama.cpp)
-
-3. **LiteRT Next** ([github](https://github.com/google-ai-edge/LiteRT))
-   - ✅ Good mobile GPU support (Android)
-   - ❌ First full release planned for late 2025
-   - ❌ Very limited model support (only Gemma models)
-   - ❌ Desktop platforms run CPU-only (GPU coming soon)
-   - ❌ No clear iOS build instructions
-
-4. **PRIMA.CPP** ([github](https://github.com/Lizonghang/prima.cpp))
-   - ✅ Multi-node support with tensor parallelism
-   - ✅ Competitive performance (20-21 TPS)
-   - ❌ Limited platform support (Linux, macOS only)
-   - ❌ No mobile support (Android, iOS)
-   - ❌ Vulkan backend not yet supported
-   - ❌ Smaller model ecosystem
-
-5. **EXO** ([github](https://github.com/exo-explore/exo))
-   - ✅ Interesting distributed training capabilities
-   - ✅ Uses MLX on Apple and Tinygrad
-   - ❌ Multiple bugs preventing reliable execution
-   - ❌ Not production-ready
-   - ❌ No multi-GPU support
-   - ❌ Limited model support
-
-**Why llama.cpp Won:**
-- Broadest platform support (desktop + mobile, all major OSes)
-- Most extensive model ecosystem (GGUF is de facto standard)
-- Best balance of performance and memory efficiency across platforms
-- Mature, production-ready with active development
-- Simpler integration (no model compilation step)
-- Memory-mapped weights reduce RAM usage significantly
-- RPC backend for multi-node inference (work in progress)
+### Trade-offs
+- ✅ Broadest platform support (desktop + mobile, all major OSes)
+- ✅ Most extensive model ecosystem (GGUF is de facto standard)
+- ✅ Best balance of performance and memory efficiency across platforms
+- ❌ Large binary size
+- ❌ C++ build complexity
+- ❌ API instability (frequent breaking changes)
 
 ---
 
@@ -614,84 +559,6 @@ Create a pluggable data loader abstraction (WeightsProvider interface) that deco
 - ❌ Additional abstraction complexity vs hardcoding a single method
 - ❌ Applications must choose/implement their loader (no batteries-included default)
 
-### WeightsProvider Interface
-
-```javascript
-// Core abstraction that all loaders must implement
-interface WeightsProvider {
-  // Get readable stream for model file
-  async getStream(path: string): ReadableStream
-  
-  // Wait for loader to be ready
-  async ready(): Promise<void>
-  
-  // Cleanup resources
-  async close(): Promise<void>
-}
-```
-
-### Example Implementations
-
-<details>
-<summary>📊 LLM-Friendly: Loader Comparison</summary>
-
-**Performance Characteristics:**
-
-| Loader | Use Case | Initial Download | Subsequent Access | Setup Complexity |
-|--------|----------|------------------|-------------------|------------------|
-| **FileSystemDataLoader** | Development, offline | Instant | Instant | Low (just file path) |
-| **HyperdriveDataLoader** | Privacy, P2P | 10-100 MB/s | Instant (cached) | Medium (P2P keys) |
-| **HttpDataLoader** | Enterprise, CDN | 50-500 MB/s | Varies | Low (just URL) |
-| **S3DataLoader** | Cloud deployments | 50-200 MB/s | Varies | Medium (AWS credentials) |
-
-**Example: Local Filesystem Loader**
-```javascript
-class FileSystemDataLoader {
-  constructor(basePath) { this.basePath = basePath }
-  
-  async getStream(path) {
-    return fs.createReadStream(`${this.basePath}/${path}`)
-  }
-  async ready() { /* no-op */ }
-  async close() { /* no-op */ }
-}
-```
-
-**Example: HTTP/CDN Loader**
-```javascript
-class HttpDataLoader {
-  constructor(baseUrl) { this.baseUrl = baseUrl }
-  
-  async getStream(path) {
-    const response = await fetch(`${this.baseUrl}/${path}`)
-    return response.body
-  }
-  async ready() { /* no-op */ }
-  async close() { /* no-op */ }
-}
-```
-
-**Example: Hyperdrive (P2P) Loader**
-```javascript
-class HyperdriveDataLoader {
-  constructor(key) { 
-    this.drive = new Hyperdrive(key)
-  }
-  
-  async getStream(path) {
-    return this.drive.createReadStream(path)
-  }
-  async ready() {
-    await this.drive.ready()
-  }
-  async close() {
-    await this.drive.close()
-  }
-}
-```
-
-</details>
-
 ---
 
 ## Decision 4: Incremental Buffer-Based Weight Loading
@@ -719,7 +586,7 @@ Alternative approach would be: download from Hyperdrive → save to temp file �
 
 Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by `qvac-lib-inference-addon-cpp` framework. This allows feeding buffer chunks from any source (Hyperdrive, HTTP, local files) directly to llama.cpp without intermediate file storage.
 
-JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory. See our [llama.cpp fork implementation](https://github.com/tetherto/qvac-ext-lib-llama.cpp/compare/master...tetherto:qvac-ext-lib-llama.cpp:temp-load-from-buffer?diff=unified&w).
+JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory.
 
 ### Rationale
 
@@ -746,69 +613,77 @@ JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambu
 - ❌ Must keep JS buffers alive during load, defer cleanup to correct thread
 - ❌ Seeking overhead O(N) across N blobs (acceptable, rarely needed)
 
-**Key Components:**
-- `WeightsProvider` (JavaScript): Orchestrates chunk delivery
-- `BlobsStream` (C++): Implements `std::basic_streambuf<char>` over multiple blobs
-- `FinalizedStream` (C++): RAII wrapper owning JavaScript references
-- `ThreadQueuedRefDeleter` (C++): Defers reference deletion to JavaScript thread
-
-See [Weight Loading Flow](data-flows-detailed.md#weight-loading-flow) for detailed sequence diagram and memory lifecycle.
-
 ---
 
-## Decision 5: Chat Message Format (JSON Serialization)
+## Decision 5: Batch Processing as Primary Use Case
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Serialize chat messages to JSON string before crossing JS/C++ boundary  
-**Why:** Simple marshalling, OpenAI API compatible, extensible  
-**Cost:** JSON parsing overhead per inference call
+**Chose:** Native batch processing support with array input and optimized batching  
+**Why:** High-throughput requirements for vector databases and semantic search  
+**Cost:** More complex input handling, memory management for large batches
 
 </details>
 
 ### Context
 
-Need to pass multi-turn conversation history from JavaScript to C++ for processing. Messages contain role, content, and potentially metadata.
+Embedding generation is often used in high-throughput scenarios:
+- Vector database indexing (thousands of documents)
+- Batch similarity computation
+- Semantic search preprocessing
+- RAG pipeline document processing
+
+Processing texts one-by-one is too slow for these use cases. Need efficient batch processing.
 
 ### Decision
 
-Serialize chat messages array to JSON string before passing to C++, rather than marshalling complex object graphs.
+Support batch processing natively by accepting both single strings and arrays of strings, with automatic batching optimization in C++.
+
+**Input Types:**
+- `string`: Single text → single embedding
+- `string[]`: Multiple texts → multiple embeddings (batched)
+
+**Batching Strategy:**
+- Accumulate sequences token-by-token until `batch_size` is reached
+- Process accumulated sequences in single forward pass
+- Larger `batch_size` = more sequences per batch (better throughput, more memory)
 
 ### Rationale
 
-**Simplicity:**
-- Single string parameter instead of complex nested objects
-- JSON parsing well-supported in both JavaScript and C++ (picojson)
-- No custom serialization format needed
+**Performance:**
+- Single forward pass processes multiple texts efficiently
+- GPU utilization improved with larger batches
+- Reduces per-text overhead (model loading, context setup)
+- Critical for high-throughput use cases
 
-**Compatibility:**
-- Matches OpenAI chat completion API format
-- Easy for developers familiar with GPT APIs
-- Compatible with LangChain, LlamaIndex patterns
+**API Simplicity:**
+- Single API handles both single and batch cases
+- Automatic detection of input type
+- No need for separate batch API
 
-**Extensibility:**
-- Easy to add new message fields without changing C++ interface
-- Tool/function calling support via additional fields
+**Memory Efficiency:**
+- Configurable batch size balances throughput vs memory
+- Unified KV cache when `n_parallel = 1` supports up to 64 sequences
+- Token-based batching prevents context overflow
 
 ### Trade-offs
-- ✅ JSON parsing available everywhere (portable)
-- ❌ Serialization overhead on every call
-- ❌ No compile-time type checking across JS/C++ boundary
-- ❌ Must serialize full history each time (no streaming)
-
-**Note:** Alternative approaches (FlatBuffers, Protocol Buffers, custom binary) were not evaluated. The drawbacks above are not significant concerns; JSON's simplicity and OpenAI API compatibility take priority.
-
+- ✅ High throughput for vector database indexing
+- ✅ Simple API (same method for single/batch)
+- ✅ GPU utilization optimized for batches
+- ❌ More complex input handling (variant types)
+- ❌ Memory usage scales with batch size
+- ❌ Context overflow protection needed per sequence
 
 ---
 
-## Decision 6: Exclusive Run Queue (index.js)
+## Decision 6: Exclusive Run Queue
 
 <details>
 <summary>⚡ TL;DR</summary>
 
 **Chose:** Promise-based exclusive run queue using `_withExclusiveRun()` wrapper  
-**Why:** Ensure atomic multi-step operations (text + media + end-of-input) complete without interruption  
+**Why:** Ensure atomic multi-step operations complete without interruption  
 **Cost:** One inference request at a time per model instance
 
 </details>
@@ -816,29 +691,27 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 ### Context
 
 A single inference request may involve multiple `append()` calls:
-1. `append({ type: 'media', input: Uint8Array })` - Send image/audio data
-2. `append({ type: 'text', input: JSON.stringify(messages) })` - Send chat history
-3. `append({ type: 'end of job' })` - Signal end of input
+1. `append({ type: 'text' or 'sequences', input: ... })` - Send text(s)
+2. `append({ type: 'end of job' })` - Signal end of input
 
-Without coordination, concurrent requests could interleave these operations, corrupting the message stream sent to the model.
+Without coordination, concurrent requests could interleave these operations, corrupting the input stream sent to the model.
 
 ### Decision
 
 Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures all append operations within a request complete atomically before the next request begins.
 
-**Note:** C++ level thread safety (mutex-protected job queue) is handled by the addon-cpp framework and documented in `architecture/dependencies/addoncpp/DECISIONS.md`.
-TODO: update to a correct gh repo link once available
+**Note:** C++ level thread safety (mutex-protected job queue) is handled by the addon-cpp framework.
 
 ### Rationale
 
 **Atomicity:**
-- Ensures multi-part messages (media + text + end-of-input) are sent as complete units
+- Ensures multi-part messages (text + end-of-input) are sent as complete units
 - Prevents another request from inserting messages mid-stream
 - Each request gets exclusive access to append until completion
 
 **Message Integrity:**
-- Model receives coherent message sequences
-- Media data paired with correct text prompt
+- Model receives coherent input sequences
+- Batch inputs paired correctly
 - No mixing of data from concurrent requests
 
 ### Trade-offs
@@ -906,4 +779,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-01-27
