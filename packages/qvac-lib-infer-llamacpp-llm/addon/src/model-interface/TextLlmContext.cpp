@@ -36,13 +36,14 @@ TextLlmContext::TextLlmContext(
 
     if (lctx_ == nullptr) {
       throw qvac_errors::StatusError(
-          ADDON_ID, toString(UnableToLoadModel), "Failed to initialize context");
+          ADDON_ID,
+          toString(UnableToLoadModel),
+          "Failed to initialize context");
     }
 
     vocab_ = llama_model_get_vocab(model_);
 
-    isQwen3Model_ =
-        qvac_lib_inference_addon_llama::utils::isQwen3Model(model_);
+    isQwen3Model_ = qvac_lib_inference_addon_llama::utils::isQwen3Model(model_);
     if (isQwen3Model_) {
       qvac_lib_inference_addon_llama::utils::initializeQwen3ReasoningState(
           lctx_, reasoningState_);
@@ -153,7 +154,8 @@ TextLlmContext::TextLlmContext(
 bool TextLlmContext::checkAntiprompt() {
   if (!params_.antiprompt.empty()) {
     constexpr int kNPrev = 32;
-    std::string lastOutput = common_sampler_prev_str(smpl_.get(), lctx_, kNPrev);
+    std::string lastOutput =
+        common_sampler_prev_str(smpl_.get(), lctx_, kNPrev);
 
     // Check if each of the reverse prompts appears at the end of the output.
     for (std::string& antiprompt : params_.antiprompt) {
@@ -173,9 +175,9 @@ bool TextLlmContext::checkAntiprompt() {
     // check for reverse prompt using special tokens
     llama_token lastToken = common_sampler_last(smpl_.get());
     for (auto token : antipromptTokens_) {
-        if (token == lastToken) {
+      if (token == lastToken) {
         return true;
-        }
+      }
     }
   }
   return false;
@@ -276,9 +278,11 @@ bool TextLlmContext::evalMessageWithTools(
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
 
     llama_pos leftTokens = nPast_ - firstMsgTokens_ - nDiscarded_;
-    if (leftTokens >= 0 && nPast_ + nTokens - nDiscarded_ < llama_n_ctx(lctx_)) {
+    if (leftTokens >= 0 &&
+        nPast_ + nTokens - nDiscarded_ < llama_n_ctx(lctx_)) {
       auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
+      llama_memory_seq_rm(
+          mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
       llama_memory_seq_add(
           mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
       nPast_ -= nDiscarded_;
@@ -337,8 +341,7 @@ bool TextLlmContext::evalMessageWithTools(
     }
     bool isLastToken = (tokenIndex == nTokens);
     if (isLastToken) {
-      textBatch->logits[textBatch->n_tokens - 1] =
-          static_cast<int8_t>(true);
+      textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     int ret = llama_decode(lctx_, *textBatch);
@@ -377,7 +380,8 @@ bool TextLlmContext::generateResponse(
       return false;
     } else if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ > 0) {
       auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
+      llama_memory_seq_rm(
+          mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
       llama_memory_seq_add(
           mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
       nPast_ -= nDiscarded_;
@@ -395,7 +399,8 @@ bool TextLlmContext::generateResponse(
     --nRemain;
 
     // send text to JS callback with UTF-8 buffering
-    std::string tokenStr = common_token_to_piece(lctx_, tokenId, params_.special);
+    std::string tokenStr =
+        common_token_to_piece(lctx_, tokenId, params_.special);
 
     if (outputCallback) {
       // Use buffer to accumulate tokens until complete UTF-8 sequences
