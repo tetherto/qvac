@@ -105,10 +105,6 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Addon} The instantiated addon interface
    */
   _createAddon (configurationParams) {
-    this.logger.info(
-      'Creating Llama interface with configuration:',
-      configurationParams
-    )
     const binding = require('./binding')
     return new LlamaInterface(
       binding,

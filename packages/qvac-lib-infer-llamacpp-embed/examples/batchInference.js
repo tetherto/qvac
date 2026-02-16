@@ -1,54 +1,38 @@
 'use strict'
 
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
+const FilesystemDL = require('@qvac/dl-filesystem')
 const GGMLBert = require('../index')
-const process = require('bare-process')
+const { downloadModel } = require('./utils')
 
 async function main () {
   console.log('Batch Inference Example: Demonstrates setting up batch inference to run multiple prompts at once')
   console.log('================================================================================================')
 
-  // 1. Initializing data loader
-  const store = new Corestore('./store')
-  const hdStore = store.namespace('hd')
+  // 1. Downloading model
+  const [modelName, dirPath] = await downloadModel(
+    'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
+    'gte-large_fp16.gguf'
+  )
 
-  const hdKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
-  const hdDL = new HyperDriveDL({
-    key: `hd://${hdKey}`,
-    store: hdStore
-  })
+  // 2. Initializing data loader
+  const fsDL = new FilesystemDL({ dirPath })
 
-  // 2. Configuring model settings
+  // 3. Configuring model settings
   const args = {
-    loader: hdDL,
+    loader: fsDL,
     logger: console,
     opts: { stats: true },
-    diskPath: './models',
-    modelName: 'gte-large_fp16.gguf'
+    diskPath: dirPath,
+    modelName
   }
   const config = '-ngl\t25\n--batch_size\t128' // large enough batch size to run all test prompts in one pass
 
-  // 3. Loading model
-  await hdDL.ready()
+  // 4. Loading model
   const model = new GGMLBert(args, config)
-  const closeLoader = true
-  let totalProgress = 0
-  const reportProgressCallback = (report) => {
-    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
-      process.stdout.write(
-        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
-      )
-      if (Number(report.currentFileProgress) === 100) {
-        process.stdout.write('\n')
-      }
-      totalProgress = Number(report.overallProgress)
-    }
-  }
-  await model.load(closeLoader, reportProgressCallback)
+  await model.load()
 
   try {
-    // 4. Generating embeddings (all prompts in one batch)
+    // 5. Generating embeddings (all prompts in one batch)
     const prompts = [
       'Hello, can you suggest a game I can play with my 1 year old daughter?',
       'What is the capital of Great Britain?',
@@ -69,10 +53,9 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 5. Cleaning up resources
+    // 6. Cleaning up resources
     await model.unload()
-    await hdDL.close()
-    await store.close()
+    await fsDL.close()
   }
 }
 

@@ -63,7 +63,7 @@ Options:
                            HuggingFace: "owner/repo" or "owner/repo:quantization"
                            Hyperdrive: "hd://key" or "hd://key/model.gguf"
                          Examples: "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
-                                   "hd://d4aca.../model.gguf"
+                                   "hd://{KEY}/model.gguf"
   --transformers-model <name>  HuggingFace transformers model for comparison (required with --compare)
   --hf-token <token>     HuggingFace token (optional, needed for gated models)
                          Get token at: https://huggingface.co/settings/tokens
@@ -90,7 +90,7 @@ Examples:
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --datasets "gsm8k,mmlu" --samples 5
   
   # P2P hyperdrive model
-  ./benchmarks/run-benchmarks.sh --gguf-model "hd://d4aca756436ff6429e3ecaa008b0a8023fa8ea568192149a09f212d5013af865/Llama-3.2-1B-Instruct-Q4_0.gguf" --samples 10
+  ./benchmarks/run-benchmarks.sh --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf" --samples 10
 
 Comparative Evaluation Examples (@qvac addon vs transformers):
   
@@ -99,7 +99,7 @@ Comparative Evaluation Examples (@qvac addon vs transformers):
   ./benchmarks/run-benchmarks.sh --compare --gguf-model "bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_0" --transformers-model "meta-llama/Llama-3.2-3B-Instruct" --hf-token YOUR_TOKEN
   
   # Compare addon (Hyperdrive GGUF) vs transformers
-  ./benchmarks/run-benchmarks.sh --compare --gguf-model "hd://d4aca756.../Llama-3.2-1B-Instruct-Q4_0.gguf" --transformers-model "meta-llama/Llama-3.2-1B-Instruct" --hf-token YOUR_TOKEN
+  ./benchmarks/run-benchmarks.sh --compare --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf" --transformers-model "meta-llama/Llama-3.2-1B-Instruct" --hf-token YOUR_TOKEN
   
   # With custom parameters to test performance characteristics
   ./benchmarks/run-benchmarks.sh --compare --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --transformers-model "meta-llama/Llama-3.2-1B-Instruct" --hf-token YOUR_TOKEN --samples 50 --datasets "gsm8k,squad"
@@ -109,7 +109,7 @@ Parameter Tuning Examples:
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --temperature 0.9 --top-p 0.95 --n-predict 1000 # Creative/diverse
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --ctx-size 1024 --gpu-layers 25 --n-predict 100 # Performance-optimized
   ./benchmarks/run-benchmarks.sh --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --gpu-layers 0 --ctx-size 512 # CPU-only evaluation
-  ./benchmarks/run-benchmarks.sh --gguf-model "hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf" --temperature 0.2 --ctx-size 2048 # P2P with custom params
+  ./benchmarks/run-benchmarks.sh --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf" --temperature 0.2 --ctx-size 2048 # P2P with custom params
 
 Addon Version Examples:
   ./benchmarks/run-benchmarks.sh --addon-version "0.3.2" --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --samples 10 # Test specific addon version
@@ -668,7 +668,7 @@ main() {
             echo "❌ Error: --gguf-model is required when using --compare"
             echo "Examples:"
             echo "  --gguf-model \"bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0\" (HuggingFace repo)"
-            echo "  --gguf-model \"hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf\" (Hyperdrive P2P)"
+            echo "  --gguf-model \"hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf\" (Hyperdrive P2P)"
             exit 1
         fi
         

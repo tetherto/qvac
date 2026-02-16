@@ -142,7 +142,8 @@ jobs:
               )
             }}
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          restore-keys: |
+            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Download test models (into package dir)
         shell: bash
