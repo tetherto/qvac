@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "qwen3-1.7b",
+      "gguf": {
+        "repo": "unsloth/Qwen3-1.7B-GGUF",
+        "revision": "main",
+        "defaultQuantization": "Q4_0",
+        "files": {
+          "Q4_0": "Qwen3-1.7B-Q4_0.gguf",
+          "Q4_K_M": "Qwen3-1.7B-Q4_K_M.gguf",
+          "Q8_0": "Qwen3-1.7B-Q8_0.gguf",
+          "F16": "Qwen3-1.7B-BF16.gguf"
+        }
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-1.7B",
+        "revision": "main"
+      }
+    },
+    {
+      "id": "qwen3-4b",
+      "gguf": {
+        "repo": "unsloth/Qwen3-4B-GGUF",
+        "revision": "main",
+        "defaultQuantization": "Q4_0",
+        "files": {
+          "Q4_0": "Qwen3-4B-Q4_0.gguf",
+          "Q4_K_M": "Qwen3-4B-Q4_K_M.gguf",
+          "Q8_0": "Qwen3-4B-Q8_0.gguf",
+          "F16": "Qwen3-4B-BF16.gguf"
+        }
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-4B",
+        "revision": "main"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@qvac/llm-llamacpp-performance",
+  "private": true,
+  "description": "Performance and parameter sweep runners for LLM addon",
+  "scripts": {
+    "prepare:models:addon": "python3 ./prepare_models.py --target addon",
+    "prepare:models:all": "python3 ./prepare_models.py --target all",
+    "prepare:prompts": "python3 ./prepare_prompts.py",
+    "run:param-sweep": "python3 ./prepare_models.py --target addon && npm run prepare:prompts && bare ./llm-parameter-sweep.js",
+    "run:pytorch-placeholder": "python3 ./pytorch-parameter-sweep.py"
+  },
+  "dependencies": {
+    "@qvac/dl-filesystem": "latest",
+    "@qvac/llm-llamacpp": "latest",
+    "bare-fs": "latest",
+    "bare-path": "latest",
+    "bare-process": "latest"
+  }
+}
