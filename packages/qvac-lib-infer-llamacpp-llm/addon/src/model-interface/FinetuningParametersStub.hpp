@@ -3,10 +3,7 @@
 #include <cstdint>
 #include <string>
 
-// Stub for standalone C++ unit tests. The real FinetuningParameters.hpp
-// (from qvac-lib-inference-addon-cpp) includes JsUtils.hpp and js.h (Bare
-// runtime), which are not available when building addon-test. This stub
-// provides the type so LlamaModel.hpp compiles without pulling in JS deps.
+// Stub for standalone C++ tests; real header pulls in JS deps.
 namespace qvac_lib_inference_addon_cpp {
 
 struct FinetuningParameters {
