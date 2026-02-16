@@ -97,11 +97,11 @@ npm run benchmarks -- \
 ```bash
 # Load model via Hyperdrive P2P
 npm run benchmarks -- \
-  --gguf-model "hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf"
+  --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf"
 
 # P2P with quick test (10 samples, 1 dataset)
 npm run benchmarks -- \
-  --gguf-model "hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf" \
+  --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf" \
   --samples 10 \
   --datasets "squad"
 ```
