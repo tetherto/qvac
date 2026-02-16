@@ -32,7 +32,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       env,
       args.get(0, "jsHandle"),
       args.getFunction(2, "outputCallback"),
-      args.get(3, "transitionCb"),
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));

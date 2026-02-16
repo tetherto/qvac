@@ -6,16 +6,15 @@ class BertInterface {
    *
    * @param {Object} configurationParams - all the required configuration for inference setup
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
-   * @param {Function} transitionCb - to be called on addon state changes (LISTENING, IDLE, STOPPED, etc )
    */
-  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+  constructor (binding, configurationParams, outputCb) {
     this._binding = binding
 
     if (!configurationParams.backendsDir) {
       configurationParams.backendsDir = path.join(__dirname, 'prebuilds')
     }
 
-    this._handle = binding.createInstance(this, configurationParams, outputCb, transitionCb)
+    this._handle = binding.createInstance(this, configurationParams, outputCb)
   } ///
 
   /**
