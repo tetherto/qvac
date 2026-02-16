@@ -122,7 +122,7 @@ function resolveCliCommand(projectRoot: string): string {
   console.log(
     "   Tip: Add @qvac/cli as a dependency for consistent versioning",
   );
-  return "npx qvac";
+  return "npx --package=@qvac/cli qvac";
 }
 
 /** Runs qvac CLI with mobile-specific options */
