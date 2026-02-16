@@ -29,7 +29,8 @@
 
 ### Technical Debt
 - [Legacy "Marian" Naming](#1-legacy-marian-naming)
-- [C-style Code in nmt.hpp](#2-c-style-code-in-nmthpp)
+- [Whisper.cpp as Indirect GGML Provider](#2-whispercpp-as-indirect-ggml-provider)
+- [Overlay Ports Instead of Registry](#3-overlay-ports-instead-of-registry)
 
 ---
 
@@ -668,11 +669,17 @@ Use `qvac-lib-inference-addon-cpp`'s `Addon<T>` template, which provides a job q
 **Root Cause:** Renaming requires coordinated changes across JS, C++, and consumer packages  
 **Plan:** Rename in a dedicated refactoring PR — `marian.js` → `translationInterface.js`, `QvacErrorAddonMarian` → `QvacErrorTranslation`, namespace → `qvac_lib_infer_nmtcpp`
 
-### 2. C-style Code in nmt.hpp
-**Status:** Intentional, documented with NOLINT directives  
-**Issue:** GGML NMT core uses C-style patterns (raw pointers, C arrays, `typedef struct`) to stay close to GGML's coding style, increasing maintenance burden  
-**Root Cause:** Modernization risks altering runtime behavior; requires thorough parity testing and benchmarking  
-**Plan:** Incrementally modernize where safe (RAII wrappers, `unique_ptr`), validated by existing C++ and integration tests
+### 2. Whisper.cpp as Indirect GGML Provider
+**Status:** Active dependency — `whisper-cpp` is declared in `vcpkg.json` and built via a custom overlay port with multiple patches  
+**Issue:** The package depends on `whisper-cpp` solely to obtain the `ggml` library it bundles as a submodule. No whisper.cpp APIs are used anywhere in the codebase. This adds unnecessary build complexity, overlay maintenance (build patches, cross-compile fixes), and a confusing dependency chain for contributors  
+**Root Cause:** The package originally used MLC-LLM (as a git submodule) for its translation backend. In July 2025, MLC-LLM was removed and `whisper-cpp` was added to `vcpkg.json` as the vehicle to obtain a vcpkg-installable `ggml`.
+**Plan:** Migrate to a standalone `ggml` vcpkg port, remove the `whisper-cpp` overlay port and its associated patches (`0001-fix-vcpkg-build.patch`, `0002-fix-apple-silicon-cross-compile.patch`), and update `vcpkg.json` to depend on `ggml` directly
+
+### 3. Overlay Ports Instead of Registry
+**Status:** 7 local overlay ports in `vcpkg-overlays/` — `whisper-cpp`, `bergamot-translator`, `marian-dev`, `ssplit`, `intgemm`, `ruy`, `simd-utils`  
+**Issue:** Dependencies are maintained as local overlay ports with custom portfiles and patches instead of being published to `qvac-registry-vcpkg`. This duplicates port maintenance into the package itself, makes dependency updates error-prone, and diverges from the pattern already adopted by other inference packages (e.g. `qvac-lib-infer-whispercpp` migrated to the registry in `94bcdfc` — July 2025)  
+**Root Cause:** The Bergamot backend was originally built from deeply nested git submodules (`bergamot-translator` → `marian-dev` → `intgemm`, `ruy`, `simd-utils`, `ssplit`). When the package migrated to vcpkg, these submodule trees were converted to local overlay ports to unblock the build, but were never promoted to the shared registry  
+**Plan:** Publish all overlay ports to `qvac-registry-vcpkg`, remove the `vcpkg-overlays/` directory, and update `vcpkg-configuration.json` to resolve all dependencies from the registry. This can be done incrementally — `whisper-cpp` removal is covered by item #2, and the Bergamot chain (`bergamot-translator`, `marian-dev`, `ssplit`, `intgemm`, `ruy`, `simd-utils`) can be migrated as a group
 
 ---
 
