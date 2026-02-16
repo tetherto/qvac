@@ -172,38 +172,26 @@ function cartesianProduct (arrays) {
   )
 }
 
-function uniqueValuesWithDefault (values, defaultValue) {
-  const out = []
-  const seen = new Set()
-  for (const value of [defaultValue, ...(values || [])]) {
-    const key = typeof value === 'string' ? `s:${value}` : `j:${JSON.stringify(value)}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(value)
-  }
-  return out
-}
-
 function buildCases (modelDef, sweep) {
   const baseQuant = modelDef.defaultQuantization
   const defaults = modelDef.defaults || {}
-  const supportedQuants = uniqueValuesWithDefault(sweep.quantization, baseQuant)
+  const supportedQuants = (sweep.quantization || [])
     .filter((quant) => !!resolveModelName(modelDef, quant))
 
   if (supportedQuants.length === 0) {
     throw new Error(`No supported quantizations found for model "${modelDef.id}"`)
   }
 
-  const devices = uniqueValuesWithDefault(sweep.device, defaults.device)
-  const ctxSizes = uniqueValuesWithDefault(sweep['ctx-size'], defaults['ctx-size'])
-  const batchSizes = uniqueValuesWithDefault(sweep['batch-size'], defaults['batch-size'])
-  const ubatchSizes = uniqueValuesWithDefault(sweep['ubatch-size'], defaults['ubatch-size'])
-  const noMmapValues = uniqueValuesWithDefault(sweep['no-mmap'], defaults['no-mmap'] ?? false)
-  const flashAttnValues = uniqueValuesWithDefault(sweep['flash-attn'], defaults['flash-attn'] ?? 'off')
-  const noKvOffloadValues = uniqueValuesWithDefault(sweep['no-kv-offload'], defaults['no-kv-offload'] ?? false)
-  const threadsValues = uniqueValuesWithDefault(sweep.threads, defaults.threads)
-  const cacheTypeKValues = uniqueValuesWithDefault(sweep['cache-type-k'], defaults['cache-type-k'])
-  const cacheTypeVValues = uniqueValuesWithDefault(sweep['cache-type-v'], defaults['cache-type-v'])
+  const devices = sweep.device || []
+  const ctxSizes = sweep['ctx-size'] || []
+  const batchSizes = sweep['batch-size'] || []
+  const ubatchSizes = sweep['ubatch-size'] || []
+  const noMmapValues = sweep['no-mmap'] || []
+  const flashAttnValues = sweep['flash-attn'] || []
+  const noKvOffloadValues = sweep['no-kv-offload'] || []
+  const threadsValues = sweep.threads || []
+  const cacheTypeKValues = sweep['cache-type-k'] || []
+  const cacheTypeVValues = sweep['cache-type-v'] || []
 
   const cases = []
   cases.push({
@@ -299,6 +287,20 @@ function truncateText (text, maxLen) {
   if (value.length <= maxLen) return value
   if (maxLen <= 3) return value.slice(0, maxLen)
   return `${value.slice(0, maxLen - 3)}...`
+}
+
+function compactPromptErrors (promptResults) {
+  if (!Array.isArray(promptResults)) return []
+  const out = []
+  for (const item of promptResults) {
+    if (!item || !item.error) continue
+    out.push({
+      promptId: item.promptId,
+      error: truncateText(item.error, 300),
+      vramError: Boolean(item.vramError)
+    })
+  }
+  return out
 }
 
 function estimateTokenCount (text) {
@@ -523,44 +525,46 @@ function toMarkdown (report) {
   lines.push(`- Repeats per case: ${report.repeats}`)
   lines.push('- Sweep mode: full-grid')
   lines.push(`- Prompts: ${report.promptsCount}`)
+  lines.push(`- Case records: ${report.jsonlPath}`)
   lines.push('')
   lines.push('> Runtime memory currently reports process-level JS memory only.')
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Load ms (avg) | TTFT ms (avg) | TPS (avg) | Unload ms (avg) | Memory RSS MB (avg) | Quality Match |')
-    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|')
+    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Status | Load ms (avg) | TTFT ms (avg) | TPS (avg) | Unload ms (avg) | Memory RSS MB (avg) | Quality Match | Error |')
+    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
+      const runtimeConfig = item.runtimeConfig || {}
       const quality = item.qualityMatch != null ? item.qualityMatch.toFixed(3) : ''
       const quantizationCell = item.isBaseline ? 'default' : (item.quantization ?? '')
-      const deviceCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.device != null ? String(item.runtimeConfig.device) : '')
-      const ctxSizeCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig['ctx-size'] != null ? String(item.runtimeConfig['ctx-size']) : '')
-      const batchSizeCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig['batch-size'] != null ? String(item.runtimeConfig['batch-size']) : '')
-      const ubatchSizeCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig['ubatch-size'] != null ? String(item.runtimeConfig['ubatch-size']) : '')
+      const deviceCell = item.isBaseline ? 'default' : (runtimeConfig.device != null ? String(runtimeConfig.device) : '')
+      const ctxSizeCell = item.isBaseline ? 'default' : (runtimeConfig['ctx-size'] != null ? String(runtimeConfig['ctx-size']) : '')
+      const batchSizeCell = item.isBaseline ? 'default' : (runtimeConfig['batch-size'] != null ? String(runtimeConfig['batch-size']) : '')
+      const ubatchSizeCell = item.isBaseline ? 'default' : (runtimeConfig['ubatch-size'] != null ? String(runtimeConfig['ubatch-size']) : '')
       const noMmapCell = item.isBaseline
         ? 'default'
-        : (item.runtimeConfig && item.runtimeConfig['no-mmap'] != null
-            ? (item.runtimeConfig['no-mmap'] === '' ? 'on' : 'off')
-            : '')
+        : (runtimeConfig['no-mmap'] ? 'on' : 'off')
       const flashAttnCell = item.isBaseline
         ? 'default'
-        : (item.runtimeConfig && item.runtimeConfig['flash-attn'] != null
-            ? (item.runtimeConfig['flash-attn'] === '' ? 'on' : 'off')
-            : '')
-      const threadsCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig.threads != null ? String(item.runtimeConfig.threads) : '')
-      const cacheKCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig['cache-type-k'] != null ? String(item.runtimeConfig['cache-type-k']) : '')
-      const cacheVCell = item.isBaseline ? 'default' : (item.runtimeConfig && item.runtimeConfig['cache-type-v'] != null ? String(item.runtimeConfig['cache-type-v']) : '')
+        : (runtimeConfig['flash-attn'] != null ? String(runtimeConfig['flash-attn']) : '')
+      const threadsCell = item.isBaseline ? 'default' : (runtimeConfig.threads != null ? String(runtimeConfig.threads) : '')
+      const cacheKCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-k'] != null ? String(runtimeConfig['cache-type-k']) : '')
+      const cacheVCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-v'] != null ? String(runtimeConfig['cache-type-v']) : '')
       const memoryRssMb = item.metrics && item.metrics.runtimeMemory
         ? item.metrics.runtimeMemory.rssMb
         : ''
+      const errorCell = item.error && item.error.message
+        ? truncateText(item.error.message, 120)
+        : ''
       lines.push(
-        `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell}` +
-        ` | ${item.metrics.loadMs ?? ''} | ${item.metrics.ttftMs ?? ''} | ${item.metrics.tps ?? ''} | ${item.metrics.unloadMs ?? ''}` +
-        ` | ${memoryRssMb ?? ''} | ${quality} |`
+        `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.status ?? ''}` +
+        ` | ${item.metrics?.loadMs ?? ''} | ${item.metrics?.ttftMs ?? ''} | ${item.metrics?.tps ?? ''} | ${item.metrics?.unloadMs ?? ''}` +
+        ` | ${memoryRssMb ?? ''} | ${quality} | ${errorCell} |`
       )
     }
     lines.push('')
   }
+  lines.push('')
   return `${lines.join('\n')}\n`
 }
 
@@ -647,12 +651,19 @@ async function main () {
 
   moduleFlushProgress = flushProgress
 
+  const stamp = tsFileStamp()
+  const jsonPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.json`)
+  const jsonlPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.jsonl`)
+  const mdPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.md`)
+  fs.writeFileSync(jsonlPath, '')
+
   const report = {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     repeats,
     promptsCount: prompts.length,
     selectedModelIds,
+    jsonlPath,
     models: []
   }
 
@@ -678,12 +689,43 @@ async function main () {
     const adaptiveBaselineOutputs = {}
     const caseResults = []
 
+    const persistCaseResult = (caseResult) => {
+      const line = {
+        startedAt: report.startedAt,
+        finishedAt: null,
+        repeats: report.repeats,
+        promptsCount: report.promptsCount,
+        modelId: modelDef.id,
+        source: modelDef.source,
+        modelDir: modelDef.modelDir,
+        caseId: caseResult.caseId,
+        parameter: caseResult.parameter,
+        value: caseResult.value,
+        quantization: caseResult.quantization,
+        modelName: caseResult.modelName,
+        runtimeConfig: caseResult.runtimeConfig,
+        isBaseline: caseResult.isBaseline,
+        metrics: caseResult.metrics,
+        qualityMatch: caseResult.qualityMatch,
+        status: caseResult.status,
+        repeatsAttempted: caseResult.repeatsAttempted,
+        repeatsSucceeded: caseResult.repeatsSucceeded,
+        promptErrorCount: caseResult.promptErrorCount,
+        promptErrors: caseResult.promptErrors || [],
+        error: caseResult.error || null
+      }
+      fs.appendFileSync(jsonlPath, `${JSON.stringify(line)}\n`)
+      caseResults.push(caseResult)
+    }
+
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
       // Wrap each case in try-catch to prevent one case from crashing the entire benchmark
       const testCase = cases[caseIndex]
       let loader = null
       let model = null
       let modelLoaded = false
+      let caseRepeatsAttempted = 0
+      let caseRepeatsSucceeded = 0
       try {
         if (!testCase.modelName) {
           throw new Error(
@@ -723,15 +765,6 @@ async function main () {
           const errorMsg = loadError && loadError.message ? loadError.message : String(loadError)
           if (errorMsg.includes('VRAM') || errorMsg.includes('gpu-layers') || errorMsg.includes('failed to create context') || errorMsg.includes('UnableToLoadModel')) {
             // VRAM error - mark all prompts as failed and skip this case
-            const promptResults = prompts.map(p => ({
-              promptId: p.id,
-              metrics: null,
-              output: null,
-              qualityMatch: null,
-              error: `VRAM_ERROR: ${errorMsg}`,
-              errorStack: loadError && loadError.stack ? loadError.stack : null,
-              vramError: true
-            }))
             for (const p of prompts) {
               for (let r = 1; r <= repeats; r++) {
                 const runKey = `${modelDef.id}:${testCase.caseId}:${p.id}:${r}`
@@ -739,12 +772,35 @@ async function main () {
               }
             }
             saveProgress()
-            caseResults.push({
+            for (let promptIndex = 0; promptIndex < prompts.length; promptIndex++) {
+              for (let repeat = 1; repeat <= repeats; repeat++) {
+                progress.tick({
+                  modelId: modelDef.id,
+                  caseIndex: caseIndex + 1,
+                  caseCount: cases.length,
+                  promptIndex: promptIndex + 1,
+                  promptCount: prompts.length,
+                  repeat,
+                  repeats
+                })
+              }
+            }
+            persistCaseResult({
               ...testCase,
               metrics: null,
               qualityMatch: null,
-              hasErrors: true,
-              promptResults
+              status: 'failed',
+              repeatsAttempted: prompts.length * repeats,
+              repeatsSucceeded: 0,
+              promptErrorCount: prompts.length * repeats,
+              promptErrors: prompts.map((p) => ({
+                promptId: p.id,
+                error: truncateText(`VRAM_ERROR: ${errorMsg}`, 300),
+                vramError: true
+              })),
+              error: {
+                message: truncateText(`VRAM_ERROR: ${errorMsg}`, 300)
+              }
             })
             // Clean up loader before continuing
             try {
@@ -758,7 +814,6 @@ async function main () {
         }
 
         const promptResults = []
-
         for (let promptIndex = 0; promptIndex < prompts.length; promptIndex++) {
           const prompt = prompts[promptIndex]
           const effectivePrompt = buildPromptForRuntimeConfig(prompt, testCase.runtimeConfig)
@@ -777,6 +832,17 @@ async function main () {
               debugLogger.log(`Skipping already completed: ${runKey}`)
               // Note: We can't load the actual metrics/output without a results file
               // So we'll just skip this repeat and continue
+              caseRepeatsAttempted += 1
+              caseRepeatsSucceeded += 1
+              progress.tick({
+                modelId: modelDef.id,
+                caseIndex: caseIndex + 1,
+                caseCount: cases.length,
+                promptIndex: promptIndex + 1,
+                promptCount: prompts.length,
+                repeat,
+                repeats
+              })
               continue
             }
 
@@ -809,6 +875,8 @@ async function main () {
               }
 
               runMetrics.push(metrics)
+              caseRepeatsAttempted += 1
+              caseRepeatsSucceeded += 1
               if (!firstOutput) {
                 firstOutput = outputText
               }
@@ -833,6 +901,7 @@ async function main () {
               }
             } catch (error) {
               promptError = error
+              caseRepeatsAttempted += 1
               const errorMsg = error && error.message ? error.message : String(error)
               debugLogger.warn(`Case failed for prompt ${prompt.id} repeat ${repeat}: ${errorMsg}`)
 
@@ -893,7 +962,6 @@ async function main () {
             promptResults.push({
               promptId: prompt.id,
               metrics: aggregated,
-              output: firstOutput,
               qualityMatch
             })
           } else if (promptError) {
@@ -904,10 +972,9 @@ async function main () {
             promptResults.push({
               promptId: prompt.id,
               metrics: null,
-              output: null,
               qualityMatch: null,
               error: errorMsg,
-              errorStack: promptError && promptError.stack ? promptError.stack : null,
+              errorStack: promptError && promptError.stack ? truncateText(promptError.stack, 1200) : null,
               vramError: isVramError
             })
           }
@@ -971,13 +1038,29 @@ async function main () {
 
         const avgQualityMatch = round(average(promptResults.filter(p => !p.error).map(p => p.qualityMatch).filter(x => x != null)), 6)
         const hasErrors = promptResults.some(p => p.error != null)
+        const status = hasErrors
+          ? (caseRepeatsSucceeded > 0 ? 'partial-failure' : 'failed')
+          : 'ok'
+        const promptErrors = compactPromptErrors(promptResults)
+        const errorSummary = promptErrors.length > 0
+          ? {
+              message: truncateText(
+                `${promptErrors.length} prompt error(s): ${promptErrors[0].error}`,
+                300
+              )
+            }
+          : null
 
-        caseResults.push({
+        persistCaseResult({
           ...testCase,
           metrics: aggregatedMetrics,
           qualityMatch: avgQualityMatch,
-          hasErrors,
-          promptResults
+          status,
+          repeatsAttempted: caseRepeatsAttempted,
+          repeatsSucceeded: caseRepeatsSucceeded,
+          promptErrorCount: promptErrors.length,
+          promptErrors,
+          error: errorSummary
         })
       } catch (caseError) {
         // If case setup failed (e.g., model load), clean up and continue
@@ -997,15 +1080,45 @@ async function main () {
           // Ignore cleanup errors
         }
         debugLogger.error(`Case ${testCase.caseId} failed completely: ${caseError.message || String(caseError)}`)
-        caseResults.push({
+        const remainingRepeats = Math.max(0, (prompts.length * repeats) - caseRepeatsAttempted)
+        for (let i = 0; i < remainingRepeats; i++) {
+          progress.tick({
+            modelId: modelDef.id,
+            caseIndex: caseIndex + 1,
+            caseCount: cases.length,
+            promptIndex: prompts.length,
+            promptCount: prompts.length,
+            repeat: repeats,
+            repeats
+          })
+        }
+        persistCaseResult({
           ...testCase,
           metrics: null,
           qualityMatch: null,
-          hasErrors: true,
-          error: caseError.message || String(caseError),
-          errorStack: caseError.stack || null,
-          promptResults: []
+          status: 'failed',
+          repeatsAttempted: caseRepeatsAttempted,
+          repeatsSucceeded: caseRepeatsSucceeded,
+          error: {
+            message: truncateText(caseError.message || String(caseError), 300),
+            stack: caseError.stack ? truncateText(caseError.stack, 1200) : null
+          },
+          promptErrorCount: 0,
+          promptErrors: []
         })
+
+        // Fail fast when the baseline case cannot initialize the model.
+        // Continuing the full grid in this state only floods logs with the same fatal error.
+        if (testCase.isBaseline) {
+          const baselineError = caseError && caseError.message ? caseError.message : String(caseError)
+          if (/Failed to initialize model|failed to load model/i.test(baselineError)) {
+            throw new Error(
+              `Baseline case failed to initialize model "${testCase.modelName}". ` +
+              `Please re-prepare models and verify disk/free space before running the sweep again. ` +
+              `Underlying error: ${baselineError}`
+            )
+          }
+        }
       }
     }
 
@@ -1018,9 +1131,6 @@ async function main () {
   }
 
   report.finishedAt = new Date().toISOString()
-  const stamp = tsFileStamp()
-  const jsonPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.json`)
-  const mdPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.md`)
 
   isShuttingDown = true
   flushProgress()
@@ -1030,6 +1140,7 @@ async function main () {
     fs.writeFileSync(mdPath, toMarkdown(report))
     debugLogger.log('\nDone.')
     debugLogger.log(`JSON: ${jsonPath}`)
+    debugLogger.log(`JSONL: ${jsonlPath}`)
     debugLogger.log(`MD:   ${mdPath}`)
   } catch (writeError) {
     console.error('Failed to write report files:', writeError)

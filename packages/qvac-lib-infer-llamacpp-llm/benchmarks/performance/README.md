@@ -20,7 +20,7 @@ npm run benchmarks:param-sweep
 
 This command runs:
 
-1. `prepare_models.py --target addon`
+1. `prepare-models.js --target addon`
 2. Prompt generation to `benchmarks/performance/test-prompts.json`
 3. Bare benchmark runner (`llm-parameter-sweep.js`)
 
