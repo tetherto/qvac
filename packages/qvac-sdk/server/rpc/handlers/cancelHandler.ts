@@ -1,5 +1,5 @@
 import type { CancelRequest, CancelResponse } from "@/schemas/cancel";
-import { cancel } from "@/server/bare/addons";
+import { cancel } from "@/server/bare/ops/cancel";
 import { createCancelFunction } from "@/server/rpc/handlers/load-model/download-manager";
 import {
   cancelRagOperation,

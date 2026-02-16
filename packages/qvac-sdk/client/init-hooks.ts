@@ -4,6 +4,7 @@ import {
   setGlobalLogLevel,
   setGlobalConsoleOutput,
 } from "@/logging";
+import { SetConfigFailedError } from "@/utils/errors-client";
 
 const logger = getClientLogger();
 
@@ -49,7 +50,7 @@ async function sendInitMessage(
   };
 
   if (!parsed.success) {
-    throw new Error(parsed.error ?? "Unknown error");
+    throw new SetConfigFailedError(parsed.error ?? "Unknown error");
   }
 }
 
