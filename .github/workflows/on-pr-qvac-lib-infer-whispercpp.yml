@@ -32,7 +32,9 @@ env:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    if: |
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -42,7 +44,7 @@ jobs:
       changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
 
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -62,7 +64,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +80,7 @@ jobs:
           workdir: packages/qvac-lib-infer-whispercpp
 
   cpp-tests-coverage:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/cpp-tests-whispercpp.yml
     secrets: inherit
     with:
@@ -86,7 +88,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   prebuild:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
@@ -96,7 +98,7 @@ jobs:
       publish_target: 'gpr'
 
   run-integration-tests:
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if:  contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: [sanity-checks, prebuild]
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
@@ -105,7 +107,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if:  contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if:  contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: [sanity-checks, prebuild]
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
