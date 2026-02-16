@@ -14,6 +14,8 @@ import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
 import { handleGetModelInfo } from "./get-model-info";
 import { handleOCRStream } from "./ocr-stream";
+import { handlePing } from "./ping";
+import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
   handleModelRegistrySearch,
@@ -21,6 +23,7 @@ import {
 } from "./registry";
 
 export const handlers = {
+  ping: handlePing,
   completionStream: handleCompletionStream,
   downloadAsset: handleDownloadAsset,
   deleteCache: handleDeleteCache,
@@ -37,6 +40,8 @@ export const handlers = {
   textToSpeech: handleTextToSpeech,
   getModelInfo: handleGetModelInfo,
   ocrStream: handleOCRStream,
+  pluginInvoke: handlePluginInvoke,
+  pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,
   modelRegistrySearch: handleModelRegistrySearch,
   modelRegistryGetModel: handleModelRegistryGetModel,

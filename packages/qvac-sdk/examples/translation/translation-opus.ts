@@ -1,4 +1,9 @@
-import { loadModel, translate, unloadModel, MARIAN_OPUS_EN_IT_Q4_0 } from "@qvac/sdk";
+import {
+  loadModel,
+  translate,
+  unloadModel,
+  MARIAN_OPUS_EN_IT_Q4_0,
+} from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({

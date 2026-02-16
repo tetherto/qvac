@@ -9,6 +9,7 @@ import { normalizeModelType } from "@/schemas";
 import os from "bare-os";
 import { handlers } from "@/server/rpc/handlers";
 import {
+  PearWorkerEntryRequiredError,
   RPCNoHandlerError,
   RPCRequestNotSentError,
 } from "@/utils/errors-client";
@@ -17,6 +18,52 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
+import { getClientLogger } from "@/logging";
+import { getAllPlugins } from "@/server/plugins";
+import { initializeWorkerCore } from "@/server/worker-core";
+
+const logger = getClientLogger();
+
+/**
+ * Load worker entry to register plugins before any SDK calls.
+ *
+ * If plugins are already registered (e.g., by a Pear worker bootstrap),
+ * skip loading the default worker but still initialize worker core.
+ *
+ * NOTE: For Pear apps, the fallback (loading default worker) cannot work.
+ *
+ * The default worker is intentionally excluded from `pear stage --compact`
+ * to enable tree-shaking of unused built-in plugins. When a Pear app tries
+ * to dynamically import it at runtime, the path resolves to a pear:// URL.
+ * The default worker imports built-in plugins, which load native addons
+ * (.bare files). Native addons cannot be loaded from pear:// URLs, causing
+ * UNSUPPORTED_PROTOCOL errors.
+ *
+ * Instead, we detect Pear runtime and throw a clear error directing users
+ * to use the generated worker entry (qvac/worker.pear.entry.mjs).
+ *
+ * The fallback only works in non-Pear environments.
+ */
+async function loadWorkerEntry() {
+  initializeWorkerCore();
+
+  if (getAllPlugins().length > 0) {
+    logger.info("📦 Plugins already registered, worker core initialized");
+    return;
+  }
+
+  const { isPear } = await import("which-runtime");
+  if (isPear) {
+    throw new PearWorkerEntryRequiredError("qvac/worker.pear.entry.mjs");
+  }
+
+  // Fallback: load default worker (all built-in plugins)
+  logger.info("📦 Loading default worker (all built-in plugins)");
+  const workerPath = "../../server/" + "worker.js";
+  await import(workerPath);
+}
+
+let workerEntryLoaded = false;
 
 // Handler function types
 type Handler =
@@ -36,9 +83,7 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
 
   let canonicalType: CanonicalModelType;
   try {
-    canonicalType = normalizeModelType(
-      request.modelType as Parameters<typeof normalizeModelType>[0],
-    );
+    canonicalType = normalizeModelType(request.modelType) as CanonicalModelType;
   } catch {
     return request;
   }
@@ -49,11 +94,7 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   return { ...request, modelConfig: configWithDefaults } as T;
 }
 
-async function send<T extends Request>(request: T): Promise<Response> {
-  if (request.type === "ping") {
-    return { type: "pong", number: Math.random() * 100 };
-  }
-
+export async function send<T extends Request>(request: T): Promise<Response> {
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -148,7 +189,7 @@ async function* stream<T extends Request>(request: T) {
   }
 }
 
-const createMockRPCRequest = () => {
+function createMockRPCRequest() {
   let requestData: Request | { type: string; config: unknown } | null = null;
 
   return {
@@ -207,11 +248,16 @@ const createMockRPCRequest = () => {
       }
     },
   };
-};
+}
 
 let configInitialized = false;
 
 export async function getRPC() {
+  if (!workerEntryLoaded) {
+    await loadWorkerEntry();
+    workerEntryLoaded = true;
+  }
+
   const mockRPC = {
     request() {
       return createMockRPCRequest();

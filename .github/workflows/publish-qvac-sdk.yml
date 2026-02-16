@@ -160,6 +160,15 @@ jobs:
             echo "✓ Updated $MOBILE_BUNDLE_FILE"
           fi
 
+          # Update references in withDeviceInfo.ts
+          DEVICE_INFO_FILE="expo/plugins/withDeviceInfo.ts"
+          if [ -f "$DEVICE_INFO_FILE" ]; then
+            echo "Updating @qvac/sdk references in $DEVICE_INFO_FILE to $NEW_NAME"
+            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$DEVICE_INFO_FILE"
+            rm "${DEVICE_INFO_FILE}.bak"
+            echo "✓ Updated $DEVICE_INFO_FILE"
+          fi
+
           # Update references in expo-rpc-client.ts
           EXPO_RPC_CLIENT_FILE="client/rpc/expo-rpc-client.ts"
           if [ -f "$EXPO_RPC_CLIENT_FILE" ]; then

@@ -41,11 +41,9 @@ export class InvalidPluginSpecifierError extends Error {
 export class BarePackNotInstalledError extends Error {
   constructor () {
     super(
-      'bare-pack is not installed.\n\n' +
-      '  To bundle the SDK, install bare-pack:\n' +
-      '    npm install -D bare-pack\n' +
-      '    # or: bun add -d bare-pack\n\n' +
-      '  Then run: npx qvac bundle sdk'
+      'bare-pack binary not found.\n\n' +
+      '  This indicates a corrupted @qvac/cli installation.\n' +
+      '  Try reinstalling: npm install @qvac/cli'
     )
     this.name = 'BarePackNotInstalledError'
   }

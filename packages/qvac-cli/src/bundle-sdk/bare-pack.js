@@ -1,37 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { BarePackNotInstalledError, BarePackError } from '../errors.js'
 
-function resolveBarePackBin (projectRoot) {
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+function resolveBarePackBin () {
   const binName = process.platform === 'win32' ? 'bare-pack.cmd' : 'bare-pack'
-  return path.join(projectRoot, 'node_modules', '.bin', binName)
-}
-
-async function detectBarePackMajorVersion (barePackBin, entryPath) {
-  return new Promise((resolve) => {
-    const proc = spawn(barePackBin, ['--version', entryPath], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    })
-
-    let output = ''
-    proc.stdout.on('data', (data) => {
-      output += data.toString()
-    })
-
-    proc.on('close', () => {
-      const match = output.match(/v?(\d+)\./)
-      const majorVersion = match?.[1] ? parseInt(match[1], 10) : 2
-      resolve(majorVersion)
-    })
-
-    proc.on('error', () => resolve(2)) // Default to v2 on error
-  })
+  return path.resolve(__dirname, '..', '..', 'node_modules', '.bin', binName)
 }
 
 export async function runBarePack (options) {
   const {
-    projectRoot,
     entryPath,
     outputPath,
     hosts,
@@ -41,19 +22,13 @@ export async function runBarePack (options) {
     logger
   } = options
 
-  const barePackBin = resolveBarePackBin(projectRoot)
+  const barePackBin = resolveBarePackBin()
   if (!fs.existsSync(barePackBin)) {
     throw new BarePackNotInstalledError()
   }
 
-  const majorVersion = await detectBarePackMajorVersion(barePackBin, entryPath)
-  const platformFlag = majorVersion < 2 ? '--target' : '--host'
-  logger.debug(
-    `📦 Detected bare-pack v${majorVersion} (using ${platformFlag})`
-  )
-
   return new Promise((resolve, reject) => {
-    const hostArgs = hosts.flatMap((h) => [platformFlag, h])
+    const hostArgs = hosts.flatMap((h) => ['--host', h])
     const deferArgs = deferModules.flatMap((m) => ['--defer', m])
     const args = [
       ...hostArgs,
