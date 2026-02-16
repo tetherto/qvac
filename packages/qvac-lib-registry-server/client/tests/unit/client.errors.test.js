@@ -1,20 +1,27 @@
 'use strict'
 
 const test = require('brittle')
-const { QVACRegistryClient } = require('../../')
-const { QvacErrorRegistryClient, ERR_CODES } = require('../../utils/error')
 
-test('client error - missing registry core key', async t => {
+test('client config - uses default registry core key when none provided', async t => {
   t.plan(2)
 
-  try {
-    const client = new QVACRegistryClient({})
-    await client.ready()
-    t.fail('Should have thrown error')
-  } catch (error) {
-    t.ok(error instanceof QvacErrorRegistryClient, 'Throws QvacErrorRegistryClient')
-    t.is(error.code, ERR_CODES.FAILED_TO_CONNECT, 'Error code is FAILED_TO_CONNECT')
-  }
+  const RegistryConfig = require('../../lib/config')
+  const config = new RegistryConfig({})
+
+  const key = config.getRegistryCoreKey(undefined)
+  t.ok(key, 'Returns a key when none provided')
+  t.is(typeof key, 'string', 'Default key is a string')
+})
+
+test('client config - explicit key takes precedence over default', async t => {
+  t.plan(1)
+
+  const RegistryConfig = require('../../lib/config')
+  const config = new RegistryConfig({})
+
+  const explicit = 'my-custom-key'
+  const key = config.getRegistryCoreKey(explicit)
+  t.is(key, explicit, 'Returns the explicitly provided key')
 })
 
 test('client error - invalid path parameter', async t => {
