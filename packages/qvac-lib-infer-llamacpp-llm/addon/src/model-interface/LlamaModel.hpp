@@ -21,7 +21,11 @@
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#if defined(STANDALONE_TEST_BUILD)
+#include "FinetuningParametersStub.hpp"
+#else
 #include "qvac-lib-inference-addon-cpp/FinetuningParameters.hpp"
+#endif
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 

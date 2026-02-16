@@ -228,9 +228,18 @@ std::any LlamaModel::process(const std::any& input) {
         "Invalid input type");
   }
   const Prompt& prompt = std::any_cast<const Prompt&>(input);
+#ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     return std::any(finetune(*prompt.finetuningParams, prompt.outputCallback));
   }
+#else
+  if (prompt.finetuningParams.has_value()) {
+    throw qvac_errors::StatusError(
+        AddonID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Finetuning not available in standalone test build");
+  }
+#endif
   return processPrompt(prompt);
 }
 

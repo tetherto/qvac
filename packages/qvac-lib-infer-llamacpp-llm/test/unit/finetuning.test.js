@@ -49,6 +49,16 @@ function completeFinetuneWith (model, status = 'IDLE') {
   }
 }
 
+function baseFinetuneOpts (overrides = {}) {
+  return {
+    trainDatasetDir: '/tmp/train.jsonl',
+    outputParametersDir: '/tmp/out',
+    numberOfEpochs: 1,
+    learningRate: 1e-5,
+    ...overrides
+  }
+}
+
 const createModelWithMockAddon = (finetuningParams = null) => {
   const loader = { close: () => Promise.resolve() }
   const model = new LlmLlamacpp(
@@ -85,13 +95,7 @@ test('finetune() with no args throws when no stored params', async (t) => {
 
 test('finetune(opts) throws when validation object is missing', async (t) => {
   const model = createModelWithMockAddon(null)
-  const opts = {
-    trainDatasetDir: '/tmp/train.jsonl',
-    evalDatasetDir: '/tmp/eval.jsonl',
-    outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
-    learningRate: 1e-5
-  }
+  const opts = baseFinetuneOpts()
   await t.exception(
     () => model.finetune(opts),
     /must include validation/
@@ -99,17 +103,44 @@ test('finetune(opts) throws when validation object is missing', async (t) => {
   t.ok(!model.addon.finetune.called)
 })
 
+test('finetune(opts) with validation.type dataset requires validation.path', async (t) => {
+  const model = createModelWithMockAddon(null)
+  const opts = baseFinetuneOpts({ validation: { type: 'dataset' } })
+  await t.exception(
+    () => model.finetune(opts),
+    /no path is provided/
+  )
+  t.ok(!model.addon.finetune.called)
+})
+
+test('finetune(opts) with validation.type dataset throws when path same as trainDatasetDir', async (t) => {
+  const model = createModelWithMockAddon(null)
+  const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/train.jsonl' } })
+  await t.exception(
+    () => model.finetune(opts),
+    /same as trainDatasetDir/
+  )
+  t.ok(!model.addon.finetune.called)
+})
+
+test('finetune(opts) with validation.type dataset and validation.path passes evalDatasetDir to addon', async (t) => {
+  const model = createModelWithMockAddon(null)
+  const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/eval.jsonl' } })
+  model.addon.finetune.callsFake(completeFinetuneWith(model))
+  const handle = await model.finetune(opts)
+  t.ok(model.addon.finetune.called)
+  const params = model.addon.finetune.lastArgs[0]
+  t.is(params.evalDatasetDir, '/tmp/eval.jsonl')
+  t.ok(params.useEvalDatasetForValidation === true)
+  t.is(params.validationSplit, 0)
+  t.ok(!('validation' in params))
+  const result = await handle.await()
+  t.alike(result, { status: 'IDLE' })
+})
+
 test('finetune(opts) stores params and calls addon.finetune', async (t) => {
   const model = createModelWithMockAddon(null)
-  const opts = {
-    trainDatasetDir: '/tmp/train.jsonl',
-    evalDatasetDir: '/tmp/eval.jsonl',
-    outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
-    learningRate: 1e-5,
-    validation: { type: 'split' }
-  }
-
+  const opts = baseFinetuneOpts({ evalDatasetDir: '/tmp/eval.jsonl', validation: { type: 'split' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
   const handle = await model.finetune(opts)
@@ -124,14 +155,7 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
 })
 
 test('finetune() with no args uses stored params and calls addon.finetune', async (t) => {
-  const opts = {
-    trainDatasetDir: '/tmp/train.jsonl',
-    evalDatasetDir: '/tmp/eval.jsonl',
-    outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
-    learningRate: 1e-5,
-    validation: { type: 'split' }
-  }
+  const opts = baseFinetuneOpts({ evalDatasetDir: '/tmp/eval.jsonl', validation: { type: 'split' } })
   const model = createModelWithMockAddon(opts)
 
   model.addon.finetune.callsFake(completeFinetuneWith(model))
@@ -146,16 +170,8 @@ test('finetune() with no args uses stored params and calls addon.finetune', asyn
 })
 
 test('finetune(opts with resume key) passes opts to addon.finetune', async (t) => {
-  const opts = {
-    trainDatasetDir: '/tmp/train.jsonl',
-    evalDatasetDir: '/tmp/eval.jsonl',
-    outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
-    learningRate: 1e-5,
-    resume: true,
-    validation: { type: 'split' }
-  }
   const model = createModelWithMockAddon(null)
+  const opts = baseFinetuneOpts({ evalDatasetDir: '/tmp/eval.jsonl', resume: true, validation: { type: 'split' } })
 
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
@@ -190,14 +206,7 @@ test('cancel() calls addon.cancel when running', async (t) => {
 })
 
 test('finetune() resolves with PAUSED when paused', async (t) => {
-  const opts = {
-    trainDatasetDir: '/tmp/train.jsonl',
-    evalDatasetDir: '/tmp/eval.jsonl',
-    outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
-    learningRate: 1e-5,
-    validation: { type: 'none' }
-  }
+  const opts = baseFinetuneOpts({ evalDatasetDir: '/tmp/eval.jsonl', validation: { type: 'none' } })
   const model = createModelWithMockAddon(opts)
   model.addon.finetune.callsFake(completeFinetuneWith(model, 'PAUSED'))
 

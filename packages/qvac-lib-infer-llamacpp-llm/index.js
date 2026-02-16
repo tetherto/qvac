@@ -18,8 +18,8 @@ function normalizeFinetuneParams (opts) {
   const validation = opts.validation
   if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
     throw new Error(
-      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number] }. ' +
-      'Example: validation: { type: \'split\', fraction: 0.05 } or validation: { type: \'none\' }.'
+      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
+      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
     )
   }
   const out = { ...opts }
@@ -37,11 +37,18 @@ function normalizeFinetuneParams (opts) {
     out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
     out.useEvalDatasetForValidation = false
   } else {
-    if (!opts.evalDatasetDir || opts.evalDatasetDir === opts.trainDatasetDir) {
+    const evalPath = validation.path ?? opts.evalDatasetDir
+    if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
       throw new Error(
-        "validation.type is 'dataset' but evalDatasetDir is missing or same as trainDatasetDir. Provide a separate eval dataset path."
+        "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
       )
     }
+    if (evalPath === opts.trainDatasetDir) {
+      throw new Error(
+        "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
+      )
+    }
+    out.evalDatasetDir = evalPath
     out.validationSplit = 0
     out.useEvalDatasetForValidation = true
   }
