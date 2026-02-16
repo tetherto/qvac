@@ -46,10 +46,6 @@
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
-    "./models": "./dist/models/hyperdrive/models.js",
-    "./electron-builder": {
-      "require": "./electron-builder/index.cjs"
-    },
     "./worker-core": {
       "import": "./dist/server/worker-core.js"
     },
