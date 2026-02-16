@@ -4028,5 +4028,858 @@
     ],
     "notes": "",
     "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox tokenizer",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "tokenizer",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
+    "engine": "@qvac/tts",
+    "description": "Supertonic tokenizer",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "tokenizer"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic text encoder (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "text-encoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic text encoder (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "text-encoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic latent denoiser (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "latent-denoiser"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic latent denoiser (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "latent-denoiser"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice decoder (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-decoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice decoder (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-decoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F1 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F2 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F3 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F4 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F5 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M1 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M2 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M3 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M4 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M5 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
   }
 ]
