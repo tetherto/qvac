@@ -179,26 +179,62 @@ export const pluginDefinitionRuntimeSchema = z
   .catchall(z.unknown());
 
 // ============================================
-// Plugin Path Constants
+// Built-in Plugins
 // ============================================
 
-export const PLUGIN_LLM_PATH = "@qvac/sdk/llamacpp-completion/plugin" as const;
-export const PLUGIN_EMBEDDING_PATH =
-  "@qvac/sdk/llamacpp-embedding/plugin" as const;
-export const PLUGIN_WHISPER_PATH =
-  "@qvac/sdk/whispercpp-transcription/plugin" as const;
-export const PLUGIN_NMT_PATH = "@qvac/sdk/nmtcpp-translation/plugin" as const;
-export const PLUGIN_TTS_PATH = "@qvac/sdk/onnx-tts/plugin" as const;
-export const PLUGIN_OCR_PATH = "@qvac/sdk/onnx-ocr/plugin" as const;
+/**
+ * LLM text completion plugin (llama.cpp).
+ * Provides: completion, streaming chat, tool calling.
+ */
+export const PLUGIN_LLM = "@qvac/sdk/llamacpp-completion/plugin" as const;
 
-/** All built-in SDK plugin paths */
-export const SDK_DEFAULT_PLUGIN_PATHS = [
-  PLUGIN_LLM_PATH,
-  PLUGIN_EMBEDDING_PATH,
-  PLUGIN_WHISPER_PATH,
-  PLUGIN_NMT_PATH,
-  PLUGIN_TTS_PATH,
-  PLUGIN_OCR_PATH,
+/**
+ * Text embedding plugin (llama.cpp).
+ * Provides: vector embeddings for RAG and semantic search.
+ */
+export const PLUGIN_EMBEDDING = "@qvac/sdk/llamacpp-embedding/plugin" as const;
+
+/**
+ * Speech-to-text transcription plugin (whisper.cpp).
+ * Provides: audio transcription, language detection.
+ */
+export const PLUGIN_WHISPER =
+  "@qvac/sdk/whispercpp-transcription/plugin" as const;
+
+/**
+ * Neural machine translation plugin (nmt.cpp).
+ * Provides: text translation between languages.
+ */
+export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
+
+/**
+ * Text-to-speech synthesis plugin (ONNX).
+ * Provides: speech synthesis from text.
+ */
+export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
+
+/**
+ * Optical character recognition plugin (ONNX).
+ * Provides: text extraction from images.
+ */
+export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
+
+/**
+ * All built-in SDK plugins.
+ *
+ * @example
+ * // Use all defaults plus a custom plugin:
+ * const config = {
+ *   plugins: [...SDK_DEFAULT_PLUGINS, myCustomPlugin],
+ * };
+ */
+export const SDK_DEFAULT_PLUGINS = [
+  PLUGIN_LLM,
+  PLUGIN_EMBEDDING,
+  PLUGIN_WHISPER,
+  PLUGIN_NMT,
+  PLUGIN_TTS,
+  PLUGIN_OCR,
 ] as const;
 
-export type BuiltinPluginPath = (typeof SDK_DEFAULT_PLUGIN_PATHS)[number];
+export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];

@@ -78,14 +78,14 @@ export {
   type PluginModelResult,
   type ModelRegistryEntry,
   type ModelRegistryEntryAddon,
-  PLUGIN_LLM_PATH,
-  PLUGIN_EMBEDDING_PATH,
-  PLUGIN_WHISPER_PATH,
-  PLUGIN_NMT_PATH,
-  PLUGIN_TTS_PATH,
-  PLUGIN_OCR_PATH,
-  SDK_DEFAULT_PLUGIN_PATHS,
-  type BuiltinPluginPath,
+  PLUGIN_LLM,
+  PLUGIN_EMBEDDING,
+  PLUGIN_WHISPER,
+  PLUGIN_NMT,
+  PLUGIN_TTS,
+  PLUGIN_OCR,
+  SDK_DEFAULT_PLUGINS,
+  type BuiltinPlugin,
 } from "./schemas";
 
 export { type ToolInput, type ToolHandler } from "./utils/tool-helpers";
