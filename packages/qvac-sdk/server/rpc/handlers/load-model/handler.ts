@@ -8,6 +8,7 @@ import { normalizeModelType, ModelType } from "@/schemas";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
 import { loadModel } from "@/server/bare/addons";
 import { resolveModelPath } from "@/server/rpc/handlers/load-model/resolve";
+import { downloadParakeetModelFromHttp } from "@/server/rpc/handlers/load-model/http";
 import {
   getModelEntry,
   updateModelConfig,
@@ -64,7 +65,20 @@ export async function handleLoadModel(
       : undefined;
 
   try {
-    const modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
+    // Parakeet models are multi-file and need a dedicated downloader for HTTP
+    let modelPath: string;
+    if (
+      canonicalModelType === ModelType.parakeetTranscription &&
+      typeof modelSrc === "string" &&
+      (modelSrc.startsWith("http://") || modelSrc.startsWith("https://"))
+    ) {
+      modelPath = await downloadParakeetModelFromHttp(
+        modelSrc,
+        progressCallback,
+      );
+    } else {
+      modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
+    }
 
     let projectionModelPath: string | undefined;
     if (projectionModelSrc) {

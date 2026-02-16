@@ -4,9 +4,6 @@ import TranscriptionWhispercpp, {
 } from "@qvac/transcription-whispercpp";
 import {
   definePlugin,
-  defineHandler,
-  transcribeStreamRequestSchema,
-  transcribeStreamResponseSchema,
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
@@ -16,6 +13,7 @@ import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/plugins/whispercpp-transcription/ops/transcribe-stream";
+import { createTranscribeStreamHandler } from "@/server/bare/utils/transcription-handler";
 
 function createWhisperModel(
   modelId: string,
@@ -79,30 +77,7 @@ export const whisperPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: defineHandler({
-      requestSchema: transcribeStreamRequestSchema,
-      responseSchema: transcribeStreamResponseSchema,
-      streaming: true,
-
-      handler: async function* (request) {
-        for await (const text of transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        })) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
-        }
-
-        yield {
-          type: "transcribeStream" as const,
-          text: "",
-          done: true,
-        };
-      },
-    }),
+    transcribeStream: createTranscribeStreamHandler(transcribe),
   },
 
   logging: {

@@ -13,6 +13,7 @@
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.1.5",
         "@qvac/rag": "^0.4.2",
+        "@qvac/transcription-parakeet": "^0.1.4",
         "@qvac/transcription-whispercpp": "^0.3.17",
         "@qvac/translation-nmtcpp": "^0.3.6",
         "@qvac/tts-onnx": "^0.2.13",
@@ -527,6 +528,8 @@
     "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
 
     "@qvac/response": ["@qvac/response@0.1.2", "", { "dependencies": { "bare-events": "2.4.2" } }, "sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA=="],
+
+    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.4", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-hHLIuUG4VRvdThQ3yTun5T4cvbEKDyNycIyrAHs31f07MG322i6emqgyq44snodF6b/1JEz3gXGLFmOEb0GLPA=="],
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.3.17", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "@qvac/util-transcription": "^0.1.4", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-SJKHGwbKbnfIh4nrupYOr/8B2IDejSIAGUs8vf2h8ZHI+ydMmDmOeq41qwvgDSDmlCQ2mWBWO9WClsjJfCSMrg=="],
 
@@ -2560,6 +2563,8 @@
 
     "@qvac/response/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
+    "@qvac/transcription-parakeet/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
+
     "@qvac/transcription-whispercpp/@qvac/infer-base": ["@qvac/infer-base@0.2.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-Sk5FcbNSbOx6fHzb4FwFdwj6aSdO6K2iYiEJWQfnap/C8EaEzgLvw6l5IiBT/w51SaEGXgHg95hwo9PZoCTJ+g=="],
 
     "@qvac/translation-nmtcpp/@qvac/infer-base": ["@qvac/infer-base@0.2.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-Sk5FcbNSbOx6fHzb4FwFdwj6aSdO6K2iYiEJWQfnap/C8EaEzgLvw6l5IiBT/w51SaEGXgHg95hwo9PZoCTJ+g=="],
@@ -2817,6 +2822,8 @@
     "@qvac/embed-llamacpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/llm-llamacpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
+
+    "@qvac/transcription-parakeet/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/transcription-whispercpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 

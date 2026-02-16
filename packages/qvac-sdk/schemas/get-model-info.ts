@@ -34,6 +34,7 @@ export const modelInfoSchema = z.object({
   addon: z.enum([
     "llamacpp-completion",
     "whispercpp-transcription",
+    "parakeet-transcription",
     "llamacpp-embedding",
     "nmtcpp-translation",
     "vad",

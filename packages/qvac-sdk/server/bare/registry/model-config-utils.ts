@@ -14,6 +14,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
