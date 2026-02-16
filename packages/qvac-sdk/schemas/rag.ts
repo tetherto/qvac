@@ -168,7 +168,10 @@ const ragCloseWorkspaceOperationSchema = ragCloseWorkspaceParamsSchema.extend({
 // ============== Delete Workspace Operation ==============
 
 export const ragDeleteWorkspaceParamsSchema = z.object({
-  workspace: z.string().min(1, "Workspace name cannot be empty").pipe(safePathComponent),
+  workspace: z
+    .string()
+    .min(1, "Workspace name cannot be empty")
+    .pipe(safePathComponent),
 });
 
 const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(

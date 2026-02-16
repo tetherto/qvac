@@ -25,7 +25,10 @@ test("sanitizePathComponent: strips ../ sequences", (t) => {
 });
 
 test("sanitizePathComponent: strips ..\\ sequences", (t) => {
-  t.is(sanitizePathComponent("..\\..\\..\\Windows\\System32"), "Windows/System32");
+  t.is(
+    sanitizePathComponent("..\\..\\..\\Windows\\System32"),
+    "Windows/System32",
+  );
 });
 
 test("sanitizePathComponent: strips leading absolute path prefixes", (t) => {
@@ -35,8 +38,14 @@ test("sanitizePathComponent: strips leading absolute path prefixes", (t) => {
 });
 
 test("sanitizePathComponent: rejects null bytes", (t) => {
-  t.exception(() => sanitizePathComponent("foo\0bar"), "should throw on null byte");
-  t.exception(() => sanitizePathComponent("foo%00bar"), "should throw on URL-encoded null byte");
+  t.exception(
+    () => sanitizePathComponent("foo\0bar"),
+    "should throw on null byte",
+  );
+  t.exception(
+    () => sanitizePathComponent("foo%00bar"),
+    "should throw on URL-encoded null byte",
+  );
 });
 
 test("sanitizePathComponent: handles mixed separator attacks", (t) => {
@@ -51,7 +60,10 @@ test("sanitizePathComponent: handles URL-encoded traversal", (t) => {
 
 test("sanitizePathComponent: passes through clean names unchanged", (t) => {
   t.is(sanitizePathComponent("model.gguf"), "model.gguf");
-  t.is(sanitizePathComponent("my-model-00001-of-00002.gguf"), "my-model-00001-of-00002.gguf");
+  t.is(
+    sanitizePathComponent("my-model-00001-of-00002.gguf"),
+    "my-model-00001-of-00002.gguf",
+  );
   t.is(sanitizePathComponent("workspace-name"), "workspace-name");
   t.is(sanitizePathComponent("abc123_def456"), "abc123_def456");
 });
@@ -64,15 +76,31 @@ test("sanitizePathComponent: handles empty string", (t) => {
 
 test("checkPathWithinBase: returns true for contained paths", (t) => {
   t.ok(checkPathWithinBase("/safe/dir", "/safe/dir/file.txt", resolve, sep));
-  t.ok(checkPathWithinBase("/safe/dir", "/safe/dir/sub/deep/file.txt", resolve, sep));
+  t.ok(
+    checkPathWithinBase(
+      "/safe/dir",
+      "/safe/dir/sub/deep/file.txt",
+      resolve,
+      sep,
+    ),
+  );
   t.ok(checkPathWithinBase("/safe/dir/", "/safe/dir/file.txt", resolve, sep));
 });
 
 test("checkPathWithinBase: returns false for escaped paths", (t) => {
-  t.absent(checkPathWithinBase("/safe/dir", "/safe/dir/../../../etc/passwd", resolve, sep));
+  t.absent(
+    checkPathWithinBase(
+      "/safe/dir",
+      "/safe/dir/../../../etc/passwd",
+      resolve,
+      sep,
+    ),
+  );
   t.absent(checkPathWithinBase("/safe/dir", "/etc/passwd", resolve, sep));
   t.absent(checkPathWithinBase("/safe/dir", "/safe/di", resolve, sep));
-  t.absent(checkPathWithinBase("/safe/dir", "/safe/directory/file.txt", resolve, sep));
+  t.absent(
+    checkPathWithinBase("/safe/dir", "/safe/directory/file.txt", resolve, sep),
+  );
 });
 
 test("checkPathWithinBase: handles the base path itself", (t) => {
@@ -89,9 +117,13 @@ bareTest("validateAndJoinPath: joins clean components", async (t: any) => {
 });
 
 bareTest("validateAndJoinPath: neutralizes traversal", async (t: any) => {
-  const { validateAndJoinPath, isPathWithinBase } = await import("@/server/utils/path-security");
+  const { validateAndJoinPath, isPathWithinBase } =
+    await import("@/server/utils/path-security");
   const result = validateAndJoinPath("/base/dir", "../../../etc/passwd");
-  t.ok(isPathWithinBase("/base/dir", result), `result "${result}" must be within /base/dir`);
+  t.ok(
+    isPathWithinBase("/base/dir", result),
+    `result "${result}" must be within /base/dir`,
+  );
 });
 
 bareTest("validateAndJoinPath: throws on null byte", async (t: any) => {
@@ -114,50 +146,84 @@ bareTest("isPathWithinBase: accepts contained paths", async (t: any) => {
 
 // ============== Archive extraction (Bare runtime only) ==============
 
-bareTest("extractTarStream: malicious entries do not escape extractDir", async (t: any) => {
-  const { extractTarStream } = await import("@/server/utils/archive");
-  const { isPathWithinBase } = await import("@/server/utils/path-security");
-  const barePath = await import("bare-path");
-  const bareFs = await import("bare-fs");
-  const bareProcess = await import("bare-process");
+bareTest(
+  "extractTarStream: malicious entries do not escape extractDir",
+  async (t: any) => {
+    const { extractTarStream } = await import("@/server/utils/archive");
+    const { isPathWithinBase } = await import("@/server/utils/path-security");
+    const barePath = await import("bare-path");
+    const bareFs = await import("bare-fs");
+    const bareProcess = await import("bare-process");
 
-  const cwd = bareProcess.default.cwd();
-  const fixturePath = barePath.join(cwd, "test", "fixtures", "malicious-zipslip.tar.gz");
-  const extractDir = barePath.join(cwd, "test", "fixtures", "tmp-extract-bare");
+    const cwd = bareProcess.default.cwd();
+    const fixturePath = barePath.join(
+      cwd,
+      "test",
+      "fixtures",
+      "malicious-zipslip.tar.gz",
+    );
+    const extractDir = barePath.join(
+      cwd,
+      "test",
+      "fixtures",
+      "tmp-extract-bare",
+    );
 
-  bareFs.mkdirSync(extractDir, { recursive: true });
+    bareFs.mkdirSync(extractDir, { recursive: true });
 
-  try {
-    await extractTarStream(fixturePath, extractDir, true);
+    try {
+      await extractTarStream(fixturePath, extractDir, true);
 
-    // Check that no files escaped
-    const resolvedExtractDir = barePath.resolve(extractDir);
-    const escapedPaths = [
-      barePath.resolve(barePath.join(extractDir, "../../../escape.gguf")),
-      barePath.resolve(barePath.join(extractDir, "../../../../tmp/pwned.gguf")),
-      barePath.resolve(barePath.join(extractDir, "models/../../../../../../escape-nested.gguf")),
-    ];
+      // Check that no files escaped
+      const resolvedExtractDir = barePath.resolve(extractDir);
+      const escapedPaths = [
+        barePath.resolve(barePath.join(extractDir, "../../../escape.gguf")),
+        barePath.resolve(
+          barePath.join(extractDir, "../../../../tmp/pwned.gguf"),
+        ),
+        barePath.resolve(
+          barePath.join(
+            extractDir,
+            "models/../../../../../../escape-nested.gguf",
+          ),
+        ),
+      ];
 
-    for (const p of escapedPaths) {
-      let exists = false;
-      try { bareFs.accessSync(p); exists = true; } catch {}
-      t.absent(exists, `file must not exist outside extractDir: ${p}`);
+      for (const p of escapedPaths) {
+        let exists = false;
+        try {
+          bareFs.accessSync(p);
+          exists = true;
+        } catch {}
+        t.absent(exists, `file must not exist outside extractDir: ${p}`);
+      }
+
+      // Legitimate files should still be extracted
+      const files = bareFs.readdirSync(extractDir) as string[];
+      const legit = files.filter((f: string) => f.startsWith("legit-model-"));
+      t.is(legit.length, 2, "legitimate shard files must be extracted");
+    } finally {
+      // Cleanup
+      try {
+        bareFs.rmSync(extractDir, { recursive: true });
+      } catch {}
+      const escapedCleanup = [
+        barePath.resolve(barePath.join(extractDir, "../../../escape.gguf")),
+        barePath.resolve(
+          barePath.join(extractDir, "../../../../tmp/pwned.gguf"),
+        ),
+        barePath.resolve(
+          barePath.join(
+            extractDir,
+            "models/../../../../../../escape-nested.gguf",
+          ),
+        ),
+      ];
+      for (const p of escapedCleanup) {
+        try {
+          bareFs.rmSync(p);
+        } catch {}
+      }
     }
-
-    // Legitimate files should still be extracted
-    const files = bareFs.readdirSync(extractDir) as string[];
-    const legit = files.filter((f: string) => f.startsWith("legit-model-"));
-    t.is(legit.length, 2, "legitimate shard files must be extracted");
-  } finally {
-    // Cleanup
-    try { bareFs.rmSync(extractDir, { recursive: true }); } catch {}
-    const escapedCleanup = [
-      barePath.resolve(barePath.join(extractDir, "../../../escape.gguf")),
-      barePath.resolve(barePath.join(extractDir, "../../../../tmp/pwned.gguf")),
-      barePath.resolve(barePath.join(extractDir, "models/../../../../../../escape-nested.gguf")),
-    ];
-    for (const p of escapedCleanup) {
-      try { bareFs.rmSync(p); } catch {}
-    }
-  }
-});
+  },
+);

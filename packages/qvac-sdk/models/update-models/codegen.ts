@@ -1,9 +1,7 @@
 import { generateExportName } from "./naming";
 import type { ProcessedModel } from "./types";
 
-export function generateModelsFileContent(
-  models: ProcessedModel[],
-): string {
+export function generateModelsFileContent(models: ProcessedModel[]): string {
   const usedNames = new Set<string>();
 
   const modelsWithNames = models.map((m) => ({

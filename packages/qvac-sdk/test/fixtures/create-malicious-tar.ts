@@ -21,11 +21,20 @@ const output = createWriteStream(outputPath);
 // Malicious entries (end in .gguf to pass isModelFile filter)
 pack.entry({ name: "../../../escape.gguf", type: "file" }, "MALICIOUS_1");
 pack.entry({ name: "../../../../tmp/pwned.gguf", type: "file" }, "MALICIOUS_2");
-pack.entry({ name: "models/../../../../../../escape-nested.gguf", type: "file" }, "MALICIOUS_3");
+pack.entry(
+  { name: "models/../../../../../../escape-nested.gguf", type: "file" },
+  "MALICIOUS_3",
+);
 
 // Legitimate entries
-pack.entry({ name: "legit-model-00001-of-00002.gguf", type: "file" }, "LEGIT_SHARD_1");
-pack.entry({ name: "legit-model-00002-of-00002.gguf", type: "file" }, "LEGIT_SHARD_2");
+pack.entry(
+  { name: "legit-model-00001-of-00002.gguf", type: "file" },
+  "LEGIT_SHARD_1",
+);
+pack.entry(
+  { name: "legit-model-00002-of-00002.gguf", type: "file" },
+  "LEGIT_SHARD_2",
+);
 
 pack.finalize();
 pack.pipe(gzip).pipe(output);

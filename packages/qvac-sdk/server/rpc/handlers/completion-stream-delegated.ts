@@ -4,7 +4,7 @@ import type {
 } from "@/schemas";
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { getRPC } from "@/server/bare/delegate-rpc-client";
-import { stream } from "@/client/rpc/rpc-client";
+import { stream } from "@/server/rpc/delegate-transport";
 import { ModelIsDelegatedError } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 

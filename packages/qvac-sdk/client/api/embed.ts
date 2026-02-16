@@ -1,6 +1,6 @@
 import { send } from "@/client/rpc/rpc-client";
 import { type EmbedParams, type EmbedRequest } from "@/schemas";
-import { InvalidResponseError, EmbedFailedError } from "@/utils/errors-client";
+import { InvalidResponseError } from "@/utils/errors-client";
 
 /**
  * Generates embeddings for a single text using a specified model.
@@ -39,10 +39,6 @@ export async function embed(
   const response = await send(request);
   if (response.type !== "embed") {
     throw new InvalidResponseError("embed");
-  }
-
-  if (!response.success) {
-    throw new EmbedFailedError(response.error);
   }
 
   return response.embedding;

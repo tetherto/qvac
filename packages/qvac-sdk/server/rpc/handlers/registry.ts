@@ -158,9 +158,7 @@ export async function handleModelRegistrySearch(
       models = models.filter((m) => m.addon === request.addon);
     }
 
-    logger.debug(
-      `QVAC model registry search returned ${models.length} models`,
-    );
+    logger.debug(`QVAC model registry search returned ${models.length} models`);
 
     return {
       type: "modelRegistrySearch",
