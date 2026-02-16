@@ -516,6 +516,36 @@ function toMarkdown (report) {
   return `${lines.join('\n')}\n`
 }
 
+function toJsonLines (report) {
+  const lines = []
+  for (const model of report.models) {
+    for (const item of model.cases) {
+      lines.push(JSON.stringify({
+        startedAt: report.startedAt,
+        finishedAt: report.finishedAt,
+        repeats: report.repeats,
+        modelId: model.modelId,
+        source: model.source,
+        modelDir: model.modelDir,
+        caseId: item.caseId,
+        parameter: item.parameter,
+        quantization: item.quantization,
+        modelName: item.modelName,
+        inputMode: item.inputMode,
+        runtimeConfig: item.runtimeConfig,
+        isBaseline: item.isBaseline,
+        metrics: item.metrics,
+        similarity: item.similarity,
+        status: item.status,
+        repeatsAttempted: item.repeatsAttempted,
+        repeatsSucceeded: item.repeatsSucceeded,
+        error: item.error
+      }))
+    }
+  }
+  return `${lines.join('\n')}\n`
+}
+
 async function main () {
   const args = parseArgs(process.argv)
   const debugEnabled = Boolean(args.debug)
@@ -688,13 +718,11 @@ async function main () {
 
   report.finishedAt = new Date().toISOString()
   const stamp = tsFileStamp()
-  const jsonPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.json`)
+  const jsonlPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.jsonl`)
   const mdPath = path.join(resultsDir, `embed-parameter-sweep-${stamp}.md`)
-  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2))
+  fs.writeFileSync(jsonlPath, toJsonLines(report))
   fs.writeFileSync(mdPath, toMarkdown(report))
   debugLogger.log('\nDone.')
-  debugLogger.log(`JSON: ${jsonPath}`)
-  debugLogger.log(`MD:   ${mdPath}`)
 }
 
 main().catch((error) => {
