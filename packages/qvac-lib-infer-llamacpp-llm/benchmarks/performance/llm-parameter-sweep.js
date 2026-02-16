@@ -20,6 +20,9 @@ function createDebugLogger (enabled) {
     },
     warn: (...msgs) => {
       if (enabled) console.warn(...msgs)
+    },
+    error: (...msgs) => {
+      if (enabled) console.error(...msgs)
     }
   }
 }
@@ -577,7 +580,7 @@ async function main () {
   const debugEnabled = Boolean(args.debug)
   const debugLogger = createDebugLogger(debugEnabled)
   const addonSource = parseAddonSource(args['addon-source'])
-  const addonCtor = resolveAddonCtor(addonSource)
+  const AddonCtor = resolveAddonCtor(addonSource)
   const repeats = args.repeats ? parsePositiveInt(args.repeats, 'repeats') : DEFAULT_REPEATS
   const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
   const promptsFilePath = args['prompts-file']
@@ -677,8 +680,11 @@ async function main () {
 
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
       // Wrap each case in try-catch to prevent one case from crashing the entire benchmark
+      const testCase = cases[caseIndex]
+      let loader = null
+      let model = null
+      let modelLoaded = false
       try {
-        const testCase = cases[caseIndex]
         if (!testCase.modelName) {
           throw new Error(
           `Quantization "${testCase.quantization}" is not configured for model "${modelDef.id}" (case ${testCase.caseId})`
@@ -693,14 +699,12 @@ async function main () {
 
         debugLogger.log(`Running: ${testCase.caseId}`)
 
-        const loader = new FilesystemDL({ dirPath: modelDef.modelDir })
+        loader = new FilesystemDL({ dirPath: modelDef.modelDir })
         const config = buildConfigObject(testCase.runtimeConfig)
         const addonRuntimeLogger = createAddonRuntimeLogger(debugEnabled)
-        let model = null
-        let modelLoaded = false
 
         // Load model once for this case
-        model = new addonCtor({
+        model = new AddonCtor({
           modelName: testCase.modelName,
           loader,
           logger: addonRuntimeLogger,
@@ -776,11 +780,11 @@ async function main () {
               continue
             }
 
-              try {
-                const runStart = process.hrtime()
-                let timeToFirstToken = null
-                const chunks = []
-                const response = await model.run(effectivePrompt.messages)
+            try {
+              const runStart = process.hrtime()
+              let timeToFirstToken = null
+              const chunks = []
+              const response = await model.run(effectivePrompt.messages)
               await response.onUpdate((data) => {
                 if (timeToFirstToken === null) {
                   timeToFirstToken = elapsedMs(runStart)
@@ -877,9 +881,13 @@ async function main () {
                 }
               }
             } else {
-              qualityMatch = testCase.parameter === 'baseline'
-                ? 1.0
-                : (baselineOutputs[prompt.id] ? exactMatch(baselineOutputs[prompt.id], firstOutput) : null)
+              if (testCase.parameter === 'baseline') {
+                qualityMatch = 1.0
+              } else {
+                qualityMatch = baselineOutputs[prompt.id]
+                  ? exactMatch(baselineOutputs[prompt.id], firstOutput)
+                  : null
+              }
             }
 
             promptResults.push({
@@ -922,7 +930,7 @@ async function main () {
           }
         }
 
-          // Update metrics with load/unload times (per-case, not per-prompt/repeat)
+        // Update metrics with load/unload times (per-case, not per-prompt/repeat)
         for (const promptResult of promptResults) {
           if (promptResult.metrics != null) {
             promptResult.metrics.loadMs = loadMs
@@ -943,21 +951,23 @@ async function main () {
         // Aggregate metrics across prompts (average) - only for successful runs
         const successfulResults = promptResults.filter(p => p.metrics != null && !p.error)
         const firstSuccess = successfulResults.length > 0 ? successfulResults[0] : null
-        const aggregatedMetrics = successfulResults.length > 0 ? {
-          repeats: firstSuccess?.metrics?.repeats ?? null,
-          loadMs: firstSuccess?.metrics?.loadMs ?? null, // Load time is per-case, not per-prompt
-          runMs: round(average(successfulResults.map(p => p.metrics?.runMs).filter(x => x != null)), 3),
-          unloadMs: firstSuccess?.metrics?.unloadMs ?? null, // Unload time is per-case, not per-prompt
-          ttftMs: round(average(successfulResults.map(p => p.metrics?.ttftMs).filter(x => x != null)), 3),
-          tps: round(average(successfulResults.map(p => p.metrics?.tps).filter(x => x != null)), 3),
-          promptTokens: round(average(successfulResults.map(p => p.metrics?.promptTokens).filter(x => x != null)), 0),
-          generatedTokens: round(average(successfulResults.map(p => p.metrics?.generatedTokens).filter(x => x != null)), 0),
-          runtimeMemory: {
-            rssMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.rssMb).filter(x => x != null)), 2),
-            heapUsedMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.heapUsedMb).filter(x => x != null)), 2),
-            externalMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.externalMb).filter(x => x != null)), 2)
-          }
-        } : null
+        const aggregatedMetrics = successfulResults.length > 0
+          ? {
+              repeats: firstSuccess?.metrics?.repeats ?? null,
+              loadMs: firstSuccess?.metrics?.loadMs ?? null, // Load time is per-case, not per-prompt
+              runMs: round(average(successfulResults.map(p => p.metrics?.runMs).filter(x => x != null)), 3),
+              unloadMs: firstSuccess?.metrics?.unloadMs ?? null, // Unload time is per-case, not per-prompt
+              ttftMs: round(average(successfulResults.map(p => p.metrics?.ttftMs).filter(x => x != null)), 3),
+              tps: round(average(successfulResults.map(p => p.metrics?.tps).filter(x => x != null)), 3),
+              promptTokens: round(average(successfulResults.map(p => p.metrics?.promptTokens).filter(x => x != null)), 0),
+              generatedTokens: round(average(successfulResults.map(p => p.metrics?.generatedTokens).filter(x => x != null)), 0),
+              runtimeMemory: {
+                rssMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.rssMb).filter(x => x != null)), 2),
+                heapUsedMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.heapUsedMb).filter(x => x != null)), 2),
+                externalMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.externalMb).filter(x => x != null)), 2)
+              }
+            }
+          : null
 
         const avgQualityMatch = round(average(promptResults.filter(p => !p.error).map(p => p.qualityMatch).filter(x => x != null)), 6)
         const hasErrors = promptResults.some(p => p.error != null)
