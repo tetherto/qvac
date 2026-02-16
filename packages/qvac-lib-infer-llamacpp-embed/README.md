@@ -230,9 +230,7 @@ npm run quickstart
 ## Other Examples
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
-- [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
-- [Native Logging](./examples/nativeLog.js) – Demonstrates C++ addon logging integration.
-- [Sharded Loading](./examples/shardedLoading.js) – Demonstrates loading sharded model files.
+- [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 
 ## Benchmarking
 
