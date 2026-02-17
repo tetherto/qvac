@@ -118,14 +118,14 @@ jobs:
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
-          # Only modify package name for dev, fix-*, feature-* branches
+          # Only modify package name for main, fix-*, feature-* branches
           case "$BRANCH_NAME" in
-            main)
-              echo "Main branch - keeping original package name"
+            release-*)
+              echo "Release branch - keeping original package name"
               exit 0
               ;;
-            dev)
-              SUFFIX="dev"
+            main)
+              SUFFIX="mono"
               ;;
             fix-*|feature-*)
               SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
