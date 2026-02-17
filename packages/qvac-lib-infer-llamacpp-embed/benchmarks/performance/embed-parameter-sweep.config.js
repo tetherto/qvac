@@ -8,7 +8,7 @@ const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
 const MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
 const RESOLVED_MODELS_PATH = path.resolve(__dirname, 'resolved-models.json')
 const DEFAULT_INPUTS_FILE = path.resolve(__dirname, 'inputs.json')
-const DEFAULT_REPEATS = 3
+const DEFAULT_REPEATS = 5
 
 // Benchmark-controlled runtime defaults used as the baseline reference.
 const BENCH_DEFAULT_RUNTIME = {

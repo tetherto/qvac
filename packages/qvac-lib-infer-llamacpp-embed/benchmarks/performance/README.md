@@ -43,15 +43,20 @@ npm run benchmarks:param-sweep -- --addon-source npm
 
 ## Optional Sweep Flags
 
-- `--models "embeddingGemma,Qwen3-embedding-0.6B"`
-- `--results-dir ./benchmarks/performance/results/custom`
-- `--inputs-file ./my-prompts.json` (must be JSON string array)
-- `--repeats 3`
+- `--repeats 10`
 - `--debug`
 
-Default output directory:
+Default repeats per case:
+
+- `5`
+
+Default output directory and files:
 
 - `benchmarks/performance/results/parameter-sweep/`
+- `embed-parameter-sweep-<timestamp>.md`
+- `embed-parameter-sweep-<timestamp>.jsonl`
+
+Each case metric in outputs includes both mean and standard deviation (for load/run/unload/TPS) across repeats.
 
 ## Runtime Defaults
 

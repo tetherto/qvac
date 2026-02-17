@@ -575,32 +575,22 @@ async function main () {
   const addonSource = parseAddonSource(args['addon-source'])
   const addonCtor = resolveAddonCtor(addonSource)
   const repeats = args.repeats ? Number(args.repeats) : DEFAULT_REPEATS
-  const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
-  const inputsFilePath = args['inputs-file']
-    ? path.resolve(args['inputs-file'])
-    : DEFAULT_INPUTS_FILE
+  const resultsDir = DEFAULT_RESULTS_DIR
+  const inputsFilePath = DEFAULT_INPUTS_FILE
   if (!fs.existsSync(inputsFilePath)) {
     throw new Error(
       `Missing inputs file: ${inputsFilePath}. ` +
-      'Provide --inputs-file <path> or place a JSON object { "<batchSize>": string[5], ... } at benchmarks/performance/inputs.json.'
+      'Place a JSON object { "<batchSize>": string[5], ... } at benchmarks/performance/inputs.json.'
     )
   }
   const inputsByBatchSize = JSON.parse(fs.readFileSync(inputsFilePath, 'utf8'))
-  const selectedModelIds = args.models
-    ? String(args.models).split(',').map((x) => x.trim()).filter(Boolean)
-    : MODELS.map((m) => m.id)
-
-  const selectedModels = MODELS.filter((m) => selectedModelIds.includes(m.id))
-  if (selectedModels.length === 0) {
-    throw new Error(`No matching models for --models=${selectedModelIds.join(',')}`)
-  }
+  const selectedModels = MODELS
 
   fs.mkdirSync(resultsDir, { recursive: true })
   const report = {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     repeats,
-    selectedModelIds,
     models: []
   }
 
