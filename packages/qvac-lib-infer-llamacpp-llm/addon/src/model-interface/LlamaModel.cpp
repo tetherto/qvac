@@ -59,8 +59,43 @@ static std::vector<std::string> split(const std::string& str, char delimiter) {
     if (!trimmed.empty()) {
       tokens.push_back(std::move(trimmed));
     }
-    }
-    return tokens;
+  }
+  return tokens;
+}
+
+static bool parseBoolConfigValue(
+    const std::string& rawValue, const std::string& keyName) {
+  std::string lowerValue = rawValue;
+  std::transform(
+      lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
+
+  if (lowerValue == "true") {
+    return true;
+  }
+  if (lowerValue == "false") {
+    return false;
+  }
+
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      string_format(
+          "%s: invalid %s value: %s (expected true/false)",
+          __func__,
+          keyName.c_str(),
+          rawValue.c_str()));
+}
+
+static std::optional<bool> tryPreferAdrenoOpenClFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap) {
+  auto preferAdrenoOpenClIt = configFilemap.find("preferAdrenoOpenCl");
+  if (preferAdrenoOpenClIt == configFilemap.end()) {
+    return std::nullopt;
+  }
+
+  bool parsedValue = parseBoolConfigValue(
+      preferAdrenoOpenClIt->second, "preferAdrenoOpenCl");
+  configFilemap.erase(preferAdrenoOpenClIt);
+  return parsedValue;
 }
 
 LlamaModel::LlamaModel(
@@ -298,6 +333,10 @@ void LlamaModel::commonParamsParse(
     common_params& params) {
 
   std::vector<std::string> configVector;
+  const std::optional<bool> preferAdrenoOpenClOverride =
+      tryPreferAdrenoOpenClFromMap(configFilemap);
+  const bool preferAdrenoOpenCl =
+      preferAdrenoOpenClOverride.value_or(true);
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto it = configFilemap.find("tools"); it != configFilemap.end()) {
@@ -350,9 +389,19 @@ void LlamaModel::commonParamsParse(
         preferredBackendTypeFromString(deviceIt->second);
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
+    if (!preferAdrenoOpenCl && preferredBackend == BackendType::GPU) {
+      const char* logMsg =
+          "preferAdrenoOpenCl=false: preferring Vulkan over Adreno OpenCL";
+      LlamaModel::llamaLogCallback(
+          GGML_LOG_LEVEL_INFO, logMsg, nullptr);
+    }
 
     const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, LlamaModel::llamaLogCallback, mainGpu);
+        chooseBackend(
+            preferredBackend,
+            LlamaModel::llamaLogCallback,
+            mainGpu,
+            preferAdrenoOpenCl);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;

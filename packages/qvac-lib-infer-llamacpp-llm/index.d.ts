@@ -48,6 +48,7 @@ export interface LlamaConfig {
   tools?: boolean | string
   verbosity?: NumericLike
   n_discarded?: NumericLike
+  preferAdrenoOpenCl?: boolean | string
   'main-gpu'?: NumericLike | string
   [key: string]: string | number | boolean | string[] | undefined
 }

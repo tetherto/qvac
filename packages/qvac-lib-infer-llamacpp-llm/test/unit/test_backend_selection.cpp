@@ -207,6 +207,25 @@ void expectChosen(
   expectChosen(result, expectedBackend, expectedBackendName);
 }
 
+void expectChosen(
+    MockBackendInterface& mockBackend, BackendType expectedBackend,
+    const std::string& expectedBackendName, bool preferAdrenoOpenCl) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result =
+      chooseBackend(expectedBackend, bckI, std::nullopt, preferAdrenoOpenCl);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
+void expectChosen(
+    MockBackendInterface& mockBackend, BackendType expectedBackend,
+    const std::string& expectedBackendName,
+    const std::optional<MainGpu>& mainGpu, bool preferAdrenoOpenCl) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      expectedBackend, bckI, mainGpu, preferAdrenoOpenCl);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
 // Adreno OpenCL and Vulkan backend -> chooses OpenCL
 TEST_F(BackendSelectionTest, AdrenoOpenCLAndVulkanChoosesOpenCL) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
@@ -306,6 +325,19 @@ TEST_F(BackendSelectionTest, MultipleAdrenoOpenCLChoosesFirst) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "gpuopencl");
+}
+
+// For BitNet on Adreno, Vulkan should be preferred over OpenCL when available.
+TEST_F(BackendSelectionTest, AdrenoCanPreferVulkanOverOpenCL) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0", false);
+}
+
+// If Vulkan is unavailable, OpenCL still works as fallback.
+TEST_F(BackendSelectionTest, AdrenoVulkanPreferenceFallsBackToOpenCL) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "gpuopencl", false);
 }
 
 // Metal GPU should be chosen over CPU when available
