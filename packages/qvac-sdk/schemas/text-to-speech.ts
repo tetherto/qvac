@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 // TTS supported languages based on available models
 export const TTS_LANGUAGES = [
@@ -8,9 +9,33 @@ export const TTS_LANGUAGES = [
   "it", // Italian
 ] as const;
 
-export const ttsConfigSchema = z.object({
+export const ttsChatterboxConfigSchema = z.object({
+  ttsEngine: z.literal("chatterbox"),
   language: z.enum(TTS_LANGUAGES),
+  ttsTokenizerSrc: modelSrcInputSchema,
+  ttsSpeechEncoderSrc: modelSrcInputSchema,
+  ttsEmbedTokensSrc: modelSrcInputSchema,
+  ttsConditionalDecoderSrc: modelSrcInputSchema,
+  ttsLanguageModelSrc: modelSrcInputSchema,
+  referenceAudioSrc: modelSrcInputSchema,
 });
+
+export const ttsSupertonicConfigSchema = z.object({
+  ttsEngine: z.literal("supertonic"),
+  language: z.enum(TTS_LANGUAGES),
+  ttsTokenizerSrc: modelSrcInputSchema,
+  ttsTextEncoderSrc: modelSrcInputSchema,
+  ttsLatentDenoiserSrc: modelSrcInputSchema,
+  ttsVoiceDecoderSrc: modelSrcInputSchema,
+  ttsVoiceSrc: modelSrcInputSchema,
+  ttsSpeed: z.number().optional(),
+  ttsNumInferenceSteps: z.number().optional(),
+});
+
+export const ttsConfigSchema = z.union([
+  ttsChatterboxConfigSchema,
+  ttsSupertonicConfigSchema,
+]);
 
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),
@@ -30,6 +55,8 @@ export const ttsResponseSchema = z.object({
 });
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
+export type TtsChatterboxConfig = z.infer<typeof ttsChatterboxConfigSchema>;
+export type TtsSupertonicConfig = z.infer<typeof ttsSupertonicConfigSchema>;
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;

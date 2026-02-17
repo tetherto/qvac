@@ -38,12 +38,15 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: "tts",
-    modelConfig: { language: "en" },
-    ttsTokenizerSrc,
-    ttsTextEncoderSrc,
-    ttsLatentDenoiserSrc,
-    ttsVoiceDecoderSrc,
-    ttsVoiceSrc,
+    modelConfig: {
+      ttsEngine: "supertonic",
+      language: "en",
+      ttsTokenizerSrc,
+      ttsTextEncoderSrc,
+      ttsLatentDenoiserSrc,
+      ttsVoiceDecoderSrc,
+      ttsVoiceSrc,
+    },
     onProgress: (progress: ModelProgressUpdate) => {
       console.log(progress);
     },

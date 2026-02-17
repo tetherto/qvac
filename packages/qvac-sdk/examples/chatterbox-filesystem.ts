@@ -36,13 +36,16 @@ try {
   const modelId = await loadModel({
     modelSrc,
     modelType: "tts",
-    modelConfig: { language: "en" },
-    ttsTokenizerSrc,
-    ttsSpeechEncoderSrc,
-    ttsEmbedTokensSrc,
-    ttsConditionalDecoderSrc,
-    ttsLanguageModelSrc,
-    referenceAudioSrc,
+    modelConfig: {
+      ttsEngine: "chatterbox",
+      language: "en",
+      ttsTokenizerSrc,
+      ttsSpeechEncoderSrc,
+      ttsEmbedTokensSrc,
+      ttsConditionalDecoderSrc,
+      ttsLanguageModelSrc,
+      referenceAudioSrc,
+    },
     onProgress: (progress) => {
       console.log(progress);
     },
