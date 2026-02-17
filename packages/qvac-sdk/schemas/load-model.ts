@@ -63,6 +63,10 @@ const loadModelOptionsBaseSchema = z.union([
     modelSrc: modelSrcInputSchema,
     modelType: parakeetModelTypeSchema,
     modelConfig: parakeetConfigSchema.partial().strict().optional(),
+    parakeetEncoderDataSrc: modelSrcInputSchema,
+    parakeetDecoderSrc: modelSrcInputSchema,
+    parakeetVocabSrc: modelSrcInputSchema,
+    parakeetPreprocessorSrc: modelSrcInputSchema,
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -174,6 +178,10 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelSrcInputSchema,
       modelType: parakeetModelTypeSchema,
       modelConfig: parakeetConfigSchema.partial().strict().optional(),
+      parakeetEncoderDataSrc: modelSrcInputSchema,
+      parakeetDecoderSrc: modelSrcInputSchema,
+      parakeetVocabSrc: modelSrcInputSchema,
+      parakeetPreprocessorSrc: modelSrcInputSchema,
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
@@ -190,6 +198,14 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      parakeetEncoderDataSrc: modelInputToSrcSchema.parse(
+        data.parakeetEncoderDataSrc,
+      ),
+      parakeetDecoderSrc: modelInputToSrcSchema.parse(data.parakeetDecoderSrc),
+      parakeetVocabSrc: modelInputToSrcSchema.parse(data.parakeetVocabSrc),
+      parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
+        data.parakeetPreprocessorSrc,
+      ),
     })),
   z
     .object({
@@ -393,6 +409,10 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
 export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.parakeetTranscription),
   modelConfig: parakeetConfigSchema, // modelType defaults to "tdt"
+  parakeetEncoderDataSrc: z.string(),
+  parakeetDecoderSrc: z.string(),
+  parakeetVocabSrc: z.string(),
+  parakeetPreprocessorSrc: z.string(),
 });
 
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({
@@ -533,6 +553,10 @@ export const loadModelServerParamsSchema = z.object({
   projectionModelPath: z.string().optional(),
   vadModelPath: z.string().optional(),
   detectorModelPath: z.string().optional(),
+  parakeetEncoderDataPath: z.string().optional(),
+  parakeetDecoderPath: z.string().optional(),
+  parakeetVocabPath: z.string().optional(),
+  parakeetPreprocessorPath: z.string().optional(),
   modelName: z.string().optional(),
 });
 

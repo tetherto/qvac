@@ -22,7 +22,6 @@ import {
 import { getServerLogger } from "@/logging";
 import { OCR_CRAFT_DETECTOR } from "@/models/registry";
 import { getPlugin } from "@/server/plugins";
-import { downloadParakeetModelFromHttp } from "@/server/rpc/handlers/load-model/http";
 
 const logger = getServerLogger();
 
@@ -54,21 +53,27 @@ export async function handleLoadModel(
       ? (request as { detectorModelSrc?: string }).detectorModelSrc
       : undefined;
 
+  // Parakeet named source fields
+  const parakeetEncoderDataSrc =
+    canonicalModelType === ModelType.parakeetTranscription
+      ? (request as { parakeetEncoderDataSrc?: string }).parakeetEncoderDataSrc
+      : undefined;
+  const parakeetDecoderSrc =
+    canonicalModelType === ModelType.parakeetTranscription
+      ? (request as { parakeetDecoderSrc?: string }).parakeetDecoderSrc
+      : undefined;
+  const parakeetVocabSrc =
+    canonicalModelType === ModelType.parakeetTranscription
+      ? (request as { parakeetVocabSrc?: string }).parakeetVocabSrc
+      : undefined;
+  const parakeetPreprocessorSrc =
+    canonicalModelType === ModelType.parakeetTranscription
+      ? (request as { parakeetPreprocessorSrc?: string })
+          .parakeetPreprocessorSrc
+      : undefined;
+
   try {
-    // Parakeet models are multi-file and need a dedicated downloader for HTTP
-    let modelPath: string;
-    if (
-      canonicalModelType === ModelType.parakeetTranscription &&
-      typeof modelSrc === "string" &&
-      (modelSrc.startsWith("http://") || modelSrc.startsWith("https://"))
-    ) {
-      modelPath = await downloadParakeetModelFromHttp(
-        modelSrc,
-        progressCallback,
-      );
-    } else {
-      modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
-    }
+    const modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
 
     let projectionModelPath: string | undefined;
     if (projectionModelSrc) {
@@ -112,6 +117,50 @@ export async function handleLoadModel(
           seed,
         );
       }
+    }
+
+    // Resolve individual Parakeet model file sources
+    let parakeetEncoderDataPath: string | undefined;
+    let parakeetDecoderPath: string | undefined;
+    let parakeetVocabPath: string | undefined;
+    let parakeetPreprocessorPath: string | undefined;
+    if (canonicalModelType === ModelType.parakeetTranscription) {
+      if (parakeetEncoderDataSrc) {
+        parakeetEncoderDataPath = await resolveModelPath(
+          parakeetEncoderDataSrc,
+          progressCallback,
+          seed,
+        );
+      }
+      if (parakeetDecoderSrc) {
+        parakeetDecoderPath = await resolveModelPath(
+          parakeetDecoderSrc,
+          progressCallback,
+          seed,
+        );
+      }
+      if (parakeetVocabSrc) {
+        parakeetVocabPath = await resolveModelPath(
+          parakeetVocabSrc,
+          progressCallback,
+          seed,
+        );
+      }
+      if (parakeetPreprocessorSrc) {
+        parakeetPreprocessorPath = await resolveModelPath(
+          parakeetPreprocessorSrc,
+          progressCallback,
+          seed,
+        );
+      }
+    }
+
+    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
+    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
+      throw new TTSConfigModelRequiredError();
+    }
+    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
+      throw new ESpeakDataPathRequiredError();
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths
@@ -191,6 +240,10 @@ export async function handleLoadModel(
       projectionModelPath,
       vadModelPath,
       detectorModelPath,
+      parakeetEncoderDataPath,
+      parakeetDecoderPath,
+      parakeetVocabPath,
+      parakeetPreprocessorPath,
       modelName,
     });
 

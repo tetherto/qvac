@@ -42,6 +42,10 @@ export async function loadModel(params: LoadModelServerParams) {
     projectionModelPath,
     vadModelPath,
     detectorModelPath,
+    parakeetEncoderDataPath,
+    parakeetDecoderPath,
+    parakeetVocabPath,
+    parakeetPreprocessorPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
   const { modelConfig, modelType: rawModelType } = options;
@@ -110,6 +114,13 @@ export async function loadModel(params: LoadModelServerParams) {
     artifacts["projectionModelPath"] = projectionModelPath;
   if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
   if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
+  if (parakeetEncoderDataPath)
+    artifacts["parakeetEncoderDataPath"] = parakeetEncoderDataPath;
+  if (parakeetDecoderPath)
+    artifacts["parakeetDecoderPath"] = parakeetDecoderPath;
+  if (parakeetVocabPath) artifacts["parakeetVocabPath"] = parakeetVocabPath;
+  if (parakeetPreprocessorPath)
+    artifacts["parakeetPreprocessorPath"] = parakeetPreprocessorPath;
 
   const result = plugin.createModel({
     modelId,
