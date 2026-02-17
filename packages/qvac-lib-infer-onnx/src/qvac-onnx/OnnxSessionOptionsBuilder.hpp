@@ -3,14 +3,18 @@
 #include <onnxruntime_cxx_api.h>
 
 #include <algorithm>
+#include <string>
 
 #include "OnnxConfig.hpp"
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <dml_provider_factory.h>
 #endif
 
 namespace onnx_addon {
+
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 // Try to append XNNPack execution provider if available and enabled
 inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
@@ -21,9 +25,13 @@ inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
                   "XnnpackExecutionProvider") != providers.end();
     if (available) {
       sessionOptions.AppendExecutionProvider("XNNPACK", {});
+      QLOG(logger::Priority::INFO, "[OnnxSession] XNNPack execution provider appended");
+    } else {
+      QLOG(logger::Priority::DEBUG, "[OnnxSession] XNNPack execution provider not available");
     }
-  } catch (const std::exception& /*e*/) {
-    // XNNPack not available, fall through to default CPU
+  } catch (const std::exception& e) {
+    QLOG(logger::Priority::WARNING,
+         std::string("[OnnxSession] Failed to append XNNPack: ") + e.what());
   }
 }
 
@@ -53,6 +61,7 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
 
   // CPU-only mode
   if (config.provider == ExecutionProvider::CPU) {
+    QLOG(logger::Priority::DEBUG, "[OnnxSession] Building session options with CPU provider");
     if (config.enableXnnpack) {
       tryAppendXnnpack(sessionOptions);
     }
@@ -76,9 +85,13 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
         uint32_t nnapiFlags = NNAPI_FLAG_USE_FP16 | NNAPI_FLAG_CPU_DISABLED;
         Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Nnapi(
             sessionOptions, nnapiFlags));
+        QLOG(logger::Priority::INFO, "[OnnxSession] NNAPI execution provider appended");
+      } else {
+        QLOG(logger::Priority::WARNING, "[OnnxSession] NNAPI execution provider not available, falling back to CPU");
       }
-    } catch (const std::exception& /*e*/) {
-      // Fall back to CPU
+    } catch (const std::exception& e) {
+      QLOG(logger::Priority::WARNING,
+           std::string("[OnnxSession] Failed to append NNAPI, falling back to CPU: ") + e.what());
     }
   }
 
@@ -92,9 +105,13 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
 
       if (coremlAvailable) {
         sessionOptions.AppendExecutionProvider("CoreML");
+        QLOG(logger::Priority::INFO, "[OnnxSession] CoreML execution provider appended");
+      } else {
+        QLOG(logger::Priority::WARNING, "[OnnxSession] CoreML execution provider not available, falling back to CPU");
       }
-    } catch (const std::exception& /*e*/) {
-      // Fall back to CPU
+    } catch (const std::exception& e) {
+      QLOG(logger::Priority::WARNING,
+           std::string("[OnnxSession] Failed to append CoreML, falling back to CPU: ") + e.what());
     }
   }
 
@@ -111,9 +128,13 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
         sessionOptions.DisableMemPattern();
         Ort::ThrowOnError(
             OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
+        QLOG(logger::Priority::INFO, "[OnnxSession] DirectML execution provider appended");
+      } else {
+        QLOG(logger::Priority::WARNING, "[OnnxSession] DirectML execution provider not available, falling back to CPU");
       }
-    } catch (const std::exception& /*e*/) {
-      // Fall back to CPU
+    } catch (const std::exception& e) {
+      QLOG(logger::Priority::WARNING,
+           std::string("[OnnxSession] Failed to append DirectML, falling back to CPU: ") + e.what());
     }
   }
 #endif

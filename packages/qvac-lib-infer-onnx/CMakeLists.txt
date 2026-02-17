@@ -25,11 +25,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(onnxruntime CONFIG REQUIRED)
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Logger.hpp")
 
 add_library(qvac-onnx INTERFACE)
 target_include_directories(
   qvac-onnx
   INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+            $<BUILD_INTERFACE:${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(qvac-onnx INTERFACE onnxruntime::onnxruntime)
 

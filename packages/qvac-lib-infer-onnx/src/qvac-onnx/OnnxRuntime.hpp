@@ -2,7 +2,11 @@
 
 #include <onnxruntime_cxx_api.h>
 
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+
 namespace onnx_addon {
+
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 /**
  * Process-wide singleton for the ONNX Runtime environment.
@@ -28,7 +32,9 @@ class OnnxRuntime {
   Ort::Env& env() { return env_; }
 
  private:
-  OnnxRuntime() : env_(ORT_LOGGING_LEVEL_WARNING, "qvac-onnx") {}
+  OnnxRuntime() : env_(ORT_LOGGING_LEVEL_WARNING, "qvac-onnx") {
+    QLOG(logger::Priority::INFO, "[OnnxRuntime] Singleton environment created");
+  }
   ~OnnxRuntime() = default;
 
   Ort::Env env_;

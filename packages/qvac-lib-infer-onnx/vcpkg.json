@@ -21,6 +21,7 @@
       "features": ["coreml-ep"],
       "platform": "osx | ios"
     },
+    "qvac-lib-inference-addon-cpp",
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.1"

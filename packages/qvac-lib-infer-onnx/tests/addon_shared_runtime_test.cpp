@@ -4,10 +4,12 @@
 #include <string>
 #include <vector>
 
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "qvac-onnx/OnnxRuntime.hpp"
 #include "qvac-onnx/OnnxSession.hpp"
 
 namespace oa = onnx_addon;
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 #ifndef TEST_FIXTURES_DIR
 #error "TEST_FIXTURES_DIR must be defined at compile time"
@@ -26,9 +28,14 @@ class AddonNormalizer {
   explicit AddonNormalizer(const std::string& modelPath)
       : session_(modelPath, oa::SessionConfig{
                                 .provider = oa::ExecutionProvider::CPU,
-                                .enableXnnpack = false}) {}
+                                .enableXnnpack = false}) {
+    QLOG(logger::Priority::INFO, "[AddonNormalizer] Initialized with model: " + modelPath);
+  }
 
   std::vector<float> normalize(const std::vector<float>& input) {
+    QLOG(logger::Priority::DEBUG,
+         "[AddonNormalizer] Running normalize with " +
+             std::to_string(input.size()) + " elements");
     oa::InputTensor tensor{.name = "X",
                            .shape = {1, static_cast<int64_t>(input.size())},
                            .type = oa::TensorType::FLOAT32,
@@ -36,6 +43,7 @@ class AddonNormalizer {
                            .dataSize = input.size() * sizeof(float)};
     auto results = session_.run(tensor);
     const float* out = results[0].as<float>();
+    QLOG(logger::Priority::DEBUG, "[AddonNormalizer] Normalize complete");
     return {out, out + results[0].elementCount()};
   }
 
@@ -56,10 +64,15 @@ class AddonCombiner {
   explicit AddonCombiner(const std::string& modelPath)
       : session_(modelPath, oa::SessionConfig{
                                 .provider = oa::ExecutionProvider::CPU,
-                                .enableXnnpack = false}) {}
+                                .enableXnnpack = false}) {
+    QLOG(logger::Priority::INFO, "[AddonCombiner] Initialized with model: " + modelPath);
+  }
 
   std::vector<float> combine(const std::vector<float>& a,
                              const std::vector<float>& b) {
+    QLOG(logger::Priority::DEBUG,
+         "[AddonCombiner] Running combine with " +
+             std::to_string(a.size()) + " elements per input");
     std::vector<oa::InputTensor> inputs = {
         {.name = "A",
          .shape = {1, static_cast<int64_t>(a.size())},
@@ -73,6 +86,7 @@ class AddonCombiner {
          .dataSize = b.size() * sizeof(float)}};
     auto results = session_.run(inputs);
     const float* out = results[0].as<float>();
+    QLOG(logger::Priority::DEBUG, "[AddonCombiner] Combine complete");
     return {out, out + results[0].elementCount()};
   }
 

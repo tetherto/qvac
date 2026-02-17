@@ -76,6 +76,9 @@ class OnnxSession : public IOnnxSession {
 inline OnnxSession::OnnxSession(const std::string& modelPath,
                                 const SessionConfig& config)
     : modelPath_(modelPath) {
+  QLOG(logger::Priority::INFO,
+       std::string("[OnnxSession] Loading model: ") + modelPath);
+
   Ort::SessionOptions sessionOptions = buildSessionOptions(config);
 
   auto& env = OnnxRuntime::instance().env();
@@ -106,6 +109,11 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     auto namePtr = session_->GetOutputNameAllocated(i, allocator_);
     outputNames_.emplace_back(namePtr.get());
   }
+
+  QLOG(logger::Priority::INFO,
+       std::string("[OnnxSession] Session created with ") +
+           std::to_string(numInputs) + " input(s) and " +
+           std::to_string(numOutputs) + " output(s)");
 }
 
 inline std::vector<TensorInfo> OnnxSession::getInputInfo() const {
@@ -163,8 +171,14 @@ inline std::vector<OutputTensor> OnnxSession::run(
     const std::vector<InputTensor>& inputs,
     const std::vector<std::string>& outputNames) {
   if (!isValid()) {
+    QLOG(logger::Priority::ERROR,
+         std::string("[OnnxSession] Run failed: session is not valid for model ") +
+             modelPath_);
     throw std::runtime_error("OnnxSession is not valid");
   }
+  QLOG(logger::Priority::DEBUG,
+       std::string("[OnnxSession] Running inference on ") + modelPath_ +
+           " with " + std::to_string(inputs.size()) + " input(s)");
 
   // Create memory info for CPU
   Ort::MemoryInfo memoryInfo =
