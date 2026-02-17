@@ -214,7 +214,7 @@ class TranslationInterface {
    * This bypasses the normal queue-based processing and directly calls
    * the batch translation API.
    * @param {string[]} texts - Array of texts to translate
-   * @returns {Promise<string[]>} - Array of translated texts
+   * @returns {Promise<{translations: string[], stats: Object}>} - Object with translated texts and native C++ runtime stats
    */
   async processBatch (texts) {
     try {

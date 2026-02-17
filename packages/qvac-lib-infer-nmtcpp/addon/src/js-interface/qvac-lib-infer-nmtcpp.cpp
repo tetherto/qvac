@@ -261,9 +261,10 @@ js_value_t* processBatch(js_env_t* env, js_callback_info_t* info) try {
   // Call processBatch on the model
   std::vector<std::string> results = model->processBatch(texts);
 
-  // Create JS array for results
-  js_value_t* resultArray;
-  if (js_create_array_with_length(env, results.size(), &resultArray) != 0) {
+  // Create JS array for translation results
+  js_value_t* translationsArray;
+  if (js_create_array_with_length(env, results.size(), &translationsArray) !=
+      0) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError,
         "Failed to create result array");
@@ -280,14 +281,32 @@ js_value_t* processBatch(js_env_t* env, js_callback_info_t* info) try {
           qvac_errors::general_error::InternalError,
           "Failed to create result string at index " + std::to_string(i));
     }
-    if (js_set_element(env, resultArray, static_cast<uint32_t>(i), str) != 0) {
+    if (js_set_element(env, translationsArray, static_cast<uint32_t>(i), str) !=
+        0) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
           "Failed to set result at index " + std::to_string(i));
     }
   }
 
-  return resultArray;
+  // Get cumulative runtime stats from the model after batch processing
+  auto runtimeStats = model->runtimeStats();
+  auto jsStats = js::Object::create(env);
+  for (const auto& p : runtimeStats) {
+    std::visit(
+        [env, &jsStats, &p](auto&& val) {
+          jsStats.setProperty(
+              env, p.first.c_str(), js::Number::create(env, val));
+        },
+        p.second);
+  }
+
+  // Return object: { translations: string[], stats: { TPS, totalTokens, ... } }
+  auto resultObj = js::Object::create(env);
+  resultObj.setProperty(env, "translations", translationsArray);
+  resultObj.setProperty(env, "stats", jsStats);
+
+  return resultObj;
 }
 JSCATCH
 

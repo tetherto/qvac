@@ -120,7 +120,8 @@ async function testBatchTranslation () {
     params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: bergamotPath,
     modelName: modelFile,
-    logger
+    logger,
+    opts: { stats: true }
   }
 
   // Config for Bergamot model
@@ -143,33 +144,91 @@ async function testBatchTranslation () {
       console.log(`  ${i + 1}. ${text}`)
     })
 
+    // ---- Batch Translation ----
     console.log('\nTranslating batch...')
     const startTime = Date.now()
 
     // Use batch translation
     const translations = await model.runBatch(textsToTranslate)
 
-    const elapsed = Date.now() - startTime
-    console.log(`\nBatch translation completed in ${elapsed}ms\n`)
+    const batchElapsed = Date.now() - startTime
+    const batchTokens = textsToTranslate.reduce((sum, t) => sum + t.split(/\s+/).filter(w => w.length > 0).length, 0)
+    const batchE2eTps = (batchTokens / batchElapsed) * 1000
+
+    console.log(`\nBatch translation completed in ${batchElapsed}ms\n`)
 
     console.log('Translations:')
     translations.forEach((text, i) => {
       console.log(`  ${i + 1}. ${text}`)
     })
 
-    // Compare with sequential translation
+    console.log('\n--- Batch Performance (End-to-End / JS wall-clock) ---')
+    console.log(`Total time:     ${batchElapsed}ms`)
+    console.log(`Total tokens:   ${batchTokens} (whitespace tokenization)`)
+    console.log(`Tokens/sec:     ${batchE2eTps.toFixed(2)}`)
+
+    // Native C++ stats from batch mode (now available via model.batchStats)
+    const batchNativeStats = model.batchStats
+    if (batchNativeStats && batchNativeStats.TPS !== undefined) {
+      const nativeTps = batchNativeStats.TPS
+      const nativeTokens = batchNativeStats.totalTokens || 0
+      const nativeTimeMs = batchNativeStats.totalTime ? (batchNativeStats.totalTime * 1000).toFixed(2) : '?'
+      const decodeTimeMs = batchNativeStats.decodeTime ? (batchNativeStats.decodeTime * 1000).toFixed(2) : '?'
+      console.log('\n--- Batch Performance: Native C++ (model-internal) ---')
+      console.log(`Native TPS (C++):       ${nativeTps.toFixed(2)} tokens/sec (${nativeTokens} tokens in ${nativeTimeMs}ms)`)
+      console.log(`Decode time:            ${decodeTimeMs}ms`)
+      if (batchNativeStats.encodeTime !== undefined) {
+        console.log(`Encode time:            ${(batchNativeStats.encodeTime * 1000).toFixed(2)}ms`)
+      }
+      if (batchNativeStats.TTFT !== undefined) {
+        console.log(`TTFT:                   ${batchNativeStats.TTFT.toFixed(2)}ms`)
+      }
+      const overhead = nativeTps > 0 ? (((nativeTps - batchE2eTps) / nativeTps) * 100) : 0
+      console.log(`JS overhead:            ${overhead.toFixed(1)}%`)
+    }
+
+    // ---- Sequential Translation ----
     console.log('\n--- Comparison: Sequential vs Batch ---')
 
     const seqStartTime = Date.now()
+    let lastNativeStats = null
     for (const text of textsToTranslate) {
       const response = await model.run(text)
       await response.await()
+      // Capture cumulative C++ native stats (last response has totals)
+      if (response.stats) {
+        lastNativeStats = response.stats
+      }
     }
     const seqElapsed = Date.now() - seqStartTime
+    const seqTokens = textsToTranslate.reduce((sum, t) => sum + t.split(/\s+/).filter(w => w.length > 0).length, 0)
+    const seqE2eTps = (seqTokens / seqElapsed) * 1000
 
-    console.log(`Sequential (${textsToTranslate.length} calls): ${seqElapsed}ms`)
-    console.log(`Batch (1 call): ${elapsed}ms`)
-    console.log(`Speedup: ${(seqElapsed / elapsed).toFixed(2)}x`)
+    console.log(`\nSequential (${textsToTranslate.length} calls): ${seqElapsed}ms`)
+    console.log(`Batch (1 call): ${batchElapsed}ms`)
+    console.log(`Speedup: ${(seqElapsed / batchElapsed).toFixed(2)}x`)
+
+    // Show TPS comparison for sequential mode
+    console.log('\n--- TPS Comparison (Sequential mode) ---')
+    console.log(`End-to-End TPS (JS):    ${seqE2eTps.toFixed(2)} tokens/sec (${seqTokens} tokens in ${seqElapsed}ms)`)
+    if (lastNativeStats && lastNativeStats.TPS !== undefined) {
+      const nativeTps = lastNativeStats.TPS
+      const nativeTokens = lastNativeStats.totalTokens || 0
+      const nativeTimeMs = lastNativeStats.totalTime ? (lastNativeStats.totalTime * 1000).toFixed(2) : '?'
+      const decodeTimeMs = lastNativeStats.decodeTime ? (lastNativeStats.decodeTime * 1000).toFixed(2) : '?'
+      console.log(`Native TPS (C++):       ${nativeTps.toFixed(2)} tokens/sec (${nativeTokens} tokens in ${nativeTimeMs}ms)`)
+      console.log(`Decode time:            ${decodeTimeMs}ms`)
+      if (lastNativeStats.encodeTime !== undefined) {
+        console.log(`Encode time:            ${(lastNativeStats.encodeTime * 1000).toFixed(2)}ms`)
+      }
+      if (lastNativeStats.TTFT !== undefined) {
+        console.log(`TTFT:                   ${lastNativeStats.TTFT.toFixed(2)}ms`)
+      }
+      const overhead = nativeTps > 0 ? (((nativeTps - seqE2eTps) / nativeTps) * 100) : 0
+      console.log(`JS overhead:            ${overhead.toFixed(1)}%`)
+    } else {
+      console.log('Native TPS (C++):       N/A (stats not received)')
+    }
   } finally {
     console.log('\nUnloading model...')
     await model.unload()
