@@ -85,6 +85,7 @@ if(BUILD_TESTING)
         tests/type_conversions_test.cpp
         tests/session_options_test.cpp
         tests/session_test.cpp
+        tests/addon_shared_runtime_test.cpp
     )
     target_include_directories(ort_tests PRIVATE src)
     target_compile_definitions(ort_tests PRIVATE
