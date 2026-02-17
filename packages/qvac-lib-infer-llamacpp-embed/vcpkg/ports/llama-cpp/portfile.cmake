@@ -1,7 +1,7 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-ext-lib-llama.cpp
-  REF v${VERSION}
+  REF 3ac4978a561e71fb26d326171f8a04864987d93b
   SHA512 8bfedfafe556b05276adea9e7c778d949a7ba6cc47157531e1c28760ba421d68a0162ff6d52f1aed6012c63acc44d429b0047f0a0e2d16cdc82d70faff36f422
 )
 
