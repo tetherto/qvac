@@ -45,7 +45,7 @@ public:
 
   ~OutputQueue() = default;
 
-  /// @brief Return current output queue and clears internal queue
+  /// @brief Returns the current output queue and clears the internal queue.
   std::vector<std::any> clear() {
     std::scoped_lock lk{mtx_};
     auto result = std::move(outputQueue_);

@@ -3,7 +3,7 @@ import { execSync } from "child_process";
 import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
-import { SDKNotFoundInNodeModulesError } from "@/utils/errors-client";
+import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
 
 const { withDangerousMod } = configPlugins;
 
@@ -14,11 +14,7 @@ const CONFIG_CANDIDATES = [
 ];
 
 /** Modules to defer from mobile bundles (not available at bundle time) */
-const DEFERRED_MODULES = [
-  "expo-file-system",
-  "react-native-bare-kit",
-  "@qvac/sdk/worker.mobile.bundle",
-];
+const DEFERRED_MODULES = ["expo-file-system", "react-native-bare-kit"];
 
 const MOBILE_HOSTS = [
   "android-arm64",
@@ -32,24 +28,19 @@ const MOBILE_HOSTS = [
  *
  * Runs qvac CLI (prefers local @qvac/cli, falls back to npx).
  * Uses qvac.config.* if exists, else includes all built-in plugins.
- * Output: node_modules/@qvac/sdk/dist/worker.mobile.bundle.js
+ * Output: node_modules/<sdk-package>/dist/worker.mobile.bundle.js
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
   function buildMobileBundle(
     config: configPlugins.ExportedConfigWithProps<unknown>,
   ) {
     const projectRoot = config.modRequest.projectRoot;
-    const qvacSdkPath = path.join(projectRoot, "node_modules", "@qvac/sdk");
+    const sdkPackage = resolveSDKPackageDir(projectRoot);
     const outputPath = path.join(
-      qvacSdkPath,
+      sdkPackage.dir,
       "dist",
       "worker.mobile.bundle.js",
     );
-
-    // Ensure SDK package exists
-    if (!fs.existsSync(qvacSdkPath)) {
-      throw new SDKNotFoundInNodeModulesError();
-    }
 
     // Generate bundle via qvac CLI
     // (uses qvac.config.* if exists, else includes all built-in plugins)
@@ -64,7 +55,11 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       );
     }
 
-    runBundler(projectRoot, qvacSdkPath, configPath);
+    const deferredModules = [
+      ...DEFERRED_MODULES,
+      `${sdkPackage.name}/worker.mobile.bundle`,
+    ];
+    runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules);
 
     // Copy the generated bundle to SDK location
     const generatedBundle = path.join(projectRoot, "qvac", "worker.bundle.js");
@@ -130,12 +125,13 @@ function runBundler(
   projectRoot: string,
   qvacSdkPath: string,
   configPath: string | null,
+  deferredModules: string[],
 ) {
   // Patch bare-kit linkers to use addons manifest
   patchBareKitLinkers(projectRoot, qvacSdkPath);
 
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
-  const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
+  const deferFlags = deferredModules.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
   const sdkPathFlag = `--sdk-path "${qvacSdkPath}"`;
   const cliCommand = resolveCliCommand(projectRoot);

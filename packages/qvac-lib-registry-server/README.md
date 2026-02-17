@@ -305,6 +305,51 @@ node scripts/check-peers.js [--key <hypercore-key>]
 node scripts/ping-server.js [--peer <peer-public-key>]
 ```
 
+## Third-Party Model Licenses
+
+This registry distributes AI model weights from various upstream sources.
+Each model is served under its original license — the registry software
+itself is Apache-2.0 but the models it hosts are not.
+
+### Licenses in use
+
+| ID | License | URL |
+|----|---------|-----|
+| `Apache-2.0` | Apache License 2.0 | https://opensource.org/licenses/Apache-2.0 |
+| `MIT` | MIT License | https://opensource.org/licenses/MIT |
+| `MPL-2.0` | Mozilla Public License 2.0 | https://opensource.org/licenses/MPL-2.0 |
+| `CC-BY-4.0` | Creative Commons Attribution 4.0 | https://creativecommons.org/licenses/by/4.0/ |
+| `llama3.2` | Llama 3.2 Community License | https://llama.meta.com/llama3_2/license/ |
+| `gemma` | Gemma Terms of Use | https://ai.google.dev/gemma/terms |
+| `health-ai-developer-foundations` | Health AI Developer Foundations License | https://developers.google.com/health-ai-developer-foundations/terms |
+| `openrail` | BigScience Open RAIL-M License | https://huggingface.co/spaces/bigscience/license |
+
+Full license texts are in [`data/licenses/<id>/LICENSE.txt`](./data/licenses/).
+Every model entry in the registry includes a `license` field with the applicable identifier.
+
+### Notable restrictions
+
+**Built with Llama** — Llama 3.2 license requires downstream applications
+to prominently display "Built with Llama" in product documentation or UI
+(Section 1.b.i).
+
+**Gemma** — Distribution is subject to the
+[Gemma Prohibited Use Policy](https://ai.google.dev/gemma/prohibited_use_policy).
+
+**Health AI Developer Foundations (MedGemma)** — Clinical use requires
+Health Regulatory Authorization. Distribution is subject to the
+[HAI-DEF Prohibited Use Policy](https://developers.google.com/health-ai-developer-foundations/prohibited-use-policy).
+
+**Open RAIL-M (Supertonic TTS)** — Use-based restrictions (Attachment A)
+must be propagated to all downstream users in any distribution agreement.
+
+### Downstream consumers
+
+Applications that download models through the SDK inherit the compliance
+obligations of each model's license. The `license` field in the model
+metadata identifies which terms apply. See the [`NOTICE`](./NOTICE) file
+for required attribution notices and the full model inventory.
+
 ## License
 
 Apache-2.0

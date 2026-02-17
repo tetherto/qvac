@@ -10,7 +10,9 @@
     "constants.js",
     "db.js",
     "db-helpers.js",
-    "spec/"
+    "spec/",
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "hyperdb": "^4.16.0",

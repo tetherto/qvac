@@ -19,8 +19,8 @@ struct OutputCallBackInterface {
   /// @brief Notify the callback that a new output is available.
   virtual void notify() = 0;
 
-  /// @brief Stop the processing thread and wait for it to finish.
-  /// This should be called before destruction to ensure clean shutdown.
+  /// @brief Stop the callback; no further outputs will be processed.
+  /// Call before destruction for clean shutdown.
   virtual void stop() = 0;
 };
 } // namespace qvac_lib_inference_addon_cpp
