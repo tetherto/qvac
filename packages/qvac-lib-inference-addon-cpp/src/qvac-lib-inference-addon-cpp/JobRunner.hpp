@@ -114,7 +114,8 @@ public:
     processingThread_ = std::thread([this]() { this->process(); });
 
     // Make sure to wait until the thread is ready for a new job.
-    // Otherwise, the thread might ignore setJobInput notifications.
+    // Otherwise, the thread might ignore and lose new jobs quickly scheduled
+    // after construction, when its not ready for processing yet.
     std::unique_lock lock(mtx_);
     processCv_.wait(lock, [this]() { return ready_.load(); });
   }

@@ -826,8 +826,8 @@ class JsAsyncTask {
       } catch (const std::exception& e) {
         rejectWithError(data->env, data->deferred, e.what());
       } catch (...) {
-        const char* unkownMsg = "Unknown error at JsAsyncTask";
-        rejectWithError(data->env, data->deferred, unkownMsg);
+        const char* unknownMsg = "Unknown error at JsAsyncTask";
+        rejectWithError(data->env, data->deferred, unknownMsg);
       }
     } else {
       // Resolve promise with undefined

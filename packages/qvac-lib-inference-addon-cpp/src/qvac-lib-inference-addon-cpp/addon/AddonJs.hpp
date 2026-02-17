@@ -39,7 +39,6 @@ public:
 
   /**
    * @brief Cancels the currently running job asynchronously
-   * @param env JavaScript environment handle
    * @return JavaScript Promise that resolves when cancellation completes
    * @note This is a non-blocking operation that returns a future/promise
    */

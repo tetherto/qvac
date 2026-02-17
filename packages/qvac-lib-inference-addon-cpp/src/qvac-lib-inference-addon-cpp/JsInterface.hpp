@@ -121,8 +121,8 @@ public:
 
   /// @brief Try to obtain optional number argument
   /// @param argIndex The index of the argument to get
-  /// @return std::optional<int> containing the number if the argument exists
-  /// and is a number, nullopt otherwise
+  /// @return std::optional<CppNumberType> containing the number if the argument
+  /// exists and is a number, nullopt otherwise
   template <typename CppNumberType>
   std::optional<CppNumberType> getIntegralOptional(int argIndex) {
     static_assert(
@@ -204,7 +204,8 @@ public:
 
   /// @brief Can be used to get the input and type
   /// @example
-  /// auto [type, jsInput] = getInput<js::String>(argsParser);
+  /// auto& instance = getInstance(env, argsParser.get(0, "instance"));
+  /// auto [type, jsInput] = getInput(argsParser);
   ////
   /// std::any anyInput;
   /// if(type == "text") {
@@ -215,9 +216,9 @@ public:
   /// if(!anyInput.has_value()) {
   ///   throw StatusError(general_error::InvalidArgument, "Invalid type");
   /// }
-  /// instance.addonCpp->setJobInput(std::move(anyInput));
-  static auto getInput(JsArgsParser& argsParser)
-      -> std::pair<std::string, js_value_t*> {
+  /// instance.runJob(std::move(anyInput));
+  static auto getInput(JsArgsParser &argsParser)
+      -> std::pair<std::string, js_value_t *> {
     auto inputObj = argsParser.getJsObject(1, "inputObj");
     auto type = argsParser.getMapEntry(1, "type");
     auto input = inputObj.getProperty(argsParser.env_, "input");
@@ -228,10 +229,11 @@ public:
   /// @example
   /// auto inputs = getInputsArray(argsParser);
   ///
-  /// for (auto& [type, jsInput] : inputs) {
+  /// for (auto& [type, inputObj] : inputs) {
   ///   std::any anyInput;
   ///   if(type == "text") {
-  ///     anyInput = js::String(env, jsInput).as<std::string>(env);
+  ///     anyInput = inputObj.getProperty<js::String>(env,
+  ///     "input").as<std::string>(env);
   ///   }
   ///   // ... other types
   /// }

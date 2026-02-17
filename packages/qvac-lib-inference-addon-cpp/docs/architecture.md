@@ -215,23 +215,22 @@ classDiagram
     class AddonCpp {
         +AddonCpp(outputCallback, model)
         +activate() void
-        +runJob(std::any input) void
+        +runJob(std::any input) bool
         +cancelJob() void
         +model IModel&
     }
     
     class AddonJs {
-        +AddonJs(env, jsHandle, outputCb, addonCpp)
-        +loadWeights(env, chunk) void
-        +activate(env) void
-        +runJob(env, input) void
-        +cancelJob(env) void
+        +AddonJs(env, outputCallback, model)
+        +loadWeights(env, weightsData) void
+        +runJob(input) js_value_t*
+        +cancelJob() js_value_t*
     }
     
     class JobRunner {
         +JobRunner(outputQueue, model, modelCancel)
         +start() void
-        +runJob(std::any input) void
+        +runJob(std::any input) bool
         +cancel() void
     }
     
