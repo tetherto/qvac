@@ -1,11 +1,10 @@
 'use strict'
 
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const LlmLlamacpp = require('../index')
+const FilesystemDL = require('@qvac/dl-filesystem')
 const { setLogger, releaseLogger } = require('../addonLogging')
-
 const process = require('bare-process')
+const { downloadModel } = require('./utils')
 
 async function main () {
   console.log('Native Logging Example: Demonstrates C++ addon logging integration')
@@ -31,23 +30,22 @@ async function main () {
   console.log('Logger setup complete. C++ logging is now active.')
   console.log('Now creating addon instances...\n')
 
-  // 2. Initializing data loader
-  const store = new Corestore('./store')
-  const hdStore = store.namespace('hd')
+  // 2. Downloading model
+  const [modelName, dirPath] = await downloadModel(
+    'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
+    'Llama-3.2-1B-Instruct-Q4_0.gguf'
+  )
 
-  const hdKey = 'afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3'
-  const hdDL = new HyperDriveDL({
-    key: `hd://${hdKey}`,
-    store: hdStore
-  })
+  // 3. Initializing data loader
+  const fsDL = new FilesystemDL({ dirPath })
 
-  // 3. Configuring model settings
+  // 4. Configuring model settings
   const args = {
-    loader: hdDL,
+    loader: fsDL,
     opts: { stats: true },
     logger: console,
-    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
-    diskPath: './models'
+    diskPath: dirPath,
+    modelName
   }
 
   const config = {
@@ -57,26 +55,12 @@ async function main () {
     verbosity: '2'
   }
 
-  // 4. Loading model
-  await hdDL.ready()
+  // 5. Loading model
   const model = new LlmLlamacpp(args, config)
-  const closeLoader = true
-  let totalProgress = 0
-  const reportProgressCallback = (report) => {
-    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
-      process.stdout.write(
-        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
-      )
-      if (Number(report.currentFileProgress) === 100) {
-        process.stdout.write('\n')
-      }
-      totalProgress = Number(report.overallProgress)
-    }
-  }
-  await model.load(closeLoader, reportProgressCallback)
+  await model.load()
 
   try {
-    // 5. Running inference with conversation prompt
+    // 6. Running inference with conversation prompt
     const prompt = [
       {
         role: 'system',
@@ -114,10 +98,9 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 6. Cleaning up resources
-    await store.close()
-    await hdDL.close()
+    // 7. Cleaning up resources
     await model.unload()
+    await fsDL.close()
     releaseLogger()
   }
 }

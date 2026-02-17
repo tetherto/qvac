@@ -46,11 +46,15 @@
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
-    "./models": "./dist/models/hyperdrive/models.js",
-    "./electron-builder": {
-      "require": "./electron-builder/index.cjs"
+    "./worker-core": {
+      "import": "./dist/server/worker-core.js"
     },
-    "./dist/*": "./dist/*"
+    "./plugins": {
+      "import": "./dist/server/plugins/index.js"
+    },
+    "./logging": {
+      "import": "./dist/logging/index.js"
+    }
   },
   "imports": {
     "#rpc": {
@@ -118,13 +122,13 @@
     "@qvac/transcription-whispercpp": "^0.3.17",
     "@qvac/translation-nmtcpp": "^0.3.6",
     "@qvac/tts-onnx": "^0.2.13",
-    "@qvac/registry-client": "^0.1.4",
+    "@qvac/registry-client": "^0.1.5",
     "fast-safe-stringify": "2.1.1",
     "which-runtime": "^1.3.2",
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@qvac/cli": "^0.1.1",
+    "@qvac/cli": "^0.1.2",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.1",
     "@lancedb/lancedb": "^0.21.3",
@@ -161,7 +165,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@qvac/cli": "^0.1.1",
+    "@qvac/cli": "^0.1.2",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.11.2",

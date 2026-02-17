@@ -140,11 +140,12 @@ function runBundler(
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
   const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
+  const sdkPathFlag = `--sdk-path "${qvacSdkPath}"`;
   const cliCommand = resolveCliCommand(projectRoot);
 
   try {
     execSync(
-      `${cliCommand} bundle sdk ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
+      `${cliCommand} bundle sdk ${sdkPathFlag} ${configFlag} ${hostFlags} ${deferFlags} --quiet`,
       { stdio: "inherit", cwd: projectRoot },
     );
   } catch (error) {

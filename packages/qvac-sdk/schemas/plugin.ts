@@ -177,3 +177,64 @@ export const pluginDefinitionRuntimeSchema = z
       .optional(),
   })
   .catchall(z.unknown());
+
+// ============================================
+// Built-in Plugins
+// ============================================
+
+/**
+ * LLM text completion plugin (llama.cpp).
+ * Provides: completion, streaming chat, tool calling.
+ */
+export const PLUGIN_LLM = "@qvac/sdk/llamacpp-completion/plugin" as const;
+
+/**
+ * Text embedding plugin (llama.cpp).
+ * Provides: vector embeddings for RAG and semantic search.
+ */
+export const PLUGIN_EMBEDDING = "@qvac/sdk/llamacpp-embedding/plugin" as const;
+
+/**
+ * Speech-to-text transcription plugin (whisper.cpp).
+ * Provides: audio transcription, language detection.
+ */
+export const PLUGIN_WHISPER =
+  "@qvac/sdk/whispercpp-transcription/plugin" as const;
+
+/**
+ * Neural machine translation plugin (nmt.cpp).
+ * Provides: text translation between languages.
+ */
+export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
+
+/**
+ * Text-to-speech synthesis plugin (ONNX).
+ * Provides: speech synthesis from text.
+ */
+export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
+
+/**
+ * Optical character recognition plugin (ONNX).
+ * Provides: text extraction from images.
+ */
+export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
+
+/**
+ * All built-in SDK plugins.
+ *
+ * @example
+ * // Use all defaults plus a custom plugin:
+ * const config = {
+ *   plugins: [...SDK_DEFAULT_PLUGINS, myCustomPlugin],
+ * };
+ */
+export const SDK_DEFAULT_PLUGINS = [
+  PLUGIN_LLM,
+  PLUGIN_EMBEDDING,
+  PLUGIN_WHISPER,
+  PLUGIN_NMT,
+  PLUGIN_TTS,
+  PLUGIN_OCR,
+] as const;
+
+export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];

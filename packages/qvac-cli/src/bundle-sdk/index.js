@@ -13,14 +13,25 @@ import {
 import { runBarePack } from './bare-pack.js'
 import { generateAddonsManifest } from './manifest.js'
 
-async function resolveSdkName (projectRoot) {
-  const sdkPackageJsonPath = path.join(
-    projectRoot,
-    'node_modules',
-    '@qvac',
-    'sdk',
-    'package.json'
-  )
+/**
+ * Resolves the SDK path.
+ * If explicitSdkPath is provided, uses that directly.
+ * Otherwise, auto-detects from node_modules/@qvac/sdk.
+ */
+function resolveSdkPath (projectRoot, explicitSdkPath) {
+  if (explicitSdkPath) {
+    return path.isAbsolute(explicitSdkPath)
+      ? explicitSdkPath
+      : path.join(projectRoot, explicitSdkPath)
+  }
+  return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+}
+
+/**
+ * Reads the SDK package name from its package.json.
+ */
+async function resolveSdkName (sdkPath) {
+  const sdkPackageJsonPath = path.join(sdkPath, 'package.json')
 
   try {
     if (fs.existsSync(sdkPackageJsonPath)) {
@@ -35,19 +46,14 @@ async function resolveSdkName (projectRoot) {
   return DEFAULT_SDK_NAME
 }
 
-function resolveImportsMapPath (projectRoot, sdkName) {
-  const fromNodeModules = path.join(
-    projectRoot,
-    'node_modules',
-    sdkName,
-    'bare-imports.json'
-  )
+function resolveImportsMapPath (sdkPath, sdkName) {
+  const importsMapPath = path.join(sdkPath, 'bare-imports.json')
 
-  if (fs.existsSync(fromNodeModules)) {
-    return fromNodeModules
+  if (fs.existsSync(importsMapPath)) {
+    return importsMapPath
   }
 
-  throw new BareImportsMapNotFoundError(sdkName, fromNodeModules)
+  throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
 export async function bundleSdk (options = {}) {
@@ -83,10 +89,12 @@ export async function bundleSdk (options = {}) {
     )
   }
 
-  const sdkName = await resolveSdkName(projectRoot)
+  const sdkPath = resolveSdkPath(projectRoot, options.sdkPath)
+  const sdkName = await resolveSdkName(sdkPath)
   logger.info(`📦 SDK: ${sdkName}`)
+  logger.debug(`   Path: ${sdkPath}`)
 
-  const importsMapPath = resolveImportsMapPath(projectRoot, sdkName)
+  const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
   logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
