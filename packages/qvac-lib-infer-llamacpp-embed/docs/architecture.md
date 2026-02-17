@@ -1,8 +1,9 @@
 # Architecture Documentation
 
-**Package:** `@qvac/embed-llamacpp` v0.10.7  
+**Package:** `@qvac/embed-llamacpp` v0.11.0  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
-**License:** Apache-2.0
+**License:** Apache-2.0  
+**Addon-cpp:** ≥1.1.1 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
 
 ---
 
@@ -70,7 +71,7 @@
 Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥0.12.2): C++ addon framework
+- qvac-lib-inference-addon-cpp (≥1.1.1): C++ addon framework
 - llama.cpp (≥7248.1.0): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 
@@ -128,7 +129,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.2.2 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework |
+| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework |
 | llama.cpp | Native | ≥7248.1.0 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
@@ -288,7 +289,7 @@ graph TB
 
 | Direction | Path | Data Format | Transform |
 |-----------|------|-------------|-----------|
-| Input → | JS → Bridge → Addon | string or string[] | Serialize input |
+| Input → | JS → Bridge → Addon | runJob({ type, input }) | Single call, no job ID |
 | Input → | Addon → Model | variant<string, vector<string>> | Parse input type |
 | Input → | Model → llama.cpp | tokens | Tokenize, batch |
 | Output ← | llama.cpp → Model | embedding vectors | Pool, normalize |
@@ -322,6 +323,8 @@ graph TB
 - Clean JavaScript API over raw C++ bindings
 - Native handle lifecycle management
 - Type conversion between JS and native
+
+**Addon surface (addon-cpp ≥1.1.1):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources.
 
 ### C++ Components
 
@@ -395,12 +398,12 @@ sequenceDiagram
     participant Llama as llama.cpp
     
     JS->>IF: run(text or text[])
-    IF->>Bind: append({type:'text'|'sequences', input})
-    Bind->>Addon: append() [lock mutex]
+    IF->>Bind: runJob({type:'text'|'sequences', input})
+    Bind->>Addon: runJob(input) [lock mutex]
     Addon->>Addon: Enqueue job
     Addon->>Addon: cv.notify_one()
-    Bind-->>IF: jobId
-    IF-->>JS: QvacResponse
+    Bind-->>IF: success
+    IF-->>JS: QvacResponse (fixed job id 'job')
     
     Note over Addon: Processing Thread
     Addon->>Addon: Dequeue job
@@ -420,6 +423,8 @@ sequenceDiagram
     Bind->>IF: outputCb('Output', jobId, embeddings)
     IF->>JS: Response emits embeddings
 ```
+
+**Cancel:** `model.cancel()` or `response.cancel()` signals the current job to stop. The Promise resolves when the job has actually stopped (future-based in C++; model is not destroyed).
 
 <details>
 <summary>📊 LLM-Friendly: Thread Communication</summary>
@@ -690,29 +695,24 @@ Support batch processing natively by accepting both single strings and arrays of
 
 ### Context
 
-A single inference request may involve multiple `append()` calls:
-1. `append({ type: 'text' or 'sequences', input: ... })` - Send text(s)
-2. `append({ type: 'end of job' })` - Signal end of input
-
-Without coordination, concurrent requests could interleave these operations, corrupting the input stream sent to the model.
+With addon-cpp ≥1.1.1, a single inference request is one `runJob({ type, input })` call (full input in one shot). The addon allows only one job at a time. Without coordination, a second `run()` could call `runJob()` while the first job is still processing, which the addon rejects.
 
 ### Decision
 
-Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures all append operations within a request complete atomically before the next request begins.
+Implement JavaScript-level promise queue using `_withExclusiveRun()` helper so that only one `run()` (and thus one `runJob()`) is in progress at a time. This avoids races and ensures the addon’s single-job contract is respected.
 
-**Note:** C++ level thread safety (mutex-protected job queue) is handled by the addon-cpp framework.
+**Note:** C++ level thread safety (mutex-protected job queue) and single-job semantics (runJob, cancel waits until stopped) are handled by the addon-cpp (≥1.1.1) framework.
 
 ### Rationale
 
 **Atomicity:**
-- Ensures multi-part messages (text + end-of-input) are sent as complete units
-- Prevents another request from inserting messages mid-stream
-- Each request gets exclusive access to append until completion
+- Only one `runJob()` is issued at a time per model instance
+- Prevents “a job is already set or being processed” from overlapping calls
+- Each request gets exclusive access until the response is returned
 
 **Message Integrity:**
-- Model receives coherent input sequences
-- Batch inputs paired correctly
-- No mixing of data from concurrent requests
+- Model receives one coherent input per job
+- No interleaving of concurrent requests
 
 ### Trade-offs
 - ✅ Simple promise-based queue (no complex locking)
@@ -779,4 +779,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-02-17
