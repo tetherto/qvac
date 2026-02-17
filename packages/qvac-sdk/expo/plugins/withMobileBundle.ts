@@ -122,7 +122,7 @@ function resolveCliCommand(projectRoot: string): string {
   console.log(
     "   Tip: Add @qvac/cli as a dependency for consistent versioning",
   );
-  return "npx qvac";
+  return "npx --package=@qvac/cli qvac";
 }
 
 /** Runs qvac CLI with mobile-specific options */
@@ -131,9 +131,6 @@ function runBundler(
   qvacSdkPath: string,
   configPath: string | null,
 ) {
-  // Truncate incompatible RPC clients for mobile
-  truncateNodeRpcClient(qvacSdkPath);
-
   // Patch bare-kit linkers to use addons manifest
   patchBareKitLinkers(projectRoot, qvacSdkPath);
 
@@ -200,36 +197,6 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
     console.log("✅ QVAC: Patched ios/link.mjs for manifest-aware linking");
   } else {
     console.log(`⚠️ QVAC: iOS linker patch not found (${iosPatch})`);
-  }
-}
-
-/**
- * Truncates node-rpc-client.js for mobile compatibility.
- *
- * Why this is needed:
- * - `node-rpc-client.js` imports Node.js-specific modules (bare-subprocess, fs, path)
- *   that are not available in React Native / mobile environments.
- * - Even though mobile apps use `expo-rpc-client.ts`, bare-pack's static analysis
- *   follows all imports from the SDK entry point, including the Node RPC client.
- * - Truncating this file removes the problematic import chain from the bundle graph.
- *
- * This is a build-time mutation of node_modules, only affecting the prebuild.
- * Future improvement: use package.json conditional exports to provide a stub
- * for React Native environments.
- */
-function truncateNodeRpcClient(qvacSdkPath: string) {
-  const clientPath = path.join(
-    qvacSdkPath,
-    "dist",
-    "client",
-    "rpc",
-    "node-rpc-client.js",
-  );
-  const truncatedContent =
-    "// This RPC client is not available in mobile environments";
-
-  if (fs.existsSync(clientPath)) {
-    fs.writeFileSync(clientPath, truncatedContent);
   }
 }
 

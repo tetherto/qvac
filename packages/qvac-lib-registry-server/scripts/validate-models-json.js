@@ -8,54 +8,50 @@ const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
 
+const SOURCE_REFINE = (val) => {
+  try {
+    parseCanonicalSource(val)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const baseFields = {
+  source: z.string()
+    .min(1, 'source is required')
+    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }),
+
+  engine: z.string()
+    .min(1, 'engine is required')
+    .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
+
+  license: z.string().min(1, 'license is required'),
+
+  description: z.string().optional(),
+  quantization: z.string().optional(),
+  params: z.string().optional(),
+  notes: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  deprecated: z.boolean().optional(),
+  deprecationReason: z.string().optional(),
+  replacedBy: z.string()
+    .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
+    .optional()
+}
+
 function createModelSchema (validLicenses) {
   return z.object({
-    source: z.string()
-      .min(1, 'source is required')
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }
-      ),
-
-    engine: z.string()
-      .min(1, 'engine is required')
-      .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
-
-    license: z.string()
-      .min(1, 'license is required')
-      .refine(
-        (val) => validLicenses.has(val),
-        (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
-      ),
-
-    description: z.string().optional(),
-    quantization: z.string().optional(),
-    params: z.string().optional(),
-    notes: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    deprecated: z.boolean().optional(),
-    deprecationReason: z.string().optional(),
-    replacedBy: z.string()
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'replacedBy must be a valid source URL' }
-      )
-      .optional()
+    ...baseFields,
+    license: baseFields.license.refine(
+      (val) => validLicenses.has(val),
+      (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
+    )
   })
+}
+
+function createDeprecatedModelSchema () {
+  return z.object(baseFields)
 }
 
 async function loadValidLicenses () {
@@ -123,17 +119,19 @@ async function validateModelsJson (filePath) {
     return { valid: false, errors, modelCount: 0 }
   }
 
-  // Create schema with license validation
-  const ModelSchema = createModelSchema(validLicenses)
-  const ModelsArraySchema = z.array(ModelSchema)
+  // Validate active and deprecated models with different schemas
+  const ActiveSchema = createModelSchema(validLicenses)
+  const DeprecatedSchema = createDeprecatedModelSchema()
 
-  // Validate with Zod
-  const result = ModelsArraySchema.safeParse(models)
+  for (let i = 0; i < models.length; i++) {
+    const schema = models[i].deprecated === true ? DeprecatedSchema : ActiveSchema
+    const result = schema.safeParse(models[i])
 
-  if (!result.success) {
-    for (const issue of result.error.issues) {
-      const pathStr = issue.path.length > 0 ? `[${issue.path.join('.')}]` : ''
-      errors.push(`${pathStr} ${issue.message}`)
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const pathStr = issue.path.length > 0 ? `[${i}.${issue.path.join('.')}]` : `[${i}]`
+        errors.push(`${pathStr} ${issue.message}`)
+      }
     }
   }
 
