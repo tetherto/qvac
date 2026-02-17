@@ -13,12 +13,62 @@ const CONFIG_CANDIDATES = [
   "qvac.config.mjs",
 ];
 
-/** Modules to defer from mobile bundles (not available at bundle time) */
-const DEFERRED_MODULES = [
-  "expo-file-system",
-  "react-native-bare-kit",
-  "@qvac/sdk/worker.mobile.bundle",
+type PackageVariant = {
+  scope: string;
+  sdk: string;
+  cli: string;
+  bin: string;
+};
+
+const PACKAGE_VARIANTS: PackageVariant[] = [
+  { scope: "@tetherto", sdk: "sdk-mono", cli: "cli-mono", bin: "tetherto" },
+  { scope: "@qvac", sdk: "sdk", cli: "cli", bin: "qvac" },
 ];
+
+/**
+ * Detects which package variant is installed based on SDK presence.
+ * Throws if both or neither variant is found - exactly one must be installed.
+ */
+function detectPackageVariant(projectRoot: string): PackageVariant {
+  const installedVariants = PACKAGE_VARIANTS.filter((variant) => {
+    const sdkPath = path.join(
+      projectRoot,
+      "node_modules",
+      variant.scope,
+      variant.sdk,
+    );
+    return fs.existsSync(sdkPath);
+  });
+
+  if (installedVariants.length > 1) {
+    const names = installedVariants
+      .map((v) => `${v.scope}/${v.sdk}`)
+      .join(", ");
+    throw new Error(
+      `QVAC: Multiple SDK variants detected (${names}). ` +
+        `Only one scope (@tetherto or @qvac) can be installed at a time.`,
+    );
+  }
+
+  if (installedVariants.length === 0) {
+    throw new SDKNotFoundInNodeModulesError();
+  }
+
+  const variant = installedVariants[0]!;
+  console.log(
+    `🔍 QVAC: Detected ${variant.scope}/${variant.sdk} package variant`,
+  );
+  return variant;
+}
+
+/** Gets deferred modules for the detected variant */
+function getDeferredModules(variant: PackageVariant): string[] {
+  return [
+    "expo-file-system",
+    "react-native-bare-kit",
+    `${variant.scope}/${variant.sdk}/worker.mobile.bundle`,
+  ];
+}
 
 const MOBILE_HOSTS = [
   "android-arm64",
@@ -30,26 +80,28 @@ const MOBILE_HOSTS = [
 /**
  * Expo plugin that automatically generates the mobile worker bundle during build.
  *
- * Runs qvac CLI (prefers local @qvac/cli, falls back to npx).
+ * Auto-detects package variant and uses the corresponding CLI.
+ * Falls back to npx when CLI is not installed locally.
  * Uses qvac.config.* if exists, else includes all built-in plugins.
- * Output: node_modules/@qvac/sdk/dist/worker.mobile.bundle.js
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
   function buildMobileBundle(
     config: configPlugins.ExportedConfigWithProps<unknown>,
   ) {
     const projectRoot = config.modRequest.projectRoot;
-    const qvacSdkPath = path.join(projectRoot, "node_modules", "@qvac/sdk");
+
+    const variant = detectPackageVariant(projectRoot);
+    const qvacSdkPath = path.join(
+      projectRoot,
+      "node_modules",
+      variant.scope,
+      variant.sdk,
+    );
     const outputPath = path.join(
       qvacSdkPath,
       "dist",
       "worker.mobile.bundle.js",
     );
-
-    // Ensure SDK package exists
-    if (!fs.existsSync(qvacSdkPath)) {
-      throw new SDKNotFoundInNodeModulesError();
-    }
 
     // Generate bundle via qvac CLI
     // (uses qvac.config.* if exists, else includes all built-in plugins)
@@ -64,7 +116,7 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       );
     }
 
-    runBundler(projectRoot, qvacSdkPath, configPath);
+    runBundler(projectRoot, qvacSdkPath, configPath, variant);
 
     // Copy the generated bundle to SDK location
     const generatedBundle = path.join(projectRoot, "qvac", "worker.bundle.js");
@@ -97,17 +149,20 @@ function findConfigFile(projectRoot: string): string | null {
 }
 
 /**
- * Resolves the qvac CLI command.
+ * Resolves the CLI command for the detected package variant.
  *
- * Prefers local @qvac/cli installation for version consistency,
+ * Prefers local CLI installation for version consistency,
  * falls back to npx for convenience when CLI is not installed.
  */
-function resolveCliCommand(projectRoot: string): string {
+function resolveCliCommand(
+  projectRoot: string,
+  variant: PackageVariant,
+): string {
   const cliPath = path.join(
     projectRoot,
     "node_modules",
-    "@qvac",
-    "cli",
+    variant.scope,
+    variant.cli,
     "src",
     "index.js",
   );
@@ -116,29 +171,32 @@ function resolveCliCommand(projectRoot: string): string {
     return `node "${cliPath}"`;
   }
 
+  const cliPackage = `${variant.scope}/${variant.cli}`;
   console.log(
-    "⚠️ QVAC: @qvac/cli not found in node_modules, falling back to npx",
+    `⚠️ QVAC: ${cliPackage} not found in node_modules, falling back to npx`,
   );
   console.log(
-    "   Tip: Add @qvac/cli as a dependency for consistent versioning",
+    `   Tip: Add ${cliPackage} as a dependency for consistent versioning`,
   );
-  return "npx --package=@qvac/cli qvac";
+  return `npx --package=${cliPackage} ${variant.bin}`;
 }
 
-/** Runs qvac CLI with mobile-specific options */
+/** Runs CLI with mobile-specific options */
 function runBundler(
   projectRoot: string,
   qvacSdkPath: string,
   configPath: string | null,
+  variant: PackageVariant,
 ) {
   // Patch bare-kit linkers to use addons manifest
   patchBareKitLinkers(projectRoot, qvacSdkPath);
 
+  const deferredModules = getDeferredModules(variant);
   const hostFlags = MOBILE_HOSTS.map((h) => `--host ${h}`).join(" ");
-  const deferFlags = DEFERRED_MODULES.map((m) => `--defer "${m}"`).join(" ");
+  const deferFlags = deferredModules.map((m) => `--defer "${m}"`).join(" ");
   const configFlag = configPath ? `--config "${configPath}"` : "";
   const sdkPathFlag = `--sdk-path "${qvacSdkPath}"`;
-  const cliCommand = resolveCliCommand(projectRoot);
+  const cliCommand = resolveCliCommand(projectRoot, variant);
 
   try {
     execSync(
