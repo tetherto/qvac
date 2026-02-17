@@ -16,8 +16,6 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_FILE_LOCATE_FAILED: 52203,
   PROJECTION_MODEL_REQUIRED: 52204,
   VAD_MODEL_REQUIRED: 52205,
-  TTS_CONFIG_MODEL_REQUIRED: 52206,
-  ESPEAK_DATA_PATH_REQUIRED: 52207,
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
 
@@ -163,14 +161,6 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.VAD_MODEL_REQUIRED]: {
     name: "VAD_MODEL_REQUIRED",
     message: "VAD model source is required for this configuration",
-  },
-  [SDK_SERVER_ERROR_CODES.TTS_CONFIG_MODEL_REQUIRED]: {
-    name: "TTS_CONFIG_MODEL_REQUIRED",
-    message: "ttsConfigModelPath is required for TTS models",
-  },
-  [SDK_SERVER_ERROR_CODES.ESPEAK_DATA_PATH_REQUIRED]: {
-    name: "ESPEAK_DATA_PATH_REQUIRED",
-    message: "eSpeakDataPath is required for TTS models",
   },
   [SDK_SERVER_ERROR_CODES.TTS_ARTIFACTS_REQUIRED]: {
     name: "TTS_ARTIFACTS_REQUIRED",

@@ -131,30 +131,6 @@ export class VADModelRequiredError extends QvacErrorBase {
   }
 }
 
-export class TTSConfigModelRequiredError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.TTS_CONFIG_MODEL_REQUIRED,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
-export class ESpeakDataPathRequiredError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.ESPEAK_DATA_PATH_REQUIRED,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
 export class TtsArtifactsRequiredError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(

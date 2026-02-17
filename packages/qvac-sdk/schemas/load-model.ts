@@ -351,7 +351,6 @@ const commonModelConfigSchema = z.object({
   modelName: z.string().optional(),
   projectionModelSrc: z.string().optional(),
   vadModelSrc: z.string().optional(),
-  configSrc: z.string().optional(),
   detectorModelSrc: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
