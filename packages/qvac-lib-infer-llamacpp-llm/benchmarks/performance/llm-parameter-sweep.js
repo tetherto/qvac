@@ -55,6 +55,10 @@ const {
   PARAMETER_SWEEP
 } = require('./llm-parameter-sweep.config')
 
+const STATIC_PROMPT_IDS = ['short', 'medium', 'long']
+// 3 static prompts + 2 adaptive prompts (ctx-filling, batch-spanning).
+const PROMPTS_PER_CASE = 5
+
 function createAddonRuntimeLogger (debugEnabled) {
   if (!debugEnabled) {
     return {
@@ -114,7 +118,7 @@ function parsePositiveInt (value, name) {
 }
 
 function exactMatch (baseline, candidate) {
-  if (!baseline || !candidate) return null
+  if (baseline == null || candidate == null) return null
   return baseline === candidate ? 1.0 : 0.0
 }
 
@@ -222,6 +226,9 @@ function buildCases (modelDef, sweep) {
     ])
 
     for (const [quantization, device, ctxSize, batchSize, ubatchSize, noMmap, flashAttn, noKvOffload, threads, cacheTypeK, cacheTypeV] of combos) {
+      if (Number(ubatchSize) > Number(batchSize)) {
+        continue // Skip combinations where ubatchSize is greater than batchSize
+      }
       const runtimeConfig = {
         ...defaults,
         device,
@@ -303,85 +310,32 @@ function compactPromptErrors (promptResults) {
   return out
 }
 
-function estimateTokenCount (text) {
-  const value = String(text ?? '').trim()
-  if (!value) return 0
-  return value.split(/\s+/).length
-}
-
-function estimateMessagesTokenCount (messages) {
-  if (!Array.isArray(messages)) return 0
-  let total = 0
-  for (const msg of messages) {
-    total += estimateTokenCount(msg && msg.content ? msg.content : '')
-  }
-  return total
-}
-
-function expandUserMessageToTargetTokens (prompt, targetTokens) {
-  if (!prompt || !Array.isArray(prompt.messages) || !Number.isFinite(targetTokens) || targetTokens <= 0) {
-    return prompt
-  }
-
-  const cloned = {
-    ...prompt,
-    messages: prompt.messages.map((m) => ({ ...m }))
-  }
-
-  let userIndex = -1
-  for (let i = cloned.messages.length - 1; i >= 0; i--) {
-    if (cloned.messages[i] && cloned.messages[i].role === 'user') {
-      userIndex = i
-      break
-    }
-  }
-  if (userIndex === -1) return cloned
-
-  let currentTotal = estimateMessagesTokenCount(cloned.messages)
-  if (currentTotal >= targetTokens) return cloned
-
-  const fillerUnit = ' Continue with concrete details, examples, trade-offs, and constraints.'
-  while (currentTotal < targetTokens) {
-    cloned.messages[userIndex].content += fillerUnit
-    currentTotal += estimateTokenCount(fillerUnit)
-  }
-  return cloned
-}
-
 function isAdaptivePromptId (promptId) {
-  return promptId === 'ctx-filling' || promptId === 'batch-spanning'
+  return String(promptId || '').startsWith('ctx-filling__ctx=') ||
+    String(promptId || '').startsWith('batch-spanning__ctx=')
 }
 
-function buildPromptForRuntimeConfig (prompt, runtimeConfig) {
-  if (!prompt || !runtimeConfig) return prompt
+function selectPromptsForCase (allPrompts, runtimeConfig) {
+  const byId = new Map(allPrompts.map((p) => [p.id, p]))
+  const ctx = String(runtimeConfig['ctx-size'])
+  const batch = String(runtimeConfig['batch-size'])
+  const ctxId = `ctx-filling__ctx=${ctx}`
+  const batchId = `batch-spanning__ctx=${ctx}__bs=${batch}`
 
-  if (prompt.id === 'ctx-filling') {
-    const ctxSize = Number(runtimeConfig['ctx-size'])
-    if (Number.isFinite(ctxSize) && ctxSize > 256) {
-      const targetTokens = Math.max(256, ctxSize - 128)
-      return expandUserMessageToTargetTokens(prompt, targetTokens)
+  const requiredIds = [...STATIC_PROMPT_IDS, ctxId, batchId]
+  for (const id of requiredIds) {
+    if (!byId.has(id)) {
+      throw new Error(
+        `Missing required prompt id "${id}" in prompt file. ` +
+        'Regenerate prompts or provide a prompt file with all static ctx/batch variants.'
+      )
     }
   }
-
-  if (prompt.id === 'batch-spanning') {
-    const batchSize = Number(runtimeConfig['batch-size'])
-    if (Number.isFinite(batchSize) && batchSize > 0) {
-      const targetTokens = Math.max(512, batchSize * 3)
-      return expandUserMessageToTargetTokens(prompt, targetTokens)
-    }
-  }
-
-  return prompt
+  return requiredIds.map((id) => byId.get(id))
 }
 
-function getAdaptiveBaselineKey (promptId, runtimeConfig) {
-  if (promptId === 'ctx-filling') {
-    return `ctx-filling:${String(runtimeConfig['ctx-size'])}`
-  }
-  if (promptId === 'batch-spanning') {
-    return `batch-spanning:${String(runtimeConfig['batch-size'])}`
-  }
-  return null
+function getAdaptiveBaselineKey (promptId) {
+  return isAdaptivePromptId(promptId) ? String(promptId) : null
 }
 
 function validatePromptObject (prompt, contextLabel) {
@@ -609,11 +563,11 @@ async function main () {
   ensureDir(resultsDir)
 
   const progressFile = path.join(resultsDir, 'llm-parameter-sweep.progress.json')
-  let completedRuns = new Set()
+  let completedCases = new Set()
   try {
     const progressData = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
-    completedRuns = new Set(progressData.completedRuns || [])
-    debugLogger.log(`Resuming: ${completedRuns.size} runs already completed`)
+    completedCases = new Set(progressData.completedCases || [])
+    debugLogger.log(`Resuming: ${completedCases.size} cases already completed`)
   } catch {
     // No progress file, start fresh
   }
@@ -625,7 +579,7 @@ async function main () {
     }
     saveProgressTimeout = setTimeout(() => {
       try {
-        fs.writeFileSync(progressFile, JSON.stringify({ completedRuns: Array.from(completedRuns) }, null, 2))
+        fs.writeFileSync(progressFile, JSON.stringify({ completedCases: Array.from(completedCases) }, null, 2))
       } catch (writeError) {
         if (debugEnabled) {
           debugLogger.warn(`Failed to save progress: ${writeError.message || String(writeError)}`)
@@ -641,7 +595,7 @@ async function main () {
       saveProgressTimeout = null
     }
     try {
-      fs.writeFileSync(progressFile, JSON.stringify({ completedRuns: Array.from(completedRuns) }, null, 2))
+      fs.writeFileSync(progressFile, JSON.stringify({ completedCases: Array.from(completedCases) }, null, 2))
     } catch (writeError) {
       if (debugEnabled) {
         debugLogger.warn(`Failed to flush progress: ${writeError.message || String(writeError)}`)
@@ -661,7 +615,7 @@ async function main () {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     repeats,
-    promptsCount: prompts.length,
+    promptsCount: PROMPTS_PER_CASE,
     selectedModelIds,
     jsonlPath,
     models: []
@@ -671,7 +625,7 @@ async function main () {
     const cases = buildCases(modelDef, PARAMETER_SWEEP)
     return { modelDef, cases }
   })
-  const totalPlannedRuns = plannedRunsByModel.reduce((acc, item) => acc + (item.cases.length * prompts.length * repeats), 0)
+  const totalPlannedRuns = plannedRunsByModel.reduce((acc, item) => acc + (item.cases.length * report.promptsCount * repeats), 0)
   const progress = createProgressReporter(totalPlannedRuns)
 
   debugLogger.log(`Running full-grid parameter sweep for: ${selectedModels.map((m) => m.id).join(', ')}`)
@@ -721,6 +675,25 @@ async function main () {
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
       // Wrap each case in try-catch to prevent one case from crashing the entire benchmark
       const testCase = cases[caseIndex]
+      const promptsForCase = selectPromptsForCase(prompts, testCase.runtimeConfig)
+      const caseKey = `${modelDef.id}:${testCase.caseId}`
+      if (completedCases.has(caseKey)) {
+        debugLogger.log(`Skipping already completed case: ${caseKey}`)
+        for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
+          for (let repeat = 1; repeat <= repeats; repeat++) {
+            progress.tick({
+              modelId: modelDef.id,
+              caseIndex: caseIndex + 1,
+              caseCount: cases.length,
+              promptIndex: promptIndex + 1,
+              promptCount: promptsForCase.length,
+              repeat,
+              repeats
+            })
+          }
+        }
+        continue
+      }
       let loader = null
       let model = null
       let modelLoaded = false
@@ -765,21 +738,14 @@ async function main () {
           const errorMsg = loadError && loadError.message ? loadError.message : String(loadError)
           if (errorMsg.includes('VRAM') || errorMsg.includes('gpu-layers') || errorMsg.includes('failed to create context') || errorMsg.includes('UnableToLoadModel')) {
             // VRAM error - mark all prompts as failed and skip this case
-            for (const p of prompts) {
-              for (let r = 1; r <= repeats; r++) {
-                const runKey = `${modelDef.id}:${testCase.caseId}:${p.id}:${r}`
-                completedRuns.add(runKey)
-              }
-            }
-            saveProgress()
-            for (let promptIndex = 0; promptIndex < prompts.length; promptIndex++) {
+            for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
               for (let repeat = 1; repeat <= repeats; repeat++) {
                 progress.tick({
                   modelId: modelDef.id,
                   caseIndex: caseIndex + 1,
                   caseCount: cases.length,
                   promptIndex: promptIndex + 1,
-                  promptCount: prompts.length,
+                  promptCount: promptsForCase.length,
                   repeat,
                   repeats
                 })
@@ -790,10 +756,10 @@ async function main () {
               metrics: null,
               qualityMatch: null,
               status: 'failed',
-              repeatsAttempted: prompts.length * repeats,
+              repeatsAttempted: promptsForCase.length * repeats,
               repeatsSucceeded: 0,
-              promptErrorCount: prompts.length * repeats,
-              promptErrors: prompts.map((p) => ({
+              promptErrorCount: promptsForCase.length * repeats,
+              promptErrors: promptsForCase.map((p) => ({
                 promptId: p.id,
                 error: truncateText(`VRAM_ERROR: ${errorMsg}`, 300),
                 vramError: true
@@ -802,6 +768,8 @@ async function main () {
                 message: truncateText(`VRAM_ERROR: ${errorMsg}`, 300)
               }
             })
+            completedCases.add(caseKey)
+            saveProgress()
             // Clean up loader before continuing
             try {
               await loader.close().catch(() => {})
@@ -814,9 +782,8 @@ async function main () {
         }
 
         const promptResults = []
-        for (let promptIndex = 0; promptIndex < prompts.length; promptIndex++) {
-          const prompt = prompts[promptIndex]
-          const effectivePrompt = buildPromptForRuntimeConfig(prompt, testCase.runtimeConfig)
+        for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
+          const prompt = promptsForCase[promptIndex]
 
           // Run repeats for this prompt
           const runMetrics = []
@@ -824,33 +791,11 @@ async function main () {
           let promptError = null
 
           for (let repeat = 1; repeat <= repeats; repeat++) {
-            // Create unique run identifier for progress tracking
-            const runKey = `${modelDef.id}:${testCase.caseId}:${prompt.id}:${repeat}`
-
-            // Skip if already completed successfully
-            if (completedRuns.has(runKey)) {
-              debugLogger.log(`Skipping already completed: ${runKey}`)
-              // Note: We can't load the actual metrics/output without a results file
-              // So we'll just skip this repeat and continue
-              caseRepeatsAttempted += 1
-              caseRepeatsSucceeded += 1
-              progress.tick({
-                modelId: modelDef.id,
-                caseIndex: caseIndex + 1,
-                caseCount: cases.length,
-                promptIndex: promptIndex + 1,
-                promptCount: prompts.length,
-                repeat,
-                repeats
-              })
-              continue
-            }
-
             try {
               const runStart = process.hrtime()
               let timeToFirstToken = null
               const chunks = []
-              const response = await model.run(effectivePrompt.messages)
+              const response = await model.run(prompt.messages)
               await response.onUpdate((data) => {
                 if (timeToFirstToken === null) {
                   timeToFirstToken = elapsedMs(runStart)
@@ -862,13 +807,12 @@ async function main () {
               const stats = response.stats || {}
               const ttftMs = stats.TTFT ?? timeToFirstToken
 
-              const runS = runMs ? runMs / 1000 : null
               const metrics = {
                 loadMs: null, // Model already loaded
                 runMs: round(runMs, 3),
                 unloadMs: null, // Will unload after all prompts
                 ttftMs: round(ttftMs, 3),
-                tps: round(runS && stats.TPS ? stats.TPS : null, 3),
+                tps: round(stats.TPS != null ? stats.TPS : null, 3),
                 promptTokens: stats.promptTokens ?? null,
                 generatedTokens: stats.generatedTokens ?? null,
                 runtimeMemory: memorySnapshot()
@@ -886,14 +830,10 @@ async function main () {
                 caseIndex: caseIndex + 1,
                 caseCount: cases.length,
                 promptIndex: promptIndex + 1,
-                promptCount: prompts.length,
+                promptCount: promptsForCase.length,
                 repeat,
                 repeats
               })
-
-              // Mark as completed
-              completedRuns.add(runKey)
-              saveProgress()
 
               // Add small delay between repeats (model stays loaded)
               if (repeat < repeats) {
@@ -908,18 +848,6 @@ async function main () {
               const isContextOverflow = errorMsg && /context|ctx[- ]?size|overflow/i.test(errorMsg)
               if (isContextOverflow) {
                 await new Promise(resolve => setTimeout(resolve, 15000))
-              }
-
-              // Check if it's a VRAM error - mark as completed (won't work with this config)
-              const isVramError = errorMsg.includes('VRAM_ERROR') || errorMsg.includes('VRAM') || errorMsg.includes('gpu-layers') || errorMsg.includes('failed to create context') || errorMsg.includes('UnableToLoadModel')
-
-              // For VRAM errors, mark all remaining repeats as completed (won't work with this config)
-              if (isVramError) {
-                for (let r = repeat; r <= repeats; r++) {
-                  const rk = `${modelDef.id}:${testCase.caseId}:${prompt.id}:${r}`
-                  completedRuns.add(rk)
-                }
-                saveProgress()
               }
 
               // Break out of repeat loop on error (can't continue with this prompt)
@@ -940,7 +868,7 @@ async function main () {
 
             let qualityMatch = null
             if (isAdaptivePromptId(prompt.id)) {
-              const adaptiveKey = getAdaptiveBaselineKey(prompt.id, testCase.runtimeConfig)
+              const adaptiveKey = getAdaptiveBaselineKey(prompt.id)
               if (adaptiveKey) {
                 if (!Object.prototype.hasOwnProperty.call(adaptiveBaselineOutputs, adaptiveKey)) {
                   adaptiveBaselineOutputs[adaptiveKey] = firstOutput
@@ -980,7 +908,7 @@ async function main () {
           }
 
           // Add small delay between prompts (model stays loaded)
-          if (promptIndex < prompts.length - 1) {
+          if (promptIndex < promptsForCase.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 50))
           }
         }
@@ -1062,6 +990,8 @@ async function main () {
           promptErrors,
           error: errorSummary
         })
+        completedCases.add(caseKey)
+        saveProgress()
       } catch (caseError) {
         // If case setup failed (e.g., model load), clean up and continue
         // Note: model might not be defined if error occurred before model creation
@@ -1080,14 +1010,14 @@ async function main () {
           // Ignore cleanup errors
         }
         debugLogger.error(`Case ${testCase.caseId} failed completely: ${caseError.message || String(caseError)}`)
-        const remainingRepeats = Math.max(0, (prompts.length * repeats) - caseRepeatsAttempted)
+        const remainingRepeats = Math.max(0, (promptsForCase.length * repeats) - caseRepeatsAttempted)
         for (let i = 0; i < remainingRepeats; i++) {
           progress.tick({
             modelId: modelDef.id,
             caseIndex: caseIndex + 1,
             caseCount: cases.length,
-            promptIndex: prompts.length,
-            promptCount: prompts.length,
+            promptIndex: promptsForCase.length,
+            promptCount: promptsForCase.length,
             repeat: repeats,
             repeats
           })
@@ -1106,6 +1036,8 @@ async function main () {
           promptErrorCount: 0,
           promptErrors: []
         })
+        completedCases.add(caseKey)
+        saveProgress()
 
         // Fail fast when the baseline case cannot initialize the model.
         // Continuing the full grid in this state only floods logs with the same fatal error.
@@ -1114,7 +1046,7 @@ async function main () {
           if (/Failed to initialize model|failed to load model/i.test(baselineError)) {
             throw new Error(
               `Baseline case failed to initialize model "${testCase.modelName}". ` +
-              `Please re-prepare models and verify disk/free space before running the sweep again. ` +
+              'Please re-prepare models and verify disk/free space before running the sweep again. ' +
               `Underlying error: ${baselineError}`
             )
           }

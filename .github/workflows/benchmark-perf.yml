@@ -8,7 +8,7 @@ on:
         default: 'all'
       reps:
         description: 'Repetitions per config'
-        default: '3'
+        default: '5'
       config:
         description: 'Path to perf-config.json'
         default: 'benchmark-perf/perf-config.json'

@@ -331,7 +331,7 @@ async function main () {
   if (!['addon', 'pytorch', 'all'].includes(target)) {
     throw new Error(`Invalid --target: ${target}. Expected addon, pytorch, or all.`)
   }
-  const modelsDir = path.resolve(String(args['models-dir'] || path.join(scriptDir, '..', '..', 'test', 'model')))
+  const modelsDir = path.resolve(String(args['models-dir'] || path.join(scriptDir, 'models')))
   const outputPath = path.resolve(String(args.output || path.join(scriptDir, 'resolved-models.json')))
   const selectedIds = new Set(asArray(args.models))
   const hfToken = process.env.HF_TOKEN || null

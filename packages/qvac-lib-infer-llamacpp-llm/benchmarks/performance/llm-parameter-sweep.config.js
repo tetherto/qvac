@@ -2,13 +2,17 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const {
+  CTX_SIZES,
+  BATCH_SIZES
+} = require('./sweep-shared-constants')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
-const DEFAULT_MODELS_DIR = path.resolve(__dirname, '..', '..', 'test', 'model')
+const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
 const MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
 const RESOLVED_MODELS_PATH = path.resolve(__dirname, 'resolved-models.json')
 const DEFAULT_PROMPTS_FILE = path.resolve(__dirname, 'test-prompts.json')
-const DEFAULT_REPEATS = 3
+const DEFAULT_REPEATS = 5
 
 // Benchmark baseline defaults
 const BENCH_DEFAULT_RUNTIME = {
@@ -76,14 +80,13 @@ function loadModelsFromManifest () {
 const MODELS = loadModelsFromManifest()
 
 // Parameter sweep: full factorial (cartesian product)
-// Adaptive prompts are deterministically expanded at runtime from templates
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
   device: ['cpu', 'gpu'],
-  'ctx-size': ['2048', '4096', '8192'],
+  'ctx-size': CTX_SIZES.map(String),
   'no-mmap': [false, true],
   threads: ['2', '4', '8'],
-  'batch-size': ['512', '2048', '4096', '8192'], // max: 10k
+  'batch-size': BATCH_SIZES.map(String), // max: 10k
   'ubatch-size': ['128', '512', '1024'], // must be <= batch-size
   'no-kv-offload': [false, true],
   'flash-attn': ['off', 'on'],

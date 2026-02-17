@@ -1,6 +1,6 @@
 {
   "manifestPath": "/Users/donriddo/Workspace/tether/qvac/packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/models.manifest.json",
-  "modelsDir": "/Users/donriddo/Workspace/tether/qvac/packages/qvac-lib-infer-llamacpp-llm/test/model",
+  "modelsDir": "/Users/donriddo/Workspace/tether/qvac/packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/models",
   "target": "addon",
   "models": {
     "qwen3-1.7b": {
@@ -9,7 +9,7 @@
         "revision": "main",
         "defaultQuantization": "Q4_0",
         "files": {
-          "Q4_0": "/Users/donriddo/Workspace/tether/qvac/packages/qvac-lib-infer-llamacpp-llm/test/model/Qwen3-1.7B-Q4_0.gguf"
+          "Q4_0": "/Users/donriddo/Workspace/tether/qvac/packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/models/Qwen3-1.7B-Q4_0.gguf"
         }
       }
     }

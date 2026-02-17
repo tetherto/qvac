@@ -4,27 +4,86 @@ This directory contains performance benchmark runners for `@qvac/llm-llamacpp`.
 
 ## Setup
 
-From `packages/qvac-lib-infer-llamacpp-llm`:
+From `packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance`:
 
 ```bash
-npm run performance:install
+npm install
 ```
 
 ## Parameter Sweep
 
-Run from `packages/qvac-lib-infer-llamacpp-llm`:
+Run from `packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance`:
 
 ```bash
-npm run benchmarks:param-sweep
+npm run run:param-sweep
 ```
 
 This command runs:
 
 1. `prepare-models.js --target addon`
-2. Prompt generation to `benchmarks/performance/test-prompts.json`
-3. Bare benchmark runner (`llm-parameter-sweep.js`)
+2. Bare benchmark runner (`llm-parameter-sweep.js`)
 
-Prompt generation creates prompt templates. Adaptive prompts are deterministically expanded at runtime from the template and the case runtime config.
+Prompt generation is standalone. Prompts are static fixtures in `benchmarks/performance/test-prompts.json`.
+The runner no longer mutates prompts at runtime.
+
+## Run Guide (All Common Cases)
+
+### 1) Fresh clone / first-time setup
+
+From repo root:
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm install
+npm run run:param-sweep
+```
+
+### 2) Normal repeat run (use committed static prompts)
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm run run:param-sweep
+```
+
+### 3) Run using published npm addon (instead of local build)
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm install --workspaces=false @qvac/llm-llamacpp@latest
+node ./prepare-models.js --target addon && bare ./llm-parameter-sweep.js --addon-source npm
+```
+
+### 4) Resume after interruption/failure
+
+- Re-run the same command.
+- The runner resumes from `benchmarks/performance/results/parameter-sweep/llm-parameter-sweep.progress.json`.
+
+### 5) Force a fresh restart (ignore prior progress)
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+rm -f ./results/parameter-sweep/llm-parameter-sweep.progress.json
+npm run run:param-sweep
+```
+
+### 6) Prompt maintenance (only when prompt tooling/config changed)
+
+Use this when prompt templates/constants, tokenizer behavior, or hardcoded ctx/batch values change.
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm run prepare:prompts
+npm run verify:prompts
+```
+
+Then run sweep normally (`npm run run:param-sweep`).
+
+### 7) Targeted/debug runs
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm run run:param-sweep -- --models "qwen3-1.7b" --repeats 1 --debug
+```
 
 ## Addon Source Selection
 
@@ -37,10 +96,10 @@ Examples:
 
 ```bash
 # Local addon (default)
-npm run benchmarks:param-sweep -- --addon-source local
+npm run run:param-sweep -- --addon-source local
 
 # npm package addon
-npm run benchmarks:param-sweep -- --addon-source npm
+npm run run:param-sweep -- --addon-source npm
 ```
 
 ## Optional Sweep Flags
@@ -48,7 +107,7 @@ npm run benchmarks:param-sweep -- --addon-source npm
 - `--models "qwen3-1.7b,qwen3-4b"`
 - `--results-dir ./benchmarks/performance/results/custom`
 - `--prompts-file ./my-prompts.json` (must be JSON array of message objects)
-- `--repeats 3`
+- `--repeats 5`
 - `--debug`
 
 Default output directory:
@@ -72,35 +131,37 @@ Model list and quantization files come from:
 - `npm run prepare:models:addon`
 - `npm run prepare:models:all`
 - `npm run prepare:prompts`
+- `npm run verify:prompts`
 - `npm run run:param-sweep`
 
 ## PyTorch Placeholder
 
 ```bash
-npm run benchmarks:pytorch-placeholder
+npm run run:pytorch-placeholder
 ```
 
 This is currently a placeholder while JS benchmarking is being polished.
 
 ## Benchmark Workflow
 
-1. **Model Preparation**: Downloads GGUF models listed in `models.manifest.json` to `test/model/`
-2. **Prompt Generation**: Creates prompt templates including:
+1. **Model Preparation**: Downloads GGUF models listed in `models.manifest.json` to `benchmarks/performance/models/`
+2. **Prompt Generation (standalone)**: Creates static prompts including:
    - Short prompts (~50 tokens)
    - Medium prompts (~200 tokens)
    - Long prompts (~1000 tokens)
-   - Context-filling prompt template (`ctx-filling`)
-   - Batch-spanning prompt template (`batch-spanning`)
-3. **Adaptive Prompt Expansion**: Runner deterministically expands adaptive templates per case:
-   - `ctx-filling` targets the current `ctx-size`
-   - `batch-spanning` targets multiple current `batch-size` chunks
+   - `ctx-filling__ctx=<ctx-size>` variants (one per hardcoded `ctx-size`)
+   - `batch-spanning__ctx=<ctx-size>__bs=<batch-size>` variants (one per hardcoded pair)
+3. **Case Prompt Selection**: Runner picks exactly one static fill/span variant per case:
+   - Context tests use the matching `ctx-filling__ctx=<ctx-size>` prompt.
+   - Batch tests use the matching `batch-spanning__ctx=<ctx-size>__bs=<batch-size>` prompt.
+   - If `batch-size > ctx-size`, the prompt is generated as the longest safe prompt under ctx budget (documented in prompt metadata).
 4. **Baseline Run**: Runs with default config, saves output for quality comparison
 5. **Parameter Sweep**: Runs all parameter combinations (full factorial design)
    - Model is loaded once per case and reused for all prompts and repeats
    - Progress is tracked and can be resumed after crashes (debounced saves)
 6. **Quality Check**: Compares each combination's output with exact-match scoring
    - Fixed prompts use global baseline outputs
-   - Adaptive prompts use adaptive baseline keys (`ctx-size` or `batch-size`) so scoring remains valid per target shape
+   - Fill/span prompts use per-variant baseline keys so scoring remains valid per exact shape
 7. **Report Generation**: Creates JSON and Markdown reports with performance metrics
 
 ## Output Quality Comparison
@@ -111,6 +172,50 @@ The benchmark compares outputs using exact match:
 - Quality match score: 1.0 (exact match) or 0.0 (different)
 
 Future enhancements may include judge model scoring for semantic similarity.
+
+## Prompt Tooling (What/Why/How)
+
+- **What**: `prepare-prompts.js` generates static fill/span prompt variants for all hardcoded sweep values.
+- **Why**: Avoid runtime prompt mutation and token-estimation drift; keep sweep deterministic and auditable.
+- **How**:
+  - Uses the addon runtime tokenizer path (`response.stats.promptTokens`) for token-exact sizing.
+  - `ctx-filling` variants target `ctx-size - n_predict_reserve - overhead_reserve`.
+  - `batch-spanning` variants target `min(ctx-budget, batch-size*3)`.
+  - For impossible span cases (`batch-size > ctx-size`), it intentionally uses the longest safe prompt that still fits context.
+  - `verify-prompts.js` re-checks all variants and fails on budget overflow/missing IDs.
+
+## How `targetPromptTokens` Is Derived
+
+All target values are deterministic and come from hardcoded constants in `prepare-prompts.js` / `verify-prompts.js`:
+
+- `CTX_SIZES = [2048, 4096, 8192]`
+- `BATCH_SIZES = [512, 2048, 4096, 8192]`
+- `N_PREDICT_RESERVE = 256`
+- `PROMPT_OVERHEAD_RESERVE = 128`
+
+Formulas:
+
+- `ctxBudget(ctx) = max(256, ctx - N_PREDICT_RESERVE - PROMPT_OVERHEAD_RESERVE)`
+- `batchDesired(batch) = max(512, batch * 3)` (aim for multi-batch prefill)
+- `batchBudget(ctx, batch) = max(256, min(ctxBudget(ctx), batchDesired(batch)))`
+
+This yields:
+
+- `ctx-filling`
+  - `ctx=2048 -> targetPromptTokens=1664`
+  - `ctx=4096 -> targetPromptTokens=3712`
+  - `ctx=8192 -> targetPromptTokens=7808`
+- `batch-spanning`
+  - `ctx=2048`: `bs=512 -> 1536`, `bs=2048 -> 1664`, `bs=4096 -> 1664`, `bs=8192 -> 1664`
+  - `ctx=4096`: `bs=512 -> 1536`, `bs=2048 -> 3712`, `bs=4096 -> 3712`, `bs=8192 -> 3712`
+  - `ctx=8192`: `bs=512 -> 1536`, `bs=2048 -> 6144`, `bs=4096 -> 7808`, `bs=8192 -> 7808`
+
+Why this is safe and accurate:
+
+- Prompt sizing uses the addon's own tokenizer stats (`promptTokens`), not word/token heuristics.
+- `prepare-prompts.js` tunes each prompt up to the highest safe value under budget.
+- `verify-prompts.js` recomputes budgets with the same formulas and fails if any prompt exceeds budget or is too short for the intended span behavior.
+- Final static prompts and metadata in `test-prompts.json` are therefore reproducible and auditable for both baseline and sweep cases.
 
 ## Performance Metrics
 
