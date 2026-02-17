@@ -50,7 +50,7 @@ npm run run:param-sweep
 ```bash
 cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
 npm install --workspaces=false @qvac/llm-llamacpp@latest
-node ./prepare-models.js --target addon && bare ./llm-parameter-sweep.js --addon-source npm
+npm run run:param-sweep -- --addon-source npm
 ```
 
 ### 4) Resume after interruption/failure
