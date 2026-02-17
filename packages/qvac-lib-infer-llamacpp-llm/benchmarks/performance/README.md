@@ -85,6 +85,16 @@ cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
 npm run run:param-sweep -- --models "qwen3-1.7b" --repeats 1 --debug
 ```
 
+### 8) Run semantic judge pass (after sweep)
+
+```bash
+cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+npm run run:judge
+```
+
+By default this reads the latest sweep JSONL and writes a sibling `*.judged.jsonl` file.
+It also reuses existing `qualityJudge` values unless you pass `-- --force`.
+
 ## Addon Source Selection
 
 Addon source is explicit (no automatic fallback). Use:
@@ -133,6 +143,7 @@ Model list and quantization files come from:
 - `npm run prepare:prompts`
 - `npm run verify:prompts`
 - `npm run run:param-sweep`
+- `npm run run:judge`
 
 ## PyTorch Placeholder
 
@@ -159,19 +170,23 @@ This is currently a placeholder while JS benchmarking is being polished.
 5. **Parameter Sweep**: Runs all parameter combinations (full factorial design)
    - Model is loaded once per case and reused for all prompts and repeats
    - Progress is tracked and can be resumed after crashes (debounced saves)
-6. **Quality Check**: Compares each combination's output with exact-match scoring
+6. **Quality Check**: Compares each combination's output with exact-match and judge-model scoring
    - Fixed prompts use global baseline outputs
    - Fill/span prompts use per-variant baseline keys so scoring remains valid per exact shape
+   - Exact-match (`qualityMatch`) is computed during sweep
+   - Judge score (`qualityJudge`) is computed in a separate pass via `npm run run:judge`
 7. **Report Generation**: Creates JSON and Markdown reports with performance metrics
 
 ## Output Quality Comparison
 
-The benchmark compares outputs using exact match:
+The benchmark compares outputs using two signals:
 - Baseline outputs are saved for each prompt
 - Each parameter combination's output is compared with baseline
-- Quality match score: 1.0 (exact match) or 0.0 (different)
+- `qualityMatch`: 1.0 (exact match) or 0.0 (different)
+- `qualityJudge`: model-judged semantic agreement score in [0, 1]
 
-Future enhancements may include judge model scoring for semantic similarity.
+`qualityJudge` is intentionally separated from the timed sweep. This avoids benchmark distortion from extra inference calls, allows a singleton judge runtime with conservative worst-case settings, and makes re-scoring possible without re-running the full parameter grid.
+The judge pass is optimized to score only unique `(baseline, candidate)` text pairs and then reuse scores across repeats/cases.
 
 ## Prompt Tooling (What/Why/How)
 
@@ -230,3 +245,17 @@ Per run:
 
 Aggregated (across repeats):
 - Mean and standard deviation for all metrics
+
+## Reporting Details
+
+- Case-level JSONL records now include:
+  - `metrics` with mean + stddev for TTFT/TPS/run/load/unload and token/memory fields
+  - `promptResults[]` with per-prompt metrics, exact-match scores, prompt-level errors, and raw outputs for judge post-processing
+- `npm run run:judge` writes `*.judged.jsonl` with populated per-prompt and per-case `qualityJudge`.
+- Final JSON report includes the same per-case information.
+
+## Deferred Work
+
+- **PyTorch desktop runner** (`linux`/`mac`): currently still a placeholder script.
+- **Native/GPU memory telemetry**: current memory metrics are process-level JS memory (`rss`, `heapUsed`, `external`).  
+  Addon/C++ side metrics for native allocations and VRAM usage are planned later.

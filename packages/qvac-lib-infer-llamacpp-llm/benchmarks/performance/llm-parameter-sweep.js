@@ -665,6 +665,7 @@ async function main () {
         isBaseline: caseResult.isBaseline,
         metrics: caseResult.metrics,
         qualityMatch: caseResult.qualityMatch,
+        promptResults: caseResult.promptResults || [],
         status: caseResult.status,
         repeatsAttempted: caseResult.repeatsAttempted,
         repeatsSucceeded: caseResult.repeatsSucceeded,
@@ -759,6 +760,7 @@ async function main () {
               ...testCase,
               metrics: null,
               qualityMatch: null,
+              promptResults: [],
               status: 'failed',
               repeatsAttempted: promptsForCase.length * repeats,
               repeatsSucceeded: 0,
@@ -786,6 +788,16 @@ async function main () {
         }
 
         const promptResults = []
+        const caseMetricSamples = {
+          runMs: [],
+          ttftMs: [],
+          tps: [],
+          promptTokens: [],
+          generatedTokens: [],
+          rssMb: [],
+          heapUsedMb: [],
+          externalMb: []
+        }
         for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
           const prompt = promptsForCase[promptIndex]
 
@@ -823,6 +835,14 @@ async function main () {
               }
 
               runMetrics.push(metrics)
+              caseMetricSamples.runMs.push(metrics.runMs)
+              if (metrics.ttftMs != null) caseMetricSamples.ttftMs.push(metrics.ttftMs)
+              if (metrics.tps != null) caseMetricSamples.tps.push(metrics.tps)
+              if (metrics.promptTokens != null) caseMetricSamples.promptTokens.push(metrics.promptTokens)
+              if (metrics.generatedTokens != null) caseMetricSamples.generatedTokens.push(metrics.generatedTokens)
+              if (metrics.runtimeMemory?.rssMb != null) caseMetricSamples.rssMb.push(metrics.runtimeMemory.rssMb)
+              if (metrics.runtimeMemory?.heapUsedMb != null) caseMetricSamples.heapUsedMb.push(metrics.runtimeMemory.heapUsedMb)
+              if (metrics.runtimeMemory?.externalMb != null) caseMetricSamples.externalMb.push(metrics.runtimeMemory.externalMb)
               caseRepeatsAttempted += 1
               caseRepeatsSucceeded += 1
               if (!firstOutput) {
@@ -871,22 +891,27 @@ async function main () {
             }
 
             let qualityMatch = null
+            let baselineReference = null
             if (isAdaptivePromptId(prompt.id)) {
               const adaptiveKey = getAdaptiveBaselineKey(prompt.id)
               if (adaptiveKey) {
                 if (!Object.prototype.hasOwnProperty.call(adaptiveBaselineOutputs, adaptiveKey)) {
                   adaptiveBaselineOutputs[adaptiveKey] = firstOutput
+                  baselineReference = firstOutput
                   qualityMatch = 1.0
                 } else {
-                  qualityMatch = exactMatch(adaptiveBaselineOutputs[adaptiveKey], firstOutput)
+                  baselineReference = adaptiveBaselineOutputs[adaptiveKey]
+                  qualityMatch = exactMatch(baselineReference, firstOutput)
                 }
               }
             } else {
               if (testCase.parameter === 'baseline') {
+                baselineReference = firstOutput
                 qualityMatch = 1.0
               } else {
-                qualityMatch = baselineOutputs[prompt.id]
-                  ? exactMatch(baselineOutputs[prompt.id], firstOutput)
+                baselineReference = baselineOutputs[prompt.id] || null
+                qualityMatch = baselineReference
+                  ? exactMatch(baselineReference, firstOutput)
                   : null
               }
             }
@@ -894,7 +919,9 @@ async function main () {
             promptResults.push({
               promptId: prompt.id,
               metrics: aggregated,
-              qualityMatch
+              qualityMatch,
+              outputText: firstOutput,
+              baselineReference
             })
           } else if (promptError) {
             // All repeats failed
@@ -947,23 +974,32 @@ async function main () {
         // Add delay after case completion to allow cleanup
         await new Promise(resolve => setTimeout(resolve, 200))
 
-        // Aggregate metrics across prompts (average) - only for successful runs
+        // Aggregate metrics across all successful prompt repeats in this case
         const successfulResults = promptResults.filter(p => p.metrics != null && !p.error)
-        const firstSuccess = successfulResults.length > 0 ? successfulResults[0] : null
         const aggregatedMetrics = successfulResults.length > 0
           ? {
-              repeats: firstSuccess?.metrics?.repeats ?? null,
-              loadMs: firstSuccess?.metrics?.loadMs ?? null, // Load time is per-case, not per-prompt
-              runMs: round(average(successfulResults.map(p => p.metrics?.runMs).filter(x => x != null)), 3),
-              unloadMs: firstSuccess?.metrics?.unloadMs ?? null, // Unload time is per-case, not per-prompt
-              ttftMs: round(average(successfulResults.map(p => p.metrics?.ttftMs).filter(x => x != null)), 3),
-              tps: round(average(successfulResults.map(p => p.metrics?.tps).filter(x => x != null)), 3),
-              promptTokens: round(average(successfulResults.map(p => p.metrics?.promptTokens).filter(x => x != null)), 0),
-              generatedTokens: round(average(successfulResults.map(p => p.metrics?.generatedTokens).filter(x => x != null)), 0),
+              repeats: repeats,
+              loadMs: round(loadMs, 3), // Load time is per-case
+              loadMsStd: loadMs != null ? 0 : null,
+              runMs: round(average(caseMetricSamples.runMs), 3),
+              runMsStd: round(stddev(caseMetricSamples.runMs), 3),
+              unloadMs: round(unloadMs, 3), // Unload time is per-case
+              unloadMsStd: unloadMs != null ? 0 : null,
+              ttftMs: round(average(caseMetricSamples.ttftMs), 3),
+              ttftMsStd: round(stddev(caseMetricSamples.ttftMs), 3),
+              tps: round(average(caseMetricSamples.tps), 3),
+              tpsStd: round(stddev(caseMetricSamples.tps), 3),
+              promptTokens: round(average(caseMetricSamples.promptTokens), 0),
+              promptTokensStd: round(stddev(caseMetricSamples.promptTokens), 3),
+              generatedTokens: round(average(caseMetricSamples.generatedTokens), 0),
+              generatedTokensStd: round(stddev(caseMetricSamples.generatedTokens), 3),
               runtimeMemory: {
-                rssMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.rssMb).filter(x => x != null)), 2),
-                heapUsedMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.heapUsedMb).filter(x => x != null)), 2),
-                externalMb: round(average(successfulResults.map(p => p.metrics?.runtimeMemory?.externalMb).filter(x => x != null)), 2)
+                rssMb: round(average(caseMetricSamples.rssMb), 2),
+                rssMbStd: round(stddev(caseMetricSamples.rssMb), 3),
+                heapUsedMb: round(average(caseMetricSamples.heapUsedMb), 2),
+                heapUsedMbStd: round(stddev(caseMetricSamples.heapUsedMb), 3),
+                externalMb: round(average(caseMetricSamples.externalMb), 2),
+                externalMbStd: round(stddev(caseMetricSamples.externalMb), 3)
               }
             }
           : null
@@ -987,6 +1023,15 @@ async function main () {
           ...testCase,
           metrics: aggregatedMetrics,
           qualityMatch: avgQualityMatch,
+          promptResults: promptResults.map((p) => ({
+            promptId: p.promptId,
+            metrics: p.metrics,
+            qualityMatch: p.qualityMatch,
+            outputText: p.outputText || null,
+            baselineReference: p.baselineReference || null,
+            error: p.error || null,
+            vramError: Boolean(p.vramError)
+          })),
           status,
           repeatsAttempted: caseRepeatsAttempted,
           repeatsSucceeded: caseRepeatsSucceeded,
@@ -1030,6 +1075,7 @@ async function main () {
           ...testCase,
           metrics: null,
           qualityMatch: null,
+          promptResults: [],
           status: 'failed',
           repeatsAttempted: caseRepeatsAttempted,
           repeatsSucceeded: caseRepeatsSucceeded,
