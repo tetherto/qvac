@@ -41,6 +41,7 @@
     "run-blind-peer": "node scripts/run-blind-peer.js",
     "cleanup": "node scripts/cleanup.js",
     "validate:models": "node scripts/validate-models-json.js",
+    "verify:licenses": "node scripts/verify-model-licenses.js",
     "sync:models": "node scripts/sync-models.js",
     "smoke-test": "node scripts/smoke-test-client.js",
     "test:unit": "brittle-node tests/unit/*.test.js",
