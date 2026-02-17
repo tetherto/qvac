@@ -53,7 +53,6 @@ class RegistryService extends ReadyResource {
     this.config = config
     this.logger = opts.logger || console
 
-    this.ackInterval = opts.ackInterval ?? 10
     this.autobaseBootstrap = opts.autobaseBootstrap || null
     this.blindPeerKeys = Array.isArray(opts.blindPeerKeys) ? opts.blindPeerKeys : []
     this.skipStorageCheck = opts.skipStorageCheck ?? false
@@ -74,12 +73,17 @@ class RegistryService extends ReadyResource {
 
     this._registerApplyHandlers()
 
-    this.base = new Autobase(this.store, this.autobaseBootstrap, {
+    const autobaseOpts = {
       open: this._openAutobase.bind(this),
       apply: this._apply.bind(this),
-      close: this._closeAutobase.bind(this),
-      ackInterval: this.ackInterval
-    })
+      close: this._closeAutobase.bind(this)
+    }
+
+    if (opts.ackInterval !== undefined) {
+      autobaseOpts.ackInterval = opts.ackInterval
+    }
+
+    this.base = new Autobase(this.store, this.autobaseBootstrap, autobaseOpts)
 
     this.logger.info('RegistryService: initialized')
   }
@@ -127,6 +131,21 @@ class RegistryService extends ReadyResource {
 
   async _appendOperation (route, payload) {
     return this.base.append(encodeDispatch(route, payload))
+  }
+
+  /**
+   * Append a null value to force an ack and advance signed length.
+   *
+   * In multi-indexer setups with a single active writer, the linearizer's
+   * "never self-ack" rule prevents the writing indexer from acking its own
+   * head. This leaves signedLength behind and peers unable to see the
+   * latest view blocks. Appending null creates a new DAG node with causal
+   * references, changing the head structure so the passive indexer can ack.
+   */
+  async _forceAck () {
+    if (this.base.isIndexer) {
+      await this.base.append(null)
+    }
   }
 
   async _open () {
@@ -485,6 +504,7 @@ class RegistryService extends ReadyResource {
         delete modelEntry.skipExisting
 
         const result = await this.addModel(modelEntry, { skipExisting })
+        await this._forceAck()
 
         this.logger.info({
           path: result.path,
@@ -509,6 +529,7 @@ class RegistryService extends ReadyResource {
         if (!this.opened) await this.ready()
         await this._ensureIndexer()
         await this.putLicense(licenseRecord)
+        await this._forceAck()
 
         this.logger.info({
           spdxId: licenseRecord.spdxId
@@ -554,6 +575,7 @@ class RegistryService extends ReadyResource {
         }
 
         await this._appendOperation(DISPATCH_PUT_MODEL, updated)
+        await this._forceAck()
 
         const viewLength = this.view?.core?.length ?? 0
         const viewContiguous = this.view?.core?.contiguousLength ?? 0
@@ -579,6 +601,7 @@ class RegistryService extends ReadyResource {
         await this._ensureIndexer()
 
         const result = await this.deleteModel({ path: data.path, source: data.source })
+        await this._forceAck()
 
         this.logger.info({
           path: data.path,
