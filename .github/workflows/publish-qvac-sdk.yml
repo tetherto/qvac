@@ -157,6 +157,13 @@ jobs:
             echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
             sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
             rm "${MOBILE_BUNDLE_FILE}.bak"
+            # Update @qvac/cli references to @tetherto/cli-mono
+            echo "Updating @qvac/cli references in $MOBILE_BUNDLE_FILE to @tetherto/cli-mono"
+            sed -i.bak "s|\"@qvac\"|\"@tetherto\"|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|\"cli\"|\"cli-mono\"|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|@qvac/cli|@tetherto/cli-mono|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|npx qvac|npx tetherto|g" "$MOBILE_BUNDLE_FILE"
+            rm "${MOBILE_BUNDLE_FILE}.bak"
             echo "✓ Updated $MOBILE_BUNDLE_FILE"
           fi
 

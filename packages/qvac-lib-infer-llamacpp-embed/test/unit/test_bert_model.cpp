@@ -124,14 +124,14 @@ protected:
     // Try multiple possible locations for the model file
     std::vector<fs::path> possiblePaths = {
         // From workspace root
-        fs::path{"models/unit-test/gte-small.gguf"},
+        fs::path{"models/unit-test/test-model.gguf"},
         // From build/test/unit (go up 3 levels)
-        fs::path{"../../../models/unit-test/gte-small.gguf"},
+        fs::path{"../../../models/unit-test/test-model.gguf"},
         // Absolute path from backendDir location
         backendDir.parent_path().parent_path().parent_path() / "models" /
-            "unit-test" / "gte-small.gguf",
+            "unit-test" / "test-model.gguf",
         // From current working directory
-        fs::current_path() / "models" / "unit-test" / "gte-small.gguf"};
+        fs::current_path() / "models" / "unit-test" / "test-model.gguf"};
 
     test_model_path = "";
     for (const auto& path : possiblePaths) {
@@ -143,7 +143,7 @@ protected:
 
     // If still not found, use relative path as last resort
     if (test_model_path.empty()) {
-      test_model_path = "models/unit-test/gte-small.gguf";
+      test_model_path = "models/unit-test/test-model.gguf";
     }
   }
 
