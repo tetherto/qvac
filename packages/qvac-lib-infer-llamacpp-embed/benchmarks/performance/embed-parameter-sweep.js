@@ -243,7 +243,8 @@ function average (values) {
 }
 
 function stddev (values) {
-  if (values.length <= 1) return 0
+  if (!values.length) return null
+  if (values.length === 1) return 0
   const avg = average(values)
   let varianceSum = 0
   for (const value of values) {
@@ -292,6 +293,7 @@ function createProgressReporter (totalRuns) {
     const repeatLabel = context && typeof context.repeat === 'number' && typeof context.repeats === 'number'
       ? `${context.repeat}/${context.repeats}`
       : '?/?'
+    const elapsedLabel = formatDurationMs(elapsedMs)
     const etaLabel = etaMs == null ? '--:--:--' : formatDurationMs(etaMs)
 
     if (!canRewriteLine) {
@@ -300,7 +302,8 @@ function createProgressReporter (totalRuns) {
       lastNonTtyPercent = flooredPercent
       console.log(
         `[progress] ${completedRuns}/${totalRuns} (${percent.toFixed(1)}%)` +
-        ` | model=${modelLabel} case=${caseLabel} repeat=${repeatLabel} | eta=${etaLabel}`
+        ` | model=${modelLabel} case=${caseLabel} repeat=${repeatLabel}` +
+        ` | elapsed=${elapsedLabel} eta=${etaLabel}`
       )
       return
     }
@@ -309,7 +312,8 @@ function createProgressReporter (totalRuns) {
     const bar = `${'#'.repeat(filled)}${'-'.repeat(Math.max(0, barWidth - filled))}`
     let line =
       `[progress] [${bar}] ${completedRuns}/${totalRuns} (${percent.toFixed(1)}%)` +
-      ` | m=${modelLabel} c=${caseLabel} r=${repeatLabel} eta=${etaLabel}`
+      ` | m=${modelLabel} c=${caseLabel} r=${repeatLabel}` +
+      ` elapsed=${elapsedLabel} eta=${etaLabel}`
     const columns = process.stdout && Number.isInteger(process.stdout.columns) ? process.stdout.columns : null
     if (columns && columns > 0 && line.length >= columns) {
       line = truncateText(line, columns - 1)
@@ -338,16 +342,30 @@ function aggregateRunMetrics (runMetrics) {
   const runMsValues = runMetrics.map((x) => x.runMs)
   const unloadMsValues = runMetrics.map((x) => x.unloadMs)
   const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
+  const loadMsMean = round(average(loadMsValues), 3)
+  const runMsMean = round(average(runMsValues), 3)
+  const unloadMsMean = round(average(unloadMsValues), 3)
+  const tpsMean = round(average(tpsValues), 3)
+  const loadMsStd = round(stddev(loadMsValues), 3)
+  const runMsStd = round(stddev(runMsValues), 3)
+  const unloadMsStd = round(stddev(unloadMsValues), 3)
+  const tpsStd = round(stddev(tpsValues), 3)
 
   return {
     repeats: runMetrics.length,
-    loadMs: round(average(loadMsValues), 3),
-    runMs: round(average(runMsValues), 3),
-    unloadMs: round(average(unloadMsValues), 3),
-    loadMsStd: round(stddev(loadMsValues), 3),
-    runMsStd: round(stddev(runMsValues), 3),
-    unloadMsStd: round(stddev(unloadMsValues), 3),
-    tps: round(average(tpsValues), 3)
+    // Keep legacy keys for backward compatibility with existing consumers.
+    loadMs: loadMsMean,
+    runMs: runMsMean,
+    unloadMs: unloadMsMean,
+    tps: tpsMean,
+    loadMsMean,
+    runMsMean,
+    unloadMsMean,
+    tpsMean,
+    loadMsStd,
+    runMsStd,
+    unloadMsStd,
+    tpsStd
   }
 }
 
@@ -484,8 +502,8 @@ function toMarkdown (report) {
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Batch Size | Input | No Mmap | Flash Attn | Status | Load ms (avg) | Run ms (avg) | Unload ms (avg) | TPS (avg) | Avg CosSim | Error |')
-    lines.push('|---|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---|')
+    lines.push('| Quantization | Device | Batch Size | Input | No Mmap | Flash Attn | Status | Load ms (mean) | Load ms (std) | Run ms (mean) | Run ms (std) | Unload ms (mean) | Unload ms (std) | TPS (mean) | TPS (std) | Avg CosSim | Error |')
+    lines.push('|---|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
       const metrics = item.metrics || {}
       const runtimeConfig = item.runtimeConfig
@@ -504,10 +522,14 @@ function toMarkdown (report) {
       const errorCell = item.error ? truncateText(item.error.message, 120) : ''
       lines.push(
         `| ${quantizationCell} | ${deviceCell} | ${batchSizeCell} | ${inputCell} | ${noMmapCell} | ${flashAttnCell}` +
-        ` | ${statusCell} | ${metrics.loadMs ?? ''}` +
-        ` | ${metrics.runMs ?? ''}` +
-        ` | ${metrics.unloadMs ?? ''}` +
-        ` | ${metrics.tps ?? ''}` +
+        ` | ${statusCell} | ${metrics.loadMsMean ?? metrics.loadMs ?? ''}` +
+        ` | ${metrics.loadMsStd ?? ''}` +
+        ` | ${metrics.runMsMean ?? metrics.runMs ?? ''}` +
+        ` | ${metrics.runMsStd ?? ''}` +
+        ` | ${metrics.unloadMsMean ?? metrics.unloadMs ?? ''}` +
+        ` | ${metrics.unloadMsStd ?? ''}` +
+        ` | ${metrics.tpsMean ?? metrics.tps ?? ''}` +
+        ` | ${metrics.tpsStd ?? ''}` +
         ` | ${cos} | ${errorCell} |`
       )
     }
