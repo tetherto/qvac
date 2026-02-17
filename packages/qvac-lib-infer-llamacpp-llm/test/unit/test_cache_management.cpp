@@ -1015,8 +1015,8 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
   int smallContextSize = 128;
   if (cacheTokensBeforeSave <= smallContextSize) {
     FAIL() << "Cache tokens (" << cacheTokensBeforeSave
-                 << ") not enough to exceed context size (" << smallContextSize
-                 << ")";
+           << ") not enough to exceed context size (" << smallContextSize
+           << ")";
   }
 
   auto model_small =
