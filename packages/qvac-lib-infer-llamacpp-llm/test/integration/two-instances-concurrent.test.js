@@ -278,8 +278,8 @@ test('two instances: A finetune + B finetune in parallel', { timeout: FINETUNE_T
 
   const [resultA, resultB] = await Promise.all([handleA.await(), handleB.await()])
 
-  t.ok(resultA?.status === 'IDLE' || resultA?.status === 'ERROR', `A finished with ${resultA?.status}`)
-  t.ok(resultB?.status === 'IDLE' || resultB?.status === 'ERROR', `B finished with ${resultB?.status}`)
+  t.ok(resultA?.status === 'COMPLETED' || resultA?.status === 'ERROR', `A finished with ${resultA?.status}`)
+  t.ok(resultB?.status === 'COMPLETED' || resultB?.status === 'ERROR', `B finished with ${resultB?.status}`)
   t.pass()
 })
 
@@ -337,7 +337,7 @@ test('two instances: A pause/resume finetune while B runs inference (per-instanc
   await sleep(8000)
   await modelA.cancel()
   const pauseResult = await handleA.await()
-  if (pauseResult?.status === 'IDLE') {
+  if (pauseResult?.status === 'COMPLETED') {
     t.comment('A completed before pause; finishing B run and exiting')
     const responseB = await modelB.run(RUN_PROMPT)
     await collectResponse(responseB)
@@ -350,6 +350,6 @@ test('two instances: A pause/resume finetune while B runs inference (per-instanc
 
   const resumeHandleA = await modelA.finetune()
   const resumeResult = await resumeHandleA.await()
-  t.ok(resumeResult?.status === 'IDLE' || resumeResult?.status === 'ERROR', `A resume should complete: ${resumeResult?.status}`)
+  t.ok(resumeResult?.status === 'COMPLETED' || resumeResult?.status === 'ERROR', `A resume should complete: ${resumeResult?.status}`)
   t.pass()
 })

@@ -144,14 +144,10 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   auto paramsOpt = args.tryGetObject<FinetuningParameters>(
       1, "finetuningParams",
       [](js_env_t* e, js::Object& jsObj) { return FinetuningParameters(e, jsObj); });
-  if (paramsOpt.has_value()) {
-    llamaModel->setFinetuneParams(std::move(*paramsOpt));
-  }
-  paramsOpt = llamaModel->getFinetuneParams();
   if (!paramsOpt.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
-        "Finetuning parameters not provided and not stored");
+        "Finetuning parameters not provided");
   }
 
   LlamaModel::Prompt prompt;

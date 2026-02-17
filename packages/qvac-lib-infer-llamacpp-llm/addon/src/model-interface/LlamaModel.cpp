@@ -1031,10 +1031,10 @@ std::string LlamaModel::finetune(
             llama_finetuning_helpers::resolveAdapterOutputPath(params);
         logCallback("LoRA adapter saved to: " + adapterPath);
         logCallback("Finetune completed successfully");
-        logCallback(R"({"type":"FinetuneComplete","status":"IDLE"})");
+        logCallback(R"({"type":"FinetuneComplete","status":"COMPLETED"})");
       }
     }
-    return wasPaused ? "PAUSED" : "IDLE";
+    return wasPaused ? "PAUSED" : "COMPLETED";
   } catch (const std::exception& ex) {
     auto* state = getCurrentCheckpointState();
     if (state) state->setIdle();
@@ -1503,16 +1503,6 @@ void LlamaModel::clearPauseRequest() {
   if (ctx != nullptr) {
     llama_opt_reset_stop(ctx);
   }
-}
-
-void LlamaModel::setFinetuneParams(
-    qvac_lib_inference_addon_cpp::FinetuningParameters params) {
-  finetuneParams_ = std::move(params);
-}
-
-std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
-LlamaModel::getFinetuneParams() const {
-  return finetuneParams_;
 }
 
 #endif // STANDALONE_TEST_BUILD

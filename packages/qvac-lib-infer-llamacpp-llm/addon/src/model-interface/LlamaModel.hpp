@@ -130,7 +130,7 @@ public:
    * Finetune the model using LoRA.
    * @param params - finetuning parameters
    * @param logCallback - callback function for logging messages
-   * @return "IDLE" on success, "PAUSED" when paused, "ERROR" on failure
+   * @return "COMPLETED" on success, "PAUSED" when paused, "ERROR" on failure
    */
   std::string finetune(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
@@ -167,11 +167,6 @@ public:
 
   /** Block until the training thread has completed the finetuning pause path. */
   void waitUntilFinetuningPauseComplete();
-
-  void setFinetuneParams(
-      qvac_lib_inference_addon_cpp::FinetuningParameters params);
-  std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
-  getFinetuneParams() const;
 
 private:
   /**
@@ -295,8 +290,6 @@ private:
       currentCheckpointState_{nullptr};
   std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState> pausedCheckpointState_;
   bool optimizerInitialized_ = false;
-  std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
-      finetuneParams_;
 };
 
 // NOLINTEND(readability-identifier-naming)

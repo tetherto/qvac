@@ -95,7 +95,7 @@ test('finetuning pause and resume', { timeout: 360_000, skip: isDarwinX64 }, asy
   await model.cancel()
 
   const pauseResult = await finetuneHandle.await()
-  if (pauseResult?.status === 'IDLE') {
+  if (pauseResult?.status === 'COMPLETED') {
     return handleEarlyCompletion(t, finetuneHandle, checkpointDir)
   }
 
@@ -186,7 +186,7 @@ test('pause during validation then resume', { timeout: 360_000, skip: isDarwinX6
   await model.cancel()
 
   const pauseResult = await finetuneHandle.await()
-  if (pauseResult?.status === 'IDLE') {
+  if (pauseResult?.status === 'COMPLETED') {
     return handleEarlyCompletion(t, finetuneHandle, checkpointDir)
   }
 
