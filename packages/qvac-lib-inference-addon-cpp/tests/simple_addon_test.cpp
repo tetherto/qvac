@@ -38,8 +38,7 @@ struct JobCompletionState {
 
   bool waitForCompletion(std::chrono::milliseconds timeout) const {
     std::unique_lock<std::mutex> lock(mutex_);
-    return cv_.wait_for(
-        lock, timeout, [this] { return completed_.load(); });
+    return cv_.wait_for(lock, timeout, [this] { return completed_.load(); });
   }
 
   void reset() {

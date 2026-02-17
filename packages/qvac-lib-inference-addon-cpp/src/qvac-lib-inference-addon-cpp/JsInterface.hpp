@@ -217,8 +217,8 @@ public:
   ///   throw StatusError(general_error::InvalidArgument, "Invalid type");
   /// }
   /// instance.runJob(std::move(anyInput));
-  static auto getInput(JsArgsParser &argsParser)
-      -> std::pair<std::string, js_value_t *> {
+  static auto getInput(JsArgsParser& argsParser)
+      -> std::pair<std::string, js_value_t*> {
     auto inputObj = argsParser.getJsObject(1, "inputObj");
     auto type = argsParser.getMapEntry(1, "type");
     auto input = inputObj.getProperty(argsParser.env_, "input");
