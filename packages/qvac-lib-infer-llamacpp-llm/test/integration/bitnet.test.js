@@ -64,6 +64,7 @@ test('bitnet model runs simple inference', { timeout: 1_800_000 }, async t => {
     const response = await addon.run(PROMPT)
     const output = await collectResponse(response)
 
+    t.comment(`bitnet response: ${output}`)
     t.ok(output.length > 0, 'bitnet model should produce non-empty output')
   } finally {
     await addon.unload().catch(() => {})
