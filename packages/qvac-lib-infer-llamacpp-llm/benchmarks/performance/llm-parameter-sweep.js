@@ -82,16 +82,99 @@ function parseArgs (argv) {
   for (let i = 2; i < argv.length; i++) {
     const token = argv[i]
     if (!token.startsWith('--')) continue
+    const inlineEqIndex = token.indexOf('=')
+    if (inlineEqIndex !== -1) {
+      const key = token.slice(2, inlineEqIndex)
+      const value = normalizeArgValue(token.slice(inlineEqIndex + 1))
+      parsed[key] = value
+      continue
+    }
     const key = token.slice(2)
     const next = argv[i + 1]
     if (!next || next.startsWith('--')) {
       parsed[key] = true
     } else {
-      parsed[key] = next
+      parsed[key] = normalizeArgValue(next)
       i++
     }
   }
   return parsed
+}
+
+const SWEEP_OVERRIDE_KEYS = [
+  'quantization',
+  'device',
+  'ctx-size',
+  'no-mmap',
+  'threads',
+  'batch-size',
+  'ubatch-size',
+  'no-kv-offload',
+  'flash-attn',
+  'cache-type-k',
+  'cache-type-v'
+]
+
+const BOOLEAN_SWEEP_KEYS = new Set(['no-mmap', 'no-kv-offload'])
+
+function stripSurroundingQuotes (value) {
+  const s = String(value)
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1)
+  }
+  return s
+}
+
+function normalizeArgValue (value) {
+  if (value === true || value == null) return value
+  let normalized = String(value).trim()
+  if (normalized.startsWith('=')) {
+    normalized = normalized.slice(1).trim()
+  }
+  normalized = stripSurroundingQuotes(normalized).trim()
+  return normalized
+}
+
+function splitCsvArg (value, key) {
+  const normalizedInput = normalizeArgValue(value)
+  if (normalizedInput === true || normalizedInput == null || normalizedInput === '') {
+    throw new Error(`Missing value for --${key}. Expected comma-separated values.`)
+  }
+  const parts = String(normalizedInput)
+    .split(',')
+    .map((v) => stripSurroundingQuotes(v).trim())
+    .filter(Boolean)
+  if (parts.length === 0) {
+    throw new Error(`Empty value for --${key}. Expected comma-separated values.`)
+  }
+  return parts
+}
+
+function parseBooleanToken (token, key) {
+  const normalized = String(token).trim().toLowerCase()
+  if (normalized === 'true' || normalized === '1' || normalized === 'on') return true
+  if (normalized === 'false' || normalized === '0' || normalized === 'off') return false
+  throw new Error(
+    `Invalid boolean value "${token}" for --${key}. ` +
+    'Use true/false (or on/off, 1/0).'
+  )
+}
+
+function buildSweepFromArgs (baseSweep, args) {
+  const nextSweep = {}
+  for (const [key, values] of Object.entries(baseSweep)) {
+    nextSweep[key] = Array.isArray(values) ? values.slice() : values
+  }
+
+  for (const key of SWEEP_OVERRIDE_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(args, key)) continue
+    const rawValues = splitCsvArg(args[key], key)
+    nextSweep[key] = BOOLEAN_SWEEP_KEYS.has(key)
+      ? rawValues.map((v) => parseBooleanToken(v, key))
+      : rawValues.map((v) => String(v))
+  }
+
+  return nextSweep
 }
 
 function ensureDir (dirPath) {
@@ -430,9 +513,9 @@ function createProgressReporter (totalRuns) {
 }
 
 function aggregateRunMetrics (runMetrics) {
-  const loadMsValues = runMetrics.map((x) => x.loadMs)
+  const loadMsValues = runMetrics.map((x) => x.loadMs).filter((x) => x != null)
   const runMsValues = runMetrics.map((x) => x.runMs)
-  const unloadMsValues = runMetrics.map((x) => x.unloadMs)
+  const unloadMsValues = runMetrics.map((x) => x.unloadMs).filter((x) => x != null)
   const ttftMsValues = runMetrics.map((x) => x.ttftMs).filter((x) => x != null)
   const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
   const promptTokensValues = runMetrics.map((x) => x.promptTokens).filter((x) => x != null)
@@ -454,11 +537,16 @@ function aggregateRunMetrics (runMetrics) {
     tps: round(average(tpsValues), 3),
     tpsStd: round(stddev(tpsValues), 3),
     promptTokens: round(average(promptTokensValues), 0),
+    promptTokensStd: round(stddev(promptTokensValues), 3),
     generatedTokens: round(average(generatedTokensValues), 0),
+    generatedTokensStd: round(stddev(generatedTokensValues), 3),
     runtimeMemory: {
       rssMb: round(average(rssValues), 2),
+      rssMbStd: round(stddev(rssValues), 3),
       heapUsedMb: round(average(heapValues), 2),
-      externalMb: round(average(extValues), 2)
+      heapUsedMbStd: round(stddev(heapValues), 3),
+      externalMb: round(average(extValues), 2),
+      externalMbStd: round(stddev(extValues), 3)
     }
   }
 }
@@ -483,7 +571,11 @@ function toMarkdown (report) {
   lines.push(`- Repeats per case: ${report.repeats}`)
   lines.push('- Sweep mode: full-grid')
   lines.push(`- Prompts: ${report.promptsCount}`)
+  if (report.totalCases != null) lines.push(`- Cases: ${report.totalCases}`)
+  if (report.totalPlannedRuns != null) lines.push(`- Planned runs: ${report.totalPlannedRuns}`)
+  if (report.totalCompletedRuns != null) lines.push(`- Completed runs: ${report.totalCompletedRuns}`)
   lines.push(`- Case records: ${report.jsonlPath}`)
+  if (report.sweep) lines.push(`- Sweep dimensions: ${JSON.stringify(report.sweep)}`)
   lines.push('')
   lines.push('> Runtime memory currently reports process-level JS memory only.')
   lines.push('')
@@ -545,6 +637,7 @@ async function main () {
   const AddonCtor = resolveAddonCtor(addonSource)
   const repeats = args.repeats ? parsePositiveInt(args.repeats, 'repeats') : DEFAULT_REPEATS
   const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
+  const sweep = buildSweepFromArgs(PARAMETER_SWEEP, args)
   const promptsFilePath = args['prompts-file']
     ? path.resolve(args['prompts-file'])
     : DEFAULT_PROMPTS_FILE
@@ -620,21 +713,29 @@ async function main () {
     finishedAt: null,
     repeats,
     promptsCount: PROMPTS_PER_CASE,
+    sweep,
     selectedModelIds,
     jsonlPath,
+    totalCases: 0,
+    totalPlannedRuns: 0,
+    totalCompletedRuns: 0,
     models: []
   }
 
   const plannedRunsByModel = selectedModels.map((modelDef) => {
-    const cases = buildCases(modelDef, PARAMETER_SWEEP)
+    const cases = buildCases(modelDef, sweep)
     return { modelDef, cases }
   })
+  const totalCases = plannedRunsByModel.reduce((acc, item) => acc + item.cases.length, 0)
   const totalPlannedRuns = plannedRunsByModel.reduce((acc, item) => acc + (item.cases.length * report.promptsCount * repeats), 0)
+  report.totalCases = totalCases
+  report.totalPlannedRuns = totalPlannedRuns
   const progress = createProgressReporter(totalPlannedRuns)
 
   debugLogger.log(`Running full-grid parameter sweep for: ${selectedModels.map((m) => m.id).join(', ')}`)
   debugLogger.log(`Addon source: ${addonSource}`)
   debugLogger.log(`Repeats per case: ${repeats}`)
+  debugLogger.log(`Sweep dimensions: ${JSON.stringify(sweep)}`)
   debugLogger.log(`Total planned runs: ${totalPlannedRuns}`)
   progress.start()
 
@@ -653,6 +754,9 @@ async function main () {
         finishedAt: null,
         repeats: report.repeats,
         promptsCount: report.promptsCount,
+        sweep: report.sweep,
+        totalCases: report.totalCases,
+        totalPlannedRuns: report.totalPlannedRuns,
         modelId: modelDef.id,
         source: modelDef.source,
         modelDir: modelDef.modelDir,
@@ -959,8 +1063,10 @@ async function main () {
         // Update metrics with load/unload times (per-case, not per-prompt/repeat)
         for (const promptResult of promptResults) {
           if (promptResult.metrics != null) {
-            promptResult.metrics.loadMs = loadMs
+            promptResult.metrics.loadMs = round(loadMs, 3)
+            promptResult.metrics.loadMsStd = loadMs != null ? 0 : null
             promptResult.metrics.unloadMs = round(unloadMs, 3)
+            promptResult.metrics.unloadMsStd = unloadMs != null ? 0 : null
           }
         }
 
@@ -1113,6 +1219,10 @@ async function main () {
   }
 
   report.finishedAt = new Date().toISOString()
+  report.totalCompletedRuns = report.models.reduce((acc, model) => {
+    const modelRuns = (model.cases || []).reduce((sum, item) => sum + Number(item.repeatsAttempted || 0), 0)
+    return acc + modelRuns
+  }, 0)
 
   isShuttingDown = true
   flushProgress()

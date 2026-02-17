@@ -95,6 +95,22 @@ npm run run:judge
 By default this reads the latest sweep JSONL and writes a sibling `*.judged.jsonl` file.
 It also reuses existing `qualityJudge` values unless you pass `-- --force`.
 
+Optional judge flags:
+
+- `--results-dir <dir>` (default: parameter-sweep results dir)
+- `--input <jsonl-file>` (default: latest sweep jsonl in results dir)
+- `--output <jsonl-file>` (default: `<input>.judged.jsonl`)
+- `--addon-source local|npm`
+- `--judge-model <model-id>`
+- `--judge-quantization <quantization>`
+- `--judge-device cpu|gpu`
+- `--judge-ctx-size <int>`
+- `--judge-batch-size <int>`
+- `--judge-ubatch-size <int>`
+- `--judge-n-predict <int>`
+- `--force` (ignore existing `qualityJudge` values and rescore)
+- `--debug`
+
 ## Addon Source Selection
 
 Addon source is explicit (no automatic fallback). Use:
@@ -119,6 +135,53 @@ npm run run:param-sweep -- --addon-source npm
 - `--prompts-file ./my-prompts.json` (must be JSON array of message objects)
 - `--repeats 5`
 - `--debug`
+- Any sweep dimension can be overridden with CSV values, for example:
+  - `--quantization=Q8_0,F16`
+  - `--device=gpu,cpu`
+  - `--threads=2`
+  - `--batch-size=4096,8192`
+  - `--ubatch-size=512,1024`
+  - `--ctx-size=4096`
+  - `--flash-attn=off,on`
+  - `--cache-type-k=f16,q8_0`
+  - `--cache-type-v=f16,q8_0`
+  - `--no-mmap=true,false`
+  - `--no-kv-offload=true,false`
+
+Example:
+
+```bash
+npm run run:param-sweep -- --quantization=Q8_0,F16 --device=gpu,cpu --threads=2 --batch-size=4096,8192
+```
+
+Supported sweep override keys:
+
+- `quantization`
+- `device`
+- `ctx-size`
+- `no-mmap`
+- `threads`
+- `batch-size`
+- `ubatch-size`
+- `no-kv-offload`
+- `flash-attn`
+- `cache-type-k`
+- `cache-type-v`
+
+## Why Overrides Are Needed
+
+The default LLM sweep is a strict full-factorial grid. With two models, 5 prompts per case, and 5 repeats,
+this can exceed 2 million prompt runs on a single invocation. That is intentional for exhaustive validation, but it is too large for most iterative local debugging sessions.
+
+Dimension overrides let you keep full-factorial behavior while shrinking the search space safely:
+
+- Keep only target quantizations (for example `Q8_0,F16`)
+- Restrict devices/threads to one or two values
+- Focus on large `batch-size` / specific `ctx-size` points
+- Keep metric/report shape identical so results remain comparable
+
+The final JSON/JSONL/Markdown reports include the exact `sweep` dimensions used, plus case/run totals.
+This makes the run reproducible and auditable even when overrides are applied.
 
 Default output directory:
 
