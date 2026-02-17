@@ -334,10 +334,10 @@ TEST_F(BackendSelectionTest, AdrenoCanPreferVulkanOverOpenCL) {
   expectChosen(mockBackend, BackendType::GPU, "vulkan0", false);
 }
 
-// If Vulkan is unavailable, OpenCL still works as fallback.
-TEST_F(BackendSelectionTest, AdrenoVulkanPreferenceFallsBackToOpenCL) {
+// If Vulkan is unavailable and OpenCL is not preferred, we do not select OpenCL.
+TEST_F(BackendSelectionTest, AdrenoVulkanPreferenceWithoutVulkanChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "gpuopencl", false);
+  expectChosen(mockBackend, BackendType::CPU, "none", false);
 }
 
 // Metal GPU should be chosen over CPU when available
