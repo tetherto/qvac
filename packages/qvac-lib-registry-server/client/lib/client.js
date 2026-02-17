@@ -151,6 +151,23 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
+  async _checkBlobProgress (core, blobPointer) {
+    const totalBlocks = blobPointer.blockLength
+    const totalBytes = blobPointer.byteLength
+
+    if (totalBlocks === 0) {
+      return { cachedBlocks: 0, totalBlocks: 0, totalBytes: 0 }
+    }
+
+    let cachedBlocks = 0
+    for (let i = blobPointer.blockOffset; i < blobPointer.blockOffset + totalBlocks; i++) {
+      const hasBlock = await core.has(i)
+      if (hasBlock) cachedBlocks++
+    }
+
+    return { cachedBlocks, totalBlocks, totalBytes }
+  }
+
   async _getBlobsCore (blobsCoreKey) {
     const keyBuffer = Buffer.isBuffer(blobsCoreKey)
       ? blobsCoreKey
@@ -208,10 +225,12 @@ class QVACRegistryClient extends ReadyResource {
       await core.update({ wait: true })
       this.logger.debug('Blobs core updated')
 
+      const totalSize = model.blobBinding.byteLength
+
       let artifact
       if (options.outputFile) {
-        await this._streamBlobToFile(blobs, model.blobBinding, options.outputFile, options)
-        artifact = { path: options.outputFile }
+        await this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options)
+        artifact = { path: options.outputFile, totalSize }
 
         if (blobs) await blobs.close()
         if (core) await core.close()
@@ -220,7 +239,7 @@ class QVACRegistryClient extends ReadyResource {
           wait: true,
           timeout: options.timeout || 30000
         })
-        artifact = { stream }
+        artifact = { stream, totalSize }
 
         const cleanup = async () => {
           if (blobs) {
@@ -271,7 +290,45 @@ class QVACRegistryClient extends ReadyResource {
     }
   }
 
-  async _streamBlobToFile (blobs, blobPointer, filePath, options) {
+  async _streamBlobToFile (blobs, core, blobPointer, filePath, options) {
+    const { cachedBlocks, totalBlocks, totalBytes } = await this._checkBlobProgress(core, blobPointer)
+
+    this.logger.debug('Blob progress before download', {
+      cachedBlocks,
+      totalBlocks,
+      totalBytes,
+      resuming: cachedBlocks > 0 && cachedBlocks < totalBlocks
+    })
+
+    const bytesPerBlock = totalBlocks > 0 ? totalBytes / totalBlocks : 0
+    let downloadedBytes = Math.floor(cachedBlocks * bytesPerBlock)
+
+    if (options.onProgress && downloadedBytes > 0) {
+      options.onProgress({
+        downloaded: downloadedBytes,
+        total: totalBytes,
+        cachedBlocks,
+        totalBlocks
+      })
+    }
+
+    const progressHandler = (index, bytes) => {
+      if (index >= blobPointer.blockOffset && index < blobPointer.blockOffset + blobPointer.blockLength) {
+        downloadedBytes += bytes
+        const capped = Math.min(downloadedBytes, totalBytes)
+        if (options.onProgress) {
+          options.onProgress({
+            downloaded: capped,
+            total: totalBytes,
+            cachedBlocks,
+            totalBlocks
+          })
+        }
+      }
+    }
+
+    core.on('download', progressHandler)
+
     const stream = blobs.createReadStream(blobPointer, {
       wait: true,
       timeout: options.timeout || 30000
@@ -282,12 +339,30 @@ class QVACRegistryClient extends ReadyResource {
 
     const writeStream = fs.createWriteStream(filePath)
 
-    return new Promise((resolve, reject) => {
-      stream.pipe(writeStream)
-      writeStream.on('finish', resolve)
-      writeStream.on('error', reject)
-      stream.on('error', reject)
-    })
+    try {
+      await new Promise((resolve, reject) => {
+        stream.pipe(writeStream)
+        writeStream.on('finish', resolve)
+        writeStream.on('error', reject)
+        stream.on('error', reject)
+
+        if (options.signal) {
+          if (options.signal.aborted) {
+            stream.destroy()
+            writeStream.destroy()
+            reject(new Error('Download cancelled'))
+            return
+          }
+          options.signal.addEventListener('abort', () => {
+            stream.destroy()
+            writeStream.destroy()
+            reject(new Error('Download cancelled'))
+          }, { once: true })
+        }
+      })
+    } finally {
+      core.off('download', progressHandler)
+    }
   }
 
   async _close () {
