@@ -1,18 +1,18 @@
 import parakeetAddonLogging from "@qvac/transcription-parakeet/addonLogging";
 import TranscriptionParakeet, {
-  type ParakeetConfig as TranscriptionParakeetConfig,
+  type ParakeetConfig,
   type TranscriptionParakeetArgs,
-  type TranscriptionParakeetConfig as UpstreamConfig,
+  type TranscriptionParakeetConfig,
 } from "@qvac/transcription-parakeet";
 import {
   definePlugin,
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
-  type ParakeetConfig,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
+import { ModelLoadFailedError } from "@/utils/errors-server";
 import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/plugins/parakeet-transcription/ops/transcribe-stream";
 import { createTranscribeStreamHandler } from "@/server/bare/utils/transcription-handler";
@@ -21,9 +21,20 @@ function createParakeetModel(
   modelId: string,
   modelPath: string,
   parakeetConfig: ParakeetConfig,
-  artifacts?: Record<string, string>,
+  artifacts: Record<string, string>,
 ) {
   const { dirPath } = parseModelPath(modelPath);
+
+  const encoderDataPath = artifacts["parakeetEncoderDataPath"];
+  const decoderPath = artifacts["parakeetDecoderPath"];
+  const vocabPath = artifacts["parakeetVocabPath"];
+  const preprocessorPath = artifacts["parakeetPreprocessorPath"];
+
+  if (!encoderDataPath || !decoderPath || !vocabPath || !preprocessorPath) {
+    throw new ModelLoadFailedError(
+      "Parakeet requires all artifact paths: parakeetEncoderDataSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc",
+    );
+  }
 
   const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, "parakeet");
@@ -35,34 +46,16 @@ function createParakeetModel(
     diskPath: dirPath,
   } as unknown as TranscriptionParakeetArgs;
 
-  // Build filePaths map from individually-resolved artifact paths
-  const filePaths: Record<string, string> | undefined =
-    artifacts &&
-    (artifacts["parakeetEncoderDataPath"] ||
-      artifacts["parakeetDecoderPath"] ||
-      artifacts["parakeetVocabPath"] ||
-      artifacts["parakeetPreprocessorPath"])
-      ? {
-          "encoder-model.onnx": modelPath,
-          ...(artifacts["parakeetEncoderDataPath"] && {
-            "encoder-model.onnx.data": artifacts["parakeetEncoderDataPath"],
-          }),
-          ...(artifacts["parakeetDecoderPath"] && {
-            "decoder_joint-model.onnx": artifacts["parakeetDecoderPath"],
-          }),
-          ...(artifacts["parakeetVocabPath"] && {
-            "vocab.txt": artifacts["parakeetVocabPath"],
-          }),
-          ...(artifacts["parakeetPreprocessorPath"] && {
-            "preprocessor.onnx": artifacts["parakeetPreprocessorPath"],
-          }),
-        }
-      : undefined;
-
-  const config: UpstreamConfig = {
+  const config: TranscriptionParakeetConfig = {
     path: dirPath,
-    ...(filePaths && { filePaths }),
-    parakeetConfig: parakeetConfig as TranscriptionParakeetConfig,
+    filePaths: {
+      "encoder-model.onnx": modelPath,
+      "encoder-model.onnx.data": encoderDataPath,
+      "decoder_joint-model.onnx": decoderPath,
+      "vocab.txt": vocabPath,
+      "preprocessor.onnx": preprocessorPath,
+    },
+    parakeetConfig: parakeetConfig as ParakeetConfig,
   };
 
   const model = new TranscriptionParakeet(args, config);
@@ -77,15 +70,14 @@ export const parakeetPlugin = definePlugin({
 
   createModel(params: CreateModelParams): PluginModelResult {
     const parakeetConfig = (params.modelConfig ?? {}) as ParakeetConfig;
+    const artifacts = params.artifacts ?? {};
 
-    const { model, loader } = createParakeetModel(
+    return createParakeetModel(
       params.modelId,
       params.modelPath,
       parakeetConfig,
-      params.artifacts,
+      artifacts,
     );
-
-    return { model, loader };
   },
 
   handlers: {
