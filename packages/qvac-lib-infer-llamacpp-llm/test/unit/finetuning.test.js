@@ -41,7 +41,7 @@ function createMockAddon () {
   }
 }
 
-function completeFinetuneWith (model, status = 'IDLE') {
+function completeFinetuneWith (model, status = 'COMPLETED') {
   return () => {
     setImmediate(() => {
       if (model._finetuneCompletionResolve) model._finetuneCompletionResolve(status)
@@ -135,7 +135,7 @@ test('finetune(opts) with validation.type dataset and validation.path passes eva
   t.is(params.validationSplit, 0)
   t.ok(!('validation' in params))
   const result = await handle.await()
-  t.alike(result, { status: 'IDLE' })
+  t.alike(result, { status: 'COMPLETED' })
 })
 
 test('finetune(opts) stores params and calls addon.finetune', async (t) => {
@@ -151,7 +151,7 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
   t.alike(model._defaultFinetuneParams, opts)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle with await()')
   const result = await handle.await()
-  t.alike(result, { status: 'IDLE' })
+  t.alike(result, { status: 'COMPLETED' })
 })
 
 test('finetune() with no args uses stored params and calls addon.finetune', async (t) => {
@@ -166,7 +166,7 @@ test('finetune() with no args uses stored params and calls addon.finetune', asyn
   delete expectedParams.validation
   t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
   const result = await handle.await()
-  t.alike(result, { status: 'IDLE' })
+  t.alike(result, { status: 'COMPLETED' })
 })
 
 test('finetune(opts with resume key) passes opts to addon.finetune', async (t) => {
