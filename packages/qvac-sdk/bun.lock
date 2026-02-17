@@ -13,7 +13,7 @@
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.1.5",
         "@qvac/rag": "^0.4.2",
-        "@qvac/registry-client": "^0.1.4",
+        "@qvac/registry-client": "^0.1.5",
         "@qvac/transcription-whispercpp": "^0.3.17",
         "@qvac/translation-nmtcpp": "^0.3.6",
         "@qvac/tts-onnx": "^0.2.13",
@@ -26,7 +26,7 @@
         "@expo/config-plugins": "^54.0.1",
         "@lancedb/lancedb": "^0.21.3",
         "@modelcontextprotocol/sdk": "^1.12.1",
-        "@qvac/cli": "^0.1.1",
+        "@qvac/cli": "^0.1.2",
         "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
         "@types/node": "^24.2.1",
         "@types/tar-stream": "^3.1.4",
@@ -59,7 +59,7 @@
       },
       "peerDependencies": {
         "@modelcontextprotocol/sdk": "^1.0.0",
-        "@qvac/cli": "^0.1.1",
+        "@qvac/cli": "^0.1.2",
         "bare-abort-controller": "^1.0.0",
         "bare-buffer": "^3.4.2",
         "bare-crypto": "^1.11.2",
@@ -80,6 +80,7 @@
         "bare-zlib": "^1.3.1",
         "corestore": "^7.4.5",
         "events": "^3.3.0",
+        "expo-build-properties": ">=0.12.0",
         "expo-device": "^8.0.0",
         "expo-file-system": "^19.0.15",
         "hyperdb": "^4.19.0",
@@ -92,6 +93,7 @@
       "optionalPeers": [
         "@modelcontextprotocol/sdk",
         "@qvac/cli",
+        "expo-build-properties",
         "expo-device",
         "expo-file-system",
         "react-native-bare-kit",
@@ -498,7 +500,7 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@qvac/cli": ["@qvac/cli@0.1.1", "", { "dependencies": { "commander": "^14.0.3", "tsx": "^4.21.0" }, "bin": { "qvac": "src/index.js" } }, "sha512-er43WHHq5415qkJXtG732eKwE2PRMJZcqp/yzE1oQCi2mWDlZGzwGtuGPjGWQoX95Zc1nUVwge9+lZKnXAeimQ=="],
+    "@qvac/cli": ["@qvac/cli@0.1.2", "", { "dependencies": { "bare-pack": "^2.0.0", "commander": "^14.0.3", "tsx": "^4.21.0" }, "bin": { "qvac": "src/index.js" } }, "sha512-vOD/rA/Tlxe/MrS9ZHgfTUIeXaJoWYLCsvOxTREoZODj4tLXw+5FjYk4L/+Cr0I5a1P/2NKhfoea4pkRdSM2cQ=="],
 
     "@qvac/decoder-audio": ["@qvac/decoder-audio@0.3.3", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/logging": "^0.1.0", "@qvac/response": "^0.1.0", "bare-assert": "^1.1.0", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "process": "npm:bare-process@^4.2.2" } }, "sha512-AQoPODGPOM29KZIgN541KwTJ0T0B5mqByMEtBGDXHk5bjB9W7eVfBOKcCM/BJleVqOG5P3fO8sNm+5INuCkadA=="],
 
@@ -524,7 +526,7 @@
 
     "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
 
-    "@qvac/registry-client": ["@qvac/registry-client@0.1.4", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^2.1.5", "bare-os": "^2.2.0", "bare-process": "^1.3.0", "corestore": "^6.18.4", "fs": "npm:bare-node-fs", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "os": "npm:bare-node-os", "paparam": "^1.10.0", "path": "npm:bare-node-path", "process": "npm:bare-node-process", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-3o64kSv1b2nkcTWfo63v+cOq2LrLhzD7S4+lDwMNLijT8LW3CcTzzqaFV+Gbi6Y0sdBeyAlhUOdcwBs9O2ikXw=="],
+    "@qvac/registry-client": ["@qvac/registry-client@0.1.5", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-process": "^4.2.2", "corestore": "^7.4.5", "fs": "npm:bare-node-fs", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "os": "npm:bare-node-os", "paparam": "^1.10.0", "path": "npm:bare-node-path", "process": "npm:bare-node-process", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-bfDRqHF93dciFQHHvf3ztvfophNE50/FicypQCxL4eo/5o5B56HAEGAYaxifJ2EWSg/6t8OiopeWuiV0c0MmXQ=="],
 
     "@qvac/registry-schema": ["@qvac/registry-schema@0.1.1", "", { "dependencies": { "hyperdb": "^4.16.0", "hyperdispatch": "^1.4.0", "hyperschema": "^1.13.0", "ready-resource": "^1.2.0" } }, "sha512-Mm0zQqc/KTplE2wtdFseSd2995H4RK0hAW63ZDE/9TXfCxuW0medjcpVOXVGFoI+mkTM2cxubcO/eJvJlZih1A=="],
 
@@ -1087,10 +1089,6 @@
     "corestore": ["corestore@7.8.0", "", { "dependencies": { "b4a": "^1.6.7", "hypercore": "^11.19.0", "hypercore-crypto": "^3.4.2", "hypercore-errors": "^1.4.0", "hypercore-id-encoding": "^1.3.0", "ready-resource": "^1.1.1", "sodium-universal": "^5.0.1", "which-runtime": "^1.2.1" } }, "sha512-zC9FNHoVzPXiFetVN39QpwJkNtJkqm5jymx7wY+NB6G6cpruEpYjd0/KuDpBtgFK6/JG1l+Qr+DV9ozmz31Dkw=="],
 
     "cors": ["cors@2.8.6", "", { "dependencies": { "object-assign": "^4", "vary": "^1" } }, "sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw=="],
-
-    "crc-native": ["crc-native@1.1.8", "", { "dependencies": { "require-addon": "^1.1.0" } }, "sha512-R/RYbD8lhG5M1k0iLX49tJdwHM0ipevJPpZw2Wk7b4EShyvx2P0uaq79xyRpcknjiVGiUfjFA8Gyy0mOlhABvw=="],
-
-    "crc-universal": ["crc-universal@1.0.4", "", { "optionalDependencies": { "crc-native": "^1.0.3" } }, "sha512-CE9xWEI6Gd5V0Bdmj5NoWH3d7+EIe4zUpy1sv6uvKYznzsDP1vhiWsTBmL6q9IrH2P6RRshp+8AkhR4CMtY5Hg=="],
 
     "cross-spawn": ["cross-spawn@7.0.6", "", { "dependencies": { "path-key": "^3.1.0", "shebang-command": "^2.0.0", "which": "^2.0.1" } }, "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA=="],
 
@@ -1992,10 +1990,6 @@
 
     "rache": ["rache@1.0.0", "", {}, "sha512-e0k0g0w/8jOCB+7YqCIlOa+OJ38k0wrYS4x18pMSmqOvLKoyhmMhmQyCcvfY6VaP8D75cqkEnlakXs+RYYLqNg=="],
 
-    "random-access-file": ["random-access-file@4.1.2", "", { "dependencies": { "bare-fs": "^4.0.1", "bare-path": "^3.0.0", "random-access-storage": "^3.0.0" }, "optionalDependencies": { "fs-native-extensions": "^1.3.1" } }, "sha512-GQM6R78DceZDcQod8KxlDFwXIiUvlvuy1EOzxTDsjuDjW5NlnlZi0MOk6iI4itAj/2vcvdqcEExYbVpC/dJcEw=="],
-
-    "random-access-storage": ["random-access-storage@3.0.2", "", { "dependencies": { "bare-events": "^2.2.0", "queue-tick": "^1.0.0" } }, "sha512-Es9maUyWdJXWKckKy9s1+vT+DEgAt+PBb9lxPaake/0EDUsHehloKGv9v1zimS2V3gpFAcQXubvc1Rgci2sDPQ=="],
-
     "random-array-iterator": ["random-array-iterator@1.0.0", "", {}, "sha512-u7xCM93XqKEvPTP6xZp2ehttcAemKnh73oKNf1FvzuVCfpt6dILDt1Kxl1LeBjm2iNIeR49VGFhy4Iz3yOun+Q=="],
 
     "range-parser": ["range-parser@1.2.1", "", {}, "sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg=="],
@@ -2017,8 +2011,6 @@
     "react-refresh": ["react-refresh@0.14.2", "", {}, "sha512-jCvmsr+1IUSMUyzOkRcvnVbX3ZYC6g9TDrDbFuFmRDq7PD4yaGbLKNQL6k2jnArV8hjYxh7hVhAZB6s9HDGpZA=="],
 
     "read-package-json-fast": ["read-package-json-fast@3.0.2", "", { "dependencies": { "json-parse-even-better-errors": "^3.0.0", "npm-normalize-package-bin": "^3.0.0" } }, "sha512-0J+Msgym3vrLOUB3hzQCuZHII0xkNGCtz/HJH9xZshwv9DbDwkw1KaE3gx/e2J5rpEY5rtOy6cyhKOPrkP7FZw=="],
-
-    "read-write-mutexify": ["read-write-mutexify@2.1.0", "", {}, "sha512-fDw/p5/acI1ytVY1UbxEDma/ej1yJH/n9NcjS9YNzcE6sPBPWdlru3ydRa/UBowUg4zqOvNMD5SOGYJrlQ6MzQ=="],
 
     "readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
 
@@ -2578,14 +2570,6 @@
 
     "@qvac/llm-llamacpp/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
 
-    "@qvac/registry-client/bare-fs": ["bare-fs@2.3.5", "", { "dependencies": { "bare-events": "^2.0.0", "bare-path": "^2.0.0", "bare-stream": "^2.0.0" } }, "sha512-SlE9eTxifPDJrT6YgemQ1WGFleevzwY+XAP1Xqgl56HtcrisC2CHCZ2tq6dBpcH2TnNxwUEUGhweo+lrQtYuiw=="],
-
-    "@qvac/registry-client/bare-os": ["bare-os@2.4.4", "", {}, "sha512-z3UiI2yi1mK0sXeRdc4O1Kk8aOa/e+FNWZcTiPB/dfTWyLypuE99LibgRaQki914Jq//yAWylcAt+mknKdixRQ=="],
-
-    "@qvac/registry-client/bare-process": ["bare-process@1.3.2", "", { "dependencies": { "bare-env": "^2.0.0", "bare-events": "^2.0.0", "bare-hrtime": "^2.0.0", "bare-os": "^2.0.0", "bare-pipe": "^2.0.2", "bare-tty": "^3.1.0" } }, "sha512-+NWMqvoFhaemm8ZUkBhb6vBBXKUkEP2Qz9zywX2fdVWwtMT+zPJK05Z8I1Wc9dDzgCACX435RprpA/R7hjypWw=="],
-
-    "@qvac/registry-client/corestore": ["corestore@6.18.4", "", { "dependencies": { "b4a": "^1.6.4", "hypercore": "^10.37.10", "hypercore-crypto": "^3.4.0", "hypercore-id-encoding": "^1.2.0", "read-write-mutexify": "^2.1.0", "ready-resource": "^1.0.0", "safety-catch": "^1.0.1", "sodium-universal": "^4.0.0", "xache": "^1.1.0" } }, "sha512-KL1cOUyj3DFRNzeVRekGPRiGN4sIfGo7BsncSJQQBT3Rh2y1nQ32MOR9X5DlOMlWIT4txwqBzhzam6+JXtwFVw=="],
-
     "@qvac/registry-client/process": ["bare-node-process@1.0.1", "", { "dependencies": { "bare-process": "*" } }, "sha512-7PVYyfcXV/YU5UozeyjBKxlma7IwZ2uaFomZuLg2R18RUCR9TkOnEcqh9wirvEh5z8ooSD0n9rV/rVol8VpLhQ=="],
 
     "@qvac/response/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
@@ -2846,20 +2830,6 @@
 
     "@qvac/llm-llamacpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
-    "@qvac/registry-client/bare-fs/bare-path": ["bare-path@2.1.3", "", { "dependencies": { "bare-os": "^2.1.0" } }, "sha512-lh/eITfU8hrj9Ru5quUp0Io1kJWIk1bTjzo7JH1P5dWmQ2EL4hFUlfI8FonAhSlgIfhn63p84CDY/x+PisgcXA=="],
-
-    "@qvac/registry-client/bare-process/bare-env": ["bare-env@2.1.0", "", { "dependencies": { "bare-os": "^2.1.0" } }, "sha512-h/YZvt/kSxN3UgyzXdgcT7xG/e20BRIgqjRYH64T16aXAymjo1Ka8lQpxK8yg8yaHvMSbEmX0x2x5+iMwjekXg=="],
-
-    "@qvac/registry-client/bare-process/bare-pipe": ["bare-pipe@2.0.6", "", { "dependencies": { "bare-events": "^2.0.0", "streamx": "^2.13.2" } }, "sha512-8mPusFqo4Msd9SSHysNdZsWz5UAmdZAUx0Yux7vscJE1tCvVjfXdh1ByB2MSn3riWYTasQj4B2mCSjQdXSjc7g=="],
-
-    "@qvac/registry-client/bare-process/bare-tty": ["bare-tty@3.4.4", "", { "dependencies": { "bare-events": "^2.2.0", "bare-signals": "^2.2.0", "bare-stream": "^2.0.0" } }, "sha512-FYpyP5Wn7xMgrb0cXAR0kIfmEXpU0CsVx8rcybclRhyy7+83vuhn0pefIHfof6O2lJhGfcYwUyoIa/3mJYM7Wg=="],
-
-    "@qvac/registry-client/corestore/hypercore": ["hypercore@10.38.2", "", { "dependencies": { "@hyperswarm/secret-stream": "^6.0.0", "b4a": "^1.1.0", "bare-events": "^2.2.0", "big-sparse-array": "^1.0.3", "compact-encoding": "^2.11.0", "crc-universal": "^1.0.2", "fast-fifo": "^1.3.0", "flat-tree": "^1.9.0", "hypercore-crypto": "^3.2.1", "hypercore-errors": "^1.2.0", "hypercore-id-encoding": "^1.2.0", "is-options": "^1.0.1", "protomux": "^3.5.0", "quickbit-universal": "^2.2.0", "random-access-file": "^4.0.0", "random-array-iterator": "^1.0.0", "safety-catch": "^1.0.1", "sodium-universal": "^4.0.0", "streamx": "^2.12.4", "unslab": "^1.3.0", "xache": "^1.1.0", "z32": "^1.0.0" } }, "sha512-2vx42g2RKdP/o2XzlxKfvgEaZ3+h/B855gCR8iscUDnxUoOZej7vXZ2buex0sweDUEW5aEfMxFR6o5hncio3Nw=="],
-
-    "@qvac/registry-client/corestore/sodium-universal": ["sodium-universal@4.0.1", "", { "dependencies": { "sodium-native": "^4.0.0" }, "peerDependencies": { "sodium-javascript": "~0.8.0" }, "optionalPeers": ["sodium-javascript"] }, "sha512-sNp13PrxYLaUFHTGoDKkSDFvoEu51bfzE12RwGlqU1fcrkpAOK0NvizaJzOWV0Omtk9me2+Pnbjcf/l0efxuGQ=="],
-
-    "@qvac/registry-client/process/bare-process": ["bare-process@4.2.2", "", { "dependencies": { "bare-env": "^3.0.0", "bare-events": "^2.3.1", "bare-hrtime": "^2.0.0", "bare-os": "^3.5.0", "bare-pipe": "^4.0.0", "bare-signals": "^4.0.0", "bare-tty": "^5.0.0" } }, "sha512-ikzEw+HGLB+2lS/WLVEsqi8BXBwzleG3n7DYI0v6/YNklvNabOIGlLd1dof+7Jw5ob4jsBRPtyflweVahY7rFA=="],
-
     "@qvac/transcription-whispercpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/translation-nmtcpp/@qvac/infer-base/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
@@ -2955,12 +2925,6 @@
     "@npmcli/package-json/glob/minimatch/brace-expansion": ["brace-expansion@2.0.2", "", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="],
 
     "@npmcli/package-json/glob/path-scurry/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
-
-    "@qvac/registry-client/bare-process/bare-tty/bare-signals": ["bare-signals@2.2.5", "", { "dependencies": { "bare-events": "^2.0.0", "bare-os": "^2.0.0" } }, "sha512-opCQu86ndIVFylZpJR5vhGt4r/9YrhyjuzepnakQXrlyhOazfcASZ5t79X6rQNdulF0lQ0x23w6CDhna8fzpIg=="],
-
-    "@qvac/registry-client/corestore/sodium-universal/sodium-native": ["sodium-native@4.3.3", "", { "dependencies": { "require-addon": "^1.1.0" } }, "sha512-OnxSlN3uyY8D0EsLHpmm2HOFmKddQVvEMmsakCrXUzSd8kjjbzL413t4ZNF3n0UxSwNgwTyUvkmZHTfuCeiYSw=="],
-
-    "@qvac/registry-client/process/bare-process/bare-os": ["bare-os@3.6.2", "", {}, "sha512-T+V1+1srU2qYNBmJCXZkUY5vQ0B4FSlL3QDROnKQYOqeiQR8UbjNHlPa+TIbM4cuidiN9GaTaOZgSEgsvPbh5A=="],
 
     "@react-native/community-cli-plugin/@react-native/dev-middleware/serve-static/send": ["send@0.19.2", "", { "dependencies": { "debug": "2.6.9", "depd": "2.0.0", "destroy": "1.2.0", "encodeurl": "~2.0.0", "escape-html": "~1.0.3", "etag": "~1.8.1", "fresh": "~0.5.2", "http-errors": "~2.0.1", "mime": "1.6.0", "ms": "2.1.3", "on-finished": "~2.4.1", "range-parser": "~1.2.1", "statuses": "~2.0.2" } }, "sha512-VMbMxbDeehAxpOtWJXlcUS5E8iXh6QmN+BkRX1GARS3wRaXEEgzCcB10gTQazO42tpNIya8xIyNx8fll1OFPrg=="],
 

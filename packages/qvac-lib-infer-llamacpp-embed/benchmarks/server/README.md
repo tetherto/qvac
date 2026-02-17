@@ -92,7 +92,7 @@ Generate embeddings for input texts.
 {
   "inputs": ["text to embed", "another text"],
   "config": {
-    "hyperdriveKey": "hd://abc123...",
+    "hyperdriveKey": "hd://{KEY}",
     "modelName": "gte-large_fp16.gguf",
     "device": "gpu",
     "gpu_layers": "99",
