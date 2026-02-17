@@ -84,12 +84,6 @@ declare module "bare-fs" {
     options?: WriteStreamOptions,
   ): WriteStream;
   export function existsSync(path: string): boolean;
-  export function symlinkSync(
-    target: string,
-    path: string,
-    type?: string,
-  ): void;
-  export function copyFileSync(src: string, dest: string, mode?: number): void;
   export const constants: {
     F_OK: number;
     R_OK: number;
