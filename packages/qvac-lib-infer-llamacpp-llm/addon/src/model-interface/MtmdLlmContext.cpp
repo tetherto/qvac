@@ -322,8 +322,7 @@ bool MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
   int nRemain = params_.n_predict;
-  BatchPtr batchPtr = BatchPtr(new llama_batch(
-      llama_batch_init(1, 0, 1))); // batch for next token generation
+  LlamaBatch batch(1, 0, 1); // batch for next token generation
 
   while (nRemain != 0) {
     if (nPast_ + 1 > llama_n_ctx(lctx_) && nDiscarded_ == 0) {
@@ -370,22 +369,22 @@ bool MtmdLlmContext::generateResponse(
       break; // end of generation
     }
 
-    common_batch_clear(*batchPtr);
+    common_batch_clear(*batch);
     // Check for stop generation request
     if (!stopGeneration_.load()) {
-      common_batch_add(*batchPtr, tokenId, nPast_++, {0}, true);
+      common_batch_add(*batch, tokenId, nPast_++, {0}, true);
     } else {
       // Generation stopped by request - add EOT token and exit
       stopGeneration_.store(false);
       llama_token eot = llama_vocab_eot(vocab_);
       common_batch_add(
-          *batchPtr,
+          *batch,
           eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
           nPast_++,
           {0},
           true);
       // Decode the EOT token
-      if (llama_decode(lctx_, *batchPtr) != 0) {
+      if (llama_decode(lctx_, *batch) != 0) {
         const char* errorMsg = "[MtmdLlm] failed to decode EOT token\n";
         throw qvac_errors::StatusError(
             ADDON_ID, toString(FailedToDecode), errorMsg);
@@ -394,7 +393,7 @@ bool MtmdLlmContext::generateResponse(
     }
 
     // eval the token
-    if (llama_decode(lctx_, *batchPtr) != 0) {
+    if (llama_decode(lctx_, *batch) != 0) {
       const char* errorMsg = "[MtmdLlm] failed to decode next token\n";
       throw qvac_errors::StatusError(
           ADDON_ID, toString(FailedToDecode), errorMsg);
