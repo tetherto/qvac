@@ -74,6 +74,8 @@ async function main () {
   const prompts = JSON.parse(fs.readFileSync(PROMPTS_PATH, 'utf8'))
   const byId = new Map(prompts.map((p) => [p.id, p]))
   const failures = []
+  const minCtxSize = Math.min(...CTX_SIZES)
+  const minCtxBudget = getCtxBudget(minCtxSize)
 
   for (const id of ['short', 'medium', 'long']) {
     if (!byId.has(id)) failures.push(`Missing base prompt: ${id}`)
@@ -118,6 +120,19 @@ async function main () {
       await model.load()
       console.log('Prompt verification runtime: cpu (fallback)')
     }
+    for (const id of ['short', 'medium', 'long']) {
+      const p = byId.get(id)
+      if (!p) continue
+      const n = await getPromptTokens(model, p.messages)
+      if (n > minCtxBudget) {
+        failures.push(`${id}: ${n} exceeds minimum ctx budget ${minCtxBudget} (ctx=${minCtxSize})`)
+      }
+      if (id === 'long' && Number.isFinite(n) && n < 512) {
+        failures.push(`${id}: ${n} too short; expected a substantial long prompt`)
+      }
+      console.log(`${id}: tokens=${n} minCtxBudget=${minCtxBudget}`)
+    }
+
     for (const ctx of CTX_SIZES) {
       const id = `ctx-filling__ctx=${ctx}`
       const p = byId.get(id)

@@ -148,11 +148,15 @@ function buildConfigObject (runtimeConfig) {
       }
       // If false, don't include it (defaults to disabled/offload enabled)
     } else if (key === 'flash-attn') {
-      // flash-attn: 'on' = include flag, 'off'/'auto' = omit (use default)
-      if (value === 'on' || value === true) {
-        config[key] = ''
+      // Pass explicit value for compatibility with addon argument parser.
+      // Bare "--flash-attn" can be parsed as requiring a value by some builds.
+      if (value === true) {
+        config[key] = 'on'
+      } else if (value === false) {
+        config[key] = 'off'
+      } else {
+        config[key] = String(value)
       }
-      // If 'off' or other values, don't include it (defaults to auto/off)
     } else {
       // All other values: stringify
       config[key] = String(value)
