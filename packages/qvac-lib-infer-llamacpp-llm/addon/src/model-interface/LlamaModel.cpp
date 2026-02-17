@@ -564,7 +564,6 @@ LlamaModel::formatPrompt(const std::string& input) {
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
 
-    int addMediaPlaceholder = 0;
     bool isNextUser = false;
     for (const auto& subObj : obj) {
       if (subObj.is<picojson::object>()) {
@@ -610,16 +609,18 @@ LlamaModel::formatPrompt(const std::string& input) {
           if (!content.empty()) {
             llmContext_->loadMedia(content);
           }
-          addMediaPlaceholder++;
+          // Push one user message per image so the tokenizer can match each
+          // marker to the corresponding bitmap in order (first marker -> first
+          // image, etc.).
+          common_chat_msg mediaMsg;
+          mediaMsg.role = "user";
+          mediaMsg.content = mtmd_default_marker();
+          chatMsgs.push_back(mediaMsg);
           isNextUser = true;
           continue;
         }
         if (newMsg.role == "user" && isNextUser) {
           isNextUser = false;
-          while (addMediaPlaceholder > 0) {
-            addMediaPlaceholder--;
-            content.insert(0, mtmd_default_marker());
-          }
         }
         if (newMsg.role != "user" && isNextUser) {
           llmContext_->resetMedia();
@@ -633,14 +634,6 @@ LlamaModel::formatPrompt(const std::string& input) {
         newMsg.content = content;
         chatMsgs.push_back(newMsg);
       }
-    }
-
-    if (addMediaPlaceholder > 0) {
-      llmContext_->resetMedia();
-      std::string errorMsg =
-          string_format("%s: No request for media was made\n", __func__);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(MediaRequestNotProvided), errorMsg);
     }
   }
   if (!err.empty()) {
