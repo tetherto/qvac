@@ -5,8 +5,7 @@
   "scripts": {
     "prepare:models:addon": "node ./prepare-models.js --target addon",
     "prepare:models:all": "node ./prepare-models.js --target all",
-    "run:param-sweep": "node ./prepare-models.js --target addon && bare ./embed-parameter-sweep.js",
-    "run:pytorch-placeholder": "python3 ./pytorch-parameter-sweep.py"
+    "run:param-sweep": "node ./prepare-models.js --target addon && bare ./embed-parameter-sweep.js"
   },
   "dependencies": {
     "@qvac/dl-filesystem": "latest",
