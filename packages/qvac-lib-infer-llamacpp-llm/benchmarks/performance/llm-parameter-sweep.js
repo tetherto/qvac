@@ -356,7 +356,8 @@ function average (values) {
 }
 
 function stddev (values) {
-  if (values.length <= 1) return 0
+  if (!values.length) return null
+  if (values.length === 1) return 0
   const avg = average(values)
   let varianceSum = 0
   for (const value of values) {
@@ -526,26 +527,26 @@ function aggregateRunMetrics (runMetrics) {
 
   return {
     repeats: runMetrics.length,
-    loadMs: round(average(loadMsValues), 3),
-    runMs: round(average(runMsValues), 3),
-    unloadMs: round(average(unloadMsValues), 3),
+    loadMsMean: round(average(loadMsValues), 3),
+    runMsMean: round(average(runMsValues), 3),
+    unloadMsMean: round(average(unloadMsValues), 3),
     loadMsStd: round(stddev(loadMsValues), 3),
     runMsStd: round(stddev(runMsValues), 3),
     unloadMsStd: round(stddev(unloadMsValues), 3),
-    ttftMs: round(average(ttftMsValues), 3),
+    ttftMsMean: round(average(ttftMsValues), 3),
     ttftMsStd: round(stddev(ttftMsValues), 3),
-    tps: round(average(tpsValues), 3),
+    tpsMean: round(average(tpsValues), 3),
     tpsStd: round(stddev(tpsValues), 3),
-    promptTokens: round(average(promptTokensValues), 0),
+    promptTokensMean: round(average(promptTokensValues), 0),
     promptTokensStd: round(stddev(promptTokensValues), 3),
-    generatedTokens: round(average(generatedTokensValues), 0),
+    generatedTokensMean: round(average(generatedTokensValues), 0),
     generatedTokensStd: round(stddev(generatedTokensValues), 3),
     runtimeMemory: {
-      rssMb: round(average(rssValues), 2),
+      rssMbMean: round(average(rssValues), 2),
       rssMbStd: round(stddev(rssValues), 3),
-      heapUsedMb: round(average(heapValues), 2),
+      heapUsedMbMean: round(average(heapValues), 2),
       heapUsedMbStd: round(stddev(heapValues), 3),
-      externalMb: round(average(extValues), 2),
+      externalMbMean: round(average(extValues), 2),
       externalMbStd: round(stddev(extValues), 3)
     }
   }
@@ -579,10 +580,24 @@ function toMarkdown (report) {
   lines.push('')
   lines.push('> Runtime memory currently reports process-level JS memory only.')
   lines.push('')
+  lines.push('### Metric Notes')
+  lines.push('')
+  lines.push('- Mean (`*Mean`): arithmetic average across successful repeats for a case/prompt.')
+  lines.push('- Std (`*Std`): standard deviation across successful repeats (higher means less stable runs).')
+  lines.push('- `runMs`: end-to-end inference duration for the prompt run (excluding model load/unload lifecycle).')
+  lines.push('- `ttftMs`: time to first generated token.')
+  lines.push('- `tps`: generated tokens per second.')
+  lines.push('- `promptTokens`: number of input tokens processed.')
+  lines.push('- `generatedTokens`: number of tokens produced by generation.')
+  lines.push('- `loadMs` / `unloadMs`: model load/unload lifecycle time measured per case.')
+  lines.push('- `RSS` (`rssMb`): resident set size used by the process (total physical memory footprint).')
+  lines.push('- `Heap` (`heapUsedMb`): JavaScript heap memory currently in use.')
+  lines.push('- `External` (`externalMb`): memory used by external/native objects tracked by the JS runtime.')
+  lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Status | Load ms (avg) | TTFT ms (avg) | TPS (avg) | Unload ms (avg) | Memory RSS MB (avg) | Quality Match | Error |')
-    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|')
+    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Status | Load Mean | Load Std | Run Mean | Run Std | TTFT Mean | TTFT Std | TPS Mean | TPS Std | Unload Mean | Unload Std | Prompt Tokens Mean | Prompt Tokens Std | Generated Tokens Mean | Generated Tokens Std | RSS Mean | RSS Std | Heap Mean | Heap Std | External Mean | External Std | Quality Match | Error |')
+    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
       const runtimeConfig = item.runtimeConfig || {}
       const quality = item.qualityMatch != null ? item.qualityMatch.toFixed(3) : ''
@@ -600,16 +615,25 @@ function toMarkdown (report) {
       const threadsCell = item.isBaseline ? 'default' : (runtimeConfig.threads != null ? String(runtimeConfig.threads) : '')
       const cacheKCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-k'] != null ? String(runtimeConfig['cache-type-k']) : '')
       const cacheVCell = item.isBaseline ? 'default' : (runtimeConfig['cache-type-v'] != null ? String(runtimeConfig['cache-type-v']) : '')
-      const memoryRssMb = item.metrics && item.metrics.runtimeMemory
-        ? item.metrics.runtimeMemory.rssMb
-        : ''
+      const runtimeMemory = item.metrics && item.metrics.runtimeMemory
+        ? item.metrics.runtimeMemory
+        : {}
       const errorCell = item.error && item.error.message
         ? truncateText(item.error.message, 120)
         : ''
       lines.push(
         `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.status ?? ''}` +
-        ` | ${item.metrics?.loadMs ?? ''} | ${item.metrics?.ttftMs ?? ''} | ${item.metrics?.tps ?? ''} | ${item.metrics?.unloadMs ?? ''}` +
-        ` | ${memoryRssMb ?? ''} | ${quality} | ${errorCell} |`
+        ` | ${item.metrics?.loadMsMean ?? ''} | ${item.metrics?.loadMsStd ?? ''}` +
+        ` | ${item.metrics?.runMsMean ?? ''} | ${item.metrics?.runMsStd ?? ''}` +
+        ` | ${item.metrics?.ttftMsMean ?? ''} | ${item.metrics?.ttftMsStd ?? ''}` +
+        ` | ${item.metrics?.tpsMean ?? ''} | ${item.metrics?.tpsStd ?? ''}` +
+        ` | ${item.metrics?.unloadMsMean ?? ''} | ${item.metrics?.unloadMsStd ?? ''}` +
+        ` | ${item.metrics?.promptTokensMean ?? ''} | ${item.metrics?.promptTokensStd ?? ''}` +
+        ` | ${item.metrics?.generatedTokensMean ?? ''} | ${item.metrics?.generatedTokensStd ?? ''}` +
+        ` | ${runtimeMemory?.rssMbMean ?? ''} | ${runtimeMemory?.rssMbStd ?? ''}` +
+        ` | ${runtimeMemory?.heapUsedMbMean ?? ''} | ${runtimeMemory?.heapUsedMbStd ?? ''}` +
+        ` | ${runtimeMemory?.externalMbMean ?? ''} | ${runtimeMemory?.externalMbStd ?? ''}` +
+        ` | ${quality} | ${errorCell} |`
       )
     }
     lines.push('')
@@ -987,8 +1011,8 @@ async function main () {
           if (runMetrics.length > 0) {
             const aggregated = aggregateRunMetrics(runMetrics)
             // Store load/unload times from first successful run (they're per-case, not per-repeat)
-            aggregated.loadMs = null // Will be set after unload
-            aggregated.unloadMs = null // Will be set after unload
+            aggregated.loadMsMean = null // Will be set after unload
+            aggregated.unloadMsMean = null // Will be set after unload
 
             if (testCase.parameter === 'baseline') {
               baselineOutputs[prompt.id] = firstOutput
@@ -1063,9 +1087,9 @@ async function main () {
         // Update metrics with load/unload times (per-case, not per-prompt/repeat)
         for (const promptResult of promptResults) {
           if (promptResult.metrics != null) {
-            promptResult.metrics.loadMs = round(loadMs, 3)
+            promptResult.metrics.loadMsMean = round(loadMs, 3)
             promptResult.metrics.loadMsStd = loadMs != null ? 0 : null
-            promptResult.metrics.unloadMs = round(unloadMs, 3)
+            promptResult.metrics.unloadMsMean = round(unloadMs, 3)
             promptResult.metrics.unloadMsStd = unloadMs != null ? 0 : null
           }
         }
@@ -1085,26 +1109,26 @@ async function main () {
         const aggregatedMetrics = successfulResults.length > 0
           ? {
               repeats: repeats,
-              loadMs: round(loadMs, 3), // Load time is per-case
+              loadMsMean: round(loadMs, 3), // Load time is per-case
               loadMsStd: loadMs != null ? 0 : null,
-              runMs: round(average(caseMetricSamples.runMs), 3),
+              runMsMean: round(average(caseMetricSamples.runMs), 3),
               runMsStd: round(stddev(caseMetricSamples.runMs), 3),
-              unloadMs: round(unloadMs, 3), // Unload time is per-case
+              unloadMsMean: round(unloadMs, 3), // Unload time is per-case
               unloadMsStd: unloadMs != null ? 0 : null,
-              ttftMs: round(average(caseMetricSamples.ttftMs), 3),
+              ttftMsMean: round(average(caseMetricSamples.ttftMs), 3),
               ttftMsStd: round(stddev(caseMetricSamples.ttftMs), 3),
-              tps: round(average(caseMetricSamples.tps), 3),
+              tpsMean: round(average(caseMetricSamples.tps), 3),
               tpsStd: round(stddev(caseMetricSamples.tps), 3),
-              promptTokens: round(average(caseMetricSamples.promptTokens), 0),
+              promptTokensMean: round(average(caseMetricSamples.promptTokens), 0),
               promptTokensStd: round(stddev(caseMetricSamples.promptTokens), 3),
-              generatedTokens: round(average(caseMetricSamples.generatedTokens), 0),
+              generatedTokensMean: round(average(caseMetricSamples.generatedTokens), 0),
               generatedTokensStd: round(stddev(caseMetricSamples.generatedTokens), 3),
               runtimeMemory: {
-                rssMb: round(average(caseMetricSamples.rssMb), 2),
+                rssMbMean: round(average(caseMetricSamples.rssMb), 2),
                 rssMbStd: round(stddev(caseMetricSamples.rssMb), 3),
-                heapUsedMb: round(average(caseMetricSamples.heapUsedMb), 2),
+                heapUsedMbMean: round(average(caseMetricSamples.heapUsedMb), 2),
                 heapUsedMbStd: round(stddev(caseMetricSamples.heapUsedMb), 3),
-                externalMb: round(average(caseMetricSamples.externalMb), 2),
+                externalMbMean: round(average(caseMetricSamples.externalMb), 2),
                 externalMbStd: round(stddev(caseMetricSamples.externalMb), 3)
               }
             }

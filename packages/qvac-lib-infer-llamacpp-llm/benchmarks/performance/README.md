@@ -297,22 +297,24 @@ Why this is safe and accurate:
 
 ## Performance Metrics
 
-Per run:
-- `loadMs`: Model load time (ms)
-- `ttftMs`: Time to first token (ms)
-- `tps`: Tokens per second
-- `unloadMs`: Model unload time (ms)
-- `promptTokens`: Number of tokens in prompt
-- `generatedTokens`: Number of tokens generated
-- `runtimeMemory`: RSS, heap, external (MB)
+Per-repeat samples:
+- `runMs`, `ttftMs`, `tps`, `promptTokens`, `generatedTokens`, `runtimeMemory.{rssMb,heapUsedMb,externalMb}`
+- `loadMs` / `unloadMs` are measured per case (model lifecycle), then attached to each prompt result
 
-Aggregated (across repeats):
-- Mean and standard deviation for all metrics
+Persisted metrics fields (mean/std across repeats):
+- `loadMsMean`, `loadMsStd`
+- `runMsMean`, `runMsStd`
+- `ttftMsMean`, `ttftMsStd`
+- `tpsMean`, `tpsStd`
+- `unloadMsMean`, `unloadMsStd`
+- `promptTokensMean`, `promptTokensStd`
+- `generatedTokensMean`, `generatedTokensStd`
+- `runtimeMemory.{rssMbMean,rssMbStd,heapUsedMbMean,heapUsedMbStd,externalMbMean,externalMbStd}`
 
 ## Reporting Details
 
 - Case-level JSONL records now include:
-  - `metrics` with mean + stddev for TTFT/TPS/run/load/unload and token/memory fields
+  - `metrics` with explicit `*Mean` + `*Std` naming for TTFT/TPS/run/load/unload and token/memory fields
   - `promptResults[]` with per-prompt metrics, exact-match scores, prompt-level errors, and raw outputs for judge post-processing
 - `npm run run:judge` writes `*.judged.jsonl` with populated per-prompt and per-case `qualityJudge`.
 - Final JSON report includes the same per-case information.
