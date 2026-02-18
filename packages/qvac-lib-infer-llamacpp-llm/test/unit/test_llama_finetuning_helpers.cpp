@@ -13,9 +13,10 @@ namespace {
 
 TEST(LlamaFinetuningHelpers, ParseLoraModules_EmptyReturnsDefault) {
   uint32_t result = llama_finetuning_helpers::parseLoraModules("");
-  EXPECT_EQ(result,
-            (LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K |
-             LLAMA_LORA_TARGET_ATTN_V | LLAMA_LORA_TARGET_ATTN_O));
+  EXPECT_EQ(
+      result,
+      (LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K |
+       LLAMA_LORA_TARGET_ATTN_V | LLAMA_LORA_TARGET_ATTN_O));
 }
 
 TEST(LlamaFinetuningHelpers, ParseLoraModules_SingleModule) {
@@ -26,13 +27,15 @@ TEST(LlamaFinetuningHelpers, ParseLoraModules_SingleModule) {
 TEST(LlamaFinetuningHelpers, ParseLoraModules_MultipleModules) {
   uint32_t result =
       llama_finetuning_helpers::parseLoraModules("attn_q,attn_k,attn_v");
-  EXPECT_EQ(result,
-            (LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K |
-             LLAMA_LORA_TARGET_ATTN_V));
+  EXPECT_EQ(
+      result,
+      (LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K |
+       LLAMA_LORA_TARGET_ATTN_V));
 }
 
 TEST(LlamaFinetuningHelpers, ParseLoraModules_WithWhitespace) {
-  uint32_t result = llama_finetuning_helpers::parseLoraModules(" attn_q , attn_k ");
+  uint32_t result =
+      llama_finetuning_helpers::parseLoraModules(" attn_q , attn_k ");
   EXPECT_EQ(result, (LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K));
 }
 
@@ -45,32 +48,30 @@ TEST(LlamaFinetuningHelpers, ParseLrScheduler_Constant) {
   llama_finetuning_helpers::LoraLrScheduleType scheduleType;
   EXPECT_TRUE(
       llama_finetuning_helpers::parseLrScheduler("constant", scheduleType));
-  EXPECT_EQ(scheduleType,
-            llama_finetuning_helpers::LoraLrScheduleType::Constant);
+  EXPECT_EQ(
+      scheduleType, llama_finetuning_helpers::LoraLrScheduleType::Constant);
 }
 
 TEST(LlamaFinetuningHelpers, ParseLrScheduler_Cosine) {
   llama_finetuning_helpers::LoraLrScheduleType scheduleType;
   EXPECT_TRUE(
       llama_finetuning_helpers::parseLrScheduler("cosine", scheduleType));
-  EXPECT_EQ(scheduleType,
-            llama_finetuning_helpers::LoraLrScheduleType::Cosine);
+  EXPECT_EQ(scheduleType, llama_finetuning_helpers::LoraLrScheduleType::Cosine);
 }
 
 TEST(LlamaFinetuningHelpers, ParseLrScheduler_Linear) {
   llama_finetuning_helpers::LoraLrScheduleType scheduleType;
   EXPECT_TRUE(
       llama_finetuning_helpers::parseLrScheduler("linear", scheduleType));
-  EXPECT_EQ(scheduleType,
-            llama_finetuning_helpers::LoraLrScheduleType::Linear);
+  EXPECT_EQ(scheduleType, llama_finetuning_helpers::LoraLrScheduleType::Linear);
 }
 
 TEST(LlamaFinetuningHelpers, ParseLrScheduler_CaseInsensitive) {
   llama_finetuning_helpers::LoraLrScheduleType scheduleType;
   EXPECT_TRUE(
       llama_finetuning_helpers::parseLrScheduler("CONSTANT", scheduleType));
-  EXPECT_EQ(scheduleType,
-            llama_finetuning_helpers::LoraLrScheduleType::Constant);
+  EXPECT_EQ(
+      scheduleType, llama_finetuning_helpers::LoraLrScheduleType::Constant);
 }
 
 TEST(LlamaFinetuningHelpers, ParseLrScheduler_InvalidReturnsFalse) {
@@ -159,8 +160,7 @@ TEST(LlamaFinetuningHelpers, FindLatestPauseCheckpoint_EmptyDir) {
       fs::temp_directory_path() / ("finetune_test_empty_" + uniqueTestId());
   fs::create_directories(tmpDir);
 
-  fs::path result =
-      llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
+  fs::path result = llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
   EXPECT_TRUE(result.empty());
 
   fs::remove_all(tmpDir);
@@ -186,8 +186,7 @@ TEST(LlamaFinetuningHelpers, FindLatestPauseCheckpoint_ReturnsLatest) {
   fs::create_directories(step12);
   fs::create_directories(step3);
 
-  fs::path result =
-      llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
+  fs::path result = llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
   EXPECT_EQ(result, step12);
 
   fs::remove_all(tmpDir);
@@ -205,8 +204,7 @@ TEST(LlamaFinetuningHelpers, FindLatestPauseCheckpoint_IgnoresNonMatching) {
   fs::create_directories(otherDir);
   fs::create_directories(randomDir);
 
-  fs::path result =
-      llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
+  fs::path result = llama_finetuning_helpers::findLatestPauseCheckpoint(tmpDir);
   EXPECT_EQ(result, stepDir);
 
   fs::remove_all(tmpDir);
@@ -236,4 +234,4 @@ TEST(LlamaFinetuningHelpers, PauseCheckpointExists_WhenEmpty) {
   fs::remove_all(tmpDir);
 }
 
-}
+} // namespace

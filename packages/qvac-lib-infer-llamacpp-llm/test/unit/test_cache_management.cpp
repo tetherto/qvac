@@ -119,7 +119,8 @@ protected:
     std::unordered_map<std::string, std::string> custom_config = config_files;
     custom_config["ctx_size"] = ctxSize;
     auto model = std::make_unique<LlamaModel>(
-        std::move(modelPath), std::move(projectionPath),
+        std::move(modelPath),
+        std::move(projectionPath),
         std::move(custom_config));
     model->waitForLoadInitialization();
     if (!model->isLoaded()) {
@@ -139,7 +140,8 @@ protected:
     custom_config["ctx_size"] = ctxSize;
     custom_config["n_predict"] = nPredict;
     auto model = std::make_unique<LlamaModel>(
-        std::move(modelPath), std::move(projectionPath),
+        std::move(modelPath),
+        std::move(projectionPath),
         std::move(custom_config));
     model->waitForLoadInitialization();
     if (!model->isLoaded()) {
@@ -485,9 +487,7 @@ TEST_F(CacheManagementTest, SessionCommandOnly) {
 
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "session", "content": "reset"}])";
-  EXPECT_THROW(
-      { model->processPrompt(prompt); },
-      qvac_errors::StatusError);
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(CacheManagementTest, SaveWhenCacheDisabled) {
@@ -502,9 +502,7 @@ TEST_F(CacheManagementTest, SaveWhenCacheDisabled) {
 
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "session", "content": "save"}])";
-  EXPECT_THROW(
-      { model->processPrompt(prompt); },
-      qvac_errors::StatusError);
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 
   EXPECT_FALSE(fs::exists(temp_session_path));
 }
@@ -908,8 +906,7 @@ TEST_F(CacheManagementTest, GetTokensCommandWithNoCache) {
   LlamaModel::Prompt getTokensPrompt;
   getTokensPrompt.input = R"([{"role": "session", "content": "getTokens"}])";
   EXPECT_THROW(
-      { model->processPrompt(getTokensPrompt); },
-      qvac_errors::StatusError);
+      { model->processPrompt(getTokensPrompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(CacheManagementTest, GetTokensCommandAfterDisable) {
@@ -943,8 +940,7 @@ TEST_F(CacheManagementTest, GetTokensCommandAfterDisable) {
   LlamaModel::Prompt getTokensPrompt;
   getTokensPrompt.input = R"([{"role": "session", "content": "getTokens"}])";
   EXPECT_THROW(
-      { model->processPrompt(getTokensPrompt); },
-      qvac_errors::StatusError);
+      { model->processPrompt(getTokensPrompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(CacheManagementTest, GetTokensCommandAfterReset) {
@@ -1094,6 +1090,5 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
   loadPrompt.input =
       R"([{"role": "session", "content": "test_large_cache.bin"}, {"role": "user", "content": "Test"}])";
   EXPECT_THROW(
-      { model_small->processPrompt(loadPrompt); },
-      qvac_errors::StatusError);
+      { model_small->processPrompt(loadPrompt); }, qvac_errors::StatusError);
 }

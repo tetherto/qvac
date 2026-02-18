@@ -132,10 +132,12 @@ void testSchedulerLrForStep() {
 // available.
 void testResolveAdapterOutputPath() {
   printf("\n=== Testing resolveAdapterOutputPath ===\n");
-  printf("⚠ Skipped: Requires FinetuningParameters which depends on Bare "
-         "runtime headers\n");
-  printf("  This test should be run as part of integration tests with full "
-         "addon build\n");
+  printf(
+      "⚠ Skipped: Requires FinetuningParameters which depends on Bare "
+      "runtime headers\n");
+  printf(
+      "  This test should be run as part of integration tests with full "
+      "addon build\n");
 }
 
 int main() {

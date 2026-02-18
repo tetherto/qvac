@@ -112,10 +112,11 @@ bool shouldProcessDevice(
       MAIN_GPU_TYPE.value() == MainGpuType::Integrated &&
       BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU &&
       isIntegratedGpu(DEV_DESCR);
-  const bool DEDICATED_GPU = MAIN_GPU_TYPE.has_value() &&
-                             MAIN_GPU_TYPE.value() == MainGpuType::Dedicated &&
-                             BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU &&
-                             !isIntegratedGpu(DEV_DESCR);
+  const bool DEDICATED_GPU =
+      MAIN_GPU_TYPE.has_value() &&
+      MAIN_GPU_TYPE.value() == MainGpuType::Dedicated &&
+      BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU &&
+      !isIntegratedGpu(DEV_DESCR);
   const bool IS_OPEN_CL =
       DEV_DESCR.gpuBackend.find("opencl") != std::string::npos;
   return ANY_GPU || INTEGRATED_GPU || DEDICATED_GPU || IS_OPEN_CL;

@@ -2,21 +2,21 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
+#include <mutex>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
-#include <vector>
-#include <chrono>
-#include <mutex>
 #include <thread>
+#include <vector>
 
 #include <common/arg.h>
 #include <common/chat.h>
@@ -750,7 +750,8 @@ std::string LlamaModel::finetune(
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
-    std::string errorMsg = "Finetune error: model/context not available. Call activate() first.";
+    std::string errorMsg =
+        "Finetune error: model/context not available. Call activate() first.";
     if (logCallback) {
       logCallback("ERROR: " + errorMsg);
     }
@@ -1158,12 +1159,14 @@ void LlamaModel::initializeLoraAdapter(
 
   adapter = llama_lora_training_init(ctx, mdl, &loraParams);
   if (adapter == nullptr) {
-    std::string errorMsg = "LoRA training initialization failed. Parameters: "
-                           "targetModules=" + std::to_string(targetModules) +
-                           ", loraRank=" + std::to_string(params.loraRank) +
-                           ", loraAlpha=" + std::to_string(params.loraAlpha) +
-                           ", loraDropout=" + std::to_string(params.loraDropout) +
-                           ", loraInitStd=" + std::to_string(params.loraInitStd);
+    std::string errorMsg =
+        "LoRA training initialization failed. Parameters: "
+        "targetModules=" +
+        std::to_string(targetModules) +
+        ", loraRank=" + std::to_string(params.loraRank) +
+        ", loraAlpha=" + std::to_string(params.loraAlpha) +
+        ", loraDropout=" + std::to_string(params.loraDropout) +
+        ", loraInitStd=" + std::to_string(params.loraInitStd);
     throw std::runtime_error(errorMsg);
   }
 }
@@ -1379,8 +1382,7 @@ void LlamaModel::executeTrainingLoop(
 
     int64_t resumeFromBatch = -1;
     if (resumingFromPause && checkpointState &&
-        checkpointState->batchOffsetWithinEpoch > 0 &&
-        epoch == startEpoch) {
+        checkpointState->batchOffsetWithinEpoch > 0 && epoch == startEpoch) {
       resumeFromBatch = checkpointState->batchOffsetWithinEpoch;
     }
 
@@ -1497,8 +1499,7 @@ void LlamaModel::waitUntilFinetuningPauseComplete() {
   constexpr auto timeout = std::chrono::minutes(5);
   std::unique_lock lock(state->pauseDoneMutex);
   state->pauseDoneCv.wait_for(
-      lock, timeout,
-      [state] { return state->pauseWaitDone.load(); });
+      lock, timeout, [state] { return state->pauseWaitDone.load(); });
 }
 
 void LlamaModel::clearPauseRequest() {

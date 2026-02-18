@@ -407,13 +407,9 @@ bool MtmdLlmContext::generateResponse(
 
 void MtmdLlmContext::stop() { stop_generation.store(true); }
 
-llama_context* MtmdLlmContext::getCtx() {
-    return lctx;
-}
+llama_context* MtmdLlmContext::getCtx() { return lctx; }
 
-llama_pos MtmdLlmContext::getNPast() const {
-    return n_past;
-}
+llama_pos MtmdLlmContext::getNPast() const { return n_past; }
 
 void MtmdLlmContext::setNPast(llama_pos nPast) { this->n_past = nPast; }
 
