@@ -30,7 +30,7 @@ class BertInterface {
    * @param {Object} data
    * @param {String} data.type - Either 'text' for string input or 'end of job'
    * @param {String} data.input - The input text string (arrays are JSON stringified)
-   * @returns {Promise<void>}
+   * @returns {Promise<bool>} true if the job was accepted, false if busy
    */
   async runJob (data) {
     return this._binding.runJob(this._handle, data)

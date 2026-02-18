@@ -21,7 +21,7 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
   activate(): Promise<void>
-  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<void>
+  runJob(input: { type: 'text' | 'sequences'; input?: string | string[] }): Promise<boolean>
   cancel(): Promise<void>
   unload(): Promise<void>
 }
