@@ -131,8 +131,7 @@ class GGMLBert extends BaseInference {
     return new BertInterface(
       binding,
       configurationParams,
-      this._addonOutputCallback.bind(this),
-      console.log
+      this._addonOutputCallback.bind(this)
     )
   }
 

@@ -118,8 +118,7 @@ export class BertInterface implements Addon {
   constructor(
     binding: unknown,
     configurationParams: AddonConfigurationParams,
-    outputCb: (addon: unknown, event: string, jobId: number, data: unknown, error?: Error) => void,
-    transitionCb?: ((message: string) => void) | null
+    outputCb: (addon: unknown, event: string, jobId: number, data: unknown, error?: Error) => void
   )
   
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }): Promise<void>
