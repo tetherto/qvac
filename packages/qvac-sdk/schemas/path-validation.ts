@@ -4,8 +4,8 @@ import { z } from "zod";
  * Zod refinement for path components that get joined to a base directory.
  * Rejects strings containing traversal sequences (.., null bytes).
  *
- * DO NOT apply to fields that accept absolute user paths (audio/image file
- * paths, model paths, attachment paths, eSpeak data paths, etc.).
+ * DO NOT apply to fields that accept absolute user paths (e.g. audio, image,
+ * model, or attachment paths).
  */
 export const safePathComponent = z.string().refine(
   (s) => {
@@ -17,5 +17,8 @@ export const safePathComponent = z.string().refine(
     if (/%2e/i.test(s)) return false;
     return true;
   },
-  { message: "Path component must not contain traversal sequences ('..', '%2e'), null bytes, or '%00'" },
+  {
+    message:
+      "Path component must not contain traversal sequences ('..', '%2e'), null bytes, or '%00'",
+  },
 );

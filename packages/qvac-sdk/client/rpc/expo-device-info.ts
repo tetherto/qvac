@@ -32,5 +32,9 @@ export async function getDeviceInfo(): Promise<{
   } catch {
     logger.debug("expo-device not available, device info will be omitted");
   }
-  return { platform: undefined, deviceModel: undefined, deviceBrand: undefined };
+  return {
+    platform: undefined,
+    deviceModel: undefined,
+    deviceBrand: undefined,
+  };
 }

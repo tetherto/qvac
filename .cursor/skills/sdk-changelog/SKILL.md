@@ -80,6 +80,19 @@ Examples:
 - `docs-v0.1.0`
 - `qvac-lib-rag-v2.0.0`
 
+### Step 5: Update NOTICE file for the target package
+
+After changelog generation completes, run notice-generate for the same `--package` to ensure its NOTICE file reflects any dependency changes in the release:
+
+```bash
+source .env
+node .cursor/skills/notice-generate/scripts/generate-notice.js <package-name>
+```
+
+Do NOT commit — the user will review and commit.
+
+See `.cursor/skills/notice-generate/SKILL.md` for full details.
+
 ## Quality Checklist
 
 Before completing:
@@ -89,6 +102,7 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] If CHANGELOG_LLM.md requested, follows format guide
+- [ ] NOTICE file updated for the target package
 
 ## References
 
@@ -96,3 +110,4 @@ Before completing:
 - GitFlow: `/gitflow.md`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
+- NOTICE generation: `.cursor/skills/notice-generate/SKILL.md`

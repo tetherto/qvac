@@ -197,24 +197,17 @@ jobs:
           restore-keys: |
             cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download test models (into package dir)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "${{ env.WORKDIR }}/models/unit-test"
-          echo "Downloading model from S3..."
-          aws s3 cp \
-            s3://tether-ai-dev/qvac_models_compiled/embed/embeddinggemma-300m-GGUF/2025-12-12/embeddinggemma-300M-Q8_0.gguf \
-            "${{ env.WORKDIR }}/models/unit-test/gte-small.gguf"
+          echo "Downloading model from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            -o "${{ env.WORKDIR }}/models/unit-test/test-model.gguf" \
+            "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
           ls -lh "${{ env.WORKDIR }}/models/unit-test/"
-          du -sh "${{ env.WORKDIR }}/models/unit-test/gte-small.gguf"
+          du -sh "${{ env.WORKDIR }}/models/unit-test/test-model.gguf"
 
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}

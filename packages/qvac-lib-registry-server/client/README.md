@@ -110,8 +110,20 @@ result.artifact.stream.pipe(fs.createWriteStream('./model.ggml'))
 
 The package includes a CLI for querying and downloading models from the registry.
 
+### Install
+
+The package is hosted on GitHub Packages. Configure npm to use the GitHub registry for the `@tetherto` scope, then install globally:
+
 ```bash
-npx qvac-registry --help
+echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
+echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT" >> ~/.npmrc
+npm install -g @tetherto/registry-client-mono
+```
+
+Verify installation:
+
+```bash
+qvac-registry --help
 ```
 
 ### List models

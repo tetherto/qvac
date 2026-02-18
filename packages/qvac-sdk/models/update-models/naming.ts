@@ -396,9 +396,7 @@ function generateEmbeddingsName({
   quantization,
 }: BaseNameInput): string {
   const name = tagName || modelName || "";
-  const nameParts = [name, params, quantization].filter(
-    (p) => p && p !== "",
-  );
+  const nameParts = [name, params, quantization].filter((p) => p && p !== "");
   return nameParts.map(cleanPart).join("_");
 }
 
@@ -408,14 +406,20 @@ function generateTtsName({
   modelName,
   tagExtra,
   tagType,
+  quantization,
 }: BaseNameInput): string {
   const name = tagName || modelName || "";
   const language = tagExtra || "";
   const type = tagType || "";
-  const nameParts = [name, language, type].filter((p) => p && p !== "");
+  const nameParts = [name, language, type, quantization].filter(
+    (p) => p && p !== "",
+  );
   let exportName = `TTS_${nameParts.map(cleanPart).join("_")}`;
   if (filename.endsWith(".onnx.json") || filename.includes("config.json")) {
     exportName = exportName + "_CONFIG";
+  }
+  if (filename.endsWith(".onnx_data")) {
+    exportName = exportName + "_DATA";
   }
   return exportName;
 }
@@ -434,8 +438,6 @@ function generateOcrName({
   } else if (filename.includes("recognizer")) {
     fileType = "RECOGNIZER";
   }
-  const nameParts = [name, language, fileType].filter(
-    (p) => p && p !== "",
-  );
+  const nameParts = [name, language, fileType].filter((p) => p && p !== "");
   return `OCR_${nameParts.map(cleanPart).join("_")}`;
 }

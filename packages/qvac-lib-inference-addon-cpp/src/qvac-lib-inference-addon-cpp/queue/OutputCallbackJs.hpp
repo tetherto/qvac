@@ -17,7 +17,6 @@ class OutputCallBackJs : public OutputCallBackInterface {
   js_env_t* env_;
   js_ref_t* jsHandle_;
   js_ref_t* outputCb_;
-  js_value_t* transitionCb_;
   js_threadsafe_function_t* threadsafeOutputCb_;
   std::shared_ptr<OutputQueue> outputQueue_ = nullptr;
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface>
@@ -29,11 +28,9 @@ public:
 
   OutputCallBackJs(
       js_env_t* env, js_value_t* jsHandle, js_value_t* outputCb,
-      js_value_t* transitionCb,
       out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface>&&
           outputHandlers)
-      : env_(env), transitionCb_(transitionCb),
-        outputHandlers_(std::move(outputHandlers)) {
+      : env_(env), outputHandlers_(std::move(outputHandlers)) {
     JS(js_create_reference(env_, jsHandle, 1, &jsHandle_));
     auto e1 = utils::onError([this, env = env_, jsHandle = jsHandle_]() {
       js_delete_reference(env, jsHandle);

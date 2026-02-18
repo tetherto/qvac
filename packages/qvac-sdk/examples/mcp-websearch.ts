@@ -10,7 +10,12 @@
  * Run with: bun run examples/mcp-websearch.ts
  */
 
-import { completion, loadModel, unloadModel, QWEN3_1_7B_INST_Q4 } from "@/index";
+import {
+  completion,
+  loadModel,
+  unloadModel,
+  QWEN3_1_7B_INST_Q4,
+} from "@/index";
 
 // MCP SDK is a user-installed optional dependency
 // Install with: bun add @modelcontextprotocol/sdk

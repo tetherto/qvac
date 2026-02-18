@@ -41,18 +41,6 @@ export class StreamEndedError extends QvacErrorBase {
   }
 }
 
-export class NoDataReceivedError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.NO_DATA_RECEIVED,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
 export class InvalidAudioChunkError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
@@ -151,18 +139,6 @@ export class RPCConnectionFailedError extends QvacErrorBase {
   }
 }
 
-export class UnknownRequestTypeError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.UNKNOWN_REQUEST_TYPE,
-        undefined,
-        cause,
-      ),
-    );
-  }
-}
-
 // ============== Provider/Delegation Errors ==============
 
 export class ProviderStartFailedError extends QvacErrorBase {
@@ -239,12 +215,36 @@ export class SDKNotFoundInNodeModulesError extends QvacErrorBase {
   }
 }
 
+export class MultipleSDKInstallationsError extends QvacErrorBase {
+  constructor(packages: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS,
+        [packages],
+        cause,
+      ),
+    );
+  }
+}
+
 export class WorkerFileNotFoundError extends QvacErrorBase {
   constructor(workerPath: string, cause?: unknown) {
     super(
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND,
         [workerPath],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PearWorkerEntryRequiredError extends QvacErrorBase {
+  constructor(workerEntry: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED,
+        [workerEntry],
         cause,
       ),
     );

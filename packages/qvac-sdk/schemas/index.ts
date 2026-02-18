@@ -49,6 +49,8 @@ export {
   type CanonicalModelType,
   type ModelTypeInput,
   normalizeModelType,
+  isCanonicalModelType,
   isModelTypeAlias,
 } from "./model-types";
+export * from "./plugin";
 export * from "./registry";

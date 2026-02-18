@@ -126,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p model
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx model/silerovad.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx model/silerovad.onnx
 
       - name: Run integration test
         shell: bash

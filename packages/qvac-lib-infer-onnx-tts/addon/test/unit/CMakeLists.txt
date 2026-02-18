@@ -11,6 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${TEST_SOURCES}
     ${TEST_MOCKS}
