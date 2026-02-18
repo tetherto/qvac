@@ -24,102 +24,81 @@ function detectPlatform () {
 }
 
 async function downloadWithHttp (url, destPath, maxRedirects = 10) {
+  const https = require('bare-https')
+  const { URL } = require('bare-url')
+
+  const parsedUrl = new URL(url)
+
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    const https = require('bare-https')
-    const { URL } = require('bare-url')
-
-    let settled = false
-    const safeResolve = () => { if (!settled) { settled = true; resolve() } }
-    const safeReject = (err) => { if (!settled) { settled = true; reject(err) } }
-
-    const dir = path.dirname(destPath)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-
-    const file = fs.createWriteStream(destPath)
-
-    file.on('error', (err) => {
-      file.destroy()
-      fs.unlink(destPath, () => safeReject(err))
-    })
-
-    const parsedUrl = new URL(url)
-
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || 443,
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
-      }
-    }
-
     const req = https.request(options, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
-        file.destroy()
-        req.destroy()
-        res.destroy()
-
-        fs.unlink(destPath, () => {
-          if (maxRedirects <= 0) {
-            safeReject(new Error('Too many redirects'))
-            return
-          }
-          const location = res.headers.location
-          let redirectUrl
-          if (location.startsWith('http://') || location.startsWith('https://')) {
-            redirectUrl = location
-          } else if (location.startsWith('/')) {
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
-          } else {
-            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
-            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
-          }
-          downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
-            .then(safeResolve)
-            .catch(safeReject)
-        })
+        res.resume()
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
         return
       }
 
       if (res.statusCode !== 200) {
-        file.destroy()
-        req.destroy()
-        res.destroy()
-        fs.unlink(destPath, () => safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`)))
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
         return
       }
 
+      const dir = path.dirname(destPath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const file = fs.createWriteStream(destPath)
       let downloadedBytes = 0
       const contentLength = parseInt(res.headers['content-length'] || '0', 10)
 
-      res.on('data', (chunk) => {
-        downloadedBytes += chunk.length
-        if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
-          const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
-          console.log(`  Download progress: ${percent}% (${(downloadedBytes / 1024 / 1024).toFixed(1)}MB / ${(contentLength / 1024 / 1024).toFixed(1)}MB)`)
-        }
+      file.on('error', (err) => {
+        res.destroy()
+        reject(err)
       })
 
       res.on('error', (err) => {
         file.destroy()
-        fs.unlink(destPath, () => safeReject(err))
+        reject(err)
       })
 
       res.pipe(file)
 
       file.on('close', () => {
-        safeResolve()
+        if (contentLength > 0) {
+          console.log(`  Downloaded ${(contentLength / 1024 / 1024).toFixed(1)}MB`)
+        }
+        resolve()
       })
     })
 
-    req.on('error', (err) => {
-      file.destroy()
-      fs.unlink(destPath, () => safeReject(err))
-    })
-
+    req.on('error', reject)
     req.end()
   })
 }
