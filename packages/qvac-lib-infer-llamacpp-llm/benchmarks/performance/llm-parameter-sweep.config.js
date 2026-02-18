@@ -18,15 +18,15 @@ const DEFAULT_REPEATS = 5
 const BENCH_DEFAULT_RUNTIME = {
   device: 'gpu',
   'gpu-layers': '99',
-  'ctx-size': '4096',
+  'ctx-size': '2048',
   verbosity: '0',
-  'batch-size': '2048',
+  'batch-size': '512',
   'ubatch-size': '512',
   'no-mmap': false,
   'flash-attn': 'off',
   temp: '0.1', // Override: addon default 0.8, using 0.1 for reproducibility
   seed: '42', // Override: addon default -1, using 42 for determinism
-  'n-predict': '256', // Override: addon default -1, using 256 for benchmarking
+  'n-predict': '1024', // Override: addon default -1, using 1024 for long-output benchmarking
   'top-p': '0.9', // Addon default
   'top-k': '40', // Addon default
   'repeat-penalty': '1.1', // Addon default
@@ -87,7 +87,7 @@ const PARAMETER_SWEEP = {
   'no-mmap': [false, true],
   threads: ['2', '4', '8'],
   'batch-size': BATCH_SIZES.map(String), // max: 10k
-  'ubatch-size': ['128', '512', '1024'], // must be <= batch-size
+  'ubatch-size': ['128', '512'], // must be <= batch-size
   'no-kv-offload': [false, true],
   'flash-attn': ['off', 'on'],
   'cache-type-k': ['f16', 'q8_0', 'q4_0'],

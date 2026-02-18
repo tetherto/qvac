@@ -77,9 +77,7 @@ async function main () {
   const minCtxSize = Math.min(...CTX_SIZES)
   const minCtxBudget = getCtxBudget(minCtxSize)
 
-  for (const id of ['short', 'medium', 'long']) {
-    if (!byId.has(id)) failures.push(`Missing base prompt: ${id}`)
-  }
+  if (!byId.has('long')) failures.push('Missing base prompt: long')
 
   if (!fs.existsSync(path.join(MODEL_DIR, MODEL_NAME))) {
     throw new Error(`Missing tokenizer model at ${path.join(MODEL_DIR, MODEL_NAME)}`)
@@ -120,17 +118,18 @@ async function main () {
       await model.load()
       console.log('Prompt verification runtime: cpu (fallback)')
     }
-    for (const id of ['short', 'medium', 'long']) {
-      const p = byId.get(id)
-      if (!p) continue
-      const n = await getPromptTokens(model, p.messages)
-      if (n > minCtxBudget) {
-        failures.push(`${id}: ${n} exceeds minimum ctx budget ${minCtxBudget} (ctx=${minCtxSize})`)
+    {
+      const p = byId.get('long')
+      if (p) {
+        const n = await getPromptTokens(model, p.messages)
+        if (n > minCtxBudget) {
+          failures.push(`long: ${n} exceeds minimum ctx budget ${minCtxBudget} (ctx=${minCtxSize})`)
+        }
+        if (Number.isFinite(n) && n < 650) {
+          failures.push(`long: ${n} too short; expected a substantial long prompt for n-predict=1024`)
+        }
+        console.log(`long: tokens=${n} minCtxBudget=${minCtxBudget}`)
       }
-      if (id === 'long' && Number.isFinite(n) && n < 512) {
-        failures.push(`${id}: ${n} too short; expected a substantial long prompt`)
-      }
-      console.log(`${id}: tokens=${n} minCtxBudget=${minCtxBudget}`)
     }
 
     for (const ctx of CTX_SIZES) {
@@ -159,7 +158,7 @@ async function main () {
         const budget = getBatchBudget(ctx, batch)
         if (n > budget) failures.push(`${id}: ${n} exceeds budget ${budget}`)
         if (Number(batch) <= Number(ctx)) {
-          const minSpan = Math.min(budget, Number(batch) + 64)
+          const minSpan = Math.max(256, Math.min(budget - CTX_SLACK, Number(batch) + 64))
           if (n < minSpan) failures.push(`${id}: ${n} too short to span batches (expected >= ${minSpan})`)
         }
         console.log(`${id}: tokens=${n} budget=${budget}`)

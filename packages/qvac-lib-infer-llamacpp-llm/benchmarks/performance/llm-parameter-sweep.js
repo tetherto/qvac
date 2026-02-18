@@ -55,9 +55,9 @@ const {
   PARAMETER_SWEEP
 } = require('./llm-parameter-sweep.config')
 
-const STATIC_PROMPT_IDS = ['short', 'medium', 'long']
-// 3 static prompts + 2 adaptive prompts (ctx-filling, batch-spanning).
-const PROMPTS_PER_CASE = 5
+const PROMPT_CASES = ['long', 'ctx-filling', 'span-fill']
+// Each case executes exactly one prompt.
+const PROMPTS_PER_CASE = 1
 
 function createAddonRuntimeLogger (debugEnabled) {
   if (!debugEnabled) {
@@ -285,15 +285,18 @@ function buildCases (modelDef, sweep) {
   const cacheTypeVValues = sweep['cache-type-v'] || []
 
   const cases = []
-  cases.push({
-    caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults`,
-    parameter: 'baseline',
-    value: 'default',
-    quantization: baseQuant,
-    modelName: resolveModelName(modelDef, baseQuant),
-    runtimeConfig: { ...defaults },
-    isBaseline: true
-  })
+  for (const promptCase of PROMPT_CASES) {
+    cases.push({
+      caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults__pc=${promptCase}`,
+      parameter: 'baseline',
+      value: 'default',
+      promptCase,
+      quantization: baseQuant,
+      modelName: resolveModelName(modelDef, baseQuant),
+      runtimeConfig: { ...defaults },
+      isBaseline: true
+    })
+  }
 
   if (devices.length > 0 && ctxSizes.length > 0 && batchSizes.length > 0 && ubatchSizes.length > 0 &&
       noMmapValues.length > 0 && flashAttnValues.length > 0 && noKvOffloadValues.length > 0 &&
@@ -332,15 +335,18 @@ function buildCases (modelDef, sweep) {
 
       const caseId = `${modelDef.id}__q=${quantization}__dev=${device}__ctx=${ctxSize}__bs=${batchSize}__ubs=${ubatchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}__kvo=${noKvOffload ? 'off' : 'on'}__t=${threads}__ck=${cacheTypeK}__cv=${cacheTypeV}`
 
-      cases.push({
-        caseId,
-        parameter: 'full-grid',
-        value: 'combination',
-        quantization,
-        modelName: resolveModelName(modelDef, quantization),
-        runtimeConfig,
-        isBaseline: false
-      })
+      for (const promptCase of PROMPT_CASES) {
+        cases.push({
+          caseId: `${caseId}__pc=${promptCase}`,
+          parameter: 'full-grid',
+          value: 'combination',
+          promptCase,
+          quantization,
+          modelName: resolveModelName(modelDef, quantization),
+          runtimeConfig,
+          isBaseline: false
+        })
+      }
     }
   }
 
@@ -403,23 +409,22 @@ function isAdaptivePromptId (promptId) {
     String(promptId || '').startsWith('batch-spanning__ctx=')
 }
 
-function selectPromptsForCase (allPrompts, runtimeConfig) {
+function selectPromptForCase (allPrompts, runtimeConfig, promptCase) {
   const byId = new Map(allPrompts.map((p) => [p.id, p]))
   const ctx = String(runtimeConfig['ctx-size'])
   const batch = String(runtimeConfig['batch-size'])
   const ctxId = `ctx-filling__ctx=${ctx}`
   const batchId = `batch-spanning__ctx=${ctx}__bs=${batch}`
-
-  const requiredIds = [...STATIC_PROMPT_IDS, ctxId, batchId]
-  for (const id of requiredIds) {
-    if (!byId.has(id)) {
-      throw new Error(
-        `Missing required prompt id "${id}" in prompt file. ` +
-        'Regenerate prompts or provide a prompt file with all static ctx/batch variants.'
-      )
-    }
+  const promptId = promptCase === 'ctx-filling'
+    ? ctxId
+    : (promptCase === 'span-fill' ? batchId : 'long')
+  if (!byId.has(promptId)) {
+    throw new Error(
+      `Missing required prompt id "${promptId}" in prompt file. ` +
+      'Regenerate prompts or provide a prompt file with all required variants.'
+    )
   }
-  return requiredIds.map((id) => byId.get(id))
+  return byId.get(promptId)
 }
 
 function getAdaptiveBaselineKey (promptId) {
@@ -596,8 +601,8 @@ function toMarkdown (report) {
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)
-    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Status | Load Mean | Load Std | Run Mean | Run Std | TTFT Mean | TTFT Std | TPS Mean | TPS Std | Unload Mean | Unload Std | Prompt Tokens Mean | Prompt Tokens Std | Generated Tokens Mean | Generated Tokens Std | RSS Mean | RSS Std | Heap Mean | Heap Std | External Mean | External Std | Quality Match | Error |')
-    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
+    lines.push('| Quantization | Device | Ctx Size | Batch Size | Ubatch Size | No Mmap | Flash Attn | Threads | Cache K | Cache V | Prompt Case | Status | Load Mean | Load Std | Run Mean | Run Std | TTFT Mean | TTFT Std | TPS Mean | TPS Std | Unload Mean | Unload Std | Prompt Tokens Mean | Prompt Tokens Std | Generated Tokens Mean | Generated Tokens Std | RSS Mean | RSS Std | Heap Mean | Heap Std | External Mean | External Std | Quality Match | Error |')
+    lines.push('|---|---|---:|---:|---:|---|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|')
     for (const item of model.cases) {
       const runtimeConfig = item.runtimeConfig || {}
       const quality = item.qualityMatch != null ? item.qualityMatch.toFixed(3) : ''
@@ -622,7 +627,7 @@ function toMarkdown (report) {
         ? truncateText(item.error.message, 120)
         : ''
       lines.push(
-        `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.status ?? ''}` +
+        `| ${quantizationCell} | ${deviceCell} | ${ctxSizeCell} | ${batchSizeCell} | ${ubatchSizeCell} | ${noMmapCell} | ${flashAttnCell} | ${threadsCell} | ${cacheKCell} | ${cacheVCell} | ${item.promptCase ?? ''} | ${item.status ?? ''}` +
         ` | ${item.metrics?.loadMsMean ?? ''} | ${item.metrics?.loadMsStd ?? ''}` +
         ` | ${item.metrics?.runMsMean ?? ''} | ${item.metrics?.runMsStd ?? ''}` +
         ` | ${item.metrics?.ttftMsMean ?? ''} | ${item.metrics?.ttftMsStd ?? ''}` +
@@ -787,6 +792,7 @@ async function main () {
         caseId: caseResult.caseId,
         parameter: caseResult.parameter,
         value: caseResult.value,
+        promptCase: caseResult.promptCase || null,
         quantization: caseResult.quantization,
         modelName: caseResult.modelName,
         runtimeConfig: caseResult.runtimeConfig,
@@ -808,7 +814,7 @@ async function main () {
     for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
       // Wrap each case in try-catch to prevent one case from crashing the entire benchmark
       const testCase = cases[caseIndex]
-      const promptsForCase = selectPromptsForCase(prompts, testCase.runtimeConfig)
+      const promptsForCase = [selectPromptForCase(prompts, testCase.runtimeConfig, testCase.promptCase)]
       const caseKey = `${modelDef.id}:${testCase.caseId}`
       if (completedCases.has(caseKey)) {
         debugLogger.log(`Skipping already completed case: ${caseKey}`)

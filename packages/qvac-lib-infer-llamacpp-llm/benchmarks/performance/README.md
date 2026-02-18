@@ -93,7 +93,7 @@ npm run run:judge
 ```
 
 By default this reads the latest sweep JSONL and writes a sibling `*.judged.jsonl` file.
-It also reuses existing `qualityJudge` values unless you pass `-- --force`.
+It reuses existing `promptResults[].qualityJudge` values only when the input file is already judged/partially judged; pass `-- --force` to rescore everything.
 
 Optional judge flags:
 
@@ -170,8 +170,8 @@ Supported sweep override keys:
 
 ## Why Overrides Are Needed
 
-The default LLM sweep is a strict full-factorial grid. With two models, 5 prompts per case, and 5 repeats,
-this can exceed 2 million prompt runs on a single invocation. That is intentional for exhaustive validation, but it is too large for most iterative local debugging sessions.
+The default LLM sweep is a strict full-factorial grid. Even with one prompt per case and practical defaults, it can still produce a large run set.
+That is intentional for reproducible performance validation, but it is still too large for many iterative local debugging sessions.
 
 Dimension overrides let you keep full-factorial behavior while shrinking the search space safely:
 
@@ -183,6 +183,20 @@ Dimension overrides let you keep full-factorial behavior while shrinking the sea
 The final JSON/JSONL/Markdown reports include the exact `sweep` dimensions used, plus case/run totals.
 This makes the run reproducible and auditable even when overrides are applied.
 
+### Default Cardinality (Current Defaults)
+
+With current defaults and two configured models:
+
+- Full-grid combinations per model: `4*2*1*2*2*2*2*2*3*3*3 = 6912`
+- Prompt cases per combination: `3` (`long`, `ctx-filling`, `span-fill`)
+- Full-grid cases per model: `6912*3 = 20736`
+- Baseline cases per model: `3`
+- Total cases per model: `20739`
+- Total cases (2 models): `41478`
+- Planned runs at default `--repeats=5`: `41478*1*5 = 207390`
+
+Overrides scale this up or down while keeping the same report/metric schema.
+
 Default output directory:
 
 - `benchmarks/performance/results/parameter-sweep/`
@@ -193,6 +207,12 @@ Baseline/default runtime settings are defined in `llm-parameter-sweep.config.js`
 
 - `BENCH_DEFAULT_RUNTIME` (global defaults for all models)
 - `MODEL_RUNTIME_OVERRIDES` (optional per-model overrides)
+
+Current default benchmark objective:
+
+- `ctx-size=2048`
+- `n-predict=1024` (long-output capped generation)
+- one prompt per case, with explicit prompt case type (`long`, `ctx-filling`, `span-fill`)
 
 Model list and quantization files come from:
 
@@ -212,22 +232,21 @@ Model list and quantization files come from:
 
 1. **Model Preparation**: Downloads GGUF models listed in `models.manifest.json` to `benchmarks/performance/models/`
 2. **Prompt Generation (standalone)**: Creates static prompts including:
-   - Short prompts (~50 tokens)
-   - Medium prompts (~200 tokens)
-   - Long prompts (~1000 tokens)
+   - Long prompt for long-output testing
    - `ctx-filling__ctx=<ctx-size>` variants (one per hardcoded `ctx-size`)
    - `batch-spanning__ctx=<ctx-size>__bs=<batch-size>` variants (one per hardcoded pair)
-3. **Case Prompt Selection**: Runner picks exactly one static fill/span variant per case:
-   - Context tests use the matching `ctx-filling__ctx=<ctx-size>` prompt.
-   - Batch tests use the matching `batch-spanning__ctx=<ctx-size>__bs=<batch-size>` prompt.
-   - If `batch-size > ctx-size`, the prompt is generated as the longest safe prompt under ctx budget (documented in prompt metadata).
+3. **Case Prompt Selection**: Each case runs exactly one prompt by `promptCase`:
+   - `long` -> static `long`
+   - `ctx-filling` -> matching `ctx-filling__ctx=<ctx-size>`
+   - `span-fill` -> matching `batch-spanning__ctx=<ctx-size>__bs=<batch-size>`
+   - If `batch-size > ctx-size`, span-fill uses the longest safe prompt under ctx budget (documented in prompt metadata).
 4. **Baseline Run**: Runs with default config, saves output for quality comparison
 5. **Parameter Sweep**: Runs all parameter combinations (full factorial design)
-   - Model is loaded once per case and reused for all prompts and repeats
+   - Model is loaded once per case and reused for all repeats of that single prompt
    - Progress is tracked and can be resumed after crashes (debounced saves)
 6. **Quality Check**: Compares each combination's output with exact-match and judge-model scoring
-   - Fixed prompts use global baseline outputs
-   - Fill/span prompts use per-variant baseline keys so scoring remains valid per exact shape
+   - `long` uses baseline-case outputs
+   - fill/span use per-variant baseline keys so scoring remains valid per exact shape
    - Exact-match (`qualityMatch`) is computed during sweep
    - Judge score (`qualityJudge`) is computed in a separate pass via `npm run run:judge`
 7. **Report Generation**: Creates JSON and Markdown reports with performance metrics
@@ -235,7 +254,7 @@ Model list and quantization files come from:
 ## Output Quality Comparison
 
 The benchmark compares outputs using two signals:
-- Baseline outputs are saved for each prompt
+- Baseline/reference outputs are persisted per prompt result
 - Each parameter combination's output is compared with baseline
 - `qualityMatch`: 1.0 (exact match) or 0.0 (different)
 - `qualityJudge`: model-judged semantic agreement score in [0, 1]
@@ -258,9 +277,9 @@ The judge pass is optimized to score only unique `(baseline, candidate)` text pa
 
 All target values are deterministic and come from hardcoded constants in `prepare-prompts.js` / `verify-prompts.js`:
 
-- `CTX_SIZES = [2048, 4096, 8192]`
-- `BATCH_SIZES = [512, 2048, 4096, 8192]`
-- `N_PREDICT_RESERVE = 256`
+- `CTX_SIZES = [2048]`
+- `BATCH_SIZES = [512, 2048]`
+- `N_PREDICT_RESERVE = 1024`
 - `PROMPT_OVERHEAD_RESERVE = 128`
 
 Formulas:
@@ -272,13 +291,9 @@ Formulas:
 This yields:
 
 - `ctx-filling`
-  - `ctx=2048 -> targetPromptTokens=1664`
-  - `ctx=4096 -> targetPromptTokens=3712`
-  - `ctx=8192 -> targetPromptTokens=7808`
+  - `ctx=2048 -> targetPromptTokens=896`
 - `batch-spanning`
-  - `ctx=2048`: `bs=512 -> 1536`, `bs=2048 -> 1664`, `bs=4096 -> 1664`, `bs=8192 -> 1664`
-  - `ctx=4096`: `bs=512 -> 1536`, `bs=2048 -> 3712`, `bs=4096 -> 3712`, `bs=8192 -> 3712`
-  - `ctx=8192`: `bs=512 -> 1536`, `bs=2048 -> 6144`, `bs=4096 -> 7808`, `bs=8192 -> 7808`
+  - `ctx=2048`: `bs=512 -> 896`, `bs=2048 -> 896`
 
 Why this is safe and accurate:
 

@@ -1,8 +1,8 @@
 'use strict'
 
-const CTX_SIZES = [2048, 4096, 8192]
-const BATCH_SIZES = [512, 2048, 4096, 8192]
-const N_PREDICT_RESERVE = 256
+const CTX_SIZES = [2048]
+const BATCH_SIZES = [512, 2048]
+const N_PREDICT_RESERVE = 1024
 const PROMPT_OVERHEAD_RESERVE = 128
 
 module.exports = {

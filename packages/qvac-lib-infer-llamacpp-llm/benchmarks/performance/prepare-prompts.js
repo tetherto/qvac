@@ -141,29 +141,16 @@ async function tuneToBudget (model, templateMessages, budget) {
 function basePrompts () {
   return [
     {
-      id: 'short',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant. Answer concisely.' },
-        { role: 'user', content: 'What is the capital of France? Provide a brief answer.' }
-      ]
-    },
-    {
-      id: 'medium',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'Explain TCP vs UDP: reliability, ordering, connection model, and use cases.' }
-      ]
-    },
-    {
       id: 'long',
       messages: [
         { role: 'system', content: 'You are a helpful assistant.' },
         {
           role: 'user',
           content: (
-            'You are reviewing an incident report. Summarize the timeline, root cause, impact, ' +
-            'mitigations, and follow-up actions with priorities and measurable checkpoints. '
-          ).repeat(90)
+            'You are reviewing an incident report. Write a detailed narrative with sections for timeline, ' +
+            'root cause, impact, mitigations, and follow-up actions. Target a long answer close to 1000 tokens, ' +
+            'include concrete checkpoints, and avoid bullet points unless needed for clarity. '
+          ).repeat(15)
         }
       ]
     }
