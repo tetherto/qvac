@@ -114,11 +114,11 @@ jobs:
 
     env:
       # Use AWS S3 as vcpkg binary cache (platform-prefixed for easy cleanup)
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://tether-ai-dev/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      S3_CACHE_PREFIX: "s3://tether-ai-dev/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
+      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/onnx-tts/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:

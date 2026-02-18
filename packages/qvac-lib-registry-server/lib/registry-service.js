@@ -33,7 +33,7 @@ const RegistryDatabase = schema.RegistryDatabase
 const ReseedTracker = require('./reseed-tracker')
 const { QVAC_MAIN_REGISTRY } = schema
 const { getFileMetadata } = require('../utils/file-metadata')
-const { parseCanonicalSource } = require('./source-helpers')
+const { parseCanonicalSource, resolveS3Bucket } = require('./source-helpers')
 const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
 
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
@@ -857,9 +857,11 @@ class RegistryService extends ReadyResource {
         await this._downloadFromHuggingFace(sourceInfo.canonicalUrl, localPath)
         return localPath
 
-      case 's3':
-        await this._downloadFromS3(sourceInfo.bucket, sourceInfo.key, localPath)
+      case 's3': {
+        const resolved = resolveS3Bucket(sourceInfo, this.config.getS3Bucket())
+        await this._downloadFromS3(resolved.bucket, resolved.key, localPath)
         return localPath
+      }
 
       default:
         throw new Error(`Unsupported source protocol: ${sourceInfo.protocol}`)
