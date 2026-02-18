@@ -14,11 +14,61 @@
 #include <gtest/gtest.h>
 
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
+#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 #include "qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp"
 #include "qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp"
+#include "qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp"
 #include "qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp"
+#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
+
+/// Shared state for completion: either job-ended (RuntimeStats) or error
+/// (Output::Error) means the job is no longer pending (JS _finishPromise).
+struct JobCompletionState {
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
+  mutable std::atomic<bool> completed_{false};
+
+  void signal() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    completed_ = true;
+    cv_.notify_all();
+  }
+
+  bool waitForCompletion(std::chrono::milliseconds timeout) const {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return cv_.wait_for(lock, timeout, [this] { return completed_.load(); });
+  }
+
+  void reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    completed_ = false;
+  }
+};
+
+/// Handler that signals completion when job-ended (RuntimeStats) is received.
+struct JobEndedNotifier
+    : public out_handl::BaseOutputHandler<void, RuntimeStats> {
+  std::shared_ptr<JobCompletionState> state_;
+
+  explicit JobEndedNotifier(std::shared_ptr<JobCompletionState> state)
+      : BaseOutputHandler<void, RuntimeStats>(
+            [state](const RuntimeStats& /*stats*/) { state->signal(); }),
+        state_(std::move(state)) {}
+};
+
+/// Handler that signals completion when an error is received (e.g. "Job
+/// cancelled" when cancel() runs before the worker takes the job).
+struct JobErrorNotifier
+    : public out_handl::BaseOutputHandler<void, Output::Error> {
+  std::shared_ptr<JobCompletionState> state_;
+
+  explicit JobErrorNotifier(std::shared_ptr<JobCompletionState> state)
+      : BaseOutputHandler<void, Output::Error>(
+            [state](const Output::Error& /*err*/) { state->signal(); }),
+        state_(std::move(state)) {}
+};
 
 // Test model that blocks in process() until unblocked
 class BlockingTestModel : public model::IModel, public model::IModelCancel {
@@ -158,6 +208,34 @@ createTestAddon() {
   return {handler, std::move(addon)};
 }
 
+/// Creates addon with completion notifiers so tests can wait for job completion
+/// (job-ended or error). Simulates JS waitForCompletion / _finishPromise.
+std::tuple<
+    std::shared_ptr<JobCompletionState>,
+    std::shared_ptr<
+        out_handl::CppContainerOutputHandler<std::set<std::string>>>,
+    std::unique_ptr<AddonCpp>>
+createTestAddonWithCompletionNotifier() {
+  auto completionState = std::make_shared<JobCompletionState>();
+  auto jobEndedNotifier = std::make_shared<JobEndedNotifier>(completionState);
+  auto jobErrorNotifier = std::make_shared<JobErrorNotifier>(completionState);
+  auto stringHandler = std::make_shared<
+      out_handl::CppContainerOutputHandler<std::set<std::string>>>();
+
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>>
+      outputHandlers;
+  outputHandlers.add(jobEndedNotifier);
+  outputHandlers.add(jobErrorNotifier);
+  outputHandlers.add(stringHandler);
+  auto outputCallback =
+      std::make_unique<OutputCallBackCpp>(std::move(outputHandlers));
+
+  auto addon = std::make_unique<AddonCpp>(
+      std::move(outputCallback), std::make_unique<BlockingTestModel>());
+
+  return {completionState, stringHandler, std::move(addon)};
+}
+
 // Helper function to wait for output to arrive in handler
 template <typename HandlerT>
 inline void
@@ -237,6 +315,41 @@ TEST(SimpleAddonTest, JobCancellationWorks) {
   {
     auto access = handler->access();
     EXPECT_EQ(access->size(), 0);
+  }
+}
+
+// Reproduces the bug where cancel() runs before the worker thread takes the
+// job: without JobRunner signalling completion in that case, nothing ever
+// queues job-ended or error, so "wait for completion" would hang (JS
+// _finishPromise never resolves). We run many iterations of runJob()+cancel()
+// and wait for completion (job-ended or error); without the fix, some
+// iterations time out when cancel() runs before the worker takes the job.
+TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
+  auto [completionState, stringHandler, addon] =
+      createTestAddonWithCompletionNotifier();
+  addon->activate();
+
+  constexpr auto waitTimeout = std::chrono::milliseconds(500);
+  constexpr int iterations = 40;
+
+  for (int i = 0; i < iterations; ++i) {
+    completionState->reset();
+
+    // Submit a job then cancel as soon as possible (no yield), so we often
+    // cancel before the worker takes the job.
+    addon->runJob(std::any(std::string("quick")));
+    addon->cancelJob();
+
+    // Wait for completion (job-ended or error). JobRunner signals either
+    // queueJobEnded() or queueException("Job cancelled") when cancel() runs
+    // before the worker takes the job.
+    bool received = completionState->waitForCompletion(waitTimeout);
+
+    ASSERT_TRUE(received)
+        << "Iteration " << i << ": completion was not received within "
+        << waitTimeout.count()
+        << " ms. Simulates the stuck wait when cancel() runs before the "
+           "worker takes the job and JobRunner does not signal completion.";
   }
 }
 

@@ -1,6 +1,5 @@
+import { PLUGIN_LLM, PLUGIN_NMT } from "@qvac/sdk";
+
 export default {
-  plugins: [
-    "@qvac/sdk/llamacpp-completion/plugin",
-    "@qvac/sdk/nmtcpp-translation/plugin",
-  ],
+  plugins: [PLUGIN_LLM, PLUGIN_NMT],
 };

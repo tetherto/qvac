@@ -111,6 +111,7 @@ gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 - Commit and push before creating PR
 
 6. If gh not available, output the copy-ready markdown format above
+7. As part of the output, provide a clickable hyperlink (not plain text) to the PR on GitHub.
 
 ## Quality Checklist
 

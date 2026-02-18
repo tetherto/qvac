@@ -1,7 +1,11 @@
 .githuman
+.env
+.npmrc
 /.sync-repos
 sync-monorepo.sh
 reset_history.sh
 confirmed.txt
 /node_modules
 packages/**/.npmrc
+NOTICE_LOG.txt
+NOTICE_FULL_REPORT.txt

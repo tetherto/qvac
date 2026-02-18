@@ -102,11 +102,11 @@ npm run benchmarks -- \
 ```bash
 # Load GTE-Large FP16 via Hyperdrive P2P
 npm run benchmarks -- \
-  --gguf-model "hd://d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e/gte-large_fp16.gguf"
+  --gguf-model "hd://{KEY}/gte-large_fp16.gguf"
 
 # P2P with quick test (1 sample, 1 dataset)
 npm run benchmarks -- \
-  --gguf-model "hd://d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e/gte-large_fp16.gguf" \
+  --gguf-model "hd://{KEY}/gte-large_fp16.gguf" \
   --samples 1 \
   --datasets "SciFact"
 ```

@@ -892,7 +892,7 @@ test("tts: Piper Norman medium — full field mapping", (t: any) => {
   t.is(model.blobBlockLength, 150);
   t.is(model.blobByteOffset, 160000000);
 
-  t.is(exportName, "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM");
+  t.is(exportName, "TTS_PIPER_NORMAN_EN_US_ONNX_MEDIUM_FP32");
 });
 
 // ---------------------------------------------------------------------------

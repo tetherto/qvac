@@ -1,6 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
+import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
 
 let didRun = false;
 
@@ -20,7 +21,7 @@ function withDeviceInfo(config: ExpoConfig): ExpoConfig {
     return config;
   }
 
-  const qvacSdkPath = path.join(projectRoot, "node_modules", "@qvac/sdk");
+  const { dir: qvacSdkPath } = resolveSDKPackageDir(projectRoot);
 
   const appPackageJsonPath = path.join(projectRoot, "package.json");
   let hasExpoDevice = false;
