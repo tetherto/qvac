@@ -1,0 +1,158 @@
+name: Mobile Integration Tests (Parakeet)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-parakeet"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test - defaults to current branch"
+        type: string
+        required: false
+      version:
+        description: "NPM package version to test (default: latest)"
+        type: string
+        required: false
+        default: latest
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-parakeet"
+
+env:
+  NODE_VERSION: 'lts/*'
+  ADDON_NAME: '@qvac/transcription-parakeet'
+  PREBUILD_ARTIFACT_PREFIX: 'parakeet-'
+  TEST_FRAMEWORK_REF: 'main'
+  APP_BUNDLE_ID: 'io.tether.test.qvac'
+  PKG_DIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
+
+jobs:
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: ai-run-linux
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Free up disk space
+        if: matrix.platform == 'Android'
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Python || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /usr/share/swift || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Checkout addon repository
+        uses: actions/checkout@v4
+        with:
+          path: addon
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Checkout mobile test framework
+        uses: actions/checkout@v4
+        with:
+          repository: tetherto/qvac-test-addon-mobile
+          token: ${{ secrets.PAT_TOKEN }}
+          path: test-framework
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure NPM registries
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Configure addon registry
+          cd addon/${{ env.PKG_DIR }}
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Configure test-framework registry
+          cd ${GITHUB_WORKSPACE}/test-framework
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Configure git for private repos
+          if [ -n "${{ secrets.PAT_TOKEN }}" ]; then
+            git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Download prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}*
+          path: addon/${{ env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Run mobile integration tests
+        working-directory: test-framework
+        shell: bash
+        run: |
+          npm install
+          npm run test:mobile:${{ matrix.platform == 'Android' && 'android' || 'ios' }}
+        env:
+          ADDON_PATH: ../addon/${{ env.PKG_DIR }}
+          ADDON_NAME: ${{ env.ADDON_NAME }}

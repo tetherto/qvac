@@ -1,5 +1,17 @@
 # Changelog 
 
+## [0.1.3]
+
+Release Date: 2026-02-17
+
+### ✨ Features
+
+- Add `--sdk-path` option to explicitly specify SDK location instead of auto-detecting from `node_modules/@qvac/sdk` (see PR [#384](https://github.com/tetherto/qvac/pull/384))
+
+### 🐛 Fixes
+
+- Use dynamic module resolution for `bare-pack` and `tsx` dependencies — fixes resolution failures when CLI dependencies are hoisted to project root (see PR [#392](https://github.com/tetherto/qvac/pull/392))
+
 ## [0.1.2]
 
 Release Date: 2026-02-14

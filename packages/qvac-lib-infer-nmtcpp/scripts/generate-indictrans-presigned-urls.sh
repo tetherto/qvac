@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 REGION="${AWS_REGION:-eu-central-1}"
-BUCKET="${S3_BUCKET:-tether-ai-dev}"
+BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 BASE_PATH="qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M"
 MODEL_NAME="ggml-indictrans2-en-indic-dist-200M-q4_0.bin"
 
