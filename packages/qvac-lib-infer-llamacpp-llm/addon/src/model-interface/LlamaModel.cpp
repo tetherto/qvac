@@ -195,7 +195,7 @@ std::any LlamaModel::process(const std::any& input) {
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
   }
-  return processPrompt(std::any_cast<Prompt>(input));
+  return processPrompt(std::any_cast<const Prompt&>(input));
 }
 
 LlamaModel::ResolvedPrompt
