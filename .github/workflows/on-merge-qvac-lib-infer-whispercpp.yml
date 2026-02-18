@@ -15,7 +15,7 @@ on:
     inputs:
       tag:
         description: "Tag to publish with"
-        required: true
+        required: false
         default: "dev"
         type: choice
         options:
