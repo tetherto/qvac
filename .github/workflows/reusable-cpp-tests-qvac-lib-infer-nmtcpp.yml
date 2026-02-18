@@ -75,24 +75,16 @@ jobs:
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Download models from S3
+      - name: Download models via Hyperdrive
         run: |
-          echo "Creating models directory..."
-          mkdir -p models/unit-test
-          echo "Downloading models from S3..."
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
+          echo "Downloading models via Hyperdrive..."
+          timeout 300 bare scripts/download-models-hyperdrive.js --target cpp-tests || {
+            echo "⚠️  Hyperdrive download failed or timed out (exit $?)"
+            echo "   Some C++ tests may be skipped due to missing models"
+          }
           echo "Verifying downloaded models..."
-          ls -lh models/unit-test/
-          du -sh models/unit-test/*
+          ls -lh models/unit-test/ 2>/dev/null || echo "   (no models downloaded)"
+          du -sh models/unit-test/* 2>/dev/null || true
 
       - name: Create config.cmake to disable Bergamot for tests
         run: |

@@ -358,121 +358,52 @@ jobs:
             ccache \
             libunwind-dev
 
-      - name: Configure AWS credentials
-        if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials (for dataset downloads)
+        if: inputs.dataset_conversational_phrases == true
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: us-west-2
 
-      - name: Download QVAC models (GGML format)
+      - name: Download QVAC models via Hyperdrive (GGML format)
         # Only download GGML models for 'qvac' translator (not qvac_bergamot which uses Bergamot models)
-        if: contains(format(',{0},', inputs.translators), ',qvac,')
+        if: contains(format(',{0},', inputs.translators), ',qvac,') && needs.setup.outputs.qvac_needed == 'true'
         working-directory: ${{ env.PKG_DIR }}
         run: |
           mkdir -p qvac_models
-          # Download model for this specific language pair
           pair="${{ matrix.pair }}"
-          echo "Downloading model for $pair..."
+          echo "Downloading OPUS/GGML model for $pair via Hyperdrive..."
 
-          # Function to download a model
-          download_model() {
-            local model_pair=$1
-            local temp_dir="qvac_models/temp_$model_pair"
-            mkdir -p "$temp_dir"
+          # Determine quantization flag
+          # Note: Only French pairs + en-pt have opus-ggml q4_0 keys on Hyperdrive.
+          # For other pairs, the script falls back: q4_0 → q0f16 → q0f32 (GGML keys only).
+          if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+            QUANT="q4_0"
+          else
+            QUANT="q0f16"
+          fi
 
-            # Map pt (Portuguese) to roa (Romance languages) for S3 path
-            local s3_pair="$model_pair"
-            if [[ "$model_pair" == "en-pt" ]]; then
-              s3_pair="en-roa"
-              echo "Mapping en-pt to en-roa for S3 download"
-            elif [[ "$model_pair" == "pt-en" ]]; then
-              s3_pair="roa-en"
-              echo "Mapping pt-en to roa-en for S3 download"
-            fi
-
-            # Download f16 or q4 model from S3
-            if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-              echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
-            else
-              echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
-            fi
-            echo "AWS PATH: $aws_path"
-            if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
-              echo "Successfully downloaded model for $model_pair from S3 (using $s3_pair)"
-              
-              # Find the latest date directory and move files up
-              date_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
-              if [ -n "$date_dir" ]; then
-                echo "Found date directory: $date_dir"
-                mkdir -p "qvac_models/$model_pair"
-                mv "$date_dir"/* "qvac_models/$model_pair/"
-                rm -rf "$temp_dir"
-
-                # Rename ggml-opus-{s3_pair}.bin to model_f16.bin or model_q4_0.bin
-                # Note: The downloaded file uses the S3 pair name (e.g., roa-en), not the model_pair (e.g., pt-en)
-                if [ -f "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" ]; then
-                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
-                    echo "Renamed ggml-opus-$s3_pair.bin to model_q4_0.bin"
-                  else
-                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_f16.bin"
-                    echo "Renamed ggml-opus-$s3_pair.bin to model_f16.bin"
-                  fi
-                elif [ -f "qvac_models/$model_pair/ggml-opus-$model_pair.bin" ]; then
-                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
-                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
-                    echo "Renamed ggml-opus-$model_pair.bin to model_q4_0.bin"
-                  else
-                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_f16.bin"
-                    echo "Renamed ggml-opus-$model_pair.bin to model_f16.bin"
-                  fi
-                fi
-                
-                # Verify the model file exists
-                if [ -f "qvac_models/$model_pair/model_f16.bin" ]; then
-                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_f16.bin)"
-                elif [ -f "qvac_models/$model_pair/model_q4_0.bin" ]; then
-                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_q4_0.bin)"
-                else
-                  echo "Warning: neither model_f16.bin nor model_q4_0.bin found after flattening"
-                  ls -la "qvac_models/$model_pair/"
-                fi
-              else
-                echo "No date directory found, moving files directly"
-                mkdir -p "qvac_models/$model_pair"
-                mv "$temp_dir"/* "qvac_models/$model_pair/" 2>/dev/null || true
-                rm -rf "$temp_dir"
-              fi
-            else
-              echo "S3 download failed for $model_pair, evaluation will attempt to use Hyperdrive"
-              rm -rf "$temp_dir"
-            fi
+          # Download the main model (script handles fallback automatically)
+          # Timeout after 3 minutes to prevent P2P hangs in CI
+          timeout 180 bare scripts/download-models-hyperdrive.js --target opus --pair "$pair" --quantization "$QUANT" || {
+            echo "⚠️  Hyperdrive download failed for $pair (exit $?), nmt-cli will attempt download at runtime"
           }
-
-          # Download the main model
-          download_model "$pair"
 
           # If using pivot translation and this is a non-English pair, download pivot models
           if [ "${{ inputs.use_pivot }}" = "true" ]; then
             src_lang="${pair%-*}"
             trg_lang="${pair#*-}"
-            
-            # Check if this is a non-English pair
+
             if [ "$src_lang" != "en" ] && [ "$trg_lang" != "en" ]; then
               echo "Pivot translation enabled for non-English pair $pair"
-              echo "Downloading pivot models: ${src_lang}-en and en-${trg_lang}"
-              
-              # Download source-to-English model
-              download_model "${src_lang}-en"
-              
-              # Download English-to-target model
-              download_model "en-${trg_lang}"
+              timeout 180 bare scripts/download-models-hyperdrive.js --target opus --pair "${src_lang}-en" --quantization "$QUANT" || true
+              timeout 180 bare scripts/download-models-hyperdrive.js --target opus --pair "en-${trg_lang}" --quantization "$QUANT" || true
             fi
           fi
+
+          echo "Downloaded models:"
+          find qvac_models -type f -name "*.bin" -exec ls -lh {} \; || true
         continue-on-error: true
 
       - name: Cache datasets
@@ -501,79 +432,70 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Download Firefox translations models for Bergamot (from GitHub)
-        # Only for 'bergamot' translator (not qvac_bergamot which downloads from S3)
-        if: contains(format(',{0},', inputs.translators), ',bergamot,')
+      - name: Download Bergamot models (Hyperdrive + Firefox fallback)
+        # For both 'bergamot' and 'qvac_bergamot' translators
+        # Tries Hyperdrive first via bare script. If the bare process crashes (e.g. exit 133
+        # due to P2P connectivity issues in CI), falls back to direct git-lfs download from
+        # Firefox Translations GitHub at the shell level.
+        if: contains(inputs.translators, 'bergamot') || contains(inputs.translators, 'qvac_bergamot')
+        working-directory: ${{ env.PKG_DIR }}
         run: |
-          # Install git-lfs on Linux
-          sudo apt-get install -y git-lfs
-          git lfs install
+          # Ensure git-lfs is installed (needed for Firefox fallback)
+          sudo apt-get install -y git-lfs 2>/dev/null || true
+          git lfs install 2>/dev/null || true
 
-          # Clone Firefox translations models repo (shallow clone)
-          git clone --depth 1 https://github.com/mozilla/firefox-translations-models.git
-          cd firefox-translations-models
-
-          # Download specific language pair models
-          pair="${{ matrix.pair }}"
-          src_lang="${pair%-*}"
-          trg_lang="${pair#*-}"
-
-          # Download main pair model
-          pair_code="${src_lang}${trg_lang}"
-          echo "Downloading Firefox model for $pair_code..."
-          git lfs pull --include="models/base-memory/$pair_code/*"
-
-          # Extract model files
-          cd models/base-memory/$pair_code
-          gunzip -k *.gz
-
-          # Set up Firefox models directory for bergamot
-          mkdir -p ~/.local/share/bergamot/models/firefox/base-memory/$pair_code
-          cp -v *.bin *.spm ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/
-
-          echo "Firefox models installed to ~/.local/share/bergamot/models/firefox/"
-        continue-on-error: true
-
-      - name: Download Bergamot models for qvac_bergamot (from S3)
-        if: contains(inputs.translators, 'qvac_bergamot')
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          # Download specific language pair models from S3
           pair="${{ matrix.pair }}"
           src_lang="${pair%-*}"
           trg_lang="${pair#*-}"
           pair_code="${src_lang}${trg_lang}"
 
-          echo "Downloading Bergamot model for $pair_code from S3..."
+          # Download to Firefox models directory (shared by both bergamot and qvac_bergamot)
+          OUTPUT_DIR="$HOME/.local/share/bergamot/models/firefox/base-memory/$pair_code"
+          mkdir -p "$OUTPUT_DIR"
 
-          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-${pair_code}"
+          echo "Downloading Bergamot model for $pair_code (Hyperdrive → Firefox fallback)..."
 
-          # Find the latest date folder (sorted alphabetically, last one is latest)
-          latest_date=$(aws s3 ls "${S3_BASE}/" | grep PRE | awk '{print $2}' | tr -d '/' | sort | tail -1)
+          # Try Hyperdrive first (may crash in CI due to P2P connectivity)
+          if timeout 120 bare scripts/download-models-hyperdrive.js --target bergamot --pair "$pair" --output "$OUTPUT_DIR" 2>&1; then
+            echo "✅ Bergamot $pair_code downloaded via Hyperdrive"
+          else
+            echo "⚠️  Hyperdrive failed (exit $?), falling back to Firefox GitHub direct download..."
 
-          if [ -z "$latest_date" ]; then
-            echo "ERROR: No date folders found for $pair_code"
-            exit 1
+            # Shell-level Firefox fallback: git sparse-checkout + git-lfs
+            TMP_DIR="/tmp/firefox-translations-${pair_code}-$$"
+            rm -rf "$TMP_DIR"
+
+            echo "   Cloning Firefox Translations repo (sparse, metadata only)..."
+            git clone --depth 1 --filter=blob:none --sparse \
+              https://github.com/mozilla/firefox-translations-models.git "$TMP_DIR"
+
+            echo "   Setting sparse checkout for models/base-memory/${pair_code}..."
+            git -C "$TMP_DIR" sparse-checkout set "models/base-memory/${pair_code}"
+
+            echo "   Pulling LFS files..."
+            git -C "$TMP_DIR" lfs pull --include="models/base-memory/${pair_code}/*"
+
+            # Decompress .gz files into output directory
+            SRC_DIR="$TMP_DIR/models/base-memory/$pair_code"
+            if [ -d "$SRC_DIR" ]; then
+              echo "   Decompressing model files..."
+              for gz_file in "$SRC_DIR"/*.gz; do
+                [ -f "$gz_file" ] || continue
+                base_name=$(basename "$gz_file" .gz)
+                gunzip -c "$gz_file" > "$OUTPUT_DIR/$base_name"
+                size=$(du -h "$OUTPUT_DIR/$base_name" | cut -f1)
+                echo "   ✅ $base_name ($size)"
+              done
+              echo "✅ Bergamot $pair_code downloaded from Firefox Translations GitHub"
+            else
+              echo "❌ Language pair $pair_code not found in Firefox Translations"
+            fi
+
+            rm -rf "$TMP_DIR"
           fi
 
-          echo "Found latest model date: $latest_date"
-
-          # Set up Firefox models directory
-          mkdir -p ~/.local/share/bergamot/models/firefox/base-memory/$pair_code
-
-          # Download only the latest date folder from S3
-          aws s3 sync "${S3_BASE}/${latest_date}/" \
-            ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/ \
-            --exclude "metadata.json" \
-            --exclude "config.bergamot.yml"
-
-          echo "Model files:"
-          ls -la ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/
-
-          echo "Bergamot models installed to ~/.local/share/bergamot/models/firefox/"
+          echo "Model files in $OUTPUT_DIR:"
+          ls -la "$OUTPUT_DIR/" 2>/dev/null || echo "   (empty)"
         continue-on-error: true
 
       - name: Install Python dependencies
@@ -679,6 +601,7 @@ jobs:
           done
         env:
           PYTHONUNBUFFERED: 1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4

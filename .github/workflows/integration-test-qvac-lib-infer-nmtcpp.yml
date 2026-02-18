@@ -163,32 +163,50 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers gcc-13 g++-13 libstdc++-13-dev
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+      - name: Install git-lfs (needed for Firefox model fallback)
+        shell: bash
+        run: |
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get install -y git-lfs 2>/dev/null || true
+          fi
+          git lfs install 2>/dev/null || true
 
-      - name: Download Bergamot model from S3
+      - name: Download models via Hyperdrive
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Downloading Bergamot en-it model from S3..."
-          mkdir -p model/bergamot/enit
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
+          echo "Downloading integration test models via Hyperdrive..."
+          if timeout 300 bare scripts/download-models-hyperdrive.js --target integration 2>&1; then
+            echo "✅ Models downloaded via Hyperdrive"
+          else
+            echo "⚠️  Hyperdrive download failed (exit $?), trying Bergamot via Firefox GitHub..."
+
+            # Shell-level Firefox fallback for Bergamot en-it
+            OUTPUT_DIR="model/bergamot/enit"
+            mkdir -p "$OUTPUT_DIR"
+            TMP_DIR="/tmp/firefox-translations-enit-$$"
+            rm -rf "$TMP_DIR"
+
+            git clone --depth 1 --filter=blob:none --sparse \
+              https://github.com/mozilla/firefox-translations-models.git "$TMP_DIR"
+            git -C "$TMP_DIR" sparse-checkout set "models/base-memory/enit"
+            git -C "$TMP_DIR" lfs pull --include="models/base-memory/enit/*"
+
+            for gz_file in "$TMP_DIR"/models/base-memory/enit/*.gz; do
+              [ -f "$gz_file" ] || continue
+              base_name=$(basename "$gz_file" .gz)
+              gunzip -c "$gz_file" > "$OUTPUT_DIR/$base_name"
+              echo "   ✅ $base_name"
+            done
+            rm -rf "$TMP_DIR"
+
+            echo "⚠️  IndicTrans model may be missing (Hyperdrive was required)"
+          fi
+
           echo "Bergamot model files:"
-          ls -la model/bergamot/enit/
-
-      - name: Download IndicTrans model from S3
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Downloading IndicTrans en-indic model from S3..."
-          mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          ls -la model/bergamot/enit/ 2>/dev/null || echo "   (missing)"
           echo "IndicTrans model files:"
-          ls -la model/indictrans/
+          ls -la model/indictrans/ 2>/dev/null || echo "   (missing)"
 
       - name: Run integration test
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}

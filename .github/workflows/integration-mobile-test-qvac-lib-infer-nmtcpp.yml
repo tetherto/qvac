@@ -300,92 +300,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
 
-      - name: Generate Bergamot Model URLs
+      - name: Prepare mobile test assets
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
-          AWS_REGION: eu-central-1
         run: |
-          echo "🔑 Generating Bergamot model URLs for mobile tests..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Language pair: $BERGAMOT_LANG_PAIR"
-
-          # Make the script executable
-          chmod +x scripts/generate-bergamot-presigned-urls.sh
-
-          # Generate presigned URLs for specified language pair
-          # This will export BERGAMOT_MODEL_URL and BERGAMOT_VOCAB_URL to GITHUB_ENV
-          ./scripts/generate-bergamot-presigned-urls.sh "$BERGAMOT_LANG_PAIR"
-
+          echo "📝 Models will be downloaded via Hyperdrive at test runtime on device"
+          echo "   No S3 presigned URLs needed - HyperdriveDL handles model download"
           echo ""
-          echo "✅ Bergamot model URLs generated and exported"
-          echo "   Language pair: $BERGAMOT_LANG_PAIR"
-          echo "   Both Opus and Bergamot backends will be tested"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Generate IndicTrans Model URLs
-        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          AWS_REGION: eu-central-1
-        run: |
-          echo "🔑 Generating IndicTrans model URLs for mobile tests..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          # Make the script executable
-          chmod +x scripts/generate-indictrans-presigned-urls.sh
-
-          # Generate presigned URL for IndicTrans model
-          # This will export INDICTRANS_MODEL_URL to GITHUB_ENV
-          ./scripts/generate-indictrans-presigned-urls.sh
-
-          echo ""
-          echo "✅ IndicTrans model URL generated and exported"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Bundle Model URLs in config files for APK to access
-        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          BERGAMOT_MODEL_URL: ${{ env.BERGAMOT_MODEL_URL }}
-          BERGAMOT_VOCAB_URL: ${{ env.BERGAMOT_VOCAB_URL }}
-          INDICTRANS_MODEL_URL: ${{ env.INDICTRANS_MODEL_URL }}
-        run: |
-          echo "📝 Creating model URL config files for mobile app bundling..."
-          echo "🔍 Debug: Checking environment variables..."
-          echo "   BERGAMOT_MODEL_URL: ${BERGAMOT_MODEL_URL:-NOTSET}"
-          echo "   BERGAMOT_VOCAB_URL: ${BERGAMOT_VOCAB_URL:-NOTSET}"
-          echo "   INDICTRANS_MODEL_URL: ${INDICTRANS_MODEL_URL:-NOTSET}"
-
-          # Create testAssets directory in the addon
+          # Create testAssets directory (may be needed by test framework)
           mkdir -p test/mobile/testAssets
-
-          # Bundle Bergamot URLs
-          if [ -n "${BERGAMOT_MODEL_URL:-}" ] && [ -n "${BERGAMOT_VOCAB_URL:-}" ]; then
-            echo "✅ Creating Bergamot config..."
-            echo "{" > test/mobile/testAssets/bergamot-urls.json
-            echo "  \"modelUrl\": \"${BERGAMOT_MODEL_URL}\"," >> test/mobile/testAssets/bergamot-urls.json
-            echo "  \"vocabUrl\": \"${BERGAMOT_VOCAB_URL}\"" >> test/mobile/testAssets/bergamot-urls.json
-            echo "}" >> test/mobile/testAssets/bergamot-urls.json
-            echo "   ✅ Bergamot URLs bundled"
-            cat test/mobile/testAssets/bergamot-urls.json
-          else
-            echo "   ⚠️  Bergamot URLs not available"
-          fi
-
-          # Bundle IndicTrans URL
-          if [ -n "${INDICTRANS_MODEL_URL:-}" ]; then
-            echo "✅ Creating IndicTrans config..."
-            echo "{" > test/mobile/testAssets/indictrans-model-urls.json
-            echo "  \"modelUrl\": \"${INDICTRANS_MODEL_URL}\"" >> test/mobile/testAssets/indictrans-model-urls.json
-            echo "}" >> test/mobile/testAssets/indictrans-model-urls.json
-            echo "   ✅ IndicTrans URL bundled"
-            cat test/mobile/testAssets/indictrans-model-urls.json
-          else
-            echo "   ⚠️  IndicTrans URL not available"
-          fi
-
-          echo ""
           echo "📂 testAssets directory contents:"
-          ls -la test/mobile/testAssets/
+          ls -la test/mobile/testAssets/ || echo "   (empty)"
 
       - name: Pack addon
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
@@ -995,10 +919,6 @@ jobs:
 
       - name: Create and Upload Test Spec
         id: upload_test_spec
-        env:
-          BERGAMOT_MODEL_URL: ${{ env.BERGAMOT_MODEL_URL }}
-          BERGAMOT_VOCAB_URL: ${{ env.BERGAMOT_VOCAB_URL }}
-          INDICTRANS_MODEL_URL: ${{ env.INDICTRANS_MODEL_URL }}
         run: |
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"
@@ -1053,7 +973,7 @@ jobs:
             printf '      - echo "Setting up test environment..."\n'
             printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
             printf '      - ls -la\n'
-            printf '      - echo "Test environment ready - using bundled Bergamot config"\n'
+            printf '      - echo "Test environment ready - models downloaded via Hyperdrive at runtime"\n'
             printf '      - echo "Installing dependencies (clean install)..."\n'
             printf '      - rm -rf node_modules package-lock.json 2>/dev/null || true\n'
             printf '      - npm install --legacy-peer-deps 2>&1\n'
