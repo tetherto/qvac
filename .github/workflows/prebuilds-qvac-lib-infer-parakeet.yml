@@ -511,6 +511,7 @@ jobs:
           tag: 'latest'
           workdir: ${{ env.WORKDIR }}
           repo_name: "parakeet"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Capture published version
         id: capture_version
