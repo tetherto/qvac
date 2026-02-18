@@ -149,12 +149,12 @@ protected:
 
 TEST_F(CacheManagementTest, InitialStateNoCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input =
@@ -171,12 +171,12 @@ TEST_F(CacheManagementTest, InitialStateNoCache) {
 
 TEST_F(CacheManagementTest, EnableCacheWithFilename) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input =
@@ -202,12 +202,12 @@ TEST_F(CacheManagementTest, EnableCacheWithFilename) {
 
 TEST_F(CacheManagementTest, SessionPersistence) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -242,12 +242,12 @@ TEST_F(CacheManagementTest, SessionPersistence) {
 
 TEST_F(CacheManagementTest, MultipleSessionCommands) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input =
@@ -264,12 +264,12 @@ TEST_F(CacheManagementTest, MultipleSessionCommands) {
 
 TEST_F(CacheManagementTest, ResetCommand) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -304,12 +304,12 @@ TEST_F(CacheManagementTest, ResetCommand) {
 
 TEST_F(CacheManagementTest, SwitchToSession2) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -348,12 +348,12 @@ TEST_F(CacheManagementTest, SwitchToSession2) {
 
 TEST_F(CacheManagementTest, DisableCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -377,12 +377,12 @@ TEST_F(CacheManagementTest, DisableCache) {
 
 TEST_F(CacheManagementTest, VerifyStatelessBehavior) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -406,12 +406,12 @@ TEST_F(CacheManagementTest, VerifyStatelessBehavior) {
 
 TEST_F(CacheManagementTest, ReEnableCacheAfterDisable) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -446,12 +446,12 @@ TEST_F(CacheManagementTest, ReEnableCacheAfterDisable) {
 
 TEST_F(CacheManagementTest, SessionCommandOnly) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "session", "content": "reset"}])";
@@ -462,12 +462,12 @@ TEST_F(CacheManagementTest, SessionCommandOnly) {
 
 TEST_F(CacheManagementTest, SaveWhenCacheDisabled) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "session", "content": "save"}])";
@@ -480,12 +480,12 @@ TEST_F(CacheManagementTest, SaveWhenCacheDisabled) {
 
 TEST_F(CacheManagementTest, ComplexSessionCommandChain) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -521,12 +521,12 @@ TEST_F(CacheManagementTest, ComplexSessionCommandChain) {
 
 TEST_F(CacheManagementTest, CacheClearedWhenNoSessionMessage) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -581,12 +581,12 @@ TEST_F(CacheManagementTest, CacheClearedWhenNoSessionMessage) {
 
 TEST_F(CacheManagementTest, CacheClearedWhenSwitchingToDifferentCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -639,12 +639,12 @@ TEST_F(CacheManagementTest, CacheClearedWhenSwitchingToDifferentCache) {
 
 TEST_F(CacheManagementTest, SingleShotInferenceAfterCacheCleared) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -676,12 +676,12 @@ TEST_F(CacheManagementTest, SingleShotInferenceAfterCacheCleared) {
 
 TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -739,12 +739,12 @@ TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
 
 TEST_F(CacheManagementTest, GetTokensCommand) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -789,12 +789,12 @@ TEST_F(CacheManagementTest, GetTokensCommand) {
 
 TEST_F(CacheManagementTest, SaveCommandReturnsZeroMetrics) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -843,12 +843,12 @@ TEST_F(CacheManagementTest, SaveCommandReturnsZeroMetrics) {
 
 TEST_F(CacheManagementTest, GetTokensCommandWithNoCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string getTokensInput =
@@ -860,12 +860,12 @@ TEST_F(CacheManagementTest, GetTokensCommandWithNoCache) {
 
 TEST_F(CacheManagementTest, GetTokensCommandAfterDisable) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -893,12 +893,12 @@ TEST_F(CacheManagementTest, GetTokensCommandAfterDisable) {
 
 TEST_F(CacheManagementTest, GetTokensCommandAfterReset) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input1 =
@@ -940,12 +940,12 @@ TEST_F(CacheManagementTest, GetTokensCommandAfterReset) {
 
 TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model_large = createModelWithContextSizeAndNPredict("4096", "100");
   if (!model_large) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string large_cache_path = "test_large_cache.bin";
@@ -1014,15 +1014,15 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
 
   int smallContextSize = 128;
   if (cacheTokensBeforeSave <= smallContextSize) {
-    GTEST_SKIP() << "Cache tokens (" << cacheTokensBeforeSave
-                 << ") not enough to exceed context size (" << smallContextSize
-                 << ")";
+    FAIL() << "Cache tokens (" << cacheTokensBeforeSave
+           << ") not enough to exceed context size (" << smallContextSize
+           << ")";
   }
 
   auto model_small =
       createModelWithContextSize(std::to_string(smallContextSize));
   if (!model_small) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string loadInput =

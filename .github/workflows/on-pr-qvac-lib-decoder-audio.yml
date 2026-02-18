@@ -10,6 +10,8 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-* 
     paths:
       - "packages/qvac-lib-decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"

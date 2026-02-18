@@ -33,6 +33,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_FILE_PARSE_FAILED: 50604,
   CONFIG_VALIDATION_FAILED: 50605,
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
+  MULTIPLE_SDK_INSTALLATIONS: 50607,
 } as const;
 
 const clientErrorDefinitions: ErrorCodesMap = {
@@ -115,7 +116,8 @@ const clientErrorDefinitions: ErrorCodesMap = {
   // Build/Bundle Errors (50,600-50,799)
   [SDK_CLIENT_ERROR_CODES.SDK_NOT_FOUND_IN_NODE_MODULES]: {
     name: "SDK_NOT_FOUND_IN_NODE_MODULES",
-    message: "@qvac/sdk not found in node_modules",
+    message:
+      "QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev",
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND]: {
     name: "WORKER_FILE_NOT_FOUND",
@@ -140,6 +142,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED]: {
     name: "CONFIG_VALIDATION_FAILED",
     message: (errors: string) => `Config validation failed: ${errors}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS]: {
+    name: "MULTIPLE_SDK_INSTALLATIONS",
+    message: (packages: string) =>
+      `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`,
   },
   [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
     name: "PEAR_WORKER_ENTRY_REQUIRED",

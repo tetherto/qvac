@@ -1,1 +1,144 @@
+QVAC Registry Server
+Copyright 2024-2026 Tether Operations Limited
 
+This product distributes third-party AI model weights under their
+respective licenses. The registry software itself is licensed under
+Apache-2.0; the models it serves are governed by the licenses listed
+below.
+
+=========================================================================
+Required Attribution Notices
+=========================================================================
+
+Llama 3.2 is licensed under the Llama 3.2 Community License,
+Copyright (c) Meta Platforms, Inc. All Rights Reserved.
+
+Gemma is provided under and subject to the Gemma Terms of Use found
+at ai.google.dev/gemma/terms
+
+HAI-DEF is provided under and subject to the Health AI Developer
+Foundations Terms of Use found at
+https://developers.google.com/health-ai-developer-foundations/terms
+
+=========================================================================
+Third-Party Model Licenses
+=========================================================================
+
+Full license texts are stored in data/licenses/<id>/LICENSE.txt.
+Each model entry in the registry includes a "license" field referencing
+one of these identifiers.
+
+--- Apache-2.0 (Apache License 2.0) ---
+
+  Original repositories:
+    BSC-LT/salamandraTA-2B-instruct-GGUF
+    Qwen/Qwen3-8B-GGUF
+    Qwen/Qwen3-VL-2B-Instruct-GGUF
+    ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+    jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
+    mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
+    unsloth/Qwen3-0.6B-GGUF
+    unsloth/Qwen3-1.7B-GGUF
+    unsloth/gpt-oss-20b-GGUF
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    Qwen3-1.7B, Qwen3-4B
+    dolphin-mixtral-2x7b-dpo
+    Marian translation models (various language pairs)
+    salamandrata-2b-instruct (q4, q8)
+    Whisper fine-tuned (English, French, German, Italian, Japanese,
+      Norwegian, Portuguese, Russian)
+    OCR detector and recognizer models
+
+--- MIT (MIT License) ---
+
+  Original repositories:
+    ggerganov/whisper.cpp         (Copyright (c) 2023-2024 The ggml authors)
+    ggml-org/whisper-vad
+    ChristianAzinn/gte-large-gguf
+    ResembleAI/chatterbox-turbo-ONNX
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    GTE-large (fp16)
+    IndicTrans2 models (en-indic, indic-en, indic-indic)
+    Whisper (German, Portuguese, Spanish, Futo fine-tuned)
+
+--- MPL-2.0 (Mozilla Public License 2.0) ---
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    Bergamot translation models (ar-en, cs-en, en-ar, en-cs, en-de,
+      en-es, en-fr, en-it, en-ja, en-pt, en-ru, en-zh, es-en, fr-en,
+      it-en, ja-en, pt-en, ru-en, zh-en)
+
+  Original model weights are publicly available from Mozilla's
+  firefox-translations-models repository.
+
+--- CC-BY-4.0 (Creative Commons Attribution 4.0 International) ---
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    Marian/Opus-MT translation models (en-de, en-pt, ru-en, zh-en)
+
+  Attribution: Helsinki-NLP / OPUS-MT project
+  (https://github.com/Helsinki-NLP/Opus-MT)
+
+--- llama3.2 (Llama 3.2 Community License) ---
+
+  Original repositories:
+    unsloth/Llama-3.2-1B-Instruct-GGUF
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    Llama-3.2-1B-Instruct (Q4_0)
+
+  Additional requirements per license Section 1.b.i:
+    Products or services distributing or containing Llama 3.2 materials
+    must prominently display "Built with Llama" on a related website,
+    user interface, blog post, about page, or product documentation.
+
+--- gemma (Gemma Terms of Use) ---
+
+  Original repositories:
+    unsloth/embeddinggemma-300m-GGUF
+
+  Additional requirements per Section 3.1:
+    Distribution must be accompanied by the Gemma Terms of Use.
+    Use is subject to the Gemma Prohibited Use Policy at
+    ai.google.dev/gemma/prohibited_use_policy
+
+--- health-ai-developer-foundations (HAI-DEF Terms of Use) ---
+
+  Original repositories:
+    unsloth/medgemma-4b-it-GGUF
+
+  Compiled / quantized derivatives (see Modification Notice below):
+    medgemma-4b-it (Q4, Q8)
+
+  Additional requirements per Section 3.1:
+    Distribution must be accompanied by the HAI-DEF Terms of Use.
+    Clinical use requires Health Regulatory Authorization from the
+    relevant authority (Section 3.1.3).
+    Use is subject to the HAI-DEF Prohibited Use Policy at
+    developers.google.com/health-ai-developer-foundations/prohibited-use-policy
+
+--- openrail (BigScience Open RAIL-M License) ---
+
+  Original repositories:
+    onnx-community/Supertonic-TTS-ONNX
+
+  Additional requirements per Section 4:
+    The use-based restrictions in Attachment A of the license must be
+    included as an enforceable provision in any agreement governing
+    distribution, and downstream users must be notified of these
+    restrictions.
+
+=========================================================================
+Modification Notice
+=========================================================================
+
+Models listed as "compiled / quantized derivatives" have been converted
+from original model weights into optimized inference formats (GGUF, GGML,
+ONNX, or Bergamot intgemm). These conversions involve format
+transformation and/or weight quantization. No architectural changes were
+made to the underlying models.
+
+Source URLs for original weights are recorded in each model's metadata
+entry within the registry.

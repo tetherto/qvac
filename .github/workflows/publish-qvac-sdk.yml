@@ -118,14 +118,14 @@ jobs:
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
-          # Only modify package name for dev, fix-*, feature-* branches
+          # Only modify package name for main, fix-*, feature-* branches
           case "$BRANCH_NAME" in
-            main)
-              echo "Main branch - keeping original package name"
+            release-*)
+              echo "Release branch - keeping original package name"
               exit 0
               ;;
-            dev)
-              SUFFIX="dev"
+            main)
+              SUFFIX="mono"
               ;;
             fix-*|feature-*)
               SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
@@ -151,13 +151,9 @@ jobs:
           MODIFIED_NAME=$(node -p "require('./package.json').name")
           echo "✓ Modified package.json: $MODIFIED_NAME"
 
-          # Update references in withMobileBundle.ts
+          # Update @qvac/cli references in withMobileBundle.ts to @tetherto/cli-mono
           MOBILE_BUNDLE_FILE="expo/plugins/withMobileBundle.ts"
           if [ -f "$MOBILE_BUNDLE_FILE" ]; then
-            echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
-            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
-            rm "${MOBILE_BUNDLE_FILE}.bak"
-            # Update @qvac/cli references to @tetherto/cli-mono
             echo "Updating @qvac/cli references in $MOBILE_BUNDLE_FILE to @tetherto/cli-mono"
             sed -i.bak "s|\"@qvac\"|\"@tetherto\"|g" "$MOBILE_BUNDLE_FILE"
             sed -i.bak "s|\"cli\"|\"cli-mono\"|g" "$MOBILE_BUNDLE_FILE"
@@ -165,15 +161,6 @@ jobs:
             sed -i.bak "s|npx qvac|npx tetherto|g" "$MOBILE_BUNDLE_FILE"
             rm "${MOBILE_BUNDLE_FILE}.bak"
             echo "✓ Updated $MOBILE_BUNDLE_FILE"
-          fi
-
-          # Update references in withDeviceInfo.ts
-          DEVICE_INFO_FILE="expo/plugins/withDeviceInfo.ts"
-          if [ -f "$DEVICE_INFO_FILE" ]; then
-            echo "Updating @qvac/sdk references in $DEVICE_INFO_FILE to $NEW_NAME"
-            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$DEVICE_INFO_FILE"
-            rm "${DEVICE_INFO_FILE}.bak"
-            echo "✓ Updated $DEVICE_INFO_FILE"
           fi
 
           # Update references in expo-rpc-client.ts

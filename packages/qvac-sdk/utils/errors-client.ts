@@ -215,6 +215,18 @@ export class SDKNotFoundInNodeModulesError extends QvacErrorBase {
   }
 }
 
+export class MultipleSDKInstallationsError extends QvacErrorBase {
+  constructor(packages: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS,
+        [packages],
+        cause,
+      ),
+    );
+  }
+}
+
 export class WorkerFileNotFoundError extends QvacErrorBase {
   constructor(workerPath: string, cause?: unknown) {
     super(

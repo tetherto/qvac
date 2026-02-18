@@ -56,7 +56,9 @@ public:
   }
 
   ~AddonCpp() { outputCallback_->stop(); }
-  void runJob(std::any input) { jobRunner_.runJob(std::move(input)); }
+
+  /// @returns False if the job cannot be run (e.g. because a job is already set or being processed)
+  bool runJob(std::any input) { return jobRunner_.runJob(std::move(input)); }
   void cancelJob() { jobRunner_.cancel(); }
 
   const std::reference_wrapper<model::IModel> model;
