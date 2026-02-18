@@ -52,7 +52,7 @@ TestModel make_valid_model() {
 
 TestModel make_invalid_model() { return TestModel(); }
 
-std::any make_valid_input() { return "Hello, my name is Bob."; }
+std::any make_valid_input() { return std::string("Hello, my name is Bob."); }
 
 std::any make_empty_input() { return std::string(); }
 

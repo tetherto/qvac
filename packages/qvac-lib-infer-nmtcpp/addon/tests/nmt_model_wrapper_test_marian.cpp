@@ -52,7 +52,7 @@ TestModel make_valid_model() {
 
 TestModel make_invalid_model() { return TestModel(); }
 
-std::any make_valid_input() { return "Hello, my name is Bob."; }
+std::any make_valid_input() { return std::string("Hello, my name is Bob."); }
 
 std::any make_empty_input() { return std::string(); }
 
@@ -237,7 +237,7 @@ TEST_P(
   wrapper.process(input);
 
   const auto stats = wrapper.runtimeStats();
-  EXPECT_TRUE(stats.empty());
+  EXPECT_FALSE(stats.empty());
 }
 
 TEST_P(NmtCppModelWrapperTest, RuntimeStatsDisabled) {
