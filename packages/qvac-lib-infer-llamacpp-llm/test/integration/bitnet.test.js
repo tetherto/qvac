@@ -73,4 +73,3 @@ test('bitnet model runs simple inference', { timeout: 1_800_000 }, async t => {
     await loader.close().catch(() => {})
   }
 })
-
