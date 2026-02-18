@@ -1,24 +1,40 @@
 ---
-name: embed-changelog
-description: Generate changelog entries for the Embeddings add-on. Use when preparing a new release.
+name: addon-changelog
+description: Generate changelog entries for a target add-on package. Use when preparing a new release.
 ---
 
 # Generate Human-Readable Changelog Entries
 
-## Step 1: Identify version **and** changes (mandatory version bump check)
+Generate changelog entries for add-on packages following the add-on release workflow.
 
-Identify the full set of changes that will land in `main` for the PR, and **validate the version bump in `package.json`** against `main`:
+## When to use this skill
+
+**Use when:**
+
+- Preparing a release for an add-on package
+- User asks to generate release notes or changelog for an add-on
+- User invokes `/addon-changelog`
+
+## Workflow
+
+### Step 1: Identify Target Add-on
+
+If the user doesn't specify, ask which add-on package they want to generate a changelog for.
+
+### Step 2: Identify version and changes (mandatory version bump check)
+
+Identify the full set of changes that will land in `main` for the PR, and validate the version bump in the target add-on `package.json` against `main`:
 
 1. **Find the PR base and head**: The base is `main`. The head is the current branch/commit that the PR will merge.
 2. **Compare against `main`**:
    - Use a range like `main...HEAD` (or the PR base commit...HEAD) to list commits and diffs.
    - **Always compare `package.json` between `main` and `HEAD`.**
 3. **Mandatory version bump check**:
-   - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user:
+   - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user, substituting `<addon>` with the actual add-on name:
 
    -----------------------------------
    ⚠️⚠️⚠️ VERSION BUMP REQUIRED ⚠️⚠️⚠️  
-   The `version` in `package.json` is unchanged compared to `main`.  
+   The `version` in `packages/<addon>/package.json` is unchanged compared to `main`.  
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 
@@ -26,7 +42,7 @@ Identify the full set of changes that will land in `main` for the PR, and **vali
 
 The goal is to produce a single, combined change set that reflects **what will be merged**: all commits on the PR branch versus `main` only.
 
-## Step 2: Collect PRs included in this release
+### Step 3: Collect PRs included in this release
 
 1. **Extract PR numbers** from commit messages in the range `main...HEAD`
    - Look for patterns like `#123`, `(#123)`, or `Merge pull request #123`
@@ -36,9 +52,9 @@ The goal is to produce a single, combined change set that reflects **what will b
    - PR URL
 3. **Build a list** of PRs to include in the release notes
 
-## Step 3: Generate changelog entry (single source of truth)
+### Step 4: Generate changelog entry (single source of truth)
 
-Create or update the matching version section in `CHANGELOG.md` for `qvac-lib-infer-llamacpp-embed` with these guidelines:
+Create or update the matching version section in `CHANGELOG.md` with these guidelines:
 
 ### Format Requirements
 
@@ -84,7 +100,7 @@ Create or update the matching version section in `CHANGELOG.md` for `qvac-lib-in
 
 **CHANGELOG.md (excerpt):**
 ```markdown
-## [0.10.8] - 2026-02-18
+## [0.4.0] - 2026-02-18
 
 This release introduces automated GitHub releases and improves mobile test reliability.
 
