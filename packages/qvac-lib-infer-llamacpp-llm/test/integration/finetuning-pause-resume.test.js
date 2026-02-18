@@ -12,7 +12,6 @@ const {
   handleEarlyCompletion,
   verifyFinalStatus,
   cleanupCheckpoints,
-  findPauseCheckpoint,
   parsePauseCheckpointMetadata
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')

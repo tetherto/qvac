@@ -110,7 +110,7 @@ test('two instances: A run + B finetune in parallel', { timeout: FINETUNE_TIMEOU
   const testCheckpointDirA = await getTmpDir()
   const testDataDirB = await getTmpDir()
   const testCheckpointDirB = await getTmpDir()
-  const { trainDatasetPath: trainA, evalDatasetPath: evalA, checkpointDir: checkpointA } =
+  const { checkpointDir: checkpointA } =
     setupPauseResumeTestData(testDataDirA, testCheckpointDirA, 'two-a')
   const { trainDatasetPath: trainB, evalDatasetPath: evalB, checkpointDir: checkpointB } =
     setupPauseResumeTestData(testDataDirB, testCheckpointDirB, 'two-b')
