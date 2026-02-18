@@ -5,6 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -15,8 +16,13 @@ std::string TranslationModel::getName() const {
   switch (backendType_) {
   case BackendType::GGML:
     return std::string("GGML : ") + srcLang_ + "->" + tgtLang_;
+#ifdef HAVE_BERGAMOT
   case BackendType::BERGAMOT:
     return std::string("BERGAMOT : ") + srcLang_ + "->" + tgtLang_;
+  
+#endif
+  default: 
+    throw qvac_errors::StatusError(qvac_errors::general_error::InternalError, "Invalid backed type.");
   }
 }
 
