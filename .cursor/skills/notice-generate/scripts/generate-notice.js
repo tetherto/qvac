@@ -10,7 +10,6 @@ const { scanPythonDeps } = require('./lib/scan-python-deps')
 const { scanCppDeps } = require('./lib/scan-cpp-deps')
 const {
   writePackageNotice,
-  writeFullReport,
   writeNoticeLog
 } = require('./lib/notice-writer')
 
@@ -176,11 +175,6 @@ async function main () {
     const scanResult = await scanPackage(pkgEntry, log)
     writePackageNotice(pkgEntry, scanResult, writeOpts)
     allResults.push({ pkgEntry, scanResult })
-  }
-
-  // Write aggregated report (--all only)
-  if (isAll) {
-    writeFullReport(allResults, writeOpts)
   }
 
   // Write error log

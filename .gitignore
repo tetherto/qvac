@@ -1,6 +1,8 @@
 .githuman
 .env
 .npmrc
+.vscode
+.cursor/skills/my-*.md
 /.sync-repos
 sync-monorepo.sh
 reset_history.sh

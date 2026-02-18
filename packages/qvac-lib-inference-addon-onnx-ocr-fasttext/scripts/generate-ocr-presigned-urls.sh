@@ -18,7 +18,7 @@ set -e
 
 # Configuration
 REGION="${AWS_REGION:-eu-central-1}"
-BUCKET="${S3_BUCKET:-tether-ai-dev}"
+BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 # Use rec_dyn subdirectory - dynamic width models
 BASE_PATH="qvac_models_compiled/ocr/rec_dyn"
 
