@@ -46,6 +46,12 @@ on:
         type: string
         default: "packages/qvac-lib-infer-onnx-vad"
 
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+  checks: write
+
 env:
   # Keep for steps that still like env, but do NOT reference env.* inside job-level `uses:`
   PKG_DIR: packages/qvac-lib-infer-onnx-vad
