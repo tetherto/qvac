@@ -9,24 +9,61 @@ import {
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
-  type TtsConfig,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
-import { TtsArtifactsRequiredError } from "@/utils/errors-server";
+import {
+  TtsArtifactsRequiredError,
+  TtsReferenceAudioRequiredError,
+} from "@/utils/errors-server";
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
 import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
 
+type TtsModelConfig = {
+  ttsEngine?: "chatterbox" | "supertonic";
+  language?: string;
+  tokenizerPath?: string;
+  speechEncoderPath?: string;
+  embedTokensPath?: string;
+  conditionalDecoderPath?: string;
+  languageModelPath?: string;
+  referenceAudioPath?: string;
+  textEncoderPath?: string;
+  latentDenoiserPath?: string;
+  voiceDecoderPath?: string;
+  voicePath?: string;
+  speed?: number;
+  numInferenceSteps?: number;
+};
+
 function createChatterboxModel(
   modelId: string,
-  ttsConfig: TtsConfig,
-  tokenizerPath: string,
-  speechEncoderPath: string,
-  embedTokensPath: string,
-  conditionalDecoderPath: string,
-  languageModelPath: string,
-  referenceAudio: Float32Array,
+  config: TtsModelConfig,
 ): PluginModelResult {
+  const {
+    tokenizerPath,
+    speechEncoderPath,
+    embedTokensPath,
+    conditionalDecoderPath,
+    languageModelPath,
+    referenceAudioPath,
+    language,
+  } = config;
+
+  if (
+    !tokenizerPath ||
+    !speechEncoderPath ||
+    !embedTokensPath ||
+    !conditionalDecoderPath ||
+    !languageModelPath
+  ) {
+    throw new TtsArtifactsRequiredError();
+  }
+  if (!referenceAudioPath) {
+    throw new TtsReferenceAudioRequiredError();
+  }
+
   const logger = createStreamLogger(modelId, "tts");
+  const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
   const args = {
     tokenizerPath,
     speechEncoderPath,
@@ -37,42 +74,53 @@ function createChatterboxModel(
     logger,
     opts: { stats: true },
   };
-  const config = { language: ttsConfig.language, useGPU: false };
-  const model = new ONNXTTS(args as never, config);
+  const modelConfig = { language: language ?? "en", useGPU: false };
+  const model = new ONNXTTS(args as never, modelConfig);
   return { model, loader: undefined };
 }
 
 function createSupertonicModel(
   modelId: string,
-  ttsConfig: TtsConfig,
-  artifacts: Record<string, string>,
+  config: TtsModelConfig,
 ): PluginModelResult {
-  const logger = createStreamLogger(modelId, "tts");
-  const voicePath = artifacts["voicePath"];
-  if (!voicePath) {
-    throw new TtsArtifactsRequiredError();
-  }
-  const voicesDir = path.dirname(voicePath);
-  const voiceName = path.basename(voicePath).replace(/\.bin$/i, "") || "voice";
-  const speed = artifacts["speed"] != null ? Number(artifacts["speed"]) : 1;
-  const numInferenceSteps =
-    artifacts["numInferenceSteps"] != null
-      ? Number(artifacts["numInferenceSteps"])
-      : 5;
-  const args = {
-    tokenizerPath: artifacts["tokenizerPath"],
-    textEncoderPath: artifacts["textEncoderPath"],
-    latentDenoiserPath: artifacts["latentDenoiserPath"],
-    voiceDecoderPath: artifacts["voiceDecoderPath"],
-    voicesDir,
-    voiceName,
+  const {
+    tokenizerPath,
+    textEncoderPath,
+    latentDenoiserPath,
+    voiceDecoderPath,
+    voicePath,
     speed,
     numInferenceSteps,
+    language,
+  } = config;
+
+  if (
+    !tokenizerPath ||
+    !textEncoderPath ||
+    !latentDenoiserPath ||
+    !voiceDecoderPath ||
+    !voicePath
+  ) {
+    throw new TtsArtifactsRequiredError();
+  }
+
+  const logger = createStreamLogger(modelId, "tts");
+  const voicesDir = path.dirname(voicePath);
+  const voiceName = path.basename(voicePath).replace(/\.bin$/i, "") || "voice";
+  const args = {
+    tokenizerPath,
+    textEncoderPath,
+    latentDenoiserPath,
+    voiceDecoderPath,
+    voicesDir,
+    voiceName,
+    speed: speed ?? 1,
+    numInferenceSteps: numInferenceSteps ?? 5,
     logger,
     opts: { stats: true },
   };
-  const config = { language: ttsConfig.language };
-  const model = new ONNXTTS(args as never, config);
+  const modelConfig = { language: language ?? "en" };
+  const model = new ONNXTTS(args as never, modelConfig);
   return { model, loader: undefined };
 }
 
@@ -82,35 +130,14 @@ export const ttsPlugin = definePlugin({
   addonPackage: "@qvac/tts-onnx",
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const ttsConfig = (params.modelConfig ?? {}) as TtsConfig;
-    const artifacts = params.artifacts ?? {};
-    const referenceAudioPath = artifacts["referenceAudioPath"] ?? "";
-    const textEncoderPath = artifacts["textEncoderPath"] ?? "";
+    const config = (params.modelConfig ?? {}) as TtsModelConfig;
 
-    if (referenceAudioPath) {
-      const tokenizerPath = artifacts["tokenizerPath"] ?? "";
-      const speechEncoderPath = artifacts["speechEncoderPath"] ?? "";
-      const embedTokensPath = artifacts["embedTokensPath"] ?? "";
-      const conditionalDecoderPath = artifacts["conditionalDecoderPath"] ?? "";
-      const languageModelPath = artifacts["languageModelPath"] ?? "";
-      const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
-      return createChatterboxModel(
-        params.modelId,
-        ttsConfig,
-        tokenizerPath,
-        speechEncoderPath,
-        embedTokensPath,
-        conditionalDecoderPath,
-        languageModelPath,
-        referenceAudio,
-      );
+    if (config.ttsEngine === "supertonic") {
+      return createSupertonicModel(params.modelId, config);
     }
 
-    if (textEncoderPath) {
-      return createSupertonicModel(params.modelId, ttsConfig, artifacts);
-    }
-
-    throw new TtsArtifactsRequiredError();
+    // Default to Chatterbox if engine not specified or is "chatterbox"
+    return createChatterboxModel(params.modelId, config);
   },
 
   handlers: {

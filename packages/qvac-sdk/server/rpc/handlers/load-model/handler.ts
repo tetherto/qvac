@@ -296,24 +296,47 @@ export async function handleLoadModel(
         ? ttsTokenizerPath ?? modelPath
         : modelPath;
 
+    // Build TTS model config with resolved paths
+    let ttsModelConfig: Record<string, unknown> | undefined;
+    if (canonicalModelType === ModelType.onnxTts && ttsTtsSrcs) {
+      if (ttsTtsSrcs.ttsEngine === "supertonic") {
+        ttsModelConfig = {
+          ttsEngine: "supertonic",
+          language: (request.modelConfig as { language?: string })?.language,
+          tokenizerPath: ttsTokenizerPath,
+          textEncoderPath: ttsTextEncoderPath,
+          latentDenoiserPath: ttsLatentDenoiserPath,
+          voiceDecoderPath: ttsVoiceDecoderPath,
+          voicePath: ttsVoicePath,
+          speed: ttsSpeed,
+          numInferenceSteps: ttsNumInferenceSteps,
+        };
+      } else {
+        ttsModelConfig = {
+          ttsEngine: "chatterbox",
+          language: (request.modelConfig as { language?: string })?.language,
+          tokenizerPath: ttsTokenizerPath,
+          speechEncoderPath: ttsSpeechEncoderPath,
+          embedTokensPath: ttsEmbedTokensPath,
+          conditionalDecoderPath: ttsConditionalDecoderPath,
+          languageModelPath: ttsLanguageModelPath,
+          referenceAudioPath: referenceAudioPath,
+        };
+      }
+    }
+
+    // Build options with TTS config merged into modelConfig
+    const loadModelOptions =
+      ttsModelConfig
+        ? { ...request, modelConfig: ttsModelConfig }
+        : request;
+
     await loadModel({
       modelId,
       modelPath: effectiveModelPath,
-      options: request,
+      options: loadModelOptions,
       projectionModelPath,
       vadModelPath,
-      ttsTokenizerPath,
-      ttsSpeechEncoderPath,
-      ttsEmbedTokensPath,
-      ttsConditionalDecoderPath,
-      ttsLanguageModelPath,
-      referenceAudioPath,
-      ttsVoicePath,
-      ttsSpeed,
-      ttsNumInferenceSteps,
-      ttsTextEncoderPath,
-      ttsLatentDenoiserPath,
-      ttsVoiceDecoderPath,
       detectorModelPath,
       modelName,
     });

@@ -25,8 +25,6 @@ import {
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError,
-  TtsArtifactsRequiredError,
-  TtsReferenceAudioRequiredError,
 } from "@/utils/errors-server";
 import { getPlugin } from "@/server/plugins";
 import type FilesystemDL from "@qvac/dl-filesystem";
@@ -43,18 +41,6 @@ export async function loadModel(params: LoadModelServerParams) {
     options,
     projectionModelPath,
     vadModelPath,
-    ttsTokenizerPath,
-    ttsSpeechEncoderPath,
-    ttsEmbedTokensPath,
-    ttsConditionalDecoderPath,
-    ttsLanguageModelPath,
-    referenceAudioPath,
-    ttsVoicePath,
-    ttsSpeed,
-    ttsNumInferenceSteps,
-    ttsTextEncoderPath,
-    ttsLatentDenoiserPath,
-    ttsVoiceDecoderPath,
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
@@ -104,37 +90,7 @@ export async function loadModel(params: LoadModelServerParams) {
       throw new ModelFileLocateFailedError(modelType, modelPath, error);
     }
   }
-  // TTS: Chatterbox (5 artifacts + reference) or Supertonic (5 explicit artifact paths)
-  const isTtsSupertonic =
-    modelType === ModelType.onnxTts &&
-    ttsTextEncoderPath != null;
 
-  if (modelType === ModelType.onnxTts) {
-    if (isTtsSupertonic) {
-      if (
-        !ttsTokenizerPath ||
-        !ttsTextEncoderPath ||
-        !ttsLatentDenoiserPath ||
-        !ttsVoiceDecoderPath ||
-        !ttsVoicePath
-      ) {
-        throw new TtsArtifactsRequiredError();
-      }
-    } else {
-      const hasAllChatterboxArtifacts =
-        ttsTokenizerPath &&
-        ttsSpeechEncoderPath &&
-        ttsEmbedTokensPath &&
-        ttsConditionalDecoderPath &&
-        ttsLanguageModelPath;
-      if (!hasAllChatterboxArtifacts) {
-        throw new TtsArtifactsRequiredError();
-      }
-      if (!referenceAudioPath) {
-        throw new TtsReferenceAudioRequiredError();
-      }
-    }
-  }
   if (modelType === ModelType.onnxOcr && !detectorModelPath) {
     throw new ModelLoadFailedError(
       "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
@@ -146,29 +102,11 @@ export async function loadModel(params: LoadModelServerParams) {
     throw new PluginNotFoundError(modelType);
   }
 
-  // Build artifacts map for plugin
+  // Build artifacts map for plugin (non-TTS artifacts only, TTS uses modelConfig)
   const artifacts: Record<string, string> = {};
   if (projectionModelPath)
     artifacts["projectionModelPath"] = projectionModelPath;
   if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
-  if (ttsTokenizerPath) artifacts["tokenizerPath"] = ttsTokenizerPath;
-  if (ttsSpeechEncoderPath)
-    artifacts["speechEncoderPath"] = ttsSpeechEncoderPath;
-  if (ttsEmbedTokensPath) artifacts["embedTokensPath"] = ttsEmbedTokensPath;
-  if (ttsConditionalDecoderPath)
-    artifacts["conditionalDecoderPath"] = ttsConditionalDecoderPath;
-  if (ttsLanguageModelPath)
-    artifacts["languageModelPath"] = ttsLanguageModelPath;
-  if (referenceAudioPath) artifacts["referenceAudioPath"] = referenceAudioPath;
-  if (ttsVoicePath) artifacts["voicePath"] = ttsVoicePath;
-  if (ttsSpeed != null) artifacts["speed"] = String(ttsSpeed);
-  if (ttsNumInferenceSteps != null)
-    artifacts["numInferenceSteps"] = String(ttsNumInferenceSteps);
-  if (ttsTextEncoderPath) artifacts["textEncoderPath"] = ttsTextEncoderPath;
-  if (ttsLatentDenoiserPath)
-    artifacts["latentDenoiserPath"] = ttsLatentDenoiserPath;
-  if (ttsVoiceDecoderPath)
-    artifacts["voiceDecoderPath"] = ttsVoiceDecoderPath;
   if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
 
   const result = plugin.createModel({
