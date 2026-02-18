@@ -307,29 +307,13 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
   return resolved
 }
 
-function preparePytorchPlaceholder (selectedModels) {
-  console.log('[pytorch] placeholder active: no downloads performed yet.')
-  const resolved = {}
-  for (const model of selectedModels) {
-    const pytorch = model.pytorch || {}
-    resolved[model.id] = {
-      pytorch: {
-        repo: pytorch.repo,
-        revision: pytorch.revision || 'main',
-        status: 'placeholder'
-      }
-    }
-  }
-  return resolved
-}
-
 async function main () {
   const scriptDir = __dirname
   const args = parseArgs(process.argv)
   const manifestPath = path.resolve(String(args.manifest || path.join(scriptDir, 'models.manifest.json')))
   const target = String(args.target || 'addon')
-  if (!['addon', 'pytorch', 'all'].includes(target)) {
-    throw new Error(`Invalid --target: ${target}. Expected addon, pytorch, or all.`)
+  if (!['addon', 'all'].includes(target)) {
+    throw new Error(`Invalid --target: ${target}. Expected addon or all.`)
   }
   const modelsDir = path.resolve(String(args['models-dir'] || path.join(scriptDir, 'models')))
   const outputPath = path.resolve(String(args.output || path.join(scriptDir, 'resolved-models.json')))
@@ -352,13 +336,6 @@ async function main () {
   if (target === 'addon' || target === 'all') {
     const addonModels = await prepareAddonModels(selectedModels, modelsDir, headers, scriptDir)
     for (const [modelId, payload] of Object.entries(addonModels)) {
-      resolved.models[modelId] = Object.assign(resolved.models[modelId] || {}, payload)
-    }
-  }
-
-  if (target === 'pytorch' || target === 'all') {
-    const pytorchModels = preparePytorchPlaceholder(selectedModels)
-    for (const [modelId, payload] of Object.entries(pytorchModels)) {
       resolved.models[modelId] = Object.assign(resolved.models[modelId] || {}, payload)
     }
   }

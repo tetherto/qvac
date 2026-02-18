@@ -27,9 +27,7 @@
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
     "test:all": "npm run test && npm run test:cpp",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
-    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
-    "benchmark-perf": "bash benchmark-perf/run-perf.sh",
-    "benchmark-perf:windows": "powershell -ExecutionPolicy Bypass -File ./benchmark-perf/run-perf.ps1"
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
   },
   "standard": {
     "ignore": [

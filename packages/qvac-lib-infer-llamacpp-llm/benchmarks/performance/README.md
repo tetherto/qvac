@@ -24,7 +24,7 @@ This command runs:
 2. Bare benchmark runner (`llm-parameter-sweep.js`)
 
 Prompt generation is standalone. Prompts are static fixtures in `benchmarks/performance/test-prompts.json`.
-The runner no longer mutates prompts at runtime.
+Prompt content is static at execution time; the runner does not generate or rewrite prompts during the sweep.
 
 ## Run Guide (All Common Cases)
 
