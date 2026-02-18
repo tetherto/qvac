@@ -75,7 +75,6 @@ async function downloadWithHttp (url, destPath, maxRedirects = 10) {
       }
 
       const file = fs.createWriteStream(destPath)
-      let downloadedBytes = 0
       const contentLength = parseInt(res.headers['content-length'] || '0', 10)
 
       file.on('error', (err) => {
