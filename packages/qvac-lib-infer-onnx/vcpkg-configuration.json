@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "cd26df3b3f4d3ba46efacdf8625f2a8fb5b4420b",
+    "baseline": "5a0a2308f1e214934f1ec115b827b8b5ce64983a",
     "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -24,7 +24,6 @@
         "nlohmann-json",
         "optional-lite",
         "psimd",
-        "pthreadpool",
         "re2",
         "safeint",
         "boost-cmake",

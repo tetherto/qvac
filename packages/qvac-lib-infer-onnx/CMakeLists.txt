@@ -1,9 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
 option(BUILD_TESTING "Build tests" ON)
+option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
+if(ENABLE_XNNPACK)
+  list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
+endif()
+
+find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
+find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 project(qvac-onnx
   VERSION 1.0.0
