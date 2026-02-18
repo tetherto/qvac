@@ -286,6 +286,78 @@ function buildFullReportContent (allResults) {
     ''
   ]
 
+  // ---- License overview: count deps by normalized license per package ----
+  lines.push(SEP)
+  lines.push('License Overview')
+  lines.push(SEP)
+  lines.push('')
+
+  const globalCounts = {}
+  let globalTotal = 0
+  const perPkgSummaries = []
+
+  for (const { pkgEntry, scanResult } of sorted) {
+    const pkgCounts = {}
+    const allDeps = [
+      ...scanResult.models.map(d => ({ license: d.license, type: 'model' })),
+      ...scanResult.js.map(d => ({ license: d.license, type: 'js' })),
+      ...scanResult.python.map(d => ({ license: d.license, type: 'python' })),
+      ...scanResult.cpp.map(d => ({ license: d.license, type: 'cpp' }))
+    ]
+    if (allDeps.length === 0) continue
+
+    for (const dep of allDeps) {
+      const key = licenseGroupKey(dep.license)
+      pkgCounts[key] = (pkgCounts[key] || 0) + 1
+      globalCounts[key] = (globalCounts[key] || 0) + 1
+      globalTotal++
+    }
+
+    const typeCounts = { model: 0, js: 0, python: 0, cpp: 0 }
+    for (const dep of allDeps) typeCounts[dep.type]++
+
+    perPkgSummaries.push({ pkgEntry, pkgCounts, typeCounts, total: allDeps.length })
+  }
+
+  // Global totals
+  lines.push(`Total packages: ${sorted.length}`)
+  lines.push(`Total dependencies: ${globalTotal}`)
+  lines.push('')
+
+  const sortedGlobal = Object.entries(globalCounts)
+    .sort((a, b) => b[1] - a[1])
+
+  const maxLicLen = Math.max(...sortedGlobal.map(([l]) => l.length))
+  const maxCountLen = String(globalTotal).length
+
+  for (const [license, count] of sortedGlobal) {
+    const pct = ((count / globalTotal) * 100).toFixed(1)
+    lines.push(
+      `  ${license.padEnd(maxLicLen)}  ${String(count).padStart(maxCountLen)} deps  (${pct}%)`
+    )
+  }
+  lines.push('')
+
+  // Per-package breakdown
+  for (const { pkgEntry, pkgCounts, typeCounts, total } of perPkgSummaries) {
+    lines.push(`--- ${pkgEntry.npmName} (packages/${pkgEntry.dir}) ---`)
+    lines.push('')
+
+    const parts = []
+    if (typeCounts.model) parts.push(`${typeCounts.model} models`)
+    if (typeCounts.js) parts.push(`${typeCounts.js} JS`)
+    if (typeCounts.python) parts.push(`${typeCounts.python} Python`)
+    if (typeCounts.cpp) parts.push(`${typeCounts.cpp} C++`)
+    lines.push(`  Total: ${total} (${parts.join(', ')})`)
+
+    const sortedPkg = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
+    for (const [license, count] of sortedPkg) {
+      lines.push(`    ${license.padEnd(maxLicLen)}  ${count}`)
+    }
+    lines.push('')
+  }
+
+  // ---- Per-package full NOTICE sections ----
   let packagesWithDeps = 0
   for (const { pkgEntry, scanResult } of sorted) {
     const sections = buildSections(scanResult)
@@ -350,6 +422,5 @@ function writeNoticeLog (logEntries, opts = {}) {
 module.exports = {
   buildSections,
   writePackageNotice,
-  writeFullReport,
   writeNoticeLog
 }

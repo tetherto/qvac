@@ -17,7 +17,7 @@
 #   BERGAMOT_LANG_PAIR - Language pair (e.g., 'enit', 'enfr') - can also be passed as argument
 # 
 # Optional:
-#   S3_BUCKET - S3 bucket (default: tether-ai-dev)
+#   S3_BUCKET - S3 bucket name (required, or set MODEL_S3_BUCKET)
 #   S3_BASE_PATH - Base path for models (default: qvac_models_compiled/bergamot/memory-base)
 # 
 # Output:
@@ -38,7 +38,7 @@ fi
 
 # Configuration
 REGION="${AWS_REGION:-eu-central-1}"
-BUCKET="${S3_BUCKET:-tether-ai-dev}"
+BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 BASE_PATH="${S3_BASE_PATH:-qvac_models_compiled/bergamot}"
 FOLDER_NAME="bergamot-${LANG_PAIR}"
 S3_PREFIX="${BASE_PATH}/${FOLDER_NAME}/"
