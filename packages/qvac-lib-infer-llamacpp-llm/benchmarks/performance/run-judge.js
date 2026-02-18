@@ -174,79 +174,74 @@ function pairKey (reference, candidate) {
   return `${ref.length}:${stableHash32(ref)}|${cand.length}:${stableHash32(cand)}`
 }
 
-class JudgeRuntimeManager {
-  constructor (opts) {
-    this.AddonCtor = opts.AddonCtor
-    this.modelDef = opts.modelDef
-    this.modelName = opts.modelName
-    this.runtimeConfig = opts.runtimeConfig
-    this.debug = opts.debug
-    this.model = null
-    this.loader = null
-    this.cache = new Map()
-    this.maxChars = 6000
-  }
+function createJudgeRuntimeManager (opts) {
+  let model = null
+  let loader = null
+  const cache = new Map()
+  const maxChars = 6000
 
-  async init () {
-    if (this.model) return
-    this.loader = new FilesystemDL({ dirPath: this.modelDef.modelDir })
-    const config = buildConfigObject(this.runtimeConfig)
-    this.model = new this.AddonCtor({
-      modelName: this.modelName,
-      loader: this.loader,
-      diskPath: this.modelDef.modelDir,
-      opts: { stats: true },
-      logger: createAddonRuntimeLogger(this.debug)
-    }, config)
-    await this.model.load()
-  }
+  return {
+    async init () {
+      if (model) return
+      loader = new FilesystemDL({ dirPath: opts.modelDef.modelDir })
+      const config = buildConfigObject(opts.runtimeConfig)
+      model = new opts.AddonCtor({
+        modelName: opts.modelName,
+        loader,
+        diskPath: opts.modelDef.modelDir,
+        opts: { stats: true },
+        logger: createAddonRuntimeLogger(opts.debug)
+      }, config)
+      await model.load()
+    },
 
-  async preflight (reference, candidate) {
-    await this.score(reference, candidate)
-  }
+    async preflight (reference, candidate) {
+      await this.score(reference, candidate)
+    },
 
-  async score (reference, candidate) {
-    if (reference == null || candidate == null) return null
-    const ref = String(reference)
-    const cand = String(candidate)
-    if (ref === cand) return 1.0
+    async score (reference, candidate) {
+      if (reference == null || candidate == null) return null
+      const ref = String(reference)
+      const cand = String(candidate)
+      if (ref === cand) return 1.0
 
-    const cacheKey = pairKey(ref, cand)
-    if (this.cache.has(cacheKey)) return this.cache.get(cacheKey)
+      const cacheKey = pairKey(ref, cand)
+      if (cache.has(cacheKey)) return cache.get(cacheKey)
 
-    let charLimit = this.maxChars
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        const refTrimmed = trimForJudge(ref, charLimit)
-        const candTrimmed = trimForJudge(cand, charLimit)
-        const response = await this.model.run(buildJudgeMessages(refTrimmed, candTrimmed))
-        const chunks = []
-        await response.onUpdate((data) => {
-          chunks.push(data)
-        }).await()
-        const parsed = parseJudgeScore(chunks.join(''))
-        this.cache.set(cacheKey, parsed)
-        return parsed
-      } catch (error) {
-        const message = String(error && error.message ? error.message : error).toLowerCase()
-        if (message.includes('context') || message.includes('overflow')) {
-          charLimit = Math.max(500, Math.floor(charLimit / 2))
-          continue
+      let charLimit = maxChars
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const refTrimmed = trimForJudge(ref, charLimit)
+          const candTrimmed = trimForJudge(cand, charLimit)
+          const response = await model.run(buildJudgeMessages(refTrimmed, candTrimmed))
+          const chunks = []
+          await response.onUpdate((data) => {
+            chunks.push(data)
+          }).await()
+          const parsed = parseJudgeScore(chunks.join(''))
+          cache.set(cacheKey, parsed)
+          return parsed
+        } catch (error) {
+          const message = String(error && error.message ? error.message : error).toLowerCase()
+          if (message.includes('context') || message.includes('overflow')) {
+            charLimit = Math.max(500, Math.floor(charLimit / 2))
+            continue
+          }
+          throw error
         }
-        throw error
       }
-    }
-    return null
-  }
+      return null
+    },
 
-  async close () {
-    if (this.model) {
-      await this.model.unload().catch(() => {})
-      this.model = null
-    }
-    if (this.loader) {
-      await this.loader.close().catch(() => {})
-      this.loader = null
+    async close () {
+      if (model) {
+        await model.unload().catch(() => {})
+        model = null
+      }
+      if (loader) {
+        await loader.close().catch(() => {})
+        loader = null
+      }
     }
   }
 }
@@ -337,7 +332,7 @@ async function main () {
   let judge = null
 
   if (scoreTasks.size > 0) {
-    judge = new JudgeRuntimeManager({
+    judge = createJudgeRuntimeManager({
       AddonCtor,
       modelDef: judgeModelDef,
       modelName: judgeModelName,

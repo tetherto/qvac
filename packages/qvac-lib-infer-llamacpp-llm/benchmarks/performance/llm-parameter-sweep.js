@@ -1289,10 +1289,13 @@ process.on('unhandledRejection', (reason, promise) => {
   if (isShuttingDown) {
     return
   }
+  if (typeof moduleFlushProgress === 'function') {
+    moduleFlushProgress()
+  }
   console.error('Unhandled rejection in parameter sweep:')
-  console.error(reason)
-  // Convert to exception so it's handled by uncaughtException
-  throw reason
+  console.error(reason && reason.stack ? reason.stack : String(reason))
+  console.error('Progress should be saved. Run again to resume.')
+  process.exit(130)
 })
 
 main().catch((error) => {

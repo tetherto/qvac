@@ -7,10 +7,14 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
   CTX_SIZES,
-  BATCH_SIZES,
-  N_PREDICT_RESERVE,
-  PROMPT_OVERHEAD_RESERVE
+  BATCH_SIZES
 } = require('./sweep-shared-constants')
+const {
+  shouldFallbackToCpu,
+  getCtxBudget,
+  getBatchBudget,
+  getPromptTokens
+} = require('./prompt-shared-utils')
 
 const OUTPUT_PATH = path.resolve(__dirname, 'test-prompts.json')
 const MODEL_DIR = path.resolve(__dirname, 'models')
@@ -40,11 +44,6 @@ const SAFE_FALLBACK_RUNTIME = {
   verbosity: '0'
 }
 
-function shouldFallbackToCpu (err) {
-  const msg = err && err.message ? String(err.message) : String(err)
-  return /vram|gpu|metal|cuda|opencl|failed to create context|unabletoloadmodel|failed to initialize model|device/i.test(msg)
-}
-
 function cloneMessages (messages) {
   return messages.map((m) => ({ role: m.role, content: String(m.content) }))
 }
@@ -62,20 +61,6 @@ function buildMessagesFromWords (templateMessages, wordCount) {
   const words = String(out[userIndex].content || '').split(/\s+/).filter(Boolean)
   out[userIndex].content = words.slice(0, Math.max(1, Math.min(words.length, wordCount))).join(' ')
   return out
-}
-
-async function getPromptTokens (model, messages) {
-  try {
-    const response = await model.run(messages)
-    await response.onUpdate(() => {}).await()
-    const n = response && response.stats ? Number(response.stats.promptTokens) : NaN
-    if (!Number.isFinite(n)) throw new Error('promptTokens missing from addon stats')
-    return n
-  } catch (err) {
-    const msg = err && err.message ? String(err.message) : String(err)
-    if (/context|ctx[- ]?size|overflow/i.test(msg)) return Infinity
-    throw err
-  }
 }
 
 async function tuneToBudget (model, templateMessages, budget) {
@@ -181,15 +166,6 @@ function batchTemplateMessages () {
       ).repeat(1200)
     }
   ]
-}
-
-function getCtxBudget (ctxSize) {
-  return Math.max(256, Number(ctxSize) - N_PREDICT_RESERVE - PROMPT_OVERHEAD_RESERVE)
-}
-
-function getBatchBudget (ctxSize, batchSize) {
-  const desired = Math.max(512, Number(batchSize) * 3)
-  return Math.max(256, Math.min(getCtxBudget(ctxSize), desired))
 }
 
 async function main () {
