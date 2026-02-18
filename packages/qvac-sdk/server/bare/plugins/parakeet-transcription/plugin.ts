@@ -59,13 +59,11 @@ function createParakeetModel(
 
   const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,
-    filePaths: {
-      "encoder-model.onnx": modelPath,
-      "encoder-model.onnx.data": encoderDataPath,
-      "decoder_joint-model.onnx": decoderPath,
-      "vocab.txt": vocabPath,
-      "preprocessor.onnx": preprocessorPath,
-    },
+    encoderPath: modelPath,
+    encoderDataPath,
+    decoderPath,
+    vocabPath,
+    preprocessorPath,
     parakeetConfig: {
       modelType: config.modelType ?? "tdt",
     } as ParakeetConfig,
