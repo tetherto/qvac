@@ -168,8 +168,8 @@ addon.activate(handle)
 // Run a job
 addon.runJob(handle, { type: 'text', input: 'Hello world' })
 
-// Cancel current job
-addon.cancelJob(handle)
+// Cancel current job (returns a Promise)
+await addon.cancelJob(handle)
 
 // Cleanup
 addon.destroyInstance(handle)
@@ -261,8 +261,8 @@ Apps may suspend during processing:
 - **Workaround:** Cancel pending jobs on `suspend` event
 
 ```javascript
-process.on('suspend', () => {
-  addon.cancelJob(handle)
+process.on('suspend', async () => {
+  await addon.cancelJob(handle)
 })
 ```
 

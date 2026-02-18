@@ -1,6 +1,9 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { ConfigNotFoundError, ConfigLoadError } from './errors.js'
+
+const require = createRequire(import.meta.url)
 
 export const CONFIG_CANDIDATES = [
   'qvac.config.json',
@@ -44,7 +47,8 @@ export async function loadConfig (configPath) {
     }
 
     if (ext === '.ts') {
-      const { tsImport } = await import('tsx/esm/api')
+      const tsxApiPath = require.resolve('tsx/esm/api')
+      const { tsImport } = await import(tsxApiPath)
       const module = await tsImport(configPath, import.meta.url)
       return module.default ?? module
     }

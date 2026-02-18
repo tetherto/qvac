@@ -16,7 +16,9 @@
   "files": [
     "src",
     "index.js",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ],
   "types": "index.d.ts",
   "devDependencies": {

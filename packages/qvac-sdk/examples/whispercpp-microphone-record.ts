@@ -4,7 +4,6 @@ import {
   transcribe,
   transcribeStream,
   WHISPER_TINY,
-  VAD_SILERO_5_1_2,
 } from "@qvac/sdk";
 import { spawn, spawnSync } from "child_process";
 import * as readline from "readline";
@@ -328,7 +327,6 @@ async function main() {
     modelId = await loadModel({
       modelSrc: WHISPER_TINY,
       modelType: "whisper",
-      vadModelSrc: VAD_SILERO_5_1_2,
       modelConfig: {
         audio_format: "f32le",
         vad_params: {

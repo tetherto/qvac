@@ -16,15 +16,54 @@ struct CommonSamplerDeleter {
 };
 using CommonSamplerPtr = std::unique_ptr<common_sampler, CommonSamplerDeleter>;
 
-struct BatchDeleter {
-  void operator()(llama_batch* ptr) {
-    if (ptr != nullptr) { // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
-      llama_batch_free(*ptr);
-      delete ptr;
+class LlamaBatch {
+  llama_batch batch_;
+  bool initialized_ = false;
+
+public:
+  LlamaBatch() noexcept : batch_{}, initialized_(false) {}
+
+  LlamaBatch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
+      : batch_(llama_batch_init(n_tokens, embd, n_seq_max)),
+        initialized_(true) {}
+
+  LlamaBatch(LlamaBatch&& other) noexcept
+      : batch_(other.batch_), initialized_(other.initialized_) {
+    other.batch_ = llama_batch{};
+    other.initialized_ = false;
+  }
+
+  LlamaBatch& operator=(LlamaBatch&& other) noexcept {
+    if (this != &other) {
+      if (initialized_) {
+        llama_batch_free(batch_);
+      }
+      batch_ = other.batch_;
+      initialized_ = other.initialized_;
+      other.batch_ = llama_batch{};
+      other.initialized_ = false;
+    }
+    return *this;
+  }
+
+  LlamaBatch(const LlamaBatch&) = delete;
+  LlamaBatch& operator=(const LlamaBatch&) = delete;
+
+  ~LlamaBatch() {
+    if (initialized_) {
+      llama_batch_free(batch_);
     }
   }
+
+  llama_batch* get() noexcept { return &batch_; }
+  const llama_batch* get() const noexcept { return &batch_; }
+
+  llama_batch& operator*() noexcept { return batch_; }
+  const llama_batch& operator*() const noexcept { return batch_; }
+
+  llama_batch* operator->() noexcept { return &batch_; }
+  const llama_batch* operator->() const noexcept { return &batch_; }
 };
-using BatchPtr = std::unique_ptr<llama_batch, BatchDeleter>;
 
 struct ThreadPoolDeleter{
     void operator()(ggml_threadpool* ptr) {

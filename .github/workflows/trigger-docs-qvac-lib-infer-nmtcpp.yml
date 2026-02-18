@@ -3,12 +3,15 @@ name: Dispatch on README (NMTCPP)
 on:
   pull_request:
     types: [closed]
+    branches:
+      - main
+      - release-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/README.md"
 
 jobs:
   dispatch:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    if: github.event.pull_request.merged == true && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'release-'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout merge commit
@@ -35,7 +38,7 @@ jobs:
         if: steps.changed.outputs.readme_changed == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.pat_token }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: tetherto/qvac-docs
           event-type: readme-changed
           client-payload: >

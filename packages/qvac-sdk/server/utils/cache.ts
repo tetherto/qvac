@@ -1,9 +1,10 @@
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
 import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";
+import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -71,7 +72,7 @@ export function getShardPath(
   shardFilename: string,
 ): string {
   const shardDir = getShardedModelCacheDir(hyperdriveKey);
-  return path.join(shardDir, shardFilename);
+  return validateAndJoinPath(shardDir, shardFilename);
 }
 
 /**

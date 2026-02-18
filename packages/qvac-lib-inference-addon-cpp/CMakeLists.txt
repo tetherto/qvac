@@ -6,7 +6,7 @@ if(BUILD_TESTING)
 endif()
 
 project(qvac-lib-inference-addon-cpp
-  VERSION 1.0.0
+  VERSION 1.1.1
   LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -75,6 +75,8 @@ if(BUILD_TESTING)
         tests/cpp_output_handler_test.cpp
         tests/simple_addon_test.cpp
         tests/batched_addon_test.cpp
+        tests/job_runner_test.cpp
+        tests/addon_js_test.cpp
     )
     target_include_directories(unit_tests PRIVATE src tests/helpers_header)
     target_link_libraries(unit_tests PRIVATE GTest::gmock_main)

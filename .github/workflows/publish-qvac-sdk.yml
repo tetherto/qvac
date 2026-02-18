@@ -118,14 +118,14 @@ jobs:
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
-          # Only modify package name for dev, fix-*, feature-* branches
+          # Only modify package name for main, fix-*, feature-* branches
           case "$BRANCH_NAME" in
-            main)
-              echo "Main branch - keeping original package name"
+            release-*)
+              echo "Release branch - keeping original package name"
               exit 0
               ;;
-            dev)
-              SUFFIX="dev"
+            main)
+              SUFFIX="mono"
               ;;
             fix-*|feature-*)
               SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
@@ -151,11 +151,14 @@ jobs:
           MODIFIED_NAME=$(node -p "require('./package.json').name")
           echo "✓ Modified package.json: $MODIFIED_NAME"
 
-          # Update references in withMobileBundle.ts
+          # Update @qvac/cli references in withMobileBundle.ts to @tetherto/cli-mono
           MOBILE_BUNDLE_FILE="expo/plugins/withMobileBundle.ts"
           if [ -f "$MOBILE_BUNDLE_FILE" ]; then
-            echo "Updating @qvac/sdk references in $MOBILE_BUNDLE_FILE to $NEW_NAME"
-            sed -i.bak "s|@qvac/sdk|${NEW_NAME}|g" "$MOBILE_BUNDLE_FILE"
+            echo "Updating @qvac/cli references in $MOBILE_BUNDLE_FILE to @tetherto/cli-mono"
+            sed -i.bak "s|\"@qvac\"|\"@tetherto\"|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|\"cli\"|\"cli-mono\"|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|@qvac/cli|@tetherto/cli-mono|g" "$MOBILE_BUNDLE_FILE"
+            sed -i.bak "s|npx qvac|npx tetherto|g" "$MOBILE_BUNDLE_FILE"
             rm "${MOBILE_BUNDLE_FILE}.bak"
             echo "✓ Updated $MOBILE_BUNDLE_FILE"
           fi
@@ -245,8 +248,10 @@ jobs:
           gpr_tag="dev"
           if [ "$ref_name" = "main" ]; then
             gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="$ref_name"
+          elif [[ "$ref_name" == feature-* ]]; then
+            gpr_tag="feature"
+          elif [[ "$ref_name" == tmp-* ]]; then
+            gpr_tag="temp"
           fi
 
           echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"

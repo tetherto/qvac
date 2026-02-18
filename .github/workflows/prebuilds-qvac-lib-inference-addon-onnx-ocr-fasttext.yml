@@ -1,15 +1,6 @@
 name: "Prebuilds (OCR)"
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
-
   workflow_dispatch:
     inputs:
       tag:
@@ -439,8 +430,8 @@ jobs:
       - name: Download onnx model files
         run: |
           mkdir -p models/ocr
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
 
       - name: Upload models artifacts
         uses: actions/upload-artifact@v4
@@ -507,8 +498,10 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
             else
               gpr_tag="dev"
             fi

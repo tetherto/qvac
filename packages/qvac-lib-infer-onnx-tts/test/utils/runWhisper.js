@@ -4,10 +4,11 @@ const path = require('bare-path')
 const os = require('bare-os')
 const FakeDL = require('./loader.fake')
 
+const WHISPER_SAMPLE_RATE = 16000
+
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-// Returns base directory for models - uses global.testDir on mobile, current dir otherwise
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
@@ -18,7 +19,6 @@ async function loadWhisper (params = {}) {
   const diskPath = params.diskPath || defaultPath
   console.log('>>> [WHISPER] Loading model from:', diskPath)
 
-  // Instantiate Hyperdrive Loader with the specific model key
   const hdDL = new FakeDL({})
 
   const constructorArgs = {
@@ -42,9 +42,65 @@ async function loadWhisper (params = {}) {
   return whisperModel
 }
 
+function extractWavPcm (wavBuf) {
+  if (wavBuf.length < 44) return { raw: wavBuf, sampleRate: WHISPER_SAMPLE_RATE }
+  const isRiff = wavBuf[0] === 0x52 && wavBuf[1] === 0x49 &&
+    wavBuf[2] === 0x46 && wavBuf[3] === 0x46
+  if (!isRiff) return { raw: wavBuf, sampleRate: WHISPER_SAMPLE_RATE }
+
+  const sampleRate = wavBuf[24] | (wavBuf[25] << 8) |
+    (wavBuf[26] << 16) | (wavBuf[27] << 24)
+
+  let dataOffset = 12
+  while (dataOffset + 8 <= wavBuf.length) {
+    const id = String.fromCharCode(
+      wavBuf[dataOffset], wavBuf[dataOffset + 1],
+      wavBuf[dataOffset + 2], wavBuf[dataOffset + 3]
+    )
+    const chunkSize = wavBuf[dataOffset + 4] | (wavBuf[dataOffset + 5] << 8) |
+      (wavBuf[dataOffset + 6] << 16) | (wavBuf[dataOffset + 7] << 24)
+    if (id === 'data') {
+      const start = dataOffset + 8
+      const end = Math.min(start + chunkSize, wavBuf.length)
+      return { raw: wavBuf.slice(start, end), sampleRate }
+    }
+    dataOffset += 8 + chunkSize
+    if (chunkSize % 2 === 1 && dataOffset < wavBuf.length) dataOffset += 1
+  }
+
+  return { raw: wavBuf.slice(44), sampleRate }
+}
+
+function resampleS16le (pcmBuf, fromRate, toRate) {
+  if (fromRate === toRate) return pcmBuf
+
+  const numSamples = Math.floor(pcmBuf.length / 2)
+  const ratio = fromRate / toRate
+  const outLen = Math.round(numSamples / ratio)
+  const out = Buffer.alloc(outLen * 2)
+
+  for (let i = 0; i < outLen; i++) {
+    const srcIdx = i * ratio
+    const lo = Math.floor(srcIdx)
+    const hi = Math.min(lo + 1, numSamples - 1)
+    const frac = srcIdx - lo
+    const sLo = pcmBuf.readInt16LE(lo * 2)
+    const sHi = pcmBuf.readInt16LE(hi * 2)
+    const val = Math.round(sLo * (1 - frac) + sHi * frac)
+    out.writeInt16LE(Math.max(-32768, Math.min(32767, val)), i * 2)
+  }
+
+  return out
+}
+
 async function runWhisper (model, text, wavBuffer) {
-  // Create a readable stream from the WAV buffer
-  const audioStream = Readable.from([Buffer.from(wavBuffer)])
+  const buf = Buffer.from(wavBuffer)
+  const { raw, sampleRate } = extractWavPcm(buf)
+  const pcm16k = resampleS16le(Buffer.from(raw), sampleRate, WHISPER_SAMPLE_RATE)
+
+  console.log(`>>> [WHISPER] Audio: ${sampleRate}Hz -> ${WHISPER_SAMPLE_RATE}Hz, ${pcm16k.length / 2} samples`)
+
+  const audioStream = Readable.from([pcm16k])
   const response = await model.run(audioStream)
   let fullText = ''
   let retryCount = 0

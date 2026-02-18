@@ -1,14 +1,6 @@
 name: Prebuilds (NMTCPP)
 
 on:
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-lib-infer-nmtcpp/**"
   workflow_call:
     inputs:
       ref:
@@ -310,7 +302,7 @@ jobs:
 
           # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
           SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="tether-ai-dev"
+          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
           S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
 
           echo "Vulkan SDK version: ${SDK_VERSION}"
@@ -761,8 +753,10 @@ jobs:
           if [ -z "$gpr_tag" ]; then
             if [ "$ref_name" = "main" ]; then
               gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="$ref_name"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
             else
               gpr_tag="dev"
             fi

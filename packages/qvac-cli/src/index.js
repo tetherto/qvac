@@ -32,6 +32,7 @@ function setupCli () {
     .command('sdk')
     .description('Generate a tree-shaken Bare worker bundle with selected plugins')
     .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
+    .option('--sdk-path <path>', 'Path to SDK package (default: auto-detect in node_modules)')
     .option('--host <target>', 'Target host (repeatable)', collect, [])
     .option('--defer <module>', 'Defer a module (repeatable)', collect, [])
     .option('-q, --quiet', 'Minimal output')
@@ -41,6 +42,7 @@ function setupCli () {
         await bundleSdk({
           projectRoot: process.cwd(),
           configPath: options.config,
+          sdkPath: options.sdkPath,
           hosts: options.host.length > 0 ? options.host : undefined,
           defer: options.defer.length > 0 ? options.defer : undefined,
           quiet: options.quiet,
