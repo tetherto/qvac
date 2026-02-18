@@ -208,14 +208,6 @@ Model list and quantization files come from:
 - `npm run run:param-sweep`
 - `npm run run:judge`
 
-## PyTorch Placeholder
-
-```bash
-npm run run:pytorch-placeholder
-```
-
-This is currently a placeholder while JS benchmarking is being polished.
-
 ## Benchmark Workflow
 
 1. **Model Preparation**: Downloads GGUF models listed in `models.manifest.json` to `benchmarks/performance/models/`
@@ -321,6 +313,5 @@ Persisted metrics fields (mean/std across repeats):
 
 ## Deferred Work
 
-- **PyTorch desktop runner** (`linux`/`mac`): currently still a placeholder script.
 - **Native/GPU memory telemetry**: current memory metrics are process-level JS memory (`rss`, `heapUsed`, `external`).  
   Addon/C++ side metrics for native allocations and VRAM usage are planned later.
