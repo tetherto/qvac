@@ -153,7 +153,8 @@ TextLlmContext::TextLlmContext(
 bool TextLlmContext::checkAntiprompt() {
   if (!params.antiprompt.empty()) {
     constexpr int K_N_PREV = 32;
-    std::string lastOutput = common_sampler_prev_str(smpl.get(), lctx, K_N_PREV);
+    std::string lastOutput =
+        common_sampler_prev_str(smpl.get(), lctx, K_N_PREV);
 
     // Check if each of the reverse prompts appears at the end of the output.
     for (std::string& antiprompt : params.antiprompt) {
@@ -173,9 +174,9 @@ bool TextLlmContext::checkAntiprompt() {
     // check for reverse prompt using special tokens
     llama_token lastToken = common_sampler_last(smpl.get());
     for (auto token : antiprompt_tokens) {
-        if (token == lastToken) {
+      if (token == lastToken) {
         return true;
-        }
+      }
     }
   }
   return false;

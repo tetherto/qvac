@@ -10,7 +10,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext: public LlmContext {
+class TextLlmContext : public LlmContext {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
