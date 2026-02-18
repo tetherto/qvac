@@ -25,7 +25,7 @@ jobs:
         with:
           script: |
             const { decodeContent, validateReleaseNotesOnVersionBump, formatFailures } = require(
-              `${process.env.GITHUB_WORKSPACE}/packages/qvac-lib-infer-llamacpp-embed/scripts/release-notes-check.js`
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/release-notes-check.js`
             );
 
             const pullNumber = context.payload.pull_request.number;
