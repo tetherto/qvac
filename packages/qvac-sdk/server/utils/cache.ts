@@ -64,6 +64,35 @@ export function getShardedModelCacheDir(hyperdriveKey: string): string {
 }
 
 /**
+ * Get cache directory for ONNX model with external data
+ * Returns: cache/onnx/<cacheKey>/
+ */
+function getOnnxModelCacheDir(cacheKey: string): string {
+  const baseCache = getModelsCacheDir();
+  const onnxDir = validateAndJoinPath(baseCache, "onnx", cacheKey);
+
+  try {
+    fs.mkdirSync(onnxDir, { recursive: true });
+  } catch (error) {
+    logger.error(
+      `Error creating ONNX model cache directory:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  return onnxDir;
+}
+
+/**
+ * Get full path to ONNX file in cache
+ * Returns: cache/onnx/<cacheKey>/<filename>
+ */
+export function getOnnxModelPath(cacheKey: string, filename: string): string {
+  const onnxDir = getOnnxModelCacheDir(cacheKey);
+  return validateAndJoinPath(onnxDir, filename);
+}
+
+/**
  * Get full path to specific shard file
  * Returns: cache/sharded/<hyperdriveKey>/<shardFilename>
  */

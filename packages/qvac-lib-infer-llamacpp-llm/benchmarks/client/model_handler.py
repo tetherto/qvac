@@ -119,7 +119,6 @@ class ServerConfig:
                  server_dir: str = None,
                  log_dir: str = "logs",
                  response_timeout: int = 600,
-                 hyperdrive_uri: str = None,
                  cli_samples: int = None,
                  cli_datasets: str = None,
                  cli_device: str = None,
@@ -157,17 +156,6 @@ class ServerConfig:
         self.top_k = DEFAULT_CONFIG['top_k']
         self.repeat_penalty = DEFAULT_CONFIG['repeat_penalty']
         self.seed = DEFAULT_CONFIG['seed']
-        
-        # P2P model parameters - split URI once here
-        self.hyperdrive_uri = hyperdrive_uri
-        if hyperdrive_uri and hyperdrive_uri.startswith("hd://"):
-            # Split URI: hd://key/filename
-            uri_parts = hyperdrive_uri[5:].split("/", 1)  # Remove 'hd://' prefix
-            self.hyperdrive_key = "hd://" + uri_parts[0]
-            self.p2p_model_name = uri_parts[1] if len(uri_parts) > 1 else None
-        else:
-            self.hyperdrive_key = None
-            self.p2p_model_name = None
         
         # Set default benchmark configuration
         self.benchmark_config = {
@@ -288,10 +276,6 @@ class QvacModelHandler:
         self.server_process = None
         self.executor = ThreadPoolExecutor(max_workers=1)
         
-        # P2P model parameters (already split in ServerConfig)
-        self.hyperdrive_key = getattr(server_cfg, 'hyperdrive_key', None)
-        self.p2p_model_name = getattr(server_cfg, 'p2p_model_name', None)
-        
         # Create log directory if it doesn't exist
         os.makedirs(self.log_dir, exist_ok=True)
         
@@ -341,10 +325,6 @@ class QvacModelHandler:
             # Wait for server to start
             self._wait_for_server()
             
-            # Wait for P2P model to be ready if using P2P mode
-            if self.hyperdrive_key and self.p2p_model_name:
-                self._wait_for_model_ready()
-            
             logger.info(f"Server started successfully. Logs available at:\n{stdout_log}\n{stderr_log}")
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
@@ -391,82 +371,6 @@ class QvacModelHandler:
             time.sleep(retry_delay)
         raise Exception("Server failed to start within timeout")
     
-    def _wait_for_model_ready(self, max_retries=60, retry_delay=10):
-        """Wait for P2P model to be fully loaded and ready"""
-        if not (self.hyperdrive_key and self.p2p_model_name):
-            return True  # Not a P2P model, no need to wait
-        
-        base_url = self.url.split("/run")[0]  # Get base URL without /run
-        logger.info(f"⏳ Waiting for P2P model to load from hyperdrive...")
-        logger.info(f"   Model: {self.p2p_model_name}")
-        logger.info(f"   This may take several minutes for large models...")
-        
-        for i in range(max_retries):
-            try:
-                # First check if server is healthy
-                health_response = httpx.get(f"{base_url}/", timeout=5)
-                if health_response.status_code != 200:
-                    logger.debug(f"Server not healthy, retrying... ({i+1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    continue
-                
-                # Try a simple test request to see if model is ready
-                model_config = self.server_cfg.get_model_config()
-                model_config["hyperdriveKey"] = self.hyperdrive_key
-                model_config["modelName"] = self.p2p_model_name
-                
-                test_payload = {
-                    "inputs": ["test"],
-                    "config": model_config
-                }
-                
-                response = httpx.post(self.url, json=test_payload, timeout=60)
-                
-                if response.status_code == 200:
-                    logger.info("✅ P2P model is ready!")
-                    return True
-                    
-                elif response.status_code == 500:
-                    # Check if it's a "model loading" error vs a real failure
-                    try:
-                        error_data = response.json()
-                        error_msg = error_data.get('error', {}).get('message', '')
-                        
-                        # These are temporary errors during model loading
-                        loading_errors = [
-                            'CONNECTION_FAILED',
-                            'Failed to connect to Hyperdrive',
-                            'Corestore is closed',
-                            'Hyperdrive is not ready',
-                            'DRIVE_NOT_READY'
-                        ]
-                        
-                        is_loading = any(err in str(error_msg) for err in loading_errors)
-                        
-                        if is_loading:
-                            elapsed = (i + 1) * retry_delay
-                            logger.info(f"📦 Model downloading from hyperdrive... ({elapsed}s elapsed, attempt {i+1}/{max_retries})")
-                        else:
-                            logger.warning(f"⚠️  Server error: {error_msg} (attempt {i+1}/{max_retries})")
-                    except:
-                        logger.info(f"📦 Model loading... (attempt {i+1}/{max_retries})")
-                    
-                    time.sleep(retry_delay)
-                    continue
-                    
-                else:
-                    logger.warning(f"Unexpected response {response.status_code} (attempt {i+1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    
-            except httpx.TimeoutException:
-                logger.info(f"⏱️  Request timeout, model still loading... (attempt {i+1}/{max_retries})")
-                time.sleep(retry_delay)
-            except Exception as e:
-                logger.debug(f"Waiting for model... (attempt {i+1}/{max_retries}): {str(e)}")
-                time.sleep(retry_delay)
-        
-        raise Exception(f"❌ P2P model failed to load within timeout ({max_retries * retry_delay}s)")
-
     def _check_server_health(self):
         """Check if server is healthy"""
         try:
@@ -535,22 +439,14 @@ class QvacModelHandler:
         if system_prompt:
             json_req["systemPrompt"] = system_prompt
         
-        # Build unified config for both P2P and local models
+        # Build config for local models
         model_config = self.server_cfg.get_model_config()
-        
-        # Check if this is a P2P model request
-        is_p2p_model = self.hyperdrive_key and self.p2p_model_name
-        
-        if is_p2p_model:
-            # P2P model - add hyperdriveKey to config
-            model_config["hyperdriveKey"] = self.hyperdrive_key
-            model_config["modelName"] = self.p2p_model_name
-        else:
-            # Local GGUF model - add diskPath to config
-            if hasattr(self.server_cfg, 'selected_model'):
-                selected_model = self.server_cfg.selected_model
-                model_config["modelName"] = selected_model.get('name')
-                model_config["diskPath"] = selected_model.get('diskPath', './models/')
+
+        # Local GGUF model - add diskPath to config
+        if hasattr(self.server_cfg, 'selected_model'):
+            selected_model = self.server_cfg.selected_model
+            model_config["modelName"] = selected_model.get('name')
+            model_config["diskPath"] = selected_model.get('diskPath', './models/')
         
         json_req.update({
             "config": model_config

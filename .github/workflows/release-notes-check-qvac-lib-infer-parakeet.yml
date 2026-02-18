@@ -1,0 +1,52 @@
+name: Release Notes Check (Parakeet)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-parakeet
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  check-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Check for release notes
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          RELEASE_NOTES_FILE="release-notes/v${VERSION}.md"
+
+          echo "Checking for release notes at: ${RELEASE_NOTES_FILE}"
+
+          if [ ! -f "${RELEASE_NOTES_FILE}" ]; then
+            echo "❌ Release notes file not found: ${RELEASE_NOTES_FILE}"
+            echo "Please create release notes for version ${VERSION}"
+            exit 1
+          fi
+
+          echo "✅ Release notes found for version ${VERSION}"
+          cat "${RELEASE_NOTES_FILE}"

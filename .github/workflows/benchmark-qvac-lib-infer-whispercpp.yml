@@ -404,7 +404,7 @@ jobs:
           mkdir -p "benchmarks/data/samples/${ARABIC_DATASET}"
 
           # Download from S3
-          S3_PATH="s3://tether-ai-dev/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
+          S3_PATH="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/transcription/arabic/${ARABIC_DATASET}/"
           echo "Downloading from ${S3_PATH}"
           aws s3 sync \
             "${S3_PATH}" \

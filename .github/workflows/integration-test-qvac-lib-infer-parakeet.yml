@@ -1,0 +1,157 @@
+name: Run Integration Tests (Parakeet)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-parakeet
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ai-run-ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm64-private
+            platform: linux
+            arch: arm64
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cd ${{ env.PKG_DIR }}
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Configure git for private repos
+          if [ -n "${{ secrets.PAT_TOKEN }}" ]; then
+            git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Rename prebuilds from tetherto_ to qvac_ prefix
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          find prebuilds -depth -name 'tetherto_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgomp1
+
+      - name: Linux - ubuntu-22 - install glibcxx
+        if: ${{ startsWith(matrix.os, 'ubuntu-22') || contains(matrix.os, 'ubuntu-22') }}
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+
+      - name: Run integration test
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/${{ env.PKG_DIR }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/${{ env.PKG_DIR }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
