@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
@@ -36,7 +36,9 @@
     "index.js",
     "index.d.ts",
     "lib",
-    "prebuilds"
+    "prebuilds",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
@@ -64,7 +66,6 @@
     "@qvac/decoder-audio": "^0.3.3",
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "bare-buffer": "^3.4.2",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
@@ -85,9 +86,6 @@
     "bare-path": "^3.0.0",
     "path": "npm:bare-path",
     "process": "npm:bare-process@^4.2.2"
-  },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",

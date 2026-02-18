@@ -1,16 +1,19 @@
 #!/bin/bash
 #
-# Download Parakeet TDT model from S3.
+# Download fine-tuned Whisper GGML models from S3.
+#
+# These are custom ggml-converted models maintained by the team.
+# Standard Whisper models should be downloaded from HuggingFace using download-models.sh instead.
 #
 # Usage:
-#   MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> [--model fp32|int8] [--dry-run]
+#   MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> [--model <name>] [--dry-run]
 #
 set -euo pipefail
 
 MODELS_DIR="./models"
 S3_BUCKET="${MODEL_S3_BUCKET:-}"
 S3_BASE=""
-MODEL_VARIANT="int8"  # Default to INT8 (smaller, recommended)
+MODEL_NAME=""
 DRY_RUN=0
 AWS_ACCESS_KEY=""
 AWS_SECRET_KEY=""
@@ -20,13 +23,21 @@ usage() {
   cat <<EOF
 Usage: $0 [options]
 
+Download fine-tuned Whisper GGML models from S3.
+
 Options:
   --access-key KEY     AWS access key ID (required).
   --secret-key SECRET  AWS secret access key (required).
-  --model VARIANT      Model variant to download (default: int8).
-                         fp32         - Full precision model (~2.4 GB)
-                         int8         - INT8 full quantized (~650 MB, recommended)
-                         int8-partial - INT8 partial quantized (~890 MB)
+  --model NAME         Model name to download (required).
+                         Examples of fine-tuned models:
+                           de-tiny-ggml-model-f16    German (tiny)
+                           de-base-ggml-model-f16    German (base)
+                           fr-tiny-ggml-model-f16    French (tiny)
+                           es-tiny-ggml-model-f16    Spanish (tiny)
+                           pt-tiny-ggml-model-f16    Portuguese (tiny)
+                           it-tiny-ggml-model-f16    Italian (tiny)
+                           ru-tiny-ggml-model-f16    Russian (tiny)
+                           ja-tiny-ggml-model-f16    Japanese (tiny)
   --region REGION      AWS region to use.
   --dry-run            Show what would be downloaded, but don't download.
   --models-dir DIR     Models directory to download to (default: ./models).
@@ -36,19 +47,13 @@ Environment:
   MODEL_S3_BUCKET        S3 bucket name (required).
 
 Examples:
-  # Download INT8 full model (default, recommended)
-  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET>
-
-  # Download FP32 model (full precision)
-  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET> --model fp32
-
-  # Download INT8 partial model (MatMul-only quantization)
-  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET> --model int8-partial
+  # Download German fine-tuned tiny model
+  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET> --model de-tiny-ggml-model-f16
 
 Notes:
-  - INT8 full quantizes Conv+MatMul layers (~73% smaller than FP32).
-  - INT8 partial quantizes MatMul layers only (~63% smaller than FP32).
-  - FP32 model may provide slightly better accuracy for some languages.
+  - Standard Whisper models (ggml-tiny.bin, etc.) should be downloaded from
+    HuggingFace using ./scripts/download-models.sh instead.
+  - Only use this script for team-maintained fine-tuned ggml conversions.
   - Requires: aws cli installed.
 EOF
 }
@@ -57,7 +62,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --access-key) AWS_ACCESS_KEY="${2:-}"; shift 2 ;;
     --secret-key) AWS_SECRET_KEY="${2:-}"; shift 2 ;;
-    --model) MODEL_VARIANT="${2:-}"; shift 2 ;;
+    --model) MODEL_NAME="${2:-}"; shift 2 ;;
     --region) AWS_REGION="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --models-dir) MODELS_DIR="${2:-}"; shift 2 ;;
@@ -93,32 +98,16 @@ if [[ -z "$S3_BUCKET" ]]; then
   exit 1
 fi
 
-S3_BASE="s3://${S3_BUCKET}/parakeet"
+if [[ -z "$MODEL_NAME" ]]; then
+  echo "ERROR: --model is required." >&2
+  usage
+  exit 1
+fi
 
-# Determine model paths based on variant
-case "$MODEL_VARIANT" in
-  fp32)
-    MODEL_NAME="parakeet-tdt-0.6b-v3-onnx"
-    MODEL_DESC="FP32 (full precision, ~2.4 GB)"
-    ;;
-  int8)
-    MODEL_NAME="parakeet-tdt-0.6b-v3-onnx-int8"
-    MODEL_DESC="INT8 full (Conv+MatMul quantized, ~650 MB)"
-    ;;
-  int8-partial)
-    MODEL_NAME="parakeet-tdt-0.6b-v3-onnx-int8-partial"
-    MODEL_DESC="INT8 partial (MatMul-only quantized, ~890 MB)"
-    ;;
-  *)
-    echo "ERROR: Unknown model variant '$MODEL_VARIANT'. Use 'fp32', 'int8', or 'int8-partial'." >&2
-    exit 1
-    ;;
-esac
-
+S3_BASE="s3://${S3_BUCKET}/whisper"
 S3_URI="${S3_BASE}/${MODEL_NAME}/"
 LOCAL_DEST="${MODELS_DIR}/${MODEL_NAME}/"
 
-# Export AWS credentials
 export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
 
@@ -128,9 +117,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then AWS_ARGS+=(--dryrun); fi
 
 echo ""
 echo "========================================="
-echo "Downloading Parakeet TDT model from S3"
+echo "Downloading fine-tuned Whisper model from S3"
 echo "========================================="
-echo "Model:  $MODEL_DESC"
+echo "Model:  $MODEL_NAME"
 echo "Source: $S3_URI"
 echo "Dest:   $LOCAL_DEST"
 if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -144,9 +133,7 @@ mkdir -p "$LOCAL_DEST"
 
 aws ${AWS_ARGS[@]+"${AWS_ARGS[@]}"} s3 sync "$S3_URI" "$LOCAL_DEST" \
   --exclude "*" \
-  --include "*.onnx" \
-  --include "*.onnx.data" \
-  --include "*.txt"
+  --include "*.bin"
 
 echo ""
 echo "========================================="
@@ -154,11 +141,4 @@ echo "Download complete!"
 echo "========================================="
 echo ""
 echo "Model downloaded to: $LOCAL_DEST"
-echo ""
-echo "You can now run the examples:"
-echo "  bare examples/quickstart.js"
-echo "  bare examples/transcribe.js --file examples/samples/French.raw"
-if [[ "$MODEL_VARIANT" == "int8" || "$MODEL_VARIANT" == "int8-partial" ]]; then
-  echo "  bare examples/transcribe.js -f examples/samples/croatian.raw -m models/${MODEL_NAME}"
-fi
 echo ""

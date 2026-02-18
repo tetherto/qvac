@@ -1,6 +1,6 @@
 # TTS Python Native Benchmark Server
 
-Python server using `piper-tts` for baseline TTS benchmarking.
+Python server using `chatterbox-tts` for baseline TTS benchmarking.
 
 ## Prerequisites
 
@@ -10,8 +10,8 @@ Python server using `piper-tts` for baseline TTS benchmarking.
 ## Installation
 
 ```bash
-pip install -r requirements.txt   # Piper TTS (default)
-# Or: pip install -r requirements-tts.txt (Piper only), requirements-chatterbox.txt (Chatterbox only)
+pip install -r requirements.txt
+pip install -r requirements-chatterbox.txt
 ```
 
 ## Usage
@@ -39,9 +39,9 @@ Response:
 }
 ```
 
-### POST /synthesize
+### POST /synthesize-chatterbox
 
-Run TTS synthesis.
+Run Chatterbox TTS synthesis.
 
 Request and response format identical to addon server for fair comparison.
 
@@ -52,14 +52,14 @@ Response:
     {
       "text": "Hello world",
       "sampleCount": 33075,
-      "sampleRate": 22050,
+      "sampleRate": 24000,
       "durationSec": 1.5,
       "generationMs": 18.2,
       "rtf": 0.082
     }
   ],
   "implementation": "python-native",
-  "version": "piper-1.2.0",
+  "version": "chatterbox-0.1.0",
   "time": {
     "loadModelMs": 312.7,
     "totalGenerationMs": 18.2
@@ -69,4 +69,4 @@ Response:
 
 ## Model Caching
 
-The server caches loaded models in memory. Uses shared eSpeak-ng data from `../shared-data/espeak-ng-data/` to ensure identical phoneme processing as the addon server.
+The server caches loaded models in memory.

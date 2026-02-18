@@ -10,9 +10,7 @@ const {
   getTestPaths,
   getAssetPath,
   setupJsLogger,
-  isMobile,
-  HyperDriveDL,
-  WHISPER_MODEL_HYPERDRIVE_KEY
+  isMobile
 } = require('./helpers.js')
 
 const { modelPath } = getTestPaths()
@@ -101,7 +99,8 @@ async function runLanguageAccuracyTest (t, langConfig) {
     return { skipped: true, reason: 'model_not_available' }
   }
 
-  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  const FakeDL = require('../mocks/loader.fake.js')
+  const loader = new FakeDL({})
 
   try {
     console.log(`\n📊 Running ${langConfig.name} accuracy test...`)

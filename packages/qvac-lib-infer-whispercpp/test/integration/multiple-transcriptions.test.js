@@ -5,9 +5,9 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const TranscriptionWhispercpp = require('../../index')
-const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile } = require('./helpers.js')
 
-// Works on both mobile and desktop - uses HyperDrive
 // On mobile, runs fewer transcriptions to avoid memory pressure
 test('Multiple consecutive transcriptions should work without errors', { timeout: 300000 }, async (t) => {
   const numTranscriptions = 3
@@ -23,7 +23,6 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
     fs.mkdirSync(modelsDir, { recursive: true })
   }
 
-  // Ensure model is available (uses HyperDrive)
   const modelResult = await ensureWhisperModel(modelPath)
   if (!modelResult.success) {
     console.log('⚠️ Model not available, skipping test')
@@ -48,8 +47,7 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
   t.ok(fs.existsSync(modelPath), 'Model file should exist')
   t.ok(fs.existsSync(audioPath), 'Audio file should exist')
 
-  // Use HyperDrive loader for both mobile and desktop
-  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  const loader = new FakeDL({})
 
   const args = {
     loader,

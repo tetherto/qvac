@@ -4,9 +4,9 @@ const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureWhisperModel, ensureVADModel, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, ensureVADModel, isMobile } = require('./helpers.js')
 
-// Download models once at the start and reuse across all tests
 const tmpDir = isMobile ? (global.testDir || os.tmpdir()) : os.tmpdir()
 const testModelPath = path.join(tmpDir, 'qvac-test-models', 'ggml-tiny.bin')
 const testVadPath = path.join(tmpDir, 'qvac-test-models', 'ggml-silero-v5.1.2.bin')
@@ -21,9 +21,8 @@ async function ensureModelsDownloaded () {
   modelsReady = true
 }
 
-// Create a HyperDrive loader
 function createLoader () {
-  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  return new FakeDL({})
 }
 
 /**

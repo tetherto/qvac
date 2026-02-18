@@ -8,7 +8,6 @@ const TranscriptionParakeet = require('../../index.js')
 const FakeDL = require('../mocks/loader.fake.js')
 const { ensureModel, getTestPaths, isMobile } = require('./helpers.js')
 
-// Create a HyperDrive loader
 function createLoader () {
   return new FakeDL({})
 }

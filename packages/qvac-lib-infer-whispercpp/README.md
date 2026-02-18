@@ -252,24 +252,14 @@ The library provides a straightforward workflow for audio transcription:
 
 Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
 
-- [Hyperdrive Data Loader](https://github.com/tetherto/qvac-lib-dl-hyperdrive)
 - [Filesystem Data Loader](https://github.com/tetherto/qvac-lib-dl-filesystem)
 
 First, select and instantiate a data loader that provides access to model files:
 
 ```javascript
-// Option A: Filesystem Data Loader - for local model files
 const FilesystemDL = require('@qvac/dl-filesystem')
 const fsDL = new FilesystemDL({
   dirPath: './path/to/model/files' // Directory containing model weights and settings
-})
-
-// Option B: Hyperdrive Data Loader - for peer-to-peer distributed models
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-// Key comes from the Model Registry (see below)
-const hdDL = new HyperDriveDL({
-  key: 'hd://<driveKey>',  // Hyperdrive key containing model files
-  store: corestore        // (Optional) A Corestore instance, If not provided, the Hyperdrive will use an in-memory store.
 })
 ```
 
@@ -337,18 +327,48 @@ const config = {
 
 Between this minimal configuration and the example scripts you should have everything needed, whether you are wiring the addon by hand or just instantiating `TranscriptionWhispercpp`.
 
-**Available Whisper Models:**
+**Available Whisper Models** (from [HuggingFace](https://huggingface.co/ggerganov/whisper.cpp)):
 
-- `ggml-tiny.bin` - Smallest, fastest (39MB)
-- `ggml-base.bin` - Balanced size/accuracy (142MB)
-- `ggml-small.bin` - Better accuracy (466MB)
-- `ggml-medium.bin` - High accuracy (1.5GB)
-- `ggml-large.bin` - Best accuracy (3.1GB)
+| Model | Size | Description |
+|-------|------|-------------|
+| `ggml-tiny.bin` | 78 MB | Smallest, fastest |
+| `ggml-base.bin` | 148 MB | Balanced size/accuracy |
+| `ggml-small.bin` | 488 MB | Better accuracy |
+| `ggml-medium.bin` | 1.5 GB | High accuracy |
+| `ggml-large-v3.bin` | 3.1 GB | Best accuracy |
+| `ggml-large-v3-turbo.bin` | 1.6 GB | Best accuracy, faster |
 
-**VAD Model:**
-- `ggml-silero-v5.1.2.bin` - Silero VAD model for voice activity detection
+Quantized variants (`q8_0`, `q5_1`, `q5_0`) are also available for all sizes.
 
-Ensure model files are available in your chosen data loader source.
+**VAD Model** (from [HuggingFace](https://huggingface.co/ggml-org/whisper-vad)):
+
+| Model | Size | Description |
+|-------|------|-------------|
+| `ggml-silero-v5.1.2.bin` | 885 KB | Silero VAD for voice activity detection |
+
+#### Downloading Models
+
+Use the provided script to download models from HuggingFace:
+
+```bash
+npm run download-models
+```
+
+Or download manually with curl:
+
+```bash
+# Whisper model
+curl -L -o models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+
+# VAD model
+curl -L -o models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
+```
+
+For fine-tuned models maintained by the team, use the S3 download script:
+
+```bash
+MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> --model <name>
+```
 
 ### 4. Create Model Instance
 
@@ -471,16 +491,12 @@ Always unload the model when finished to free up memory and resources:
 ```javascript
 try {
   await model.unload()
-  // If using Hyperdrive/Hyperbee, close the db instance if applicable
-  await db.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
 ```
 
 ## Quickstart example
-
-Follow these steps to run the Quickstart demo using the Hyperdrive loader:
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
@@ -489,30 +505,14 @@ cd qvac-lib-infer-whispercpp
 npm install
 ```
 
-### 2. Run the Hyperdrive example file inside `examples` folder
+### 2. Run the quickstart example inside `examples` folder
 ```bash
-bare examples/transcription.hd.js
+bare examples/quickstart.js
 ```
-Note: It might take a few seconds for the add-on to be created and for the weights to be downloaded from HyperDrive.
 
 ### 3. Code Walkthrough
 
-See `examples/quickstart.js` for the full Hyperdrive workflow (`HyperDriveDL` + `TranscriptionWhispercpp`), including streaming audio and cleanup. For VAD-enabled transcription, see `examples/exampleVad.hd.js`.
-
-## Model registry
-
-We use [Hyperbee](#glossary) as the model registry, mapping model identifiers (like `whisper-tiny`) to their corresponding [Hyperdrive](#glossary) keys, which point to the storage location of the model files.
-
-*   **Hyperbee key for Whisper models registry:** `d4d762d2070f1285d012941a76f8314b243ddc99be20a4f2c72c4f2aae09070d`
-
-The registry contains entries like:
-```json
-{
-  "whisper-tiny":    "ebfb94b378276da139554668f1ff737644eadff529c2ea0f2662d7df61fd86ca",
-}
-```
-Supported keys:
-- whisper-tiny
+See `examples/quickstart.js` for the full workflow (`TranscriptionWhispercpp` + filesystem loader), including streaming audio and cleanup.
 
 ## Benchmarking
 
@@ -535,9 +535,7 @@ Results are updated regularly as new model versions are released.
 
 ## Other examples
 
--   [Quickstart](examples/quickstart.js) – Basic transcription example using HyperDrive loader.
--   [HyperDrive Transcription](examples/transcription.hd.js) – Transcribes pre-decoded raw audio files using HyperDrive model loading.
--   [VAD with HyperDrive](examples/exampleVad.hd.js) – Demonstrates Voice Activity Detection (VAD) with HyperDrive model loading.
+-   [Quickstart](examples/quickstart.js) – Basic transcription example.
 -   [Standalone Decoder](examples/example.decoder.js) – Demonstrates the FFmpeg decoder independently for audio format conversion.
 -   [Model Reload](examples/example.reload.js) – Shows how to reload models with different configurations (language, temperature).
 -   [Audio ctx chunking](examples/example.audio-ctx-chunking.js) – Processes long recordings by reloading with `offset_ms`, `duration_ms`, and `audio_ctx` per chunk (mirrors the `audio-ctx-chunking` integration test).
@@ -547,8 +545,6 @@ Results are updated regularly as new model versions are released.
 
 • **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
 • **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.  
-• **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
-• **Hyperbee** – A decentralized B-tree built on top of Hypercores, and exposes a key-value API to store values. [Learn more](https://docs.pears.com/building-blocks/hyperbee).  
 • **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
 
 ## Error Range

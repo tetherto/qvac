@@ -6,11 +6,11 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
-const { setupJsLogger, ensureWhisperModel, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { setupJsLogger, ensureWhisperModel, isMobile } = require('./helpers.js')
 
-// Create a HyperDrive loader
 function createLoader () {
-  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  return new FakeDL({})
 }
 
 /**
