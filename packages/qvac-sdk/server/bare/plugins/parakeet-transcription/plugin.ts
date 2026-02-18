@@ -55,7 +55,7 @@ function createParakeetModel(
     logger,
     modelName: parseModelPath(dirPath).basePath,
     diskPath: dirPath,
-  } as unknown as TranscriptionParakeetArgs;
+  } as TranscriptionParakeetArgs;
 
   const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,
