@@ -122,13 +122,13 @@
     "@qvac/transcription-whispercpp": "^0.3.17",
     "@qvac/translation-nmtcpp": "^0.3.6",
     "@qvac/tts-onnx": "^0.2.13",
-    "@qvac/registry-client": "^0.1.5",
+    "@qvac/registry-client": "^0.1.6",
     "fast-safe-stringify": "2.1.1",
     "which-runtime": "^1.3.2",
     "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@qvac/cli": "^0.1.2",
+    "@qvac/cli": "^0.1.3",
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.1",
     "@lancedb/lancedb": "^0.21.3",
