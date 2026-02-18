@@ -8,7 +8,12 @@ import {
 import { whisperConfigSchema } from "./whispercpp-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
-import { ttsConfigSchema } from "./text-to-speech";
+import {
+  ttsConfigSchema,
+  ttsChatterboxRequestConfigSchema,
+  ttsSupertonicRequestConfigSchema,
+  ttsRequestConfigSchema,
+} from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -68,12 +73,11 @@ const loadModelOptionsBaseSchema = z.union([
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
+  // TTS (supports both Chatterbox and Supertonic via ttsEngine discriminator)
   z.object({
     modelSrc: modelSrcInputSchema,
     modelType: ttsModelTypeSchema,
     modelConfig: ttsConfigSchema,
-    configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
-    eSpeakDataPath: z.string(),
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -209,27 +213,60 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelSrcInputSchema,
       modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
-      configSrc: modelSrcInputSchema.optional(), // Optional - auto-derived from registry:// URLs
-      eSpeakDataPath: z.string(),
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
       withProgress: z.boolean().optional(),
     })
-    .transform((data) => ({
-      type: "loadModel" as const,
-      modelType: ModelType.onnxTts,
-      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
-      modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
-      seed: data.seed ?? false,
-      withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      configSrc: data.configSrc
-        ? modelInputToSrcSchema.parse(data.configSrc)
-        : undefined,
-      eSpeakDataPath: data.eSpeakDataPath,
-    })),
+    .transform((data) => {
+      // Keep modelConfig intact, just convert ModelSrcInput values to strings
+      if (data.modelConfig.ttsEngine === "chatterbox") {
+        return {
+          type: "loadModel" as const,
+          modelType: ModelType.onnxTts,
+          modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+          modelName: modelInputToNameSchema.parse(data.modelSrc),
+          modelConfig: {
+            ttsEngine: "chatterbox" as const,
+            language: data.modelConfig.language,
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
+            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsSpeechEncoderSrc),
+            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsEmbedTokensSrc),
+            ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsConditionalDecoderSrc,
+            ),
+            ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsLanguageModelSrc),
+            referenceAudioSrc: modelInputToSrcSchema.parse(data.modelConfig.referenceAudioSrc),
+          },
+          seed: data.seed ?? false,
+          withProgress: data.withProgress ?? !!data.onProgress,
+          delegate: data.delegate,
+        };
+      } else {
+        return {
+          type: "loadModel" as const,
+          modelType: ModelType.onnxTts,
+          modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+          modelName: modelInputToNameSchema.parse(data.modelSrc),
+          modelConfig: {
+            ttsEngine: "supertonic" as const,
+            language: data.modelConfig.language,
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
+            ttsTextEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTextEncoderSrc),
+            ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsLatentDenoiserSrc,
+            ),
+            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceDecoderSrc),
+            ttsVoiceSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceSrc),
+            ttsSpeed: data.modelConfig.ttsSpeed,
+            ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
+          },
+          seed: data.seed ?? false,
+          withProgress: data.withProgress ?? !!data.onProgress,
+          delegate: data.delegate,
+        };
+      }
+    }),
   z
     .object({
       modelSrc: modelSrcInputSchema,
@@ -285,7 +322,6 @@ const commonModelConfigSchema = z.object({
   modelName: z.string().optional(),
   projectionModelSrc: z.string().optional(),
   vadModelSrc: z.string().optional(),
-  configSrc: z.string().optional(),
   detectorModelSrc: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
@@ -317,11 +353,19 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
   dstVocabSrc: z.string().optional(),
 });
 
+export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.onnxTts),
+  modelConfig: ttsChatterboxRequestConfigSchema,
+});
+
+export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.onnxTts),
+  modelConfig: ttsSupertonicRequestConfigSchema,
+});
+
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsConfigSchema,
-  configSrc: z.string().optional(), // Optional - auto-derived from registry:// URLs
-  eSpeakDataPath: z.string(),
+  modelConfig: ttsRequestConfigSchema,
 });
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
@@ -383,6 +427,16 @@ export const modelProgressUpdateSchema = z.object({
       overallPercentage: z.number(),
     })
     .optional(),
+  onnxInfo: z
+    .object({
+      currentFile: z.string(),
+      fileIndex: z.number(),
+      totalFiles: z.number(),
+      overallDownloaded: z.number(),
+      overallTotal: z.number(),
+      overallPercentage: z.number(),
+    })
+    .optional(),
 });
 
 export const hyperdriveUrlSchema = z
@@ -418,11 +472,9 @@ export const registryUrlSchema = z
 export const loadModelServerParamsSchema = z.object({
   modelId: z.string(),
   modelPath: z.string(),
-  options: loadModelOptionsSchema,
+  options: loadModelSrcRequestSchema,
   projectionModelPath: z.string().optional(),
   vadModelPath: z.string().optional(),
-  ttsConfigModelPath: z.string().optional(),
-  eSpeakDataPath: z.string().optional(),
   detectorModelPath: z.string().optional(),
   modelName: z.string().optional(),
 });
