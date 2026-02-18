@@ -6,6 +6,8 @@ const Logger = require('./logger')
 const os = require('os')
 const path = require('path')
 
+const DEFAULT_REGISTRY_CORE_KEY = 'u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y'
+
 class RegistryConfig {
   constructor (opts = {}) {
     this.logger = new Logger(opts.logger)
@@ -38,8 +40,9 @@ class RegistryConfig {
     }
 
     const envKey = getEnv(ENV_KEYS.QVAC_REGISTRY_CORE_KEY)
-    this.logger.debug('getRegistryCoreKey loaded from env', { envKey })
-    return envKey || null
+    const result = envKey || DEFAULT_REGISTRY_CORE_KEY
+    this.logger.debug('getRegistryCoreKey resolved', { fromEnv: !!envKey, usingDefault: !envKey })
+    return result
   }
 }
 

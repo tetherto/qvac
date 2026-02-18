@@ -16,7 +16,6 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [7. Run Inference](#7-run-inference)
   - [8. Release Resources](#8-release-resources)
 - [Quickstart Example](#quickstart-example)
-- [Model Registry](#model-registry)
 - [Other Examples](#other-examples)
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
@@ -84,27 +83,29 @@ const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](../qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
-const store = new Corestore('./store')
-const hdStore = store.namespace('hd')
+const FilesystemDL = require('@qvac/dl-filesystem')
 
-const hdDL = new HyperDriveDL({
-  key: 'hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3',
-  store: hdStore
-})
+// Download model from HuggingFace (see examples/utils.js for downloadModel helper)
+const [modelName, dirPath] = await downloadModel(
+  'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
+  'Llama-3.2-1B-Instruct-Q4_0.gguf'
+)
+
+const fsDL = new FilesystemDL({ dirPath })
 ```
 
 ### 3. Create the `args` obj
 
 ```js
 const args = {
-  loader: hdDL,
+  loader: fsDL,
   opts: { stats: true },
   logger: console,
-  diskPath: './models',
-  modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
+  diskPath: dirPath,
+  modelName,
   // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
 }
 ```
@@ -237,7 +238,7 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  // Close P2P resources if applicable
+  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
@@ -261,26 +262,12 @@ npm run quickstart
 ```
 
 
-## Model registry
-
-| Hyperdrive Key                                                   | `.gguf` File Name                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3 | Llama-3.2-1B-Instruct-Q4_0.gguf                                                      |
-| 211874c9885f6b88b9926904420e365f5e74e1b6ac47207b7536408539bef4b7 | Qwen3-0.6B-Q4_0.gguf                                                                 |
-| 05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9 | Qwen3-1.7B-Q4_0.gguf                                                                 |
-| 73b1bc01d01e25fa27be7d7f434337d14f054b0315e8463766ca31e778ac6576 | SmolVLM2-500M-Video-Instruct-Q8_0.gguf+mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf |
-| 1610d81772a9e7c37660666dbdfdcef915b6b83c522ea1ad31c19cab0075811d | salamandrata_2b_inst_q4.gguf                                                         |
-| 1839dcabe1df8fdf1c83cd3d7a306c6e01e3c67e8542b0dd1e78cdfc86e75e2d | medgemma-4b-it-Q4_1-00001-of-00005.gguf                                              |
-
-
 ## Other examples
 
 -   [SalamandraTA](./examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
 -   [Multimodal](./examples/multiModal.js) – Demonstrates how to run multimodal inference.
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
--   [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
--   [Sharded Loading](./examples/shardedLoading.js) – Demonstrates loading sharded model files.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
 
 ## Architecture
@@ -332,9 +319,7 @@ These tests validate the native implementation and help catch issues early in de
 
 ## Glossary
 
-• **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).  
-• **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
-• **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
+• **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
 
 ## License
 
