@@ -4,8 +4,3 @@ sync-monorepo.sh
 reset_history.sh
 /node_modules
 packages/**/.npmrc
-
-# Generated benchmark artifacts (machine-specific / large)
-packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/models/
-packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/results/
-packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance/resolved-models.json

@@ -28,5 +28,7 @@ p2p-models/
 .clang-format
 benchmarks/results
 benchmarks/performance/results/
+benchmarks/performance/models/
+benchmarks/performance/resolved-models.json
 
 /test_cpp/build/
