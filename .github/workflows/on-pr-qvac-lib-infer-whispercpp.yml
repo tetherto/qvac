@@ -170,7 +170,7 @@ jobs:
       publish_target: 'gpr'
 
   run-integration-tests:
-    needs: [context, sanity-checks, prebuild]
+    needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
@@ -179,7 +179,7 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   run-mobile-integration-tests:
-    needs: [context, sanity-checks, prebuild]
+    needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
     secrets: inherit
