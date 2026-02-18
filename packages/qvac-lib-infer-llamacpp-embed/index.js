@@ -27,6 +27,8 @@ class GGMLBert extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._nextJobId = 0
+    this._currentJobId = null // jobId we route native events to (current confirmed job)
   }
 
   async _load (closeLoader = false, reportProgressCallback) {
@@ -95,13 +97,24 @@ class GGMLBert extends BaseInference {
       ? { type: 'sequences', input: text }
       : { type: 'text', input: text }
 
-    const success = await this.addon.runJob(inputData)
+    const jobId = String(++this._nextJobId)
+    const response = this._createResponse(jobId)
+
+    let success
+    try {
+      success = await this.addon.runJob(inputData)
+    } catch (error) {
+      this._deleteJobMapping(jobId)
+      throw error
+    }
     if (!success) {
+      this._deleteJobMapping(jobId)
       throw new Error('Cannot set new job: a job is already set or being processed')
     }
 
-    // Only one job is supported at the moment, with hardcoded jobId 'job'
-    return this._createResponse('job')
+    // Only route native events to this job once accepted (events are async after runJob returns)
+    this._currentJobId = jobId
+    return response
   }
 
   /**
@@ -126,6 +139,10 @@ class GGMLBert extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
+    // Route events only to the current confirmed job; base discards if no mapping.
+    const jobId = this._currentJobId
+    if (jobId == null) return
+
     // Map C++ mangled type names to expected event names
     // Stats / job-ended: LLM uses tokens_per_second; embed uses total_tokens, total_time_ms, etc. (RuntimeStats)
     const isStatsData = typeof data === 'object' && data !== null && (
@@ -133,7 +150,7 @@ class GGMLBert extends BaseInference {
       ('total_tokens' in data || 'total_time_ms' in data || 'batch_size' in data || 'context_size' in data)
     )
     if (isStatsData) {
-      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+      return this._outputCallback(addon, 'JobEnded', jobId, data, null)
     }
 
     let mappedEvent = event
@@ -142,7 +159,7 @@ class GGMLBert extends BaseInference {
     } else if (event.includes('Embeddings')) {
       mappedEvent = 'Output'
     }
-    return this._outputCallback(addon, mappedEvent, 'job', data, error)
+    return this._outputCallback(addon, mappedEvent, jobId, data, error)
   }
 }
 
