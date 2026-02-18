@@ -34,9 +34,9 @@ ln -sf ../ggml-indictrans2-en-indic-dist-200M.bin models/unit-test/ggml-indictra
 
 ```bash
 # Download from S3 (requires AWS credentials)
-aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
-aws s3 cp s3://tether-ai-dev/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
-aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
+aws s3 cp s3://${MODEL_S3_BUCKET}/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
+aws s3 cp s3://${MODEL_S3_BUCKET}/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
+aws s3 cp s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
 ```
 
 ### Option 3: Run Only Tests That Don't Need Models

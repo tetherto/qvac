@@ -15,11 +15,6 @@
     "url": "https://llama.meta.com/llama3_2/license/"
   },
   {
-    "spdxId": "qwen-research",
-    "name": "Qwen Research License",
-    "url": "https://huggingface.co/Qwen/Qwen2.5-72B-Instruct/blob/main/LICENSE"
-  },
-  {
     "spdxId": "gemma",
     "name": "Gemma Terms of Use",
     "url": "https://ai.google.dev/gemma/terms"
@@ -38,5 +33,10 @@
     "spdxId": "CC-BY-4.0",
     "name": "Creative Commons Attribution 4.0 International",
     "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  {
+    "spdxId": "openrail",
+    "name": "Open RAIL License",
+    "url": "https://huggingface.co/spaces/bigscience/license"
   }
 ]

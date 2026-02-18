@@ -10,6 +10,7 @@ runs:
       run: |
         # GPR SDK package name
         NEW_SDK_NAME="@tetherto/sdk-mono"
+        NEW_CLI_NAME="@tetherto/cli-mono"
 
         echo "Rewriting @qvac/sdk → $NEW_SDK_NAME in source files..."
 
@@ -29,4 +30,36 @@ runs:
           sed -i.bak "s|@qvac/sdk|${NEW_SDK_NAME}|g" "$INDEX_FILE"
           rm "${INDEX_FILE}.bak"
           echo "✓ Updated $INDEX_FILE"
+        fi
+
+        # Update package.json bin name: "qvac" → "tetherto"
+        PACKAGE_FILE="package.json"
+        if [ -f "$PACKAGE_FILE" ]; then
+          sed -i.bak 's|"qvac": "./src/index.js"|"tetherto": "./src/index.js"|g' "$PACKAGE_FILE"
+          rm "${PACKAGE_FILE}.bak"
+          echo "✓ Updated $PACKAGE_FILE (bin name)"
+        fi
+
+        # Update src/index.js Commander.js program name
+        MAIN_INDEX_FILE="src/index.js"
+        if [ -f "$MAIN_INDEX_FILE" ]; then
+          sed -i.bak "s|.name('qvac')|.name('tetherto')|g" "$MAIN_INDEX_FILE"
+          rm "${MAIN_INDEX_FILE}.bak"
+          echo "✓ Updated $MAIN_INDEX_FILE (program name)"
+        fi
+
+        # Update errors.js @qvac/cli references
+        ERRORS_FILE="src/errors.js"
+        if [ -f "$ERRORS_FILE" ]; then
+          sed -i.bak "s|@qvac/cli|${NEW_CLI_NAME}|g" "$ERRORS_FILE"
+          rm "${ERRORS_FILE}.bak"
+          echo "✓ Updated $ERRORS_FILE"
+        fi
+
+        # Update entry-gen.js npx qvac references
+        ENTRY_GEN_FILE="src/bundle-sdk/entry-gen.js"
+        if [ -f "$ENTRY_GEN_FILE" ]; then
+          sed -i.bak "s|npx qvac|npx tetherto|g" "$ENTRY_GEN_FILE"
+          rm "${ENTRY_GEN_FILE}.bak"
+          echo "✓ Updated $ENTRY_GEN_FILE"
         fi

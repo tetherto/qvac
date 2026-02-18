@@ -78,7 +78,7 @@
     "deprecationReason": "Superseded by v2"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "",
     "quantization": "fp16",
@@ -93,7 +93,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "",
     "quantization": "fp16",
@@ -108,7 +108,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "",
     "quantization": "fp16",
@@ -123,7 +123,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "",
     "quantization": "fp16",
@@ -138,7 +138,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "",
     "quantization": "fp16",
@@ -153,7 +153,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
     "engine": "@qvac/embed-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "fp16",

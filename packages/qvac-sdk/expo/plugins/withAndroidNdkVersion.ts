@@ -37,7 +37,9 @@ function withAndroidNdkVersion(config: ExpoConfig): ExpoConfig {
         }
 
         fs.writeFileSync(buildGradlePath, buildGradle);
-        console.log(`[withAndroidNdkVersion] 🔧 QVAC: Set Android NDK version to ${ndkVersion}`);
+        console.log(
+          `[withAndroidNdkVersion] 🔧 QVAC: Set Android NDK version to ${ndkVersion}`,
+        );
       }
 
       return config;

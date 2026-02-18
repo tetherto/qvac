@@ -1,1 +1,23 @@
+@qvac/dl-base
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/dl-base itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  @qvac/logging@0.1.0
+  bare-events@2.8.2
+    https://github.com/holepunchto/bare-events
+
+--- mit (MIT License) ---
+
+  ready-resource@1.2.0
+    https://github.com/holepunchto/ready-resource
 
