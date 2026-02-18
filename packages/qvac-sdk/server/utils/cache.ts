@@ -67,9 +67,9 @@ export function getShardedModelCacheDir(hyperdriveKey: string): string {
  * Get cache directory for ONNX model with external data
  * Returns: cache/onnx/<cacheKey>/
  */
-export function getOnnxModelCacheDir(cacheKey: string): string {
+function getOnnxModelCacheDir(cacheKey: string): string {
   const baseCache = getModelsCacheDir();
-  const onnxDir = path.join(baseCache, "onnx", cacheKey);
+  const onnxDir = validateAndJoinPath(baseCache, "onnx", cacheKey);
 
   try {
     fs.mkdirSync(onnxDir, { recursive: true });
