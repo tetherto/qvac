@@ -2,7 +2,6 @@
 
 const { InferenceArgsSchema } = require('../validation')
 const { setLogger, releaseLogger } = require('@qvac/llm-llamacpp/addonLogging')
-const { loadP2PModel } = require('./p2pModelLoader')
 const { modelManager } = require('./modelManager')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
@@ -11,7 +10,7 @@ const process = require('bare-process')
 
 /**
  * Runs an addon with the given payload.
- * @param {Object} payload - The payload containing inputs, config, and P2P model parameters.
+ * @param {Object} payload - The payload containing inputs and config.
  * @returns {Promise<{ outputs: any[]; timings: { loadModelMs: number; runMs: number } }>} - A promise that resolves to the output and timings.
  */
 const runAddon = async (payload) => {
@@ -42,61 +41,39 @@ const runAddon = async (payload) => {
     // Get or load model
     const loadStart = process.hrtime()
 
+    // Direct LlmLlamacpp instantiation (local model approach)
+    logger.info('Loading model directly with LlmLlamacpp')
+
+    // Use config to determine model path and settings
+    const localModelName = config?.modelName
+    const diskPath = config?.diskPath || './models/'
+
+    if (!localModelName) {
+      throw new Error('modelName is required in config for local GGUF models')
+    }
+
+    const modelPath = path.join(diskPath, localModelName)
+
+    if (!fs.existsSync(modelPath)) {
+      throw new Error(`Local model not found: ${modelPath}`)
+    }
+
+    logger.info(`Loading model: ${localModelName}`)
+
     let model
-
-    // Check if this is a P2P model request (unified in config)
-    const hyperdriveKey = config?.hyperdriveKey
-    const modelName = config?.modelName
-    const isP2PModel = hyperdriveKey && modelName
-
-    if (isP2PModel) {
-      logger.info('Loading P2P model using hyperdrive')
-      logger.info(`Hyperdrive key: ${hyperdriveKey}`)
-      logger.info(`Model name: ${modelName}`)
-      logger.debug(`P2P params: hyperdriveKey=${hyperdriveKey}, modelName=${modelName}`)
-
-      // Use P2P model loader with unified config
-      model = await loadP2PModel({
-        hyperdriveKey,
-        modelName,
-        modelConfig: config || {}
+    try {
+      // Use ModelManager to get or reuse model instance
+      model = await modelManager.getModel(modelPath, diskPath, localModelName, config)
+      logger.info('Model ready for inference')
+    } catch (error) {
+      logger.error(`Error loading model ${localModelName}:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        toString: String(error)
       })
-
-      logger.info('P2P model loaded successfully')
-    } else {
-      // Direct LlmLlamacpp instantiation (local model approach)
-      logger.info('Loading model directly with LlmLlamacpp')
-
-      // Use config to determine model path and settings
-      const localModelName = config?.modelName
-      const diskPath = config?.diskPath || './models/'
-
-      if (!localModelName) {
-        throw new Error('modelName is required in config for local GGUF models')
-      }
-
-      const modelPath = path.join(diskPath, localModelName)
-
-      if (!fs.existsSync(modelPath)) {
-        throw new Error(`Local model not found: ${modelPath}`)
-      }
-
-      logger.info(`Loading model: ${localModelName}`)
-
-      try {
-        // Use ModelManager to get or reuse model instance
-        model = await modelManager.getModel(modelPath, diskPath, localModelName, config)
-        logger.info('Model ready for inference')
-      } catch (error) {
-        logger.error(`Error loading model ${localModelName}:`, {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          code: error.code,
-          toString: String(error)
-        })
-        throw error
-      }
+      throw error
     }
 
     const [loadSec, loadNano] = process.hrtime(loadStart)
