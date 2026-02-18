@@ -424,14 +424,13 @@ bool savePauseCheckpoint(
   std::ofstream metadata(metadataPath);
   if (metadata.is_open()) {
     CheckpointMetadata meta{};
-    meta.epoch = pausedDuringValidation
-                     ? state.currentEpoch + 1
-                     : state.currentEpoch;
+    meta.epoch =
+        pausedDuringValidation ? state.currentEpoch + 1 : state.currentEpoch;
     meta.loraRank = state.loraRank;
     meta.loraAlpha = state.loraAlpha;
     meta.targetModules = state.targetModules;
-    meta.globalStep = pausedDuringValidation ? state.globalStep + 1
-                                             : state.globalStep;
+    meta.globalStep =
+        pausedDuringValidation ? state.globalStep + 1 : state.globalStep;
     meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
 
     metadata << "epoch=" << meta.epoch << '\n';
@@ -534,9 +533,10 @@ void optEpochCallback(
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
   const bool isFinalBatch = (ibatch == ibatchMax - 1);
-  // Add +1 only when backend sent 0-indexed ibatch. That happens if we resumed mid-epoch and
-  // epoch==startEpoch (executeTrainingLoop passes resumeFromBatch only then), so batchOffsetWithinEpoch>0
-  // exactly when we are in that resumed epoch.
+  // Add +1 only when backend sent 0-indexed ibatch. That happens if we resumed
+  // mid-epoch and epoch==startEpoch (executeTrainingLoop passes resumeFromBatch
+  // only then), so batchOffsetWithinEpoch>0 exactly when we are in that resumed
+  // epoch.
   const int64_t displayBatch =
       (checkpointState && checkpointState->batchOffsetWithinEpoch > 0)
           ? (ibatch + 1)
@@ -547,8 +547,8 @@ void optEpochCallback(
   std::fflush(stdout);
 
   if (checkpointState != nullptr &&
-      tryHandlePauseRequest(optCtx, checkpointState, train, ibatch,
-                            ibatchMax)) {
+      tryHandlePauseRequest(
+          optCtx, checkpointState, train, ibatch, ibatchMax)) {
     return;
   }
 
@@ -588,7 +588,8 @@ void optEpochCallback(
     }
   }
 
-  // After last batch of resumed epoch, clear so next epoch uses raw (1-indexed) ibatch
+  // After last batch of resumed epoch, clear so next epoch uses raw (1-indexed)
+  // ibatch
   if (state->batchOffsetWithinEpoch > 0 && isFinalBatch) {
     state->batchOffsetWithinEpoch = -1;
   }
