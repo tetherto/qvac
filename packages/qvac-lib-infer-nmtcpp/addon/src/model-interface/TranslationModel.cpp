@@ -5,6 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "nmt_utils.hpp"
@@ -19,10 +20,11 @@ std::string TranslationModel::getName() const {
 #ifdef HAVE_BERGAMOT
   case BackendType::BERGAMOT:
     return std::string("BERGAMOT : ") + srcLang_ + "->" + tgtLang_;
-  
+
 #endif
-  default: 
-    throw qvac_errors::StatusError(qvac_errors::general_error::InternalError, "Invalid backed type.");
+  default:
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InternalError, "Invalid backed type.");
   }
 }
 
