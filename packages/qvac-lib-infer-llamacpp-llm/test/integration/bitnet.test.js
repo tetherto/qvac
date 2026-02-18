@@ -20,7 +20,7 @@ const BITNET_MODEL = {
 
 const PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
-  { role: 'user', content: 'Hello, how are you?' }
+  { role: 'user', content: 'what is bitcoin?' }
 ]
 
 function getConfig () {
@@ -30,7 +30,9 @@ function getConfig () {
     ctx_size: '1024',
     n_predict: '32',
     verbosity: '2',
-    preferAdrenoOpenCl: 'false'
+    preferAdrenoOpenCl: 'false',
+    flash_attn: 'off',
+    seed: '42'
   }
 }
 
