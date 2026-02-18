@@ -37,7 +37,6 @@ on:
 env:
   PKG_DIR: packages/qvac-lib-infer-onnx-vad
   AWS_REGION: us-east-1
-  SILERO_VAD_S3_URI: s3://tether-ai-dev/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx
 
 jobs:
   prebuild:
@@ -381,6 +380,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+    env:
+      SILERO_VAD_S3_URI: s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/silerovad/2025-04-29/silero_vad.onnx
 
     steps:
       - name: Checkout repository
