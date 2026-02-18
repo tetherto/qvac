@@ -114,6 +114,12 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
+    // TODO: remove this and jobId completely after refactoring infer-base
+    // Map keys() iterates in insertion order; last key = last added job
+    // Or null and let original callback handle the unknown job
+    const keys = [...this._jobToResponse.keys()]
+    const jobId = keys.length > 0 ? keys[keys.length - 1] : null
+
     // Map C++ mangled type names to expected event names
     // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
