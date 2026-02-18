@@ -416,8 +416,10 @@ C++ Dependencies
   bergamot-translator
     https://github.com/tetherto/qvac-ext-bergamot-translator
 
---- lgpl-2.1 (GNU Lesser General Public License v2.1) ---
+--- apache-2.0 (Apache License 2.0) ---
 
-  ssplit
+  ssplit (C++ code)
     https://github.com/browsermt/ssplit-cpp
+    Note: C++ source code is Apache-2.0. Data files in nonbreaking_prefixes/
+    are LGPL-2.1 but are read at runtime, not compiled into the library.
 
