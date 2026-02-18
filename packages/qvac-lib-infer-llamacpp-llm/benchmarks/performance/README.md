@@ -213,6 +213,7 @@ Current default benchmark objective:
 - `ctx-size=2048`
 - `n-predict=1024` (long-output capped generation)
 - one prompt per case, with explicit prompt case type (`long`, `ctx-filling`, `span-fill`)
+- default sweep remains intentionally compact; broader values are available via CLI overrides
 
 Model list and quantization files come from:
 
@@ -239,6 +240,7 @@ Model list and quantization files come from:
    - `long` -> static `long`
    - `ctx-filling` -> matching `ctx-filling__ctx=<ctx-size>`
    - `span-fill` -> matching `batch-spanning__ctx=<ctx-size>__bs=<batch-size>`
+   - Missing exact prompt variants fail fast by default to preserve comparability.
    - If `batch-size > ctx-size`, span-fill uses the longest safe prompt under ctx budget (documented in prompt metadata).
 4. **Baseline Run**: Runs with default config, saves output for quality comparison
 5. **Parameter Sweep**: Runs all parameter combinations (full factorial design)
@@ -277,8 +279,8 @@ The judge pass is optimized to score only unique `(baseline, candidate)` text pa
 
 All target values are deterministic and come from hardcoded constants in `prepare-prompts.js` / `verify-prompts.js`:
 
-- `CTX_SIZES = [2048]`
-- `BATCH_SIZES = [512, 2048]`
+- `PROMPT_CTX_SIZES = [2048, 4096, 8192]`
+- `PROMPT_BATCH_SIZES = [512, 2048, 4096, 8192]`
 - `N_PREDICT_RESERVE = 1024`
 - `PROMPT_OVERHEAD_RESERVE = 128`
 
@@ -292,8 +294,12 @@ This yields:
 
 - `ctx-filling`
   - `ctx=2048 -> targetPromptTokens=896`
+  - `ctx=4096 -> targetPromptTokens=2944`
+  - `ctx=8192 -> targetPromptTokens=7040`
 - `batch-spanning`
-  - `ctx=2048`: `bs=512 -> 896`, `bs=2048 -> 896`
+  - `ctx=2048`: `bs=512 -> 896`, `bs=2048 -> 896`, `bs=4096 -> 896`, `bs=8192 -> 896`
+  - `ctx=4096`: `bs=512 -> 1536`, `bs=2048 -> 2944`, `bs=4096 -> 2944`, `bs=8192 -> 2944`
+  - `ctx=8192`: `bs=512 -> 1536`, `bs=2048 -> 6144`, `bs=4096 -> 7040`, `bs=8192 -> 7040`
 
 Why this is safe and accurate:
 

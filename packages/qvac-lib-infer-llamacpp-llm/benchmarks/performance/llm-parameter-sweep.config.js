@@ -3,8 +3,8 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const {
-  CTX_SIZES,
-  BATCH_SIZES
+  DEFAULT_SWEEP_CTX_SIZES,
+  DEFAULT_SWEEP_BATCH_SIZES
 } = require('./sweep-shared-constants')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
@@ -83,10 +83,10 @@ const MODELS = loadModelsFromManifest()
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
   device: ['cpu', 'gpu'],
-  'ctx-size': CTX_SIZES.map(String),
+  'ctx-size': DEFAULT_SWEEP_CTX_SIZES.map(String),
   'no-mmap': [false, true],
   threads: ['2', '4', '8'],
-  'batch-size': BATCH_SIZES.map(String), // max: 10k
+  'batch-size': DEFAULT_SWEEP_BATCH_SIZES.map(String), // max: 10k
   'ubatch-size': ['128', '512'], // must be <= batch-size
   'no-kv-offload': [false, true],
   'flash-attn': ['off', 'on'],

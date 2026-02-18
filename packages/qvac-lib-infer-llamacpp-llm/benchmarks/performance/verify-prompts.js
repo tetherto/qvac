@@ -6,8 +6,8 @@ const process = require('bare-process')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
-  CTX_SIZES,
-  BATCH_SIZES
+  PROMPT_CTX_SIZES,
+  PROMPT_BATCH_SIZES
 } = require('./sweep-shared-constants')
 const {
   shouldFallbackToCpu,
@@ -50,7 +50,7 @@ async function main () {
   const prompts = JSON.parse(fs.readFileSync(PROMPTS_PATH, 'utf8'))
   const byId = new Map(prompts.map((p) => [p.id, p]))
   const failures = []
-  const minCtxSize = Math.min(...CTX_SIZES)
+  const minCtxSize = Math.min(...PROMPT_CTX_SIZES)
   const minCtxBudget = getCtxBudget(minCtxSize)
 
   if (!byId.has('long')) failures.push('Missing base prompt: long')
@@ -108,7 +108,7 @@ async function main () {
       }
     }
 
-    for (const ctx of CTX_SIZES) {
+    for (const ctx of PROMPT_CTX_SIZES) {
       const id = `ctx-filling__ctx=${ctx}`
       const p = byId.get(id)
       if (!p) {
@@ -122,8 +122,8 @@ async function main () {
       console.log(`${id}: tokens=${n} budget=${budget}`)
     }
 
-    for (const ctx of CTX_SIZES) {
-      for (const batch of BATCH_SIZES) {
+    for (const ctx of PROMPT_CTX_SIZES) {
+      for (const batch of PROMPT_BATCH_SIZES) {
         const id = `batch-spanning__ctx=${ctx}__bs=${batch}`
         const p = byId.get(id)
         if (!p) {

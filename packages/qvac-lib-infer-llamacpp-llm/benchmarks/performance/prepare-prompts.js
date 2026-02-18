@@ -6,8 +6,8 @@ const process = require('bare-process')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
-  CTX_SIZES,
-  BATCH_SIZES
+  PROMPT_CTX_SIZES,
+  PROMPT_BATCH_SIZES
 } = require('./sweep-shared-constants')
 const {
   shouldFallbackToCpu,
@@ -74,47 +74,80 @@ async function tuneToBudget (model, templateMessages, budget) {
     throw new Error(`Calibration probe failed (words=${probeWords}, tokens=${probeTokens})`)
   }
 
-  let currentWords = Math.max(1, Math.min(words.length, Math.floor((budget / probeTokens) * probeWords * 0.9)))
-  let currentTokens = await getPromptTokens(model, buildMessagesFromWords(templateMessages, currentWords))
-  if (!Number.isFinite(currentTokens)) {
-    throw new Error('Initial calibrated prompt overflowed unexpectedly; reduce template density')
+  const tokenByWords = new Map()
+  async function tokensForWords (wordCount) {
+    const w = Math.max(1, Math.min(words.length, Number(wordCount)))
+    if (tokenByWords.has(w)) return tokenByWords.get(w)
+    const tokenCount = await getPromptTokens(model, buildMessagesFromWords(templateMessages, w))
+    tokenByWords.set(w, tokenCount)
+    return tokenCount
   }
 
   // Keep closest under-budget prompt as winner.
-  let bestWords = currentWords
-  let bestTokens = currentTokens <= budget ? currentTokens : -1
+  let bestWords = 1
+  let bestTokens = -1
 
-  // Bounded monotonic growth near budget to avoid large overflow jumps that can destabilize runtime.
-  let safety = 0
-  while (currentTokens < budget && safety < 400) {
-    safety += 1
-    const gap = budget - currentTokens
-    const step = gap > 512 ? 48 : (gap > 128 ? 16 : 4)
-    const nextWords = Math.min(words.length, currentWords + step)
-    if (nextWords === currentWords) break
-    const nextTokens = await getPromptTokens(model, buildMessagesFromWords(templateMessages, nextWords))
-    if (!Number.isFinite(nextTokens)) break
-    currentWords = nextWords
-    currentTokens = nextTokens
-    if (currentTokens <= budget && currentTokens > bestTokens) {
-      bestWords = currentWords
-      bestTokens = currentTokens
+  // Initial guess close to target.
+  let guessWords = Math.max(1, Math.min(words.length, Math.floor((budget / probeTokens) * probeWords * 0.95)))
+  let guessTokens = await tokensForWords(guessWords)
+  if (Number.isFinite(guessTokens) && guessTokens <= budget) {
+    bestWords = guessWords
+    bestTokens = guessTokens
+  }
+
+  // Establish [low, high] bounds where low is safe and high is overflow/over-budget if possible.
+  let lowWords = Number.isFinite(guessTokens) && guessTokens <= budget ? guessWords : 1
+  let highWords = guessWords
+  if (!(Number.isFinite(guessTokens) && guessTokens > budget)) {
+    let stepWords = Math.max(8, Math.floor(guessWords * 0.3))
+    let safety = 0
+    while (highWords < words.length && safety < 24) {
+      safety += 1
+      const nextWords = Math.min(words.length, highWords + stepWords)
+      if (nextWords === highWords) break
+      const nextTokens = await tokensForWords(nextWords)
+      if (Number.isFinite(nextTokens) && nextTokens <= budget) {
+        lowWords = nextWords
+        if (nextTokens > bestTokens) {
+          bestWords = nextWords
+          bestTokens = nextTokens
+        }
+        highWords = nextWords
+        stepWords = Math.max(8, Math.floor(stepWords * 1.5))
+      } else {
+        highWords = nextWords
+        break
+      }
+    }
+  }
+
+  // Binary search the upper boundary to maximize safe tokens quickly.
+  let left = lowWords
+  let right = highWords
+  if (right <= left) right = Math.min(words.length, left + 1)
+  let iter = 0
+  while (left <= right && iter < 28) {
+    iter += 1
+    const mid = Math.floor((left + right) / 2)
+    const midTokens = await tokensForWords(mid)
+    if (Number.isFinite(midTokens) && midTokens <= budget) {
+      if (midTokens > bestTokens) {
+        bestWords = mid
+        bestTokens = midTokens
+      }
+      left = mid + 1
+    } else {
+      right = mid - 1
     }
   }
 
   if (bestTokens < 0) {
-    // Fallback: find smallest safe prompt by shrinking from currentWords.
-    let shrinkWords = Math.max(1, Math.floor(currentWords / 2))
-    let shrinkTokens = await getPromptTokens(model, buildMessagesFromWords(templateMessages, shrinkWords))
-    while ((!Number.isFinite(shrinkTokens) || shrinkTokens > budget) && shrinkWords > 1) {
-      shrinkWords = Math.max(1, Math.floor(shrinkWords / 2))
-      shrinkTokens = await getPromptTokens(model, buildMessagesFromWords(templateMessages, shrinkWords))
-    }
-    if (!Number.isFinite(shrinkTokens) || shrinkTokens > budget) {
+    const minTokens = await tokensForWords(1)
+    if (!Number.isFinite(minTokens) || minTokens > budget) {
       throw new Error(`Unable to build safe prompt under budget=${budget}`)
     }
-    bestWords = shrinkWords
-    bestTokens = shrinkTokens
+    bestWords = 1
+    bestTokens = minTokens
   }
 
   return {
@@ -212,7 +245,7 @@ async function main () {
     const ctxTemplate = ctxTemplateMessages()
     const batchTemplate = batchTemplateMessages()
 
-    for (const ctx of CTX_SIZES) {
+    for (const ctx of PROMPT_CTX_SIZES) {
       const target = getCtxBudget(ctx)
       const tuned = await tuneToBudget(model, ctxTemplate, target)
       prompts.push({
@@ -227,8 +260,8 @@ async function main () {
       console.log(`ctx-filling__ctx=${ctx}: target=${target} actual=${tuned.promptTokens}`)
     }
 
-    for (const ctx of CTX_SIZES) {
-      for (const batch of BATCH_SIZES) {
+    for (const ctx of PROMPT_CTX_SIZES) {
+      for (const batch of PROMPT_BATCH_SIZES) {
         const target = getBatchBudget(ctx, batch)
         const tuned = await tuneToBudget(model, batchTemplate, target)
         const note = Number(batch) > Number(ctx)

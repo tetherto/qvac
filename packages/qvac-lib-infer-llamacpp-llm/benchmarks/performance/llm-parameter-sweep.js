@@ -421,7 +421,7 @@ function selectPromptForCase (allPrompts, runtimeConfig, promptCase) {
   if (!byId.has(promptId)) {
     throw new Error(
       `Missing required prompt id "${promptId}" in prompt file. ` +
-      'Regenerate prompts or provide a prompt file with all required variants.'
+      'Run `npm run prepare:prompts` (or pass --prompts-file with exact variants).'
     )
   }
   return byId.get(promptId)
@@ -520,7 +520,7 @@ function createProgressReporter (totalRuns) {
 
 function aggregateRunMetrics (runMetrics) {
   const loadMsValues = runMetrics.map((x) => x.loadMs).filter((x) => x != null)
-  const runMsValues = runMetrics.map((x) => x.runMs)
+  const runMsValues = runMetrics.map((x) => x.runMs).filter((x) => x != null)
   const unloadMsValues = runMetrics.map((x) => x.unloadMs).filter((x) => x != null)
   const ttftMsValues = runMetrics.map((x) => x.ttftMs).filter((x) => x != null)
   const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
@@ -1112,10 +1112,12 @@ async function main () {
                 baselineReference = firstOutput
                 qualityMatch = 1.0
               } else {
-                baselineReference = baselineOutputs[prompt.id] || null
-                qualityMatch = baselineReference
-                  ? exactMatch(baselineReference, firstOutput)
+                baselineReference = Object.prototype.hasOwnProperty.call(baselineOutputs, prompt.id)
+                  ? baselineOutputs[prompt.id]
                   : null
+                qualityMatch = baselineReference == null
+                  ? null
+                  : exactMatch(baselineReference, firstOutput)
               }
             }
 
