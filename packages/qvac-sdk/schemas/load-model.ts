@@ -8,7 +8,12 @@ import {
 import { whisperConfigSchema } from "./whispercpp-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
-import { ttsConfigSchema, TTS_LANGUAGES } from "./text-to-speech";
+import {
+  ttsConfigSchema,
+  ttsChatterboxRequestConfigSchema,
+  ttsSupertonicRequestConfigSchema,
+  ttsRequestConfigSchema,
+} from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -214,26 +219,28 @@ export const loadModelOptionsToRequestSchema = z.union([
       withProgress: z.boolean().optional(),
     })
     .transform((data) => {
-      // Use the explicit ttsEngine discriminator
+      // Keep modelConfig intact, just convert ModelSrcInput values to strings
       if (data.modelConfig.ttsEngine === "chatterbox") {
         return {
           type: "loadModel" as const,
           modelType: ModelType.onnxTts,
           modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
           modelName: modelInputToNameSchema.parse(data.modelSrc),
-          modelConfig: { language: data.modelConfig.language },
+          modelConfig: {
+            ttsEngine: "chatterbox" as const,
+            language: data.modelConfig.language,
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
+            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsSpeechEncoderSrc),
+            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsEmbedTokensSrc),
+            ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsConditionalDecoderSrc,
+            ),
+            ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsLanguageModelSrc),
+            referenceAudioSrc: modelInputToSrcSchema.parse(data.modelConfig.referenceAudioSrc),
+          },
           seed: data.seed ?? false,
           withProgress: data.withProgress ?? !!data.onProgress,
           delegate: data.delegate,
-          ttsEngine: "chatterbox" as const,
-          ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-          ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsSpeechEncoderSrc),
-          ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsEmbedTokensSrc),
-          ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
-            data.modelConfig.ttsConditionalDecoderSrc,
-          ),
-          ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsLanguageModelSrc),
-          referenceAudioSrc: modelInputToSrcSchema.parse(data.modelConfig.referenceAudioSrc),
         };
       } else {
         return {
@@ -241,20 +248,22 @@ export const loadModelOptionsToRequestSchema = z.union([
           modelType: ModelType.onnxTts,
           modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
           modelName: modelInputToNameSchema.parse(data.modelSrc),
-          modelConfig: { language: data.modelConfig.language },
+          modelConfig: {
+            ttsEngine: "supertonic" as const,
+            language: data.modelConfig.language,
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
+            ttsTextEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTextEncoderSrc),
+            ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsLatentDenoiserSrc,
+            ),
+            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceDecoderSrc),
+            ttsVoiceSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceSrc),
+            ttsSpeed: data.modelConfig.ttsSpeed,
+            ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
+          },
           seed: data.seed ?? false,
           withProgress: data.withProgress ?? !!data.onProgress,
           delegate: data.delegate,
-          ttsEngine: "supertonic" as const,
-          ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-          ttsTextEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTextEncoderSrc),
-          ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
-            data.modelConfig.ttsLatentDenoiserSrc,
-          ),
-          ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceDecoderSrc),
-          ttsVoiceSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceSrc),
-          ttsSpeed: data.modelConfig.ttsSpeed,
-          ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
         };
       }
     }),
@@ -346,33 +355,18 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
-  modelConfig: z.object({ language: z.enum(TTS_LANGUAGES) }),
-  ttsEngine: z.literal("chatterbox").optional(),
-  ttsTokenizerSrc: z.string(),
-  ttsSpeechEncoderSrc: z.string(),
-  ttsEmbedTokensSrc: z.string(),
-  ttsConditionalDecoderSrc: z.string(),
-  ttsLanguageModelSrc: z.string(),
-  referenceAudioSrc: z.string(),
+  modelConfig: ttsChatterboxRequestConfigSchema,
 });
 
 export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
-  modelConfig: z.object({ language: z.enum(TTS_LANGUAGES) }),
-  ttsEngine: z.literal("supertonic"),
-  ttsTokenizerSrc: z.string(),
-  ttsTextEncoderSrc: z.string(),
-  ttsLatentDenoiserSrc: z.string(),
-  ttsVoiceDecoderSrc: z.string(),
-  ttsVoiceSrc: z.string(),
-  ttsSpeed: z.number().optional(),
-  ttsNumInferenceSteps: z.number().optional(),
+  modelConfig: ttsSupertonicRequestConfigSchema,
 });
 
-export const loadTtsModelRequestSchema = z.union([
-  loadTtsChatterboxModelRequestSchema,
-  loadTtsSupertonicModelRequestSchema,
-]);
+export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.onnxTts),
+  modelConfig: ttsRequestConfigSchema,
+});
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxOcr),

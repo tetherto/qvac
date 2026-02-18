@@ -14,8 +14,6 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { generateShortHash, transformConfigForReload } from "@/server/utils";
 import {
-  TtsArtifactsRequiredError,
-  TtsReferenceAudioRequiredError,
   ConfigReloadNotSupportedError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
@@ -23,6 +21,7 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { OCR_CRAFT_DETECTOR } from "@/models/registry";
+import { getPlugin } from "@/server/plugins";
 
 const logger = getServerLogger();
 
@@ -54,24 +53,6 @@ export async function handleLoadModel(
     canonicalModelType === ModelType.nmtcppTranslation
       ? (request as { dstVocabSrc?: string }).dstVocabSrc
       : undefined;
-  const ttsTtsSrcs =
-    canonicalModelType === ModelType.onnxTts
-      ? (request as {
-          ttsEngine?: "chatterbox" | "supertonic";
-          ttsTokenizerSrc?: string;
-          ttsSpeechEncoderSrc?: string;
-          ttsEmbedTokensSrc?: string;
-          ttsConditionalDecoderSrc?: string;
-          ttsLanguageModelSrc?: string;
-          referenceAudioSrc?: string;
-          ttsVoiceSrc?: string;
-          ttsSpeed?: number;
-          ttsNumInferenceSteps?: number;
-          ttsTextEncoderSrc?: string;
-          ttsLatentDenoiserSrc?: string;
-          ttsVoiceDecoderSrc?: string;
-        })
-      : undefined;
   const detectorModelSrc =
     canonicalModelType === ModelType.onnxOcr
       ? (request as { detectorModelSrc?: string }).detectorModelSrc
@@ -96,117 +77,6 @@ export async function handleLoadModel(
         progressCallback,
         seed,
       );
-    }
-
-    let ttsTokenizerPath: string | undefined;
-    let ttsSpeechEncoderPath: string | undefined;
-    let ttsEmbedTokensPath: string | undefined;
-    let ttsConditionalDecoderPath: string | undefined;
-    let ttsLanguageModelPath: string | undefined;
-    let referenceAudioPath: string | undefined;
-    let ttsVoicePath: string | undefined;
-    let ttsSpeed: number | undefined;
-    let ttsNumInferenceSteps: number | undefined;
-    let ttsTextEncoderPath: string | undefined;
-    let ttsLatentDenoiserPath: string | undefined;
-    let ttsVoiceDecoderPath: string | undefined;
-    if (canonicalModelType === ModelType.onnxTts && ttsTtsSrcs) {
-      if (ttsTtsSrcs.ttsEngine === "supertonic") {
-        const {
-          ttsTokenizerSrc,
-          ttsTextEncoderSrc,
-          ttsLatentDenoiserSrc,
-          ttsVoiceDecoderSrc,
-          ttsVoiceSrc,
-        } = ttsTtsSrcs;
-        if (
-          !ttsTokenizerSrc ||
-          !ttsTextEncoderSrc ||
-          !ttsLatentDenoiserSrc ||
-          !ttsVoiceDecoderSrc ||
-          !ttsVoiceSrc
-        ) {
-          throw new TtsArtifactsRequiredError();
-        }
-        ttsSpeed = ttsTtsSrcs.ttsSpeed;
-        ttsNumInferenceSteps = ttsTtsSrcs.ttsNumInferenceSteps;
-        ttsTokenizerPath = await resolveModelPath(
-          ttsTokenizerSrc,
-          progressCallback,
-          seed,
-        );
-        ttsTextEncoderPath = await resolveModelPath(
-          ttsTextEncoderSrc,
-          progressCallback,
-          seed,
-        );
-        ttsLatentDenoiserPath = await resolveModelPath(
-          ttsLatentDenoiserSrc,
-          progressCallback,
-          seed,
-        );
-        ttsVoiceDecoderPath = await resolveModelPath(
-          ttsVoiceDecoderSrc,
-          progressCallback,
-          seed,
-        );
-        ttsVoicePath = await resolveModelPath(
-          ttsVoiceSrc,
-          progressCallback,
-          seed,
-        );
-      } else {
-        const {
-          ttsTokenizerSrc,
-          ttsSpeechEncoderSrc,
-          ttsEmbedTokensSrc,
-          ttsConditionalDecoderSrc,
-          ttsLanguageModelSrc,
-          referenceAudioSrc,
-        } = ttsTtsSrcs;
-        if (
-          !ttsTokenizerSrc ||
-          !ttsSpeechEncoderSrc ||
-          !ttsEmbedTokensSrc ||
-          !ttsConditionalDecoderSrc ||
-          !ttsLanguageModelSrc
-        ) {
-          throw new TtsArtifactsRequiredError();
-        }
-        if (!referenceAudioSrc) {
-          throw new TtsReferenceAudioRequiredError();
-        }
-        ttsTokenizerPath = await resolveModelPath(
-          ttsTokenizerSrc,
-          progressCallback,
-          seed,
-        );
-        ttsSpeechEncoderPath = await resolveModelPath(
-          ttsSpeechEncoderSrc,
-          progressCallback,
-          seed,
-        );
-        ttsEmbedTokensPath = await resolveModelPath(
-          ttsEmbedTokensSrc,
-          progressCallback,
-          seed,
-        );
-        ttsConditionalDecoderPath = await resolveModelPath(
-          ttsConditionalDecoderSrc,
-          progressCallback,
-          seed,
-        );
-        ttsLanguageModelPath = await resolveModelPath(
-          ttsLanguageModelSrc,
-          progressCallback,
-          seed,
-        );
-        referenceAudioPath = await resolveModelPath(
-          referenceAudioSrc,
-          progressCallback,
-          seed,
-        );
-      }
     }
 
     // For OCR models: use provided detectorModelSrc or auto-derive
@@ -278,62 +148,30 @@ export async function handleLoadModel(
       }
     }
 
-    // Generate hash-based modelId
+    // Use plugin's resolveConfig hook if available to resolve model sources
+    let resolvedModelConfig = request.modelConfig as Record<string, unknown> | undefined;
+    const plugin = getPlugin(canonicalModelType);
+    if (plugin?.resolveConfig && resolvedModelConfig) {
+      const resolve = (src: string) => resolveModelPath(src, progressCallback, seed);
+      resolvedModelConfig = await plugin.resolveConfig(resolvedModelConfig, resolve);
+    }
+
+    // Generate hash-based modelId from modelConfig (includes all sources for TTS)
     const configStr = JSON.stringify(
       request.modelConfig,
       Object.keys(request.modelConfig as object).sort(),
     );
-    const modelHashInput =
-      canonicalModelType === ModelType.onnxTts && ttsTtsSrcs
-        ? ttsTtsSrcs.ttsEngine === "supertonic"
-          ? `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsTextEncoderSrc}:${ttsTtsSrcs.ttsLatentDenoiserSrc}:${ttsTtsSrcs.ttsVoiceDecoderSrc}:${ttsTtsSrcs.ttsVoiceSrc}:${configStr}`
-          : `${request.modelType}:${modelSrc}:${ttsTtsSrcs.ttsTokenizerSrc}:${ttsTtsSrcs.ttsSpeechEncoderSrc}:${ttsTtsSrcs.ttsEmbedTokensSrc}:${ttsTtsSrcs.ttsConditionalDecoderSrc}:${ttsTtsSrcs.ttsLanguageModelSrc}:${ttsTtsSrcs.referenceAudioSrc ?? ""}:${configStr}`
-        : `${request.modelType}:${modelSrc}:${configStr}`;
+    const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
-    const effectiveModelPath =
-      canonicalModelType === ModelType.onnxTts
-        ? ttsTokenizerPath ?? modelPath
-        : modelPath;
-
-    // Build TTS model config with resolved paths
-    let ttsModelConfig: Record<string, unknown> | undefined;
-    if (canonicalModelType === ModelType.onnxTts && ttsTtsSrcs) {
-      if (ttsTtsSrcs.ttsEngine === "supertonic") {
-        ttsModelConfig = {
-          ttsEngine: "supertonic",
-          language: (request.modelConfig as { language?: string })?.language,
-          tokenizerPath: ttsTokenizerPath,
-          textEncoderPath: ttsTextEncoderPath,
-          latentDenoiserPath: ttsLatentDenoiserPath,
-          voiceDecoderPath: ttsVoiceDecoderPath,
-          voicePath: ttsVoicePath,
-          speed: ttsSpeed,
-          numInferenceSteps: ttsNumInferenceSteps,
-        };
-      } else {
-        ttsModelConfig = {
-          ttsEngine: "chatterbox",
-          language: (request.modelConfig as { language?: string })?.language,
-          tokenizerPath: ttsTokenizerPath,
-          speechEncoderPath: ttsSpeechEncoderPath,
-          embedTokensPath: ttsEmbedTokensPath,
-          conditionalDecoderPath: ttsConditionalDecoderPath,
-          languageModelPath: ttsLanguageModelPath,
-          referenceAudioPath: referenceAudioPath,
-        };
-      }
-    }
-
-    // Build options with TTS config merged into modelConfig
-    const loadModelOptions =
-      ttsModelConfig
-        ? { ...request, modelConfig: ttsModelConfig }
-        : request;
+    const loadModelOptions = {
+      ...request,
+      modelConfig: resolvedModelConfig,
+    };
 
     await loadModel({
       modelId,
-      modelPath: effectiveModelPath,
+      modelPath,
       options: loadModelOptions,
       projectionModelPath,
       vadModelPath,

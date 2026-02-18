@@ -72,7 +72,8 @@ export async function loadModel(params: LoadModelServerParams) {
       );
     }
   } else if (modelType !== ModelType.onnxTts) {
-    // For non-sharded, non-TTS models, validate single file exists
+    // For non-sharded models, validate single file exists
+    // Skip for TTS - it uses multiple paths from modelConfig (resolved by plugin.resolveConfig)
     try {
       const modelDir = path.dirname(modelPath);
       const modelFile = path.basename(modelPath);
@@ -102,7 +103,8 @@ export async function loadModel(params: LoadModelServerParams) {
     throw new PluginNotFoundError(modelType);
   }
 
-  // Build artifacts map for plugin (non-TTS artifacts only, TTS uses modelConfig)
+  // Build artifacts map for plugin
+  // Note: TTS paths are in modelConfig (resolved by plugin.resolveConfig), not artifacts
   const artifacts: Record<string, string> = {};
   if (projectionModelPath)
     artifacts["projectionModelPath"] = projectionModelPath;

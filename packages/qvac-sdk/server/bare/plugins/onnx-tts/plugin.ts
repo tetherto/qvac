@@ -9,6 +9,7 @@ import {
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveModelPath,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import {
@@ -21,31 +22,142 @@ import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-help
 type TtsModelConfig = {
   ttsEngine?: "chatterbox" | "supertonic";
   language?: string;
-  tokenizerPath?: string;
-  speechEncoderPath?: string;
-  embedTokensPath?: string;
-  conditionalDecoderPath?: string;
-  languageModelPath?: string;
-  referenceAudioPath?: string;
-  textEncoderPath?: string;
-  latentDenoiserPath?: string;
-  voiceDecoderPath?: string;
-  voicePath?: string;
-  speed?: number;
-  numInferenceSteps?: number;
+  // Chatterbox fields
+  ttsTokenizerSrc?: string;
+  ttsSpeechEncoderSrc?: string;
+  ttsEmbedTokensSrc?: string;
+  ttsConditionalDecoderSrc?: string;
+  ttsLanguageModelSrc?: string;
+  referenceAudioSrc?: string;
+  // Supertonic fields
+  ttsTextEncoderSrc?: string;
+  ttsLatentDenoiserSrc?: string;
+  ttsVoiceDecoderSrc?: string;
+  ttsVoiceSrc?: string;
+  ttsSpeed?: number;
+  ttsNumInferenceSteps?: number;
 };
+
+async function resolveChatterboxConfig(
+  config: TtsModelConfig,
+  resolve: ResolveModelPath,
+): Promise<TtsModelConfig> {
+  const {
+    ttsTokenizerSrc,
+    ttsSpeechEncoderSrc,
+    ttsEmbedTokensSrc,
+    ttsConditionalDecoderSrc,
+    ttsLanguageModelSrc,
+    referenceAudioSrc,
+    language,
+  } = config;
+
+  if (
+    !ttsTokenizerSrc ||
+    !ttsSpeechEncoderSrc ||
+    !ttsEmbedTokensSrc ||
+    !ttsConditionalDecoderSrc ||
+    !ttsLanguageModelSrc
+  ) {
+    throw new TtsArtifactsRequiredError();
+  }
+  if (!referenceAudioSrc) {
+    throw new TtsReferenceAudioRequiredError();
+  }
+
+  const [
+    resolvedTokenizer,
+    resolvedSpeechEncoder,
+    resolvedEmbedTokens,
+    resolvedConditionalDecoder,
+    resolvedLanguageModel,
+    resolvedReferenceAudio,
+  ] = await Promise.all([
+    resolve(ttsTokenizerSrc),
+    resolve(ttsSpeechEncoderSrc),
+    resolve(ttsEmbedTokensSrc),
+    resolve(ttsConditionalDecoderSrc),
+    resolve(ttsLanguageModelSrc),
+    resolve(referenceAudioSrc),
+  ]);
+
+  const result: TtsModelConfig = {
+    ttsEngine: "chatterbox",
+    ttsTokenizerSrc: resolvedTokenizer,
+    ttsSpeechEncoderSrc: resolvedSpeechEncoder,
+    ttsEmbedTokensSrc: resolvedEmbedTokens,
+    ttsConditionalDecoderSrc: resolvedConditionalDecoder,
+    ttsLanguageModelSrc: resolvedLanguageModel,
+    referenceAudioSrc: resolvedReferenceAudio,
+  };
+  if (language) result.language = language;
+  return result;
+}
+
+async function resolveSupertonicConfig(
+  config: TtsModelConfig,
+  resolve: ResolveModelPath,
+): Promise<TtsModelConfig> {
+  const {
+    ttsTokenizerSrc,
+    ttsTextEncoderSrc,
+    ttsLatentDenoiserSrc,
+    ttsVoiceDecoderSrc,
+    ttsVoiceSrc,
+    ttsSpeed,
+    ttsNumInferenceSteps,
+    language,
+  } = config;
+
+  if (
+    !ttsTokenizerSrc ||
+    !ttsTextEncoderSrc ||
+    !ttsLatentDenoiserSrc ||
+    !ttsVoiceDecoderSrc ||
+    !ttsVoiceSrc
+  ) {
+    throw new TtsArtifactsRequiredError();
+  }
+
+  const [
+    resolvedTokenizer,
+    resolvedTextEncoder,
+    resolvedLatentDenoiser,
+    resolvedVoiceDecoder,
+    resolvedVoice,
+  ] = await Promise.all([
+    resolve(ttsTokenizerSrc),
+    resolve(ttsTextEncoderSrc),
+    resolve(ttsLatentDenoiserSrc),
+    resolve(ttsVoiceDecoderSrc),
+    resolve(ttsVoiceSrc),
+  ]);
+
+  const result: TtsModelConfig = {
+    ttsEngine: "supertonic",
+    ttsTokenizerSrc: resolvedTokenizer,
+    ttsTextEncoderSrc: resolvedTextEncoder,
+    ttsLatentDenoiserSrc: resolvedLatentDenoiser,
+    ttsVoiceDecoderSrc: resolvedVoiceDecoder,
+    ttsVoiceSrc: resolvedVoice,
+  };
+  if (language) result.language = language;
+  if (ttsSpeed !== undefined) result.ttsSpeed = ttsSpeed;
+  if (ttsNumInferenceSteps !== undefined) result.ttsNumInferenceSteps = ttsNumInferenceSteps;
+  return result;
+}
 
 function createChatterboxModel(
   modelId: string,
   config: TtsModelConfig,
 ): PluginModelResult {
   const {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
-    referenceAudioPath,
+    ttsTokenizerSrc: tokenizerPath,
+    ttsSpeechEncoderSrc: speechEncoderPath,
+    ttsEmbedTokensSrc: embedTokensPath,
+    ttsConditionalDecoderSrc: conditionalDecoderPath,
+    ttsLanguageModelSrc: languageModelPath,
+    referenceAudioSrc: referenceAudioPath,
     language,
   } = config;
 
@@ -84,13 +196,13 @@ function createSupertonicModel(
   config: TtsModelConfig,
 ): PluginModelResult {
   const {
-    tokenizerPath,
-    textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicePath,
-    speed,
-    numInferenceSteps,
+    ttsTokenizerSrc: tokenizerPath,
+    ttsTextEncoderSrc: textEncoderPath,
+    ttsLatentDenoiserSrc: latentDenoiserPath,
+    ttsVoiceDecoderSrc: voiceDecoderPath,
+    ttsVoiceSrc: voicePath,
+    ttsSpeed: speed,
+    ttsNumInferenceSteps: numInferenceSteps,
     language,
   } = config;
 
@@ -129,6 +241,19 @@ export const ttsPlugin = definePlugin({
   displayName: "TTS (ONNX)",
   addonPackage: "@qvac/tts-onnx",
 
+  async resolveConfig(
+    modelConfig: Record<string, unknown>,
+    resolve: ResolveModelPath,
+  ): Promise<Record<string, unknown>> {
+    const config = modelConfig as TtsModelConfig;
+
+    if (config.ttsEngine === "supertonic") {
+      return resolveSupertonicConfig(config, resolve);
+    }
+
+    return resolveChatterboxConfig(config, resolve);
+  },
+
   createModel(params: CreateModelParams): PluginModelResult {
     const config = (params.modelConfig ?? {}) as TtsModelConfig;
 
@@ -136,7 +261,6 @@ export const ttsPlugin = definePlugin({
       return createSupertonicModel(params.modelId, config);
     }
 
-    // Default to Chatterbox if engine not specified or is "chatterbox"
     return createChatterboxModel(params.modelId, config);
   },
 

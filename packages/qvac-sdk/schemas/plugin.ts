@@ -65,6 +65,12 @@ export interface PluginLogging {
   namespace: string;
 }
 
+/**
+ * Function to resolve a model source (URL or path) to a local file path.
+ * Passed to resolveConfig hook to allow plugins to resolve their artifacts.
+ */
+export type ResolveModelPath = (src: string) => Promise<string>;
+
 export interface QvacPlugin {
   modelType: string;
   displayName: string;
@@ -72,6 +78,15 @@ export interface QvacPlugin {
   createModel: (params: CreateModelParams) => PluginModelResult;
   handlers: Record<string, PluginHandlerDefinition>;
   logging?: PluginLogging | undefined;
+  /**
+   * Optional hook to resolve model sources in modelConfig to local paths.
+   * Called before createModel if the plugin needs to download/resolve artifacts.
+   * Receives the raw modelConfig and a resolve function, returns transformed config.
+   */
+  resolveConfig?: (
+    modelConfig: Record<string, unknown>,
+    resolve: ResolveModelPath,
+  ) => Promise<Record<string, unknown>>;
 }
 
 // Non-streaming plugin invoke
