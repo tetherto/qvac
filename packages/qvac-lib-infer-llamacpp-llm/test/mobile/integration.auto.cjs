@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runBitnetTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/bitnet.test.js', options)
+}
+
 async function runCacheStateMachineTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
@@ -24,6 +28,10 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
 
 async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moe.test.js', options)
+}
+
+async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/multi-instance.test.js', options)
 }
 
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
