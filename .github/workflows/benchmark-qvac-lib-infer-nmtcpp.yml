@@ -395,10 +395,10 @@ jobs:
             # Download f16 or q4 model from S3
             if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
               echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
             else
               echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
             fi
             echo "AWS PATH: $aws_path"
             if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
@@ -549,7 +549,7 @@ jobs:
 
           echo "Downloading Bergamot model for $pair_code from S3..."
 
-          S3_BASE="s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-${pair_code}"
+          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-${pair_code}"
 
           # Find the latest date folder (sorted alphabetically, last one is latest)
           latest_date=$(aws s3 ls "${S3_BASE}/" | grep PRE | awk '{print $2}' | tr -d '/' | sort | tail -1)

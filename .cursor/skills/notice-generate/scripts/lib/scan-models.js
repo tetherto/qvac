@@ -22,8 +22,8 @@ function loadModels () {
   const raw = fs.readFileSync(MODELS_JSON_PATH, 'utf8')
   const allRecords = JSON.parse(raw)
 
-  // Filter out tensors.txt
-  const filtered = allRecords.filter(r => !isTensorsTxt(r.source))
+  // Filter out tensors.txt and deprecated models
+  const filtered = allRecords.filter(r => !isTensorsTxt(r.source) && !r.deprecated)
 
   // Dedup sharded models — keep first shard as representative
   const seenShardBases = new Set()

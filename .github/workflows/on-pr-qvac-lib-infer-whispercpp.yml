@@ -10,6 +10,8 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"

@@ -29,8 +29,8 @@ System requirements for Python scanning:
 
 1. Ask which package to generate NOTICE for (or `--all` for all packages)
 2. Source `.env` in the shell
-3. Run the generator script
-4. Present the output to the user for review
+3. Run the generator script — this writes NOTICE files directly
+4. Only use `--dry-run` if the user explicitly asks for it
 
 **Do NOT commit changes.** The user will review and commit manually.
 
@@ -87,10 +87,21 @@ If violations are found, writes `FORBIDDEN_LICENSES.txt` to the repo root and ex
 
 **Important:** The agent should NOT edit `ALLOWED_LICENSES` directly. Present the scan results to the user and let them decide which licenses to allow. The allowlist and normalization map live in `.cursor/skills/notice-generate/scripts/constants.js`.
 
+### Generate license overview report
+
+```bash
+node .cursor/skills/notice-generate/scripts/generate-report.js
+```
+
+Reads existing NOTICE files across all packages (no scanning, no tokens needed) and produces `NOTICE_FULL_REPORT.txt` with:
+- Global license distribution with counts and percentages
+- Per-package breakdown by dependency type (models, JS, Python, C++)
+- Packages with no dependencies listed separately
+
 ### What it produces
 
-1. **Per-package `NOTICE`** file inside each scanned package directory
-2. **`NOTICE_FULL_REPORT.txt`** at the repo root when `--all` is used (aggregates all packages, gitignored)
+1. **Per-package `NOTICE`** file inside each scanned package directory (from `generate-notice.js`)
+2. **`NOTICE_FULL_REPORT.txt`** license overview report (from `generate-report.js`, gitignored)
 3. **`NOTICE_LOG.txt`** at the repo root with errors/warnings (gitignored)
 
 ## Scan types
