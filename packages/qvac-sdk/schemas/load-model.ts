@@ -433,6 +433,16 @@ export const modelProgressUpdateSchema = z.object({
       overallPercentage: z.number(),
     })
     .optional(),
+  onnxInfo: z
+    .object({
+      currentFile: z.string(),
+      fileIndex: z.number(),
+      totalFiles: z.number(),
+      overallDownloaded: z.number(),
+      overallTotal: z.number(),
+      overallPercentage: z.number(),
+    })
+    .optional(),
 });
 
 export const hyperdriveUrlSchema = z
