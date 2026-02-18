@@ -189,7 +189,7 @@ async function runFinetuningTests () {
 
     const finetuneOptions = {
       trainDatasetDir: './examples/input/small_train_HF.jsonl',
-      validation: { type: 'dataset', path: './examples/input/eval_HF.jsonl' },
+      validation: { type: 'dataset', path: './examples/input/small_eval_HF.jsonl' },
       numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,
