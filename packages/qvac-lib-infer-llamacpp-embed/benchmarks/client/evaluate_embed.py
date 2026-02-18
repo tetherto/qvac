@@ -31,9 +31,6 @@ Examples:
   # Download from HuggingFace (auto-download)
   python evaluate_embed.py --gguf-model "ChristianAzinn/gte-large-gguf:F16"
   
-  # P2P model via Hyperdrive
-  python evaluate_embed.py --gguf-model "hd://KEY/gte-large_fp16.gguf"
-  
   # Comparative mode - test both addon (GGUF) and SentenceTransformers
   python evaluate_embed.py --compare --gguf-model "ChristianAzinn/gte-large-gguf:F16" --transformers-model "thenlper/gte-large"
   
@@ -44,7 +41,7 @@ Examples:
     
     # Model specification
     parser.add_argument("--gguf-model", required=True,
-                       help="GGUF model specification. Formats: HuggingFace 'owner/repo' or 'owner/repo:quantization', P2P 'hd://key/model.gguf'")
+                       help="GGUF model specification. Formats: HuggingFace 'owner/repo' or 'owner/repo:quantization'")
     parser.add_argument("--hf-token",
                        help="HuggingFace token for accessing gated models")
     
@@ -81,28 +78,18 @@ Examples:
 
 def parse_gguf_model_spec(args):
     """Parse GGUF model specification into appropriate format"""
-    args.hyperdrive_uri = None
     args.hf_gguf_repo = None
     args.hf_gguf_quantization = None
     
     if not args.gguf_model:
         return
     
-    # Check if it's a P2P hyperdrive URI
-    if args.gguf_model.startswith("hd://"):
-        hd_uri = args.gguf_model[5:]
-        if "/" not in hd_uri:
-            logger.error("Hyperdrive URI must include model filename (Format: hd://key/model.gguf)")
-            sys.exit(1)
-        args.hyperdrive_uri = args.gguf_model
-        args.hd_model_name = args.hyperdrive_uri.split("/")[-1].replace(".gguf", "")
-    else:
-        # Treat everything else as HuggingFace repo
-        args.hf_gguf_repo = args.gguf_model
-        if ":" in args.gguf_model:
-            repo, quant = args.gguf_model.rsplit(":", 1)
-            args.hf_gguf_repo = repo
-            args.hf_gguf_quantization = quant.upper()
+    # Treat everything as HuggingFace repo
+    args.hf_gguf_repo = args.gguf_model
+    if ":" in args.gguf_model:
+        repo, quant = args.gguf_model.rsplit(":", 1)
+        args.hf_gguf_repo = repo
+        args.hf_gguf_quantization = quant.upper()
 
 
 def validate_args(args):
@@ -138,8 +125,6 @@ def log_configuration(server_config, args, model_display_name):
     logger.info(f"   Samples per dataset: {samples if samples else 'Full dataset'}")
     logger.info(f"   HTTP Batch: {server_config.get_http_batch_size()} sentences/request (auto-derived)")
     logger.info(f"   Server port: {args.port}")
-    if args.hyperdrive_uri:
-        logger.info(f"   Hyperdrive URI: {args.hyperdrive_uri}")
     if args.compare:
         logger.info(f"   Mode: Comparative (addon vs {args.transformers_model})")
     else:
@@ -175,12 +160,6 @@ def setup_gguf_model(args, server_config):
         
         return model_display_name
     
-    # Hyperdrive P2P models
-    if args.hyperdrive_uri:
-        logger.info(f"P2P model via Hyperdrive: {args.hyperdrive_uri}")
-        # hyperdrive_key and p2p_model_name already set in ServerConfig
-        return args.gguf_model
-    
     logger.error("Could not determine model type from --gguf-model")
     sys.exit(1)
 
@@ -198,8 +177,6 @@ def run_comparative_mode(args, server_config, model_display_name):
         model_dir_name = args.hf_gguf_repo.split("/")[-1]
         if args.hf_gguf_quantization:
             model_dir_name = f"{model_dir_name}_{args.hf_gguf_quantization}"
-    elif args.hyperdrive_uri:
-        model_dir_name = args.hyperdrive_uri.split("/")[-1].replace(".gguf", "")
     else:
         model_dir_name = args.gguf_model.replace('.gguf', '')
     
@@ -241,9 +218,6 @@ def run_single_model_mode(args, server_config, model_display_name):
     # Create handler and wrapper
     handler = QvacEmbedHandler(server_config)
     
-    # For P2P models, wait for the model to be fully downloaded from Hyperdrive
-    handler.wait_for_model_ready()
-    
     model_wrapper = MTEBModelWrapper(
         handler, 
         batch_size=server_config.get_http_batch_size(),
@@ -255,8 +229,6 @@ def run_single_model_mode(args, server_config, model_display_name):
         model_dir_name = args.hf_gguf_repo.split("/")[-1]
         if args.hf_gguf_quantization:
             model_dir_name = f"{model_dir_name}_{args.hf_gguf_quantization}"
-    elif args.hyperdrive_uri:
-        model_dir_name = args.hyperdrive_uri.split("/")[-1].replace(".gguf", "")
     else:
         model_dir_name = args.gguf_model.replace('.gguf', '')
     
@@ -333,7 +305,6 @@ def main():
     # Create configuration
     server_config = ServerConfig(
         url=f"http://localhost:{args.port}/run",
-        hyperdrive_uri=args.hyperdrive_uri,
         cli_samples=args.samples,
         cli_datasets=args.datasets,
         cli_device=args.device,

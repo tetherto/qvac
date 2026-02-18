@@ -233,7 +233,6 @@ class ServerConfig:
                  url: str = "http://localhost:7357/run",
                  timeout: int = 300,
                  server_dir: str = None,
-                 hyperdrive_uri: str = None,
                  cli_samples: int = None,
                  cli_datasets: str = None,
                  cli_device: str = None,
@@ -262,17 +261,6 @@ class ServerConfig:
         self.batch_size = DEFAULT_CONFIG['batch_size']  # Tokens for processing multiple prompts
         self.device = DEFAULT_CONFIG['device']
         self.verbosity = DEFAULT_CONFIG['verbosity']
-        
-        # P2P model parameters - parse hyperdrive URI
-        self.hyperdrive_uri = hyperdrive_uri
-        if hyperdrive_uri and hyperdrive_uri.startswith("hd://"):
-            # Split URI: hd://key/filename
-            uri_parts = hyperdrive_uri[5:].split("/", 1)  # Remove 'hd://' prefix
-            self.hyperdrive_key = "hd://" + uri_parts[0]
-            self.p2p_model_name = uri_parts[1] if len(uri_parts) > 1 else None
-        else:
-            self.hyperdrive_key = None
-            self.p2p_model_name = None
         
         # Set default benchmark configuration
         self.benchmark_config = {
@@ -366,10 +354,6 @@ class QvacEmbedHandler:
         self.client = httpx.Client(timeout=self.timeout)
         self.model_name = "embed-llamacpp-addon"
         
-        # P2P model parameters (already parsed in ServerConfig)
-        self.hyperdrive_key = getattr(server_cfg, 'hyperdrive_key', None)
-        self.p2p_model_name = getattr(server_cfg, 'p2p_model_name', None)
-    
     def _check_server_health(self) -> bool:
         """Check if server is healthy"""
         try:
@@ -378,86 +362,6 @@ class QvacEmbedHandler:
             return response.status_code == 200
         except:
             return False
-    
-    def wait_for_model_ready(self, max_retries=60, retry_delay=10):
-        """Wait for P2P model to be fully loaded and ready.
-        
-        This is needed because P2P models are downloaded from Hyperdrive on first request,
-        which can take several minutes. This method polls the server until the model is ready.
-        """
-        if not (self.hyperdrive_key and self.p2p_model_name):
-            return True  # Not a P2P model, no need to wait
-        
-        base_url = self.url.rsplit('/run', 1)[0]
-        logger.info(f"Waiting for P2P model to load from hyperdrive...")
-        logger.info(f"   Model: {self.p2p_model_name}")
-        logger.info(f"   This may take several minutes for large models...")
-        
-        for i in range(max_retries):
-            try:
-                # First check if server is healthy
-                health_response = httpx.get(f"{base_url}/", timeout=5)
-                if health_response.status_code != 200:
-                    logger.debug(f"Server not healthy, retrying... ({i+1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    continue
-                
-                # Try a simple test request to see if model is ready
-                model_config = self.server_cfg.get_model_config()
-                model_config["hyperdriveKey"] = self.hyperdrive_key
-                model_config["modelName"] = self.p2p_model_name
-                
-                test_payload = {
-                    "inputs": ["test"],
-                    "config": model_config
-                }
-                
-                response = httpx.post(self.url, json=test_payload, timeout=60)
-                
-                if response.status_code == 200:
-                    logger.info("P2P model is ready!")
-                    return True
-                    
-                elif response.status_code == 500:
-                    # Check if it's a "model loading" error vs a real failure
-                    try:
-                        error_data = response.json()
-                        error_msg = error_data.get('error', {}).get('message', '')
-                        
-                        # These are temporary errors during model loading
-                        loading_errors = [
-                            'CONNECTION_FAILED',
-                            'Failed to connect to Hyperdrive',
-                            'Corestore is closed',
-                            'Hyperdrive is not ready',
-                            'DRIVE_NOT_READY'
-                        ]
-                        
-                        is_loading = any(err in str(error_msg) for err in loading_errors)
-                        
-                        if is_loading:
-                            elapsed = (i + 1) * retry_delay
-                            logger.info(f"Model downloading from hyperdrive... ({elapsed}s elapsed, attempt {i+1}/{max_retries})")
-                        else:
-                            logger.warning(f"Server error: {error_msg} (attempt {i+1}/{max_retries})")
-                    except:
-                        logger.info(f"Model loading... (attempt {i+1}/{max_retries})")
-                    
-                    time.sleep(retry_delay)
-                    continue
-                    
-                else:
-                    logger.warning(f"Unexpected response {response.status_code} (attempt {i+1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    
-            except httpx.TimeoutException:
-                logger.info(f"Request timeout, model still loading... (attempt {i+1}/{max_retries})")
-                time.sleep(retry_delay)
-            except Exception as e:
-                logger.debug(f"Waiting for model... (attempt {i+1}/{max_retries}): {str(e)}")
-                time.sleep(retry_delay)
-        
-        raise Exception(f"P2P model failed to load within timeout ({max_retries * retry_delay}s)")
     
     def embed(self, sentences: list[str]) -> np.ndarray:
         """
@@ -475,20 +379,12 @@ class QvacEmbedHandler:
         # Build config for the request
         model_config = self.server_cfg.get_model_config()
         
-        # Check if this is a P2P model request
-        is_p2p_model = self.hyperdrive_key and self.p2p_model_name
-        
-        if is_p2p_model:
-            # P2P model - add hyperdriveKey to config
-            model_config["hyperdriveKey"] = self.hyperdrive_key
-            model_config["modelName"] = self.p2p_model_name
-        else:
-            # Local GGUF model - add diskPath to config
-            if hasattr(self.server_cfg, 'selected_model'):
-                model_config['modelName'] = self.server_cfg.selected_model.get('name')
-                # Convert diskPath to absolute path (server runs from different directory)
-                disk_path = self.server_cfg.selected_model.get('diskPath', './models/')
-                model_config['diskPath'] = os.path.abspath(disk_path)
+        # Local GGUF model - add diskPath to config
+        if hasattr(self.server_cfg, 'selected_model'):
+            model_config['modelName'] = self.server_cfg.selected_model.get('name')
+            # Convert diskPath to absolute path (server runs from different directory)
+            disk_path = self.server_cfg.selected_model.get('diskPath', './models/')
+            model_config['diskPath'] = os.path.abspath(disk_path)
         
         payload = {
             "inputs": sentences,

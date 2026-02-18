@@ -2,7 +2,6 @@
 
 const { InferenceArgsSchema } = require('../validation')
 const { setLogger, releaseLogger } = require('@qvac/embed-llamacpp/addonLogging')
-const { loadP2PModel } = require('./p2pModelLoader')
 const { modelManager } = require('./modelManager')
 const logger = require('../utils/logger')
 const fs = require('bare-fs')
@@ -31,71 +30,46 @@ const runAddon = async (payload) => {
     const { inputs, config } = InferenceArgsSchema.parse(payload)
     logger.debug(`Running addon with ${inputs.length} inputs`)
 
-    // Check if this is a P2P model request (hyperdriveKey present)
-    const hyperdriveKey = config?.hyperdriveKey
-    const modelName = config?.modelName
-    const isP2PModel = hyperdriveKey && modelName
-
     let model
     let loadModelMs = 0
 
-    if (isP2PModel) {
-      logger.info('Loading P2P model using hyperdrive')
-      logger.info(`Hyperdrive key: ${hyperdriveKey}`)
-      logger.info(`Model name: ${modelName}`)
+    // Direct local model approach
+    logger.info('Loading model directly with EmbedLlamacpp')
 
+    const localModelName = config?.modelName
+    const diskPath = config?.diskPath || './models/'
+
+    if (!localModelName) {
+      throw new Error('modelName is required in config for local GGUF models')
+    }
+
+    const modelPath = path.join(diskPath, localModelName)
+
+    if (!fs.existsSync(modelPath)) {
+      throw new Error(`Local model not found: ${modelPath}`)
+    }
+
+    logger.info(`Loading model: ${localModelName}`)
+
+    try {
       // Start timer just before actual model loading
       const loadStart = process.hrtime()
 
-      model = await loadP2PModel({
-        hyperdriveKey,
-        modelName,
-        modelConfig: config || {}
-      })
+      model = await modelManager.getModel(modelPath, diskPath, localModelName, config)
 
       const [loadSec, loadNano] = process.hrtime(loadStart)
       loadModelMs = loadSec * 1e3 + loadNano / 1e6
 
-      logger.info(`P2P model loaded successfully in ${loadModelMs.toFixed(2)}ms`)
-    } else {
-      // Direct local model approach
-      logger.info('Loading model directly with EmbedLlamacpp')
-
-      const localModelName = config?.modelName
-      const diskPath = config?.diskPath || './models/'
-
-      if (!localModelName) {
-        throw new Error('modelName is required in config for local GGUF models')
-      }
-
-      const modelPath = path.join(diskPath, localModelName)
-
-      if (!fs.existsSync(modelPath)) {
-        throw new Error(`Local model not found: ${modelPath}`)
-      }
-
-      logger.info(`Loading model: ${localModelName}`)
-
-      try {
-        // Start timer just before actual model loading
-        const loadStart = process.hrtime()
-
-        model = await modelManager.getModel(modelPath, diskPath, localModelName, config)
-
-        const [loadSec, loadNano] = process.hrtime(loadStart)
-        loadModelMs = loadSec * 1e3 + loadNano / 1e6
-
-        logger.info(`Model ready for inference (loaded in ${loadModelMs.toFixed(2)}ms)`)
-      } catch (error) {
-        logger.error(`Error loading model ${localModelName}:`, {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          code: error.code,
-          toString: String(error)
-        })
-        throw error
-      }
+      logger.info(`Model ready for inference (loaded in ${loadModelMs.toFixed(2)}ms)`)
+    } catch (error) {
+      logger.error(`Error loading model ${localModelName}:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        toString: String(error)
+      })
+      throw error
     }
 
     // -----------------------------
