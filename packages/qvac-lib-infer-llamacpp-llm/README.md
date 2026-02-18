@@ -153,6 +153,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| preferAdrenoOpenCl | `"true"` or `"false"`                       | `"true"` (`"false"` for BitNet model path) | On Adreno GPUs, prefer OpenCL (`true`) or Vulkan (`false`) when both exist |
 
 
 #### IGPU/GPU  selection logic:

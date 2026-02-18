@@ -41,12 +41,14 @@ struct BackendInterface {
 
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu = std::nullopt);
+    const std::optional<MainGpu>& mainGpu = std::nullopt,
+    bool preferAdrenoOpenCl = true);
 
 /// @brief Choose the backend to use for the model based on GPU device and
-/// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise Vulkan
-/// backend. Uses CPU if no GPU backends are available.
+/// available backends. Prefer OpenCL backend for Adreno GPUs by default,
+/// otherwise Vulkan backend. Uses CPU if no GPU backends are available.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu = std::nullopt);
+    const std::optional<MainGpu>& mainGpu = std::nullopt,
+    bool preferAdrenoOpenCl = true);
 } // namespace backend_selection

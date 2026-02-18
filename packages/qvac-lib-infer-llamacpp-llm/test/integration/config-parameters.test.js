@@ -228,6 +228,22 @@ const scenarios = [
     expectSuccess: true
   },
   {
+    name: 'preferAdrenoOpenCl config key accepted',
+    overrides: {
+      device: 'cpu',
+      preferAdrenoOpenCl: 'false'
+    },
+    skipInferenceAfterLoad: true
+  },
+  {
+    name: 'prefer_adreno_open_cl alias rejected',
+    overrides: {
+      device: 'cpu',
+      prefer_adreno_open_cl: 'true'
+    },
+    expectLoadFailure: /invalid argument.*prefer-adreno-open-cl/i
+  },
+  {
     name: 'Invalid device surfaces argument error',
     overrides: {
       device: 'invalid'

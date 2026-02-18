@@ -196,7 +196,7 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, bool preferAdrenoOpenCl) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -239,9 +239,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  // check if Adreno GPU is present and force OpenCL backend, otherwise let
-  // llama.cpp choose Vulkan GPU backend
-  if (!openClBackends.empty()) {
+  // Default behavior for Adreno keeps existing OpenCL preference.
+  if (preferAdrenoOpenCl && !openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
   }
@@ -263,7 +262,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, bool preferAdrenoOpenCl) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -273,5 +272,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       llamaLogcallback};
-  return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
+  return backend_selection::chooseBackend(
+      preferredBackendType, bckI, mainGpu, preferAdrenoOpenCl);
 }
