@@ -56,15 +56,18 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 ## Source URL Formats
 
 - HuggingFace: `https://huggingface.co/<org>/<repo>/resolve/<commit>/<path>`
-- S3: `s3://<bucket>/<key>`
+- S3: `s3:///<key>` (bucket name is resolved from `QVAC_S3_BUCKET` environment variable)
 
 Pin to specific commit/version. Avoid `main` or `latest`.
+
+The S3 bucket name is **not** stored in `models.prod.json`. Set `QVAC_S3_BUCKET` in your `.env` file.
+The server resolves the bucket at runtime when downloading artifacts.
 
 ## Field Reference
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `source` | Yes | Full URL to model file |
+| `source` | Yes | URL to model file (`https://huggingface.co/...` or `s3:///key`) |
 | `engine` | Yes | Engine identifier (e.g., `@qvac/llm-llamacpp`) |
 | `license` | Yes | SPDX license identifier |
 | `quantization` | No | Quantization format (e.g., `q4_0`, `q8_0`) |

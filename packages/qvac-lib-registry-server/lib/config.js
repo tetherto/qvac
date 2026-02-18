@@ -155,6 +155,14 @@ class RegistryConfig {
   }
 
   /**
+   * Get S3 bucket name for model artifact storage.
+   * Required when models.prod.json uses bucket-less s3:/// URLs.
+   */
+  getS3Bucket () {
+    return getEnv(ENV_KEYS.QVAC_S3_BUCKET) || null
+  }
+
+  /**
    * Get all AWS credentials
    */
   getAWSCredentials () {

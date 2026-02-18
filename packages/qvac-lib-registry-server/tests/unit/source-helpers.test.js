@@ -1,9 +1,9 @@
 'use strict'
 
 const test = require('brittle')
-const { parseCanonicalSource } = require('../../lib/source-helpers')
+const { parseCanonicalSource, resolveS3Bucket } = require('../../lib/source-helpers')
 
-test('parseCanonicalSource - S3 URL', async (t) => {
+test('parseCanonicalSource - S3 URL with bucket', async (t) => {
   const result = parseCanonicalSource('s3://my-bucket/path/to/model.gguf')
 
   t.is(result.protocol, 's3')
@@ -14,14 +14,15 @@ test('parseCanonicalSource - S3 URL', async (t) => {
   t.is(result.canonicalUrl, 's3://my-bucket/path/to/model.gguf')
 })
 
-test('parseCanonicalSource - S3 URL with nested path', async (t) => {
-  const result = parseCanonicalSource('s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
+test('parseCanonicalSource - S3 URL without bucket', async (t) => {
+  const result = parseCanonicalSource('s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
 
   t.is(result.protocol, 's3')
-  t.is(result.bucket, 'tether-ai-dev')
+  t.is(result.bucket, null, 'bucket should be null when omitted')
   t.is(result.key, 'qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
-  t.is(result.path, 'qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf', 'path should NOT include bucket name')
+  t.is(result.path, 'qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
   t.is(result.filename, 'model.gguf')
+  t.is(result.canonicalUrl, 's3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
 })
 
 test('parseCanonicalSource - S3 URL with leading slash in path', async (t) => {
@@ -31,6 +32,43 @@ test('parseCanonicalSource - S3 URL with leading slash in path', async (t) => {
   t.is(result.bucket, 'bucket-name')
   t.is(result.key, 'some/path/file.bin', 'leading slashes should be normalized')
   t.is(result.path, 'some/path/file.bin')
+})
+
+test('resolveS3Bucket - injects bucket when missing', async (t) => {
+  const source = parseCanonicalSource('s3:///path/to/model.gguf')
+  t.is(source.bucket, null)
+
+  const resolved = resolveS3Bucket(source, 'my-bucket')
+  t.is(resolved.bucket, 'my-bucket')
+  t.is(resolved.key, 'path/to/model.gguf')
+  t.is(resolved.canonicalUrl, 's3://my-bucket/path/to/model.gguf')
+})
+
+test('resolveS3Bucket - preserves existing bucket', async (t) => {
+  const source = parseCanonicalSource('s3://existing-bucket/path/to/model.gguf')
+  const resolved = resolveS3Bucket(source, 'other-bucket')
+
+  t.is(resolved.bucket, 'existing-bucket', 'should not override existing bucket')
+  t.is(resolved.canonicalUrl, 's3://existing-bucket/path/to/model.gguf')
+})
+
+test('resolveS3Bucket - throws when bucket missing and none provided', async (t) => {
+  const source = parseCanonicalSource('s3:///path/to/model.gguf')
+
+  try {
+    resolveS3Bucket(source, null)
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err.message.includes('QVAC_S3_BUCKET'), 'error references env var')
+  }
+})
+
+test('resolveS3Bucket - no-op for non-S3 sources', async (t) => {
+  const source = parseCanonicalSource('https://huggingface.co/org/repo/resolve/main/model.gguf')
+  const resolved = resolveS3Bucket(source, 'some-bucket')
+
+  t.is(resolved.protocol, 'hf')
+  t.is(resolved.bucket, undefined, 'HF source should not get a bucket')
 })
 
 test('parseCanonicalSource - HuggingFace URL', async (t) => {

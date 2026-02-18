@@ -8,21 +8,27 @@ const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
 
+const SOURCE_REFINE = (val) => {
+  try {
+    parseCanonicalSource(val)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const S3_NO_BUCKET = (val) => {
+  if (!val.startsWith('s3://')) return true
+  const parsed = parseCanonicalSource(val)
+  return parsed.bucket === null
+}
+
 function createModelSchema (validLicenses) {
   return z.object({
     source: z.string()
       .min(1, 'source is required')
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }
-      ),
+      .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
+      .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' }),
 
     engine: z.string()
       .min(1, 'engine is required')
@@ -43,17 +49,7 @@ function createModelSchema (validLicenses) {
     deprecated: z.boolean().optional(),
     deprecationReason: z.string().optional(),
     replacedBy: z.string()
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'replacedBy must be a valid source URL' }
-      )
+      .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
       .optional()
   })
 }
