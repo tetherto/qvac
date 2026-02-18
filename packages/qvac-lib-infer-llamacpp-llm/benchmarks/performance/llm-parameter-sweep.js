@@ -658,6 +658,59 @@ function loadPromptsFromFile (filePath) {
   return parsed
 }
 
+function loadPreviousCaseRecords (resultsDir, currentJsonlPath) {
+  const recordsByCaseKey = new Map()
+  let files = []
+  try {
+    files = fs.readdirSync(resultsDir)
+      .filter((name) => /^llm-parameter-sweep-\d{8}-\d{6}\.jsonl$/.test(name))
+      .sort()
+  } catch {
+    return recordsByCaseKey
+  }
+
+  for (const name of files) {
+    const absPath = path.join(resultsDir, name)
+    if (absPath === currentJsonlPath) continue
+    let raw = ''
+    try {
+      raw = fs.readFileSync(absPath, 'utf8')
+    } catch {
+      continue
+    }
+    const lines = raw.split('\n').filter(Boolean)
+    for (const line of lines) {
+      let parsed = null
+      try {
+        parsed = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (!parsed || !parsed.modelId || !parsed.caseId) continue
+      recordsByCaseKey.set(`${parsed.modelId}:${parsed.caseId}`, parsed)
+    }
+  }
+  return recordsByCaseKey
+}
+
+function seedBaselineCachesFromRecord (record, baselineOutputs, adaptiveBaselineOutputs) {
+  if (!record || !record.isBaseline) return
+  const promptResults = Array.isArray(record.promptResults) ? record.promptResults : []
+  for (const promptResult of promptResults) {
+    if (!promptResult || !promptResult.promptId) continue
+    const promptId = String(promptResult.promptId)
+    const outputText = typeof promptResult.outputText === 'string'
+      ? promptResult.outputText
+      : null
+    if (outputText == null) continue
+    baselineOutputs[promptId] = outputText
+    const adaptiveKey = getAdaptiveBaselineKey(promptId)
+    if (adaptiveKey) {
+      adaptiveBaselineOutputs[adaptiveKey] = outputText
+    }
+  }
+}
+
 async function main () {
   const args = parseArgs(process.argv)
   const debugEnabled = Boolean(args.debug)
@@ -735,6 +788,7 @@ async function main () {
   const jsonPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.json`)
   const jsonlPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.jsonl`)
   const mdPath = path.join(resultsDir, `llm-parameter-sweep-${stamp}.md`)
+  const previousCaseRecords = loadPreviousCaseRecords(resultsDir, jsonlPath)
   fs.writeFileSync(jsonlPath, '')
 
   const report = {
@@ -817,6 +871,16 @@ async function main () {
       const promptsForCase = [selectPromptForCase(prompts, testCase.runtimeConfig, testCase.promptCase)]
       const caseKey = `${modelDef.id}:${testCase.caseId}`
       if (completedCases.has(caseKey)) {
+        const previousRecord = previousCaseRecords.get(caseKey) || null
+        seedBaselineCachesFromRecord(previousRecord, baselineOutputs, adaptiveBaselineOutputs)
+        if (previousRecord) {
+          caseResults.push({
+            ...previousRecord,
+            promptCase: previousRecord.promptCase || testCase.promptCase || null
+          })
+        } else if (debugEnabled) {
+          debugLogger.warn(`Completed case missing from previous JSONL records: ${caseKey}`)
+        }
         debugLogger.log(`Skipping already completed case: ${caseKey}`)
         for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
           for (let repeat = 1; repeat <= repeats; repeat++) {
@@ -1022,6 +1086,10 @@ async function main () {
 
             if (testCase.parameter === 'baseline') {
               baselineOutputs[prompt.id] = firstOutput
+              const adaptiveKey = getAdaptiveBaselineKey(prompt.id)
+              if (adaptiveKey) {
+                adaptiveBaselineOutputs[adaptiveKey] = firstOutput
+              }
             }
 
             let qualityMatch = null
@@ -1029,12 +1097,13 @@ async function main () {
             if (isAdaptivePromptId(prompt.id)) {
               const adaptiveKey = getAdaptiveBaselineKey(prompt.id)
               if (adaptiveKey) {
-                if (!Object.prototype.hasOwnProperty.call(adaptiveBaselineOutputs, adaptiveKey)) {
-                  adaptiveBaselineOutputs[adaptiveKey] = firstOutput
+                if (testCase.parameter === 'baseline') {
                   baselineReference = firstOutput
                   qualityMatch = 1.0
                 } else {
-                  baselineReference = adaptiveBaselineOutputs[adaptiveKey]
+                  baselineReference = Object.prototype.hasOwnProperty.call(adaptiveBaselineOutputs, adaptiveKey)
+                    ? adaptiveBaselineOutputs[adaptiveKey]
+                    : null
                   qualityMatch = exactMatch(baselineReference, firstOutput)
                 }
               }
