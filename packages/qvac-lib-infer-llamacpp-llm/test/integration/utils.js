@@ -4,8 +4,6 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 const process = require('bare-process')
-const LlmLlamacpp = require('../../index.js')
-const FilesystemDL = require('@qvac/dl-filesystem')
 
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {

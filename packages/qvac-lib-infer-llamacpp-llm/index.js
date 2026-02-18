@@ -391,7 +391,5 @@ class LlmLlamacpp extends BaseInference {
       throw err
     }
   }
-
 }
-
 module.exports = LlmLlamacpp
