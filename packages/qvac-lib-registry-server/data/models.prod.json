@@ -231,7 +231,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
     "description": "Multimodal 4B model, good for tool calls",
@@ -384,7 +384,7 @@
     "link": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
@@ -400,7 +400,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
@@ -416,7 +416,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
@@ -432,7 +432,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
@@ -448,7 +448,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
@@ -464,7 +464,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_1",
@@ -479,7 +479,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
@@ -495,7 +495,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
@@ -511,7 +511,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
@@ -527,7 +527,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
@@ -543,7 +543,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
@@ -559,7 +559,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8_0",
@@ -574,7 +574,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
@@ -590,7 +590,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
@@ -606,7 +606,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
@@ -622,7 +622,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
@@ -638,7 +638,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
     "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
@@ -654,7 +654,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16.tensors.txt",
     "engine": "@qvac/embed-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "fp16",
@@ -669,7 +669,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -685,7 +685,7 @@
     "notes": "shard 1/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -701,7 +701,7 @@
     "notes": "shard 2/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -717,7 +717,7 @@
     "notes": "shard 3/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00004-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00004-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -733,7 +733,7 @@
     "notes": "shard 4/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00005-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00005-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -749,7 +749,7 @@
     "notes": "shard 5/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00006-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00006-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -765,7 +765,7 @@
     "notes": "shard 6/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00007-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00007-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -781,7 +781,7 @@
     "notes": "shard 7/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
@@ -797,7 +797,7 @@
     "notes": "shard 8/8"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_0",
@@ -812,7 +812,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
@@ -828,7 +828,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
@@ -844,7 +844,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
@@ -860,7 +860,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
@@ -876,7 +876,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
@@ -892,7 +892,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
@@ -907,7 +907,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00001-of-00003.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00001-of-00003.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
@@ -923,7 +923,7 @@
     "notes": "shard 1/3"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00002-of-00003.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00002-of-00003.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
@@ -939,7 +939,7 @@
     "notes": "shard 2/3"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00003-of-00003.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00003-of-00003.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
@@ -955,7 +955,7 @@
     "notes": "shard 3/3"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
@@ -970,7 +970,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00001-of-00004.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00001-of-00004.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
@@ -986,7 +986,7 @@
     "notes": "shard 1/4"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00002-of-00004.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00002-of-00004.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
@@ -1002,7 +1002,7 @@
     "notes": "shard 2/4"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00003-of-00004.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00003-of-00004.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
@@ -1018,7 +1018,7 @@
     "notes": "shard 3/4"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00004-of-00004.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00004-of-00004.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
@@ -1034,7 +1034,7 @@
     "notes": "shard 4/4"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8",
@@ -1049,7 +1049,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
@@ -1065,7 +1065,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
@@ -1081,7 +1081,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
@@ -1097,7 +1097,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
@@ -1113,7 +1113,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
@@ -1129,7 +1129,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
@@ -1215,7 +1215,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1231,7 +1231,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1247,7 +1247,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1263,7 +1263,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1279,7 +1279,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1295,7 +1295,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "f16",
@@ -1311,7 +1311,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1327,7 +1327,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1343,7 +1343,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1359,7 +1359,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1375,7 +1375,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1391,7 +1391,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1407,7 +1407,7 @@
     "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
@@ -1423,7 +1423,7 @@
     "notes": "shard 1/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00002-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
@@ -1439,7 +1439,7 @@
     "notes": "shard 2/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00003-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
@@ -1455,7 +1455,7 @@
     "notes": "shard 3/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00004-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
@@ -1471,7 +1471,7 @@
     "notes": "shard 4/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00005-of-00005.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
@@ -1487,7 +1487,7 @@
     "notes": "shard 5/5"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K.tensors.txt",
+    "source": "s3:///qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "Q2_K",
@@ -1502,7 +1502,7 @@
     "notes": "tensors config"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-ru/2025-11-09/ggml-opus-en-ru.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-ru/2025-11-09/ggml-opus-en-ru.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1518,7 +1518,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1534,7 +1534,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1550,7 +1550,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1610,7 +1610,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/NbAiLab/nb-whisper-tiny/blob/main/ggml-model.bin",
     "description": "Fine-tuned for Norwegian",
@@ -1626,7 +1626,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
@@ -1641,7 +1641,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
@@ -1656,7 +1656,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-pt/2025-11-07/ggml-opus-mt-en-roa-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-pt/2025-11-07/ggml-opus-mt-en-roa-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1672,7 +1672,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1688,7 +1688,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1704,7 +1704,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1720,7 +1720,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1736,7 +1736,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1752,7 +1752,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1768,7 +1768,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1784,7 +1784,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1800,7 +1800,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1816,7 +1816,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1832,7 +1832,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q0f16",
@@ -1848,7 +1848,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1864,7 +1864,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-pt"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Latin (fixed-width 512px)",
     "quantization": "",
@@ -1879,7 +1879,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "CRAFT text detector",
     "quantization": "",
@@ -1894,7 +1894,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1910,7 +1910,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-it"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1926,7 +1926,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-it-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1942,7 +1942,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-de"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1958,7 +1958,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1974,7 +1974,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-es"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -1990,7 +1990,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2006,7 +2006,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2022,7 +2022,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2038,7 +2038,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ar"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2054,7 +2054,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ar-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2070,7 +2070,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2086,7 +2086,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2102,7 +2102,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2118,7 +2118,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
+    "source": "s3:///qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "",
     "quantization": "q4_0",
@@ -2134,7 +2134,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "Fine-tuned for French",
@@ -2150,7 +2150,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "",
@@ -2166,7 +2166,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "Fine-tuned for German",
@@ -2182,7 +2182,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "",
@@ -2198,7 +2198,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
@@ -2214,7 +2214,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
@@ -2230,7 +2230,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
@@ -2246,7 +2246,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
@@ -2262,7 +2262,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
@@ -2278,7 +2278,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
@@ -2294,7 +2294,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
@@ -2310,7 +2310,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
@@ -2326,7 +2326,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
@@ -2342,7 +2342,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
@@ -2358,7 +2358,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
@@ -2374,7 +2374,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
@@ -2390,7 +2390,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
@@ -2406,7 +2406,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
@@ -2422,7 +2422,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
@@ -2438,7 +2438,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
@@ -2454,7 +2454,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
@@ -2470,7 +2470,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
@@ -2486,7 +2486,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
@@ -2502,7 +2502,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
@@ -2518,7 +2518,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
@@ -2534,7 +2534,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
@@ -2550,7 +2550,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
@@ -2566,7 +2566,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
@@ -2614,7 +2614,7 @@
     "link": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ar-en",
     "quantization": "",
@@ -2630,7 +2630,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ar-en",
     "quantization": "",
@@ -2646,7 +2646,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/model.aren.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/model.aren.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ar-en",
     "quantization": "",
@@ -2662,7 +2662,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/vocab.aren.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/vocab.aren.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ar-en",
     "quantization": "",
@@ -2678,7 +2678,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/lex.50.50.csen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/lex.50.50.csen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist cs-en",
     "quantization": "",
@@ -2694,7 +2694,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata cs-en",
     "quantization": "",
@@ -2710,7 +2710,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/model.csen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/model.csen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model cs-en",
     "quantization": "",
@@ -2726,7 +2726,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/vocab.csen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/vocab.csen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary cs-en",
     "quantization": "",
@@ -2742,7 +2742,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/lex.50.50.enar.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/lex.50.50.enar.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ar",
     "quantization": "",
@@ -2758,7 +2758,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ar",
     "quantization": "",
@@ -2774,7 +2774,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/model.enar.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/model.enar.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ar",
     "quantization": "",
@@ -2790,7 +2790,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/vocab.enar.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/vocab.enar.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ar",
     "quantization": "",
@@ -2806,7 +2806,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/lex.50.50.encs.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/lex.50.50.encs.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-cs",
     "quantization": "",
@@ -2822,7 +2822,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-cs",
     "quantization": "",
@@ -2838,7 +2838,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/model.encs.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/model.encs.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-cs",
     "quantization": "",
@@ -2854,7 +2854,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/vocab.encs.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/vocab.encs.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-cs",
     "quantization": "",
@@ -2870,7 +2870,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/lex.50.50.enes.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/lex.50.50.enes.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-es",
     "quantization": "",
@@ -2886,7 +2886,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-es",
     "quantization": "",
@@ -2902,7 +2902,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/model.enes.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/model.enes.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-es",
     "quantization": "",
@@ -2918,7 +2918,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/vocab.enes.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/vocab.enes.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-es",
     "quantization": "",
@@ -2934,7 +2934,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/lex.50.50.enfr.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/lex.50.50.enfr.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-fr",
     "quantization": "",
@@ -2950,7 +2950,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-fr",
     "quantization": "",
@@ -2966,7 +2966,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/model.enfr.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/model.enfr.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-fr",
     "quantization": "",
@@ -2982,7 +2982,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/vocab.enfr.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/vocab.enfr.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-fr",
     "quantization": "",
@@ -2998,7 +2998,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
@@ -3014,7 +3014,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-it",
     "quantization": "",
@@ -3030,7 +3030,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-it",
     "quantization": "",
@@ -3046,7 +3046,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
@@ -3062,7 +3062,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ja",
     "quantization": "",
@@ -3078,7 +3078,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ja",
     "quantization": "",
@@ -3094,7 +3094,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/model.enja.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/model.enja.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ja",
     "quantization": "",
@@ -3110,7 +3110,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/srcvocab.enja.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/srcvocab.enja.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
@@ -3126,7 +3126,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/trgvocab.enja.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/trgvocab.enja.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
@@ -3142,7 +3142,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/lex.50.50.enpt.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/lex.50.50.enpt.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-pt",
     "quantization": "",
@@ -3158,7 +3158,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-pt",
     "quantization": "",
@@ -3174,7 +3174,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/model.enpt.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/model.enpt.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-pt",
     "quantization": "",
@@ -3190,7 +3190,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/vocab.enpt.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/vocab.enpt.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-pt",
     "quantization": "",
@@ -3206,7 +3206,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/lex.50.50.enru.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/lex.50.50.enru.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-ru",
     "quantization": "",
@@ -3222,7 +3222,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-ru",
     "quantization": "",
@@ -3238,7 +3238,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/model.enru.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/model.enru.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-ru",
     "quantization": "",
@@ -3254,7 +3254,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/vocab.enru.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/vocab.enru.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-ru",
     "quantization": "",
@@ -3270,7 +3270,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-zh",
     "quantization": "",
@@ -3286,7 +3286,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-zh",
     "quantization": "",
@@ -3302,7 +3302,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-zh",
     "quantization": "",
@@ -3318,7 +3318,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
@@ -3334,7 +3334,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
@@ -3350,7 +3350,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
@@ -3366,7 +3366,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata es-en",
     "quantization": "",
@@ -3382,7 +3382,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model es-en",
     "quantization": "",
@@ -3398,7 +3398,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
@@ -3414,7 +3414,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist fr-en",
     "quantization": "",
@@ -3430,7 +3430,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata fr-en",
     "quantization": "",
@@ -3446,7 +3446,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/model.fren.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/model.fren.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model fr-en",
     "quantization": "",
@@ -3462,7 +3462,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/vocab.fren.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/vocab.fren.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary fr-en",
     "quantization": "",
@@ -3478,7 +3478,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/lex.50.50.iten.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/lex.50.50.iten.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist it-en",
     "quantization": "",
@@ -3494,7 +3494,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata it-en",
     "quantization": "",
@@ -3510,7 +3510,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/model.iten.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/model.iten.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model it-en",
     "quantization": "",
@@ -3526,7 +3526,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/vocab.iten.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/vocab.iten.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary it-en",
     "quantization": "",
@@ -3542,7 +3542,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/lex.50.50.jaen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/lex.50.50.jaen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ja-en",
     "quantization": "",
@@ -3558,7 +3558,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ja-en",
     "quantization": "",
@@ -3574,7 +3574,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/model.jaen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/model.jaen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ja-en",
     "quantization": "",
@@ -3590,7 +3590,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/vocab.jaen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/vocab.jaen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ja-en",
     "quantization": "",
@@ -3606,7 +3606,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/lex.50.50.pten.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/lex.50.50.pten.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist pt-en",
     "quantization": "",
@@ -3622,7 +3622,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata pt-en",
     "quantization": "",
@@ -3638,7 +3638,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/model.pten.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/model.pten.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model pt-en",
     "quantization": "",
@@ -3654,7 +3654,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/vocab.pten.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/vocab.pten.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary pt-en",
     "quantization": "",
@@ -3670,7 +3670,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/lex.50.50.ruen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/lex.50.50.ruen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist ru-en",
     "quantization": "",
@@ -3686,7 +3686,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata ru-en",
     "quantization": "",
@@ -3702,7 +3702,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/model.ruen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/model.ruen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model ru-en",
     "quantization": "",
@@ -3718,7 +3718,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/vocab.ruen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/vocab.ruen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary ru-en",
     "quantization": "",
@@ -3734,7 +3734,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist zh-en",
     "quantization": "",
@@ -3750,7 +3750,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata zh-en",
     "quantization": "",
@@ -3766,7 +3766,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model zh-en",
     "quantization": "",
@@ -3782,7 +3782,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary zh-en",
     "quantization": "",
@@ -3841,7 +3841,7 @@
     "notes": ""
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_arabic.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_arabic.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Arabic",
     "quantization": "",
@@ -3856,7 +3856,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Bengali",
     "quantization": "",
@@ -3871,7 +3871,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Cyrillic",
     "quantization": "",
@@ -3886,7 +3886,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Devanagari",
     "quantization": "",
@@ -3901,7 +3901,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Japanese",
     "quantization": "",
@@ -3916,7 +3916,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Kannada",
     "quantization": "",
@@ -3931,7 +3931,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Korean",
     "quantization": "",
@@ -3946,7 +3946,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Latin",
     "quantization": "",
@@ -3961,7 +3961,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Tamil",
     "quantization": "",
@@ -3976,7 +3976,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Telugu",
     "quantization": "",
@@ -3991,7 +3991,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Thai",
     "quantization": "",
@@ -4006,7 +4006,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Chinese Simplified",
     "quantization": "",
@@ -4021,7 +4021,7 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
-    "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
+    "source": "s3:///qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
     "engine": "@qvac/ocr-onnx",
     "description": "Text recognizer - Chinese Traditional",
     "quantization": "",
