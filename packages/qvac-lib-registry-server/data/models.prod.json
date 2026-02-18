@@ -4892,7 +4892,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 encoder (graph)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
@@ -4907,7 +4907,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 encoder (weights)",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
@@ -4922,7 +4922,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/decoder_joint-model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 decoder-joint",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
@@ -4937,7 +4937,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 vocabulary",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
@@ -4952,7 +4952,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 preprocessor",
-    "quantization": "",
+    "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
