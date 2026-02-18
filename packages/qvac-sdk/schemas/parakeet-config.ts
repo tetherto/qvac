@@ -7,12 +7,8 @@ import { modelSrcInputSchema } from "./model-src-utils";
 export const parakeetModelTypeEnumSchema = z.enum(["tdt"]);
 export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
 
-export const parakeetConfigSchema = z.object({
+export const parakeetRuntimeConfigSchema = z.object({
   modelType: parakeetModelTypeEnumSchema.default("tdt"),
-  parakeetEncoderDataSrc: modelSrcInputSchema,
-  parakeetDecoderSrc: modelSrcInputSchema,
-  parakeetVocabSrc: modelSrcInputSchema,
-  parakeetPreprocessorSrc: modelSrcInputSchema,
   maxThreads: z.number().int().optional(),
   useGPU: z.boolean().optional(),
   sampleRate: z.number().int().optional(),
@@ -20,6 +16,13 @@ export const parakeetConfigSchema = z.object({
   captionEnabled: z.boolean().optional(),
   timestampsEnabled: z.boolean().optional(),
   seed: z.number().int().optional(),
+});
+
+export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
+  parakeetEncoderDataSrc: modelSrcInputSchema,
+  parakeetDecoderSrc: modelSrcInputSchema,
+  parakeetVocabSrc: modelSrcInputSchema,
+  parakeetPreprocessorSrc: modelSrcInputSchema,
 });
 
 export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;

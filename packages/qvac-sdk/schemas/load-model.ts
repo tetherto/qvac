@@ -405,7 +405,9 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.parakeetTranscription),
-  modelConfig: z.object({ modelType: parakeetModelTypeEnumSchema }),
+  modelConfig: z
+    .object({ modelType: parakeetModelTypeEnumSchema })
+    .passthrough(),
   parakeetEncoderDataSrc: z.string(),
   parakeetDecoderSrc: z.string(),
   parakeetVocabSrc: z.string(),
