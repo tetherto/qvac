@@ -198,7 +198,7 @@ async function downloadSingleFileFromRegistry(
       });
     }
   } finally {
-    void closeRegistryClient();
+    await closeRegistryClient();
   }
 }
 
