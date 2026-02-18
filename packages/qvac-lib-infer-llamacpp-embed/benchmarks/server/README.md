@@ -1,12 +1,11 @@
 # EmbedLlamacpp Benchmark Server
 
-A Node.js server for benchmarking the `@qvac/embed-llamacpp` addon, built with `bare` runtime. Supports HuggingFace auto-downloaded models and P2P models via Hyperdrive.
+A Node.js server for benchmarking the `@qvac/embed-llamacpp` addon, built with `bare` runtime. Supports HuggingFace auto-downloaded models.
 
 ## Features
 
 - HTTP server using `bare-http1`
 - Direct addon instantiation via ModelManager singleton
-- P2P model loading via Hyperdrive (`@qvac/dl-hyperdrive`)
 - VRAM management with automatic cleanup
 - Input validation using Zod
 - Comprehensive error handling and logging
@@ -15,7 +14,7 @@ A Node.js server for benchmarking the `@qvac/embed-llamacpp` addon, built with `
 ## Prerequisites
 
 - `bare` runtime
-- GGUF embedding model (downloaded from HuggingFace or via P2P)
+- GGUF embedding model (downloaded from HuggingFace)
 
 ## Installation
 
@@ -87,22 +86,6 @@ Generate embeddings for input texts.
 }
 ```
 
-**P2P Hyperdrive Model Request:**
-```json
-{
-  "inputs": ["text to embed", "another text"],
-  "config": {
-    "hyperdriveKey": "hd://{KEY}",
-    "modelName": "gte-large_fp16.gguf",
-    "device": "gpu",
-    "gpu_layers": "99",
-    "ctx_size": "512",
-    "batch_size": "2048",
-    "verbosity": "0"
-  }
-}
-```
-
 Response:
 ```json
 {
@@ -122,7 +105,6 @@ Response:
 |-----------|------|-------------|---------|
 | `modelName` | `string` | GGUF model filename | Required |
 | `diskPath` | `string` | Path to downloaded models directory | `./models/` |
-| `hyperdriveKey` | `string` | P2P Hyperdrive key (for P2P models) | - |
 | `device` | `string` | Device type (`cpu`, `gpu`) | `gpu` |
 | `gpu_layers` | `string` | GPU layers to offload | `99` |
 | `ctx_size` | `string` | Context window size | `512` |
@@ -139,8 +121,7 @@ server/
     ├── server.js      # HTTP request handling
     ├── services/
     │   ├── modelManager.js   # Singleton for downloaded models + VRAM
-    │   ├── p2pModelLoader.js # P2P Hyperdrive model loading
-    │   └── runAddon.js       # Addon interface + routing logic
+    │   └── runAddon.js       # Addon interface logic
     ├── utils/
     │   ├── ApiError.js       # Error class
     │   ├── constants.js      # HTTP constants
@@ -152,12 +133,7 @@ server/
 
 ## Model Loading
 
-The server routes model requests based on the presence of `hyperdriveKey`:
-
-- **With `hyperdriveKey`**: Uses `p2pModelLoader.js` to load via Hyperdrive
-- **Without `hyperdriveKey`**: Uses `modelManager.js` for downloaded GGUF files
-
-Both loaders implement singleton caching to avoid reloading the same model.
+The server uses `modelManager.js` for downloaded GGUF files with singleton caching to avoid reloading the same model.
 
 ## Error Handling
 

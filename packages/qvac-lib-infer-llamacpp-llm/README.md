@@ -298,11 +298,6 @@ npm run benchmarks -- \
   --transformers-model "meta-llama/Llama-3.2-1B-Instruct" \
   --hf-token YOUR_TOKEN \
   --samples 10
-
-# P2P Hyperdrive models
-npm run benchmarks -- \
-  --gguf-model "hd://key/model.gguf" \
-  --samples 10
 ```
 
 **Platform Support**: Unix/Linux/macOS (bash), Windows (PowerShell, Git Bash)

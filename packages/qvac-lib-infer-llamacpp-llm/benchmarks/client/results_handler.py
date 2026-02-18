@@ -21,7 +21,6 @@ class ResultsHandler:
             self.model_id = model_name
             # Create directory name from model name (handle colons and slashes)
             # e.g., "unsloth/Qwen3-1.7B-GGUF:Q4_0" -> "Qwen3-1.7B-GGUF_Q4_0"
-            # e.g., "hd://key/model.gguf" -> "model"
             results_dir_name = model_name.split('/')[-1].replace(':', '_').replace('.gguf', '')
         
         self.date_str = datetime.now().strftime("%Y-%m-%d")

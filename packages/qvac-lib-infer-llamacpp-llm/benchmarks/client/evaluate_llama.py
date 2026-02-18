@@ -29,9 +29,6 @@ Examples:
   # Server-based evaluation using GGUF model from HuggingFace Hub
   python evaluate_llama.py --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --hf-token YOUR_TOKEN
   
-  # Server-based evaluation using GGUF model from Hyperdrive P2P
-  python evaluate_llama.py --gguf-model "hd://{KEY}/medgemma-4b-it-Q4_1.gguf"
-  
   # Comparative mode - test both addon (GGUF) and transformers (PyTorch)
   python evaluate_llama.py --compare-implementations --gguf-model "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" --transformers-model "meta-llama/Llama-3.2-1B-Instruct" --hf-token YOUR_TOKEN
         """
@@ -61,26 +58,16 @@ Examples:
 
 def parse_gguf_model_spec(args):
     """Parse GGUF model specification"""
-    args.hyperdrive_uri = None
-    
     if not args.gguf_model:
         return
-    
-    if args.gguf_model.startswith("hd://"):
-        hd_uri = args.gguf_model[5:]
-        if "/" not in hd_uri:
-            logger.error("❌ Hyperdrive URI must include model filename (Format: hd://key/model.gguf)")
-            sys.exit(1)
-        args.hyperdrive_uri = args.gguf_model
-        args.hd_model_name = args.hyperdrive_uri.split("/")[-1].replace(".gguf", "")
+
+    args.hf_gguf_repo = args.gguf_model
+    if ":" in args.gguf_model:
+        repo, quant = args.gguf_model.rsplit(":", 1)
+        args.hf_gguf_repo = repo
+        args.hf_gguf_quantization = quant.upper()
     else:
-        args.hf_gguf_repo = args.gguf_model
-        if ":" in args.gguf_model:
-            repo, quant = args.gguf_model.rsplit(":", 1)
-            args.hf_gguf_repo = repo
-            args.hf_gguf_quantization = quant.upper()
-        else:
-            args.hf_gguf_quantization = None
+        args.hf_gguf_quantization = None
 
 
 def validate_args(args):
@@ -119,8 +106,6 @@ def log_configuration(server_config, args):
     logger.info(f"   • datasets: {server_config.get_enabled_datasets()}")
     logger.info(f"   • samples per dataset: {server_config.get_num_samples()}")
     logger.info(f"   • server port: {args.port}")
-    if args.hyperdrive_uri:
-        logger.info(f"   • hyperdrive URI: {args.hyperdrive_uri}")
     logger.info("=" * 70)
     logger.info("")
 
@@ -156,12 +141,6 @@ def setup_gguf_model_for_single_mode(args, server_config):
         print(f"Testing addon: {model_display_name}")
         return model_display_name
     
-    # Hyperdrive P2P models - hyperdrive_key and p2p_model_name already set in ServerConfig
-    if args.hyperdrive_uri:
-        model_display_name = args.gguf_model
-        print(f"Testing addon: {model_display_name}")
-        return model_display_name
-    
     logger.error("Could not determine model name from --gguf-model")
     sys.exit(1)
 
@@ -180,12 +159,9 @@ def run_comparative_mode(args, server_config):
         server_config.hf_gguf_quantization = getattr(args, 'hf_gguf_quantization', None)
     
     # Determine GGUF model name for directory
-    if args.hyperdrive_uri:
-        gguf_model_dir_name = args.hyperdrive_uri.split("/")[-1].replace(".gguf", "")
-    else:
-        gguf_model_dir_name = args.hf_gguf_repo.split("/")[-1]
-        if args.hf_gguf_quantization:
-            gguf_model_dir_name = f"{gguf_model_dir_name}_{args.hf_gguf_quantization}"
+    gguf_model_dir_name = args.hf_gguf_repo.split("/")[-1]
+    if args.hf_gguf_quantization:
+        gguf_model_dir_name = f"{gguf_model_dir_name}_{args.hf_gguf_quantization}"
     
     # Initialize results handler
     results_handler = ResultsHandler(
@@ -315,7 +291,6 @@ def main():
     # Create configuration
     server_config = ServerConfig(
         url=f"http://localhost:{args.port}/run",
-        hyperdrive_uri=args.hyperdrive_uri,
         cli_samples=args.samples,
         cli_datasets=args.datasets,
         cli_device=args.device,
