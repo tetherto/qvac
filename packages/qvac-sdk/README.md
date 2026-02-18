@@ -203,7 +203,8 @@ bun run examples/path/to/example.ts
 
 ### Text-to-Speech
 
-- TTS with [eSpeak](https://github.com/espeak-ng/espeak-ng): [`examples/text-to-speech.ts`](examples/text-to-speech.ts)
+- TTS (Chatterbox): [`examples/tts/chatterbox.ts`](examples/tts/chatterbox.ts) _(voice cloning with reference audio)_
+- TTS (Supertonic): [`examples/tts/supertonic.ts`](examples/tts/supertonic.ts) _(general-purpose, no voice cloning)_
 
 ### Multimodel
 
