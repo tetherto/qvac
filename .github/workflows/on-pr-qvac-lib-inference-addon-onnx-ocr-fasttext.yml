@@ -10,6 +10,8 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
       - ".github/workflows/*ocr*.yml"

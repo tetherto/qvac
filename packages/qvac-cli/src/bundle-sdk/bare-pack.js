@@ -1,14 +1,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { BarePackNotInstalledError, BarePackError } from '../errors.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
 
 function resolveBarePackBin () {
-  const binName = process.platform === 'win32' ? 'bare-pack.cmd' : 'bare-pack'
-  return path.resolve(__dirname, '..', '..', 'node_modules', '.bin', binName)
+  try {
+    const barePackPkgPath = require.resolve('bare-pack/package')
+    const barePackDir = path.dirname(barePackPkgPath)
+    return path.join(barePackDir, 'bin.js')
+  } catch {
+    return null
+  }
 }
 
 export async function runBarePack (options) {
@@ -23,7 +28,7 @@ export async function runBarePack (options) {
   } = options
 
   const barePackBin = resolveBarePackBin()
-  if (!fs.existsSync(barePackBin)) {
+  if (!barePackBin || !fs.existsSync(barePackBin)) {
     throw new BarePackNotInstalledError()
   }
 

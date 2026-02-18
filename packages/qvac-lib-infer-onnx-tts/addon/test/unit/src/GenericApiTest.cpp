@@ -39,7 +39,9 @@ TTSModel make_valid_model() {
 
   std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
 
-  return TTSModel(config, referenceAudio, g_validMock);
+  TTSModel model(config, referenceAudio, g_validMock);
+  g_validMock.reset(); // TTSModel now owns the mock; avoid leak at exit so mock is verified
+  return model;
 }
 
 TTSModel make_invalid_model() {

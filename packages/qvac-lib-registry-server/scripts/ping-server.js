@@ -51,29 +51,8 @@ async function pingServer (options = {}) {
 
     const response = await connection.rpc.request('ping', {})
 
-    const expectedViewKey = config.getRegistryCoreKey()
-
     console.log('\n--- Ping Response ---')
     console.log(`Role: ${response.role}`)
-    console.log(`Is Indexer: ${response.isIndexer}`)
-    console.log(`Local Key: ${response.localKey || 'N/A'}`)
-    console.log(`Autobase Key: ${response.autobaseKey || 'N/A'}`)
-    console.log(`View Core Key: ${response.viewCoreKey || 'N/A'}`)
-    console.log(`Expected Key:  ${expectedViewKey || 'not set'}`)
-    if (response.viewCoreKey && expectedViewKey) {
-      console.log(`Keys Match: ${response.viewCoreKey === expectedViewKey}`)
-    }
-    console.log(`View Length: ${response.viewLength ?? 'N/A'}`)
-    console.log(`View Contiguous: ${response.viewContiguousLength ?? 'N/A'}`)
-    console.log(`View Signed: ${response.viewSignedLength ?? 'N/A'}`)
-    if (response.viewLength && response.viewContiguousLength) {
-      const gap = response.viewLength - response.viewContiguousLength
-      if (gap > 0) {
-        console.log(`Contiguous Gap: ${gap} blocks (contiguous lags signed by ${(response.viewSignedLength ?? 0) - response.viewContiguousLength})`)
-      }
-    }
-    console.log(`Indexer Count: ${response.indexerCount ?? 'N/A'}`)
-    console.log(`Connected Peers: ${response.connectedPeers ?? 'N/A'}`)
     console.log(`Timestamp: ${new Date(response.timestamp).toISOString()}`)
     console.log('--- Server is available ---')
 

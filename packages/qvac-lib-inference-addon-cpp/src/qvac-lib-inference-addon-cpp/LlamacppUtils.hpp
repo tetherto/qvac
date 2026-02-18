@@ -50,7 +50,7 @@ initFromShards(const GGUFShards& shards, common_params& params) {
 }
 
 /// @brief Initializes a model from a single gguf stream stored in memory
-/// @note For performance reasons `initFromShards` should be preferabily used
+/// @note For performance reasons `initFromShards` should be preferably used
 /// with streams. However, this function is still offered to unify the Js
 /// interface of the addon and separate concerns.
 inline common_init_result initFromMemory(
@@ -68,7 +68,7 @@ inline common_init_result initFromMemory(
   // sharded models should be used instead.
   std::vector<uint8_t> contiguousData;
   {
-    // Scope streambuf so that its destructed after reading, and JS garbage
+    // Scope streambuf so that it is destroyed after reading, and JS garbage
     // collection triggered.
     std::unique_ptr<std::basic_streambuf<char>> scopedStreambuf =
         std::move(streambuf);
@@ -94,7 +94,7 @@ inline common_init_result initFromMemory(
 /// @param shards Containing sharded files, if any
 /// @param loading_context What context to use when asynchronously loading
 /// shards
-/// @param isStreaming Should be set to true when `set_weights_for_file` is
+/// @param isStreaming Should be set to true when `setWeightsForFile` is
 /// being used to populate `singleGgufStreamedFiles` or call
 /// `llama_model_load_fulfill_split_future`
 inline common_init_result initFromConfig(
@@ -106,10 +106,10 @@ inline common_init_result initFromConfig(
   common_init_result llamaInit;
   // Stream should have been awaited by the time activate is called from JS
   // and init is triggered. isStreaming should be (thread) safe to use at this
-  // point because `set_weights_for_file` has already finished.
+  // point because `setWeightsForFile` has already finished.
   if (isStreaming) {
     if (shards.gguf_files.empty()) {
-      // Not optimal. Shards prefered when streaming.
+      // Not optimal. Shards preferred when streaming.
       LOG_INF(
           "%s: load the model gguf from stream and apply lora adapter, if "
           "any.\n",

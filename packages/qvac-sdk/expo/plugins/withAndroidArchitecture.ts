@@ -12,9 +12,7 @@ const DEFAULT_ARCHITECTURES = ["arm64-v8a"];
 function withAndroidArchitecture(config: ExpoConfig): ExpoConfig {
   const architectures = DEFAULT_ARCHITECTURES;
   const architectureString = architectures.join(",");
-  const abiFiltersArray = architectures
-    .map((arch) => `"${arch}"`)
-    .join(", ");
+  const abiFiltersArray = architectures.map((arch) => `"${arch}"`).join(", ");
 
   // Update gradle.properties to set reactNativeArchitectures
   config = withGradleProperties(config, (config) => {

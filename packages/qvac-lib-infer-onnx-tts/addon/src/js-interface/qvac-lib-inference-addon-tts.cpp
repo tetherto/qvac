@@ -69,6 +69,55 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
         languageModelPathOpt.value().as<std::string>(env);
   }
 
+  // Supertonic engine options
+  auto modelDirOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "modelDir");
+  if (modelDirOpt.has_value()) {
+    configMap["modelDir"] = modelDirOpt.value().as<std::string>(env);
+  }
+  auto textEncoderPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "textEncoderPath");
+  if (textEncoderPathOpt.has_value()) {
+    configMap["textEncoderPath"] =
+        textEncoderPathOpt.value().as<std::string>(env);
+  }
+  auto latentDenoiserPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "latentDenoiserPath");
+  if (latentDenoiserPathOpt.has_value()) {
+    configMap["latentDenoiserPath"] =
+        latentDenoiserPathOpt.value().as<std::string>(env);
+  }
+  auto voiceDecoderPathOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "voiceDecoderPath");
+  if (voiceDecoderPathOpt.has_value()) {
+    configMap["voiceDecoderPath"] =
+        voiceDecoderPathOpt.value().as<std::string>(env);
+  }
+  auto voicesDirOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "voicesDir");
+  if (voicesDirOpt.has_value()) {
+    configMap["voicesDir"] = voicesDirOpt.value().as<std::string>(env);
+  }
+  auto voiceNameOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "voiceName");
+  if (voiceNameOpt.has_value()) {
+    configMap["voiceName"] = voiceNameOpt.value().as<std::string>(env);
+  }
+  auto speedOpt =
+      configurationParams.getOptionalProperty<js::String>(env, "speed");
+  if (speedOpt.has_value()) {
+    configMap["speed"] = speedOpt.value().as<std::string>(env);
+  }
+  auto numInferenceStepsOpt =
+      configurationParams.getOptionalProperty<js::String>(env,
+                                                          "numInferenceSteps");
+  if (numInferenceStepsOpt.has_value()) {
+    configMap["numInferenceSteps"] =
+        numInferenceStepsOpt.value().as<std::string>(env);
+  }
+
   return configMap;
 }
 

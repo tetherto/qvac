@@ -8,54 +8,57 @@ const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
 
+const SOURCE_REFINE = (val) => {
+  try {
+    parseCanonicalSource(val)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const S3_NO_BUCKET = (val) => {
+  if (!val.startsWith('s3://')) return true
+  const parsed = parseCanonicalSource(val)
+  return parsed.bucket === null
+}
+
+const baseFields = {
+  source: z.string()
+    .min(1, 'source is required')
+    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
+    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' }),
+
+  engine: z.string()
+    .min(1, 'engine is required')
+    .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
+
+  license: z.string().min(1, 'license is required'),
+
+  description: z.string().max(512).optional(),
+  quantization: z.string().max(512).optional(),
+  params: z.string().max(64).optional(),
+  notes: z.string().max(512).optional(),
+  tags: z.array(z.string().max(128)).max(50).optional(),
+  deprecated: z.boolean().optional(),
+  deprecationReason: z.string().max(512).optional(),
+  replacedBy: z.string()
+    .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
+    .optional()
+}
+
 function createModelSchema (validLicenses) {
   return z.object({
-    source: z.string()
-      .min(1, 'source is required')
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }
-      ),
-
-    engine: z.string()
-      .min(1, 'engine is required')
-      .regex(ENGINE_PATTERN, 'Invalid engine format (expected @qvac/<engine-name>)'),
-
-    license: z.string()
-      .min(1, 'license is required')
-      .refine(
-        (val) => validLicenses.has(val),
-        (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
-      ),
-
-    description: z.string().optional(),
-    quantization: z.string().optional(),
-    params: z.string().optional(),
-    notes: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    deprecated: z.boolean().optional(),
-    deprecationReason: z.string().optional(),
-    replacedBy: z.string()
-      .refine(
-        (val) => {
-          try {
-            parseCanonicalSource(val)
-            return true
-          } catch {
-            return false
-          }
-        },
-        { message: 'replacedBy must be a valid source URL' }
-      )
-      .optional()
+    ...baseFields,
+    license: baseFields.license.refine(
+      (val) => validLicenses.has(val),
+      (val) => ({ message: `Unknown license: "${val}" (not found in licenses.json)` })
+    )
   })
+}
+
+function createDeprecatedModelSchema () {
+  return z.object(baseFields)
 }
 
 async function loadValidLicenses () {
@@ -123,17 +126,19 @@ async function validateModelsJson (filePath) {
     return { valid: false, errors, modelCount: 0 }
   }
 
-  // Create schema with license validation
-  const ModelSchema = createModelSchema(validLicenses)
-  const ModelsArraySchema = z.array(ModelSchema)
+  // Validate active and deprecated models with different schemas
+  const ActiveSchema = createModelSchema(validLicenses)
+  const DeprecatedSchema = createDeprecatedModelSchema()
 
-  // Validate with Zod
-  const result = ModelsArraySchema.safeParse(models)
+  for (let i = 0; i < models.length; i++) {
+    const schema = models[i].deprecated === true ? DeprecatedSchema : ActiveSchema
+    const result = schema.safeParse(models[i])
 
-  if (!result.success) {
-    for (const issue of result.error.issues) {
-      const pathStr = issue.path.length > 0 ? `[${issue.path.join('.')}]` : ''
-      errors.push(`${pathStr} ${issue.message}`)
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const pathStr = issue.path.length > 0 ? `[${i}.${issue.path.join('.')}]` : `[${i}]`
+        errors.push(`${pathStr} ${issue.message}`)
+      }
     }
   }
 

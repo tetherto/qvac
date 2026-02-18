@@ -266,16 +266,23 @@ async function ensureFileDownloaded (url, filepath) {
   return { success: false, path: filepath, isReal: false }
 }
 
-// Download Whisper model (ggml format)
+// Download Whisper model (ggml format). Supports ggml-small.bin and ggml-medium.bin via targetPath.
+const WHISPER_MODELS = {
+  'ggml-small.bin': { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin', minSize: 460000000 },
+  'ggml-medium.bin': { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin', minSize: 1400000000 }
+}
+
 async function ensureWhisperModel (targetPath = null) {
   if (!targetPath) {
-    targetPath = path.join(getBaseDir(), 'models', 'whisper', 'ggml-small.bin')
+    targetPath = path.join(getBaseDir(), 'models', 'whisper', 'ggml-medium.bin')
   }
+  const modelFile = path.basename(targetPath)
+  const modelInfo = WHISPER_MODELS[modelFile] || WHISPER_MODELS['ggml-medium.bin']
+
   // Check if model already exists
   if (fs.existsSync(targetPath)) {
     const stats = fs.statSync(targetPath)
-    // ggml-small.bin should be around 460MB
-    if (stats.size > 460000000) {
+    if (stats.size > modelInfo.minSize) {
       console.log(` ✓ Whisper model already exists (${stats.size} bytes)`)
       return { success: true, path: targetPath }
     } else {
@@ -284,7 +291,7 @@ async function ensureWhisperModel (targetPath = null) {
     }
   }
 
-  console.log('\nDownloading Whisper model (ggml-small.bin)...')
+  console.log(`\nDownloading Whisper model (${modelFile})...`)
   console.log('Source: HuggingFace whisper.cpp')
 
   // Ensure directory exists
@@ -293,54 +300,46 @@ async function ensureWhisperModel (targetPath = null) {
     fs.mkdirSync(dir, { recursive: true })
   }
 
-  // HuggingFace URL for whisper.cpp models
-  const urls = [
-    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin'
-  ]
+  const url = modelInfo.url
+  console.log(` Trying: ${url}`)
 
-  for (const url of urls) {
-    console.log(` Trying: ${url}`)
+  let downloadSuccess = false
 
-    let downloadSuccess = false
-
-    if (isMobile) {
-      // Use HTTP download on mobile
-      try {
-        const result = await downloadWithHttp(url, targetPath)
-        downloadSuccess = result.success && fs.existsSync(targetPath)
-      } catch (e) {
-        console.log(` HTTP download error: ${e.message}`)
-      }
-    } else {
-      // Use curl on desktop
-      try {
-        const { spawnSync } = require('bare-subprocess')
-        const downloadResult = spawnSync('curl', [
-          '-L', '-o', targetPath, url,
-          '--fail', '--show-error',
-          '--connect-timeout', '30',
-          '--max-time', '1000'
-        ], { stdio: ['inherit', 'inherit', 'pipe'] })
-        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
-        if (!downloadSuccess) {
-          console.log(` Download failed with exit code: ${downloadResult.status}`)
-        }
-      } catch (e) {
-        console.log(` Curl error: ${e.message}`)
-      }
+  if (isMobile) {
+    try {
+      const result = await downloadWithHttp(url, targetPath)
+      downloadSuccess = result.success && fs.existsSync(targetPath)
+    } catch (e) {
+      console.log(` HTTP download error: ${e.message}`)
     }
-
-    if (downloadSuccess) {
-      const stats = fs.statSync(targetPath)
-      console.log(` ✓ Downloaded: ${stats.size} bytes`)
-
-      if (stats.size > 460000000) {
-        console.log(' ✓ Whisper model downloaded successfully')
-        return { success: true, path: targetPath }
-      } else {
-        console.log(` Downloaded file too small: ${stats.size} bytes`)
-        fs.unlinkSync(targetPath)
+  } else {
+    try {
+      const { spawnSync } = require('bare-subprocess')
+      const downloadResult = spawnSync('curl', [
+        '-L', '-o', targetPath, url,
+        '--fail', '--show-error',
+        '--connect-timeout', '30',
+        '--max-time', '1000'
+      ], { stdio: ['inherit', 'inherit', 'pipe'] })
+      downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+      if (!downloadSuccess) {
+        console.log(` Download failed with exit code: ${downloadResult.status}`)
       }
+    } catch (e) {
+      console.log(` Curl error: ${e.message}`)
+    }
+  }
+
+  if (downloadSuccess) {
+    const stats = fs.statSync(targetPath)
+    console.log(` ✓ Downloaded: ${stats.size} bytes`)
+
+    if (stats.size > modelInfo.minSize) {
+      console.log(' ✓ Whisper model downloaded successfully')
+      return { success: true, path: targetPath }
+    } else {
+      console.log(` Downloaded file too small: ${stats.size} bytes`)
+      fs.unlinkSync(targetPath)
     }
   }
 
@@ -382,7 +381,7 @@ async function ensureChatterboxModels (options = {}) {
   // Files to download (each model has .onnx and .onnx_data files)
   const modelFiles = [
     { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
-    { name: `speech_encoder${suffix}.onnx_data`, minSize: 100000000 }, // ~1GB for fp32
+    { name: `speech_encoder${suffix}.onnx_data`, minSize: 950000000 }, // ~1GB for fp32 (offset ~982MB in .onnx)
     { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
     { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 }, // ~233MB for fp32
     { name: `conditional_decoder${suffix}.onnx`, minSize: 1000 },
@@ -542,4 +541,260 @@ async function ensureChatterboxModels (options = {}) {
   }
 }
 
-module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels }
+/**
+ * Fetch URL response body as string (for JSON etc.). Used when we need to write the received content to a file.
+ * @param {string} url - URL to fetch
+ * @returns {Promise<{ success: boolean, body?: string, error?: string }>}
+ */
+async function fetchUrlBody (url) {
+  if (isMobile) {
+    const https = require('bare-https')
+    const { URL } = require('bare-url')
+    return new Promise((resolve) => {
+      const parsedUrl = new URL(url)
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || 443,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)' }
+      }
+      const req = https.request(options, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const location = res.headers.location
+          let redirectUrl
+          if (location.startsWith('http://') || location.startsWith('https://')) {
+            redirectUrl = location
+          } else if (location.startsWith('/')) {
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+          } else {
+            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+          }
+          fetchUrlBody(redirectUrl).then(resolve).catch((e) => resolve({ success: false, error: e.message }))
+          return
+        }
+        if (res.statusCode !== 200) {
+          resolve({ success: false, error: `HTTP ${res.statusCode}` })
+          return
+        }
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => resolve({ success: true, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('error', (err) => resolve({ success: false, error: err.message }))
+      })
+      req.on('error', (err) => resolve({ success: false, error: err.message }))
+      req.end()
+    })
+  }
+  const { spawnSync } = require('bare-subprocess')
+  const result = spawnSync('curl', [
+    '-L', url,
+    '--fail', '--silent', '--show-error',
+    '--connect-timeout', '30',
+    '--max-time', '300'
+  ], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe'] })
+  if (result.status === 0 && result.stdout) {
+    return { success: true, body: result.stdout }
+  }
+  return { success: false, error: result.stderr || `exit code ${result.status}` }
+}
+
+/**
+ * Ensure Supertonic TTS models are present. Downloads from Hugging Face if missing.
+ * Source: https://huggingface.co/onnx-community/Supertonic-TTS-ONNX (onnx/, voices/, tokenizer.json).
+ * tokenizer.json is fetched as content and written to file (resolve/main returns the file content).
+ * @param {Object} options - Download options
+ * @param {string} [options.targetDir] - Target directory (default: getBaseDir()/models/supertonic)
+ * @param {string[]} [options.voiceNames=['F1']] - Voice files to download (e.g. F1.bin, M1.bin)
+ * @returns {Promise<Object>} { success, results, targetDir }
+ */
+async function ensureSupertonicModels (options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'supertonic')
+  const voiceNames = options.voiceNames || ['F1']
+
+  console.log('\nEnsuring Supertonic TTS models...')
+
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true })
+  }
+  const onnxDir = path.join(targetDir, 'onnx')
+  const voicesDir = path.join(targetDir, 'voices')
+  if (!fs.existsSync(onnxDir)) fs.mkdirSync(onnxDir, { recursive: true })
+  if (!fs.existsSync(voicesDir)) fs.mkdirSync(voicesDir, { recursive: true })
+
+  const baseUrl = 'https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/main'
+
+  // ONNX files (each has .onnx and .onnx_data) - sizes from Hugging Face
+  const onnxFiles = [
+    { name: 'text_encoder.onnx', minSize: 100000 },
+    { name: 'text_encoder.onnx_data', minSize: 25000000 },
+    { name: 'latent_denoiser.onnx', minSize: 100000 },
+    { name: 'latent_denoiser.onnx_data', minSize: 120000000 },
+    { name: 'voice_decoder.onnx', minSize: 10000 },
+    { name: 'voice_decoder.onnx_data', minSize: 95000000 }
+  ]
+
+  const results = {}
+  let allSuccess = true
+
+  for (const file of onnxFiles) {
+    const url = `${baseUrl}/onnx/${file.name}`
+    const targetPath = path.join(onnxDir, file.name)
+
+    console.log(`\n Downloading onnx/${file.name}...`)
+
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Using cached: onnx/${file.name} (${stats.size} bytes)`)
+        results['onnx/' + file.name] = { success: true, path: targetPath, cached: true }
+        continue
+      }
+      fs.unlinkSync(targetPath)
+    }
+
+    let downloadSuccess = false
+    if (isMobile) {
+      try {
+        const result = await downloadWithHttp(url, targetPath)
+        downloadSuccess = result.success && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` HTTP download error: ${e.message}`)
+      }
+    } else {
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const downloadResult = spawnSync('curl', [
+          '-L', '-o', targetPath, url,
+          '--fail', '--show-error',
+          '--connect-timeout', '30',
+          '--max-time', '1800'
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` Curl error: ${e.message}`)
+      }
+    }
+
+    if (downloadSuccess) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size >= file.minSize) {
+        console.log(` ✓ Downloaded: onnx/${file.name} (${stats.size} bytes)`)
+        results['onnx/' + file.name] = { success: true, path: targetPath, cached: false }
+      } else {
+        fs.unlinkSync(targetPath)
+        results['onnx/' + file.name] = { success: false, path: targetPath }
+        allSuccess = false
+      }
+    } else {
+      results['onnx/' + file.name] = { success: false, path: targetPath }
+      allSuccess = false
+    }
+  }
+
+  // Voice files
+  for (const voice of voiceNames) {
+    const name = voice.endsWith('.bin') ? voice : `${voice}.bin`
+    const url = `${baseUrl}/voices/${name}`
+    const targetPath = path.join(voicesDir, name)
+
+    console.log(`\n Downloading voices/${name}...`)
+
+    if (fs.existsSync(targetPath)) {
+      const stats = fs.statSync(targetPath)
+      if (stats.size > 40000) {
+        console.log(` ✓ Using cached: voices/${name} (${stats.size} bytes)`)
+        results['voices/' + name] = { success: true, path: targetPath, cached: true }
+        continue
+      }
+      fs.unlinkSync(targetPath)
+    }
+
+    let downloadSuccess = false
+    if (isMobile) {
+      try {
+        const result = await downloadWithHttp(url, targetPath)
+        downloadSuccess = result.success && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` HTTP download error: ${e.message}`)
+      }
+    } else {
+      try {
+        const { spawnSync } = require('bare-subprocess')
+        const downloadResult = spawnSync('curl', [
+          '-L', '-o', targetPath, url,
+          '--fail', '--show-error',
+          '--connect-timeout', '30',
+          '--max-time', '300'
+        ], { stdio: ['inherit', 'inherit', 'pipe'] })
+        downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
+      } catch (e) {
+        console.log(` Curl error: ${e.message}`)
+      }
+    }
+
+    if (downloadSuccess && fs.statSync(targetPath).size > 40000) {
+      console.log(` ✓ Downloaded: voices/${name}`)
+      results['voices/' + name] = { success: true, path: targetPath, cached: false }
+    } else {
+      if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath)
+      results['voices/' + name] = { success: false, path: targetPath }
+      allSuccess = false
+    }
+  }
+
+  // tokenizer.json: URL returns the JSON content; we fetch content and write the file
+  const tokenizerUrl = `${baseUrl}/tokenizer.json`
+  const tokenizerPath = path.join(targetDir, 'tokenizer.json')
+
+  console.log('\n Downloading tokenizer.json (fetch content and write file)...')
+
+  if (fs.existsSync(tokenizerPath) && isValidJsonCache(tokenizerPath)) {
+    console.log(' ✓ Using cached: tokenizer.json')
+    results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: true }
+  } else {
+    if (fs.existsSync(tokenizerPath)) fs.unlinkSync(tokenizerPath)
+    const fetchResult = await fetchUrlBody(tokenizerUrl)
+    if (fetchResult.success && fetchResult.body) {
+      try {
+        const parsed = JSON.parse(fetchResult.body)
+        if (typeof parsed === 'object' && parsed !== null) {
+          fs.writeFileSync(tokenizerPath, fetchResult.body, 'utf8')
+          console.log(` ✓ Downloaded: tokenizer.json (${Buffer.byteLength(fetchResult.body, 'utf8')} bytes)`)
+          results['tokenizer.json'] = { success: true, path: tokenizerPath, cached: false }
+        } else {
+          console.log(' tokenizer.json response was not valid JSON object')
+          results['tokenizer.json'] = { success: false, path: tokenizerPath }
+          allSuccess = false
+        }
+      } catch (e) {
+        console.log(` tokenizer.json parse error: ${e.message}`)
+        results['tokenizer.json'] = { success: false, path: tokenizerPath }
+        allSuccess = false
+      }
+    } else {
+      console.log(` tokenizer.json fetch failed: ${fetchResult.error || 'unknown'}`)
+      results['tokenizer.json'] = { success: false, path: tokenizerPath }
+      allSuccess = false
+    }
+  }
+
+  console.log('\n' + '='.repeat(50))
+  console.log('SUPERTONIC MODEL DOWNLOAD SUMMARY')
+  console.log('='.repeat(50))
+  for (const [name, result] of Object.entries(results)) {
+    const status = result.success ? '✓' : '✗'
+    const cached = result.cached ? ' (cached)' : ''
+    console.log(` ${status} ${name}${cached}`)
+  }
+  console.log('='.repeat(50))
+
+  return {
+    success: allSuccess,
+    results,
+    targetDir
+  }
+}
+
+module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels }

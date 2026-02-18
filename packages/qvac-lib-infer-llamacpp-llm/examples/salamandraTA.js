@@ -1,31 +1,30 @@
 'use strict'
 
-const Corestore = require('corestore')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const process = require('bare-process')
 const LlmLlamacpp = require('../index')
+const FilesystemDL = require('@qvac/dl-filesystem')
+const process = require('bare-process')
+const { downloadModel } = require('./utils')
 
 async function main () {
   console.log('SalamandraTA Example: Demonstrates translation model capabilities')
   console.log('=================================================================')
 
-  // 1. Initializing data loader
-  const store = new Corestore('./store')
-  const hdStore = store.namespace('hd')
+  // 1. Downloading model
+  const [modelName, dirPath] = await downloadModel(
+    'https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf',
+    'salamandrata_2b_inst_q4.gguf'
+  )
 
-  const hdKey = '1610d81772a9e7c37660666dbdfdcef915b6b83c522ea1ad31c19cab0075811d'
-  const hdDL = new HyperDriveDL({
-    key: `hd://${hdKey}`,
-    store: hdStore
-  })
+  // 2. Initializing data loader
+  const fsDL = new FilesystemDL({ dirPath })
 
-  // 2. Configuring model settings
+  // 3. Configuring model settings
   const args = {
-    loader: hdDL,
+    loader: fsDL,
     opts: { stats: true },
     logger: console,
-    modelName: 'salamandrata_2b_inst_q4.gguf',
-    diskPath: './models'
+    diskPath: dirPath,
+    modelName
   }
 
   const config = {
@@ -34,26 +33,12 @@ async function main () {
     ctx_size: '1024'
   }
 
-  // 3. Loading model
-  await hdDL.ready()
+  // 4. Loading model
   const model = new LlmLlamacpp(args, config)
-  const closeLoader = true
-  let totalProgress = 0
-  const reportProgressCallback = (report) => {
-    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
-      process.stdout.write(
-        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
-      )
-      if (Number(report.currentFileProgress) === 100) {
-        process.stdout.write('\n')
-      }
-      totalProgress = Number(report.overallProgress)
-    }
-  }
-  await model.load(closeLoader, reportProgressCallback)
+  await model.load()
 
   try {
-    // 4. Running translation inference
+    // 5. Running translation inference
     const messages = [
       {
         role: 'system',
@@ -79,10 +64,9 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 5. Cleaning up resources
-    await store.close()
-    await hdDL.close()
+    // 6. Cleaning up resources
     await model.unload()
+    await fsDL.close()
   }
 }
 
