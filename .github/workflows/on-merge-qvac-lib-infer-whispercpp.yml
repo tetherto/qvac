@@ -21,11 +21,6 @@ on:
         options:
           - latest
           - dev
-      tar-run-id:
-        description: "Tar run id https://github.com/tetherto/qvac-ext-lib-mlc/actions/runs/14774672942 "
-        required: false
-        default: "14774672942"
-        type: string
 
 permissions:
   contents: write
