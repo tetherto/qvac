@@ -6,7 +6,10 @@ import {
   type EmbedConfig,
 } from "./llamacpp-config";
 import { whisperConfigSchema } from "./whispercpp-config";
-import { parakeetConfigSchema } from "./parakeet-config";
+import {
+  parakeetConfigSchema,
+  parakeetModelTypeEnumSchema,
+} from "./parakeet-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import {
@@ -62,11 +65,7 @@ const loadModelOptionsBaseSchema = z.union([
   z.object({
     modelSrc: modelSrcInputSchema,
     modelType: parakeetModelTypeSchema,
-    modelConfig: parakeetConfigSchema.partial().strict().optional(),
-    parakeetEncoderDataSrc: modelSrcInputSchema,
-    parakeetDecoderSrc: modelSrcInputSchema,
-    parakeetVocabSrc: modelSrcInputSchema,
-    parakeetPreprocessorSrc: modelSrcInputSchema,
+    modelConfig: parakeetConfigSchema,
     seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
@@ -177,11 +176,7 @@ export const loadModelOptionsToRequestSchema = z.union([
     .object({
       modelSrc: modelSrcInputSchema,
       modelType: parakeetModelTypeSchema,
-      modelConfig: parakeetConfigSchema.partial().strict().optional(),
-      parakeetEncoderDataSrc: modelSrcInputSchema,
-      parakeetDecoderSrc: modelSrcInputSchema,
-      parakeetVocabSrc: modelSrcInputSchema,
-      parakeetPreprocessorSrc: modelSrcInputSchema,
+      modelConfig: parakeetConfigSchema,
       seed: z.boolean().optional(),
       delegate: delegateSchema,
       onProgress: z.unknown().optional(),
@@ -192,19 +187,21 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelType: ModelType.parakeetTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<
-        typeof parakeetConfigSchema
-      >,
+      modelConfig: { modelType: data.modelConfig.modelType },
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
       parakeetEncoderDataSrc: modelInputToSrcSchema.parse(
-        data.parakeetEncoderDataSrc,
+        data.modelConfig.parakeetEncoderDataSrc,
       ),
-      parakeetDecoderSrc: modelInputToSrcSchema.parse(data.parakeetDecoderSrc),
-      parakeetVocabSrc: modelInputToSrcSchema.parse(data.parakeetVocabSrc),
+      parakeetDecoderSrc: modelInputToSrcSchema.parse(
+        data.modelConfig.parakeetDecoderSrc,
+      ),
+      parakeetVocabSrc: modelInputToSrcSchema.parse(
+        data.modelConfig.parakeetVocabSrc,
+      ),
       parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
-        data.parakeetPreprocessorSrc,
+        data.modelConfig.parakeetPreprocessorSrc,
       ),
     })),
   z
@@ -408,7 +405,7 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
 
 export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.parakeetTranscription),
-  modelConfig: parakeetConfigSchema, // modelType defaults to "tdt"
+  modelConfig: z.object({ modelType: parakeetModelTypeEnumSchema }),
   parakeetEncoderDataSrc: z.string(),
   parakeetDecoderSrc: z.string(),
   parakeetVocabSrc: z.string(),
@@ -553,10 +550,6 @@ export const loadModelServerParamsSchema = z.object({
   projectionModelPath: z.string().optional(),
   vadModelPath: z.string().optional(),
   detectorModelPath: z.string().optional(),
-  parakeetEncoderDataPath: z.string().optional(),
-  parakeetDecoderPath: z.string().optional(),
-  parakeetVocabPath: z.string().optional(),
-  parakeetPreprocessorPath: z.string().optional(),
   modelName: z.string().optional(),
 });
 

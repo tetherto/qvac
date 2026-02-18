@@ -53,23 +53,15 @@ export async function handleLoadModel(
       ? (request as { detectorModelSrc?: string }).detectorModelSrc
       : undefined;
 
-  // Parakeet named source fields
-  const parakeetEncoderDataSrc =
+  // Parakeet named source fields (promoted from modelConfig by schema transform)
+  const parakeetSrcs =
     canonicalModelType === ModelType.parakeetTranscription
-      ? (request as { parakeetEncoderDataSrc?: string }).parakeetEncoderDataSrc
-      : undefined;
-  const parakeetDecoderSrc =
-    canonicalModelType === ModelType.parakeetTranscription
-      ? (request as { parakeetDecoderSrc?: string }).parakeetDecoderSrc
-      : undefined;
-  const parakeetVocabSrc =
-    canonicalModelType === ModelType.parakeetTranscription
-      ? (request as { parakeetVocabSrc?: string }).parakeetVocabSrc
-      : undefined;
-  const parakeetPreprocessorSrc =
-    canonicalModelType === ModelType.parakeetTranscription
-      ? (request as { parakeetPreprocessorSrc?: string })
-          .parakeetPreprocessorSrc
+      ? (request as {
+          parakeetEncoderDataSrc?: string;
+          parakeetDecoderSrc?: string;
+          parakeetVocabSrc?: string;
+          parakeetPreprocessorSrc?: string;
+        })
       : undefined;
 
   try {
@@ -119,40 +111,39 @@ export async function handleLoadModel(
       }
     }
 
-    // Resolve individual Parakeet model file sources
-    let parakeetEncoderDataPath: string | undefined;
-    let parakeetDecoderPath: string | undefined;
-    let parakeetVocabPath: string | undefined;
-    let parakeetPreprocessorPath: string | undefined;
-    if (canonicalModelType === ModelType.parakeetTranscription) {
-      if (parakeetEncoderDataSrc) {
-        parakeetEncoderDataPath = await resolveModelPath(
-          parakeetEncoderDataSrc,
-          progressCallback,
-          seed,
-        );
-      }
-      if (parakeetDecoderSrc) {
-        parakeetDecoderPath = await resolveModelPath(
-          parakeetDecoderSrc,
-          progressCallback,
-          seed,
-        );
-      }
-      if (parakeetVocabSrc) {
-        parakeetVocabPath = await resolveModelPath(
-          parakeetVocabSrc,
-          progressCallback,
-          seed,
-        );
-      }
-      if (parakeetPreprocessorSrc) {
-        parakeetPreprocessorPath = await resolveModelPath(
-          parakeetPreprocessorSrc,
-          progressCallback,
-          seed,
-        );
-      }
+    // Resolve individual Parakeet model file sources and build resolved config
+    let parakeetModelConfig: Record<string, unknown> | undefined;
+    if (canonicalModelType === ModelType.parakeetTranscription && parakeetSrcs) {
+      const {
+        parakeetEncoderDataSrc,
+        parakeetDecoderSrc,
+        parakeetVocabSrc,
+        parakeetPreprocessorSrc,
+      } = parakeetSrcs;
+
+      const [encoderDataPath, decoderPath, vocabPath, preprocessorPath] =
+        await Promise.all([
+          parakeetEncoderDataSrc
+            ? resolveModelPath(parakeetEncoderDataSrc, progressCallback, seed)
+            : undefined,
+          parakeetDecoderSrc
+            ? resolveModelPath(parakeetDecoderSrc, progressCallback, seed)
+            : undefined,
+          parakeetVocabSrc
+            ? resolveModelPath(parakeetVocabSrc, progressCallback, seed)
+            : undefined,
+          parakeetPreprocessorSrc
+            ? resolveModelPath(parakeetPreprocessorSrc, progressCallback, seed)
+            : undefined,
+        ]);
+
+      parakeetModelConfig = {
+        ...(request.modelConfig as Record<string, unknown>),
+        encoderDataPath,
+        decoderPath,
+        vocabPath,
+        preprocessorPath,
+      };
     }
 
     // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
@@ -240,10 +231,6 @@ export async function handleLoadModel(
       projectionModelPath,
       vadModelPath,
       detectorModelPath,
-      parakeetEncoderDataPath,
-      parakeetDecoderPath,
-      parakeetVocabPath,
-      parakeetPreprocessorPath,
       modelName,
     });
 

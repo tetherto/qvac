@@ -17,22 +17,33 @@ import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/plugins/parakeet-transcription/ops/transcribe-stream";
 import { createTranscribeStreamHandler } from "@/server/bare/utils/transcription-handler";
 
+type ParakeetModelConfig = {
+  modelType?: string;
+  encoderDataPath?: string;
+  decoderPath?: string;
+  vocabPath?: string;
+  preprocessorPath?: string;
+  maxThreads?: number;
+  useGPU?: boolean;
+  sampleRate?: number;
+  channels?: number;
+  captionEnabled?: boolean;
+  timestampsEnabled?: boolean;
+  seed?: number;
+};
+
 function createParakeetModel(
   modelId: string,
   modelPath: string,
-  parakeetConfig: ParakeetConfig,
-  artifacts: Record<string, string>,
+  config: ParakeetModelConfig,
 ) {
   const { dirPath } = parseModelPath(modelPath);
 
-  const encoderDataPath = artifacts["parakeetEncoderDataPath"];
-  const decoderPath = artifacts["parakeetDecoderPath"];
-  const vocabPath = artifacts["parakeetVocabPath"];
-  const preprocessorPath = artifacts["parakeetPreprocessorPath"];
+  const { encoderDataPath, decoderPath, vocabPath, preprocessorPath } = config;
 
   if (!encoderDataPath || !decoderPath || !vocabPath || !preprocessorPath) {
     throw new ModelLoadFailedError(
-      "Parakeet requires all artifact paths: parakeetEncoderDataSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc",
+      "Parakeet requires all model file paths: parakeetEncoderDataSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc in modelConfig",
     );
   }
 
@@ -46,7 +57,7 @@ function createParakeetModel(
     diskPath: dirPath,
   } as unknown as TranscriptionParakeetArgs;
 
-  const config: TranscriptionParakeetConfig = {
+  const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,
     filePaths: {
       "encoder-model.onnx": modelPath,
@@ -55,10 +66,12 @@ function createParakeetModel(
       "vocab.txt": vocabPath,
       "preprocessor.onnx": preprocessorPath,
     },
-    parakeetConfig: parakeetConfig as ParakeetConfig,
+    parakeetConfig: {
+      modelType: config.modelType ?? "tdt",
+    } as ParakeetConfig,
   };
 
-  const model = new TranscriptionParakeet(args, config);
+  const model = new TranscriptionParakeet(args, addonConfig);
 
   return { model, loader };
 }
@@ -69,15 +82,9 @@ export const parakeetPlugin = definePlugin({
   addonPackage: "@qvac/transcription-parakeet",
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const parakeetConfig = (params.modelConfig ?? {}) as ParakeetConfig;
-    const artifacts = params.artifacts ?? {};
+    const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
 
-    return createParakeetModel(
-      params.modelId,
-      params.modelPath,
-      parakeetConfig,
-      artifacts,
-    );
+    return createParakeetModel(params.modelId, params.modelPath, config);
   },
 
   handlers: {

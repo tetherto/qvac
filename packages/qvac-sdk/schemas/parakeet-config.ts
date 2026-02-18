@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 // Only TDT is currently supported
 // Other variants (ctc, eou, sortformer) can be added once available upstream
@@ -8,6 +9,10 @@ export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
 
 export const parakeetConfigSchema = z.object({
   modelType: parakeetModelTypeEnumSchema.default("tdt"),
+  parakeetEncoderDataSrc: modelSrcInputSchema,
+  parakeetDecoderSrc: modelSrcInputSchema,
+  parakeetVocabSrc: modelSrcInputSchema,
+  parakeetPreprocessorSrc: modelSrcInputSchema,
   maxThreads: z.number().int().optional(),
   useGPU: z.boolean().optional(),
   sampleRate: z.number().int().optional(),
