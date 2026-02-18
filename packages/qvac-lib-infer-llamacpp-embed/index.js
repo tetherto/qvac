@@ -136,6 +136,11 @@ class GGMLBert extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
+    // Map keys() iterates in insertion order; last key = last added job
+    // Or null and let original callback handle the unknown job
+    const keys = [...this._jobToResponse.keys()]
+    const jobId = keys.length > 0 ? keys[keys.length - 1] : null
+
     // Map C++ mangled type names to expected event names
     // Stats / job-ended: LLM uses tokens_per_second; embed uses total_tokens, total_time_ms, etc. (RuntimeStats)
     const isStatsData = typeof data === 'object' && data !== null && (
