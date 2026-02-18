@@ -3521,7 +3521,7 @@ export const models = [
   {
     name: "OCR_LATIN_RECOGNIZER",
     registryPath:
-      "qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
+      "qvac_models_compiled/ocr/rec_dyn/recognizer_latin.onnx",
     registrySource: "s3",
     blobCoreKey:
       "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
@@ -3530,9 +3530,9 @@ export const models = [
     blobByteOffset: 29357691733,
     modelId: "recognizer_latin.onnx",
     addon: "ocr",
-    expectedSize: 15411868,
+    expectedSize: 15398841,
     sha256Checksum:
-      "5dfcc50a6b2a237d62bd160f1b578a65e5cf445ff30c7a8b2fddec30bbde2098",
+      "fbae7f3d321cf4891ed8c5da7599d0695acc93c638056d837383f9b317730273",
     engine: "onnx-ocr",
     quantization: "",
     params: "",
