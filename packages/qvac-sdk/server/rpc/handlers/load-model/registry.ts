@@ -10,11 +10,12 @@ import {
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
+  getOnnxModelPath,
   calculateFileChecksum,
   extractTensorsFromShards,
   calculatePercentage,
 } from "@/server/utils";
-import { getModelByPath } from "@/models/registry";
+import { getModelByPath, type RegistryItem } from "@/models/registry";
 import {
   getRegistryClient,
   closeRegistryClient,
@@ -197,7 +198,7 @@ async function downloadSingleFileFromRegistry(
       });
     }
   } finally {
-    void closeRegistryClient();
+    await closeRegistryClient();
   }
 }
 
@@ -416,6 +417,169 @@ async function downloadShardedFilesFromRegistry(
 }
 
 /**
+ * Find companion ONNX data file in registry.
+ * ONNX models with external data have a .onnx file and a .onnx_data file.
+ */
+function findOnnxCompanionDataFile(
+  registryPath: string,
+): RegistryItem | undefined {
+  if (!registryPath.endsWith(".onnx")) return undefined;
+  const dataPath = registryPath + "_data";
+  return getModelByPath(dataPath);
+}
+
+/**
+ * Download ONNX model with companion data file from registry.
+ * Both files are placed in the same directory to satisfy ONNX Runtime requirements.
+ */
+async function downloadOnnxWithDataFromRegistry(
+  registryPath: string,
+  registrySource: string,
+  companionDataFile: RegistryItem,
+  cacheKey: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (signal?.aborted) {
+    throw new DownloadCancelledError();
+  }
+
+  const mainFilename = registryPath.split("/").pop() || registryPath;
+  const dataFilename = companionDataFile.registryPath.split("/").pop() || "";
+  const downloadKey = createRegistryDownloadKey(registryPath);
+
+  const mainModelMetadata = getModelByPath(registryPath);
+  const mainPath = getOnnxModelPath(cacheKey, mainFilename);
+  const dataPath = getOnnxModelPath(cacheKey, dataFilename);
+
+  logger.info(
+    `📥 Downloading ONNX model with external data: ${mainFilename} + ${dataFilename}`,
+  );
+
+  const mainExpectedSize = mainModelMetadata?.expectedSize || 0;
+  const mainChecksum = mainModelMetadata?.sha256Checksum || "";
+  const dataExpectedSize = companionDataFile.expectedSize || 0;
+  const dataChecksum = companionDataFile.sha256Checksum || "";
+
+  const overallTotal = mainExpectedSize + dataExpectedSize;
+  let overallDownloaded = 0;
+
+  // Check if main file already cached
+  const cachedMainPath = await validateCachedFile(
+    mainPath,
+    mainFilename,
+    mainExpectedSize,
+    mainChecksum,
+  );
+
+  if (cachedMainPath) {
+    logger.info(`✅ Main ONNX file already cached: ${mainFilename}`);
+    overallDownloaded += mainExpectedSize;
+  } else {
+    // Download main ONNX file
+    const mainProgressCallback = progressCallback
+      ? (progress: ModelProgressUpdate) => {
+          const currentOverall = overallDownloaded + progress.downloaded;
+          progressCallback({
+            ...progress,
+            downloadKey,
+            onnxInfo: {
+              currentFile: mainFilename,
+              fileIndex: 1,
+              totalFiles: 2,
+              overallDownloaded: currentOverall,
+              overallTotal,
+              overallPercentage: calculatePercentage(currentOverall, overallTotal),
+            },
+          });
+        }
+      : undefined;
+
+    await downloadSingleFileFromRegistry(
+      registryPath,
+      registrySource,
+      mainPath,
+      mainFilename,
+      downloadKey,
+      mainExpectedSize,
+      mainChecksum,
+      mainProgressCallback,
+      signal,
+    );
+
+    overallDownloaded += mainExpectedSize;
+    logger.info(`✅ Main ONNX file downloaded: ${mainFilename}`);
+  }
+
+  // Check if data file already cached
+  const cachedDataPath = await validateCachedFile(
+    dataPath,
+    dataFilename,
+    dataExpectedSize,
+    dataChecksum,
+  );
+
+  if (cachedDataPath) {
+    logger.info(`✅ ONNX data file already cached: ${dataFilename}`);
+    overallDownloaded = overallTotal;
+  } else {
+    // Download companion data file
+    const dataProgressCallback = progressCallback
+      ? (progress: ModelProgressUpdate) => {
+          const currentOverall = overallDownloaded + progress.downloaded;
+          progressCallback({
+            ...progress,
+            downloadKey,
+            onnxInfo: {
+              currentFile: dataFilename,
+              fileIndex: 2,
+              totalFiles: 2,
+              overallDownloaded: currentOverall,
+              overallTotal,
+              overallPercentage: calculatePercentage(currentOverall, overallTotal),
+            },
+          });
+        }
+      : undefined;
+
+    await downloadSingleFileFromRegistry(
+      companionDataFile.registryPath,
+      companionDataFile.registrySource,
+      dataPath,
+      dataFilename,
+      downloadKey,
+      dataExpectedSize,
+      dataChecksum,
+      dataProgressCallback,
+      signal,
+    );
+
+    logger.info(`✅ ONNX data file downloaded: ${dataFilename}`);
+  }
+
+  // Send final 100% progress
+  if (progressCallback) {
+    progressCallback({
+      type: "modelProgress",
+      downloaded: overallTotal,
+      total: overallTotal,
+      percentage: 100,
+      downloadKey,
+      onnxInfo: {
+        currentFile: dataFilename,
+        fileIndex: 2,
+        totalFiles: 2,
+        overallDownloaded: overallTotal,
+        overallTotal,
+        overallPercentage: 100,
+      },
+    });
+  }
+
+  return mainPath;
+}
+
+/**
  * Create a managed download with abort controller support.
  */
 function createManagedDownload(
@@ -489,6 +653,27 @@ export async function downloadModelFromRegistry(
         downloadShardedFilesFromRegistry(
           registryPath,
           registrySource,
+          cacheKey,
+          progressCallback,
+          signal,
+        ),
+      progressCallback,
+    );
+  }
+
+  // Check for ONNX with companion data file
+  const companionDataFile = findOnnxCompanionDataFile(registryPath);
+  if (companionDataFile) {
+    const cacheKey = generateShortHash(registryPath);
+
+    return createManagedDownload(
+      downloadKey,
+      registryPath,
+      (signal) =>
+        downloadOnnxWithDataFromRegistry(
+          registryPath,
+          registrySource,
+          companionDataFile,
           cacheKey,
           progressCallback,
           signal,
