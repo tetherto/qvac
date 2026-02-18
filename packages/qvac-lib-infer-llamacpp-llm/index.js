@@ -299,49 +299,49 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
-    if (this._jobInProgress) {
-      throw new Error(RUN_QUEUE_BUSY_ERROR)
-    }
     this.logger.info('Starting inference with prompt:', prompt)
-    const textMessages = []
-    let mediaData = null
-
-    for (const message of prompt) {
-      if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-        if (mediaData !== null) {
-          throw new Error('Only one media message is supported at the moment')
-        }
-        mediaData = message.content
-        // Keep the message as a placeholder marker (with empty content) for tokenization
-        textMessages.push({ ...message, content: '' })
-      } else {
-        textMessages.push(message)
+    return this._withExclusiveRun(async () => {
+      if (this._jobInProgress) {
+        throw new Error(RUN_QUEUE_BUSY_ERROR)
       }
-    }
+      const textMessages = []
+      let mediaData = null
 
-    const promptMessages = []
+      for (const message of prompt) {
+        if (message.role === 'user' &&
+            message.type === 'media' &&
+            message.content instanceof Uint8Array) {
+          if (mediaData !== null) {
+            throw new Error('Only one media message is supported at the moment')
+          }
+          mediaData = message.content
+          textMessages.push({ ...message, content: '' })
+        } else {
+          textMessages.push(message)
+        }
+      }
 
-    if (mediaData) {
-      promptMessages.push({ type: 'media', content: mediaData })
-    }
+      const promptMessages = []
 
-    promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
-    this._jobInProgress = true
-    try {
-      await this.addon.runJob(promptMessages)
-    } catch (err) {
-      this._jobInProgress = false
-      throw err
-    }
+      if (mediaData) {
+        promptMessages.push({ type: 'media', content: mediaData })
+      }
 
-    // Only one job is supported at the moment, with hardcoded jobId 'job'
-    const response = this._createResponse('job')
+      promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+      this._jobInProgress = true
+      try {
+        await this.addon.runJob(promptMessages)
+      } catch (err) {
+        this._jobInProgress = false
+        throw err
+      }
 
-    this.logger.info('Inference job started successfully')
+      const response = this._createResponse('job')
 
-    return response
+      this.logger.info('Inference job started successfully')
+
+      return response
+    })
   }
 
   async finetune (finetuningOptions = undefined) {
