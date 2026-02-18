@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 
+#include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
 #include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
@@ -10,18 +11,18 @@
 #include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
-#include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
-inline LlamaModel* getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+inline LlamaModel*
+getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   return static_cast<LlamaModel*>(&instance.addonCpp->model.get());
 }
 
-inline std::function<void(const std::string&)> makeQueueOutputCallback(
-    qvac_lib_inference_addon_cpp::AddonJs& instance) {
+inline std::function<void(const std::string&)>
+makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   return [&instance](const std::string& s) {
     instance.addonCpp->outputQueue->queueResult(std::any(s));
   };
@@ -119,7 +120,8 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   auto* addonCpp = instance.addonCpp.get();
 
   return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
-    if (llamaModel && llamaModel->isFinetuneRunning() && llamaModel->requestPause())
+    if (llamaModel && llamaModel->isFinetuneRunning() &&
+        llamaModel->requestPause())
       llamaModel->waitUntilFinetuningPauseComplete();
     else
       addonCpp->cancelJob();
@@ -142,12 +144,12 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   }
 
   auto paramsOpt = args.tryGetObject<FinetuningParameters>(
-      1, "finetuningParams",
-      [](js_env_t* e, js::Object& jsObj) { return FinetuningParameters(e, jsObj); });
+      1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
+        return FinetuningParameters(e, jsObj);
+      });
   if (!paramsOpt.has_value()) {
     throw StatusError(
-        general_error::InvalidArgument,
-        "Finetuning parameters not provided");
+        general_error::InvalidArgument, "Finetuning parameters not provided");
   }
 
   LlamaModel::Prompt prompt;
