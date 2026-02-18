@@ -37,9 +37,10 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
 
 ## Table of Contents
 
-- [Installation](#installation)  
-- [Examples](#examples)  
+- [Installation](#installation)
+- [Examples](#examples)
 - [Model Setup](#model-setup)
+- [Benchmark Results](#benchmark-results)
 - [JavaScript API](#javascript-api)
 - [Model Variants](#model-variants)
 - [Development](#development)
@@ -154,6 +155,41 @@ The TDT model supports approximately 25 languages with automatic detection:
 - And more...
 
 Set `language: 'auto'` for automatic detection or specify the language code explicitly.
+
+## Benchmark Results
+
+The following benchmarks were run using the **parakeet-tdt-0.6b-v3-onnx** model with 100 samples per language on CPU (4 threads).
+
+### Word Error Rate (WER) by Language
+
+| Language | Dataset | WER (%) | CER (%) | Quality |
+|----------|---------|---------|---------|---------|
+| English | LibriSpeech (clean) | **7.51** | 6.61 | Excellent |
+| French | Multilingual LibriSpeech | 22.35 | 19.31 | Adequate |
+| Spanish | Multilingual LibriSpeech | 27.34 | 25.93 | Adequate |
+| Russian | FLEURS | 30.97 | 28.81 | Adequate |
+| Italian | Multilingual LibriSpeech | 31.39 | 24.71 | Low |
+| Portuguese | Multilingual LibriSpeech | 31.24 | 29.48 | Low |
+| Czech | FLEURS | 35.39 | 30.18 | Low |
+| German | Multilingual LibriSpeech | 40.99 | 38.83 | Low |
+
+### Quality Interpretation
+
+| WER Range | Quality | Description |
+|-----------|---------|-------------|
+| 0–5% | Excellent | Near human-parity transcription |
+| 5–15% | High | Minor word errors, highly usable |
+| 15–30% | Adequate | Understandable but noticeable mistakes |
+| >30% | Low | Transcript may need significant correction |
+
+### Notes
+
+- **English** is the primary language the model was trained on, hence the best performance
+- Performance on non-English languages varies based on training data representation
+- GPU acceleration typically improves both speed and accuracy
+- INT8 quantized models provide similar accuracy with faster inference
+
+For detailed benchmark methodology and raw results, see the [benchmarks/](./benchmarks/) directory.
 
 ## JavaScript API
 
