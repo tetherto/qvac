@@ -38,13 +38,11 @@ test('DocTR basic test - basic_test image (BMP)', { timeout: TEST_TIMEOUT }, asy
     })
 
     let outputTexts = []
-    let outputData = []
 
     await response
       .onUpdate(output => {
         t.ok(Array.isArray(output), 'output should be an array')
         t.ok(output.length > 0, `should detect text regions, got ${output.length}`)
-        outputData = output
         outputTexts = output.map(o => o[1])
         t.comment('Detected texts: ' + JSON.stringify(outputTexts))
         t.comment('Full output: ' + JSON.stringify(output.map(o => ({
