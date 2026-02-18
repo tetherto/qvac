@@ -227,7 +227,7 @@ const args = {
 
 **Bergamot Model Files by Language Pair:**
 
-> **Note:** Hyperdrive keys shown are truncated. See [Model Registry](#model-registry) for full keys.
+> **Note:** Hyperdrive keys shown are truncated. See [Model Registry](#model-registry) for full keys. Pairs without Hyperdrive keys are automatically downloaded from [Firefox Translations GitHub](https://github.com/mozilla/firefox-translations-models) via `git-lfs`.
 
 | Language Pair | Hyperdrive Key | Model File | Vocab File(s) |
 |---------------|----------------|------------|---------------|
@@ -236,14 +236,16 @@ const args = {
 | en→es | `bf46f9b51d04f561...` | `model.enes.intgemm.alphas.bin` | `vocab.enes.spm` |
 | es→en | `c3e983c8db3f64fa...` | `model.esen.intgemm.alphas.bin` | `vocab.esen.spm` |
 | en→fr | `0a4f388c0449b777...` | `model.enfr.intgemm.alphas.bin` | `vocab.enfr.spm` |
-| fr→en | `7a9b38b0c4637b2e...` | `model.fren.intgemm.alphas.bin` | (see registry) |
-| en→de | (see Bergamot section in registry) | `model.ende.intgemm.alphas.bin` | `vocab.ende.spm` |
+| fr→en | `7a9b38b0c4637b2e...` | `model.fren.intgemm.alphas.bin` | `vocab.fren.spm` |
+| en→de | Firefox fallback | `model.ende.intgemm.alphas.bin` | `vocab.ende.spm` |
+| de→en | Firefox fallback | `model.deen.intgemm.alphas.bin` | `vocab.deen.spm` |
 | en→ru | `404279d9716f3191...` | `model.enru.intgemm.alphas.bin` | `vocab.enru.spm` |
 | ru→en | `dad7f99c8d8c1723...` | `model.ruen.intgemm.alphas.bin` | `vocab.ruen.spm` |
 | en→zh | `15d484200acea8b1...` | `model.enzh.intgemm.alphas.bin` | `srcvocab.enzh.spm`, `trgvocab.enzh.spm` |
 | zh→en | `17eb4c3fcd23ac3c...` | `model.zhen.intgemm.alphas.bin` | `vocab.zhen.spm` |
 | en→ja | `ac0b883d176ea3b1...` | `model.enja.intgemm.alphas.bin` | `srcvocab.enja.spm`, `trgvocab.enja.spm` |
 | ja→en | `85012ed3c3ff5c2b...` | `model.jaen.intgemm.alphas.bin` | `vocab.jaen.spm` |
+| Other pairs | Firefox fallback | Auto-detected | Auto-detected |
 
 **Key Parameters:**
 | Parameter | Description | Example |
@@ -847,7 +849,26 @@ IndicTrans2 supports translation between English and 22 Indic languages. The fol
 | Russian | ru | Yes | Yes |
 | Chinese | zh | Yes | Yes |
 
-The Bergamot backend supports all language pairs available in [Firefox Translations](https://github.com/mozilla/firefox-translations-models). See the Firefox Translations models repository for the complete and up-to-date list of supported language pairs. **Download Firefox Translations models locally only if your language pair is not available via Hyperdrive.**
+**Pairs without Hyperdrive keys (auto-downloaded from Firefox GitHub):**
+
+| Language | Code | en→X | X→en |
+|----------|------|------|------|
+| German | de | Firefox | Firefox |
+| Bulgarian | bg | Firefox | Firefox |
+| Estonian | et | Firefox | Firefox |
+| Korean | ko | Firefox | Firefox |
+| Dutch | nl | Firefox | Firefox |
+| Polish | pl | Firefox | Firefox |
+| Turkish | tr | Firefox | Firefox |
+| Ukrainian | uk | Firefox | Firefox |
+| + more | ... | Firefox | Firefox |
+
+The Bergamot backend supports **all** language pairs available in [Firefox Translations](https://github.com/mozilla/firefox-translations-models):
+
+- **18 pairs with Hyperdrive keys** → downloaded via P2P Hyperdrive (fastest)
+- **All other pairs** → automatically downloaded from [Firefox Translations GitHub](https://github.com/mozilla/firefox-translations-models) via `git-lfs` (requires `git` and `git-lfs` installed)
+
+The download script (`scripts/download-models-hyperdrive.js`) and `evaluate.py` both handle this fallback automatically. No manual downloading is needed.
 
 ## ModelClasses and Packages
 

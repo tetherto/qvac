@@ -30,13 +30,11 @@ ln -sf ../ggml-indictrans2-en-indic-dist-200M.bin models/unit-test/ggml-indictra
 ./build/addon/tests/addon-test
 ```
 
-### Option 2: Using AWS S3 (Requires AWS Access)
+### Option 2: Using Download Script (Recommended for CI)
 
 ```bash
-# Download from S3 (requires AWS credentials)
-aws s3 cp s3://${MODEL_S3_BUCKET}/qvac/tests/nmt/ggml-opus-en-it_q4_0.bin models/unit-test/
-aws s3 cp s3://${MODEL_S3_BUCKET}/qvac/tests/nmt/ggml-opus-it-en_q4_0.bin models/unit-test/
-aws s3 cp s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
+# Download all models via Hyperdrive (no AWS credentials needed)
+bare scripts/download-models-hyperdrive.js --target cpp-tests
 ```
 
 ### Option 3: Run Only Tests That Don't Need Models
@@ -54,8 +52,8 @@ aws s3 cp s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/indictrans2/q4_0/ggm
 
 ## CI/CD
 
-In CI/CD pipelines, models are automatically downloaded from S3 before running tests.
-See `.github/workflows/cpp-tests.yaml` for the automated configuration.
+In CI/CD pipelines, models are automatically downloaded via Hyperdrive before running tests.
+See `.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml` for the automated configuration.
 
 ## Verifying Setup
 

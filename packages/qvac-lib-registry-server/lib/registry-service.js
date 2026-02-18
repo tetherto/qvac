@@ -592,18 +592,8 @@ class RegistryService extends ReadyResource {
     // Server identification endpoint - allows RPC clients to verify they connected
     // to the actual server and not a blind peer (which won't have RPC responders)
     rpc.respond('ping', async () => {
-      const indexers = this.base?.linearizer?.indexers || []
       return {
         role: 'registry-server',
-        isIndexer: this.base?.isIndexer ?? false,
-        localKey: this.base?.localWriter ? IdEnc.normalize(this.base.localWriter.core.key) : null,
-        autobaseKey: this.base?.key ? IdEnc.normalize(this.base.key) : null,
-        viewCoreKey: this.view?.publicKey ? IdEnc.normalize(this.view.publicKey) : null,
-        viewLength: this.view?.core?.length ?? 0,
-        viewContiguousLength: this.view?.core?.contiguousLength ?? 0,
-        viewSignedLength: this.view?.core?.signedLength ?? 0,
-        indexerCount: indexers.length,
-        connectedPeers: this.swarm?.connections?.size ?? 0,
         timestamp: Date.now()
       }
     })
@@ -633,12 +623,28 @@ class RegistryService extends ReadyResource {
       }
     }
 
+    const MAX_FIELD_LENGTH = 512
+    const MAX_TAG_LENGTH = 128
+    const MAX_TAGS = 50
+
+    for (const field of ['description', 'quantization', 'params', 'notes', 'deprecationReason']) {
+      if (entry[field] !== undefined && typeof entry[field] === 'string' && entry[field].length > MAX_FIELD_LENGTH) {
+        throw new TypeError(`${field} exceeds maximum length of ${MAX_FIELD_LENGTH}`)
+      }
+    }
+
     if (entry.tags) {
       if (!Array.isArray(entry.tags)) {
         throw new TypeError('tags must be an array of strings')
       }
+      if (entry.tags.length > MAX_TAGS) {
+        throw new TypeError(`tags array exceeds maximum of ${MAX_TAGS} items`)
+      }
       if (entry.tags.some(tag => typeof tag !== 'string')) {
         throw new TypeError('tags must be an array of strings')
+      }
+      if (entry.tags.some(tag => tag.length > MAX_TAG_LENGTH)) {
+        throw new TypeError(`each tag must be at most ${MAX_TAG_LENGTH} characters`)
       }
     }
   }
@@ -1144,7 +1150,17 @@ class RegistryService extends ReadyResource {
     const existing = await this.getLicenseByKey({ spdxId: licenseId })
     if (existing) return
 
-    const licensePath = path.join(__dirname, '..', 'data', 'licenses', licenseId, 'LICENSE.txt')
+    if (!/^[A-Za-z0-9._-]+$/.test(licenseId)) {
+      throw new TypeError('Invalid licenseId: must contain only alphanumeric, dot, dash, or underscore characters')
+    }
+
+    const licensesDir = path.join(__dirname, '..', 'data', 'licenses')
+    const licensePath = path.join(licensesDir, licenseId, 'LICENSE.txt')
+    const resolved = path.resolve(licensePath)
+    if (!resolved.startsWith(path.resolve(licensesDir))) {
+      throw new Error('Invalid licenseId: path traversal detected')
+    }
+
     const metaPath = path.join(__dirname, '..', 'data', 'licenses.json')
 
     try {

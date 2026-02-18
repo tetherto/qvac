@@ -169,7 +169,7 @@ class RegistryConfig {
     const creds = {
       accessKeyId: getEnv(ENV_KEYS.AWS_ACCESS_KEY_ID),
       secretAccessKey: getEnv(ENV_KEYS.AWS_SECRET_ACCESS_KEY),
-      region: getEnv(ENV_KEYS.AWS_REGION, 'eu-central-1')
+      region: getEnv(ENV_KEYS.AWS_REGION)
     }
     return creds
   }

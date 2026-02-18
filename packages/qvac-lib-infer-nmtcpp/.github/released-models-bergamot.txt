@@ -2,9 +2,12 @@
 # One pair per line in format: src-trg (e.g., en-it)
 # Lines starting with # are comments and are ignored
 #
-# S3 path: s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-{pair_code}/
+# Models are downloaded via Hyperdrive if a key exists, otherwise
+# downloaded directly from Firefox Translations GitHub (git-lfs fallback).
+# Any pair supported by Firefox Translations can be added here.
+# See: https://github.com/mozilla/firefox-translations-models
 
-# Bergamot pairs (from model registry)
+# Bergamot pairs (18 core pairs with Hyperdrive keys)
 en-ar
 en-cs
 en-es
@@ -23,4 +26,3 @@ ja-en
 pt-en
 ru-en
 zh-en
-

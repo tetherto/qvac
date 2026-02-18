@@ -3,6 +3,18 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
+const HyperdriveDL = require('@qvac/dl-hyperdrive')
+const TranslationNmtcpp = require('../../index')
+
+// ============================================================================
+// Hyperdrive Keys for Mobile Model Downloads
+// ============================================================================
+
+/** Bergamot en-it Hyperdrive key */
+const BERGAMOT_ENIT_KEY = 'a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6'
+
+/** IndicTrans en-indic 200M q4_0 Hyperdrive key */
+const INDICTRANS_KEY = '8336d23073b2fd99723bf17d65ddc7b54b8ee886d6627659ba95c7a8fb932dc8'
 
 // ============================================================================
 // Platform Detection
@@ -28,119 +40,15 @@ const DESKTOP_TIMEOUT = 120 * 1000
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
 // ============================================================================
-// Download Helpers
-// ============================================================================
-
-/**
- * Downloads a file from URL to destination path with redirect support
- * Handles HTTP 301/302/307/308 redirects up to maxRedirects times
- *
- * @param {string} url - Source URL to download from
- * @param {string} destPath - Local file path to save to
- * @param {number} [maxRedirects=5] - Maximum number of redirects to follow
- * @returns {Promise<void>}
- * @throws {Error} If download fails or redirects exceed limit
- */
-async function downloadFile (url, destPath, maxRedirects = 5) {
-  const fetch = require('bare-fetch')
-  console.log(`Downloading: ${url.substring(0, 60)}...`)
-
-  // Fetch with redirect following enabled
-  const response = await fetch(url, {
-    redirect: 'follow',
-    follow: maxRedirects
-  })
-
-  // Check for redirect status codes that weren't followed
-  if ([301, 302, 307, 308].includes(response.status)) {
-    const location = response.headers.get('location')
-    if (location && maxRedirects > 0) {
-      console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
-      return downloadFile(location, destPath, maxRedirects - 1)
-    }
-    throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
-  }
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
-
-  const buffer = await response.arrayBuffer()
-  fs.writeFileSync(destPath, Buffer.from(buffer))
-  console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
-}
-
-// ============================================================================
-// Asset Configuration Loading
-// ============================================================================
-
-/**
- * Loads JSON configuration from testAssets directory
- * Searches multiple candidate paths to support both mobile and desktop environments
- *
- * Mobile: Uses global.assetPaths provided by test framework
- * Desktop: Uses filesystem paths relative to test directory
- *
- * @param {string} filename - Configuration filename (e.g., 'bergamot-urls.json')
- * @returns {Object|null} Parsed JSON configuration or null if not found
- */
-function loadConfigFromAssets (filename) {
-  let urlConfig = null
-
-  // Mobile: Check global.assetPaths (set by test framework)
-  if (global.assetPaths) {
-    const candidates = [
-      `../../testAssets/${filename}`,
-      `../mobile/testAssets/${filename}`,
-      `testAssets/${filename}`,
-      `../testAssets/${filename}`
-    ]
-
-    for (const candidate of candidates) {
-      if (global.assetPaths[candidate]) {
-        try {
-          const configData = fs.readFileSync(global.assetPaths[candidate].replace('file://', ''), 'utf8')
-          urlConfig = JSON.parse(configData)
-          console.log(`   Loaded config from asset: ${candidate}`)
-          return urlConfig
-        } catch (e) {
-          console.log(`   Failed to load asset ${candidate}: ${e.message}`)
-        }
-      }
-    }
-  }
-
-  // Desktop: Check filesystem paths
-  const fallbackPaths = [
-    path.resolve(__dirname, `../mobile/testAssets/${filename}`),
-    path.resolve(__dirname, `../../test/mobile/testAssets/${filename}`)
-  ]
-
-  for (const fallbackPath of fallbackPaths) {
-    if (fs.existsSync(fallbackPath)) {
-      try {
-        urlConfig = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
-        console.log(`   Loaded config from file: ${fallbackPath}`)
-        return urlConfig
-      } catch (e) {
-        console.log(`   Failed to parse ${fallbackPath}: ${e.message}`)
-      }
-    }
-  }
-
-  return null
-}
-
-// ============================================================================
 // Model Availability Helpers
 // ============================================================================
 
 /**
  * Ensures IndicTrans model is available
- * Uses INDICTRANS_MODEL_PATH env var or downloads from S3 on mobile
+ * Uses INDICTRANS_MODEL_PATH env var or downloads via Hyperdrive on mobile
  *
  * Desktop: Expects model at ../../model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin
- * Mobile: Downloads from presigned S3 URL configured in indictrans-model-urls.json
+ * Mobile: Downloads via HyperdriveDL using peer-to-peer network
  *
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
@@ -165,20 +73,28 @@ async function ensureIndicTransModel () {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned S3 URL
-  const configFilename = 'indictrans-model-urls.json'
-  const urlConfig = loadConfigFromAssets(configFilename)
-
-  if (!urlConfig || !urlConfig.modelUrl) {
-    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
-  }
-
+  // Mobile: Download via Hyperdrive
+  console.log('Downloading IndicTrans model via Hyperdrive...')
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'translation-models', 'indictrans')
   fs.mkdirSync(modelsDir, { recursive: true })
 
   const destPath = path.join(modelsDir, modelFilename)
-  await downloadFile(urlConfig.modelUrl, destPath)
+
+  const hdDL = new HyperdriveDL({ key: `hd://${INDICTRANS_KEY}` })
+  try {
+    const args = {
+      loader: hdDL,
+      params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+      diskPath: modelsDir,
+      modelName: modelFilename
+    }
+    const model = new TranslationNmtcpp(args, {})
+    await model.load()
+    await model.unload()
+  } finally {
+    await hdDL.close()
+  }
 
   // Validate downloaded model size
   const stats = fs.statSync(destPath)
@@ -187,16 +103,17 @@ async function ensureIndicTransModel () {
     throw new Error(`Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
   }
 
+  console.log(`IndicTrans model downloaded: ${destPath} (${sizeMB.toFixed(1)}MB)`)
   return destPath
 }
 
 /**
  * Ensures Bergamot model is available
- * Uses BERGAMOT_MODEL_PATH env var or downloads from S3 on mobile
+ * Uses BERGAMOT_MODEL_PATH env var or downloads via Hyperdrive on mobile
  *
  * Desktop: Expects model at ../../model/bergamot/enit/
  *          with .intgemm model file and .spm vocab file
- * Mobile: Downloads from presigned S3 URLs configured in bergamot-urls.json
+ * Mobile: Downloads via HyperdriveDL using peer-to-peer network
  *
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
@@ -221,28 +138,34 @@ async function ensureBergamotModel () {
     throw new Error(`Bergamot model not found at ${modelDir}. Please download it first.`)
   }
 
-  // Mobile: Download from presigned S3 URLs
-  const configFilename = 'bergamot-urls.json'
-  const urlConfig = loadConfigFromAssets(configFilename)
-
-  if (!urlConfig || !urlConfig.modelUrl || !urlConfig.vocabUrl) {
-    throw new Error('Bergamot model URLs config not found - cannot download models on mobile')
-  }
-
+  // Mobile: Download via Hyperdrive
+  console.log('Downloading Bergamot en-it model via Hyperdrive...')
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'translation-models', 'bergamot', 'enit')
   fs.mkdirSync(modelsDir, { recursive: true })
 
-  // Download model file
-  const modelFilename = 'model.intgemm.bin'
-  const modelPath = path.join(modelsDir, modelFilename)
-  await downloadFile(urlConfig.modelUrl, modelPath)
+  const hdDL = new HyperdriveDL({ key: `hd://${BERGAMOT_ENIT_KEY}` })
+  try {
+    await hdDL.ready()
 
-  // Download vocab file
-  const vocabFilename = 'vocab.spm'
-  const vocabPath = path.join(modelsDir, vocabFilename)
-  await downloadFile(urlConfig.vocabUrl, vocabPath)
+    // Download model file
+    const modelFilename = 'model.enit.intgemm.alphas.bin'
+    console.log(`   Downloading ${modelFilename}...`)
+    const modelData = await hdDL.download(modelFilename)
+    fs.writeFileSync(path.join(modelsDir, modelFilename), modelData)
+    console.log(`   ✅ ${modelFilename} (${(modelData.length / 1024 / 1024).toFixed(1)}MB)`)
 
+    // Download vocab file
+    const vocabFilename = 'vocab.enit.spm'
+    console.log(`   Downloading ${vocabFilename}...`)
+    const vocabData = await hdDL.download(vocabFilename)
+    fs.writeFileSync(path.join(modelsDir, vocabFilename), vocabData)
+    console.log(`   ✅ ${vocabFilename} (${(vocabData.length / 1024).toFixed(0)}KB)`)
+  } finally {
+    await hdDL.close()
+  }
+
+  console.log(`Bergamot model downloaded to: ${modelsDir}`)
   return modelsDir
 }
 
