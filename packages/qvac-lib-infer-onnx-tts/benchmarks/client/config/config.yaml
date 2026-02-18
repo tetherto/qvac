@@ -27,8 +27,3 @@ model:
   language: "en-us" # Language code: en-us (English), es (Spanish), de (German), it (Italian)
   sampleRate: 22050
   useGPU: false # Enable GPU acceleration for inference
-
-hyperdrive:
-  # HyperDrive keys for downloading data files
-  espeak_key: "hd://c00ea8bc3d250968943ecab83e39b22828c2ad7995b159d8aedcb0f3fef81894"
-  # model_key is automatically determined based on model.language (see benchmarks/server/tts-setup.js)
