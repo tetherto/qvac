@@ -36,6 +36,8 @@ class LlmLlamacpp extends BaseInference {
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._runQueueWaiter = Promise.resolve()
+    this._nextJobId = 0
+    this._currentJobId = null // jobId we route native events to (current confirmed job)
   }
 
   /**
@@ -113,12 +115,16 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
+    // Route events only to the current confirmed job; base discards if no mapping.
+    const jobId = this._currentJobId
+    if (jobId == null) return
+
     // Map C++ mangled type names to expected event names
     // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+      return this._outputCallback(addon, 'JobEnded', jobId, data, null)
     }
 
     let mappedEvent = event
@@ -128,7 +134,7 @@ class LlmLlamacpp extends BaseInference {
       mappedEvent = 'Output'
     }
 
-    return this._outputCallback(addon, mappedEvent, 'job', data, error)
+    return this._outputCallback(addon, mappedEvent, jobId, data, error)
   }
 
   async _withExclusiveRun (fn) {
@@ -185,16 +191,26 @@ class LlmLlamacpp extends BaseInference {
 
       // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
-      const accepted = await this.addon.runJob(promptMessages)
+
+      const jobId = String(++this._nextJobId)
+      const response = this._createResponse(jobId)
+
+      let accepted
+      try {
+        accepted = await this.addon.runJob(promptMessages)
+      } catch (error) {
+        this._deleteJobMapping(jobId)
+        throw error
+      }
       if (!accepted) {
+        this._deleteJobMapping(jobId)
         throw new Error(
           'Cannot set new job: a job is already set or being processed'
         )
       }
 
-      // Only one job is supported at the moment, with hardcoded jobId 'job'
-      const response = this._createResponse('job')
-
+      // Only route native events to this job once accepted (events are async after runJob returns)
+      this._currentJobId = jobId
       this.logger.info('Inference job started successfully')
 
       return response
