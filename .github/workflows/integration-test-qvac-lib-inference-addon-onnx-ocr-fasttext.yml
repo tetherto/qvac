@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p models/ocr/rec_dyn
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive
 
       - name: Run integration test
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}

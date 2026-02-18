@@ -4,7 +4,7 @@
 set -e
 
 # Configuration
-BUCKET="tether-ai-dev"
+BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 REGION="us-east-1"
 
 # Check if credentials are set

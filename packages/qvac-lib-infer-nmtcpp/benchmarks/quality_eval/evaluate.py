@@ -29,7 +29,7 @@ DATASETS = {
     "conversational-phrases": {
         "type": "json",
         "folder": "conversational_phrases",
-        "s3_path": "s3://tether-ai-dev/qvac_datasets/nmt/short/conversational_phrases_dataset.json"
+        "s3_path": f"s3://{os.environ.get('MODEL_S3_BUCKET', 'MODEL_S3_BUCKET')}/qvac_datasets/nmt/short/conversational_phrases_dataset.json"
     }
 }
 

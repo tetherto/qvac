@@ -3,36 +3,27 @@
 const process = require('bare-process')
 const path = require('bare-path')
 const { ONNXOcr } = require('@qvac/ocr-onnx')
+const { ensureModels } = require('./utils')
 
 const args = process.argv.slice(2)
-const [
-  argImagesDir = './test/images',
-  argDetectorPath = './models/ocr/detector_craft.onnx',
-  argRecognizerPrefix = './models/ocr/recognizer_'
-] = args
+const inputImage = args[0] || './test/images/basic_test.bmp'
 
 const basePath = process.cwd()
-
-const imageDefaultPath = `${argImagesDir}/basic_test.bmp`
-
-// Define paths relative to the example script location
-const imagePath = path.join(basePath, imageDefaultPath)
-const modelDetectorPath = path.join(basePath, argDetectorPath)
-const modelRecognizerPrefix = path.join(basePath, argRecognizerPrefix)
+const imagePath = path.join(basePath, inputImage)
 
 async function main () {
-  const args = {
+  // Download models if not present (via Hyperdrive)
+  const { detectorPath, recognizerPath } = await ensureModels()
+
+  const model = new ONNXOcr({
     params: {
       langList: ['en'],
-      pathDetector: modelDetectorPath,
-      pathRecognizerPrefix: modelRecognizerPrefix,
+      pathDetector: detectorPath,
+      pathRecognizer: recognizerPath,
       useGPU: false
     },
-    // Enable stats logging
     opts: { stats: true }
-  }
-
-  const model = new ONNXOcr(args)
+  })
 
   try {
     console.log('Loading OCR model...')
@@ -42,7 +33,6 @@ async function main () {
     console.log(`Running OCR on: ${imagePath}`)
     const response = await model.run({
       path: imagePath
-      // options: { paragraph: true } // Optional paragraph mode
     })
 
     console.log('Waiting for OCR results...')
@@ -51,12 +41,10 @@ async function main () {
         console.log('--- OCR Update ---')
         console.log('Output: ' + JSON.stringify(data.map(o => o[1])))
         console.log('--- data ---')
-        // Output structure might vary based on paragraph option and updates
-        // Refer to Output Format section
         console.log(JSON.stringify(data, null, 2))
         console.log('------------------')
       })
-      .await() // Wait for the final result
+      .await()
 
     console.log('OCR finished!')
     if (response.stats) {
