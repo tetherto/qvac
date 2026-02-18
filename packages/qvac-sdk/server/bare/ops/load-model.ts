@@ -20,7 +20,6 @@ import {
   validateShardedModelCache,
 } from "@/server/utils";
 import {
-  ESpeakDataPathRequiredError,
   ModelLoadFailedError,
   PluginNotFoundError,
   ModelFileNotFoundError,
@@ -42,8 +41,6 @@ export async function loadModel(params: LoadModelServerParams) {
     options,
     projectionModelPath,
     vadModelPath,
-    ttsConfigModelPath,
-    eSpeakDataPath,
     detectorModelPath,
     modelName,
   } = loadModelServerParamsSchema.parse(params);
@@ -74,8 +71,9 @@ export async function loadModel(params: LoadModelServerParams) {
         `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`,
       );
     }
-  } else {
+  } else if (modelType !== ModelType.onnxTts) {
     // For non-sharded models, validate single file exists
+    // Skip for TTS - it uses multiple paths from modelConfig (resolved by plugin.resolveConfig)
     try {
       const modelDir = path.dirname(modelPath);
       const modelFile = path.basename(modelPath);
@@ -94,10 +92,6 @@ export async function loadModel(params: LoadModelServerParams) {
     }
   }
 
-  // Model-type-specific validation
-  if (modelType === ModelType.onnxTts && !eSpeakDataPath) {
-    throw new ESpeakDataPathRequiredError();
-  }
   if (modelType === ModelType.onnxOcr && !detectorModelPath) {
     throw new ModelLoadFailedError(
       "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
@@ -110,12 +104,11 @@ export async function loadModel(params: LoadModelServerParams) {
   }
 
   // Build artifacts map for plugin
+  // Note: TTS paths are in modelConfig (resolved by plugin.resolveConfig), not artifacts
   const artifacts: Record<string, string> = {};
   if (projectionModelPath)
     artifacts["projectionModelPath"] = projectionModelPath;
   if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
-  if (ttsConfigModelPath) artifacts["ttsConfigModelPath"] = ttsConfigModelPath;
-  if (eSpeakDataPath) artifacts["eSpeakDataPath"] = eSpeakDataPath;
   if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
 
   const result = plugin.createModel({
