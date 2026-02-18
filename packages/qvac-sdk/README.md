@@ -203,8 +203,8 @@ bun run examples/path/to/example.ts
 
 ### Text-to-Speech
 
-- TTS (Chatterbox): [`examples/chatterbox-filesystem.ts`](examples/chatterbox-filesystem.ts) _(voice cloning with reference audio)_
-- TTS (Supertonic): [`examples/supertonic-filesystem.ts`](examples/supertonic-filesystem.ts) _(general-purpose, no voice cloning)_
+- TTS (Chatterbox): [`examples/tts/chatterbox-filesystem.ts`](examples/tts/chatterbox-filesystem.ts) _(voice cloning with reference audio)_
+- TTS (Supertonic): [`examples/tts/supertonic-filesystem.ts`](examples/tts/supertonic-filesystem.ts) _(general-purpose, no voice cloning)_
 
 ### Multimodel
 

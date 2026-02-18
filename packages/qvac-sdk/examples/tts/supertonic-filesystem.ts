@@ -3,6 +3,11 @@ import {
   textToSpeech,
   unloadModel,
   type ModelProgressUpdate,
+  TTS_TOKENIZER_SUPERTONIC,
+  TTS_TEXT_ENCODER_SUPERTONIC_FP32,
+  TTS_LATENT_DENOISER_SUPERTONIC_FP32,
+  TTS_VOICE_DECODER_SUPERTONIC_FP32,
+  TTS_VOICE_STYLE_SUPERTONIC,
 } from "@qvac/sdk";
 import {
   createWav,
@@ -11,44 +16,22 @@ import {
   createWavHeader,
 } from "./utils";
 
-// Supertonic TTS: general-purpose, no voice cloning. Pass paths in order: tokenizer, text_encoder, latent_denoiser, voice_decoder, voice.bin
-// Usage: node supertonic-filesystem.js <ttsTokenizerSrc> <ttsTextEncoderSrc> <ttsLatentDenoiserSrc> <ttsVoiceDecoderSrc> <ttsVoiceSrc>
-const [
-  ttsTokenizerSrc,
-  ttsTextEncoderSrc,
-  ttsLatentDenoiserSrc,
-  ttsVoiceDecoderSrc,
-  ttsVoiceSrc,
-] = process.argv.slice(2);
-
-if (
-  !ttsTokenizerSrc ||
-  !ttsTextEncoderSrc ||
-  !ttsLatentDenoiserSrc ||
-  !ttsVoiceDecoderSrc ||
-  !ttsVoiceSrc
-) {
-  console.error(
-    "Usage: node supertonic-filesystem.js <ttsTokenizerSrc> <ttsTextEncoderSrc> <ttsLatentDenoiserSrc> <ttsVoiceDecoderSrc> <ttsVoiceSrc>",
-  );
-  process.exit(1);
-}
-
-const modelSrc = ttsTokenizerSrc;
+// Supertonic TTS: general-purpose, no voice cloning.
+// Uses registry model constants - downloads automatically from QVAC Registry.
 const SUPERTONIC_SAMPLE_RATE = 44100;
 
 try {
   const modelId = await loadModel({
-    modelSrc,
+    modelSrc: TTS_TOKENIZER_SUPERTONIC.src,
     modelType: "tts",
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",
-      ttsTokenizerSrc,
-      ttsTextEncoderSrc,
-      ttsLatentDenoiserSrc,
-      ttsVoiceDecoderSrc,
-      ttsVoiceSrc,
+      ttsTokenizerSrc: TTS_TOKENIZER_SUPERTONIC.src,
+      ttsTextEncoderSrc: TTS_TEXT_ENCODER_SUPERTONIC_FP32.src,
+      ttsLatentDenoiserSrc: TTS_LATENT_DENOISER_SUPERTONIC_FP32.src,
+      ttsVoiceDecoderSrc: TTS_VOICE_DECODER_SUPERTONIC_FP32.src,
+      ttsVoiceSrc: TTS_VOICE_STYLE_SUPERTONIC.src,
     },
     onProgress: (progress: ModelProgressUpdate) => {
       console.log(progress);
