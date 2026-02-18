@@ -37,7 +37,6 @@ class LlmLlamacpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._runQueueWaiter = Promise.resolve()
     this._nextJobId = 0
-    this._currentJobId = null // jobId we route native events to (current confirmed job)
   }
 
   /**
@@ -115,10 +114,6 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Route events only to the current confirmed job; base discards if no mapping.
-    const jobId = this._currentJobId
-    if (jobId == null) return
-
     // Map C++ mangled type names to expected event names
     // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
@@ -209,8 +204,6 @@ class LlmLlamacpp extends BaseInference {
         )
       }
 
-      // Only route native events to this job once accepted (events are async after runJob returns)
-      this._currentJobId = jobId
       this.logger.info('Inference job started successfully')
 
       return response
