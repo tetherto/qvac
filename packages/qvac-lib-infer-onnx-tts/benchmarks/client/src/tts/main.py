@@ -42,7 +42,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="config/config-tts.yaml",
+        default="config/config-chatterbox.yaml",
         help="Path to config file"
     )
     args = parser.parse_args()
