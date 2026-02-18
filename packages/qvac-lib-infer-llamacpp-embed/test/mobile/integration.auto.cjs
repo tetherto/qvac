@@ -9,3 +9,7 @@ require('./integration-runtime.cjs')
 async function runAddonTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/addon.test.js', options)
 }
+
+async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/multi-instance.test.js', options)
+}
