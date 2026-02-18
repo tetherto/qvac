@@ -149,7 +149,7 @@ async function main () {
   })
 
   const trainDatasetPath = './examples/input/small_train_HF.jsonl'
-  const evalDatasetPath = './examples/input/eval_HF.jsonl'
+  const evalDatasetPath = './examples/input/small_eval_HF.jsonl'
 
   const loader = new FilesystemDL({ dirPath: modelDir })
 
