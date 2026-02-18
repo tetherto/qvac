@@ -23,7 +23,7 @@ If the user doesn't specify, ask which add-on package they want to generate a ch
 
 ### Step 2: Identify version and changes (mandatory version bump + upstream tag diff)
 
-Identify the full set of changes that will land in `main` for the PR, validate the version bump in the target add-on `package.json` against `main`, and compute diff from the previous released tag to `HEAD`:
+Identify the full set of changes for the **target add-on package only**, validate the version bump in the target add-on `package.json` against `main`, and compute diff from the previous released tag to `HEAD`:
 
 1. **Find the PR base and head**: The base is `main`. The head is the current branch/commit that the PR will merge.
 2. **Read versions**:
@@ -45,24 +45,30 @@ Identify the full set of changes that will land in `main` for the PR, validate t
      - Most addons: `v<version>` (example: `v0.10.7`)
      - OCR addon: `ocr-onnx-v<version>`
 
-5. **Compute release diff from upstream tag to PR head**:
+5. **Compute release diff from upstream tag to PR head (package-scoped)**:
    - Primary range for changelog generation: `upstream_tag...HEAD` (or `upstream_tag..HEAD` for commit listing).
+   - Scope all comparisons to the target package path using path filtering:
+     - diff scope example: `git diff upstream_tag...HEAD -- packages/<addon>/`
+     - commit scope example: `git log upstream_tag..HEAD -- packages/<addon>/`
    - This ensures the changelog is based on changes since the previous released version, up to the latest commit in the PR branch.
    - If `upstream_tag` does not exist locally/remotely, warn clearly and fall back to `main...HEAD`.
 
 6. **Do not include uncommitted changes or untracked files**: If any uncommitted/untracked files are present, ignore them.
 
-The goal is to produce a single, combined change set that reflects what will be released next: from the previous released tag (`prev_version`) to the current PR head (`HEAD`).
+The goal is to produce a single, package-scoped change set that reflects what will be released next for the target add-on: from the previous released tag (`prev_version`) to the current PR head (`HEAD`).
 
 ### Step 3: Collect PRs included in this release
 
-1. **Extract PR numbers** from commit messages in the range `upstream_tag..HEAD` (or fallback `main...HEAD` if tag is missing)
+1. **Extract PR numbers** from commit messages in the package-scoped range `upstream_tag..HEAD -- packages/<addon>/` (or fallback `main...HEAD -- packages/<addon>/` if tag is missing)
    - Look for patterns like `#123`, `(#123)`, or `Merge pull request #123`
 2. **For each PR found**, use `gh pr view <number>` to get:
    - PR title
    - PR number
    - PR URL
-3. **Build a list** of PRs to include in the release notes
+3. **Filter PRs to package-relevant only**:
+   - Keep PRs that actually touch files under `packages/<addon>/`.
+   - If needed, verify with `gh pr view <number> --json files` and drop unrelated PRs.
+4. **Build a list** of PRs to include in the release notes
 
 ### Step 4: Generate changelog entry (single source of truth)
 
