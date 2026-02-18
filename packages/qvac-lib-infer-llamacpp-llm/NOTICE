@@ -29,12 +29,6 @@ Additional requirements per license Section 1.b.i:
   must prominently display "Built with Llama" on a related website,
   user interface, blog post, about page, or product documentation.
 
-Qwen is licensed under the Qwen RESEARCH LICENSE AGREEMENT,
-Copyright (c) Alibaba Cloud. All Rights Reserved.
-
-Note: The Qwen Research License permits non-commercial use only.
-Commercial use requires a separate license from Alibaba Cloud.
-
 =========================================================================
 Third-Party Model Licenses
 =========================================================================
@@ -75,11 +69,6 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF
   Llama-3.2-1B-Instruct-Q4_0-00001-of-00008
     https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF
-
---- qwen-research (Qwen Research License) ---
-
-  Qwen2.5-Omni-3B-GGUF
-    https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF
 
 =========================================================================
 Modification Notice
