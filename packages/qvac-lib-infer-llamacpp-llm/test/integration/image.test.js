@@ -84,9 +84,9 @@ async function setupMultimodalInference (t, device = 'gpu') {
   const inference = new LlmLlamacpp({
     modelName,
     loader,
-    logger: console,
     diskPath: dirPath,
-    projectionModel: projModelName
+    projectionModel: projModelName,
+    logger: console
   }, getConfig(device))
 
   t.teardown(async () => {

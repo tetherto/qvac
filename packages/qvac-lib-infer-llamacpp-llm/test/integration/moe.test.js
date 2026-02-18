@@ -40,8 +40,8 @@ test('llm addon can run MoE models [dolphin-mixtral-2x7b]', { timeout: 1_800_000
   const inference = new LlmLlamacpp({
     modelName,
     loader,
-    logger: console,
     diskPath: dirPath,
+    logger: console,
     opts: { stats: true }
   }, CONFIG)
 

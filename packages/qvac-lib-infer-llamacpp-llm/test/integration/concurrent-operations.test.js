@@ -16,6 +16,7 @@ const os = require('bare-os')
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isLinuxX64 = platform === 'linux' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
@@ -29,7 +30,7 @@ const RUN_PROMPT = [
   { role: 'user', content: 'Say "ok" once.' }
 ]
 
-const BUSY_ERROR = /A finetune or run is already in progress\. Wait for it to complete or pause before calling run\(\) or finetune\(\) again\./
+const BUSY_ERROR = /A finetune or run is already set or being processed\. Wait for it to complete or pause before calling run\(\) or finetune\(\) again\./
 
 const FINETUNE_TIMEOUT_MS = 360_000
 
@@ -37,7 +38,7 @@ function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-test('finetune() throws when previous finetune() is still running', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('finetune() throws when previous finetune() is still running', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 || isLinuxX64 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url

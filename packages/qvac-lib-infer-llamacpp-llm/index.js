@@ -9,7 +9,7 @@ const { LlamaInterface } = require('./addon')
 const noop = () => { }
 
 const RUN_QUEUE_BUSY_ERROR =
-  'A finetune or run is already in progress. Wait for it to complete or pause before calling run() or finetune() again.'
+  'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
@@ -299,11 +299,11 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
+    if (this._jobInProgress) {
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
+    }
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      if (this._jobInProgress) {
-        throw new Error(RUN_QUEUE_BUSY_ERROR)
-      }
       const textMessages = []
       let mediaData = null
 
