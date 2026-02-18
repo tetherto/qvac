@@ -44,7 +44,6 @@ jobs:
       changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
 
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
