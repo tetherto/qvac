@@ -147,7 +147,9 @@ class LlmLlamacpp extends BaseInference {
    * Cancel the current task
    */
   async cancel () {
-    await this.addon.cancel()
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
   }
 
   /**
