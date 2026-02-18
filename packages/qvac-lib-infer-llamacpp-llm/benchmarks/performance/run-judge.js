@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const process = require('bare-process')
 const FilesystemDL = require('@qvac/dl-filesystem')
 
 function loadLocalLlmAddon () {
@@ -188,13 +189,16 @@ class JudgeRuntimeManager {
 
   async init () {
     if (this.model) return
-    this.loader = new FilesystemDL.storage(this.modelDef.modelDir)
+    this.loader = new FilesystemDL({ dirPath: this.modelDef.modelDir })
+    const config = buildConfigObject(this.runtimeConfig)
     this.model = new this.AddonCtor({
-      modelsDirectory: this.modelDef.modelDir,
-      modelsLoader: this.loader,
+      modelName: this.modelName,
+      loader: this.loader,
+      diskPath: this.modelDef.modelDir,
+      opts: { stats: true },
       logger: createAddonRuntimeLogger(this.debug)
-    })
-    await this.model.load(this.modelName, buildConfigObject(this.runtimeConfig))
+    }, config)
+    await this.model.load()
   }
 
   async preflight (reference, candidate) {
