@@ -21,13 +21,13 @@ Generate changelog entries for add-on packages following the add-on release work
 
 If the user doesn't specify, ask which add-on package they want to generate a changelog for.
 
-### Step 2: Identify version and changes (mandatory version bump check)
+### Step 2: Identify version and changes (mandatory version bump + upstream tag diff)
 
-Identify the full set of changes that will land in `main` for the PR, and validate the version bump in the target add-on `package.json` against `main`:
+Identify the full set of changes that will land in `main` for the PR, validate the version bump in the target add-on `package.json` against `main`, and compute diff from the previous released tag to `HEAD`:
 
 1. **Find the PR base and head**: The base is `main`. The head is the current branch/commit that the PR will merge.
-2. **Compare against `main`**:
-   - Use a range like `main...HEAD` (or the PR base commit...HEAD) to list commits and diffs.
+2. **Read versions**:
+   - Read `package.json` from `main` (`prev_version`) and from `HEAD` (`current_version`).
    - **Always compare `package.json` between `main` and `HEAD`.**
 3. **Mandatory version bump check**:
    - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user, substituting `<addon>` with the actual add-on name:
@@ -38,13 +38,25 @@ Identify the full set of changes that will land in `main` for the PR, and valida
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 
-4. **Do not include uncommitted changes or untracked files**: If any uncommitted/untracked files are present, ignore them.
+4. **Resolve upstream release tag for `prev_version`**:
+   - Check addon release workflow tag format in `.github/workflows/create-github-release-*.yml` (`tag_name`).
+   - Use that format to build `upstream_tag` from `prev_version`.
+   - Known patterns currently used:
+     - Most addons: `v<version>` (example: `v0.10.7`)
+     - OCR addon: `ocr-onnx-v<version>`
 
-The goal is to produce a single, combined change set that reflects **what will be merged**: all commits on the PR branch versus `main` only.
+5. **Compute release diff from upstream tag to PR head**:
+   - Primary range for changelog generation: `upstream_tag...HEAD` (or `upstream_tag..HEAD` for commit listing).
+   - This ensures the changelog is based on changes since the previous released version, up to the latest commit in the PR branch.
+   - If `upstream_tag` does not exist locally/remotely, warn clearly and fall back to `main...HEAD`.
+
+6. **Do not include uncommitted changes or untracked files**: If any uncommitted/untracked files are present, ignore them.
+
+The goal is to produce a single, combined change set that reflects what will be released next: from the previous released tag (`prev_version`) to the current PR head (`HEAD`).
 
 ### Step 3: Collect PRs included in this release
 
-1. **Extract PR numbers** from commit messages in the range `main...HEAD`
+1. **Extract PR numbers** from commit messages in the range `upstream_tag..HEAD` (or fallback `main...HEAD` if tag is missing)
    - Look for patterns like `#123`, `(#123)`, or `Merge pull request #123`
 2. **For each PR found**, use `gh pr view <number>` to get:
    - PR title
