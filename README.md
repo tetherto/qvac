@@ -127,8 +127,9 @@ Legend:
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
 | lib-infer-nmtcpp | Library for running various translation models supporting OPUS, Bergamot, and IndicTrans backends | Addon |
-| lib-infer-onnx-tts | Text-to-Speech (TTS) library using Piper neural TTS model via ONNX Runtime | Addon |
+| lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
 | lib-infer-onnx-vad | Voice activity detection (VAD) addon using Silero VAD model via ONNX Runtime | Addon |
+| lib-infer-parakeet | High-performance speech-to-text inference addon using NVIDIA Parakeet models via ONNX Runtime | Addon |
 | lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via whisper.cpp | Addon |
 | lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
 | lib-inference-addon-onnx-ocr-fasttext | Optical Character Recognition (OCR) library using detector and recognizer models via ONNX Runtime | Addon |

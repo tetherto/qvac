@@ -99,7 +99,7 @@ package-lock.json
 # npmrc file
 .npmrc
 
-# Benchmark data (downloaded via HyperDrive)
+# Benchmark data
 benchmarks/shared-data/
 benchmarks/results/*.wav
 benchmarks/results/*.raw

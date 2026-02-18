@@ -13,7 +13,7 @@ sequenceDiagram
     participant App as Consumer
     participant TW as TranscriptionWhispercpp
     participant WP as WeightsProvider
-    participant DL as Data Loader<br/>(filesystem/hyperdrive)
+    participant DL as Data Loader<br/>(filesystem)
     participant CC as configChecker
     participant WI as WhisperInterface
     participant Bind as Native Binding

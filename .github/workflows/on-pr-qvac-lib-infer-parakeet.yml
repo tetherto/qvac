@@ -17,7 +17,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -49,7 +49,6 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   sanity-checks:
-    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -63,12 +62,19 @@ jobs:
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
-    secrets: inherit
-    with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-parakeet
+    runs-on: ai-run-linux
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run C++ lint check
+        uses: ./.github/actions/cpp-lint
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          target_sha: ${{ github.event.pull_request.base.sha }}
+          pr_head_sha: ${{ github.event.pull_request.head.sha }}
+          workdir: packages/qvac-lib-infer-parakeet
 
   cpp-tests-coverage:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'

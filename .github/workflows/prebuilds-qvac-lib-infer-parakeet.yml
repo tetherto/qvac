@@ -87,11 +87,11 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://tether-ai-dev/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
+      VCPKG_BINARY_SOURCES: "clear;x-aws,s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/,readwrite"
       VCPKG_BUILD_TYPE: release
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      S3_CACHE_PREFIX: "s3://tether-ai-dev/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/"
+      S3_CACHE_PREFIX: "s3://${{ secrets.MODEL_S3_BUCKET }}/vcpkg-cache/parakeet/${{ matrix.platform }}-${{ matrix.arch }}/"
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
     steps:
