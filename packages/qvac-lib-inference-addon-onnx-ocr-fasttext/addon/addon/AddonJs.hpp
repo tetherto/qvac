@@ -194,6 +194,34 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
         static_cast<int>(optRecognizerBatchSize->as<double>(env));
   }
 
+  auto optPipelineMode =
+      args1.getOptionalProperty<js::String>(env, "pipelineMode");
+  if (optPipelineMode) {
+    auto modeStr = optPipelineMode->as<std::string>(env);
+    if (modeStr == "doctr") {
+      config.mode = PipelineMode::DOCTR;
+    } else {
+      config.mode = PipelineMode::EASYOCR;
+    }
+  }
+
+  auto optDecoding =
+      args1.getOptionalProperty<js::String>(env, "decodingMethod");
+  if (optDecoding) {
+    auto str = optDecoding->as<std::string>(env);
+    if (str == "attention") {
+      config.decodingMethod = DecodingMethod::ATTENTION;
+    } else {
+      config.decodingMethod = DecodingMethod::CTC;
+    }
+  }
+
+  auto optStraighten =
+      args1.getOptionalProperty<js::Boolean>(env, "straightenPages");
+  if (optStraighten) {
+    config.straightenPages = optStraighten->as<bool>(env);
+  }
+
   auto model = make_unique<Pipeline>(
       pathDetector.c_str(),
       pathRecognizer.c_str(),

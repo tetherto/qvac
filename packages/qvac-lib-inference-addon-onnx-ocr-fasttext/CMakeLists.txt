@@ -120,6 +120,8 @@ target_sources(
     addon/pipeline/StepDetectionInference.cpp
     addon/pipeline/StepBoundingBox.cpp
     addon/pipeline/StepRecognizeText.cpp
+    addon/pipeline/StepDoctrDetection.cpp
+    addon/pipeline/StepDoctrRecognition.cpp
 )
 target_include_directories(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
@@ -219,6 +221,8 @@ if(BUILD_TESTING)
         addon/pipeline/StepDetectionInference.cpp
         addon/pipeline/StepBoundingBox.cpp
         addon/pipeline/StepRecognizeText.cpp
+        addon/pipeline/StepDoctrDetection.cpp
+        addon/pipeline/StepDoctrRecognition.cpp
     )
 
     target_include_directories(

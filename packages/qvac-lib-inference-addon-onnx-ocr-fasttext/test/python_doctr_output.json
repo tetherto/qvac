@@ -1,0 +1,532 @@
+{
+  "basic_test.bmp": {
+    "manual": [
+      {
+        "text": "-",
+        "confidence": 0.7369411587715149
+      },
+      {
+        "text": ":",
+        "confidence": 0.8529083132743835
+      }
+    ],
+    "onnxtr": [
+      {
+        "text": "das",
+        "confidence": 0.6655938029289246
+      },
+      {
+        "text": "normal",
+        "confidence": 0.9999969005584717
+      },
+      {
+        "text": "a",
+        "confidence": 0.9998216032981873
+      },
+      {
+        "text": "-",
+        "confidence": 0.9966705441474915
+      }
+    ]
+  },
+  "basic_test.jpg": {
+    "manual": [
+      {
+        "text": "-",
+        "confidence": 0.7330465912818909
+      },
+      {
+        "text": ":",
+        "confidence": 0.8370656371116638
+      }
+    ],
+    "onnxtr": [
+      {
+        "text": "das",
+        "confidence": 0.6667330861091614
+      },
+      {
+        "text": "normal",
+        "confidence": 0.9999969005584717
+      },
+      {
+        "text": "-",
+        "confidence": 0.7321094274520874
+      },
+      {
+        "text": "-",
+        "confidence": 0.5432990789413452
+      },
+      {
+        "text": "",
+        "confidence": 0.0
+      },
+      {
+        "text": "-",
+        "confidence": 0.46465015411376953
+      },
+      {
+        "text": "-",
+        "confidence": 0.8879101872444153
+      }
+    ]
+  },
+  "english.bmp": {
+    "manual": [
+      {
+        "text": "Joneziuebic",
+        "confidence": 0.986015796661377
+      },
+      {
+        "text": "meaH",
+        "confidence": 0.791778564453125
+      },
+      {
+        "text": "PHOM",
+        "confidence": 0.8486103415489197
+      },
+      {
+        "text": "Jo",
+        "confidence": 0.7973989844322205
+      },
+      {
+        "text": "eurue",
+        "confidence": 0.832297146320343
+      },
+      {
+        "text": "une,",
+        "confidence": 0.9326923489570618
+      },
+      {
+        "text": "Dejuu.",
+        "confidence": 0.6995908617973328
+      },
+      {
+        "text": "-",
+        "confidence": 0.9209322333335876
+      },
+      {
+        "text": "PI!M",
+        "confidence": 0.9624341726303101
+      },
+      {
+        "text": "BAI",
+        "confidence": 0.6504997611045837
+      },
+      {
+        "text": "-",
+        "confidence": 0.24185554683208466
+      },
+      {
+        "text": "ON",
+        "confidence": 0.9953083395957947
+      },
+      {
+        "text": "sbba",
+        "confidence": 0.9170998334884644
+      },
+      {
+        "text": "1ypnojou",
+        "confidence": 0.6390107870101929
+      },
+      {
+        "text": "eau",
+        "confidence": 0.888399600982666
+      },
+      {
+        "text": "pue",
+        "confidence": 0.9999679923057556
+      },
+      {
+        "text": "1000",
+        "confidence": 0.8217700123786926
+      },
+      {
+        "text": "swoiduas",
+        "confidence": 0.9666680097579956
+      },
+      {
+        "text": "J0",
+        "confidence": 0.6808834671974182
+      },
+      {
+        "text": "-",
+        "confidence": 0.6792524456977844
+      },
+      {
+        "text": "PIOD",
+        "confidence": 0.7509480714797974
+      },
+      {
+        "text": "auoAue",
+        "confidence": 0.8962273001670837
+      },
+      {
+        "text": "pejuu.",
+        "confidence": 0.760574996471405
+      },
+      {
+        "text": "44!0",
+        "confidence": 0.6757447123527527
+      },
+      {
+        "text": "4410",
+        "confidence": 0.7389158010482788
+      },
+      {
+        "text": "asop",
+        "confidence": 0.9416269659996033
+      },
+      {
+        "text": "DIUAT",
+        "confidence": 0.8471891283988953
+      },
+      {
+        "text": "A",
+        "confidence": 0.6481471061706543
+      },
+      {
+        "text": "ouizaaus",
+        "confidence": 0.9949307441711426
+      },
+      {
+        "text": "noye",
+        "confidence": 0.9505552053451538
+      },
+      {
+        "text": "Jexe",
+        "confidence": 0.8579038977622986
+      },
+      {
+        "text": "anssy",
+        "confidence": 0.9340566992759705
+      },
+      {
+        "text": "un!m",
+        "confidence": 0.8066110610961914
+      },
+      {
+        "text": "asou",
+        "confidence": 0.9990823864936829
+      },
+      {
+        "text": "oulybno)",
+        "confidence": 0.8894180655479431
+      },
+      {
+        "text": "thou",
+        "confidence": 0.8341800570487976
+      },
+      {
+        "text": "len0)",
+        "confidence": 0.899333119392395
+      },
+      {
+        "text": "pue",
+        "confidence": 0.9999105334281921
+      },
+      {
+        "text": "Jeym",
+        "confidence": 0.9668875336647034
+      },
+      {
+        "text": "pue",
+        "confidence": 0.9998932480812073
+      },
+      {
+        "text": "J0",
+        "confidence": 0.8176558613777161
+      },
+      {
+        "text": "JODEUPUVUVE",
+        "confidence": 0.7743479013442993
+      },
+      {
+        "text": "puey",
+        "confidence": 0.9848132133483887
+      },
+      {
+        "text": "9nu",
+        "confidence": 0.5492408275604248
+      },
+      {
+        "text": "deos",
+        "confidence": 0.9999881386756897
+      },
+      {
+        "text": "lotem",
+        "confidence": 0.8670757412910461
+      },
+      {
+        "text": "spuer",
+        "confidence": 0.8308448791503906
+      },
+      {
+        "text": "Jedp",
+        "confidence": 0.8949871063232422
+      },
+      {
+        "text": "pue",
+        "confidence": 0.9999178051948547
+      },
+      {
+        "text": "43!M",
+        "confidence": 0.7424342632293701
+      },
+      {
+        "text": "unow",
+        "confidence": 0.803977906703949
+      },
+      {
+        "text": "uolLJeju",
+        "confidence": 0.6327396631240845
+      },
+      {
+        "text": "DITUTAUVAU.",
+        "confidence": 0.6639821529388428
+      },
+      {
+        "text": "aonpe",
+        "confidence": 0.8683895468711853
+      },
+      {
+        "text": ">5!",
+        "confidence": 0.8235381841659546
+      },
+      {
+        "text": "10",
+        "confidence": 0.595374345779419
+      }
+    ],
+    "onnxtr": [
+      {
+        "text": "Reduce",
+        "confidence": 0.9999973773956299
+      },
+      {
+        "text": "your",
+        "confidence": 0.999993085861206
+      },
+      {
+        "text": "risk",
+        "confidence": 0.9999961256980896
+      },
+      {
+        "text": "of",
+        "confidence": 0.9999964833259583
+      },
+      {
+        "text": "coronavirus",
+        "confidence": 0.9999962449073792
+      },
+      {
+        "text": "infection:",
+        "confidence": 0.9839438199996948
+      },
+      {
+        "text": "Clean",
+        "confidence": 0.9999723434448242
+      },
+      {
+        "text": "hands",
+        "confidence": 0.9999979138374329
+      },
+      {
+        "text": "with",
+        "confidence": 0.9999982118606567
+      },
+      {
+        "text": "soap",
+        "confidence": 0.9999276399612427
+      },
+      {
+        "text": "and",
+        "confidence": 0.9999982714653015
+      },
+      {
+        "text": "water",
+        "confidence": 0.9999622106552124
+      },
+      {
+        "text": "or",
+        "confidence": 0.9999231100082397
+      },
+      {
+        "text": "alcohol-based",
+        "confidence": 0.9999961256980896
+      },
+      {
+        "text": "hand",
+        "confidence": 0.9999963045120239
+      },
+      {
+        "text": "rub",
+        "confidence": 0.9999980926513672
+      },
+      {
+        "text": "Cover",
+        "confidence": 0.9999935030937195
+      },
+      {
+        "text": "nose",
+        "confidence": 0.9999744892120361
+      },
+      {
+        "text": "and",
+        "confidence": 0.9999987483024597
+      },
+      {
+        "text": "mouth",
+        "confidence": 0.9999990463256836
+      },
+      {
+        "text": "when",
+        "confidence": 0.999998927116394
+      },
+      {
+        "text": "coughing",
+        "confidence": 0.9999959468841553
+      },
+      {
+        "text": "and",
+        "confidence": 0.9999987483024597
+      },
+      {
+        "text": "sneezing",
+        "confidence": 0.9999988675117493
+      },
+      {
+        "text": "with",
+        "confidence": 0.9999960064888
+      },
+      {
+        "text": "tissue",
+        "confidence": 0.9999987483024597
+      },
+      {
+        "text": "or",
+        "confidence": 0.9999302625656128
+      },
+      {
+        "text": "flexed",
+        "confidence": 0.9999963641166687
+      },
+      {
+        "text": "elbow",
+        "confidence": 0.9999871253967285
+      },
+      {
+        "text": "Avoid",
+        "confidence": 0.999987781047821
+      },
+      {
+        "text": "close",
+        "confidence": 0.9998943209648132
+      },
+      {
+        "text": "contact",
+        "confidence": 0.9999989867210388
+      },
+      {
+        "text": "with",
+        "confidence": 0.9999973773956299
+      },
+      {
+        "text": "anyone",
+        "confidence": 0.9999896883964539
+      },
+      {
+        "text": "with",
+        "confidence": 0.9999977350234985
+      },
+      {
+        "text": "cold",
+        "confidence": 0.999924898147583
+      },
+      {
+        "text": "or",
+        "confidence": 0.9999365210533142
+      },
+      {
+        "text": "flu-like",
+        "confidence": 0.9999980926513672
+      },
+      {
+        "text": "symptoms",
+        "confidence": 0.9999911785125732
+      },
+      {
+        "text": "Thoroughly",
+        "confidence": 0.9999944567680359
+      },
+      {
+        "text": "cook",
+        "confidence": 0.9999622702598572
+      },
+      {
+        "text": "meat",
+        "confidence": 0.999998927116394
+      },
+      {
+        "text": "and",
+        "confidence": 0.9999967217445374
+      },
+      {
+        "text": "eggs",
+        "confidence": 0.9999842047691345
+      },
+      {
+        "text": "AOD",
+        "confidence": 0.7243969440460205
+      },
+      {
+        "text": "No",
+        "confidence": 0.9999929070472717
+      },
+      {
+        "text": "unprotected",
+        "confidence": 0.9999913573265076
+      },
+      {
+        "text": "contact",
+        "confidence": 0.9999977946281433
+      },
+      {
+        "text": "with",
+        "confidence": 0.9999977350234985
+      },
+      {
+        "text": "live",
+        "confidence": 0.9998600482940674
+      },
+      {
+        "text": "wild",
+        "confidence": 0.9999878406524658
+      },
+      {
+        "text": "or",
+        "confidence": 0.999942421913147
+      },
+      {
+        "text": "farm",
+        "confidence": 0.9999996423721313
+      },
+      {
+        "text": "animals",
+        "confidence": 0.9999968409538269
+      },
+      {
+        "text": "World",
+        "confidence": 0.9999787211418152
+      },
+      {
+        "text": "Health",
+        "confidence": 0.9999944567680359
+      },
+      {
+        "text": "Organization",
+        "confidence": 0.9999966621398926
+      }
+    ]
+  }
+}

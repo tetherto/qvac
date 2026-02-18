@@ -63,5 +63,17 @@ struct InferredText {
     , confidenceScore{confidenceScore} {}
 };
 
+struct StepDoctrDetectionOutput {
+  PipelineContext context;
+  std::vector<std::array<cv::Point2f, 4>> polygons;
+  std::vector<float> polygonConfidences;
+  cv::Mat probMap;  // Raw probability map for straighten_pages orientation estimation
+  int paddedW{0};   // Width of the padded region in the prob map
+  int paddedH{0};   // Height of the padded region in the prob map
+};
+
 Ort::SessionOptions getOrtSessionOptions(bool useGPU = true);
+
+cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect);
+
 }
