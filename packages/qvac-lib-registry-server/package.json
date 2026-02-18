@@ -81,6 +81,7 @@
     "stream": "npm:bare-node-stream"
   },
   "devDependencies": {
+    "@qvac/error": "^0.1.0",
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
     "standard": "^17.1.0",
