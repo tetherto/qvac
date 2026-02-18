@@ -45,6 +45,8 @@
   "bugs": "https://github.com/tetherto/qvac-lib-dl-hyperdrive/issues",
   "files": [
     "src",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ]
 }

@@ -6,18 +6,16 @@ export const SDK_CLIENT_ERROR_CODES = {
   INVALID_RESPONSE_TYPE: 50001,
   INVALID_OPERATION_IN_RESPONSE: 50002,
   STREAM_ENDED_WITHOUT_RESPONSE: 50003,
-  NO_DATA_RECEIVED: 50004,
-  INVALID_AUDIO_CHUNK_TYPE: 50005,
-  INVALID_TOOLS_ARRAY: 50006,
-  INVALID_TOOL_SCHEMA: 50007,
-  OCR_FAILED: 50008,
+  INVALID_AUDIO_CHUNK_TYPE: 50004,
+  INVALID_TOOLS_ARRAY: 50005,
+  INVALID_TOOL_SCHEMA: 50006,
+  OCR_FAILED: 50007,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
-  UNKNOWN_REQUEST_TYPE: 50204,
 
   // Provider/Delegation Errors (50,400-50,599)
   PROVIDER_START_FAILED: 50400,
@@ -34,6 +32,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_FILE_INVALID: 50603,
   CONFIG_FILE_PARSE_FAILED: 50604,
   CONFIG_VALIDATION_FAILED: 50605,
+  PEAR_WORKER_ENTRY_REQUIRED: 50606,
+  MULTIPLE_SDK_INSTALLATIONS: 50607,
 } as const;
 
 const clientErrorDefinitions: ErrorCodesMap = {
@@ -50,10 +50,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.STREAM_ENDED_WITHOUT_RESPONSE]: {
     name: "STREAM_ENDED_WITHOUT_RESPONSE",
     message: "Stream ended without receiving final response",
-  },
-  [SDK_CLIENT_ERROR_CODES.NO_DATA_RECEIVED]: {
-    name: "NO_DATA_RECEIVED",
-    message: "No data received from request",
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE]: {
     name: "INVALID_AUDIO_CHUNK_TYPE",
@@ -91,10 +87,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "RPC_CONNECTION_FAILED",
     message: (details: string) => `RPC connection failed: ${details}`,
   },
-  [SDK_CLIENT_ERROR_CODES.UNKNOWN_REQUEST_TYPE]: {
-    name: "UNKNOWN_REQUEST_TYPE",
-    message: "Unknown request type received",
-  },
 
   // Provider/Delegation Errors (50,400-50,599)
   [SDK_CLIENT_ERROR_CODES.PROVIDER_START_FAILED]: {
@@ -124,7 +116,8 @@ const clientErrorDefinitions: ErrorCodesMap = {
   // Build/Bundle Errors (50,600-50,799)
   [SDK_CLIENT_ERROR_CODES.SDK_NOT_FOUND_IN_NODE_MODULES]: {
     name: "SDK_NOT_FOUND_IN_NODE_MODULES",
-    message: "@qvac/sdk not found in node_modules",
+    message:
+      "QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev",
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND]: {
     name: "WORKER_FILE_NOT_FOUND",
@@ -149,6 +142,16 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED]: {
     name: "CONFIG_VALIDATION_FAILED",
     message: (errors: string) => `Config validation failed: ${errors}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS]: {
+    name: "MULTIPLE_SDK_INSTALLATIONS",
+    message: (packages: string) =>
+      `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
+    name: "PEAR_WORKER_ENTRY_REQUIRED",
+    message: (workerEntry: string) =>
+      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
   },
 };
 

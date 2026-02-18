@@ -75,6 +75,7 @@ async function addAllModels (flags) {
 
   try {
     let added = 0
+    const failed = []
     for (const entry of entries) {
       if (!entry.source) {
         logger.warn('Skipping entry without source', entry)
@@ -97,11 +98,23 @@ async function addAllModels (flags) {
       if (flags.skipExisting) {
         logger.debug('Skip-existing flag enabled - will skip if model already exists')
       }
-      await connection.rpc.request('add-model', payload)
-      added++
+
+      try {
+        await connection.rpc.request('add-model', payload)
+        added++
+      } catch (err) {
+        logger.warn(`Failed to add model ${entry.source}: ${err.message}`)
+        failed.push(entry.source)
+      }
     }
 
-    logger.info(`Completed: ${added} model(s) added`)
+    logger.info(`Completed: ${added} model(s) added, ${failed.length} failed`)
+    if (failed.length > 0) {
+      logger.warn('Failed model sources:')
+      for (const source of failed) {
+        logger.warn(`  - ${source}`)
+      }
+    }
   } finally {
     await connection.cleanup()
   }

@@ -7,6 +7,7 @@ import {
   RAGWorkspaceModelMismatchError,
   RAGWorkspaceNotOpenError,
 } from "@/utils/errors-server";
+import { validateAndJoinPath } from "@/server/utils/path-security";
 import {
   createStreamLogger,
   getServerLogger,
@@ -38,7 +39,7 @@ function getRagBaseDir() {
 }
 
 function getStorePath(workspace: string) {
-  return path.join(getRagBaseDir(), workspace);
+  return validateAndJoinPath(getRagBaseDir(), workspace);
 }
 
 export function hasRagWorkspaceStorage(workspace?: string) {

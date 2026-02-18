@@ -33,7 +33,7 @@ const Corestore = require('corestore')
 const Autobase = require('autobase')
 const IdEnc = require('hypercore-id-encoding')
 
-const schema = require('@tetherto/qvac-registry-schema')
+const schema = require('@qvac/registry-schema')
 const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
 const { QVAC_MAIN_REGISTRY } = schema

@@ -1,7 +1,7 @@
 [
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -15,7 +15,7 @@
   },
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -233,8 +233,9 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
     "description": "Multimodal 4B model, good for tool calls",
-    "quantization": "q4",
+    "quantization": "q4_K_M",
     "params": "4B",
     "license": "Apache-2.0",
     "tags": [
@@ -250,7 +251,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -264,7 +265,7 @@
     "description": "Finetuned for medicine 4B model, good for tool calls",
     "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -278,7 +279,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -306,13 +307,17 @@
     "description": "Multimodal for text, image, and audio",
     "quantization": "",
     "params": "3B",
-    "license": "Qwen",
+    "license": "qwen-research",
     "tags": [
       "generation",
       "multimodal",
       "qwen2.5-omni"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF",
+    "deprecated": true,
+    "replacedBy": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+    "deprecationReason": "Superseded by Qwen3-VL with Apache-2.0 license"
   },
   {
     "source": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF/blob/75f1b73b657a50f5092502799457ccb4a4a1f9df/mmproj-Qwen2.5-Omni-3B-Q8_0.gguf",
@@ -320,13 +325,17 @@
     "description": "",
     "quantization": "",
     "params": "3B",
-    "license": "Qwen",
+    "license": "qwen-research",
     "tags": [
       "generation",
       "multimodal",
       "qwen2.5-omni"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/Qwen2.5-Omni-3B-GGUF",
+    "deprecated": true,
+    "replacedBy": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+    "deprecationReason": "Superseded by Qwen3-VL with Apache-2.0 license"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf",
@@ -355,7 +364,8 @@
       "smolvlm2",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
@@ -370,15 +380,17 @@
       "smolvlm2",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -390,10 +402,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -405,10 +418,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -420,10 +434,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -435,10 +450,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q4/2025-08-21/medgemma-4b-it-Q4_1-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf",
     "description": "",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -453,7 +469,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_1",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -465,10 +481,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -480,10 +497,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -495,10 +513,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -510,10 +529,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -525,10 +545,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q8_0.gguf",
     "description": "",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -541,9 +562,9 @@
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/medgemma-4b-it-Q8/2025-08-21/medgemma-4b-it-Q8_0.tensors.txt",
     "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
-    "quantization": "q8_1",
+    "quantization": "q8_0",
     "params": "4B",
-    "license": "Apache-2.0",
+    "license": "health-ai-developer-foundations",
     "tags": [
       "generation",
       "it",
@@ -555,6 +576,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -570,6 +592,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -585,6 +608,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -600,6 +624,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -615,6 +640,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/ChristianAzinn/gte-large-gguf",
     "description": "",
     "quantization": "fp16",
     "params": "335M",
@@ -645,10 +671,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -660,10 +687,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -675,10 +703,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -690,10 +719,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00004-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -705,10 +735,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00005-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -720,10 +751,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00006-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -735,10 +767,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00007-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -750,10 +783,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "description": "",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -768,7 +802,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4_0",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "llama3.2",
     "tags": [
       "generation",
       "instruct",
@@ -780,6 +814,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -795,6 +830,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -810,6 +846,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -825,6 +862,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -840,6 +878,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-4B/2025-08-21/Qwen3-4B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "4B",
@@ -869,7 +908,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00001-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -884,7 +924,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00002-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -899,7 +940,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4-00003-of-00003.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q4.gguf",
     "description": "",
     "quantization": "q4",
     "params": "2B",
@@ -914,7 +956,7 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q4/2025-08-21/salamandrata_2b_inst_q4.tensors.txt",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q4",
     "params": "2B",
@@ -929,7 +971,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00001-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -944,7 +987,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00002-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -959,7 +1003,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00003-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -974,7 +1019,8 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8-00004-of-00004.gguf",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/resolve/main/salamandrata_2b_inst_q8.gguf",
     "description": "",
     "quantization": "q8",
     "params": "2B",
@@ -989,7 +1035,7 @@
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/salamandrata_2b_inst_q8/2025-08-21/salamandrata_2b_inst_q8.tensors.txt",
-    "engine": "@qvac/translation-llamacpp",
+    "engine": "@qvac/llm-llamacpp",
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "q8",
     "params": "2B",
@@ -1005,6 +1051,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1020,6 +1067,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1035,6 +1083,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1050,6 +1099,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1065,6 +1115,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/Qwen3-1.7B/2025-08-21/Qwen3-1.7B-Q4_0-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf",
     "description": "",
     "quantization": "q4",
     "params": "1.7B",
@@ -1098,7 +1149,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1112,7 +1163,7 @@
     "description": "",
     "quantization": "q8_0",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1126,7 +1177,7 @@
     "description": "",
     "quantization": "BF16",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1140,7 +1191,7 @@
     "description": "",
     "quantization": "F32",
     "params": "300M",
-    "license": "Apache-2.0",
+    "license": "gemma",
     "tags": [
       "embedding",
       "embed",
@@ -1176,7 +1227,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-f16.bin",
@@ -1191,7 +1243,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-f16.bin",
@@ -1206,7 +1259,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-f16.bin",
@@ -1221,7 +1275,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-f16.bin",
@@ -1236,7 +1291,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/f16/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-f16.bin",
@@ -1251,7 +1307,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-1B/2026-01-01/ggml-indictrans2-en-indic-1B-q4_0.bin",
@@ -1266,7 +1323,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin",
@@ -1281,7 +1339,8 @@
       "ggml-indictrans",
       "en-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-1B/2026-01-01/ggml-indictrans2-indic-en-1B-q4_0.bin",
@@ -1296,7 +1355,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-en-dist-200M/2026-01-01/ggml-indictrans2-indic-en-dist-200M-q4_0.bin",
@@ -1311,7 +1371,8 @@
       "ggml-indictrans",
       "hi-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-1B/2026-01-01/ggml-indictrans2-indic-indic-1B-q4_0.bin",
@@ -1326,7 +1387,8 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-indic-indic-dist-320M/2026-01-01/ggml-indictrans2-indic-indic-dist-320M-q4_0.bin",
@@ -1341,371 +1403,13 @@
       "ggml-indictrans",
       "hi-hi"
     ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Norman voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-norman",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/norman/medium/en_US-norman-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-norman",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Lessac voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-lessac",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-lessac",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/low/en_US-amy-low.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Amy voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-amy",
-      "en_us"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Sharvard voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-sharvard",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Davefx voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-davefx",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-davefx",
-      "es_es"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Thorsten voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-thorsten",
-      "de_de"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-thorsten",
-      "de_de"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Paola voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/it/it_IT/paola/medium/it_IT-paola-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-paola",
-      "it_it"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Irina voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-irina",
-      "ru_ru"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-irina",
-      "ru_ru"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx",
-    "engine": "@qvac/tts",
-    "description": "Gilles voice (low quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-gilles",
-      "fr_fr"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-low",
-      "piper-gilles",
-      "fr_fr"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-tugao",
-      "pt_pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-tugao",
-      "pt_pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx",
-    "engine": "@qvac/tts",
-    "description": "Cadu voice (medium quality)",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-cadu",
-      "pt_br"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/rhasspy/piper-voices/resolve/0622afc867cf0388684853ecdf59a498b489949d/pt/pt_BR/cadu/medium/pt_BR-cadu-medium.onnx.json",
-    "engine": "@qvac/tts",
-    "description": "",
-    "quantization": "fp32",
-    "params": "20M",
-    "license": "MIT",
-    "tags": [
-      "tts",
-      "onnx-medium",
-      "piper-cadu",
-      "pt_br"
-    ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1721,6 +1425,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00002-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1736,6 +1441,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00003-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1751,6 +1457,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00004-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1766,6 +1473,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/dolphin-mixtral-2x7b-dop_q2/2025-09-17/dolphin-mixtral-2x7b-dop-Q2_K-00005-of-00005.gguf",
     "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF/resolve/main/dolphin-mixtral-2x7b-dop-Q2_K.gguf",
     "description": "",
     "quantization": "Q2_K",
     "params": "2x7B",
@@ -1806,7 +1514,8 @@
       "marian",
       "en-ru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-ru-en/2025-11-09/ggml-opus-ru-en.bin",
@@ -1814,14 +1523,15 @@
     "description": "",
     "quantization": "q0f16",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
       "marian",
       "ru-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ru/2025-09-23/ggml-opus-en-ru.bin",
@@ -1836,7 +1546,8 @@
       "marian",
       "en-ru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ru-en/2025-09-23/ggml-opus-ru-en.bin",
@@ -1844,14 +1555,15 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
       "marian",
       "ru-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ru-en"
   },
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-f16.gguf",
@@ -1900,10 +1612,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/NbAiLab/nb-whisper-tiny/blob/main/ggml-model.bin",
     "description": "Fine-tuned for Norwegian",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -1915,6 +1628,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
@@ -1929,6 +1643,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_en_acft_q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin",
     "description": "With acoustic fine-tuning",
     "quantization": "",
     "params": "",
@@ -1953,7 +1668,8 @@
       "marian",
       "en-pt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-pt-en/2025-11-07/ggml-opus-mt-roa-en-f16.bin",
@@ -1968,7 +1684,8 @@
       "marian",
       "pt-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-en-fr/2025-11-09/ggml-opus-en-fr.bin",
@@ -1983,7 +1700,8 @@
       "marian",
       "en-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-de-fr/2025-11-09/ggml-opus-de-fr.bin",
@@ -1998,7 +1716,8 @@
       "marian",
       "de-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-fr/2025-11-04/ggml-opus-de-fr.bin",
@@ -2013,7 +1732,8 @@
       "marian",
       "de-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-es-fr/2025-11-09/ggml-opus-es-fr.bin",
@@ -2028,7 +1748,8 @@
       "marian",
       "es-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-fr/2025-11-04/ggml-opus-es-fr.bin",
@@ -2043,7 +1764,8 @@
       "marian",
       "es-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-es/2025-11-09/ggml-opus-fr-es.bin",
@@ -2058,7 +1780,8 @@
       "marian",
       "fr-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-es/2025-11-04/ggml-opus-fr-es.bin",
@@ -2073,7 +1796,8 @@
       "marian",
       "fr-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-de/2025-11-09/ggml-opus-fr-de.bin",
@@ -2088,7 +1812,8 @@
       "marian",
       "fr-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-de/2025-11-04/ggml-opus-fr-de.bin",
@@ -2103,7 +1828,8 @@
       "marian",
       "fr-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-fr-en/2025-11-09/ggml-opus-fr-en.bin",
@@ -2118,7 +1844,8 @@
       "marian",
       "fr-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-pt/2025-11-04/ggml-opus-en-pt.bin",
@@ -2126,14 +1853,15 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus-ggml",
       "marian",
       "en-pt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-pt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/recognizer_latin.onnx",
@@ -2147,7 +1875,8 @@
       "recognizer",
       "latin"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_512/detector_craft.onnx",
@@ -2161,7 +1890,8 @@
       "detector",
       "craft"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-it/2025-09-10/ggml-opus-en-it.bin",
@@ -2176,7 +1906,8 @@
       "marian",
       "en-it"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-it"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-it-en/2025-09-10/ggml-opus-it-en.bin",
@@ -2191,7 +1922,8 @@
       "marian",
       "it-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-it-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-de/2025-09-10/ggml-opus-en-de.bin",
@@ -2199,14 +1931,15 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
       "marian",
       "en-de"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-de"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-de-en/2025-09-10/ggml-opus-de-en.bin",
@@ -2221,7 +1954,8 @@
       "marian",
       "de-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-de-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-es/2025-09-10/ggml-opus-en-es.bin",
@@ -2236,7 +1970,8 @@
       "marian",
       "en-es"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-es"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-es-en/2025-09-10/ggml-opus-es-en.bin",
@@ -2251,7 +1986,8 @@
       "marian",
       "es-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-es-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-fr/2025-11-04/ggml-opus-en-fr.bin",
@@ -2266,7 +2002,8 @@
       "marian",
       "en-fr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-fr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-fr-en/2025-11-04/ggml-opus-fr-en.bin",
@@ -2281,7 +2018,8 @@
       "marian",
       "fr-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-fr-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-ar/2025-11-20/ggml-opus-en-ar.bin",
@@ -2296,7 +2034,8 @@
       "marian",
       "en-ar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-ar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ar-en/2025-11-20/ggml-opus-ar-en.bin",
@@ -2311,7 +2050,8 @@
       "marian",
       "ar-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ar-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-zh/2025-11-19/ggml-opus-en-zh.bin",
@@ -2326,7 +2066,8 @@
       "marian",
       "en-zh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-zh-en/2025-11-19/ggml-opus-zh-en.bin",
@@ -2334,14 +2075,15 @@
     "description": "",
     "quantization": "q4_0",
     "params": "",
-    "license": "Apache-2.0",
+    "license": "CC-BY-4.0",
     "tags": [
       "translation",
       "opus",
       "marian",
       "zh-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-ja-en/2025-11-19/ggml-opus-ja-en.bin",
@@ -2356,7 +2098,8 @@
       "marian",
       "ja-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-en-roa/2025-11-20/ggml-opus-en-roa.bin",
@@ -2371,7 +2114,8 @@
       "marian",
       "en-roa"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-en-roa"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-roa-en/2025-11-19/ggml-opus-roa-en.bin",
@@ -2386,15 +2130,17 @@
       "marian",
       "roa-en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "Fine-tuned for French",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2406,10 +2152,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2421,10 +2168,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "Fine-tuned for German",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2436,10 +2184,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2451,10 +2200,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2466,10 +2216,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "tiny-ggml",
@@ -2481,6 +2232,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2496,6 +2248,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2511,6 +2264,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2526,6 +2280,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2541,6 +2296,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2556,6 +2312,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2571,6 +2328,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2586,6 +2344,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2601,6 +2360,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2616,6 +2376,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2631,6 +2392,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2646,6 +2408,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2661,10 +2424,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
     "quantization": "f16",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -2676,10 +2440,11 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
     "quantization": "q8_0",
     "params": "",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "tags": [
       "transcription",
       "base-ggml",
@@ -2691,6 +2456,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2706,6 +2472,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2721,6 +2488,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2736,6 +2504,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2751,6 +2520,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2766,6 +2536,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2781,6 +2552,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
     "quantization": "f16",
     "params": "",
@@ -2796,6 +2568,7 @@
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
+    "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
     "quantization": "q8_0",
     "params": "",
@@ -2821,7 +2594,8 @@
       "qwen3-vl",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
   },
   {
     "source": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
@@ -2836,7 +2610,8 @@
       "qwen3-vl",
       "video-instruct"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/lex.50.50.aren.s2t.bin",
@@ -2844,14 +2619,15 @@
     "description": "Bergamot lexical shortlist ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/metadata.json",
@@ -2859,14 +2635,15 @@
     "description": "Bergamot metadata ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/model.aren.intgemm.alphas.bin",
@@ -2874,14 +2651,15 @@
     "description": "Bergamot NMT model ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-aren/2025-12-18/vocab.aren.spm",
@@ -2889,14 +2667,15 @@
     "description": "Bergamot vocabulary ar-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "aren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/lex.50.50.csen.s2t.bin",
@@ -2904,14 +2683,15 @@
     "description": "Bergamot lexical shortlist cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/metadata.json",
@@ -2919,14 +2699,15 @@
     "description": "Bergamot metadata cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/model.csen.intgemm.alphas.bin",
@@ -2934,14 +2715,15 @@
     "description": "Bergamot NMT model cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-csen/2025-12-18/vocab.csen.spm",
@@ -2949,14 +2731,15 @@
     "description": "Bergamot vocabulary cs-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "csen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/lex.50.50.enar.s2t.bin",
@@ -2964,14 +2747,15 @@
     "description": "Bergamot lexical shortlist en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/metadata.json",
@@ -2979,14 +2763,15 @@
     "description": "Bergamot metadata en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/model.enar.intgemm.alphas.bin",
@@ -2994,14 +2779,15 @@
     "description": "Bergamot NMT model en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enar/2025-12-18/vocab.enar.spm",
@@ -3009,14 +2795,15 @@
     "description": "Bergamot vocabulary en-ar",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enar"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/lex.50.50.encs.s2t.bin",
@@ -3024,14 +2811,15 @@
     "description": "Bergamot lexical shortlist en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/metadata.json",
@@ -3039,14 +2827,15 @@
     "description": "Bergamot metadata en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/model.encs.intgemm.alphas.bin",
@@ -3054,14 +2843,15 @@
     "description": "Bergamot NMT model en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-encs/2025-12-18/vocab.encs.spm",
@@ -3069,14 +2859,15 @@
     "description": "Bergamot vocabulary en-cs",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "encs"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/lex.50.50.enes.s2t.bin",
@@ -3084,14 +2875,15 @@
     "description": "Bergamot lexical shortlist en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/metadata.json",
@@ -3099,14 +2891,15 @@
     "description": "Bergamot metadata en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/model.enes.intgemm.alphas.bin",
@@ -3114,14 +2907,15 @@
     "description": "Bergamot NMT model en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/vocab.enes.spm",
@@ -3129,14 +2923,15 @@
     "description": "Bergamot vocabulary en-es",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enes"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/lex.50.50.enfr.s2t.bin",
@@ -3144,14 +2939,15 @@
     "description": "Bergamot lexical shortlist en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/metadata.json",
@@ -3159,14 +2955,15 @@
     "description": "Bergamot metadata en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/model.enfr.intgemm.alphas.bin",
@@ -3174,14 +2971,15 @@
     "description": "Bergamot NMT model en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enfr/2025-12-18/vocab.enfr.spm",
@@ -3189,14 +2987,15 @@
     "description": "Bergamot vocabulary en-fr",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enfr"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
@@ -3204,14 +3003,15 @@
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
@@ -3219,14 +3019,15 @@
     "description": "Bergamot metadata en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
@@ -3234,14 +3035,15 @@
     "description": "Bergamot NMT model en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
@@ -3249,14 +3051,15 @@
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enit"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
@@ -3264,14 +3067,15 @@
     "description": "Bergamot lexical shortlist en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/metadata.json",
@@ -3279,14 +3083,15 @@
     "description": "Bergamot metadata en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/model.enja.intgemm.alphas.bin",
@@ -3294,14 +3099,15 @@
     "description": "Bergamot NMT model en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/srcvocab.enja.spm",
@@ -3309,14 +3115,15 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/trgvocab.enja.spm",
@@ -3324,14 +3131,15 @@
     "description": "Bergamot vocabulary en-ja",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enja"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/lex.50.50.enpt.s2t.bin",
@@ -3339,14 +3147,15 @@
     "description": "Bergamot lexical shortlist en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/metadata.json",
@@ -3354,14 +3163,15 @@
     "description": "Bergamot metadata en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/model.enpt.intgemm.alphas.bin",
@@ -3369,14 +3179,15 @@
     "description": "Bergamot NMT model en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enpt/2025-12-18/vocab.enpt.spm",
@@ -3384,14 +3195,15 @@
     "description": "Bergamot vocabulary en-pt",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enpt"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/lex.50.50.enru.s2t.bin",
@@ -3399,14 +3211,15 @@
     "description": "Bergamot lexical shortlist en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/metadata.json",
@@ -3414,14 +3227,15 @@
     "description": "Bergamot metadata en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/model.enru.intgemm.alphas.bin",
@@ -3429,14 +3243,15 @@
     "description": "Bergamot NMT model en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enru/2025-12-18/vocab.enru.spm",
@@ -3444,14 +3259,15 @@
     "description": "Bergamot vocabulary en-ru",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enru"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
@@ -3459,14 +3275,15 @@
     "description": "Bergamot lexical shortlist en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
@@ -3474,14 +3291,15 @@
     "description": "Bergamot metadata en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
@@ -3489,14 +3307,15 @@
     "description": "Bergamot NMT model en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
@@ -3504,14 +3323,15 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
@@ -3519,14 +3339,15 @@
     "description": "Bergamot vocabulary en-zh",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "enzh"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
@@ -3534,14 +3355,15 @@
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
@@ -3549,14 +3371,15 @@
     "description": "Bergamot metadata es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
@@ -3564,14 +3387,15 @@
     "description": "Bergamot NMT model es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
@@ -3579,14 +3403,15 @@
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "esen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",
@@ -3594,14 +3419,15 @@
     "description": "Bergamot lexical shortlist fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/metadata.json",
@@ -3609,14 +3435,15 @@
     "description": "Bergamot metadata fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/model.fren.intgemm.alphas.bin",
@@ -3624,14 +3451,15 @@
     "description": "Bergamot NMT model fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/vocab.fren.spm",
@@ -3639,14 +3467,15 @@
     "description": "Bergamot vocabulary fr-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "fren"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/lex.50.50.iten.s2t.bin",
@@ -3654,14 +3483,15 @@
     "description": "Bergamot lexical shortlist it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/metadata.json",
@@ -3669,14 +3499,15 @@
     "description": "Bergamot metadata it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/model.iten.intgemm.alphas.bin",
@@ -3684,14 +3515,15 @@
     "description": "Bergamot NMT model it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-iten/2025-12-18/vocab.iten.spm",
@@ -3699,14 +3531,15 @@
     "description": "Bergamot vocabulary it-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "iten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/lex.50.50.jaen.s2t.bin",
@@ -3714,14 +3547,15 @@
     "description": "Bergamot lexical shortlist ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/metadata.json",
@@ -3729,14 +3563,15 @@
     "description": "Bergamot metadata ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/model.jaen.intgemm.alphas.bin",
@@ -3744,14 +3579,15 @@
     "description": "Bergamot NMT model ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-jaen/2025-12-18/vocab.jaen.spm",
@@ -3759,14 +3595,15 @@
     "description": "Bergamot vocabulary ja-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "jaen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/lex.50.50.pten.s2t.bin",
@@ -3774,14 +3611,15 @@
     "description": "Bergamot lexical shortlist pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/metadata.json",
@@ -3789,14 +3627,15 @@
     "description": "Bergamot metadata pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/model.pten.intgemm.alphas.bin",
@@ -3804,14 +3643,15 @@
     "description": "Bergamot NMT model pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-pten/2025-12-18/vocab.pten.spm",
@@ -3819,14 +3659,15 @@
     "description": "Bergamot vocabulary pt-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "pten"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/lex.50.50.ruen.s2t.bin",
@@ -3834,14 +3675,15 @@
     "description": "Bergamot lexical shortlist ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/metadata.json",
@@ -3849,14 +3691,15 @@
     "description": "Bergamot metadata ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/model.ruen.intgemm.alphas.bin",
@@ -3864,14 +3707,15 @@
     "description": "Bergamot NMT model ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-ruen/2025-12-18/vocab.ruen.spm",
@@ -3879,14 +3723,15 @@
     "description": "Bergamot vocabulary ru-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "ruen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
@@ -3894,14 +3739,15 @@
     "description": "Bergamot lexical shortlist zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
@@ -3909,14 +3755,15 @@
     "description": "Bergamot metadata zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
@@ -3924,14 +3771,15 @@
     "description": "Bergamot NMT model zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
@@ -3939,14 +3787,15 @@
     "description": "Bergamot vocabulary zh-en",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "license": "MPL-2.0",
     "tags": [
       "translation",
       "nmt",
       "bergamot",
       "zhen"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
@@ -3954,7 +3803,7 @@
     "description": "Llama 3.2 1B with tool calling support",
     "quantization": "q4_k",
     "params": "1B",
-    "license": "Llama-3.2",
+    "license": "Apache-2.0",
     "tags": [
       "generation",
       "instruct",
@@ -4003,7 +3852,8 @@
       "recognizer",
       "arabic"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_bengali.onnx",
@@ -4017,7 +3867,8 @@
       "recognizer",
       "bengali"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_cyrillic.onnx",
@@ -4031,7 +3882,8 @@
       "recognizer",
       "cyrillic"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_devanagari.onnx",
@@ -4045,7 +3897,8 @@
       "recognizer",
       "devanagari"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_japanese.onnx",
@@ -4059,7 +3912,8 @@
       "recognizer",
       "japanese"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_kannada.onnx",
@@ -4073,7 +3927,8 @@
       "recognizer",
       "kannada"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_korean.onnx",
@@ -4087,7 +3942,8 @@
       "recognizer",
       "korean"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_latin.onnx",
@@ -4101,7 +3957,8 @@
       "recognizer",
       "latin"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_tamil.onnx",
@@ -4115,7 +3972,8 @@
       "recognizer",
       "tamil"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_telugu.onnx",
@@ -4129,7 +3987,8 @@
       "recognizer",
       "telugu"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_thai.onnx",
@@ -4143,7 +4002,8 @@
       "recognizer",
       "thai"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_sim.onnx",
@@ -4157,7 +4017,8 @@
       "recognizer",
       "zh_sim"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
     "source": "s3://tether-ai-dev/qvac_models_compiled/ocr/2026-02-12/rec_dyn/recognizer_zh_tra.onnx",
@@ -4170,6 +4031,860 @@
       "ocr",
       "recognizer",
       "zh_tra"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox tokenizer",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "tokenizer",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (quantized, graph)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (quantized, weights)",
+    "quantization": "quantized",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox speech encoder (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "speech-encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox token embeddings (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "embed-tokens",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox conditional decoder (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "conditional-decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox language model (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "language-model",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
+    "engine": "@qvac/tts",
+    "description": "Supertonic tokenizer",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "tokenizer"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic text encoder (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "text-encoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic text encoder (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "text-encoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic latent denoiser (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "latent-denoiser"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic latent denoiser (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "latent-denoiser"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice decoder (graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-decoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice decoder (weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-decoder"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F1 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F2 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F3 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F4 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style F5 (female)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M1 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M2 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M3 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M4 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin",
+    "engine": "@qvac/tts",
+    "description": "Supertonic voice style M5 (male)",
+    "quantization": "",
+    "params": "",
+    "license": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "voice-style"
     ],
     "notes": ""
   }

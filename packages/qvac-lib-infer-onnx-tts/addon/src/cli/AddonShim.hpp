@@ -11,7 +11,6 @@
 #include <thread>
 #include <vector>
 
-#include "src/model-interface/PiperEngine.hpp"
 #include "src/model-interface/TTSModel.hpp"
 
 namespace qvac::ttslib::cli_shim {
@@ -26,7 +25,9 @@ public:
     std::string payload; // output path or error message; runtime stats omitted
   };
 
-  explicit TTSAddonShim(const TTSConfig& config);
+  explicit TTSAddonShim(
+      const std::unordered_map<std::string, std::string> &configMap,
+      const std::vector<float> &referenceAudio = {});
 
   ~TTSAddonShim();
 
@@ -34,10 +35,13 @@ public:
 
   uint32_t append(std::string_view text);
 
-  bool poll(std::vector<Event>& outEvents);
+  bool poll(std::vector<Event> &outEvents);
 
 private:
-  struct Job { uint32_t id; std::string text; };
+  struct Job {
+    uint32_t id;
+    std::string text;
+  };
 
   void processLoop();
 
@@ -52,5 +56,3 @@ private:
 };
 
 } // namespace qvac::ttslib::cli_shim
-
-

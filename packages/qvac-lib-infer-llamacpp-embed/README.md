@@ -17,7 +17,6 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [7. Generate embeddings for input sequence](#7-generate-embeddings-for-input-sequence)
   - [8. Unload the model](#8-unload-the-model)
 - [Quickstart Example](#quickstart-example)
-- [Model Registry](#model-registry)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
@@ -86,27 +85,29 @@ const GGMLBert = require('@qvac/embed-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](../qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
-const store = new Corestore('./store')
-const hdStore = store.namespace('hd')
+const FilesystemDL = require('@qvac/dl-filesystem')
 
-const hdDL = new HyperDriveDL({
-  key: 'hd://d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e',
-  store: hdStore
-})
+// Download model from HuggingFace (see examples/utils.js for downloadModel helper)
+const [modelName, dirPath] = await downloadModel(
+  'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
+  'gte-large_fp16.gguf'
+)
+
+const fsDL = new FilesystemDL({ dirPath })
 ```
 
 ### 3. Create the `args` obj
 
 ```js
 const args = {
-  loader: hdDL,
+  loader: fsDL,
   logger: console,
   opts: { stats: true },
-  diskPath: './models',
-  modelName: 'gte-large_fp16.gguf'
+  diskPath: dirPath,
+  modelName
 }
 ```
 
@@ -203,7 +204,7 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  // Close P2P resources if applicable
+  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
@@ -226,23 +227,10 @@ Run the quickstart example (uses examples/quickstart.js):
 npm run quickstart
 ```
 
-## Model Registry
-
-| Hyperdrive Key                                                   | `.gguf` File Name                        |
-| ---------------------------------------------------------------- | ---------------------------------------- |
-| d1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e | gte-large_fp16.gguf                      |
-| c3b4c8f54ac3ed3e66323e011d52c88fcb1be8596251fd5457e4faab7b062798 | gte-large.Q2_K-00001-of-00005.gguf       |
-| f72fe66575d59db3fff8d01db7b185f5e30f291ade1dbfba8c4489742b93d4a0 | gte-large_fp16-00001-of-00005.gguf       |
-| 7eb0441fdc5074ceb02168822da8fef91de7f547cd71240bd36ea964816ab059 | embeddinggemma-300m-Q4_0.gguf            |
-| 304b3543f89f2d3f204b9638ad8e3ea0f237033b0e4d04c416a43e5921df4180 | embeddinggemma-300M-Q8_0.gguf            |
-| cb18d3fe8774ae03bdc0e8c9559371201e76fdb38e1a3f0cfbc700214d50c5b3 | embeddinggemma-300M-BF16.gguf            |
-
 ## Other Examples
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
-- [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
-- [Native Logging](./examples/nativeLog.js) – Demonstrates C++ addon logging integration.
-- [Sharded Loading](./examples/shardedLoading.js) – Demonstrates loading sharded model files.
+- [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 
 ## Benchmarking
 
@@ -273,9 +261,7 @@ These tests validate the native implementation and help catch issues early in de
 
 ## Glossary
 
-* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview). 
-* **Hyperdrive** - A peer-to-peer filesystem built on Hypercore, supporting real-time file sharing, versioning, and sparse downloading. Ideal for decentralized apps and data syncing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).
-* **CoreStore** - A manager for multiple Hypercores, handling storage, replication, and key derivation. Simplifies working with many Hypercores in peer-to-peer applications. [Learn more](https://docs.pears.com/helpers/corestore).
+* **Bare Runtime** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
 
 ## License
 

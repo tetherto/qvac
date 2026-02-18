@@ -84,7 +84,7 @@ qvac bundle sdk --verbose
 | `qvac/worker.bundle.js` | Final bundle for mobile/Pear runtimes |
 | `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking |
 
-> **Note:** Your project must have `@qvac/sdk` and `bare-pack` installed. Install `bare-pack` as a devDependency: `npm i -D bare-pack` or `bun add -d bare-pack`
+> **Note:** Your project must have `@qvac/sdk` installed.
 
 ## Configuration
 

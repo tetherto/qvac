@@ -6,41 +6,125 @@ const { TTSInterface } = require('./tts')
 const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
+// Engine types
+const ENGINE_CHATTERBOX = 'chatterbox'
+const ENGINE_SUPERTONIC = 'supertonic'
+
 class ONNXTTS extends InferBase {
-  constructor ({ mainModelUrl, configJsonPath, eSpeakDataPath, loader, cache, logger, ...args }, config = {}) {
+  constructor ({
+    tokenizerPath,
+    speechEncoderPath,
+    embedTokensPath,
+    conditionalDecoderPath,
+    languageModelPath,
+    referenceAudio,
+    // Supertonic-specific (if provided, engine is Supertonic)
+    modelDir,
+    textEncoderPath,
+    latentDenoiserPath,
+    voiceDecoderPath,
+    voicesDir,
+    voiceName,
+    speed,
+    numInferenceSteps,
+    loader, cache, logger, ...args
+  }, config = {}) {
     super(args)
 
     this._loader = loader
     this._weightsProvider = loader ? new WeightsProvider(loader, logger) : null
     this._cache = cache || '.'
-    this._mainModelUrl = mainModelUrl
-    this._configJsonPath = configJsonPath
-    this._eSpeakDataPath = eSpeakDataPath
     this._config = config
     this._logger = logger
 
-    // Tashkeel model is bundled with the addon
-    this._tashkeelModelDir = path.join(__dirname, 'assets', 'tashkeel')
+    const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
+      (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
+    this._engineType = hasSupertonicPaths ? ENGINE_SUPERTONIC : ENGINE_CHATTERBOX
+
+    if (this._engineType === ENGINE_CHATTERBOX) {
+      this._tokenizerPath = tokenizerPath
+      this._speechEncoderPath = speechEncoderPath
+      this._embedTokensPath = embedTokensPath
+      this._conditionalDecoderPath = conditionalDecoderPath
+      this._languageModelPath = languageModelPath
+      this._referenceAudio = referenceAudio
+    } else {
+      this._modelDir = modelDir
+      this._voiceName = voiceName ?? 'F1'
+      this._speed = speed != null ? speed : 1
+      this._numInferenceSteps = numInferenceSteps != null ? numInferenceSteps : 5
+      if (modelDir) {
+        this._tokenizerPath = path.join(modelDir, 'tokenizer.json')
+        this._textEncoderPath = path.join(modelDir, 'onnx', 'text_encoder.onnx')
+        this._latentDenoiserPath = path.join(modelDir, 'onnx', 'latent_denoiser.onnx')
+        this._voiceDecoderPath = path.join(modelDir, 'onnx', 'voice_decoder.onnx')
+        this._voicesDir = path.join(modelDir, 'voices')
+      } else {
+        this._tokenizerPath = tokenizerPath
+        this._textEncoderPath = textEncoderPath
+        this._latentDenoiserPath = latentDenoiserPath
+        this._voiceDecoderPath = voiceDecoderPath
+        this._voicesDir = voicesDir
+      }
+    }
   }
 
   async _load (closeLoader = false, reportProgressCallback) {
     await this._downloadWeights(reportProgressCallback, { closeLoader })
 
-    const tashkeelPath = this._getTashkeelModelDir(this._tashkeelModelDir)
-    console.log('[TTS] Tashkeel model dir:', tashkeelPath)
+    console.log('[TTS] Engine type:', this._engineType)
     console.log('[TTS] Language:', this._config?.language || 'en')
 
-    const ttsParams = {
-      modelPath: this._getMainModelUrl(this._mainModelUrl),
-      configJsonPath: this._getConfigPath(this._configJsonPath),
-      eSpeakDataPath: this._getESpeakDataPath(this._eSpeakDataPath),
-      tashkeelModelDir: tashkeelPath,
-      language: this._config?.language || 'en',
-      useGPU: this._config?.useGPU || false
+    let ttsParams
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      ttsParams = this._getSupertonicTtsParams()
+    } else {
+      ttsParams = {
+        tokenizerPath: this._resolvePath(this._tokenizerPath),
+        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
+        embedTokensPath: this._resolvePath(this._embedTokensPath),
+        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
+        languageModelPath: this._resolvePath(this._languageModelPath),
+        language: this._config?.language || 'en',
+        useGPU: this._config?.useGPU || false
+      }
+      if (this._referenceAudio != null) {
+        ttsParams.referenceAudio = this._referenceAudio
+      }
     }
 
     this.addon = this._createAddon(ttsParams, this._outputCallback.bind(this), this._logger)
     await this.addon.activate()
+  }
+
+  _getSupertonicTtsParams () {
+    const baseDir = this._modelDir
+      ? this._resolvePath(this._modelDir)
+      : ''
+    const onnxDir = baseDir ? path.join(baseDir, 'onnx') : ''
+    const voicesDir = this._voicesDir
+      ? this._resolvePath(this._voicesDir)
+      : (baseDir ? path.join(baseDir, 'voices') : '')
+    return {
+      modelDir: baseDir,
+      tokenizerPath: this._tokenizerPath
+        ? this._resolvePath(this._tokenizerPath)
+        : (baseDir ? path.join(baseDir, 'tokenizer.json') : ''),
+      textEncoderPath: this._textEncoderPath
+        ? this._resolvePath(this._textEncoderPath)
+        : (onnxDir ? path.join(onnxDir, 'text_encoder.onnx') : ''),
+      latentDenoiserPath: this._latentDenoiserPath
+        ? this._resolvePath(this._latentDenoiserPath)
+        : (onnxDir ? path.join(onnxDir, 'latent_denoiser.onnx') : ''),
+      voiceDecoderPath: this._voiceDecoderPath
+        ? this._resolvePath(this._voiceDecoderPath)
+        : (onnxDir ? path.join(onnxDir, 'voice_decoder.onnx') : ''),
+      voicesDir,
+      voiceName: this._voiceName || 'F1',
+      language: this._config?.language || 'en',
+      speed: String(this._speed),
+      numInferenceSteps: String(this._numInferenceSteps)
+    }
   }
 
   /**
@@ -55,42 +139,15 @@ class ONNXTTS extends InferBase {
     return new TTSInterface(binding, configurationParams, outputCb, logger)
   }
 
-  _getMainModelUrl (mainModelUrl) {
+  _resolvePath (filePath) {
+    if (!filePath) return ''
     if (this._loader) {
-      return path.join(this._cache, mainModelUrl)
+      return path.join(this._cache, filePath)
     }
     if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(mainModelUrl)
+      return '\\\\?\\' + path.resolve(filePath)
     }
-    return path.resolve(mainModelUrl)
-  }
-
-  _getConfigPath (configJsonPath) {
-    if (this._loader) {
-      return path.join(this._cache, configJsonPath)
-    }
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(configJsonPath)
-    }
-    return path.resolve(configJsonPath)
-  }
-
-  _getESpeakDataPath (eSpeakDataPath) {
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(eSpeakDataPath)
-    }
-
-    return path.resolve(eSpeakDataPath)
-  }
-
-  _getTashkeelModelDir (tashkeelModelDir) {
-    if (!tashkeelModelDir) {
-      return ''
-    }
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(tashkeelModelDir)
-    }
-    return path.resolve(tashkeelModelDir)
+    return path.resolve(filePath)
   }
 
   async _downloadWeights (reportProgressCallback, { closeLoader }) {
@@ -98,7 +155,21 @@ class ONNXTTS extends InferBase {
       return
     }
 
-    const files = [this._mainModelUrl, this._configJsonPath]
+    const files = this._engineType === ENGINE_SUPERTONIC
+      ? [
+          this._tokenizerPath,
+          this._textEncoderPath,
+          this._latentDenoiserPath,
+          this._voiceDecoderPath,
+          this._voicesDir ? path.join(this._voicesDir, this._voiceName + '.bin') : null
+        ].filter(Boolean)
+      : [
+          this._tokenizerPath,
+          this._speechEncoderPath,
+          this._embedTokensPath,
+          this._conditionalDecoderPath,
+          this._languageModelPath
+        ].filter(Boolean)
 
     this.logger.info('Loading weight files:', files)
 
@@ -115,7 +186,9 @@ class ONNXTTS extends InferBase {
   }
 
   async unload () {
-    return this.addon.destroyInstance()
+    if (this.addon) {
+      return this.addon.destroyInstance()
+    }
   }
 
   async _runInternal (input) {
@@ -133,9 +206,6 @@ class ONNXTTS extends InferBase {
    * Reload the addon with new configuration parameters.
    * Supports changing both runtime parameters (language, useGPU) and model files.
    * @param {Object} newConfig - New configuration parameters
-   * @param {string} [newConfig.mainModelUrl] - Path to new model file
-   * @param {string} [newConfig.configJsonPath] - Path to new config JSON file
-   * @param {string} [newConfig.eSpeakDataPath] - Path to eSpeak data directory
    * @param {string} [newConfig.language] - Language setting (defaults to 'en')
    * @param {boolean} [newConfig.useGPU] - Whether to use GPU (defaults to false)
    * @param {Function} [newConfig.reportProgressCallback] - Hook for download progress updates
@@ -143,18 +213,6 @@ class ONNXTTS extends InferBase {
   async reload (newConfig = {}) {
     this.logger.debug('Reloading addon with new configuration', newConfig)
 
-    // Update model paths if provided
-    if (newConfig.mainModelUrl !== undefined) {
-      this._mainModelUrl = newConfig.mainModelUrl
-    }
-    if (newConfig.configJsonPath !== undefined) {
-      this._configJsonPath = newConfig.configJsonPath
-    }
-    if (newConfig.eSpeakDataPath !== undefined) {
-      this._eSpeakDataPath = newConfig.eSpeakDataPath
-    }
-
-    // Update runtime config
     if (newConfig.language !== undefined) {
       this._config.language = newConfig.language
     }
@@ -167,13 +225,19 @@ class ONNXTTS extends InferBase {
       await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
     }
 
-    const ttsParams = {
-      modelPath: this._getMainModelUrl(this._mainModelUrl),
-      configJsonPath: this._getConfigPath(this._configJsonPath),
-      eSpeakDataPath: this._getESpeakDataPath(this._eSpeakDataPath),
-      tashkeelModelDir: this._getTashkeelModelDir(this._tashkeelModelDir),
-      language: this._config?.language || 'en',
-      useGPU: this._config?.useGPU || false
+    let ttsParams
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      ttsParams = this._getSupertonicTtsParams()
+    } else {
+      ttsParams = {
+        tokenizerPath: this._resolvePath(this._tokenizerPath),
+        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
+        embedTokensPath: this._resolvePath(this._embedTokensPath),
+        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
+        languageModelPath: this._resolvePath(this._languageModelPath),
+        language: this._config?.language || 'en',
+        useGPU: this._config?.useGPU || false
+      }
     }
 
     await this.addon.reload(ttsParams)

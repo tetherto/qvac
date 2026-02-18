@@ -2,10 +2,15 @@
 
 #include <cstdint>
 #include <cstring>
+#include <exception>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string>
+#include <thread>
 #include <type_traits>
 #include <vector>
 
@@ -13,7 +18,6 @@
 
 #ifndef NDEBUG
 #include <cassert>
-#include <thread>
 #endif
 
 #include "Errors.hpp"
@@ -778,5 +782,103 @@ std::vector<CppType> toVector(js_env_t* env, Array array) {
   }
   return result;
 }
+
+/// @brief Utility for executing blocking C++ operations asynchronously and
+/// returning a JavaScript Promise/Future
+/// @details Handles thread spawning, promise creation, and result delivery
+/// back to the JavaScript event loop via uv_async.
+///
+/// @example
+/// return js::JsAsyncTask::run(env, []() {
+///   // Blocking operation here
+///   heavyComputation();
+/// });
+class JsAsyncTask {
+  struct CallbackData {
+    js_env_t* env;
+    js_deferred_t* deferred;
+    uv_async_t* async_handle;
+    std::exception_ptr error;
+
+    CallbackData(js_env_t* e, js_deferred_t* d, uv_async_t* h)
+        : env(e), deferred(d), async_handle(h), error(nullptr) {}
+  };
+
+  static void
+  rejectWithError(js_env_t* env, js_deferred_t* deferred, const char* msg) {
+    js_value_t* error_msg;
+    JS(js_create_string_utf8(env, (const utf8_t*)msg, strlen(msg), &error_msg));
+    js_value_t* error;
+    JS(js_create_error(env, nullptr, error_msg, &error));
+    JS(js_reject_deferred(env, deferred, error));
+  }
+
+  static void onComplete(uv_async_t* handle) {
+    std::unique_ptr<CallbackData> data(
+        static_cast<CallbackData*>(handle->data));
+
+    js_handle_scope_t* scope;
+    JS(js_open_handle_scope(data->env, &scope));
+
+    if (data->error) {
+      try {
+        std::rethrow_exception(data->error);
+      } catch (const std::exception& e) {
+        rejectWithError(data->env, data->deferred, e.what());
+      } catch (...) {
+        const char* unknownMsg = "Unknown error at JsAsyncTask";
+        rejectWithError(data->env, data->deferred, unknownMsg);
+      }
+    } else {
+      // Resolve promise with undefined
+      js_value_t* undefined;
+      JS(js_get_undefined(data->env, &undefined));
+      JS(js_resolve_deferred(data->env, data->deferred, undefined));
+    }
+
+    js_close_handle_scope(data->env, scope);
+
+    uv_close(reinterpret_cast<uv_handle_t*>(handle), [](uv_handle_t* h) {
+      delete reinterpret_cast<uv_async_t*>(h);
+    });
+  }
+
+public:
+  /// @brief Execute blocking work asynchronously and return a promise
+  /// @param env JavaScript environment
+  /// @param work Blocking operation to execute on a background thread
+  /// @return JavaScript Promise that resolves when work completes
+  static js_value_t* run(js_env_t* env, std::function<void()> work) {
+    // Create promise
+    js_deferred_t* deferred;
+    js_value_t* promise;
+    JS(js_create_promise(env, &deferred, &promise));
+
+    // Set up async handle
+    uv_loop_t* loop;
+    JS(js_get_env_loop(env, &loop));
+    auto* async_handle = new uv_async_t{};
+    if (uv_async_init(loop, async_handle, &JsAsyncTask::onComplete) != 0) {
+      delete async_handle;
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InternalError,
+          "Failed to initialize async handle for JsAsyncTask");
+    }
+
+    auto* data = new CallbackData(env, deferred, async_handle);
+    async_handle->data = data;
+
+    std::thread([data, work = std::move(work)]() {
+      try {
+        work();
+      } catch (...) {
+        data->error = std::current_exception();
+      }
+      uv_async_send(data->async_handle);
+    }).detach();
+
+    return promise;
+  }
+};
 
 } // namespace qvac_lib_inference_addon_cpp::js
