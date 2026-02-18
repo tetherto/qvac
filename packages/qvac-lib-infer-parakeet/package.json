@@ -1,0 +1,110 @@
+{
+  "name": "@qvac/transcription-parakeet",
+  "version": "0.1.4",
+  "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.20.0"
+  },
+  "scripts": {
+    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "clean": "rm -rf build/ prebuilds/",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
+    "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target parakeet_tests && bare-make install",
+    "test:cpp:run": "cd build && LLVM_PROFILE_FILE=default.profraw ./parakeet_tests --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target parakeet_tests",
+    "coverage:cpp:summary": "cd build && llvm-cov report ./parakeet_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./parakeet_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./parakeet_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
+    "test:dts": "tsc index.d.ts --noEmit",
+    "download-models": "./scripts/download-models.sh",
+    "example": "bare examples/transcribe.js",
+    "example:real": "bare examples/test-real-audio.js",
+    "prepare:husky": "husky"
+  },
+  "files": [
+    "addonLogging.js",
+    "addonLogging.d.ts",
+    "binding.js",
+    "parakeet.js",
+    "index.js",
+    "index.d.ts",
+    "lib",
+    "prebuilds"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-parakeet"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "parakeet",
+    "qvac",
+    "speech-to-text",
+    "stt",
+    "asr",
+    "nvidia",
+    "onnx",
+    "transcription",
+    "bare"
+  ],
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-parakeet#readme",
+  "devDependencies": {
+    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/dl-base": "^0.1.0",
+    "@qvac/dl-filesystem": "^0.1.0",
+    "@qvac/dl-hyperdrive": "^0.1.0",
+    "bare-buffer": "^3.4.2",
+    "brittle": "^3.17.0",
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "os": "npm:bare-os@^3.6.2",
+    "sinon": "^21.0.0",
+    "standard": "^17.1.2",
+    "tty": "npm:bare-node-tty",
+    "util": "npm:bare-utils@^1.5.1"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.2.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0",
+    "path": "npm:bare-path",
+    "process": "npm:bare-process@^4.2.2"
+  },
+  "peerDependencies": {
+    "@qvac/dl-hyperdrive": "^0.1.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js",
+    "./binding.js": "./binding.js",
+    "./parakeet.js": "./parakeet.js"
+  },
+  "types": "index.d.ts",
+  "lint-staged": {
+    "*.js": "standard --fix"
+  }
+}

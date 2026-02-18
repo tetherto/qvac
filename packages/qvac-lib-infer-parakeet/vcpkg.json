@@ -1,0 +1,45 @@
+{
+  "name": "qvac-lib-infer-parakeet",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "0.12.0"
+    },
+    {
+      "name": "onnxruntime",
+      "default-features": false
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "gpu": {
+      "description": "Enable GPU acceleration",
+      "dependencies": [
+        {
+          "name": "onnxruntime",
+          "features": ["cuda"]
+        }
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ]
+}

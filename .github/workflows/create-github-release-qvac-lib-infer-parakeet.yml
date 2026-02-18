@@ -1,0 +1,85 @@
+name: Create GitHub Release (Parakeet)
+
+on:
+  workflow_call:
+    inputs:
+      published_version:
+        description: "Published version"
+        required: true
+        type: string
+      prev_sha:
+        description: "Previous SHA"
+        required: false
+        type: string
+      workdir:
+        description: "Working directory"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-parakeet"
+  workflow_dispatch:
+    inputs:
+      published_version:
+        description: "Published version"
+        required: true
+        type: string
+      prev_sha:
+        description: "Previous SHA"
+        required: false
+        type: string
+      workdir:
+        description: "Working directory"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-parakeet"
+
+env:
+  PKG_DIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Generate release notes
+        id: release-notes
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          VERSION="${{ inputs.published_version }}"
+          PREV_SHA="${{ inputs.prev_sha }}"
+
+          echo "Generating release notes for version ${VERSION}"
+
+          if [ -f "release-notes/v${VERSION}.md" ]; then
+            NOTES=$(cat "release-notes/v${VERSION}.md")
+            echo "notes<<EOF" >> $GITHUB_OUTPUT
+            echo "$NOTES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "notes=Release v${VERSION}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: qvac-lib-infer-parakeet-v${{ inputs.published_version }}
+          release_name: Parakeet v${{ inputs.published_version }}
+          body: ${{ steps.release-notes.outputs.notes }}
+          draft: false
+          prerelease: false

@@ -1,0 +1,297 @@
+name: CPP Tests (Parakeet)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Debug
+  ENABLE_COVERAGE: ON
+  PKG_DIR: packages/qvac-lib-infer-parakeet
+
+jobs:
+  cpp-tests:
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    permissions:
+      contents: read
+      packages: read
+      checks: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            coverage: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ inputs.repository || github.repository }}
+          token: ${{ secrets.PAT_TOKEN }}
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+          sudo apt update
+          sudo apt install -y g++-13
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - name: Setup LLVM coverage tools symlinks
+        if: matrix.platform == 'linux'
+        run: |
+          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
+          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
+          which llvm-profdata
+          which llvm-cov
+          llvm-profdata --version
+
+      - name: Setup ccache
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get install -y ccache
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.platform == 'linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
+          restore-keys: |
+            ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Generate and build unit tests
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:build
+
+      - name: Download test models
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p models examples/models
+
+          echo "Downloading Parakeet TDT int8 models for C++ tests..."
+          REPO_URL="https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main"
+
+          curl -L -o models/encoder-model.int8.onnx \
+            "${REPO_URL}/encoder-model.int8.onnx" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 600
+
+          curl -L -o models/decoder_joint-model.int8.onnx \
+            "${REPO_URL}/decoder_joint-model.int8.onnx" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 300
+
+          curl -L -o models/nemo128.onnx \
+            "${REPO_URL}/nemo128.onnx" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 60
+
+          curl -L -o models/vocab.txt \
+            "${REPO_URL}/vocab.txt" \
+            --fail --silent --show-error --connect-timeout 30 --max-time 60
+
+          echo "Downloaded models:"
+          ls -lha models/
+
+      - name: Run C++ Unit Tests
+        id: cpp-tests
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "=== Running Parakeet C++ tests ==="
+          pwd
+          ls -la models/
+          npm run test:cpp:run
+        continue-on-error: true
+
+      - name: Debug - List test output files
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "Contents of build/:"
+          ls -la build/ || echo "Directory not found"
+          echo "Profiling files:"
+          ls -la build/*.profraw || echo "No profraw files"
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' build/coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Show ccache statistics
+        if: matrix.platform == 'linux'
+        run: ccache -s
+
+      - name: Archive Coverage Results
+        if: matrix.coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.PKG_DIR }}/build/coverage-html/
+            ${{ env.PKG_DIR }}/build/lcov.info
+            ${{ env.PKG_DIR }}/build/coverage-summary.txt
+            ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Comment Coverage on PR
+        if: matrix.coverage && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && matrix.platform == 'linux'
+        env:
+          COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryPath = '${{ env.PKG_DIR }}/build/coverage-summary.txt';
+
+            if (fs.existsSync(summaryPath)) {
+              const summary = fs.readFileSync(summaryPath, 'utf8');
+              const platform = process.env.PLATFORM;
+              const arch = process.env.ARCH;
+              const coverage = process.env.COVERAGE_PERCENTAGE;
+              const repo = process.env.REPO;
+              const runId = process.env.RUN_ID;
+
+              const body = '## 🧪 C++ Test Coverage Report (Parakeet)\n\n' +
+                '**Platform:** ' + platform + '-' + arch + '\n' +
+                '**Overall Line Coverage:** ' + coverage + '\n\n' +
+                '```\n' + summary + '\n```\n\n' +
+                '---\n\n' +
+                '📥 **[Download Full HTML Report](https://github.com/' + repo + '/actions/runs/' + runId + ')** - Click "coverage-report" artifact';
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          if [ -f build/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
+      - name: Coverage Summary
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "## 🎯 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-reports
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## 📊 C++ Code Coverage Summary (Parakeet)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ParakeetModel C++ tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              platform=$(basename $(dirname "$report"))
+              echo "### $platform" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

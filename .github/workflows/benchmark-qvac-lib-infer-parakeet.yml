@@ -1,0 +1,449 @@
+name: Benchmark (Parakeet)
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_type:
+        description: 'Model type'
+        required: false
+        type: choice
+        default: tdt
+        options:
+          - tdt
+          - ctc
+      max_samples:
+        description: 'Max samples per test (0 = unlimited)'
+        required: false
+        type: number
+        default: 50
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-parakeet
+
+jobs:
+  generate-matrix:
+    runs-on: ai-run-linux
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Generate matrix based on configuration
+        id: set-matrix
+        run: |
+          MODEL_TYPE="${{ github.event.inputs.model_type || 'tdt' }}"
+          MAX_SAMPLES="${{ github.event.inputs.max_samples || '50' }}"
+
+          MATRIX=$(python3 <<PYEOF
+          import json
+
+          model_type = "${MODEL_TYPE}"
+          max_samples = int("${MAX_SAMPLES}")
+
+          # Model directory mapping
+          model_dirs = {
+              "tdt": "parakeet-tdt-0.6b-v3-onnx",
+              "ctc": "parakeet-ctc-0.6b-onnx"
+          }
+
+          # All test configurations to run in parallel
+          test_configs = [
+              # English LibriSpeech tests
+              {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+              {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+              {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+              # Multi-language FLEURS tests
+              {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+              {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+              {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+          ]
+
+          include = []
+          for i, cfg in enumerate(test_configs):
+              mode_str = "streaming" if cfg["streaming"] else "batch"
+              gpu_str = "gpu" if cfg["use_gpu"] else "cpu"
+              variant = f"{cfg['language']}-{cfg['dataset_type']}-{gpu_str}-{mode_str}"
+              include.append({
+                  "model_variant": variant,
+                  "model_dir": model_dirs[model_type],
+                  "model_type": model_type,
+                  "use_gpu": cfg["use_gpu"],
+                  "language": cfg["language"],
+                  "dataset_type": cfg["dataset_type"],
+                  "streaming": cfg["streaming"],
+                  "max_samples": max_samples
+              })
+
+          variants = [cfg["model_variant"] for cfg in include]
+          matrix = {
+              "model_variant": variants,
+              "include": include
+          }
+
+          print(json.dumps(matrix))
+          PYEOF
+          )
+
+          COMPACT_MATRIX=$(echo "$MATRIX" | jq -c .)
+          echo "matrix=$COMPACT_MATRIX" >> $GITHUB_OUTPUT
+          echo "Generated matrix for model type: $MODEL_TYPE"
+          echo "$MATRIX" | jq .
+
+  benchmark-parakeet:
+    needs: generate-matrix
+    runs-on: ai-run-linux
+    timeout-minutes: 1440
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+
+    name: benchmark-${{ matrix.model_variant }}
+
+    steps:
+      - name: Display benchmark configuration
+        run: |
+          echo "=== Benchmark Configuration ==="
+          echo "Test: ${{ matrix.model_variant }}"
+          echo "Dataset: ${{ matrix.dataset_type }} / ${{ matrix.language }}"
+          echo "Model: ${{ matrix.model_type }} (${{ matrix.model_dir }})"
+          echo "GPU: ${{ matrix.use_gpu }}"
+          echo "Streaming: ${{ matrix.streaming }}"
+          echo "Max Samples: ${{ matrix.max_samples }}"
+
+      - name: Maximize build space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+
+          echo "=== Cleaning up disk space ==="
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+
+          echo "=== Disk space after cleanup ==="
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          cp .npmrc benchmarks/server/.npmrc
+
+          echo "=== .npmrc contents ==="
+          cat .npmrc
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg build-essential cmake unzip curl
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g bare-dev
+          npm install -g bare bare-make
+
+      - name: Download prebuilds
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          # Download prebuilds from the latest successful prebuilds workflow run
+          echo "Fetching prebuilds artifact from latest successful prebuilds run..."
+
+          # Get the latest successful prebuilds run ID
+          RUN_ID=$(gh run list --workflow=prebuilds-qvac-lib-infer-parakeet.yml --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "No successful prebuilds run found"
+            exit 1
+          fi
+
+          echo "Using prebuilds from run ID: $RUN_ID"
+
+          # Download the prebuilds artifact
+          gh run download "$RUN_ID" -n parakeet-prebuilds -D ${{ env.PKG_DIR }}/prebuilds
+
+          echo "Prebuilds downloaded:"
+          ls -la ${{ env.PKG_DIR }}/prebuilds/
+
+      - name: Download Parakeet model
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          MODEL_DIR="${{ matrix.model_dir }}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+
+          mkdir -p "models/${MODEL_DIR}"
+          cd "models/${MODEL_DIR}"
+
+          echo "Downloading model: ${MODEL_DIR} (type: ${MODEL_TYPE})"
+
+          # Use public community repos (no auth required)
+          if [ "$MODEL_TYPE" = "tdt" ]; then
+            # TDT model from istupakov's community repo
+            REPO_URL="https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main"
+            curl -L -o encoder-model.onnx "${REPO_URL}/encoder-model.onnx"
+            curl -L -o encoder-model.onnx.data "${REPO_URL}/encoder-model.onnx.data"
+            curl -L -o decoder_joint-model.onnx "${REPO_URL}/decoder_joint-model.onnx"
+            curl -L -o vocab.txt "${REPO_URL}/vocab.txt"
+            # Preprocessor from another community repo
+            curl -L -o preprocessor.onnx "https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx"
+          elif [ "$MODEL_TYPE" = "ctc" ]; then
+            # CTC model from onnx-community
+            REPO_URL="https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx"
+            curl -L -o model.onnx "${REPO_URL}/model.onnx"
+            curl -L -o model.onnx_data "${REPO_URL}/model.onnx_data"
+            curl -L -o tokenizer.json "${REPO_URL}/tokenizer.json"
+          else
+            echo "Model type ${MODEL_TYPE} not supported for auto-download"
+            exit 1
+          fi
+
+          echo "Model files downloaded:"
+          ls -lh
+
+      - name: Update config with runner paths
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          MODEL_DIR="${{ matrix.model_dir }}"
+          RUNNER_MODEL_PATH="${GITHUB_WORKSPACE}/${{ env.PKG_DIR }}/models/${MODEL_DIR}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANGUAGE="${{ matrix.language }}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          USE_GPU="${{ matrix.use_gpu }}"
+          STREAMING_MODE="${{ matrix.streaming }}"
+          STREAMING_CHUNK_SIZE="${{ github.event.inputs.streaming_chunk_size || '64000' }}"
+          MAX_SAMPLES="${{ matrix.max_samples }}"
+
+          CONFIG_FILE="config.yaml"
+
+          echo "Configuring benchmark:"
+          echo "  Dataset: $DATASET_TYPE / $DATASET_LANGUAGE"
+          echo "  Model: $MODEL_TYPE ($MODEL_DIR)"
+          echo "  GPU: $USE_GPU, Streaming: $STREAMING_MODE"
+          echo "  Max samples: $MAX_SAMPLES"
+
+          # Set timeout based on model type
+          case "$MODEL_TYPE" in
+            tdt) TIMEOUT=120 ;;
+            ctc) TIMEOUT=60 ;;
+            eou) TIMEOUT=120 ;;
+            sortformer) TIMEOUT=180 ;;
+            *) TIMEOUT=120 ;;
+          esac
+
+          # Double timeout for streaming mode
+          if [ "$STREAMING_MODE" = "true" ]; then
+            TIMEOUT=$((TIMEOUT * 2))
+          fi
+
+          CONFIG_PATH="benchmarks/client/config/${CONFIG_FILE}"
+
+          # Update config file with runtime values
+          sed -i "s|timeout:.*|timeout: ${TIMEOUT}|" "$CONFIG_PATH"
+          sed -i "s|path:.*|path: \"${RUNNER_MODEL_PATH}\"|" "$CONFIG_PATH"
+          sed -i "s|speaker_group:.*|speaker_group: \"clean\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  dataset_type:.*|  dataset_type: \"${DATASET_TYPE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  language:.*|  language: \"${DATASET_LANGUAGE}\"|" "$CONFIG_PATH"
+          sed -i "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  model_type:.*|  model_type: \"${MODEL_TYPE}\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  use_gpu:.*|  use_gpu: ${USE_GPU}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
+
+          echo "=== Updated ${CONFIG_FILE} ==="
+          cat "$CONFIG_PATH"
+
+      - name: Install main package dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Install benchmark server dependencies
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/server
+        run: |
+          npm install
+          # Install the main package from the local repo (uses current branch code)
+          npm install ../../
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/client
+        run: poetry install --no-cache
+
+      - name: Start benchmark server
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            echo "Server failed to start"
+            cat server.log
+            exit 1
+          fi
+          echo "Server started successfully"
+
+      - name: Run benchmark
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          echo "Running benchmark with config: config.yaml"
+          poetry run python -u -m src.parakeet.main --config config/config.yaml
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop benchmark server
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+            rm server.pid
+          fi
+
+      - name: Display server logs
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/server
+        run: |
+          if [ -f server.log ]; then
+            echo "=== Server Logs ==="
+            cat server.log
+          fi
+
+      - name: Display results summary
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          MODEL_DIR="${{ matrix.model_dir }}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANG="${{ matrix.language }}"
+          GPU_SUFFIX="cpu"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ matrix.use_gpu }}" = "true" ]; then
+            GPU_SUFFIX="gpu"
+          fi
+
+          if [ "${{ matrix.streaming }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_DIR}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_TYPE}-${GPU_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "=== Benchmark Configuration ==="
+          echo "Test: ${{ matrix.model_variant }}"
+          echo "Model Type: ${MODEL_TYPE}"
+          echo "GPU: ${GPU_SUFFIX}"
+          echo "Dataset: ${DATASET_TYPE} / ${DATASET_LANG}"
+          echo "Streaming Mode: ${STREAMING_SUFFIX}"
+          echo ""
+
+          if [ -f "$RESULT_FILE" ]; then
+            echo "=== Results from $RESULT_FILE ==="
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "Samples evaluated: $SAMPLES"
+            echo "WER: $WER"
+            echo "CER: $CER"
+            echo "Load time: $LOAD_TIME"
+            echo "Run time: $RUN_TIME"
+          else
+            echo "❌ Results file not found: $RESULT_FILE"
+          fi
+
+      - name: Add results to job summary
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          MODEL_DIR="${{ matrix.model_dir }}"
+          MODEL_TYPE="${{ matrix.model_type }}"
+          DATASET_TYPE="${{ matrix.dataset_type }}"
+          DATASET_LANG="${{ matrix.language }}"
+          GPU_SUFFIX="cpu"
+          STREAMING_SUFFIX="batch"
+
+          if [ "${{ matrix.use_gpu }}" = "true" ]; then
+            GPU_SUFFIX="gpu"
+          fi
+
+          if [ "${{ matrix.streaming }}" = "true" ]; then
+            STREAMING_SUFFIX="streaming"
+          fi
+
+          RESULT_FILE="benchmarks/results/${MODEL_DIR}/${DATASET_TYPE}-${DATASET_LANG}-clean-${MODEL_TYPE}-${GPU_SUFFIX}-${STREAMING_SUFFIX}.md"
+
+          echo "### ${{ matrix.model_variant }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "$RESULT_FILE" ]; then
+            SAMPLES=$(grep "Samples evaluated:" "$RESULT_FILE" | head -1 | sed 's/.*Samples evaluated: //' | sed 's/\*\*//')
+            WER=$(grep "WER:" "$RESULT_FILE" | head -1 | sed 's/.*WER: //' | sed 's/\*\*//')
+            CER=$(grep "CER:" "$RESULT_FILE" | head -1 | sed 's/.*CER: //' | sed 's/\*\*//')
+            LOAD_TIME=$(grep "Total load time:" "$RESULT_FILE" | sed 's/.*Total load time: //' | sed 's/\*\*//')
+            RUN_TIME=$(grep "Total run time:" "$RESULT_FILE" | sed 's/.*Total run time: //' | sed 's/\*\*//')
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Language | ${DATASET_LANG} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Dataset | ${DATASET_TYPE} (clean) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Model Type | ${MODEL_TYPE} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Samples | ${SAMPLES} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Mode | ${STREAMING_SUFFIX} |" >> $GITHUB_STEP_SUMMARY
+            echo "| WER | ${WER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| CER | ${CER} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Load time | ${LOAD_TIME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Run time | ${RUN_TIME} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Results file not found**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY

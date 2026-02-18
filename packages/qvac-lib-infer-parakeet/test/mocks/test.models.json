@@ -1,0 +1,33 @@
+{
+  "modelName": "parakeet-tdt-0.6b-v3-onnx",
+  "modelFiles": [
+    "encoder-model.onnx",
+    "encoder-model.onnx.data",
+    "decoder_joint-model.onnx",
+    "vocab.txt",
+    "preprocessor.onnx"
+  ],
+  "modelTypes": {
+    "tdt": {
+      "name": "Token-and-Duration Transducer",
+      "files": ["encoder-model.onnx", "decoder_joint-model.onnx", "vocab.txt", "preprocessor.onnx"],
+      "languages": "multi"
+    },
+    "ctc": {
+      "name": "Connectionist Temporal Classification",
+      "files": ["model.onnx", "tokenizer.json"],
+      "languages": "en"
+    },
+    "eou": {
+      "name": "End of Utterance",
+      "files": ["encoder-model.onnx", "decoder_joint-model.onnx", "vocab.txt"],
+      "languages": "multi"
+    },
+    "sortformer": {
+      "name": "Speaker Diarization",
+      "files": ["encoder-model.onnx", "decoder_joint-model.onnx", "vocab.txt"],
+      "languages": "multi"
+    }
+  }
+}
+
