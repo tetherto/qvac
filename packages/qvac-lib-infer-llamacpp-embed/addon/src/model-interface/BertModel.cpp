@@ -486,12 +486,13 @@ std::any BertModel::process(const std::any& input) {
   reset();
 
   if (input.type() == typeid(std::string)) {
-    auto text = std::any_cast<std::string>(input);
+    const auto& text = std::any_cast<const std::string&>(input);
     BertEmbeddings result = encodeHostF32(text);
     return result;
   }
   if (input.type() == typeid(std::vector<std::string>)) {
-    auto sequences = std::any_cast<std::vector<std::string>>(input);
+    const auto& sequences =
+        std::any_cast<const std::vector<std::string>&>(input);
     BertEmbeddings result = encodeHostF32Sequences(sequences);
     return result;
   }
