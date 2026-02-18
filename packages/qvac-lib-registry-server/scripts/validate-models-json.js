@@ -17,10 +17,17 @@ const SOURCE_REFINE = (val) => {
   }
 }
 
+const S3_NO_BUCKET = (val) => {
+  if (!val.startsWith('s3://')) return true
+  const parsed = parseCanonicalSource(val)
+  return parsed.bucket === null
+}
+
 const baseFields = {
   source: z.string()
     .min(1, 'source is required')
-    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }),
+    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
+    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' }),
 
   engine: z.string()
     .min(1, 'engine is required')
