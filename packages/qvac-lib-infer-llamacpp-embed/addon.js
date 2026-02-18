@@ -21,6 +21,7 @@ class BertInterface {
    * Cancel current inference process. Resolves when the job has stopped.
    */
   async cancel () {
+    if (!this._handle) return
     await this._binding.cancel(this._handle)
   }
 
