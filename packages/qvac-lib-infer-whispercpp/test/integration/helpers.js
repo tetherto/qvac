@@ -28,6 +28,22 @@ async function downloadWithHttp (url, destPath, maxRedirects = 10) {
     const https = require('bare-https')
     const { URL } = require('bare-url')
 
+    let settled = false
+    const safeResolve = () => { if (!settled) { settled = true; resolve() } }
+    const safeReject = (err) => { if (!settled) { settled = true; reject(err) } }
+
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    const file = fs.createWriteStream(destPath)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(destPath, () => safeReject(err))
+    })
+
     const parsedUrl = new URL(url)
 
     const options = {
@@ -41,47 +57,45 @@ async function downloadWithHttp (url, destPath, maxRedirects = 10) {
     }
 
     const req = https.request(options, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.destroy()
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        file.destroy()
         req.destroy()
-        if (maxRedirects <= 0) {
-          reject(new Error('Too many redirects'))
-          return
-        }
-        const location = res.headers.location
-        let redirectUrl
-        if (location.startsWith('http://') || location.startsWith('https://')) {
-          redirectUrl = location
-        } else if (location.startsWith('/')) {
-          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
-        } else {
-          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
-          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
-        }
-        downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
-          .then(resolve)
-          .catch(reject)
+        res.destroy()
+
+        fs.unlink(destPath, () => {
+          if (maxRedirects <= 0) {
+            safeReject(new Error('Too many redirects'))
+            return
+          }
+          const location = res.headers.location
+          let redirectUrl
+          if (location.startsWith('http://') || location.startsWith('https://')) {
+            redirectUrl = location
+          } else if (location.startsWith('/')) {
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+          } else {
+            const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+            redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+          }
+          downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
+            .then(safeResolve)
+            .catch(safeReject)
+        })
         return
       }
 
       if (res.statusCode !== 200) {
-        res.destroy()
+        file.destroy()
         req.destroy()
-        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        res.destroy()
+        fs.unlink(destPath, () => safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`)))
         return
       }
 
-      const dir = path.dirname(destPath)
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
-      }
-
-      const writeStream = fs.createWriteStream(destPath)
       let downloadedBytes = 0
       const contentLength = parseInt(res.headers['content-length'] || '0', 10)
 
       res.on('data', (chunk) => {
-        writeStream.write(chunk)
         downloadedBytes += chunk.length
         if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
           const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
@@ -89,31 +103,21 @@ async function downloadWithHttp (url, destPath, maxRedirects = 10) {
         }
       })
 
-      res.on('end', () => {
-        writeStream.end(() => {
-          res.destroy()
-          req.destroy()
-          resolve()
-        })
-      })
-
       res.on('error', (err) => {
-        writeStream.destroy()
-        res.destroy()
-        req.destroy()
-        reject(err)
+        file.destroy()
+        fs.unlink(destPath, () => safeReject(err))
       })
 
-      writeStream.on('error', (err) => {
-        res.destroy()
-        req.destroy()
-        reject(err)
+      res.pipe(file)
+
+      file.on('close', () => {
+        safeResolve()
       })
     })
 
     req.on('error', (err) => {
-      req.destroy()
-      reject(err)
+      file.destroy()
+      fs.unlink(destPath, () => safeReject(err))
     })
 
     req.end()
