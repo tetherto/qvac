@@ -72,7 +72,8 @@ function updateEnvFile (key, value) {
       if (value.includes(' ') || value.includes('=')) formattedValue = `'${value}'`
     }
     const newLine = `${key}=${formattedValue}`
-    if (envContent.includes(`${key}=`)) envContent = envContent.replace(new RegExp(`^${key}=.*$`, 'm'), newLine)
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (envContent.includes(`${key}=`)) envContent = envContent.replace(new RegExp(`^${escapedKey}=.*$`, 'm'), newLine)
     else envContent = envContent.trimEnd() + `\n${newLine}\n`
     fs.writeFileSync(envPath, envContent)
     envCache = null
