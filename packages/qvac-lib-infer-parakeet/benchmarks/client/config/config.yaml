@@ -1,0 +1,26 @@
+server:
+  url: "http://localhost:8080/run"
+  timeout: 60
+  batch_size: 10
+  lib: "@qvac/transcription-parakeet"
+  # version not specified - uses locally installed package
+dataset:
+  dataset_type: "librispeech" # librispeech or fleurs
+  speaker_group: "clean" # clean, other, all, only relevant for english with librispeech
+  language: "english" # english, french, german, spanish, italian, portuguese, mandarin_chinese, russian, japanese, czech
+  max_samples: 0
+wer:
+  enabled: true
+cer:
+  enabled: true
+model:
+  path: "/home/raju/Documents/T/workspace/qvac-lib-infer-parakeet/models/parakeet-tdt-0.6b-v3-onnx"
+  sample_rate: 16000
+  audio_format: "s16le"
+  model_type: "tdt" # tdt, ctc, eou, sortformer
+  max_threads: 4
+  use_gpu: false
+  caption_enabled: false
+  timestamps_enabled: true
+  streaming: false
+  streaming_chunk_size: 64000

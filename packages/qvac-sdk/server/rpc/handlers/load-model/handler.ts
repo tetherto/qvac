@@ -14,8 +14,6 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { generateShortHash, transformConfigForReload } from "@/server/utils";
 import {
-  TTSConfigModelRequiredError,
-  ESpeakDataPathRequiredError,
   ConfigReloadNotSupportedError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
@@ -23,6 +21,7 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { OCR_CRAFT_DETECTOR } from "@/models/registry";
+import { getPlugin } from "@/server/plugins";
 
 const logger = getServerLogger();
 
@@ -44,7 +43,6 @@ export async function handleLoadModel(
     seed,
     projectionModelSrc,
     vadModelSrc,
-    configSrc,
   } = request;
   const canonicalModelType = normalizeModelType(request.modelType);
   const srcVocabSrc =
@@ -54,10 +52,6 @@ export async function handleLoadModel(
   const dstVocabSrc =
     canonicalModelType === ModelType.nmtcppTranslation
       ? (request as { dstVocabSrc?: string }).dstVocabSrc
-      : undefined;
-  const eSpeakDataPath =
-    canonicalModelType === ModelType.onnxTts
-      ? (request as { eSpeakDataPath?: string }).eSpeakDataPath
       : undefined;
   const detectorModelSrc =
     canonicalModelType === ModelType.onnxOcr
@@ -80,34 +74,6 @@ export async function handleLoadModel(
     if (vadModelSrc) {
       vadModelPath = await resolveModelPath(
         vadModelSrc,
-        progressCallback,
-        seed,
-      );
-    }
-
-    let ttsConfigModelPath: string | undefined;
-    if (canonicalModelType === ModelType.onnxTts) {
-      if (configSrc) {
-        ttsConfigModelPath = await resolveModelPath(
-          configSrc,
-          progressCallback,
-          seed,
-        );
-      } else if (modelSrc.startsWith("registry://")) {
-        // Registry: config is the model path + ".json"
-        // e.g., registry://hf/path/model.onnx -> registry://hf/path/model.onnx.json
-        const derivedConfigSrc = `${modelSrc}.json`;
-        logger.info(`Auto-deriving TTS config from: ${derivedConfigSrc}`);
-        ttsConfigModelPath = await resolveModelPath(
-          derivedConfigSrc,
-          progressCallback,
-          seed,
-        );
-      }
-    } else if (configSrc) {
-      // For non-TTS models, still resolve configSrc if provided
-      ttsConfigModelPath = await resolveModelPath(
-        configSrc,
         progressCallback,
         seed,
       );
@@ -137,14 +103,6 @@ export async function handleLoadModel(
           seed,
         );
       }
-    }
-
-    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
-    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
-      throw new TTSConfigModelRequiredError();
-    }
-    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
-      throw new ESpeakDataPathRequiredError();
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths
@@ -190,7 +148,15 @@ export async function handleLoadModel(
       }
     }
 
-    // Generate hash-based modelId
+    // Use plugin's resolveConfig hook if available to resolve model sources
+    let resolvedModelConfig = request.modelConfig as Record<string, unknown> | undefined;
+    const plugin = getPlugin(canonicalModelType);
+    if (plugin?.resolveConfig && resolvedModelConfig) {
+      const resolve = (src: string) => resolveModelPath(src, progressCallback, seed);
+      resolvedModelConfig = await plugin.resolveConfig(resolvedModelConfig, resolve);
+    }
+
+    // Generate hash-based modelId from modelConfig (includes all sources for TTS)
     const configStr = JSON.stringify(
       request.modelConfig,
       Object.keys(request.modelConfig as object).sort(),
@@ -198,14 +164,17 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
+    const loadModelOptions = {
+      ...request,
+      modelConfig: resolvedModelConfig,
+    };
+
     await loadModel({
       modelId,
       modelPath,
-      options: request,
+      options: loadModelOptions,
       projectionModelPath,
       vadModelPath,
-      ttsConfigModelPath,
-      eSpeakDataPath,
       detectorModelPath,
       modelName,
     });

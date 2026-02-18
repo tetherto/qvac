@@ -35,13 +35,13 @@ const baseFields = {
 
   license: z.string().min(1, 'license is required'),
 
-  description: z.string().optional(),
-  quantization: z.string().optional(),
-  params: z.string().optional(),
-  notes: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  description: z.string().max(512).optional(),
+  quantization: z.string().max(512).optional(),
+  params: z.string().max(64).optional(),
+  notes: z.string().max(512).optional(),
+  tags: z.array(z.string().max(128)).max(50).optional(),
   deprecated: z.boolean().optional(),
-  deprecationReason: z.string().optional(),
+  deprecationReason: z.string().max(512).optional(),
   replacedBy: z.string()
     .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
     .optional()
