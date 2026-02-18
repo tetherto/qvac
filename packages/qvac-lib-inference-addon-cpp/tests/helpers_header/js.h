@@ -13,7 +13,10 @@ struct js_value_t {};
 struct js_ref_t {};
 struct js_callback_info_t {};
 struct js_handle_scope_t {};
-struct uv_async_t {};
+struct js_deferred_t {};
+struct uv_async_t {
+  void* data;
+};
 struct uv_handle_t {};
 struct uv_loop_t {};
 
@@ -162,7 +165,10 @@ typedef enum {
 } js_typedarray_type_t;
 
 // Value creation functions
-inline int js_get_undefined(js_env_t* env, js_value_t** result) { return -1; }
+inline int js_get_undefined(js_env_t* env, js_value_t** result) {
+  *result = new js_value_t{};
+  return 0;
+}
 
 inline int js_create_string_utf8(
     js_env_t* env, const utf8_t* data, size_t length, js_value_t** result) {
@@ -372,11 +378,13 @@ js_get_reference_value(js_env_t* env, js_ref_t* ref, js_value_t** result) {
 
 // Handle scope functions
 inline int js_open_handle_scope(js_env_t* env, js_handle_scope_t** result) {
-  return -1;
+  *result = new js_handle_scope_t{};
+  return 0;
 }
 
 inline int js_close_handle_scope(js_env_t* env, js_handle_scope_t* scope) {
-  return -1;
+  delete scope;
+  return 0;
 }
 
 // Global and function call functions
@@ -389,12 +397,16 @@ inline int js_call_function(
 }
 
 // Loop functions
-inline int js_get_env_loop(js_env_t* env, js_loop_t** result) { return -1; }
+inline int js_get_env_loop(js_env_t* env, js_loop_t** result) {
+  *result = new uv_loop_t{};
+  return 0;
+}
 
 inline int js_get_null(js_env_t* env, js_value_t** result) { return -1; }
 
 inline int js_get_boolean(js_env_t* env, bool value, js_value_t** result) {
-  return -1;
+  *result = new js_value_t{};
+  return 0;
 }
 
 // Additional functions needed for OutputCallbackJs
@@ -402,6 +414,30 @@ inline int js_is_exception_pending(js_env_t* env, bool* result) { return -1; }
 
 inline int js_get_and_clear_last_exception(js_env_t* env, js_value_t** result) {
   return -1;
+}
+
+// Promise/Future API (for async operations)
+inline int js_create_promise(
+    js_env_t* env, js_deferred_t** deferred, js_value_t** promise) {
+  *deferred = new js_deferred_t{};
+  *promise = new js_value_t{};
+  return 0;
+}
+
+inline int js_resolve_deferred(
+    js_env_t* env, js_deferred_t* deferred, js_value_t* resolution) {
+  return 0;
+}
+
+inline int js_reject_deferred(
+    js_env_t* env, js_deferred_t* deferred, js_value_t* rejection) {
+  return 0;
+}
+
+inline int js_create_error(
+    js_env_t* env, js_value_t* code, js_value_t* message, js_value_t** result) {
+  *result = new js_value_t{};
+  return 0;
 }
 
 // UV/libuv functions (minimal stubs for compilation)
