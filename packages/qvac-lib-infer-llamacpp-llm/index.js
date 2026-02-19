@@ -9,7 +9,7 @@ const { LlamaInterface } = require('./addon')
 const noop = () => { }
 
 /** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 300
+const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**

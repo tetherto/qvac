@@ -29,7 +29,7 @@ const LONG_PROMPT = [
   { role: 'user', content: 'Tell me a long story about a dragon.' }
 ]
 
-async function setupModel (t) {
+async function setupModel (t, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -41,7 +41,8 @@ async function setupModel (t) {
     gpu_layers: '999',
     ctx_size: '1024',
     n_predict: '32',
-    verbosity: '2'
+    verbosity: '2',
+    ...configOverrides
   }
 
   const specLogger = attachSpecLogger({ forwardToConsole: true })
@@ -100,7 +101,7 @@ test('run | cancel: allowed, cancels current job', { timeout: 600_000 }, async t
 })
 
 test('run | run: second run() throws busy error', { timeout: 600_000 }, async t => {
-  const { model } = await setupModel(t)
+  const { model } = await setupModel(t, { n_predict: '256' })
   const firstResponse = await model.run(LONG_PROMPT)
   let firstError = null
   if (typeof firstResponse.onError === 'function') {
