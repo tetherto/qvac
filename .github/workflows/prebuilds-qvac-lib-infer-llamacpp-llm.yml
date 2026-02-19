@@ -1,4 +1,4 @@
-name: Build Prebuilds (Qvac-lib-infer-llm)
+name: Prebuilds (LLM)
 
 on:
   workflow_dispatch:
@@ -53,7 +53,7 @@ on:
     outputs:
       published_version:
         description: "The version that was published"
-        value: ${{ jobs.publish-npm.outputs.npm_published_version || jobs.publish-gpr.outputs.npm_published_version }}
+        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -182,7 +182,6 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -292,11 +291,38 @@ jobs:
 
       - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         name: Setup vulkan sdk path in linux arm64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           VULKAN_SDK=~/vulkan/aarch64
           echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+          
           cd ~/vulkan
-          ./vulkansdk --maxjobs
+          
+          # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+          S3_BUCKET="tether-ai-dev"
+          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
+          
+          echo "Vulkan SDK version: ${SDK_VERSION}"
+          
+          # Try to download cached build from S3
+          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
+            echo "Found cached Vulkan SDK, extracting..."
+            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          else
+            echo "No cache found, building Vulkan SDK for ARM64..."
+            ./vulkansdk --maxjobs
+            
+            # Upload the compiled SDK to S3 for future runs
+            echo "Uploading compiled SDK to S3..."
+            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
+            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          fi
 
       - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         name: Export rest of vulkan sdk variables in linux
@@ -307,13 +333,28 @@ jobs:
           echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
 
       - if: ${{ matrix.platform == 'win32' }}
-        name: Install vulkan in windows
+        name: Install Vulkan SDK (Windows)
         shell: powershell
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+
+          # Use a stable URL (latest) but download with BITS (more reliable than Invoke-WebRequest)
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+          $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+
+          # Some environments need TLS 1.2 explicitly
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          Write-Host "Downloading Vulkan SDK from $url to $out"
+          Start-BitsTransfer -Source $url -Destination $out
+
+          Write-Host "Installing Vulkan SDK..."
+          & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
 
       - if: ${{ matrix.platform == 'android' }}
         name: Configure runner for cross compilation - android
@@ -432,7 +473,7 @@ jobs:
             ) }}
     continue-on-error: true
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -454,7 +495,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Scope package as @tetherto for GPR
         shell: bash
@@ -486,10 +527,10 @@ jobs:
             ) }}
     continue-on-error: false
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -508,10 +549,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       # Re-assert scope for public npm (fresh checkout)
       - name: Scope package as @qvac for npm
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           set -euo pipefail
@@ -524,3 +566,6 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
+          workdir: ${{ env.WORKDIR }}
+          repo_name: "llamacpp-llm"
+          git-token: ${{ secrets.GITHUB_TOKEN }}

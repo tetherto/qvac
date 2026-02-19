@@ -1,4 +1,4 @@
-name: Delete NPM Versions (Qvac-lib-infer-llamacpp-llm)
+name: Delete NPM Versions (LLM)
 
 on:
   pull_request:
@@ -32,6 +32,10 @@ on:
 
 run-name: Delete NPM Versions (llm-llamacpp) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   print-context-trigger:
     runs-on: ubuntu-latest
