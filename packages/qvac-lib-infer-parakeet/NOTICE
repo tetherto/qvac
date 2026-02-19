@@ -158,7 +158,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.26.0
+  hypercore@11.25.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
