@@ -64,6 +64,8 @@ jobs:
       WORKDIR: ${{ inputs.workdir }}
       PKG_DIR: ${{ github.workspace }}/${{ inputs.workdir }}
       PREBUILDS_DIR: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds
+      # Set on runners without usable GPU; integration tests skip slow finetune tests when set
+      NO_GPU: ${{ matrix.no_gpu }}
 
     strategy:
       fail-fast: false
@@ -74,6 +76,7 @@ jobs:
             platform: linux
             arch: x64
             runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -82,10 +85,12 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
+            no_gpu: 'true'
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+            no_gpu: 'true'
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
@@ -94,10 +99,12 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
+            no_gpu: 'true'
           - os: windows-2022
             platform: win32
             arch: x64
             runner: ai-run-windows-gpu
+            no_gpu: 'true'
 
     steps:
       - name: Setup Node.js
