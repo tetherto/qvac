@@ -8,6 +8,9 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
+/** Max ms to wait for the previous job to finish before throwing. */
+const PREVIOUS_JOB_WAIT_MS = 3_000
+
 /**
  * GGML client implementation for Llama LLM model
  */
@@ -36,7 +39,7 @@ class LlmLlamacpp extends BaseInference {
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._runQueueWaiter = Promise.resolve()
-    this._nextJobId = 0
+    this._lastJobResult = Promise.resolve()
   }
 
   /**
@@ -114,18 +117,12 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // TODO: remove this and jobId completely after refactoring infer-base
-    // Map keys() iterates in insertion order; last key = last added job
-    // Or null and let original callback handle the unknown job
-    const keys = [...this._jobToResponse.keys()]
-    const jobId = keys.length > 0 ? keys[keys.length - 1] : null
-
     // Map C++ mangled type names to expected event names
     // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', jobId, data, null)
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
 
     let mappedEvent = event
@@ -135,7 +132,7 @@ class LlmLlamacpp extends BaseInference {
       mappedEvent = 'Output'
     }
 
-    return this._outputCallback(addon, mappedEvent, jobId, data, error)
+    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
   }
 
   async _withExclusiveRun (fn) {
@@ -193,22 +190,50 @@ class LlmLlamacpp extends BaseInference {
       // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
 
-      const jobId = String(++this._nextJobId)
-      const response = this._createResponse(jobId)
+      // Make sure all events from previous one are done and will not
+      // affect our new job. addon-cpp C++ guarantees every accepted job will
+      // end with output or exception after finishing processing.
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error('Still waiting for previous job to finish processing. Cannot run new job. Only one job per instance is supported.'))
+        }, PREVIOUS_JOB_WAIT_MS)
+        this._lastJobResult
+          // If last job finished.
+          .then(() => { clearTimeout(timer); resolve() })
+          // If last job threw, it still finished and no more events will be generated.
+          .catch(() => { clearTimeout(timer); resolve() })
+      })
 
+      // At this point, previous job is not using 'OnlyOneJob'
+      // slot anymore, so we can safely overwrite it with new response.
+      // We need to create response before running the job,
+      // any events right after successful runJob are not lost.
+      const response = this._createResponse('OnlyOneJob')
+
+      // addon-cpp C++ guarantees no events will be generated
+      // until job is fully accepted. This means even if trying
+      // to queue a job fails right now as not accepted,
+      // it will not generate events.
+      //
+      // If any unexpected exception is thrown (e.g. in the C++ code)
+      // it will unwind here and the job will not be accepted.
       let accepted
       try {
         accepted = await this.addon.runJob(promptMessages)
       } catch (error) {
-        this._deleteJobMapping(jobId)
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(error)
         throw error
       }
       if (!accepted) {
-        this._deleteJobMapping(jobId)
-        throw new Error(
-          'Cannot set new job: a job is already set or being processed'
-        )
+        this._deleteJobMapping('OnlyOneJob')
+        const msg = 'Cannot set new job: a job is already set or being processed'
+        response.failed(new Error(msg))
+        throw new Error(msg)
       }
+
+      // Store the finish promise so the next run can wait on it.
+      this._lastJobResult = response.await()
 
       this.logger.info('Inference job started successfully')
 
