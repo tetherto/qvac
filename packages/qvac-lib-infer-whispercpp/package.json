@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
@@ -31,6 +31,7 @@
     "test:stand-alone:gpu-speed": "brittle-bare test/stand-alone/seed-vulkan-gpu-speed.test.js",
     "test": "npm run test:unit && npm run test:integration && npm run test:integration:multiple && npm run test:integration:chunking && npm run test:integration:live-stream-simultion && npm run test:integration:corrupted-model && npm run test:integration:model-file-validation",
     "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
+    "download-models": "./scripts/download-models.sh",
     "prepare:husky": "husky"
   },
   "files": [
@@ -65,7 +66,6 @@
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "@types/node": "^22",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.5.1",
@@ -96,9 +96,6 @@
     "process": "npm:bare-process@^4.2.2",
     "stream": "npm:bare-node-stream",
     "worker_threads": "npm:bare-node-worker-threads@^1.0.0"
-  },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",

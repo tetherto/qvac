@@ -430,8 +430,8 @@ jobs:
       - name: Download onnx model files
         run: |
           mkdir -p models/ocr
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
 
       - name: Upload models artifacts
         uses: actions/upload-artifact@v4
