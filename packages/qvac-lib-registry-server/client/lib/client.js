@@ -9,8 +9,8 @@ const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')
 const Hyperblobs = require('hyperblobs')
 const IdEnc = require('hypercore-id-encoding')
-const path = require('path')
-const fs = require('fs')
+const path = require('bare-path')
+const fs = require('bare-fs')
 
 class QVACRegistryClient extends ReadyResource {
   constructor (opts = {}) {

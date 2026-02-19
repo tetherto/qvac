@@ -1,12 +1,12 @@
 'use strict'
 
-const path = require('path')
-const fs = require('fs')
+const path = require('bare-path')
+const fs = require('bare-fs')
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') })
 
 const { QVACRegistryClient } = require('../index')
 
-async function downloadAllModelsExample () {
+async function downloadAllModelsExample() {
   const tmpStorage = path.join(process.cwd(), '.cache', `registry-${Date.now()}`)
   const client = new QVACRegistryClient({
     registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY,

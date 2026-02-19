@@ -1,11 +1,11 @@
 'use strict'
 
-const path = require('path')
+const path = require('bare-path')
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') })
 
 const { QVACRegistryClient } = require('../index')
 const IdEnc = require('hypercore-id-encoding')
-const os = require('os')
+const os = require('bare-os')
 
 async function example () {
   const tmpStorage = path.join(os.tmpdir(), `qvac-registry-example-${Date.now()}`)

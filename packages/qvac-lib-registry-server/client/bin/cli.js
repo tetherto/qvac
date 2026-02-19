@@ -1,10 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env bare
 'use strict'
 
 const { command, flag, arg, summary, header, footer, description } = require('paparam')
 const { QVACRegistryClient } = require('../index')
 const IdEnc = require('hypercore-id-encoding')
-const path = require('path')
+const path = require('bare-path')
 
 const VERSION = require('../package.json').version
 

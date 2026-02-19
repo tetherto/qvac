@@ -325,15 +325,10 @@ jobs:
         shell: bash
         run: npm run lint
 
-      - name: Unit tests (node)
+      - name: Unit tests
         working-directory: ${{ env.PKG_DIR }}/client
         shell: bash
         run: npm run test:unit
-
-      - name: Unit tests (bare)
-        working-directory: ${{ env.PKG_DIR }}/client
-        shell: bash
-        run: npm run test:unit:bare
 
       - name: Validate typings
         working-directory: ${{ env.PKG_DIR }}/client
