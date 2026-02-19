@@ -56,9 +56,6 @@ permissions:
   packages: write
   checks: write
 
-env:
-  PKG_DIR: packages/qvac-lib-infer-whispercpp
-
 jobs:
   release-pr-guard:
     name: Release PR Guard
