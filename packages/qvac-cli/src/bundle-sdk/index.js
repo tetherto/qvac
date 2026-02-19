@@ -149,15 +149,9 @@ export async function bundleSdk (options = {}) {
     '  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)'
   )
   logger.info(
-    '  - qvac/worker.pear.entry.mjs (Pear worker entrypoint: plugins + app worker)'
-  )
-  logger.info(
     '  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)'
   )
   logger.info('  - qvac/addons.manifest.json\n')
-  logger.info(
-    'Pear apps: Spawn qvac/worker.pear.entry.mjs as your worker entrypoint'
-  )
   logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
   logger.info(
     'Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n'
@@ -168,8 +162,7 @@ export async function bundleSdk (options = {}) {
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     entryPaths: {
-      worker: entryPath,
-      pearWorker: pearWorkerEntryPath
+      worker: entryPath
     },
     manifestPath: manifestResult.manifestPath
   }
