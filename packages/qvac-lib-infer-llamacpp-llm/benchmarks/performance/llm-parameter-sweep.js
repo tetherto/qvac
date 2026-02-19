@@ -743,12 +743,19 @@ async function main () {
 
   const progressFile = path.join(resultsDir, 'llm-parameter-sweep.progress.json')
   let completedCases = new Set()
+  let runStartedAt = null
   try {
     const progressData = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
     completedCases = new Set(progressData.completedCases || [])
+    runStartedAt = typeof progressData.startedAt === 'string' && progressData.startedAt
+      ? progressData.startedAt
+      : null
     debugLogger.log(`Resuming: ${completedCases.size} cases already completed`)
   } catch {
     // No progress file, start fresh
+  }
+  if (!runStartedAt) {
+    runStartedAt = new Date().toISOString()
   }
 
   let saveProgressTimeout = null
@@ -758,7 +765,10 @@ async function main () {
     }
     saveProgressTimeout = setTimeout(() => {
       try {
-        fs.writeFileSync(progressFile, JSON.stringify({ completedCases: Array.from(completedCases) }, null, 2))
+        fs.writeFileSync(progressFile, JSON.stringify({
+          startedAt: runStartedAt,
+          completedCases: Array.from(completedCases)
+        }, null, 2))
       } catch (writeError) {
         if (debugEnabled) {
           debugLogger.warn(`Failed to save progress: ${writeError.message || String(writeError)}`)
@@ -774,7 +784,10 @@ async function main () {
       saveProgressTimeout = null
     }
     try {
-      fs.writeFileSync(progressFile, JSON.stringify({ completedCases: Array.from(completedCases) }, null, 2))
+      fs.writeFileSync(progressFile, JSON.stringify({
+        startedAt: runStartedAt,
+        completedCases: Array.from(completedCases)
+      }, null, 2))
     } catch (writeError) {
       if (debugEnabled) {
         debugLogger.warn(`Failed to flush progress: ${writeError.message || String(writeError)}`)
@@ -792,7 +805,7 @@ async function main () {
   fs.writeFileSync(jsonlPath, '')
 
   const report = {
-    startedAt: new Date().toISOString(),
+    startedAt: runStartedAt,
     finishedAt: null,
     repeats,
     promptsCount: PROMPTS_PER_CASE,
