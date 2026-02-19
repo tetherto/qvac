@@ -21,10 +21,10 @@ class GGMLBert extends BaseInference {
    * @param {Object} config - environment specific inference setup configuration
    */
   constructor (
-    { opts = {}, loader, logger = null, diskPath = '.', modelName, exclusiveRun = true },
+    { opts = {}, loader, logger = null, diskPath = '.', modelName },
     config = {}
   ) {
-    super({ logger, opts, exclusiveRun })
+    super({ logger, opts })
     this._config = config
     this._diskPath = diskPath
     this._modelName = modelName
