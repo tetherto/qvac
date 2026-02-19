@@ -39,11 +39,9 @@ Identify the full set of changes for the **target add-on package only**, validat
    -----------------------------------
 
 4. **Resolve upstream release tag for `prev_version`**:
-   - Check addon release workflow tag format in `.github/workflows/create-github-release-*.yml` (`tag_name`).
-   - Use that format to build `upstream_tag` from `prev_version`.
-   - Known patterns currently used:
-     - Most addons: `v<version>` (example: `v0.10.7`)
-     - OCR addon: `ocr-onnx-v<version>`
+   - Check addon release workflow tag format in `.github/workflows/create-github-release.yml` (`tag_name`).
+   - Use that format to build `upstream_tag` for `prev_version`.
+   - The tag pattern currently used is `<short_addon_name>-v<version>` (example: `llamacpp-embed-v0.10.7`)
 
 5. **Compute release diff from upstream tag to PR head (package-scoped)**:
    - Primary range for changelog generation: `upstream_tag...HEAD` (or `upstream_tag..HEAD` for commit listing).
