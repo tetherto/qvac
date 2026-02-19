@@ -244,11 +244,6 @@ Python Dependencies
   numpy
     https://numpy.org
 
---- gpl-3.0-or-later (GNU General Public License v3.0 or later) ---
-
-  piper-tts
-    http://github.com/OHF-voice/piper1-gpl
-
 --- mit (MIT License) ---
 
   chatterbox-tts

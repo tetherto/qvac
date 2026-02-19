@@ -10,10 +10,10 @@ const { exec, sortByName } = require('./utils')
 // ---------------------------------------------------------------------------
 function ensureLicenseChecker () {
   try {
-    exec('npx --yes license-checker --version', { stdio: 'ignore' })
+    exec('which license-checker', { stdio: 'ignore' })
   } catch {
     console.log('  Installing license-checker...')
-    exec('npm install license-checker', { stdio: 'ignore' })
+    exec('npx --yes license-checker --production --json --help', { stdio: 'ignore' })
   }
 }
 

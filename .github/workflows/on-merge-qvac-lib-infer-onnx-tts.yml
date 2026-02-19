@@ -16,14 +16,11 @@ on:
       tag:
         description: "Tag to publish with"
         required: false
-        default: ""
+        default: "dev"
         type: choice
         options:
-          - ""
-          - dev
-          - feature
-          - temp
           - latest
+          - dev
 
 permissions:
   contents: write
