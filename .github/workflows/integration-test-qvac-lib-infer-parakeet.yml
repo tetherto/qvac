@@ -115,8 +115,8 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds
           path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
