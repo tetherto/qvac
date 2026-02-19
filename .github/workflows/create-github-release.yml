@@ -1,0 +1,69 @@
+name: Create GitHub Release
+
+on:
+  workflow_call:
+    inputs:
+      repo_name:
+        description: "Short repository name for tag prefix (e.g., 'llamacpp-llm', 'onnx-tts')"
+        required: true
+        type: string
+      release_name:
+        description: "Display name for the release (e.g., 'QVAC LLM Addon')"
+        required: true
+        type: string
+      published_version:
+        description: "Version published in prebuild workflow"
+        required: false
+        type: string
+      prev_sha:
+        description: "Previous commit SHA for version comparison"
+        required: false
+        type: string
+      workdir:
+        description: "Working directory (package path in monorepo)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    if: inputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version bump
+        id: version
+        uses: ./.github/actions/detect-version-bump
+        with:
+          current_version: ${{ inputs.published_version }}
+          prev_sha: ${{ inputs.prev_sha }}
+          workdir: ${{ inputs.workdir }}
+
+      - name: Verify Release Notes
+        if: steps.version.outputs.bumped == 'true'
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          notes_path="release-notes/v${{ steps.version.outputs.current }}.md"
+          if [ ! -s "${notes_path}" ]; then
+            echo "Missing or empty release notes: ${notes_path}"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.bumped == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.repo_name }}-v${{ steps.version.outputs.current }}
+          name: ${{ inputs.release_name }} v${{ steps.version.outputs.current }}
+          body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
