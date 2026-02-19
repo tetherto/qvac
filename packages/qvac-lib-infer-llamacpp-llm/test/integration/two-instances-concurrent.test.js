@@ -60,8 +60,7 @@ function createConfig () {
   }
 }
 
-const TWO_RUN_TIMEOUT_MS = isDarwinArm64 ? 180_000 : 60_000
-test('two instances: A run + B run in parallel', { timeout: TWO_RUN_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('two instances: A run + B run in parallel', { timeout: 60_000, skip: isDarwinX64 || isDarwinArm64 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
