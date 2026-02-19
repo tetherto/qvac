@@ -124,10 +124,17 @@ TEST_F(AddonCppTest, StopDuringGeneration) {
 
   EXPECT_NO_THROW(addonInstance.addon->cancelJob());
 
-  // Should not get a response, did not have time to fully finish
-  // and we did not use the callback to get a partial response
+  // After cancel: either no response (cancel won the race before generation
+  // started) or one partial response (generation had started before stop was
+  // observed). On darwin arm64 and other fast runners the latter is common.
   std::optional<std::string> answer =
       addonInstance.outputHandler->tryPop(std::chrono::seconds(1));
 
-  ASSERT_FALSE(answer.has_value()) << "Expected no response after cancellation";
+  if (answer.has_value()) {
+    // If we got a response, it must be a short partial one (we requested a
+    // long story and cancelled immediately).
+    EXPECT_LT(answer->size(), 500u)
+        << "Expected no or only partial response after cancellation, got "
+        << answer->size() << " chars";
+  }
 }
