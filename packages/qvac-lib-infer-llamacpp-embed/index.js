@@ -5,6 +5,9 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { BertInterface } = require('./addon')
 
+/** Max ms to wait for the previous job to finish before throwing. */
+const PREVIOUS_JOB_WAIT_MS = 3_000
+
 /**
  * GGML client implementation for BERT GTE model
  */
@@ -27,7 +30,7 @@ class GGMLBert extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._nextJobId = 0
+    this._lastJobResult = Promise.resolve()
   }
 
   async _load (closeLoader = false, reportProgressCallback) {
@@ -96,22 +99,45 @@ class GGMLBert extends BaseInference {
       ? { type: 'sequences', input: text }
       : { type: 'text', input: text }
 
-    const jobId = String(++this._nextJobId)
-    const response = this._createResponse(jobId)
+    // Make sure all events from previous one are done and will not
+    // affect our new job. addon-cpp C++ guarantees every accepted job will
+    // end with output or exception after finishing processing.
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Still waiting for previous job to finish processing. Cannot run new job. Only one job per instance is supported.'))
+      }, PREVIOUS_JOB_WAIT_MS)
+      this._lastJobResult
+        .then(() => { clearTimeout(timer); resolve() })
+        .catch(() => { clearTimeout(timer); resolve() })
+    })
 
-    let success
+    // At this point, previous job is not using 'OnlyOneJob'
+    // slot anymore, so we can safely overwrite it with new response.
+    // Create response before running the job so any events right after
+    // successful runJob are not lost.
+    const response = this._createResponse('OnlyOneJob')
+
+    // addon-cpp C++ guarantees no events will be generated until job is
+    // fully accepted. If runJob throws or returns false, no events will be
+    // generated for this job.
+    let accepted
     try {
-      success = await this.addon.runJob(inputData)
+      accepted = await this.addon.runJob(inputData)
     } catch (error) {
-      this._deleteJobMapping(jobId)
+      this._deleteJobMapping('OnlyOneJob')
+      response.failed(error)
       throw error
     }
-    if (!success) {
-      this._deleteJobMapping(jobId)
-      throw new Error('Cannot set new job: a job is already set or being processed')
+    if (!accepted) {
+      this._deleteJobMapping('OnlyOneJob')
+      const msg = 'Cannot set new job: a job is already set or being processed'
+      response.failed(new Error(msg))
+      throw new Error(msg)
     }
 
-    // Only route native events to this job once accepted (events are async after runJob returns)
+    // Store the finish promise so the next run can wait on it.
+    this._lastJobResult = response.await()
+
     return response
   }
 
@@ -136,11 +162,6 @@ class GGMLBert extends BaseInference {
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Map keys() iterates in insertion order; last key = last added job
-    // Or null and let original callback handle the unknown job
-    const keys = [...this._jobToResponse.keys()]
-    const jobId = keys.length > 0 ? keys[keys.length - 1] : null
-
     // Map C++ mangled type names to expected event names
     // Stats / job-ended: LLM uses tokens_per_second; embed uses total_tokens, total_time_ms, etc. (RuntimeStats)
     const isStatsData = typeof data === 'object' && data !== null && (
@@ -148,7 +169,7 @@ class GGMLBert extends BaseInference {
       ('total_tokens' in data || 'total_time_ms' in data || 'batch_size' in data || 'context_size' in data)
     )
     if (isStatsData) {
-      return this._outputCallback(addon, 'JobEnded', jobId, data, null)
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
 
     let mappedEvent = event
@@ -157,7 +178,7 @@ class GGMLBert extends BaseInference {
     } else if (event.includes('Embeddings')) {
       mappedEvent = 'Output'
     }
-    return this._outputCallback(addon, mappedEvent, jobId, data, error)
+    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
   }
 }
 
