@@ -131,7 +131,6 @@ jobs:
 
   sanity-checks:
     needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
