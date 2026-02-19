@@ -163,30 +163,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers gcc-13 g++-13 libstdc++-13-dev
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Download Bergamot model from S3
+      - name: Download models via Hyperdrive
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Downloading Bergamot en-it model from S3..."
-          mkdir -p model/bergamot/enit
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
+          echo "Downloading integration test models via Hyperdrive..."
+          bare scripts/download-models-hyperdrive.js --target integration
           echo "Bergamot model files:"
           ls -la model/bergamot/enit/
-
-      - name: Download IndicTrans model from S3
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Downloading IndicTrans en-indic model from S3..."
-          mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 

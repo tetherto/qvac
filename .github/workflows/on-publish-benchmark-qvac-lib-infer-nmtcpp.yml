@@ -106,24 +106,8 @@ jobs:
           echo "### 🔧 OPUS/GGML Models (qvac)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.opus_pairs }}"
           echo ""
-          echo "📍 S3 Model Paths:"
-          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.opus_pairs }}"
-          for pair in "${PAIRS[@]}"; do
-            pair=$(echo "$pair" | xargs)
-            echo "- **$pair**: \`s3://\${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$pair/\`"
-          done
-          echo ""
           echo "### 🔧 Bergamot Models (qvac_bergamot)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.bergamot_pairs }}"
           echo ""
-          echo "📍 S3 Model Paths:"
-          IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.bergamot_pairs }}"
-          for pair in "${PAIRS[@]}"; do
-            pair=$(echo "$pair" | xargs)
-            src_lang="${pair%-*}"
-            trg_lang="${pair#*-}"
-            pair_code="${src_lang}${trg_lang}"
-            echo "- **$pair**: \`s3://\${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-${pair_code}/\`"
-          done
-          echo ""
+          echo "📥 Models downloaded via Hyperdrive (decentralized)"
           echo "🔗 View results in the benchmark workflow artifacts"

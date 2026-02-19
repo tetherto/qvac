@@ -12,6 +12,8 @@ import traceback
 import click
 import time
 import json
+import gzip
+import tempfile
 from pathlib import Path
 
 # Dataset configuration
@@ -222,6 +224,127 @@ def copy_dataset_files(dataset_name, src_lang, trg_lang, results_dir, data_dir):
     return dest_src, dest_trg
 
 
+def ensure_firefox_model(src_lang, trg_lang):
+    """Ensure Firefox Translations (Bergamot) model is available for the given language pair.
+
+    Checks if the model files exist in the Firefox models directory.
+    If missing, downloads from Firefox Translations GitHub repo using git-lfs.
+
+    Args:
+        src_lang: Source language code (e.g., 'en', 'de')
+        trg_lang: Target language code (e.g., 'it', 'fr')
+
+    Returns:
+        Path to the model directory, or None if download failed
+    """
+    firefox_models_dir = Path(os.environ.get(
+        "FIREFOX_MODELS_DIR",
+        Path.home() / ".local/share/bergamot/models/firefox"
+    ))
+
+    pair_code = f"{src_lang}{trg_lang}"
+
+    # Check if model already exists (base-memory or tiny)
+    for variant in ["base-memory", "tiny"]:
+        model_dir = firefox_models_dir / variant / pair_code
+        model_file = model_dir / f"model.{pair_code}.intgemm.alphas.bin"
+        if model_file.exists():
+            print(f"  Bergamot model found: {model_dir}")
+            return model_dir
+
+    # Model not found — try to download from Firefox Translations GitHub
+    print(f"  Bergamot model not found for {pair_code}. Downloading from Firefox Translations GitHub...")
+
+    # First try: use the bare download script (if bare is available)
+    qvac_repo_dir = Path(__file__).parent.parent.parent.resolve()
+    download_script = qvac_repo_dir / "scripts" / "download-models-hyperdrive.js"
+
+    if download_script.exists():
+        bare_check = subprocess.run(["bare", "--version"], capture_output=True, text=True)
+        if bare_check.returncode == 0:
+            model_dir = firefox_models_dir / "base-memory" / pair_code
+            print(f"  Using bare download script (Hyperdrive + Firefox fallback)...")
+            result = subprocess.run([
+                "bare", str(download_script),
+                "--target", "bergamot",
+                "--pair", f"{src_lang}-{trg_lang}",
+                "--output", str(model_dir)
+            ], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print(f"  ✅ Downloaded via bare script to {model_dir}")
+                return model_dir
+            else:
+                print(f"  ⚠️  bare download script failed: {result.stderr[:200]}")
+                print(f"  Falling back to direct git download...")
+
+    # Second try: download directly from Firefox Translations GitHub using git + git-lfs
+    git_check = subprocess.run(["git", "--version"], capture_output=True, text=True)
+    if git_check.returncode != 0:
+        print(f"  ❌ git is not installed. Cannot download Firefox models.")
+        print(f"  Install models manually from: https://github.com/mozilla/firefox-translations-models")
+        return None
+
+    lfs_check = subprocess.run(["git", "lfs", "version"], capture_output=True, text=True)
+    if lfs_check.returncode != 0:
+        print(f"  ❌ git-lfs is not installed. Install with: sudo apt-get install git-lfs && git lfs install")
+        return None
+
+    try:
+        with tempfile.TemporaryDirectory(prefix=f"firefox-{pair_code}-") as tmpdir:
+            print(f"  Cloning Firefox Translations repo (sparse, metadata only)...")
+            subprocess.run([
+                "git", "clone", "--depth", "1", "--filter=blob:none", "--sparse",
+                "https://github.com/mozilla/firefox-translations-models.git",
+                tmpdir
+            ], check=True, capture_output=True, text=True)
+
+            subprocess.run([
+                "git", "-C", tmpdir, "sparse-checkout", "set",
+                f"models/base-memory/{pair_code}"
+            ], check=True, capture_output=True, text=True)
+
+            print(f"  Pulling LFS files for {pair_code}...")
+            subprocess.run([
+                "git", "-C", tmpdir, "lfs", "pull",
+                "--include", f"models/base-memory/{pair_code}/*"
+            ], check=True, capture_output=True, text=True)
+
+            # Decompress .gz files and copy to destination
+            src_dir = Path(tmpdir) / "models" / "base-memory" / pair_code
+            if not src_dir.exists():
+                print(f"  ❌ Language pair {pair_code} not found in Firefox Translations repo")
+                return None
+
+            model_dir = firefox_models_dir / "base-memory" / pair_code
+            model_dir.mkdir(parents=True, exist_ok=True)
+
+            gz_files = list(src_dir.glob("*.gz"))
+            if not gz_files:
+                print(f"  ❌ No model files found for {pair_code}")
+                return None
+
+            print(f"  Decompressing {len(gz_files)} files...")
+            for gz_file in gz_files:
+                output_file_path = model_dir / gz_file.stem  # Remove .gz extension
+                with gzip.open(gz_file, 'rb') as f_in:
+                    with open(output_file_path, 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                size_mb = output_file_path.stat().st_size / (1024 * 1024)
+                print(f"    ✅ {output_file_path.name} ({size_mb:.1f}MB)")
+
+            print(f"  ✅ Firefox model downloaded to {model_dir}")
+            return model_dir
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Failed to download Firefox model: {e}")
+        print(f"  stderr: {e.stderr[:300] if e.stderr else 'N/A'}")
+        return None
+    except Exception as e:
+        print(f"  ❌ Error downloading Firefox model: {e}")
+        return None
+
+
 def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_pivot=False, is_quantized_model=False, hyperparams=None, use_batch=False):
     """Run translation using the specified translator. Returns elapsed time in seconds.
 
@@ -240,6 +363,15 @@ def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_
     env = os.environ.copy()
     env["SRC"] = src_lang
     env["TRG"] = trg_lang
+
+    # Auto-download Bergamot models if missing (for bergamot and qvac_bergamot translators)
+    if translator in ("bergamot", "qvac_bergamot"):
+        # For pivot translation, ensure both models exist
+        if use_pivot and src_lang != "en" and trg_lang != "en":
+            ensure_firefox_model(src_lang, "en")
+            ensure_firefox_model("en", trg_lang)
+        else:
+            ensure_firefox_model(src_lang, trg_lang)
 
     # Check if we should use pivot translation
     if use_pivot and src_lang != "en" and trg_lang != "en":

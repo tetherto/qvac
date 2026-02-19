@@ -34,8 +34,11 @@ Bergamot translator has been added as a new backend option alongside QVAC, OpusM
 
 The bergamot translator:
 
-1. **Model Management**: Uses Firefox Translations models downloaded via git-lfs
+1. **Model Management**: Uses Firefox Translations models
    - Models are stored in `~/.local/share/bergamot/models/firefox/base-memory/`
+   - **Auto-download**: `evaluate.py` automatically downloads missing models before translation:
+     - **18 pairs with Hyperdrive keys** → downloaded via P2P Hyperdrive (using `bare scripts/download-models-hyperdrive.js`)
+     - **All other pairs** → downloaded from [Firefox Translations GitHub](https://github.com/mozilla/firefox-translations-models) via `git-lfs`
    - Automatically creates bergamot config files with optimized parameters
    - Uses base-memory architecture (optimized for speed and quality)
 
@@ -110,8 +113,10 @@ To test the bergamot translator locally with Firefox models:
 ```bash
 cd benchmarks/quality_eval
 
-# First, set up Firefox models (if not already done by workflow)
-# FIREFOX_MODELS_DIR=/path/to/firefox-translations-models/models
+# Models are auto-downloaded when running evaluate.py
+# Or pre-download manually:
+bare ../../scripts/download-models-hyperdrive.js --target bergamot --pair en-it \
+  --output ~/.local/share/bergamot/models/firefox/base-memory/enit
 
 # Test en-it
 echo "Hello, how are you?" | SRC=en TRG=it python3.10 translators/bergamot_translator.py
@@ -163,10 +168,14 @@ If you see import errors for bergamot:
 
 ### Model Not Found Errors
 If you see "Firefox translations model not found for {pair}":
-- Check that the workflow downloaded the models (check workflow logs)
+- `evaluate.py` now auto-downloads missing models. Ensure `git` and `git-lfs` are installed:
+  ```bash
+  sudo apt-get install git-lfs && git lfs install
+  ```
+- If `bare` is installed, the download script uses Hyperdrive (fastest for supported pairs)
 - Verify the language pair exists in Firefox Translations models
 - Check models directory: `ls ~/.local/share/bergamot/models/firefox/base-memory/`
-- For local testing, ensure FIREFOX_MODELS_DIR points to the correct location
+- For local testing, you can also set `FIREFOX_MODELS_DIR` to point to a custom location
 
 ### Translation Returns Empty Results
 - Check that all model files exist in the model directory:

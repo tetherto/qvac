@@ -171,7 +171,7 @@ echo ""
 
 # Run batch with real-time output
 BATCH_LOG="$RESULTS_DIR/batch_temp_$$.log"
-bare benchmarks/evaluate-bare.js $COMMON_ARGS 2>&1 | tee "$BATCH_LOG"
+bare benchmarks/backend_evaluate_bare.js $COMMON_ARGS 2>&1 | tee "$BATCH_LOG"
 BATCH_OUTPUT=$(cat "$BATCH_LOG")
 rm -f "$BATCH_LOG"
 
@@ -190,7 +190,7 @@ echo ""
 
 # Run sequential with real-time output (using tee to capture and display)
 SEQ_LOG="$RESULTS_DIR/seq_temp_$$.log"
-bare benchmarks/evaluate-bare.js $COMMON_ARGS --sequential 2>&1 | tee "$SEQ_LOG"
+bare benchmarks/backend_evaluate_bare.js $COMMON_ARGS --sequential 2>&1 | tee "$SEQ_LOG"
 SEQ_OUTPUT=$(cat "$SEQ_LOG")
 rm -f "$SEQ_LOG"
 

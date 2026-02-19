@@ -335,6 +335,9 @@ class TranslationNmtcpp extends BaseInference {
    * This is more efficient than calling run() multiple times as it processes
    * all texts together in a single batch operation.
    *
+   * Native C++ runtime stats (TPS, totalTokens, totalTime, decodeTime, etc.)
+   * are available after the call via the `batchStats` getter.
+   *
    * @param {string[]} texts - Array of texts to translate
    * @returns {Promise<string[]>} - Array of translated texts (same order as input)
    * @example
@@ -344,6 +347,7 @@ class TranslationNmtcpp extends BaseInference {
    *   "Goodbye"
    * ]);
    * // translations = ["Ciao mondo", "Come stai?", "Arrivederci"]
+   * console.log(model.batchStats) // { TPS: 245.3, totalTokens: 12, ... }
    */
   async runBatch (texts) {
     if (!this.addon) {
@@ -370,16 +374,31 @@ class TranslationNmtcpp extends BaseInference {
       processedTexts = texts.map(text => this._prepareInputText(text))
     }
 
-    // Call batch translation
-    const results = await this.addon.processBatch(processedTexts)
+    // Call batch translation — returns { translations: string[], stats: object }
+    const result = await this.addon.processBatch(processedTexts)
+
+    // Store native C++ runtime stats from batch processing
+    this._batchStats = result.stats || null
+
+    const translations = result.translations
 
     // Post-process results if needed
     if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
-      return processor.postprocessBatch(results, this._params.dstLang)
+      return processor.postprocessBatch(translations, this._params.dstLang)
     }
 
     // Remove language prefix from output for standard models
-    return results.map(text => text.replace(/^>>[a-z]+\s*<<\s*/i, ''))
+    return translations.map(text => text.replace(/^>>[a-z]+\s*<<\s*/i, ''))
+  }
+
+  /**
+   * Returns the native C++ runtime stats from the last runBatch() call.
+   * Stats include totalTokens, totalTime, decodeTime, TPS, and
+   * optionally encodeTime and TTFT (for GGML backends).
+   * @returns {Object|null} Native runtime stats or null if no batch has been run
+   */
+  get batchStats () {
+    return this._batchStats || null
   }
 
   createAddon (configurationParams) {
