@@ -38,7 +38,7 @@
 
 ## Purpose
 
-`@qvac/ocr-onnx` is a cross-platform npm package providing Optical Character Recognition (OCR) for Bare runtime applications. It exposes a unified inference API that runs a two-stage pipeline (text detection then text recognition) using ONNX Runtime and OpenCV, with multi-language and multi-script support. Applications supply detector and recognizer model paths; the package handles image decoding, geometry, and inference orchestration.
+`@qvac/ocr-onnx` is a cross-platform npm package providing Optical Character Recognition (OCR) for Bare runtime applications. It runs a two-stage pipeline (text detection then text recognition) using **models exported from [EasyOCR](https://github.com/JaidedAI/EasyOCR) to ONNX format**. The pipeline (preprocessing, geometry, and tunable parameters such as `magRatio`) is aligned with EasyOCR’s design. The package runs these ONNX models via ONNX Runtime and OpenCV, with multi-language and multi-script support. Applications supply detector and recognizer model paths; the package handles image decoding, geometry, and inference orchestration.
 
 **Core value:**
 - High-level JavaScript API for OCR (load → run image path → receive text regions with bounding boxes)
@@ -48,7 +48,7 @@
 
 ## Key Features
 
-- **Two-stage pipeline**: Detector (ONNX) locates text regions; OpenCV extracts bounding boxes; Recognizer (ONNX) extracts text per region
+- **Models exported from EasyOCR to ONNX**: Two-stage flow—detector (ONNX) locates text regions; OpenCV extracts bounding boxes; recognizer (ONNX) extracts text per region. The detector and recognizer are EasyOCR models exported to ONNX; preprocessing (e.g. dynamic-width recognizer, CRAFT-style detection) is aligned with EasyOCR.
 - **Multi-script support**: Latin, Arabic, Bengali, Cyrillic, Devanagari, Thai, Chinese (sim/tra), Japanese, Korean, Tamil, Telugu, Kannada
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android with platform-specific ONNX execution providers (CoreML, NNAPI, DirectML)
 - **Image formats**: BMP (decoded in JS), JPEG and PNG (decoded in C++ via OpenCV)
@@ -348,7 +348,7 @@ graph TB
 
 #### **Pipeline (pipeline/Pipeline.cpp)**
 
-**Responsibility:** Sequential three-step OCR: (1) validate input, decode image if encoded, resize to max 1200px on longest side, run StepDetectionInference (textMap, linkMap); (2) StepBoundingBox (aligned/unaligned boxes); (3) StepRecognizeText (InferredText per region). Tracks detectionTime, recognitionTime, totalTime, textRegionsCount for runtimeStats(); timeout applies to pipeline run.
+**Responsibility:** Sequential three-step OCR using models exported from EasyOCR to ONNX: (1) validate input, decode image if encoded, resize to max 1200px on longest side, run StepDetectionInference (textMap, linkMap); (2) StepBoundingBox (aligned/unaligned boxes); (3) StepRecognizeText (InferredText per region). Tracks detectionTime, recognitionTime, totalTime, textRegionsCount for runtimeStats(); timeout applies to pipeline run.
 
 **Why C++:**
 - Single-threaded by design to avoid races and keep shared state simple
@@ -440,7 +440,7 @@ sequenceDiagram
 
 ### Context
 
-OCR requires two models: a detector (text region localization) and a recognizer (text string per region). Both are typically exported from PyTorch/Python (e.g. EasyOCR-style). A runtime is needed that runs ONNX models across all target platforms with optional GPU acceleration.
+OCR requires two models: a detector (text region localization) and a recognizer (text string per region). This package uses **models exported from [EasyOCR](https://github.com/JaidedAI/EasyOCR) to ONNX format**; pipeline hyperparameters (e.g. magRatio, recognizer height/batch behavior) are aligned with EasyOCR. A runtime is needed that runs these ONNX models across all target platforms with optional GPU acceleration.
 
 ### Decision
 
