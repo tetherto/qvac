@@ -6,11 +6,11 @@ const test = require('brittle')
 const { Readable } = require('streamx')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
 
-// Create a HyperDrive loader
 function createLoader () {
-  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  return new FakeDL({})
 }
 
 // Create a pushable Readable to simulate a live input source.

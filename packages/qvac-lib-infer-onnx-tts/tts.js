@@ -8,7 +8,7 @@ const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 class TTSInterface {
   /**
    * @param {Object} binding - the native binding object
-   * @param {Object} configuration Optional initial configuration (e.g., modelPath, language, eSpeakDataPath)
+   * @param {Object} configuration Optional initial configuration (engine-specific model paths, language, etc.)
    * @param {Function} outputCb - To be called on any inference event ( started, new output, error, etc )
    * @param {Function} transitionCb - To be called on addon state changes (LISTENING, IDLE, STOPPED, etc )
    */

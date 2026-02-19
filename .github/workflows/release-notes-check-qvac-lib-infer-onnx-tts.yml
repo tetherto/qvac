@@ -118,7 +118,8 @@ jobs:
             const repo = context.repo.repo;
 
             const version = "${{ steps.pr-package-version.outputs.version }}";
-            const expected = `release-notes/v${version}.md`;
+            const workdir = "${{ inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}";
+            const expected = `${workdir}/release-notes/v${version}.md`;
 
             const files = await github.paginate(
               github.rest.pulls.listFiles,

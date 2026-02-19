@@ -5,7 +5,6 @@ const path = require('bare-path')
 const { QVACRegistryClient } = require('@qvac/registry-client')
 
 const DEFAULT_DISK_PATH = './models/ocr'
-const DEFAULT_REGISTRY_CORE_KEY = 'u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y'
 
 const OCR_MODELS = {
   detector: {
@@ -35,9 +34,7 @@ async function ensureModels (diskPath) {
   fs.mkdirSync(diskPath, { recursive: true })
 
   console.log('Downloading OCR models from registry...')
-  const client = new QVACRegistryClient({
-    registryCoreKey: DEFAULT_REGISTRY_CORE_KEY
-  })
+  const client = new QVACRegistryClient()
 
   try {
     await client.ready()

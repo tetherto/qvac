@@ -99,7 +99,6 @@ graph TB
     subgraph "Core Libs"
         BASE["@qvac/infer-base"]
         DECODER["@qvac/decoder-audio"]
-        DL["@qvac/dl-hyperdrive"]
     end
 
     subgraph "Native Framework"
@@ -114,7 +113,6 @@ graph TB
     APP --> WHISPER
     WHISPER --> BASE
     WHISPER --> DECODER
-    WHISPER --> DL
     WHISPER --> ADDON
     ADDON --> BARE
     ADDON --> WCPP
