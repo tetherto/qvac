@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -21,7 +22,7 @@ enum class BackendType {
 #endif
 };
 
-class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel {
+class TranslationModel : public qvac_lib_inference_addon_cpp::model::IModel , qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   TranslationModel() {};
 
@@ -35,16 +36,16 @@ public:
 
   void load();
 
-  void unload(); // TODO Should I remove this function ?
+  void unload();
 
-  void reload(); // TODO Should I remove this function ?
+  void reload(); 
 
-  void reset(); // TODO Should I remove this function ?
+  void reset() const;
 
-  void setUseGpu(bool useGpu); // TODO Should I remove this function ?
+  void setUseGpu(bool useGpu);
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
-  getConfig() const; // TODO Should I remove this function ?
+  getConfig() const; 
 
   bool isLoaded() const;
 
@@ -62,6 +63,8 @@ public: // overrides
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
 
+  void cancel() const override;
+
 private:
   BackendType detectBackendType(const std::string& modelPath);
 
@@ -74,6 +77,8 @@ private:
   std::string processString(const std::string& input);
 
 private:
+  mutable std::mutex mtx_;
+
   std::string srcLang_;
 
   std::string tgtLang_;
@@ -82,13 +87,13 @@ private:
 
   BackendType backendType_ = BackendType::GGML;
 
-  std::unique_ptr<nmt_context, decltype(&nmt_free)> nmtCtx_{nullptr, nmt_free};
+  mutable std::unique_ptr<nmt_context, decltype(&nmt_free)> nmtCtx_{nullptr, nmt_free};
 
 #ifdef HAVE_BERGAMOT
   std::unique_ptr<bergamot_context, decltype(&bergamot_free)> bergamotCtx_{nullptr, bergamot_free};
 #endif
 
-  bool isFirstSentence_ = true;
+  mutable bool isFirstSentence_ = true;
 
   bool useGpu_ = true; // Default to GPU enabled
 

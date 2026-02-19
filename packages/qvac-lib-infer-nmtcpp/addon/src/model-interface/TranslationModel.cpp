@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -214,7 +215,8 @@ void TranslationModel::saveLoadParams(const std::string& modelPath) {
   modelPath_ = modelPath;
 }
 
-void TranslationModel::reset() {
+void TranslationModel::reset() const {
+  std::scoped_lock<std::mutex> scoped_lock(mtx_);
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT && bergamotCtx_) {
     bergamot_reset_runtime_stats(bergamotCtx_.get());
@@ -227,8 +229,6 @@ void TranslationModel::reset() {
     nmt_reset_state(nmtCtx_.get());
   }
   isFirstSentence_ = true;
-  srcLang_.clear();
-  tgtLang_.clear();
 }
 
 bool TranslationModel::isLoaded() const {
@@ -295,6 +295,7 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
 }
 
 std::any TranslationModel::process(const std::any& input) {
+  std::unique_lock<std::mutex> unique_lock(mtx_);
   if (auto* inputString = std::any_cast<std::string>(&input)) {
     return processString(*inputString);
   } else if (
@@ -308,6 +309,10 @@ std::any TranslationModel::process(const std::any& input) {
   }
 }
 
+void TranslationModel::cancel() const 
+{
+    reset();
+}
 std::string TranslationModel::processString(const std::string& text) {
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {

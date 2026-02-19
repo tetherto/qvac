@@ -98,7 +98,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       env,
       args.get(0, "jsHandle"),
       args.getFunction(2, "outputCallback"),
-      args.get(3, "transitionCb"),
       std::move(outHandlers));
 
   auto addon =
@@ -139,9 +138,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     throw StatusError(general_error::InvalidArgument, type);
   }
 
-  instance.addonCpp->runJob(std::move(anyInput));
-
-  return nullptr;
+  return instance.runJob(std::move(anyInput));
 }
 JSCATCH
 
