@@ -7,6 +7,11 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
         required: true
         type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/qvac-lib-infer-parakeet"
   workflow_call:
     inputs:
       ref:
@@ -14,9 +19,11 @@ on:
         type: string
       repository:
         type: string
-
-env:
-  PKG_DIR: packages/qvac-lib-infer-parakeet
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        required: false
+        default: "packages/qvac-lib-infer-parakeet"
+        type: string
 
 jobs:
   run-integration-tests:
@@ -79,7 +86,7 @@ jobs:
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
           set -eu
           echo "Writing .npmrc for dual registry install…"
-          cd ${{ env.PKG_DIR }}
+          cd ${{ inputs.workdir }}
           cat > .npmrc <<NPMRC
           always-auth=true
           registry=https://registry.npmjs.org/
@@ -99,7 +106,7 @@ jobs:
           fi
 
       - name: Install NPM dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ inputs.workdir }}
         run: |
           npm install
           npm install -g bare bare-make
@@ -108,12 +115,12 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@v4
         with:
-          name: prebuilds
-          path: ${{ env.PKG_DIR }}/prebuilds
+          path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
           mkdir -p prebuilds
@@ -123,7 +130,7 @@ jobs:
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
           find prebuilds -depth -name 'tetherto_*' | while read -r file; do
@@ -149,9 +156,9 @@ jobs:
 
       - name: Run integration test
         shell: bash
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/${{ env.PKG_DIR }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/${{ env.PKG_DIR }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/${{ inputs.workdir }}/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}

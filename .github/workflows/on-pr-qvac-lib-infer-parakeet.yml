@@ -3,7 +3,7 @@ name: On PR Trigger (Parakeet)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main, release-*]
+    branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/qvac-lib-infer-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
@@ -55,9 +55,6 @@ permissions:
   pull-requests: write
   packages: write
   checks: write
-
-env:
-  PKG_DIR: packages/qvac-lib-infer-parakeet
 
 jobs:
   release-pr-guard:
@@ -138,6 +135,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
     needs: context
@@ -177,6 +175,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
     needs: [context, prebuild]

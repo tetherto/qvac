@@ -78,15 +78,13 @@ const PYTHON_DEP_PATHS = {
   ],
   'qvac-lib-infer-onnx-tts': [
     'benchmarks/python-server/requirements.txt',
-    'benchmarks/python-server/requirements-tts.txt',
     'benchmarks/python-server/requirements-chatterbox.txt',
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
   ],
   'qvac-lib-infer-whispercpp': [
     'benchmarks/ci/requirements-conversion.txt',
-    'benchmarks/client/pyproject.toml',
-    'benchmarks/mlc/client/pyproject.toml'
+    'benchmarks/client/pyproject.toml'
   ],
   'qvac-lib-inference-addon-onnx-ocr-fasttext': [
     'benchmarks/quality_eval/requirements.txt'
