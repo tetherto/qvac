@@ -21,118 +21,21 @@ const cv::Scalar DOCTR_DET_STD(0.264, 0.2749, 0.287);
 
 constexpr double PIXEL_MAX = 255.0;
 
-// Compute mean probability within a contour region as confidence score
-float boxScore(const cv::Mat& probMap, const std::vector<cv::Point>& contour) {
-  cv::Rect bbox = cv::boundingRect(contour);
-
-  // Clamp to image bounds
+// Compute mean probability within a bounding rect region (matching OnnxTR assume_straight_pages=True)
+float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
+  // Clamp to image bounds (matching Python: np.clip(np.floor/ceil(...), 0, dim-1))
   int x0 = std::max(0, bbox.x);
   int y0 = std::max(0, bbox.y);
-  int x1 = std::min(probMap.cols, bbox.x + bbox.width);
-  int y1 = std::min(probMap.rows, bbox.y + bbox.height);
+  int x1 = std::min(probMap.cols - 1, bbox.x + bbox.width);
+  int y1 = std::min(probMap.rows - 1, bbox.y + bbox.height);
 
   if (x1 <= x0 || y1 <= y0) {
     return 0.0F;
   }
 
-  cv::Mat mask = cv::Mat::zeros(y1 - y0, x1 - x0, CV_8UC1);
-  std::vector<cv::Point> shifted;
-  shifted.reserve(contour.size());
-  for (const auto& pt : contour) {
-    shifted.emplace_back(pt.x - x0, pt.y - y0);
-  }
-  cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{shifted}, cv::Scalar(255));
-
-  cv::Mat roi = probMap(cv::Rect(x0, y0, x1 - x0, y1 - y0));
-  return static_cast<float>(cv::mean(roi, mask)[0]);
-}
-
-// Unclip a polygon by expanding it by offset = area * unclip_ratio / perimeter
-std::vector<cv::Point> unclipPolygon(const std::vector<cv::Point>& polygon, float unclipRatio) {
-  double area = std::abs(cv::contourArea(polygon));
-  double perimeter = cv::arcLength(polygon, true);
-  if (perimeter < 1e-6) {
-    return polygon;
-  }
-
-  double offset = area * unclipRatio / perimeter;
-
-  // Use morphological dilation as a simpler alternative to Clipper library
-  cv::Rect bbox = cv::boundingRect(polygon);
-  int margin = static_cast<int>(std::ceil(offset)) + 1;
-  int maskW = bbox.width + 2 * margin;
-  int maskH = bbox.height + 2 * margin;
-
-  cv::Mat mask = cv::Mat::zeros(maskH, maskW, CV_8UC1);
-  std::vector<cv::Point> shifted;
-  shifted.reserve(polygon.size());
-  for (const auto& pt : polygon) {
-    shifted.emplace_back(pt.x - bbox.x + margin, pt.y - bbox.y + margin);
-  }
-  cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{shifted}, cv::Scalar(255));
-
-  // Dilate by offset
-  int kernelSize = static_cast<int>(std::round(offset * 2)) + 1;
-  if (kernelSize < 3) kernelSize = 3;
-  cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(kernelSize, kernelSize));
-  cv::Mat dilated;
-  cv::dilate(mask, dilated, kernel);
-
-  // Find contour of dilated mask
-  std::vector<std::vector<cv::Point>> contours;
-  cv::findContours(dilated, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-  if (contours.empty()) {
-    return polygon;
-  }
-
-  // Pick largest contour
-  size_t largestIdx = 0;
-  double largestArea = 0;
-  for (size_t i = 0; i < contours.size(); i++) {
-    double a = cv::contourArea(contours[i]);
-    if (a > largestArea) {
-      largestArea = a;
-      largestIdx = i;
-    }
-  }
-
-  // Shift back to original coordinates
-  std::vector<cv::Point> result;
-  result.reserve(contours[largestIdx].size());
-  for (const auto& pt : contours[largestIdx]) {
-    result.emplace_back(pt.x + bbox.x - margin, pt.y + bbox.y - margin);
-  }
-  return result;
-}
-
-// Ensure points are in clockwise order: top-left, top-right, bottom-right, bottom-left
-std::array<cv::Point2f, 4> makeClockwise(cv::Point2f pts[4]) {
-  // Sort by y first
-  std::array<cv::Point2f, 4> sorted = {pts[0], pts[1], pts[2], pts[3]};
-  std::sort(sorted.begin(), sorted.end(), [](const cv::Point2f& a, const cv::Point2f& b) {
-    return a.y < b.y;
-  });
-
-  // Top two points: left one is top-left, right one is top-right
-  std::array<cv::Point2f, 4> result{};
-  if (sorted[0].x <= sorted[1].x) {
-    result[0] = sorted[0]; // top-left
-    result[1] = sorted[1]; // top-right
-  } else {
-    result[0] = sorted[1];
-    result[1] = sorted[0];
-  }
-
-  // Bottom two points: right one is bottom-right, left one is bottom-left
-  if (sorted[2].x >= sorted[3].x) {
-    result[2] = sorted[2]; // bottom-right
-    result[3] = sorted[3]; // bottom-left
-  } else {
-    result[2] = sorted[3];
-    result[3] = sorted[2];
-  }
-
-  return result;
+  // Simple rectangular mean (no polygon masking) - matches Python's assume_straight_pages=True
+  cv::Mat roi = probMap(cv::Rect(x0, y0, x1 - x0 + 1, y1 - y0 + 1));
+  return static_cast<float>(cv::mean(roi)[0]);
 }
 
 } // namespace
@@ -145,7 +48,7 @@ StepDoctrDetection::StepDoctrDetection(const ORTCHAR_T* pathDetector, bool useGP
   ALOG_INFO(std::string("[DoctrDetection] ONNX session created"));
 }
 
-std::tuple<cv::Mat, float, int, int> StepDoctrDetection::preprocessImage(const cv::Mat& img) {
+std::tuple<cv::Mat, float, int, int, int, int> StepDoctrDetection::preprocessImage(const cv::Mat& img) {
   int h = img.rows;
   int w = img.cols;
   float scale = std::min(
@@ -161,9 +64,15 @@ std::tuple<cv::Mat, float, int, int> StepDoctrDetection::preprocessImage(const c
   cv::Mat floatImg;
   resized.convertTo(floatImg, CV_32FC3, 1.0 / PIXEL_MAX);
 
-  // Pad to 1024x1024
+  // Symmetric padding to 1024x1024 (matching OnnxTR: symmetric_pad=True)
+  // Center the image in the canvas with equal padding on both sides
+  int deltaW = DBNET_INPUT_SIZE - newW;
+  int deltaH = DBNET_INPUT_SIZE - newH;
+  int padLeft = (deltaW + 1) / 2;  // ceil(deltaW / 2)
+  int padTop = (deltaH + 1) / 2;   // ceil(deltaH / 2)
+
   cv::Mat padded = cv::Mat::zeros(DBNET_INPUT_SIZE, DBNET_INPUT_SIZE, CV_32FC3);
-  cv::Mat roi = padded(cv::Rect(0, 0, newW, newH));
+  cv::Mat roi = padded(cv::Rect(padLeft, padTop, newW, newH));
   floatImg.copyTo(roi);
 
   // Normalize: (pixel - mean) / std
@@ -173,9 +82,9 @@ std::tuple<cv::Mat, float, int, int> StepDoctrDetection::preprocessImage(const c
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[DoctrDetection] Preprocessed image: " + std::to_string(w) + "x" + std::to_string(h) +
        " -> " + std::to_string(newW) + "x" + std::to_string(newH) +
-       " (scale=" + std::to_string(scale) + ")");
+       " (scale=" + std::to_string(scale) + ", pad=" + std::to_string(padLeft) + "," + std::to_string(padTop) + ")");
 
-  return {padded, scale, newW, newH};
+  return {padded, scale, newW, newH, padLeft, padTop};
 }
 
 cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
@@ -231,41 +140,48 @@ cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
        (outShape.size() > 2 ? ", " + std::to_string(outShape[2]) : "") +
        (outShape.size() > 3 ? ", " + std::to_string(outShape[3]) : "") + "]");
 
-  // Output can be [1, 1, H, W] or [1, H, W] - extract as 2D probability map
-  cv::Mat probMap;
+  // Output can be [1, 1, H, W] or [1, H, W] - extract as 2D logit map
+  cv::Mat logitMap;
   if (outShape.size() == 4) {
     // [batch, channels, height, width]
     int outH = static_cast<int>(outShape[2]);
     int outW = static_cast<int>(outShape[3]);
-    probMap = cv::Mat(outH, outW, CV_32F, outData).clone();
+    logitMap = cv::Mat(outH, outW, CV_32F, outData).clone();
   } else if (outShape.size() == 3) {
     // [batch, height, width]
     int outH = static_cast<int>(outShape[1]);
     int outW = static_cast<int>(outShape[2]);
-    probMap = cv::Mat(outH, outW, CV_32F, outData).clone();
+    logitMap = cv::Mat(outH, outW, CV_32F, outData).clone();
   } else {
     throw std::runtime_error("[DoctrDetection] Unexpected output tensor shape with " +
                              std::to_string(outShape.size()) + " dimensions");
   }
 
+  // Apply sigmoid to convert logits to probabilities (matching Python OnnxTR's expit(logits))
+  cv::Mat probMap;
+  cv::exp(-logitMap, probMap);   // probMap = exp(-logits)
+  probMap = 1.0F / (1.0F + probMap);  // probMap = 1 / (1 + exp(-logits)) = sigmoid(logits)
+
   return probMap;
 }
 
 std::pair<std::vector<std::array<cv::Point2f, 4>>, std::vector<float>>
-StepDoctrDetection::extractPolygons(const cv::Mat& probMap, const cv::Mat& /*origProbMap*/,
+StepDoctrDetection::extractPolygons(const cv::Mat& probMap,
                                     float scale, int paddedW, int paddedH,
+                                    int padLeft, int padTop,
                                     int origW, int origH) {
-  // Crop probability map to the actually used region (remove padding)
-  cv::Mat croppedProb = probMap(cv::Rect(0, 0,
-      std::min(paddedW, probMap.cols),
-      std::min(paddedH, probMap.rows)));
+  // Work on the FULL probability map (matching Python OnnxTR which does NOT crop before postprocessing)
+  // The padded regions have near-zero probabilities and are filtered by box_thresh.
+  int mapH = probMap.rows;
+  int mapW = probMap.cols;
 
-  // Binarize
+  // Binarize using >= threshold (matching Python: (proba_map >= bin_thresh).astype(np.uint8))
+  // Note: cv::THRESH_BINARY uses >, so we subtract a tiny epsilon for >= behavior
   cv::Mat binary;
-  cv::threshold(croppedProb, binary, BINARIZE_THRESHOLD, 1.0, cv::THRESH_BINARY);
-  binary.convertTo(binary, CV_8U, 255);
+  cv::threshold(probMap, binary, BINARIZE_THRESHOLD - 1e-6F, 1.0, cv::THRESH_BINARY);
+  binary.convertTo(binary, CV_8U);
 
-  // Morphological opening to clean noise
+  // Morphological opening to clean noise (matching Python: np.ones((3,3), uint8))
   cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
   cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel);
 
@@ -280,44 +196,74 @@ StepDoctrDetection::extractPolygons(const cv::Mat& probMap, const cv::Mat& /*ori
   std::vector<float> confidences;
 
   for (const auto& contour : contours) {
-    // Filter by minimum size
+    // Filter by minimum size (matching Python: contour span < 2 in any dimension)
     cv::Rect bbox = cv::boundingRect(contour);
     if (bbox.width < MIN_SIZE_BOX || bbox.height < MIN_SIZE_BOX) {
       continue;
     }
 
-    // Compute confidence score from probability map
-    float score = boxScore(croppedProb, contour);
+    // Compute confidence score from rectangular region
+    // (matching OnnxTR assume_straight_pages=True: score from boundingRect, not contour mask)
+    float score = boxScore(probMap, bbox);
     if (score < BOX_THRESHOLD) {
       continue;
     }
 
-    // Unclip the polygon to expand detected regions
-    std::vector<cv::Point> expanded = unclipPolygon(contour, UNCLIP_RATIO);
-    if (expanded.size() < 3) {
+    // Unclip: expand the bounding rect by distance = area * unclip_ratio / perimeter
+    // (matching OnnxTR: polygon_to_box uses contourArea/arcLength of the RECTANGULAR points,
+    //  then pyclipper expands each side by distance)
+    double rectArea = static_cast<double>(bbox.width) * static_cast<double>(bbox.height);
+    double rectPerimeter = 2.0 * (static_cast<double>(bbox.width) + static_cast<double>(bbox.height));
+    double distance = rectArea * UNCLIP_RATIO / rectPerimeter;
+
+    // Expand bounding rect by distance on each side (equivalent to pyclipper JT_ROUND on a rect)
+    float ex0 = static_cast<float>(bbox.x) - static_cast<float>(distance);
+    float ey0 = static_cast<float>(bbox.y) - static_cast<float>(distance);
+    float ex1 = static_cast<float>(bbox.x + bbox.width) + static_cast<float>(distance);
+    float ey1 = static_cast<float>(bbox.y + bbox.height) + static_cast<float>(distance);
+
+    // Convert to normalized coordinates [0, 1] (matching Python's normalization by map dimensions)
+    float nx0 = ex0 / static_cast<float>(mapW);
+    float ny0 = ey0 / static_cast<float>(mapH);
+    float nx1 = ex1 / static_cast<float>(mapW);
+    float ny1 = ey1 / static_cast<float>(mapH);
+
+    // Remove padding effect (matching Python's _remove_padding with symmetric_pad=True)
+    // For h > w (tall image): x_new = (x_old - 0.5) * h/w + 0.5
+    // For w > h (wide image): y_new = (y_old - 0.5) * w/h + 0.5
+    if (origH > origW) {
+      // Image is taller: horizontal padding was added, adjust x coordinates
+      float ratio = static_cast<float>(origH) / static_cast<float>(origW);
+      nx0 = (nx0 - 0.5F) * ratio + 0.5F;
+      nx1 = (nx1 - 0.5F) * ratio + 0.5F;
+    } else if (origW > origH) {
+      // Image is wider: vertical padding was added, adjust y coordinates
+      float ratio = static_cast<float>(origW) / static_cast<float>(origH);
+      ny0 = (ny0 - 0.5F) * ratio + 0.5F;
+      ny1 = (ny1 - 0.5F) * ratio + 0.5F;
+    }
+
+    // Clip to [0, 1] (matching Python's np.clip(loc_pred, 0, 1))
+    nx0 = std::clamp(nx0, 0.0F, 1.0F);
+    ny0 = std::clamp(ny0, 0.0F, 1.0F);
+    nx1 = std::clamp(nx1, 0.0F, 1.0F);
+    ny1 = std::clamp(ny1, 0.0F, 1.0F);
+
+    // Convert to absolute pixel coordinates in original image
+    float x0 = nx0 * static_cast<float>(origW);
+    float y0 = ny0 * static_cast<float>(origH);
+    float x1 = nx1 * static_cast<float>(origW);
+    float y1 = ny1 * static_cast<float>(origH);
+
+    if ((x1 - x0) < 1.0F || (y1 - y0) < 1.0F) {
       continue;
     }
 
-    // Get minimum area rectangle
-    cv::RotatedRect rotRect = cv::minAreaRect(expanded);
-    cv::Point2f pts[4];
-    rotRect.points(pts);
-
-    // Scale back to original image coordinates
-    for (int i = 0; i < 4; i++) {
-      pts[i].x = std::clamp(pts[i].x / scale, 0.0F, static_cast<float>(origW));
-      pts[i].y = std::clamp(pts[i].y / scale, 0.0F, static_cast<float>(origH));
-    }
-
-    // Ensure clockwise ordering
-    std::array<cv::Point2f, 4> polygon = makeClockwise(pts);
-
-    // Verify the scaled polygon is still valid (non-degenerate)
-    float polyW = std::sqrt(std::pow(polygon[1].x - polygon[0].x, 2) + std::pow(polygon[1].y - polygon[0].y, 2));
-    float polyH = std::sqrt(std::pow(polygon[3].x - polygon[0].x, 2) + std::pow(polygon[3].y - polygon[0].y, 2));
-    if (polyW < 1.0F || polyH < 1.0F) {
-      continue;
-    }
+    // Convert to 4-point polygon: top-left, top-right, bottom-right, bottom-left
+    std::array<cv::Point2f, 4> polygon = {{
+        cv::Point2f(x0, y0), cv::Point2f(x1, y0),
+        cv::Point2f(x1, y1), cv::Point2f(x0, y1)
+    }};
 
     polygons.push_back(polygon);
     confidences.push_back(score);
@@ -334,12 +280,12 @@ StepDoctrDetection::Output StepDoctrDetection::process(const Input& input) {
        "[DoctrDetection] Processing image " +
        std::to_string(input.origImg.cols) + "x" + std::to_string(input.origImg.rows));
 
-  auto [preprocessed, scale, paddedW, paddedH] = preprocessImage(input.origImg);
+  auto [preprocessed, scale, paddedW, paddedH, padLeft, padTop] = preprocessImage(input.origImg);
 
   cv::Mat probMap = runInference(preprocessed);
 
   auto [polygons, confidences] = extractPolygons(
-      probMap, probMap, scale, paddedW, paddedH,
+      probMap, scale, paddedW, paddedH, padLeft, padTop,
       input.origImg.cols, input.origImg.rows);
 
   Output output;
@@ -349,6 +295,8 @@ StepDoctrDetection::Output StepDoctrDetection::process(const Input& input) {
   output.probMap = probMap;
   output.paddedW = paddedW;
   output.paddedH = paddedH;
+  output.padLeft = padLeft;
+  output.padTop = padTop;
 
   return output;
 }

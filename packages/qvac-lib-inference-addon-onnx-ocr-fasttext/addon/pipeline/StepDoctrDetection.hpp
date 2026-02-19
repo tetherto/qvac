@@ -27,8 +27,8 @@ private:
   Ort::Session ortSession_{nullptr};
 
   // Preprocess: resize with aspect ratio + pad to 1024x1024, normalize with docTR stats
-  // Returns: {preprocessed mat, scale, padded width, padded height}
-  std::tuple<cv::Mat, float, int, int> preprocessImage(const cv::Mat& img);
+  // Returns: {preprocessed mat, scale, newW, newH, padLeft, padTop}
+  std::tuple<cv::Mat, float, int, int, int, int> preprocessImage(const cv::Mat& img);
 
   // Run ONNX inference, returns probability map
   cv::Mat runInference(const cv::Mat& preprocessed);
@@ -36,8 +36,9 @@ private:
   // Post-process: binarize, contours, unclip, extract polygons
   // Returns polygons and their confidence scores in original image space
   std::pair<std::vector<std::array<cv::Point2f, 4>>, std::vector<float>>
-  extractPolygons(const cv::Mat& probMap, const cv::Mat& origProbMap,
+  extractPolygons(const cv::Mat& probMap,
                   float scale, int paddedW, int paddedH,
+                  int padLeft, int padTop,
                   int origW, int origH);
 };
 

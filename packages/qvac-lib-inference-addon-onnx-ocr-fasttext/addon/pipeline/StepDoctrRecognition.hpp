@@ -27,6 +27,11 @@ public:
   Output process(Input input);
 
 private:
+  struct SoftmaxResult {
+    int bestIdx;
+    float bestProb;
+  };
+
   Ort::Env ortEnv_;
   Ort::Session ortSession_{nullptr};
   int batchSize_;
@@ -36,12 +41,17 @@ private:
   static const std::string VOCAB;
   // Index 126 = <eos> for attention models, blank token for CTC models
   static constexpr int SPECIAL_TOKEN_IDX = 126;
+  // Parsed vocab characters (initialized once in constructor)
+  std::vector<std::string> vocabChars_;
 
   // Crop, perspective-transform, and preprocess a text region for recognition
   cv::Mat preprocessCrop(const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
 
   // Run batch ONNX inference, returns raw logits [batch, seq_len, vocab_size+3]
   cv::Mat runBatchInference(const std::vector<cv::Mat>& images);
+
+  // Softmax + argmax for a single timestep, returns best index and its probability
+  SoftmaxResult softmaxArgmax(const cv::Mat& preds, int batchIdx, int timestep, int vocabSize);
 
   // Decode attention-based predictions (PARSeq, SAR, ViTSTR, MASTER): softmax + argmax, stop at <eos>
   std::pair<std::string, float> decodeAttention(const cv::Mat& preds, int batchIdx);

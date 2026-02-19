@@ -7,6 +7,16 @@ const os = require('bare-os')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
+// DocTR model download URLs from OnnxTR GitHub releases
+const DOCTR_MODEL_URLS = {
+  'db_resnet50.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
+  'parseq.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
+  'db_mobilenet_v3_large.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
+  'crnn_mobilenet_v3_small.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx'
+}
+
+const DOCTR_MODELS_DIR = path.resolve('.', 'test/models/doctr')
+
 // Mapping from original filename to renamed filename for mobile
 // Files are renamed to avoid Android resource merger conflicts (same base name, different extension)
 const mobileAssetMapping = {
@@ -54,6 +64,43 @@ async function downloadFile (url, destPath) {
   const buffer = await response.arrayBuffer()
   fs.writeFileSync(destPath, Buffer.from(buffer))
   console.log(`   Downloaded: ${path.basename(destPath)}`)
+}
+
+/**
+ * Downloads a single DocTR model if not already cached
+ * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
+ */
+async function downloadDoctrModel (filename) {
+  const destPath = path.join(DOCTR_MODELS_DIR, filename)
+  if (fs.existsSync(destPath)) return
+  const url = DOCTR_MODEL_URLS[filename]
+  if (!url) throw new Error(`No download URL for DocTR model: ${filename}`)
+  console.log(`Downloading ${filename}...`)
+  const fetch = require('bare-fetch')
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
+  const buffer = await response.arrayBuffer()
+  fs.writeFileSync(destPath, Buffer.from(buffer))
+  console.log(`Downloaded ${filename} (${Math.round(buffer.byteLength / 1024 / 1024)}MB)`)
+}
+
+/**
+ * Ensures all requested DocTR models are available, downloading from OnnxTR GitHub releases if needed
+ * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
+ * @returns {Promise<Object>} Map of model name (without extension) to full path
+ */
+async function ensureDoctrModels (models) {
+  if (!models) models = Object.keys(DOCTR_MODEL_URLS)
+  fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
+  for (const filename of models) {
+    await downloadDoctrModel(filename)
+  }
+  const paths = {}
+  for (const filename of models) {
+    const key = filename.replace('.onnx', '')
+    paths[key] = path.join(DOCTR_MODELS_DIR, filename)
+  }
+  return paths
 }
 
 /**
@@ -167,10 +214,64 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = []) {
     - Detected texts: ${JSON.stringify(outputTexts)}`
 }
 
+/**
+ * Helper to run a single DocTR OCR pass and return results
+ * @param {Object} t - brittle test handle
+ * @param {Object} params - OCR params (pathDetector, pathRecognizer, etc.)
+ * @param {string} imagePath - Path to the image file
+ * @returns {Promise<{results: Array, stats: Object}>}
+ */
+async function runDoctrOCR (t, params, imagePath) {
+  const { ONNXOcr } = require('../..')
+
+  const onnxOcr = new ONNXOcr({
+    params: {
+      langList: ['en'],
+      useGPU: false,
+      pipelineMode: 'doctr',
+      ...params
+    },
+    opts: { stats: true }
+  })
+
+  await onnxOcr.load()
+
+  try {
+    const response = await onnxOcr.run({
+      path: imagePath,
+      options: { paragraph: false }
+    })
+
+    let results = []
+
+    await response
+      .onUpdate(output => {
+        t.ok(Array.isArray(output), 'output should be an array')
+        results = output.map(o => ({ text: o[1], confidence: o[2], bbox: o[0] }))
+      })
+      .onError(error => {
+        t.fail('unexpected error: ' + JSON.stringify(error))
+      })
+      .await()
+
+    return { results, stats: response.stats || {} }
+  } finally {
+    try {
+      await onnxOcr.unload()
+    } catch (e) {
+      t.comment('unload() error: ' + e.message)
+    }
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+}
+
 module.exports = {
   isMobile,
   platform,
   getImagePath,
   ensureModelPath,
-  formatOCRPerformanceMetrics
+  ensureDoctrModels,
+  DOCTR_MODELS_DIR,
+  formatOCRPerformanceMetrics,
+  runDoctrOCR
 }

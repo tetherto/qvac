@@ -1,76 +1,46 @@
 'use strict'
 
-const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const path = require('bare-path')
-const { getImagePath, formatOCRPerformanceMetrics } = require('./utils')
+const { getImagePath, formatOCRPerformanceMetrics, runDoctrOCR, ensureDoctrModels } = require('./utils')
 
-const TEST_TIMEOUT = 120 * 1000
+const TEST_TIMEOUT = 180 * 1000
 
-const DOCTR_DETECTOR = path.resolve('.', 'test/models/doctr/db_resnet50.onnx')
-const DOCTR_RECOGNIZER = path.resolve('.', 'test/models/doctr/parseq.onnx')
+let DOCTR_DETECTOR
+let DOCTR_RECOGNIZER
+
+test('DocTR french - download models', { timeout: TEST_TIMEOUT }, async function (t) {
+  const models = await ensureDoctrModels(['db_resnet50.onnx', 'parseq.onnx'])
+  DOCTR_DETECTOR = models.db_resnet50
+  DOCTR_RECOGNIZER = models.parseq
+  t.ok(DOCTR_DETECTOR, 'db_resnet50 model available')
+  t.ok(DOCTR_RECOGNIZER, 'parseq model available')
+})
 
 test('DocTR french test - accented characters', { timeout: TEST_TIMEOUT }, async function (t) {
   const imagePath = getImagePath('/test/images/french.bmp')
 
   t.comment('Testing DocTR pipeline with French image (accented chars): ' + imagePath)
 
-  const onnxOcr = new ONNXOcr({
-    params: {
-      pathDetector: DOCTR_DETECTOR,
-      pathRecognizer: DOCTR_RECOGNIZER,
-      langList: ['fr'],
-      useGPU: false,
-      pipelineMode: 'doctr'
-    },
-    opts: { stats: true }
-  })
+  const { results, stats } = await runDoctrOCR(t, {
+    pathDetector: DOCTR_DETECTOR,
+    pathRecognizer: DOCTR_RECOGNIZER,
+    langList: ['fr']
+  }, imagePath)
 
-  await onnxOcr.load()
-  t.pass('DocTR model loaded successfully')
+  const outputTexts = results.map(r => r.text)
+  t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
+  t.comment('Detected texts (French): ' + JSON.stringify(outputTexts))
+  t.comment('Full output: ' + JSON.stringify(results.map(r => ({
+    text: r.text,
+    confidence: r.confidence
+  }))))
 
-  try {
-    const response = await onnxOcr.run({
-      path: imagePath,
-      options: { paragraph: false }
-    })
+  // Check for accented characters in the output
+  const hasAccent = outputTexts.some(t =>
+    /[àâéèêëîïôùûüçÀÂÉÈÊËÎÏÔÙÛÜÇ]/.test(t)
+  )
+  t.comment('Contains accented characters: ' + hasAccent)
 
-    let outputTexts = []
-
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'output should be an array')
-        t.ok(output.length > 0, `should detect text regions, got ${output.length}`)
-        outputTexts = output.map(o => o[1])
-        t.comment('Detected texts (French): ' + JSON.stringify(outputTexts))
-        t.comment('Full output: ' + JSON.stringify(output.map(o => ({
-          text: o[1],
-          confidence: o[2]
-        }))))
-
-        // Check for accented characters in the output
-        const hasAccent = outputTexts.some(t =>
-          /[àâéèêëîïôùûüçÀÂÉÈÊËÎÏÔÙÛÜÇ]/.test(t)
-        )
-        t.comment('Contains accented characters: ' + hasAccent)
-      })
-      .onError(error => {
-        t.fail('unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
-
-    const stats = response.stats || {}
-    t.comment(formatOCRPerformanceMetrics('[DocTR French]', stats, outputTexts))
-    t.pass('DocTR French test completed successfully')
-  } catch (e) {
-    t.fail('DocTR French test failed: ' + e.message)
-    throw e
-  } finally {
-    try {
-      await onnxOcr.unload()
-    } catch (e) {
-      t.comment('unload() error: ' + e.message)
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000))
-  }
+  t.comment(formatOCRPerformanceMetrics('[DocTR French]', stats, outputTexts))
+  t.pass('DocTR French test completed successfully')
 })

@@ -90,32 +90,16 @@ class ONNXOcr extends ONNXBase {
       timeout: this.params.timeout ?? 120
     }
 
-    // Add pipeline mode
-    if (this.params.pipelineMode !== undefined) {
-      onnxOcrParams.pipelineMode = this.params.pipelineMode
-    }
-
-    // Add optional performance tuning parameters
-    if (this.params.magRatio !== undefined) {
-      onnxOcrParams.magRatio = this.params.magRatio
-    }
-    if (this.params.defaultRotationAngles !== undefined) {
-      onnxOcrParams.defaultRotationAngles = this.params.defaultRotationAngles
-    }
-    if (this.params.contrastRetry !== undefined) {
-      onnxOcrParams.contrastRetry = this.params.contrastRetry
-    }
-    if (this.params.lowConfidenceThreshold !== undefined) {
-      onnxOcrParams.lowConfidenceThreshold = this.params.lowConfidenceThreshold
-    }
-    if (this.params.recognizerBatchSize !== undefined) {
-      onnxOcrParams.recognizerBatchSize = this.params.recognizerBatchSize
-    }
-    if (this.params.decodingMethod !== undefined) {
-      onnxOcrParams.decodingMethod = this.params.decodingMethod
-    }
-    if (this.params.straightenPages !== undefined) {
-      onnxOcrParams.straightenPages = this.params.straightenPages
+    // Add optional parameters if provided
+    const optionalFields = [
+      'pipelineMode', 'magRatio', 'defaultRotationAngles',
+      'contrastRetry', 'lowConfidenceThreshold',
+      'recognizerBatchSize', 'decodingMethod', 'straightenPages'
+    ]
+    for (const field of optionalFields) {
+      if (this.params[field] !== undefined) {
+        onnxOcrParams[field] = this.params[field]
+      }
     }
 
     this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)

@@ -18,6 +18,8 @@ namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
 namespace {
 
+constexpr double NANOSECONDS_TO_SECONDS = 1e9;
+
 void validatePipelineInput(const Pipeline::Input &input) {
   // Skip validation for encoded images - they will be decoded by OpenCV
   if (input.isEncoded) {
@@ -121,7 +123,6 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Sequential process() starting");
   ALOG_DEBUG(std::string("[Pipeline] Sequential process() starting"));
   auto timeStart = std::chrono::high_resolution_clock::now();
-  static constexpr double nanosecondsToSeconds = 1e9;
 
   try {
     validatePipelineInput(input);
@@ -135,22 +136,26 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       image = cv::Mat(input.imageHeight, input.imageWidth, CV_8UC3, input.data.data()).clone();
     }
 
-    // Resize image to max 1200px on longest side
+    // Resize image to max 1200px on longest side (EasyOCR only)
+    // DocTR skips this because detection internally resizes to 1024x1024,
+    // and recognition benefits from full-resolution crops (matching Python OnnxTR)
     constexpr int maxInputSize = 1200;
     float initialResizeRatio = 1.0F;
-    int maxDim = std::max(image.cols, image.rows);
-    if (maxDim > maxInputSize) {
-      initialResizeRatio =
-          static_cast<float>(maxInputSize) / static_cast<float>(maxDim);
-      int newWidth = static_cast<int>(static_cast<float>(image.cols) * initialResizeRatio);
-      int newHeight = static_cast<int>(static_cast<float>(image.rows) * initialResizeRatio);
-      cv::Mat resized;
-      cv::resize(image, resized, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
-      image = resized;
-      std::string resizeMsg = "[Pipeline] Resized image from " + std::to_string(maxDim) + "px to " +
-          std::to_string(std::max(newWidth, newHeight)) + "px (ratio=" + std::to_string(initialResizeRatio) + ")";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, resizeMsg);
-      ALOG_INFO(resizeMsg);
+    if (config_.mode != PipelineMode::DOCTR) {
+      int maxDim = std::max(image.cols, image.rows);
+      if (maxDim > maxInputSize) {
+        initialResizeRatio =
+            static_cast<float>(maxInputSize) / static_cast<float>(maxDim);
+        int newWidth = static_cast<int>(static_cast<float>(image.cols) * initialResizeRatio);
+        int newHeight = static_cast<int>(static_cast<float>(image.rows) * initialResizeRatio);
+        cv::Mat resized;
+        cv::resize(image, resized, cv::Size(newWidth, newHeight), 0, 0, cv::INTER_LINEAR);
+        image = resized;
+        std::string resizeMsg = "[Pipeline] Resized image from " + std::to_string(maxDim) + "px to " +
+            std::to_string(std::max(newWidth, newHeight)) + "px (ratio=" + std::to_string(initialResizeRatio) + ")";
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, resizeMsg);
+        ALOG_INFO(resizeMsg);
+      }
     }
 
     Output result;
@@ -165,7 +170,7 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
     auto timeEnd = std::chrono::high_resolution_clock::now();
     double processingTimeSec =
         static_cast<double>((timeEnd - timeStart).count()) /
-        nanosecondsToSeconds;
+        NANOSECONDS_TO_SECONDS;
     {
       std::scoped_lock scopedLock(processingTimeMtx_);
       processingTime_.push(processingTimeSec);
@@ -186,15 +191,13 @@ Pipeline::Output Pipeline::process(Pipeline::Input input) {
       std::scoped_lock scopedLock(processingTimeMtx_);
       processingTime_.push(
           static_cast<double>((timeEnd - timeStart).count()) /
-          nanosecondsToSeconds);
+          NANOSECONDS_TO_SECONDS);
     }
     throw;
   }
 }
 
 Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, float initialResizeRatio) {
-  static constexpr double nanosecondsToSeconds = 1e9;
-
   // Step 1: Detection
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Running detection...");
   ALOG_INFO(std::string("[Pipeline] Step 1: Running detection..."));
@@ -204,7 +207,7 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   auto detectionEnd = std::chrono::high_resolution_clock::now();
   double detectionTimeSec =
       static_cast<double>((detectionEnd - detectionStart).count()) /
-      nanosecondsToSeconds;
+      NANOSECONDS_TO_SECONDS;
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete in " + std::to_string(detectionTimeSec) + "s");
   ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
@@ -225,7 +228,7 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   auto recognitionEnd = std::chrono::high_resolution_clock::now();
   double recognitionTimeSec =
       static_cast<double>((recognitionEnd - recognitionStart).count()) /
-      nanosecondsToSeconds;
+      NANOSECONDS_TO_SECONDS;
   std::string step3Msg = "[Pipeline] Step 3: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions) in " + std::to_string(recognitionTimeSec) + "s";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step3Msg);
   ALOG_INFO(step3Msg);
@@ -241,11 +244,11 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   return recognitionOutput;
 }
 
-float Pipeline::estimatePageOrientation(const cv::Mat& probMap, int paddedW, int paddedH) {
-  // Crop probability map to the actual content region (remove padding)
-  cv::Mat croppedProb = probMap(cv::Rect(0, 0,
-      std::min(paddedW, probMap.cols),
-      std::min(paddedH, probMap.rows)));
+float Pipeline::estimatePageOrientation(const cv::Mat& probMap, int paddedW, int paddedH, int padLeft, int padTop) {
+  // Crop probability map to the actual content region (remove symmetric padding)
+  cv::Mat croppedProb = probMap(cv::Rect(padLeft, padTop,
+      std::min(paddedW, probMap.cols - padLeft),
+      std::min(paddedH, probMap.rows - padTop)));
 
   // Binarize the probability map
   cv::Mat binary;
@@ -347,8 +350,6 @@ cv::Mat Pipeline::rotateImage(const cv::Mat& image, float angleDeg) {
 }
 
 Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, float initialResizeRatio) {
-  static constexpr double nanosecondsToSeconds = 1e9;
-
   cv::Mat workingImage = image;
 
   // Step 0 (optional): Straighten pages - detect rotation and correct it
@@ -364,7 +365,8 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
 
     // Estimate orientation from the probability map
     float angle = estimatePageOrientation(preDetOutput.probMap,
-                                          preDetOutput.paddedW, preDetOutput.paddedH);
+                                          preDetOutput.paddedW, preDetOutput.paddedH,
+                                          preDetOutput.padLeft, preDetOutput.padTop);
 
     if (angle != 0.0F) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -383,7 +385,7 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
   auto detectionEnd = std::chrono::high_resolution_clock::now();
   double detectionTimeSec =
       static_cast<double>((detectionEnd - detectionStart).count()) /
-      nanosecondsToSeconds;
+      NANOSECONDS_TO_SECONDS;
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[Pipeline] DocTR Step 1: Detection complete (" + std::to_string(detOutput.polygons.size()) +
        " regions) in " + std::to_string(detectionTimeSec) + "s");
@@ -396,7 +398,7 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
   auto recognitionEnd = std::chrono::high_resolution_clock::now();
   double recognitionTimeSec =
       static_cast<double>((recognitionEnd - recognitionStart).count()) /
-      nanosecondsToSeconds;
+      NANOSECONDS_TO_SECONDS;
   std::string stepMsg = "[Pipeline] DocTR Step 2: Recognition complete (" + std::to_string(recognitionOutput.size()) + " text regions) in " + std::to_string(recognitionTimeSec) + "s";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, stepMsg);
   ALOG_INFO(stepMsg);

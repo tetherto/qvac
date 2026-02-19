@@ -1,26 +1,10 @@
 'use strict'
 
-const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const path = require('bare-path')
 const fs = require('bare-fs')
-const { getImagePath, formatOCRPerformanceMetrics } = require('./utils')
+const { getImagePath, formatOCRPerformanceMetrics, runDoctrOCR, ensureDoctrModels } = require('./utils')
 
 const TEST_TIMEOUT = 180 * 1000
-
-const MODELS_DIR = path.resolve('.', 'test/models/doctr')
-
-// Model paths
-const DB_RESNET50 = path.join(MODELS_DIR, 'db_resnet50.onnx')
-const PARSEQ = path.join(MODELS_DIR, 'parseq.onnx')
-const DB_MOBILENET = path.join(MODELS_DIR, 'db_mobilenet_v3_large.onnx')
-const CRNN_MOBILENET = path.join(MODELS_DIR, 'crnn_mobilenet_v3_small.onnx')
-
-// Download URLs from OnnxTR GitHub releases
-const MODEL_URLS = {
-  'db_mobilenet_v3_large.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
-  'crnn_mobilenet_v3_small.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx'
-}
 
 // Words reliably detected by ALL 4 model combinations on english.bmp (case-insensitive).
 // english.bmp is a WHO coronavirus infographic with known text.
@@ -35,76 +19,11 @@ const ENGLISH_EXPECTED_WORDS = [
 // Additional words that attention models (PARSeq) detect correctly
 const ATTENTION_EXTRA_WORDS = ['organization']
 
-async function downloadModel (filename) {
-  const destPath = path.join(MODELS_DIR, filename)
-  if (fs.existsSync(destPath)) {
-    return
-  }
-  const url = MODEL_URLS[filename]
-  if (!url) {
-    throw new Error(`No download URL for model: ${filename}`)
-  }
-  console.log(`Downloading ${filename}...`)
-  const fetch = require('bare-fetch')
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} downloading ${filename}`)
-  }
-  const buffer = await response.arrayBuffer()
-  fs.writeFileSync(destPath, Buffer.from(buffer))
-  console.log(`Downloaded ${filename} (${Math.round(buffer.byteLength / 1024 / 1024)}MB)`)
-}
-
-async function ensureModels () {
-  fs.mkdirSync(MODELS_DIR, { recursive: true })
-  await downloadModel('db_mobilenet_v3_large.onnx')
-  await downloadModel('crnn_mobilenet_v3_small.onnx')
-}
-
-/**
- * Helper to run a single DocTR OCR pass and return results
- */
-async function runDoctrOCR (t, params, imagePath) {
-  const onnxOcr = new ONNXOcr({
-    params: {
-      langList: ['en'],
-      useGPU: false,
-      pipelineMode: 'doctr',
-      ...params
-    },
-    opts: { stats: true }
-  })
-
-  await onnxOcr.load()
-
-  try {
-    const response = await onnxOcr.run({
-      path: imagePath,
-      options: { paragraph: false }
-    })
-
-    let results = []
-
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'output should be an array')
-        results = output.map(o => ({ text: o[1], confidence: o[2], bbox: o[0] }))
-      })
-      .onError(error => {
-        t.fail('unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
-
-    return { results, stats: response.stats || {} }
-  } finally {
-    try {
-      await onnxOcr.unload()
-    } catch (e) {
-      t.comment('unload() error: ' + e.message)
-    }
-    await new Promise(resolve => setTimeout(resolve, 500))
-  }
-}
+// Model paths (set after download)
+let DB_RESNET50
+let PARSEQ
+let DB_MOBILENET
+let CRNN_MOBILENET
 
 /**
  * Assert that all expected words appear in the detected texts (case-insensitive)
@@ -120,10 +39,16 @@ function assertExpectedWords (t, texts, expectedWords, label) {
 }
 
 // -------------------------------------------------------------------
-// Download models before tests
+// Download all 4 models before tests
 // -------------------------------------------------------------------
-test('DocTR models - download CTC models', { timeout: TEST_TIMEOUT }, async function (t) {
-  await ensureModels()
+test('DocTR models - download all models', { timeout: TEST_TIMEOUT }, async function (t) {
+  const models = await ensureDoctrModels()
+  DB_RESNET50 = models.db_resnet50
+  PARSEQ = models.parseq
+  DB_MOBILENET = models.db_mobilenet_v3_large
+  CRNN_MOBILENET = models.crnn_mobilenet_v3_small
+  t.ok(fs.existsSync(DB_RESNET50), 'db_resnet50.onnx exists')
+  t.ok(fs.existsSync(PARSEQ), 'parseq.onnx exists')
   t.ok(fs.existsSync(DB_MOBILENET), 'db_mobilenet_v3_large.onnx exists')
   t.ok(fs.existsSync(CRNN_MOBILENET), 'crnn_mobilenet_v3_small.onnx exists')
   t.pass('All models available')

@@ -88,7 +88,8 @@ StepDoctrRecognition::StepDoctrRecognition(const ORTCHAR_T* pathRecognizer,
     : ortEnv_(ORT_LOGGING_LEVEL_WARNING, "DoctrRecognizer"),
       ortSession_(ortEnv_, pathRecognizer, getOrtSessionOptions(useGPU)),
       batchSize_(batchSize),
-      decodingMethod_(decoding) {
+      decodingMethod_(decoding),
+      vocabChars_(parseVocabToChars(VOCAB)) {
   std::string decodingStr = (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrRecognition] ONNX session created, batchSize=" + std::to_string(batchSize) +
@@ -105,17 +106,28 @@ cv::Mat StepDoctrRecognition::preprocessCrop(const cv::Mat& origImg,
     return cv::Mat::zeros(RECOG_HEIGHT, RECOG_WIDTH, CV_32FC3);
   }
 
-  // Resize to 32x128 (docTR uses 3 RGB channels)
+  // Resize crop preserving aspect ratio (matching OnnxTR: preserve_aspect_ratio=True, symmetric_pad=False)
+  // Scale to fit within 32x128 maintaining aspect ratio, pad with black at right/bottom
+  int cropH = crop.rows;
+  int cropW = crop.cols;
+  float scaleH = static_cast<float>(RECOG_HEIGHT) / static_cast<float>(cropH);
+  float scaleW = static_cast<float>(RECOG_WIDTH) / static_cast<float>(cropW);
+  float cropScale = std::min(scaleH, scaleW);
+  int newH = std::max(1, static_cast<int>(static_cast<float>(cropH) * cropScale));
+  int newW = std::max(1, static_cast<int>(static_cast<float>(cropW) * cropScale));
+
   cv::Mat resized;
-  cv::resize(crop, resized, cv::Size(RECOG_WIDTH, RECOG_HEIGHT), 0, 0, cv::INTER_LINEAR);
+  cv::resize(crop, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LINEAR);
 
-  // Convert BGR to RGB (OpenCV loads as BGR, docTR expects RGB)
-  cv::Mat rgbImg;
-  cv::cvtColor(resized, rgbImg, cv::COLOR_BGR2RGB);
+  // Pad to RECOG_HEIGHT x RECOG_WIDTH with black (asymmetric: right/bottom padding)
+  cv::Mat padded = cv::Mat::zeros(RECOG_HEIGHT, RECOG_WIDTH, resized.type());
+  cv::Mat roi = padded(cv::Rect(0, 0, newW, newH));
+  resized.copyTo(roi);
 
+  // Image is already RGB from Pipeline - no color conversion needed
   // Convert to float and normalize
   cv::Mat floatImg;
-  rgbImg.convertTo(floatImg, CV_32FC3, 1.0 / PIXEL_MAX);
+  padded.convertTo(floatImg, CV_32FC3, 1.0 / PIXEL_MAX);
 
   // Apply docTR recognition normalization
   cv::subtract(floatImg, DOCTR_RECO_MEAN, floatImg);
@@ -198,6 +210,29 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
   return preds.clone();
 }
 
+StepDoctrRecognition::SoftmaxResult StepDoctrRecognition::softmaxArgmax(
+    const cv::Mat& preds, int batchIdx, int timestep, int vocabSize) {
+  // Numerically stable softmax: subtract max before exp
+  float maxVal = -std::numeric_limits<float>::infinity();
+  for (int v = 0; v < vocabSize; v++) {
+    maxVal = std::max(maxVal, preds.at<float>(batchIdx, timestep, v));
+  }
+
+  float sumExp = 0.0F;
+  int bestIdx = 0;
+  float bestExp = 0.0F;
+  for (int v = 0; v < vocabSize; v++) {
+    float expVal = std::exp(preds.at<float>(batchIdx, timestep, v) - maxVal);
+    sumExp += expVal;
+    if (expVal > bestExp) {
+      bestExp = expVal;
+      bestIdx = v;
+    }
+  }
+
+  return {bestIdx, bestExp / sumExp};
+}
+
 std::pair<std::string, float> StepDoctrRecognition::decodeAttention(
     const cv::Mat& preds, int batchIdx) {
   // preds shape: [batch, seq_len, vocab_size + special_tokens]
@@ -208,39 +243,12 @@ std::pair<std::string, float> StepDoctrRecognition::decodeAttention(
   const int vocabSize = preds.size[2]; // includes special tokens
   assert(batchIdx >= 0 && batchIdx < preds.size[0]);
 
-  static const std::vector<std::string> vocabChars = parseVocabToChars(VOCAB);
-
   std::string decodedText;
   float confidenceSum = 0.0F;
   int numChars = 0;
 
   for (int t = 0; t < seqLen; t++) {
-    // Apply softmax for this position
-    float maxVal = -std::numeric_limits<float>::infinity();
-    for (int v = 0; v < vocabSize; v++) {
-      float val = preds.at<float>(batchIdx, t, v);
-      maxVal = std::max(maxVal, val);
-    }
-
-    float sumExp = 0.0F;
-    std::vector<float> probs(vocabSize);
-    for (int v = 0; v < vocabSize; v++) {
-      probs[v] = std::exp(preds.at<float>(batchIdx, t, v) - maxVal);
-      sumExp += probs[v];
-    }
-    for (int v = 0; v < vocabSize; v++) {
-      probs[v] /= sumExp;
-    }
-
-    // Argmax
-    int bestIdx = 0;
-    float bestProb = probs[0];
-    for (int v = 1; v < vocabSize; v++) {
-      if (probs[v] > bestProb) {
-        bestProb = probs[v];
-        bestIdx = v;
-      }
-    }
+    auto [bestIdx, bestProb] = softmaxArgmax(preds, batchIdx, t, vocabSize);
 
     // Stop at <eos> token
     if (bestIdx >= SPECIAL_TOKEN_IDX) {
@@ -248,8 +256,8 @@ std::pair<std::string, float> StepDoctrRecognition::decodeAttention(
     }
 
     // Map index to character
-    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars.size())) {
-      decodedText += vocabChars[bestIdx];
+    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars_.size())) {
+      decodedText += vocabChars_[bestIdx];
       confidenceSum += std::min(bestProb, 1.0F);
       numChars++;
     }
@@ -275,39 +283,12 @@ std::pair<std::string, float> StepDoctrRecognition::decodeCTC(
   const int vocabSize = preds.size[2];
   assert(batchIdx >= 0 && batchIdx < preds.size[0]);
 
-  static const std::vector<std::string> vocabChars = parseVocabToChars(VOCAB);
-
   std::string decodedText;
   float minConfidence = 1.0F;
   int prevIdx = -1;
 
   for (int t = 0; t < seqLen; t++) {
-    // Apply softmax for this position
-    float maxVal = -std::numeric_limits<float>::infinity();
-    for (int v = 0; v < vocabSize; v++) {
-      float val = preds.at<float>(batchIdx, t, v);
-      maxVal = std::max(maxVal, val);
-    }
-
-    float sumExp = 0.0F;
-    std::vector<float> probs(vocabSize);
-    for (int v = 0; v < vocabSize; v++) {
-      probs[v] = std::exp(preds.at<float>(batchIdx, t, v) - maxVal);
-      sumExp += probs[v];
-    }
-    for (int v = 0; v < vocabSize; v++) {
-      probs[v] /= sumExp;
-    }
-
-    // Argmax
-    int bestIdx = 0;
-    float bestProb = probs[0];
-    for (int v = 1; v < vocabSize; v++) {
-      if (probs[v] > bestProb) {
-        bestProb = probs[v];
-        bestIdx = v;
-      }
-    }
+    auto [bestIdx, bestProb] = softmaxArgmax(preds, batchIdx, t, vocabSize);
 
     // Track minimum confidence across all timesteps (matching OnnxTR: .max(-1).min(1))
     minConfidence = std::min(minConfidence, bestProb);
@@ -324,8 +305,8 @@ std::pair<std::string, float> StepDoctrRecognition::decodeCTC(
     }
 
     // Map index to character
-    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars.size())) {
-      decodedText += vocabChars[bestIdx];
+    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars_.size())) {
+      decodedText += vocabChars_[bestIdx];
     }
 
     prevIdx = bestIdx;

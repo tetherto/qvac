@@ -143,7 +143,7 @@ private:
 
   // Estimate page orientation from detection probability map (for straightenPages)
   // Returns rotation angle rounded to nearest 90° increment (0, 90, 180, 270)
-  float estimatePageOrientation(const cv::Mat& probMap, int paddedW, int paddedH);
+  float estimatePageOrientation(const cv::Mat& probMap, int paddedW, int paddedH, int padLeft, int padTop);
 
   // Rotate an image by a multiple of 90 degrees
   static cv::Mat rotateImage(const cv::Mat& image, float angleDeg);
