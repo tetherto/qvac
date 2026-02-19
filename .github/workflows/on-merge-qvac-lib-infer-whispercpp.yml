@@ -183,6 +183,7 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
