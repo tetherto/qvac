@@ -60,10 +60,10 @@ function scanAllModels () {
   const models = loadModels()
   const attributions = models.map(toAttribution)
 
-  // Dedup by URL (same model repo can appear multiple times for different quants)
+  // Dedup by name+url (distinct models may share the same URL, e.g. EasyOCR hub)
   const seen = new Map()
   for (const attr of attributions) {
-    const key = attr.url || attr.name
+    const key = `${attr.name}::${attr.url}`
     if (!seen.has(key)) {
       seen.set(key, attr)
     }
@@ -80,10 +80,10 @@ function scanModelsByEngines (engines) {
   const filtered = models.filter(r => engines.includes(r.engine))
   const attributions = filtered.map(toAttribution)
 
-  // Dedup by URL
+  // Dedup by name+url (distinct models may share the same URL, e.g. EasyOCR hub)
   const seen = new Map()
   for (const attr of attributions) {
-    const key = attr.url || attr.name
+    const key = `${attr.name}::${attr.url}`
     if (!seen.has(key)) {
       seen.set(key, attr)
     }
