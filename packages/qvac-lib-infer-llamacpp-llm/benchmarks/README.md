@@ -93,19 +93,6 @@ npm run benchmarks -- \
   --samples 100
 ```
 
-**P2P Model Loading (Hyperdrive)**
-```bash
-# Load model via Hyperdrive P2P
-npm run benchmarks -- \
-  --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf"
-
-# P2P with quick test (10 samples, 1 dataset)
-npm run benchmarks -- \
-  --gguf-model "hd://{KEY}/Llama-3.2-1B-Instruct-Q4_0.gguf" \
-  --samples 10 \
-  --datasets "squad"
-```
-
 **Comparative Analysis**
 ```bash
 # Compare addon vs HuggingFace Transformers
@@ -201,7 +188,6 @@ npm run benchmarks -- \
 |--------|---------|-------------|
 | HuggingFace | `"owner/repo"` | Auto-downloads from HuggingFace Hub |
 | HuggingFace + quant | `"owner/repo:Q4_0"` | Specific quantization variant |
-| P2P Hyperdrive | `"hd://key/model.gguf"` | Load via Hyperdrive P2P |
 
 **Transformers Model** (for comparative mode only):
 - **HuggingFace**: `"owner/repo"` 
@@ -328,17 +314,17 @@ benchmarks/results/
 │   - Argument parsing                    │
 └──────────────┬──────────────────────────┘
                │
-    ┌──────────▼────────┐       ┌────────────────────┐
+    ┌──────────▼───────-─┐       ┌────────────────────┐
     │  Benchmark Server  │       │   Python Client    │
     │  (Node.js + bare)  │◄──────┤  (evaluate_llama)  │
     │                    │       │                    │
     │  - ModelManager    │       │  - ComparativeEval │
-    │  - P2P Loader      │       │  - HF Downloader   │
-    │  - VRAM cleanup    │       │  - Dataset loading │
-    │  - HTTP API        │       │  - Results handler │
+    │  - VRAM cleanup    │       │  - HF Downloader   │
+    │  - HTTP API        │       │  - Dataset loading │
+    │                    │       │  - Results handler │
     └──────────┬─────────┘       └────────────────────┘
                │
-    ┌──────────▼──────────────────────────────────────┐
+    ┌──────────▼─────────────────────────────────────┐
     │  @qvac/llm-llamacpp Addon (C++ Native)         │
     │  - llama.cpp GGUF loading                      │
     │  - Hardware acceleration (GPU/CPU)             │
@@ -363,8 +349,7 @@ benchmarks/
 │   │   ├── server.js               # HTTP server
 │   │   ├── services/
 │   │   │   ├── modelManager.js     # Singleton model manager
-│   │   │   ├── p2pModelLoader.js   # P2P Hyperdrive loader
-│   │   │   └── runAddon.js         # Addon interface + routing
+│   │   │   └── runAddon.js         # Addon interface
 │   │   ├── validation/
 │   │   │   └── index.js            # Request validation
 │   │   └── utils/

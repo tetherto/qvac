@@ -13,7 +13,7 @@ function ensureLicenseChecker () {
     exec('npx --yes license-checker --version', { stdio: 'ignore' })
   } catch {
     console.log('  Installing license-checker...')
-    exec('npm install -g license-checker', { stdio: 'ignore' })
+    exec('npm install license-checker', { stdio: 'ignore' })
   }
 }
 

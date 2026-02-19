@@ -18,11 +18,11 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
-const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile } = require('./helpers.js')
 
-// Create a HyperDrive loader
 function createLoader () {
-  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  return new FakeDL({})
 }
 
 async function getModelPaths () {

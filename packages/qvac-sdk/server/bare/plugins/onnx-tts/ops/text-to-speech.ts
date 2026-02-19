@@ -29,8 +29,10 @@ export async function* textToSpeech(
     // Streaming mode: use async iterator pattern
     const outputQueue: { outputArray: Int16Array }[] = [];
     let isComplete = false;
+    let streamError: unknown = null;
     let resolveNext: ((value: IteratorResult<TtsResponse>) => void) | null =
       null;
+    let rejectNext: ((reason: unknown) => void) | null = null;
 
     // Start the response processing
     const responsePromise = response
@@ -46,6 +48,7 @@ export async function* textToSpeech(
             done: false,
           });
           resolveNext = null;
+          rejectNext = null;
         } else {
           // Otherwise, queue the output
           outputQueue.push(data);
@@ -57,12 +60,31 @@ export async function* textToSpeech(
         if (resolveNext) {
           resolveNext({ value: undefined, done: true });
           resolveNext = null;
+          rejectNext = null;
+        }
+      })
+      .catch((err: unknown) => {
+        streamError = err;
+        isComplete = true;
+        if (rejectNext) {
+          rejectNext(err);
+          resolveNext = null;
+          rejectNext = null;
         }
       });
 
     // Create an async iterator
     const asyncIterator = {
       async next(): Promise<IteratorResult<TtsResponse>> {
+        if (streamError) {
+          if (streamError instanceof Error) throw streamError;
+          const message =
+            typeof streamError === "string"
+              ? streamError
+              : JSON.stringify(streamError);
+          throw new Error(message);
+        }
+
         if (outputQueue.length > 0) {
           const data = outputQueue.shift()!;
           return {
@@ -80,8 +102,9 @@ export async function* textToSpeech(
         }
 
         // Wait for the next output
-        return new Promise<IteratorResult<TtsResponse>>((resolve) => {
+        return new Promise<IteratorResult<TtsResponse>>((resolve, reject) => {
           resolveNext = resolve;
+          rejectNext = reject;
         });
       },
       [Symbol.asyncIterator]() {

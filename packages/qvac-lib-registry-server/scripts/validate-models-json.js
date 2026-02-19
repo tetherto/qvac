@@ -17,10 +17,17 @@ const SOURCE_REFINE = (val) => {
   }
 }
 
+const S3_NO_BUCKET = (val) => {
+  if (!val.startsWith('s3://')) return true
+  const parsed = parseCanonicalSource(val)
+  return parsed.bucket === null
+}
+
 const baseFields = {
   source: z.string()
     .min(1, 'source is required')
-    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' }),
+    .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
+    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' }),
 
   engine: z.string()
     .min(1, 'engine is required')
@@ -28,13 +35,13 @@ const baseFields = {
 
   license: z.string().min(1, 'license is required'),
 
-  description: z.string().optional(),
-  quantization: z.string().optional(),
-  params: z.string().optional(),
-  notes: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  description: z.string().max(512).optional(),
+  quantization: z.string().max(512).optional(),
+  params: z.string().max(64).optional(),
+  notes: z.string().max(512).optional(),
+  tags: z.array(z.string().max(128)).max(50).optional(),
   deprecated: z.boolean().optional(),
-  deprecationReason: z.string().optional(),
+  deprecationReason: z.string().max(512).optional(),
   replacedBy: z.string()
     .refine(SOURCE_REFINE, { message: 'replacedBy must be a valid source URL' })
     .optional()

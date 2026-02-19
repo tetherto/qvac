@@ -8,7 +8,6 @@ from pathlib import Path
 
 from .config import ServerConfig, ModelConfig
 
-# Reduce httpx logging noise
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -23,7 +22,7 @@ class TTSResult(NamedTuple):
     duration_sec: float
     generation_ms: float
     rtf: float
-    samples: list = None  # Optional: audio samples for comparison
+    samples: list = None
 
 
 class TTSResults(NamedTuple):
@@ -55,28 +54,16 @@ class TTSClient:
         self.model_cfg = model_cfg
         self.timeout = timeout
         self.batch_size = batch_size
-        self.include_samples = include_samples  # Whether to request audio samples
-        self.num_runs = num_runs  # Number of times to synthesize each text
+        self.include_samples = include_samples
+        self.num_runs = num_runs
         self.client = httpx.Client(timeout=self.timeout)
         
-        # Convert paths to absolute, relative to benchmarks/ directory
-        # This finds the benchmarks/ directory regardless of where the script is run from
-        benchmarks_dir = Path(__file__).resolve().parents[3]  # Go up: tts/ -> src/ -> client/ -> benchmarks/
+        benchmarks_dir = Path(__file__).resolve().parents[3]
         
-        if model_cfg.is_chatterbox:
-            # Chatterbox: resolve modelDir and referenceAudioPath
-            if model_cfg.modelDir and not Path(model_cfg.modelDir).is_absolute():
-                self.model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
-            if model_cfg.referenceAudioPath and not Path(model_cfg.referenceAudioPath).is_absolute():
-                self.model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
-        else:
-            # Piper TTS: resolve modelPath, configPath, eSpeakDataPath
-            if model_cfg.modelPath and not Path(model_cfg.modelPath).is_absolute():
-                self.model_cfg.modelPath = str((benchmarks_dir / model_cfg.modelPath).resolve())
-            if model_cfg.configPath and not Path(model_cfg.configPath).is_absolute():
-                self.model_cfg.configPath = str((benchmarks_dir / model_cfg.configPath).resolve())
-            if model_cfg.eSpeakDataPath and not Path(model_cfg.eSpeakDataPath).is_absolute():
-                self.model_cfg.eSpeakDataPath = str((benchmarks_dir / model_cfg.eSpeakDataPath).resolve())
+        if model_cfg.modelDir and not Path(model_cfg.modelDir).is_absolute():
+            self.model_cfg.modelDir = str((benchmarks_dir / model_cfg.modelDir).resolve())
+        if model_cfg.referenceAudioPath and not Path(model_cfg.referenceAudioPath).is_absolute():
+            self.model_cfg.referenceAudioPath = str((benchmarks_dir / model_cfg.referenceAudioPath).resolve())
     
     def synthesize_batch(self, texts: List[str]) -> TTSResults:
         """
@@ -90,40 +77,24 @@ class TTSClient:
         """
         logger.info(f"Sending {len(texts)} texts to {self.url}")
         
-        # Build config based on whether this is Chatterbox or Piper TTS
-        if self.model_cfg.is_chatterbox:
-            request_data = {
-                "texts": texts,
-                "config": {
-                    "modelDir": self.model_cfg.modelDir,
-                    "referenceAudioPath": self.model_cfg.referenceAudioPath,
-                    "language": self.model_cfg.language,
-                    "sampleRate": self.model_cfg.sampleRate,
-                    "useGPU": self.model_cfg.useGPU,
-                    "variant": self.model_cfg.variant
-                },
-                "includeSamples": self.include_samples
-            }
-        else:
-            request_data = {
-                "texts": texts,
-                "config": {
-                    "modelPath": self.model_cfg.modelPath,
-                    "configPath": self.model_cfg.configPath,
-                    "eSpeakDataPath": self.model_cfg.eSpeakDataPath,
-                    "language": self.model_cfg.language,
-                    "sampleRate": self.model_cfg.sampleRate,
-                    "useGPU": self.model_cfg.useGPU
-                },
-                "includeSamples": self.include_samples  # Request samples if needed
-            }
+        request_data = {
+            "texts": texts,
+            "config": {
+                "modelDir": self.model_cfg.modelDir,
+                "referenceAudioPath": self.model_cfg.referenceAudioPath,
+                "language": self.model_cfg.language,
+                "sampleRate": self.model_cfg.sampleRate,
+                "useGPU": self.model_cfg.useGPU,
+                "variant": self.model_cfg.variant
+            },
+            "includeSamples": self.include_samples
+        }
         
         resp = self.client.post(self.url, json=request_data)
         resp.raise_for_status()
         
         data = resp.json()
         
-        # Parse results
         results = []
         for output in data["outputs"]:
             results.append(TTSResult(
@@ -133,7 +104,7 @@ class TTSClient:
                 duration_sec=output["durationSec"],
                 generation_ms=output["generationMs"],
                 rtf=output["rtf"],
-                samples=output.get("samples")  # Optional samples for comparison
+                samples=output.get("samples")
             ))
         
         return TTSResults(
@@ -168,7 +139,7 @@ class TTSClient:
             
             num_batches = (len(texts) + self.batch_size - 1) // self.batch_size
             
-            if run_idx == 0:  # Only show this once
+            if run_idx == 0:
                 logger.info(f"Synthesizing {len(texts)} texts in {num_batches} batches of {self.batch_size}")
             
             for batch_idx in range(num_batches):
@@ -178,7 +149,6 @@ class TTSClient:
                 end = start + self.batch_size
                 batch = texts[start:end]
                 
-                # Add retry logic
                 max_retries = 3
                 retry_delay = 2
                 
@@ -187,7 +157,6 @@ class TTSClient:
                         batch_results = self.synthesize_batch(batch)
                         all_results.extend(batch_results.results)
                         
-                        # Accumulate timing (only count load time once)
                         if batch_idx == 0:
                             total_load_time = batch_results.load_time_ms
                         total_gen_time += batch_results.total_generation_ms
@@ -219,4 +188,3 @@ class TTSClient:
     def close(self):
         """Close the HTTP client"""
         self.client.close()
-

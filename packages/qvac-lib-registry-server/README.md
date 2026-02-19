@@ -120,9 +120,12 @@ Models are configured in `data/models.test.json`:
 
 **Note**: To download from AWS S3 you need env vars configured or `~/.aws/credentials` set.
 
+QVAC_S3_BUCKET=...                    # S3 bucket name (required for S3 sources)
 AWS_ACCESS_KEY_ID=...                 # AWS S3 access key
 AWS_SECRET_ACCESS_KEY=...             # AWS S3 secret
 AWS_REGION=eu-central-1               # AWS region (defaults to eu-central-1)
+
+S3 source URLs in `models.prod.json` use the format `s3:///key` (no bucket). The bucket is resolved at runtime from `QVAC_S3_BUCKET`.
 
 #### 5. Verify the Model
 
