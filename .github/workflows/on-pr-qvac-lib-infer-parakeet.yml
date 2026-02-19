@@ -3,7 +3,7 @@ name: On PR Trigger (Parakeet)
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main, release-*]
+    branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/qvac-lib-infer-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
