@@ -31,7 +31,6 @@ class GGMLBert extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._runQueueWaiter = Promise.resolve()
     this._lastJobResult = Promise.resolve()
   }
 
@@ -108,18 +107,6 @@ class GGMLBert extends BaseInference {
       }
       await super.unload()
     })
-  }
-
-  async _withExclusiveRun (fn) {
-    const prev = this._runQueueWaiter || Promise.resolve()
-    let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    await prev
-    try {
-      return await fn()
-    } finally {
-      release()
-    }
   }
 
   async _runInternal (text) {
