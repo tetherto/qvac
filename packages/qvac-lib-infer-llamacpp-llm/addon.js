@@ -47,7 +47,7 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
+   * Cancel current task
    */
   async cancel () {
     await this._binding.cancel(this._handle)
@@ -58,21 +58,6 @@ class LlamaInterface {
       return this._binding.finetune(this._handle, finetuningParams)
     }
     return this._binding.finetune(this._handle)
-  }
-
-  /**
-   * Pause finetuning
-   */
-  async pause () {
-    this._binding.pause(this._handle)
-  }
-
-  /**
-   * Get addon status
-   * @returns {String} Current status
-   */
-  async status () {
-    return this._binding.status(this._handle)
   }
 
   /**

@@ -9,7 +9,7 @@ index 1234567..abcdefg 100644
 -      cancelHandler: () => {
 -        return this.addon.cancel(jobId)
 +      cancelHandler: async () => {
-+        await this.addon.cancel(jobId)
++        await this.addon.cancel()
        },
-       pauseHandler: () => {
-         return this.addon.pause()
+      pauseHandler: () => {
+        return this.addon.cancel()

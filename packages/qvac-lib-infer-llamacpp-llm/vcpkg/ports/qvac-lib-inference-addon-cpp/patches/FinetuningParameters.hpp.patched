@@ -11,7 +11,8 @@ struct FinetuningParameters
     numberOfEpochs(finetuningParametersObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(env)),
     learningRate(finetuningParametersObj.getProperty<js::Number>(env, "learningRate").as<double>(env)),
     trainDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "trainDatasetDir").as<std::string>(env)),
-    evalDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "evalDatasetDir").as<std::string>(env)),
+    evalDatasetDir(finetuningParametersObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir").value_or("")),
+    evalDatasetPath(finetuningParametersObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetPath").value_or("")),
     contextLength(finetuningParametersObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength").value_or(0)),
     microBatchSize(finetuningParametersObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize").value_or(0)),
     assistantLossOnly(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly").value_or(false)),
@@ -30,17 +31,23 @@ struct FinetuningParameters
     weightDecay(finetuningParametersObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay").value_or(0.0)),
     warmupStepsSet(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet").value_or(false)),
     warmupSteps(finetuningParametersObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps").value_or(0)),
-    warmupRatioSet(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet").value_or(false))
+    warmupRatioSet(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet").value_or(false)),
+    validationSplit(finetuningParametersObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit").value_or(0.05)),
+    useEvalDatasetForValidation(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "useEvalDatasetForValidation").value_or(false))
   {
 
   }
   FinetuningParameters() = default;
-  
+
+  double validationSplit{0.05};
+  bool useEvalDatasetForValidation{false};
+
   std::string outputParametersDir;
   int numberOfEpochs{0};
   double learningRate{0.0};
   std::string trainDatasetDir;
   std::string evalDatasetDir;
+  std::string evalDatasetPath;
   int64_t contextLength{0};
   int64_t microBatchSize{0};
   bool assistantLossOnly{false};

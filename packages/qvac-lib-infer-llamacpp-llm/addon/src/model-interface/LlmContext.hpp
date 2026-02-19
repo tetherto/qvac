@@ -26,29 +26,29 @@ struct BatchDeleter {
 };
 using BatchPtr = std::unique_ptr<llama_batch, BatchDeleter>;
 
-struct ThreadPoolDeleter{
-    void operator()(ggml_threadpool* ptr) {
-      if (ptr != nullptr) {
-        auto* cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-        if (cpu_dev == nullptr) {
-          throw qvac_errors::StatusError(
-              AddonID, toString(NoBackendFound), "no CPU backend found");
-        }
-        auto* reg = ggml_backend_dev_backend_reg(cpu_dev);
-        void* proc_addr =
-            ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
-        if (proc_addr == nullptr) {
-          throw qvac_errors::StatusError(
-              AddonID,
-              toString(UnableToDeleteThreadPool),
-              "Failed to get ggml_threadpool_free function address");
-        }
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        auto* ggml_threadpool_free_fn =
-            reinterpret_cast<decltype(ggml_threadpool_free)*>(proc_addr);
-        ggml_threadpool_free_fn(ptr);
+struct ThreadPoolDeleter {
+  void operator()(ggml_threadpool* ptr) {
+    if (ptr != nullptr) {
+      auto* cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+      if (cpu_dev == nullptr) {
+        throw qvac_errors::StatusError(
+            AddonID, toString(NoBackendFound), "no CPU backend found");
       }
+      auto* reg = ggml_backend_dev_backend_reg(cpu_dev);
+      void* proc_addr =
+          ggml_backend_reg_get_proc_address(reg, "ggml_threadpool_free");
+      if (proc_addr == nullptr) {
+        throw qvac_errors::StatusError(
+            AddonID,
+            toString(UnableToDeleteThreadPool),
+            "Failed to get ggml_threadpool_free function address");
+      }
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      auto* ggml_threadpool_free_fn =
+          reinterpret_cast<decltype(ggml_threadpool_free)*>(proc_addr);
+      ggml_threadpool_free_fn(ptr);
     }
+  }
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
 

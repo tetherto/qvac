@@ -400,8 +400,9 @@ TEST_F(LlmContextBaseTest, RuntimeStatsAccuracy) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
-  model->process(input);
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  model->processPrompt(prompt);
 
   auto stats = model->runtimeStats();
   double promptTokens = getStatValue(stats, "promptTokens");
@@ -424,10 +425,11 @@ TEST_F(LlmContextBaseTest, RuntimeStatsConsistency) {
     GTEST_SKIP() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
 
   for (int i = 0; i < 3; ++i) {
-    model->process(input);
+    model->processPrompt(prompt);
     auto stats = model->runtimeStats();
 
     double promptTokens = getStatValue(stats, "promptTokens");

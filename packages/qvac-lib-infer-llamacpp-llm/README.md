@@ -15,8 +15,10 @@ This library simplifies running Large Language Models (LLMs) within QVAC runtime
   - [6. Load Model](#6-load-model)
   - [7. Run Inference](#7-run-inference)
   - [8. Release Resources](#8-release-resources)
+- [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
 - [Model Registry](#model-registry)
+- [Fine-tuning](#fine-tuning)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
@@ -229,6 +231,17 @@ try {
 }
 ```
 
+### API behavior by state
+
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+
+| Current state | Action called | What happens |
+|---------------|----------------|----------------------------------------------------------------|
+| idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
+| idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" |
+| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
+
 ## Quickstart Example
 
 Follow these simple steps to run the Quickstart demo using the Hyperdrive loader:
@@ -382,6 +395,12 @@ In the QVAC ecosystem, a model registry is simply a Hyperbee that stores Hyperdr
 | generation:medgemma:it::4B:q4_1:1.0.0:shard                     | 1839dcabe1df8fdf1c83cd3d7a306c6e01e3c67e8542b0dd1e78cdfc86e75e2d | medgemma-4b-it-Q4_1-00001-of-00005.gguf                                              |
 
 
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
+
 ## Other examples
 
 -   [SalamandraTA](examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
@@ -391,6 +410,9 @@ In the QVAC ecosystem, a model registry is simply a Hyperbee that stores Hyperdr
 -   [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
 -   [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
 -   [Tool Calling](examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [LoRA Finetuning](examples/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](examples/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 
 ## Benchmarking
 

@@ -9,7 +9,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class MtmdLlmContext: public LlmContext {
+class MtmdLlmContext : public LlmContext {
 public:
   /**
    * The constructor.
@@ -156,51 +156,51 @@ public:
   void resetMedia() override;
 
 private:
-    /**
-     * The check antiprompt method. It checks the antiprompt.
-     *
-     * @return - true if the antiprompt is found, false otherwise.
-    */
-    bool check_antiprompt();
+  /**
+   * The check antiprompt method. It checks the antiprompt.
+   *
+   * @return - true if the antiprompt is found, false otherwise.
+   */
+  bool check_antiprompt();
 
-    /**
-     * The tokenize chat method. It tokenizes the chat.
-     *
-     * @param chatMsgs - chat messages.
-     * @param tools - tools.
-     * @param chunks - output chunks.
-     * @param isCacheLoaded - whether the cache is loaded.
-     */
-    void TokenizeChat(
-        const std::vector<common_chat_msg>& chatMsgs,
-        const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
-        bool isCacheLoaded);
+  /**
+   * The tokenize chat method. It tokenizes the chat.
+   *
+   * @param chatMsgs - chat messages.
+   * @param tools - tools.
+   * @param chunks - output chunks.
+   * @param isCacheLoaded - whether the cache is loaded.
+   */
+  void TokenizeChat(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
+      bool isCacheLoaded);
 
-    /**
-     * The init vision context method. It initializes the vision context.
-     *
-    */
-    void init_vision_context();
+  /**
+   * The init vision context method. It initializes the vision context.
+   *
+   */
+  void init_vision_context();
 
-    common_init_result llama_init;
-    mtmd::context_ptr ctx_vision;
-    llama_model       * model;
-    llama_context     * lctx;
-    const llama_vocab * vocab;
-    CommonSamplerPtr    smpl;
+  common_init_result llama_init;
+  mtmd::context_ptr ctx_vision;
+  llama_model* model;
+  llama_context* lctx;
+  const llama_vocab* vocab;
+  CommonSamplerPtr smpl;
 
-    common_params params;
-    common_chat_templates_ptr tmpls;
-    std::vector<llama_token> antiprompt_tokens;
+  common_params params;
+  common_chat_templates_ptr tmpls;
+  std::vector<llama_token> antiprompt_tokens;
 
-    mtmd::bitmaps bitmaps;
-    llama_pos n_past = 0;
-    llama_pos n_discarded = 0;
-    llama_pos firstMsgTokens = 0;
+  mtmd::bitmaps bitmaps;
+  llama_pos n_past = 0;
+  llama_pos n_discarded = 0;
+  llama_pos firstMsgTokens = 0;
 
-    // UTF-8 token buffer for handling incomplete emoji sequences
-    qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8_buffer_;
-    std::atomic<bool> stop_generation = false;
+  // UTF-8 token buffer for handling incomplete emoji sequences
+  qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8_buffer_;
+  std::atomic<bool> stop_generation = false;
 };
 
 // NOLINTEND(readability-identifier-naming)

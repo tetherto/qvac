@@ -1,4 +1,4 @@
-name: Release Notes Check (Qvac-lib-infer-llamacpp-llm)
+name: Release Notes Check (LLM)
 
 on:
   pull_request:

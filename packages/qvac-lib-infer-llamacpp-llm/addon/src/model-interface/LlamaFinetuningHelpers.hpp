@@ -1,8 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -57,23 +59,28 @@ struct TrainingCheckpointState {
   uint32_t targetModules = 0;
   LoraLrSchedulerState* scheduler = nullptr;
   std::function<void(const std::string&)> logFn;
-  // Pause/resume control
   std::atomic<bool> pauseRequested{false};
   std::atomic<bool> shouldExit{false};
-  std::atomic<bool> pauseCheckpointSaved{
-      false}; // Flag to prevent multiple saves
+  std::atomic<bool> pauseCheckpointSaved{false};
   std::filesystem::path pauseCheckpointPath;
-  // Resume verification
-  int64_t expectedFirstBatchAfterResume =
-      -1; // Set when resuming to verify first batch
-  bool firstBatchAfterResumeLogged =
-      false; // Track if we've logged the first batch
-  // Mid-epoch resume support
-  int64_t batchOffsetWithinEpoch =
-      -1; // Batch index within epoch to resume from (0-indexed), -1 means start
-          // from beginning
-  bool skippingBatches =
-      false; // Track if we're currently skipping batches to reach resume point
+  std::atomic<bool> isIdle{true};
+  std::atomic<bool> isFinetuning{false};
+  std::atomic<bool> isPaused{false};
+  int64_t expectedFirstBatchAfterResume = -1;
+  bool firstBatchAfterResumeLogged = false;
+  int64_t batchOffsetWithinEpoch = -1;
+  bool skippingBatches = false;
+  bool finetuningStartedEmitted = false;
+
+  std::mutex pauseDoneMutex;
+  std::condition_variable pauseDoneCv;
+  std::atomic<bool> pauseWaitDone{false};
+
+  void setIdle() {
+    isIdle.store(true);
+    isFinetuning.store(false);
+    isPaused.store(false);
+  }
 };
 
 // Dataset preparation functions
@@ -103,13 +110,15 @@ std::filesystem::path pauseCheckpointDirectory(
 std::filesystem::path
 findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir);
 bool savePauseCheckpoint(
-    ggml_opt_context_t optCtx, TrainingCheckpointState& state);
+    ggml_opt_context_t optCtx, TrainingCheckpointState& state,
+    bool pausedDuringValidation = false);
+bool tryHandlePauseRequest(
+    ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
+    int64_t ibatch, int64_t ibatchMax);
 bool loadPauseCheckpoint(
     const std::filesystem::path& checkpointPath, llama_adapter_lora* adapter,
     llama_model* model, llama_context* ctx, ggml_opt_context_t* optCtx,
     CheckpointMetadata& meta);
-// Note: optCtx parameter is kept for API compatibility but optimizer loading
-// is handled separately via llama_opt_init with checkpoint_path parameter
 bool pauseCheckpointExists(const std::filesystem::path& checkpointDir);
 void clearPauseCheckpoint(const std::filesystem::path& checkpointDir);
 void optEpochCallback(
@@ -117,16 +126,13 @@ void optEpochCallback(
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState);
 
-// Wrapper for callback that uses global state (for compatibility)
 void optEpochCallbackWrapper(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs);
 
-// Global checkpoint state management (for callback compatibility)
-void setGlobalCheckpointState(TrainingCheckpointState* state);
-TrainingCheckpointState* getGlobalCheckpointState();
-void clearGlobalCheckpointState();
+void setCurrentCheckpointState(TrainingCheckpointState* state);
+void clearCurrentCheckpointState();
 
 // Utility functions
 std::string resolveAdapterOutputPath(

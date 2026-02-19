@@ -6,7 +6,7 @@ index 1234567..abcdefg 100644
      learningRate(finetuningParametersObj.getProperty<js::Number>(env, "learningRate").as<double>(env)),
      trainDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "trainDatasetDir").as<std::string>(env)),
 -    evalDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "evalDatasetDir").as<std::string>(env))
-+    evalDatasetDir(finetuningParametersObj.getProperty<js::String>(env, "evalDatasetDir").as<std::string>(env)),
++    evalDatasetDir(finetuningParametersObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir").value_or("")),
 +    contextLength(finetuningParametersObj.getOptionalPropertyAs<js::Uint32, int64_t>(env, "contextLength").value_or(0)),
 +    microBatchSize(finetuningParametersObj.getOptionalPropertyAs<js::Uint32, int64_t>(env, "microBatchSize").value_or(0)),
 +    assistantLossOnly(finetuningParametersObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly").value_or(false)),

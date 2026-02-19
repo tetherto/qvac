@@ -1,6 +1,7 @@
 #pragma once
 // NOLINTBEGIN(readability-identifier-naming)
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -12,14 +13,19 @@
 #include <picojson/picojson.h>
 
 #include "CacheManager.hpp"
-#include "LlamaLazyInitializeBackend.hpp"
 #include "LlamaFinetuningHelpers.hpp"
+#include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#if defined(STANDALONE_TEST_BUILD)
+#include "FinetuningParametersStub.hpp"
+#else
+#include "qvac-lib-inference-addon-cpp/FinetuningParameters.hpp"
+#endif
 #include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
@@ -67,6 +73,8 @@ public:
     bool prefill = false;
     std::optional<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
+    std::optional<qvac_lib_inference_addon_cpp::FinetuningParameters>
+        finetuningParams;
   };
 
   std::any process(const std::any& input) final;
@@ -120,15 +128,13 @@ public:
 
   /**
    * Finetune the model using LoRA.
-   *
    * @param params - finetuning parameters
    * @param logCallback - callback function for logging messages
+   * @return "COMPLETED" on success, "PAUSED" when paused, "ERROR" on failure
    */
-  void finetune(
+  std::string finetune(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      std::function<void(const std::string&)> logCallback = {}) {
-    finetune(params, logCallback, false);
-  }
+      std::function<void(const std::string&)> logCallback = {});
 
   /**
    * Get the llama context. Returns nullptr if context is not initialized.
@@ -145,25 +151,8 @@ public:
    */
   common_params& getCommonParams();
 
-  /**
-   * Get the current checkpoint state (for status checking).
-   * Returns nullptr if no checkpoint state exists.
-   */
-  llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState() const {
-    return currentCheckpointState_;
-  }
-
-  /**
-   * Finetune the model using LoRA (with pause/resume support).
-   *
-   * @param params - finetuning parameters
-   * @param logCallback - callback function for logging messages
-   * @param allowResumeFromPause - whether to resume from a paused state
-   */
-  void finetune(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      std::function<void(const std::string&)> logCallback = {},
-      bool allowResumeFromPause = false);
+  /** True if a finetune run is active (training or pausing). */
+  bool isFinetuneRunning() const;
 
   /**
    * Request pause of finetuning (sets pause flag in checkpoint state).
@@ -175,6 +164,10 @@ public:
    * Clear pause request flag (for resume).
    */
   void clearPauseRequest();
+
+  /** Block until the training thread has completed the finetuning pause path.
+   */
+  void waitUntilFinetuningPauseComplete();
 
 private:
   /**
@@ -250,16 +243,24 @@ private:
   std::optional<CacheManager> cacheManager;
 
   // Finetuning private methods
-  void validateFinetuningParams(const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
-  ggml_opt_dataset_t prepareTrainingDataset(const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  void validateFinetuningParams(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  ggml_opt_dataset_t prepareDatasetFromPath(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const std::string& datasetPath, const char* errorLabel,
+      const char* constructKind);
+  ggml_opt_dataset_t prepareTrainingDataset(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+  ggml_opt_dataset_t prepareEvalDataset(
+      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
   void initializeLoraAdapter(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      uint32_t targetModules,
-      llama_adapter_lora*& adapter);
+      uint32_t targetModules, llama_adapter_lora*& adapter);
   llama_finetuning_helpers::LoraLrSchedulerState createLrScheduler(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       int64_t totalSteps);
-  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState> initializeCheckpointing(
+  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  initializeCheckpointing(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       llama_adapter_lora* adapter,
       llama_finetuning_helpers::LoraLrSchedulerState* scheduler,
@@ -272,21 +273,24 @@ private:
       bool loadOptimizerState = false);
   void executeTrainingLoop(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      ggml_opt_dataset_t dataset,
-      int64_t trainSplit,
+      ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
       llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
       std::function<void(const std::string&)> logCallback,
-      uint32_t startEpoch = 0,
-      bool resumingFromPause = false);
+      uint32_t startEpoch = 0, bool resumingFromPause = false,
+      ggml_opt_dataset_t evalDataset = nullptr,
+      int64_t evalDatasetSampleCount = 0);
   void saveLoraAdapter(
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
 
-  // Finetuning state
-  llama_finetuning_helpers::TrainingCheckpointState* currentCheckpointState_ = nullptr;
-  // Hold ownership of checkpoint state when paused to prevent destruction
-  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState> pausedCheckpointState_;
+  llama_finetuning_helpers::TrainingCheckpointState*
+  getCurrentCheckpointState() const;
+
+  std::atomic<llama_finetuning_helpers::TrainingCheckpointState*>
+      currentCheckpointState_{nullptr};
+  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+      pausedCheckpointState_;
   bool optimizerInitialized_ = false;
 };
 

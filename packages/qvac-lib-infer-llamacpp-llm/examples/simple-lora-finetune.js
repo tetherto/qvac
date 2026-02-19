@@ -188,9 +188,9 @@ async function runFinetuningTests () {
     await model.load()
 
     const finetuneOptions = {
-      trainDatasetDir: './models/small_train_HF.jsonl',
-      evalDatasetDir: './models/eval_HF.jsonl',
-      numberOfEpochs: 8,
+      trainDatasetDir: './examples/input/small_train_HF.jsonl',
+      validation: { type: 'dataset', path: './examples/input/small_eval_HF.jsonl' },
+      numberOfEpochs: 2,
       learningRate: 1e-5,
       lrMin: 1e-8,
       lrScheduler: 'cosine',
@@ -205,7 +205,8 @@ async function runFinetuningTests () {
       outputParametersDir: './finetuned-model-direct'
     }
 
-    const finetuneResult = await model.finetune(finetuneOptions)
+    const handle = await model.finetune(finetuneOptions)
+    const finetuneResult = await handle.await()
     console.log('Finetune completed:', finetuneResult)
   } catch (error) {
     console.error('Test failed:', error.message)

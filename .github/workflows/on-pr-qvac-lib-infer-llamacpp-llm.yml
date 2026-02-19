@@ -1,22 +1,20 @@
-name: On PR Trigger (Qvac-lib-infer-llamacpp-llm)
+name: On PR Trigger (LLM)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
       - release-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
-
-  pull_request_target:
-    types: [labeled]
-    branches:
-      - main
-    paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
-
+      - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
+
   workflow_call:
 
 permissions:
@@ -30,7 +28,7 @@ env:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -40,6 +38,7 @@ jobs:
       changelog-path: packages/qvac-lib-infer-llamacpp-llm/CHANGELOG.md
 
   sanity-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
@@ -49,14 +48,20 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-llamacpp-llm
 
   cpp-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: sanity-checks
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-llamacpp-llm
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -76,21 +81,20 @@ jobs:
           node-version: 20
 
       - name: Configure npm auth
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: |
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
           NPMRC
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-llamacpp-embed
+        working-directory: packages/qvac-lib-infer-llamacpp-llm
         run: npm run test:dts
 
   prebuild:
@@ -109,7 +113,7 @@ jobs:
       tag: pr-${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: needs.prebuild.result == 'success'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
@@ -118,7 +122,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-mobile-integration-tests:
-    if: needs.prebuild.result == 'success'
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
@@ -142,5 +146,5 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success'}}
+      build-status: ${{ needs.prebuild.result == 'success' }}
     secrets: inherit

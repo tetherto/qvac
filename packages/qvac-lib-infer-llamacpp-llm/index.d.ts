@@ -20,11 +20,9 @@ export interface Loader {
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  pause(): Promise<void>
   stop(): Promise<void>
-  status(): Promise<string>
   append(input: { type: 'text' | 'media' | 'end of job'; input?: string | Uint8Array }): Promise<number>
-  cancel(jobId?: number): Promise<void>
+  cancel(): Promise<void>
   destroyInstance(): Promise<void>
   unload(): Promise<void>
 }
@@ -98,6 +96,10 @@ export interface DownloadResult {
   completed: boolean
 }
 
+export interface FinetuneHandle {
+  await(): Promise<{ status: string }>
+}
+
 export default class LlmLlamacpp extends BaseInference {
   protected addon: Addon
 
@@ -127,17 +129,15 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[]): Promise<QvacResponse>
 
-  unload(): Promise<void>
+  finetune(finetuningOptions?: Record<string, any>): Promise<FinetuneHandle>
 
-  pause(): Promise<void>
+  unload(): Promise<void>
 
   unpause(): Promise<void>
 
   stop(): Promise<void>
 
-  cancel(jobId?: string): Promise<void>
-
-  status(): Promise<any>
+  cancel(): Promise<void>
 
   destroy(): Promise<void>
 
@@ -146,4 +146,4 @@ export default class LlmLlamacpp extends BaseInference {
   getApiDefinition(): string
 }
 
-export { ReportProgressCallback, QvacResponse }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle }

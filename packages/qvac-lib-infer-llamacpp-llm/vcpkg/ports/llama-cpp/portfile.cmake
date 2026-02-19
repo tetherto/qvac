@@ -2,7 +2,7 @@ vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
   REF fabric-llm-finetune
-  SHA512 64c32d50bbb11b3565926fefd93dbe411dfa27010a986e4a24a81dbad3eba88ad44b01e5d140c9d81c8d24ef20f9b906b486c58fd456676d0e02c5a1fd66667b
+  SHA512 55d2f2af536f952ccd205181fec1cba98f280f8667dfeb4d3ddb1be828eecff66b45e7062a7526da2eb306be86dc24df44487b60e64f2c0cb9adc7dea86be392
 )
 
 vcpkg_check_features(

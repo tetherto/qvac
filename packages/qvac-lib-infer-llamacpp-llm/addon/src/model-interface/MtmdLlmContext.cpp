@@ -114,35 +114,35 @@ void MtmdLlmContext::init_vision_context() {
 }
 
 bool MtmdLlmContext::check_antiprompt() {
-    if (!params.antiprompt.empty()) {
-      constexpr int K_N_PREV = 32;
-      std::string lastOutput =
-          common_sampler_prev_str(smpl.get(), lctx, K_N_PREV);
+  if (!params.antiprompt.empty()) {
+    constexpr int K_N_PREV = 32;
+    std::string lastOutput =
+        common_sampler_prev_str(smpl.get(), lctx, K_N_PREV);
 
-      // Check if each of the reverse prompts appears at the end of the output.
-      for (std::string& antiprompt : params.antiprompt) {
-        size_t extraPadding = 2;
-        size_t searchStartPos =
-            lastOutput.length() >
+    // Check if each of the reverse prompts appears at the end of the output.
+    for (std::string& antiprompt : params.antiprompt) {
+      size_t extraPadding = 2;
+      size_t searchStartPos =
+          lastOutput.length() >
+                  static_cast<size_t>(antiprompt.length() + extraPadding)
+              ? lastOutput.length() -
                     static_cast<size_t>(antiprompt.length() + extraPadding)
-                ? lastOutput.length() -
-                      static_cast<size_t>(antiprompt.length() + extraPadding)
-                : 0;
+              : 0;
 
-        if (lastOutput.find(antiprompt, searchStartPos) != std::string::npos) {
-          return true;
-        }
-        }
-
-        // check for reverse prompt using special tokens
-        llama_token lastToken = common_sampler_last(smpl.get());
-        for (auto token : antiprompt_tokens) {
-          if (token == lastToken) {
-            return true;
-          }
-        }
+      if (lastOutput.find(antiprompt, searchStartPos) != std::string::npos) {
+        return true;
+      }
     }
-    return false;
+
+    // check for reverse prompt using special tokens
+    llama_token lastToken = common_sampler_last(smpl.get());
+    for (auto token : antiprompt_tokens) {
+      if (token == lastToken) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 void MtmdLlmContext::TokenizeChat(
@@ -407,13 +407,9 @@ bool MtmdLlmContext::generateResponse(
 
 void MtmdLlmContext::stop() { stop_generation.store(true); }
 
-llama_context* MtmdLlmContext::getCtx() {
-    return lctx;
-}
+llama_context* MtmdLlmContext::getCtx() { return lctx; }
 
-llama_pos MtmdLlmContext::getNPast() const {
-    return n_past;
-}
+llama_pos MtmdLlmContext::getNPast() const { return n_past; }
 
 void MtmdLlmContext::setNPast(llama_pos nPast) { this->n_past = nPast; }
 
@@ -428,67 +424,69 @@ void MtmdLlmContext::setNDiscarded(llama_pos nDiscarded) {
 }
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
-    if (media.empty()) {
-        resetMedia();
-        const char* errorMsg = "[MtmdLlm] Media buffer is empty\n";
-        throw qvac_errors::StatusError(
-            AddonID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
+  if (media.empty()) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Media buffer is empty\n";
+    throw qvac_errors::StatusError(
+        AddonID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
 
-    if (ctx_vision.get() == nullptr) {
-      resetMedia();
-      const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
-      throw qvac_errors::StatusError(
-          AddonID, toString(UnableToLoadModel), errorMsg);
-    }
+  if (ctx_vision.get() == nullptr) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
+    throw qvac_errors::StatusError(
+        AddonID, toString(UnableToLoadModel), errorMsg);
+  }
 
-    mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(ctx_vision.get(), media.data(), media.size()));
-    if (!bmp.ptr) {
-        resetMedia();
-        const char* errorMsg =
-            "[MtmdLlm] Failed to load media from memory buffer\n";
-        throw qvac_errors::StatusError(
-            AddonID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
-    bitmaps.entries.push_back(std::move(bmp));
+  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
+      ctx_vision.get(), media.data(), media.size()));
+  if (!bmp.ptr) {
+    resetMedia();
+    const char* errorMsg =
+        "[MtmdLlm] Failed to load media from memory buffer\n";
+    throw qvac_errors::StatusError(
+        AddonID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
+  bitmaps.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::loadMedia(const std::string& fname) {
-    if (fname.empty()) {
-        resetMedia();
-        const char* errorMsg = "[MtmdLlm] Filename is empty\n";
-        throw qvac_errors::StatusError(
-            AddonID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
+  if (fname.empty()) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Filename is empty\n";
+    throw qvac_errors::StatusError(
+        AddonID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
 
-    if (ctx_vision.get() == nullptr) {
-      resetMedia();
-      const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
-      throw qvac_errors::StatusError(
-          AddonID, toString(UnableToLoadModel), errorMsg);
-    }
+  if (ctx_vision.get() == nullptr) {
+    resetMedia();
+    const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
+    throw qvac_errors::StatusError(
+        AddonID, toString(UnableToLoadModel), errorMsg);
+  }
 
-    mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(ctx_vision.get(), fname.c_str()));
-    if (!bmp.ptr) {
-        resetMedia();
-        std::string errorMsg = string_format(
-            "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
-        throw qvac_errors::StatusError(
-            AddonID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            errorMsg);
-    }
-    bitmaps.entries.push_back(std::move(bmp));
+  mtmd::bitmap bmp(
+      mtmd_helper_bitmap_init_from_file(ctx_vision.get(), fname.c_str()));
+  if (!bmp.ptr) {
+    resetMedia();
+    std::string errorMsg = string_format(
+        "[MtmdLlm] Failed to load media from file: %s\n", fname.c_str());
+    throw qvac_errors::StatusError(
+        AddonID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
+  }
+  bitmaps.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {

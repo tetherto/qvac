@@ -1,4 +1,4 @@
-name: "cpp-tests (Qvac-lib-infer-llamacpp-llm)"
+name: CPP Tests (LLM)
 
 on:
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install llvm-19 on Linux
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -65,7 +65,7 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install Vulkan SDK on Linux
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
@@ -74,32 +74,31 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure Windows runner
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           git config --system core.longpaths true
           choco upgrade llvm
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Install Vulkan SDK on Windows
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru
+          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure vcpkg in windows
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg on macOS
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          rm -rf vcpkg
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
@@ -108,13 +107,13 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Configure vcpkg in linux
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure CMake generator on Windows
         shell: pwsh
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
@@ -122,20 +121,20 @@ jobs:
       # mkdir -p is not portable to pwsh; do per-OS
       - name: Create vcpkg cache location (non-Windows)
         if: ${{ matrix.os != 'windows-2022' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
         shell: pwsh
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
 
       - name: Get vcpkg cache
         uses: actions/cache@v4
         with:
-          path: ${{ inputs.workdir }}/vcpkg/cache
+          path: ${{ env.WORKDIR }}/vcpkg/cache
           key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
@@ -146,10 +145,9 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         shell: bash
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
@@ -160,48 +158,41 @@ jobs:
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
       - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
           npm install -g bare bare-make
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download test models
         shell: bash
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "Creating models directory..."
           mkdir -p models/unit-test
-          echo "Downloading Llama-3.2-1B-Instruct-Q4_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ggml/Llama-3.2-1B/2025-07-02/Llama-3.2-1B-Instruct-Q4_0.gguf models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf
-          echo "Downloading SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
-          echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from S3..."
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/SmolVLM-500M-Instruct/2025-12-8/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
+          echo "Downloading Llama-3.2-1B-Instruct-Q4_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf" -o models/unit-test/Llama-3.2-1B-Instruct-Q4_0.gguf
+          echo "Downloading SmolVLM-500M-Instruct-Q8_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
+          echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
 
       - name: Build C++ tests with coverage
         if: ${{ matrix.os == 'ubuntu-24.04' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: npm run coverage:cpp:build
 
       - name: Build C++ tests
         if: ${{ matrix.os != 'ubuntu-24.04' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
       - name: Run C++ tests
         id: cpp-tests
         shell: bash
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         env:
           # keep as repo-root absolute path to avoid assuming it's copied into workdir
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
@@ -234,7 +225,7 @@ jobs:
 
       - name: Generate Coverage Report
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:report
           COVERAGE=$(grep 'TOTAL' build/test/unit/coverage-summary.txt | awk '{print $10}' || echo "0.0")
@@ -246,51 +237,17 @@ jobs:
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |
-            ${{ inputs.workdir }}/build/test/unit/coverage-html/
-            ${{ inputs.workdir }}/build/test/unit/lcov.info
-            ${{ inputs.workdir }}/build/test/unit/coverage-summary.txt
-            ${{ inputs.workdir }}/build/test/unit/cpp-test-results.xml
+            ${{ env.WORKDIR }}/build/test/unit/coverage-html/
+            ${{ env.WORKDIR }}/build/test/unit/lcov.info
+            ${{ env.WORKDIR }}/build/test/unit/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
 
-      - name: Comment Coverage on PR
-        if: ${{ matrix.os == 'ubuntu-24.04' && github.event.pull_request && always() }}
-        uses: actions/github-script@v7
-        env:
-          WORKDIR: ${{ inputs.workdir }}
-          LINE_COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
-        with:
-          script: |
-            const fs = require('fs');
-            const wd = process.env.WORKDIR || '.';
-            const path = `${wd}/build/test/unit/coverage-summary.txt`;
-            if (fs.existsSync(path)) {
-              const coverage = fs.readFileSync(path, 'utf8');
-              const body = `## 🧪 C++ Test Coverage Report
-
-              **Coverage:** ${process.env.LINE_COVERAGE_PERCENTAGE}%
-
-
-              <details>
-              <summary>📊 Detailed Coverage</summary>
-
-              \`\`\`
-              ${coverage}
-              \`\`\`
-
-              </details>`;
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            }
 
       - name: Coverage Summary
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         shell: bash
-        working-directory: ${{ inputs.workdir }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
           echo "## 🎯 C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}%" >> $GITHUB_STEP_SUMMARY

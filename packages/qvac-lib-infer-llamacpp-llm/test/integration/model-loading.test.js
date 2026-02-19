@@ -166,8 +166,8 @@ async function runHyperdriveTest (t) {
     loader: hdDL,
     modelName,
     diskPath: cachePath,
-    opts: { stats: true },
-    logger: console
+    logger: console,
+    opts: { stats: true }
   }, HYPERDRIVE_CONFIG)
 
   const progressEvents = []
