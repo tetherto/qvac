@@ -9,9 +9,6 @@ const process = require('process')
 global.process = process
 const sinon = require('sinon')
 
-/**
- * TTSInterface wrapper that uses MockedBinding for testing
- */
 class MockedTTSInterface {
   constructor (binding, configuration, outputCb, transitionCb = null) {
     this._binding = binding
@@ -64,12 +61,12 @@ class MockedTTSInterface {
   }
 }
 
-function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createMockedSupertonicModel ({ onOutput = () => { }, binding = undefined } = {}) {
   const args = {
-    mainModelUrl: './models/tts/model.onnx',
-    configJsonPath: './models/tts/config.json',
-    eSpeakDataPath: './models/tts/espeak-ng-data'
-    // No loader - _downloadWeights will skip
+    modelDir: './models/supertonic',
+    voiceName: 'F1',
+    speed: 1,
+    numInferenceSteps: 5
   }
   const config = {
     language: 'en',
@@ -90,16 +87,24 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   return model
 }
 
-/**
- * Test that the inference process returns the expected output.
- */
-test('Inference returns correct output for text input', async (t) => {
+const SUPERTONIC_ADDON_CONFIG = {
+  modelDir: './models/supertonic',
+  tokenizerPath: './tokenizer.json',
+  textEncoderPath: './onnx/text_encoder.onnx',
+  latentDenoiserPath: './onnx/latent_denoiser.onnx',
+  voiceDecoderPath: './onnx/voice_decoder.onnx',
+  voicesDir: './voices',
+  voiceName: 'F1',
+  language: 'en'
+}
+
+test('Supertonic: Inference returns correct output for text input', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
   }
 
-  const model = createMockedModel({ onOutput })
+  const model = createMockedSupertonicModel({ onOutput })
   await model.load()
 
   const sampleText = 'Hello world'
@@ -120,11 +125,8 @@ test('Inference returns correct output for text input', async (t) => {
   t.ok(jobEndedEvent, 'Should receive a JobEnded event for job 1')
 })
 
-/**
- * Test that the model correctly handles state transitions.
- */
-test('Model state transitions are handled correctly', async (t) => {
-  const model = createMockedModel()
+test('Supertonic: Model state transitions are handled correctly', async (t) => {
+  const model = createMockedSupertonicModel()
   await model.load()
 
   const response = await model.run({ type: 'text', input: 'Test message' })
@@ -142,10 +144,7 @@ test('Model state transitions are handled correctly', async (t) => {
   t.ok(await model.status() === 'idle', 'Status: Model should be idle after destroy')
 })
 
-/**
- * Test that errors during processing are properly emitted and caught.
- */
-test('Model emits error events when an error occurs during processing', async (t) => {
+test('Supertonic: Model emits error events when an error occurs during processing', async (t) => {
   const binding = {
     createInstance: () => ({ id: 1 }),
     append: () => { throw new Error('Forced error for testing') },
@@ -156,7 +155,7 @@ test('Model emits error events when an error occurs during processing', async (t
     status: () => 'idle',
     destroyInstance: () => { }
   }
-  const model = createMockedModel({ binding })
+  const model = createMockedSupertonicModel({ binding })
   await model.load()
 
   try {
@@ -168,10 +167,7 @@ test('Model emits error events when an error occurs during processing', async (t
   }
 })
 
-/**
- * Test the complete sequence of operations for the TTSInterface.
- */
-test('TTSInterface full sequence: status, append, and job boundaries', async (t) => {
+test('Supertonic: TTSInterface full sequence: status, append, and job boundaries', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -179,10 +175,7 @@ test('TTSInterface full sequence: status, append, and job boundaries', async (t)
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en',
+    ...SUPERTONIC_ADDON_CONFIG,
     useGPU: false
   }, onOutput, transitionCb)
 
@@ -232,21 +225,14 @@ test('TTSInterface full sequence: status, append, and job boundaries', async (t)
   t.end()
 })
 
-/**
- * Test that append throws TypeError for invalid input.
- */
-test('append throws TypeError for invalid input', async (t) => {
+test('Supertonic: append throws TypeError for invalid input', async (t) => {
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, () => {}, transitionCb)
 
   await addon.activate()
 
-  // Test with missing type
   try {
     await addon.append({ input: 'Hello' })
     t.fail('Should throw TypeError for missing type')
@@ -255,7 +241,6 @@ test('append throws TypeError for invalid input', async (t) => {
     t.ok(error.message.includes('expects an object with input and type properties'), 'Error message should mention required properties')
   }
 
-  // Test with missing input (non end-of-job)
   try {
     await addon.append({ type: 'text' })
     t.fail('Should throw TypeError for missing input')
@@ -263,7 +248,6 @@ test('append throws TypeError for invalid input', async (t) => {
     t.ok(error instanceof TypeError, 'Should throw TypeError')
   }
 
-  // Test with non-object input
   try {
     await addon.append('invalid')
     t.fail('Should throw TypeError for non-object input')
@@ -271,7 +255,6 @@ test('append throws TypeError for invalid input', async (t) => {
     t.ok(error instanceof TypeError, 'Should throw TypeError')
   }
 
-  // Test with null
   try {
     await addon.append(null)
     t.fail('Should throw TypeError for null input')
@@ -280,10 +263,7 @@ test('append throws TypeError for invalid input', async (t) => {
   }
 })
 
-/**
- * Test stop functionality.
- */
-test('Stop functionality stops processing', async (t) => {
+test('Supertonic: Stop functionality stops processing', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -291,26 +271,19 @@ test('Stop functionality stops processing', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
   let status = await addon.status()
   t.ok(status === 'listening', 'Status should be listening after activation')
 
-  // Stop the addon
   await addon.stop()
   status = await addon.status()
   t.ok(status === 'stopped', 'Status should be stopped after stop()')
 })
 
-/**
- * Test cancel functionality.
- */
-test('Cancel cancels specific job', async (t) => {
+test('Supertonic: Cancel cancels specific job', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -318,46 +291,32 @@ test('Cancel cancels specific job', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
 
-  // Start a job
   const jobId = await addon.append({ type: 'text', input: 'Hello world' })
   t.is(jobId, 1, 'Job ID should be 1')
 
-  // Cancel the job
   await addon.cancel(jobId)
   const status = await addon.status()
   t.ok(status === 'stopped', 'Status should be stopped after cancel')
 })
 
-/**
- * Test unload functionality.
- */
-test('Unload destroys the addon instance', async (t) => {
-  const model = createMockedModel()
+test('Supertonic: Unload destroys the addon instance', async (t) => {
+  const model = createMockedSupertonicModel()
   await model.load()
 
-  // Verify addon is loaded
   t.ok(model.addon, 'Addon should be created after load')
 
-  // Unload the model
   await model.unload()
 
-  // Status should be idle after destroy
   const status = await model.status()
   t.ok(status === 'idle', 'Status should be idle after unload')
 })
 
-/**
- * Test reload functionality.
- */
-test('Reload reloads configuration', async (t) => {
+test('Supertonic: Reload reloads configuration', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -365,17 +324,13 @@ test('Reload reloads configuration', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
   let status = await addon.status()
   t.ok(status === 'listening', 'Initial status should be listening')
 
-  // Process text before reload
   await addon.append({ type: 'text', input: 'Hello' })
   await addon.append({ type: 'end of job' })
   await wait()
@@ -383,11 +338,8 @@ test('Reload reloads configuration', async (t) => {
   const initialEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
   t.ok(initialEvents.length > 0, 'Should receive Output events before reload')
 
-  // Reload with new configuration
   const newConfig = {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
+    ...SUPERTONIC_ADDON_CONFIG,
     language: 'es'
   }
 
@@ -397,12 +349,10 @@ test('Reload reloads configuration', async (t) => {
   status = await addon.status()
   t.ok(status === 'idle' || status === 'loading', 'Status should be idle or loading after reload')
 
-  // Activate after reload
   await addon.activate()
   status = await addon.status()
   t.ok(status === 'listening', 'Status should be listening after activation')
 
-  // Process text after reload
   const jobId = await addon.append({ type: 'text', input: 'World' })
   t.is(jobId, 2, 'Job ID should increment to 2 after reload')
 
@@ -413,10 +363,7 @@ test('Reload reloads configuration', async (t) => {
   t.ok(reloadEvents.length > 0, 'Should receive Output events after reload')
 })
 
-/**
- * Test append in invalid state emits error.
- */
-test('Append in invalid state emits error', async (t) => {
+test('Supertonic: Append in invalid state emits error', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -424,20 +371,15 @@ test('Append in invalid state emits error', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
 
-  // Stop the addon first
   await addon.stop()
   const status = await addon.status()
   t.ok(status === 'stopped', 'Status should be stopped')
 
-  // Try to append when stopped - should emit error
   await addon.append({ type: 'text', input: 'Hello' })
   await wait()
 
@@ -446,10 +388,7 @@ test('Append in invalid state emits error', async (t) => {
   t.ok(errorEvent.output.error.includes('Invalid state'), 'Error should mention invalid state')
 })
 
-/**
- * Test append with unknown type emits error.
- */
-test('Append with unknown type emits error', async (t) => {
+test('Supertonic: Append with unknown type emits error', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -457,15 +396,11 @@ test('Append with unknown type emits error', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
 
-  // Append with unknown type
   await addon.append({ type: 'unknown_type', input: 'Hello' })
   await wait()
 
@@ -474,23 +409,15 @@ test('Append with unknown type emits error', async (t) => {
   t.ok(errorEvent.output.error.includes('Unknown type'), 'Error should mention unknown type')
 })
 
-/**
- * Test static methods return expected values.
- */
-test('Static methods return expected values', async (t) => {
-  // Test getModelKey
+test('Supertonic: Static methods return expected values', async (t) => {
   const modelKey = ONNXTTS.getModelKey({})
   t.is(modelKey, 'onnx-tts', 'getModelKey should return "onnx-tts"')
 
-  // Test inferenceManagerConfig
   t.ok(ONNXTTS.inferenceManagerConfig, 'inferenceManagerConfig should exist')
   t.is(ONNXTTS.inferenceManagerConfig.noAdditionalDownload, true, 'noAdditionalDownload should be true')
 })
 
-/**
- * Test multiple text chunks in same job.
- */
-test('Multiple text chunks in same job', async (t) => {
+test('Supertonic: Multiple text chunks in same job', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
@@ -498,15 +425,11 @@ test('Multiple text chunks in same job', async (t) => {
 
   const binding = new MockedBinding()
   const addon = new MockedTTSInterface(binding, {
-    modelPath: './model.onnx',
-    configJsonPath: './config.json',
-    eSpeakDataPath: './espeak-ng-data',
-    language: 'en'
+    ...SUPERTONIC_ADDON_CONFIG
   }, onOutput, transitionCb)
 
   await addon.activate()
 
-  // Append multiple text chunks before end of job
   const jobId1 = await addon.append({ type: 'text', input: 'Hello' })
   t.is(jobId1, 1, 'First chunk job ID should be 1')
 
@@ -517,17 +440,31 @@ test('Multiple text chunks in same job', async (t) => {
 
   await wait()
 
-  // End the job
   const jobIdEnd = await addon.append({ type: 'end of job' })
   t.is(jobIdEnd, 1, 'End of job ID should be 1')
 
   await wait()
 
-  // Should have multiple output events for the same job
   const outputEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
   t.is(outputEvents.length, 2, 'Should receive 2 Output events for 2 text chunks')
 
-  // Should have one JobEnded event
   const jobEndedEvent = events.find(e => e.event === 'JobEnded' && e.jobId === 1)
   t.ok(jobEndedEvent, 'Should receive JobEnded event for job 1')
+})
+
+test('Supertonic: Engine type is detected correctly', async (t) => {
+  const supertonicModelDirArgs = {
+    modelDir: './models/supertonic',
+    voiceName: 'F1'
+  }
+  const modelFromDir = new ONNXTTS(supertonicModelDirArgs, {})
+  t.is(modelFromDir._engineType, 'supertonic', 'Should detect Supertonic engine when modelDir + voiceName are provided')
+
+  const supertonicExplicitArgs = {
+    textEncoderPath: './onnx/text_encoder.onnx',
+    latentDenoiserPath: './onnx/latent_denoiser.onnx',
+    voiceDecoderPath: './onnx/voice_decoder.onnx'
+  }
+  const modelFromPaths = new ONNXTTS(supertonicExplicitArgs, {})
+  t.is(modelFromPaths._engineType, 'supertonic', 'Should detect Supertonic engine when textEncoderPath is provided')
 })
