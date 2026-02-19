@@ -157,6 +157,20 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
+   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+   * @returns {Promise<void>}
+   */
+  async unload () {
+    const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
+    if (currentJobResponse) {
+      // Make sure not to leak jobs to avoid "job already exists" errors after
+      // loading the model again.
+      currentJobResponse.failed(new Error('Model was unloaded'))
+    }
+    await super.unload()
+  }
+
+  /**
    * Internal method to start inference with a text prompt.
    * @param {Message[]} prompt - Input prompt array of messages
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
@@ -193,6 +207,7 @@ class LlmLlamacpp extends BaseInference {
       // Make sure all events from previous one are done and will not
       // affect our new job. addon-cpp C++ guarantees every accepted job will
       // end with output or exception after finishing processing.
+      // If timeout is hit, exception should surface to avoid infinite await.
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           reject(new Error('Still waiting for previous job to finish processing. Cannot run new job. Only one job per instance is supported.'))
