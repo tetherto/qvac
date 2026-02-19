@@ -95,6 +95,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-feature-gpr:
@@ -109,6 +111,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-tmp-gpr:
@@ -123,6 +127,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-release-npm:
@@ -137,6 +143,8 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-release:
@@ -158,7 +166,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+      ref: ${{ github.sha }}
 
   mobile-tests:
     needs: [publish-main-gpr, publish-feature-gpr, publish-tmp-gpr, publish-release-npm]
@@ -167,4 +175,4 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+      ref: ${{ github.sha }}
