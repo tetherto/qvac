@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { exec, sortByName } = require('./utils')
+const { exec, sortByName, fetchPyPILicense, fetchGHRepoLicense } = require('./utils')
 
 // ---------------------------------------------------------------------------
 // Parse requirements.txt — extract package names (ignore versions/comments)
@@ -104,14 +104,14 @@ function runPipLicenses (packageNames, log) {
     console.log(`  Installing ${packageNames.length} Python packages...`)
     const installList = packageNames.join(' ')
     try {
-      exec(`${pip} install --quiet --no-cache-dir ${installList}`, { stdio: 'ignore', ...execOpts })
+      exec(`${pip} install --quiet --cache-dir /tmp/notice-pip-cache ${installList}`, { stdio: 'ignore', ...execOpts })
     } catch (err) {
       // Some packages may fail (e.g. torch on some platforms)
       // Try installing one by one to get as many as possible
       log.push(`[Python] Bulk install failed, falling back to one-by-one`)
       for (const pkg of packageNames) {
         try {
-          exec(`${pip} install --quiet --no-cache-dir ${pkg}`, { stdio: 'ignore', ...execOpts })
+          exec(`${pip} install --quiet --cache-dir /tmp/notice-pip-cache ${pkg}`, { stdio: 'ignore', ...execOpts })
         } catch {
           log.push(`[Python] Failed to install ${pkg}`)
         }
@@ -163,21 +163,33 @@ async function scanPythonDeps (pkgDir, pythonPaths, log) {
     // Only include packages we actually requested (skip transitive deps of pip-licenses itself)
     if (!packageNames.includes(name)) continue
 
-    const license = r.License || 'Unknown'
-    const url = r.URL || r.Home || `https://pypi.org/project/${r.Name}/`
+    let license = r.License || 'Unknown'
+    let url = r.URL || r.Home || `https://pypi.org/project/${r.Name}/`
 
+    // PyPI API fallback when pip-licenses returns UNKNOWN
     if (license === 'UNKNOWN' || license === 'Unknown') {
-      log.push(`[Python] Could not determine license for ${name}`)
+      const pypi = await fetchPyPILicense(name)
+      if (pypi.license) {
+        license = pypi.license
+      } else {
+        log.push(`[Python] Could not determine license for ${name}`)
+      }
+      if (pypi.url) url = pypi.url
     }
 
     mapped.push({ name, license, url })
   }
 
-  // Report packages that didn't install
+  // For packages that didn't install, try PyPI API directly
   for (const pkg of packageNames) {
     if (!installedNames.has(pkg)) {
-      log.push(`[Python] Package not installed (may not exist or platform-specific): ${pkg}`)
-      mapped.push({ name: pkg, license: 'Unknown', url: `https://pypi.org/project/${pkg}/` })
+      const pypi = await fetchPyPILicense(pkg)
+      if (pypi.license) {
+        mapped.push({ name: pkg, license: pypi.license, url: pypi.url || `https://pypi.org/project/${pkg}/` })
+      } else {
+        log.push(`[Python] Package not installed and not found on PyPI: ${pkg}`)
+        mapped.push({ name: pkg, license: 'Unknown', url: `https://pypi.org/project/${pkg}/` })
+      }
     }
   }
 
