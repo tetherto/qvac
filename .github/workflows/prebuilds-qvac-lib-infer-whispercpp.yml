@@ -26,10 +26,6 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-mlc-whisper"
       tag:
         description: "Tag to publish"
         type: string
@@ -548,9 +544,9 @@ jobs:
               || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
             )
           ) }} 
-    continue-on-error: true
+    continue-on-error: false
     outputs:
-      published_version: ${{ steps.capture_version.outputs.published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -587,7 +583,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "${WORKDIR}"
 
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")

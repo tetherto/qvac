@@ -21,9 +21,8 @@ def _get_results_root() -> Path:
 
 
 def _get_model_name(cfg: Config) -> str:
-    """Get model name from config (handles both Piper and Chatterbox configs)"""
-    # Chatterbox uses modelDir, Piper uses modelPath
-    model_path = getattr(cfg.model, 'modelPath', None) or getattr(cfg.model, 'modelDir', None)
+    """Get model name from config"""
+    model_path = getattr(cfg.model, 'modelDir', None)
     return Path(model_path).stem if model_path else "chatterbox"
 
 

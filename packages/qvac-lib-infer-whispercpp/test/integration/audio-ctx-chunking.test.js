@@ -3,11 +3,11 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile, HyperDriveDL, WHISPER_MODEL_HYPERDRIVE_KEY } = require('./helpers.js')
+const FakeDL = require('../mocks/loader.fake.js')
+const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
 
-// Create a HyperDrive loader
 function createLoader () {
-  return new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  return new FakeDL({})
 }
 
 async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioCtx) {
@@ -42,7 +42,7 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
   t.timeout(180000)
   console.log('\n=== Audio Context Chunking Integration Test ===\n')
 
-  // Ensure whisper model is available (uses HyperDrive)
+  // Ensure whisper model is available
   const whisperResult = await ensureWhisperModel(modelPath)
 
   if (!whisperResult.success && !whisperResult.isReal) {

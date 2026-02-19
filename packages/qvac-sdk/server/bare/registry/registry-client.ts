@@ -1,12 +1,9 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
 import { getCacheDir } from "@/server/utils/cache";
 import { getServerLogger } from "@/logging";
+import { DEFAULT_REGISTRY_CORE_KEY } from "@/constants";
 
 const logger = getServerLogger();
-
-// Public QVAC Registry containing all available models
-const DEFAULT_REGISTRY_CORE_KEY =
-  "u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y";
 
 let registryClient: QVACRegistryClient | null = null;
 
@@ -20,7 +17,7 @@ export async function getRegistryClient(): Promise<QVACRegistryClient> {
 
   registryClient = new QVACRegistryClient({
     registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
-    storage: getCacheDir("registry-corestore"),
+    storage: getCacheDir(`registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`),
   });
 
   await registryClient.ready();
