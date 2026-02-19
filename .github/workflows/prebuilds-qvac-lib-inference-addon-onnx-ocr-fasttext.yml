@@ -547,7 +547,7 @@ jobs:
   publish-npm:
     needs: [prebuild, merge, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
-    continue-on-error: true
+    continue-on-error: false
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest

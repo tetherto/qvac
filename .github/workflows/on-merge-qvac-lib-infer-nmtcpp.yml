@@ -136,3 +136,15 @@ jobs:
       tag: "latest"
       publish_target: "npm"
       
+    # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [prebuild-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-nmtcpp.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-nmtcpp"
