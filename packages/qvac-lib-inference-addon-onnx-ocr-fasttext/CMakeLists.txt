@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
+
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
  message(STATUS "enter special apple")
@@ -62,6 +64,10 @@ endif()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+if(ENABLE_XNNPACK)
+  list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -162,7 +168,7 @@ target_compile_definitions(
 function(strip_libraries LIB_DIR LIB_NAMES)
   foreach(LIB_NAME IN LISTS LIB_NAMES)
     set(LIB_PATH "${LIB_DIR}/${LIB_NAME}")
-    
+
     execute_process(
       COMMAND ${LLVM_STRIP} --strip-debug "${LIB_PATH}"
       ERROR_VARIABLE STRIP_ERROR
