@@ -33,22 +33,6 @@ function resolveArchName(arch) {
 }
 
 /**
- * Computes which prebuild directories to keep based on platform and arch.
- *
- * @param {string} platform - Electron platform name (darwin, win32, linux)
- * @param {string} arch - Architecture (x64, arm64, universal)
- * @returns {string[]} Array of prebuild directory prefixes to keep
- */
-function computeKeepPrefixes(platform, arch) {
-  if (platform === "darwin" && arch === "universal") {
-    // Universal mac builds need both architectures
-    return ["darwin-arm64", "darwin-x64"];
-  }
-  // Normal build: keep only the target platform-arch
-  return [`${platform}-${arch}`];
-}
-
-/**
  * Finds the app.asar.unpacked directory within the staged app.
  *
  * @param {string} appOutDir - The staged app output directory
@@ -221,8 +205,9 @@ async function prunePrebuildsHook(context) {
     return;
   }
 
-  const keepPrefixes = computeKeepPrefixes(platform, archName);
-  logger.debug(`Keeping prefixes: ${keepPrefixes.join(", ")}`);
+  // Keep only prebuilds matching target platform-arch (e.g., "darwin-arm64")
+  const keepPrefix = `${platform}-${archName}`;
+  logger.debug(`Keeping prefix: ${keepPrefix}`);
 
   const prebuildsDirs = findPrebuildsDirs(nodeModulesPath);
 
@@ -241,10 +226,8 @@ async function prunePrebuildsHook(context) {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      // Keep if any keepPrefix matches (prefix match for musl variants etc.)
-      const shouldKeep = keepPrefixes.some((prefix) =>
-        entry.name.startsWith(prefix)
-      );
+      // Keep if entry matches target platform-arch (prefix match for musl variants etc.)
+      const shouldKeep = entry.name.startsWith(keepPrefix);
 
       if (!shouldKeep) {
         const fullPath = path.join(prebuildsDir, entry.name);

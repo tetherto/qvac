@@ -4,6 +4,8 @@
  * Electron-builder integration for QVAC SDK.
  * Provides automatic native addon tree-shaking and prebuild pruning.
  *
+ * @compatible electron-builder >=25.0.0 <26.0.0
+ *
  * Usage:
  *   Option A - extends (minimal config):
  *     // package.json
@@ -20,6 +22,11 @@
  *   - Aligns with @qvac/logging conventions
  */
 
+/**
+ * Tested electron-builder version.
+ */
+const ELECTRON_BUILDER_COMPAT_RANGE = ">=25.0.0 <26.0.0";
+
 const {
   generateAddonExclusions,
   discoverQvacAddonPackages,
@@ -28,6 +35,40 @@ const { mergeFilesWithExclusions } = require("./files.cjs");
 const { createMergedAfterPackHook } = require("./hooks.cjs");
 const { logger, setLogLevel } = require("./logger.cjs");
 const { prunePrebuildsHook } = require("./prebuilds.cjs");
+
+/**
+ * Checks if the config uses universal arch (macOS) which is incompatible with
+ * prebuild tree-shaking. Universal builds require @electron/universal to merge
+ * x64 and arm64 binaries, but prebuilds have arch-specific directories which are incompatible.
+ *
+ * @param {object} config - electron-builder configuration
+ * @throws {Error} If universal arch is detected
+ */
+function checkForUniversalArch(config) {
+  const macConfig = config.mac;
+  if (!macConfig) return;
+
+  const targets = Array.isArray(macConfig.target)
+    ? macConfig.target
+    : [macConfig.target];
+
+  for (const target of targets) {
+    if (!target) continue;
+
+    const arch = typeof target === "object" ? target.arch : null;
+    if (!arch) continue;
+
+    const archList = Array.isArray(arch) ? arch : [arch];
+    if (archList.includes("universal")) {
+      throw new Error(
+        "[qvac:electron-builder] Universal arch is not supported.\n\n" +
+        "  macOS universal builds are incompatible with native addon prebuilds.\n" +
+        "  The @electron/universal merger cannot handle arch-specific prebuild directories.\n\n" +
+        "  Solution: Configure separate arm64 and x64 targets instead of universal.\n"
+      );
+    }
+  }
+}
 
 /**
  * Wraps a user's electron-builder config with QVAC tree-shaking.
@@ -51,12 +92,18 @@ function withQvacElectronBuilder(userConfig, options = {}) {
     setLogLevel(logLevel);
   }
 
+  logger.debug(
+    `QVAC electron-builder integration (tested: electron-builder ${ELECTRON_BUILDER_COMPAT_RANGE})`
+  );
+
   return async function (context) {
     const resolvedUserConfig =
       typeof userConfig === "function" ? await userConfig(context) : userConfig;
 
     logger.debug(`Project directory: ${projectDir}`);
     logger.debug(`Strict mode: ${strict}`);
+
+    checkForUniversalArch(resolvedUserConfig);
 
     const addonExclusions = generateAddonExclusions(projectDir, strict);
 
