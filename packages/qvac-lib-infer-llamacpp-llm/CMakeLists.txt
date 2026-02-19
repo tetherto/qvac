@@ -7,7 +7,7 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(VK_PROFILING "Force vk performance logging in llama-cpp" OFF)
+option(VK_PROFILING "Force vk performance logging in qvac-fabric" OFF)
 if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
