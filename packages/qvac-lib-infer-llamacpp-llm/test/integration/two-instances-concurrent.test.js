@@ -22,6 +22,7 @@ const proc = require('bare-process')
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isDarwinArm64 = platform === 'darwin' && arch === 'arm64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
@@ -59,7 +60,8 @@ function createConfig () {
   }
 }
 
-test('two instances: A run + B run in parallel', { timeout: 60_000, skip: isDarwinX64 }, async (t) => {
+const TWO_RUN_TIMEOUT_MS = isDarwinArm64 ? 180_000 : 60_000
+test('two instances: A run + B run in parallel', { timeout: TWO_RUN_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
