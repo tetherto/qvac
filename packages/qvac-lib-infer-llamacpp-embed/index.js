@@ -6,7 +6,8 @@ const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvide
 const { BertInterface } = require('./addon')
 
 /** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 3_000
+const PREVIOUS_JOB_WAIT_MS = 30
+const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
  * GGML client implementation for BERT GTE model
@@ -28,7 +29,9 @@ class GGMLBert extends BaseInference {
     this._diskPath = diskPath
     this._modelName = modelName
     // _shards will be null if the modelName is not a sharded file.
-    this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)inde.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
+    this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._runQueueWaiter = Promise.resolve()
     this._lastJobResult = Promise.resolve()
   }
 
@@ -94,65 +97,84 @@ class GGMLBert extends BaseInference {
    * @returns {Promise<void>}
    */
   async unload () {
-    const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
-    if (currentJobResponse) {
-      // Make sure not to leak jobs to avoid "job already exists" errors after
-      // loading the model again.
-      currentJobResponse.failed(new Error('Model was unloaded'))
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
+      if (currentJobResponse) {
+        // Make sure not to leak jobs to avoid "job already exists" errors after
+        // loading the model again.
+        currentJobResponse.failed(new Error('Model was unloaded'))
+        this._deleteJobMapping('OnlyOneJob')
+      }
+      await super.unload()
+    })
+  }
+
+  async _withExclusiveRun (fn) {
+    const prev = this._runQueueWaiter || Promise.resolve()
+    let release
+    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    await prev
+    try {
+      return await fn()
+    } finally {
+      release()
     }
-    await super.unload()
   }
 
   async _runInternal (text) {
-    this.logger.info('Starting inference embeddings for text:', text)
+    return this._withExclusiveRun(async () => {
+      this.logger.info('Starting inference embeddings for text:', text)
 
-    // Detect arrays and set type: 'sequences' for direct vector passing
-    // Otherwise use type: 'text' for string input
-    const inputData = Array.isArray(text)
-      ? { type: 'sequences', input: text }
-      : { type: 'text', input: text }
+      // Detect arrays and set type: 'sequences' for direct vector passing
+      // Otherwise use type: 'text' for string input
+      const inputData = Array.isArray(text)
+        ? { type: 'sequences', input: text }
+        : { type: 'text', input: text }
 
-    // Make sure all events from previous one are done and will not
-    // affect our new job. addon-cpp C++ guarantees every accepted job will
-    // end with output or exception after finishing processing.
-    // If timeout is hit, exception should surface to avoid infinite await.
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('Still waiting for previous job to finish processing. Cannot run new job. Only one job per instance is supported.'))
-      }, PREVIOUS_JOB_WAIT_MS)
-      this._lastJobResult
-        .then(() => { clearTimeout(timer); resolve() })
-        .catch(() => { clearTimeout(timer); resolve() })
+      // Make sure all events from previous one are done and will not
+      // affect our new job. addon-cpp C++ guarantees every accepted job will
+      // end with output or exception after finishing processing.
+      // - If timeout is hit, exception should surface to avoid infinite await.
+      // - It is expected that we briefly wait for the previous job to settle
+      //   before throwing a busy error.
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
+        }, PREVIOUS_JOB_WAIT_MS)
+        this._lastJobResult
+          .then(() => { clearTimeout(timer); resolve() })
+          .catch(() => { clearTimeout(timer); resolve() })
+      })
+
+      // At this point, previous job is not using 'OnlyOneJob'
+      // slot anymore, so we can safely overwrite it with new response.
+      // Create response before running the job so any events right after
+      // successful runJob are not lost.
+      const response = this._createResponse('OnlyOneJob')
+
+      // addon-cpp C++ guarantees no events will be generated until job is
+      // fully accepted. If runJob throws or returns false, no events will be
+      // generated for this job.
+      let accepted
+      try {
+        accepted = await this.addon.runJob(inputData)
+      } catch (error) {
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(error)
+        throw error
+      }
+      if (!accepted) {
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      // Store the finish promise so the next run can wait on it.
+      this._lastJobResult = response.await()
+
+      return response
     })
-
-    // At this point, previous job is not using 'OnlyOneJob'
-    // slot anymore, so we can safely overwrite it with new response.
-    // Create response before running the job so any events right after
-    // successful runJob are not lost.
-    const response = this._createResponse('OnlyOneJob')
-
-    // addon-cpp C++ guarantees no events will be generated until job is
-    // fully accepted. If runJob throws or returns false, no events will be
-    // generated for this job.
-    let accepted
-    try {
-      accepted = await this.addon.runJob(inputData)
-    } catch (error) {
-      this._deleteJobMapping('OnlyOneJob')
-      response.failed(error)
-      throw error
-    }
-    if (!accepted) {
-      this._deleteJobMapping('OnlyOneJob')
-      const msg = 'Cannot set new job: a job is already set or being processed'
-      response.failed(new Error(msg))
-      throw new Error(msg)
-    }
-
-    // Store the finish promise so the next run can wait on it.
-    this._lastJobResult = response.await()
-
-    return response
   }
 
   /**

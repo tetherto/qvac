@@ -636,7 +636,7 @@ test('run | response.cancel(): equivalent to model.cancel(), resolves when job s
   t.pass('response.cancel() resolves when job has stopped')
 })
 
-test('run | run: second run() throws', { timeout: TEST_TIMEOUT }, async t => {
+test('run | run: second run() throws busy error', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   const sequences = Array.from({ length: 16 }, (_, i) => `Sequence ${i}.`)
   const firstResponse = await inference.run(sequences)

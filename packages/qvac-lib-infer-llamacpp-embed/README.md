@@ -223,8 +223,11 @@ The following table describes the expected behavior of `run` and `cancel` depend
 |---------------|----------------|----------------------------------------------------------------|
 | idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
 | idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves       |
-| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
 | run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped      |
+
+When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
+- `"Cannot set new job: a job is already set or being processed"`
 
 **Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
 
