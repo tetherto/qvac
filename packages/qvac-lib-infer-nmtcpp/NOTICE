@@ -68,103 +68,19 @@ Third-Party Model Licenses
 
   ggml-indictrans2-en-indic-1B-f16
     https://huggingface.co/ai4bharat/indictrans2-en-indic-1B
-  ggml-indictrans2-en-indic-1B-q4_0
-    https://huggingface.co/ai4bharat/indictrans2-en-indic-1B
   ggml-indictrans2-en-indic-dist-200M-f16
-    https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M
-  ggml-indictrans2-en-indic-dist-200M-q4_0
     https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M
   ggml-indictrans2-indic-en-1B-f16
     https://huggingface.co/ai4bharat/indictrans2-indic-en-1B
-  ggml-indictrans2-indic-en-1B-q4_0
-    https://huggingface.co/ai4bharat/indictrans2-indic-en-1B
   ggml-indictrans2-indic-en-dist-200M-f16
-    https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M
-  ggml-indictrans2-indic-en-dist-200M-q4_0
     https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M
   ggml-indictrans2-indic-indic-1B-f16
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B
-  ggml-indictrans2-indic-indic-1B-q4_0
-    https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B
   ggml-indictrans2-indic-indic-dist-320M-f16
-    https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M
-  ggml-indictrans2-indic-indic-dist-320M-q4_0
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M
 
 --- mpl-2.0 (Mozilla Public License 2.0) ---
 
-  lex.50.50.aren.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
-  lex.50.50.csen.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
-  lex.50.50.enar.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
-  lex.50.50.encs.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
-  lex.50.50.enes.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
-  lex.50.50.enfr.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
-  lex.50.50.enit.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
-  lex.50.50.enja.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  lex.50.50.enpt.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
-  lex.50.50.enru.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  lex.50.50.enzh.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  lex.50.50.esen.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
-  lex.50.50.fren.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
-  lex.50.50.iten.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
-  lex.50.50.jaen.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
-  lex.50.50.pten.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
-  lex.50.50.ruen.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  lex.50.50.zhen.s2t
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  metadata
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
   model.aren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
   model.csen.intgemm.alphas
@@ -200,46 +116,6 @@ Third-Party Model Licenses
   model.ruen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
   model.zhen.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
-  srcvocab.enja
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  srcvocab.enzh
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  trgvocab.enja
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  trgvocab.enzh
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  vocab.aren
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
-  vocab.csen
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
-  vocab.enar
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
-  vocab.encs
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
-  vocab.enes
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
-  vocab.enfr
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
-  vocab.enit
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
-  vocab.enpt
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
-  vocab.enru
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  vocab.esen
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
-  vocab.fren
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
-  vocab.iten
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
-  vocab.jaen
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
-  vocab.pten
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
-  vocab.ruen
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  vocab.zhen
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
 
 =========================================================================

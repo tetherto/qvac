@@ -324,7 +324,7 @@ C++ Dependencies
   opencv4
     https://github.com/opencv/opencv
 
---- MIT ---
+--- mit (MIT License) ---
 
   onnxruntime
     https://github.com/microsoft/onnxruntime
