@@ -240,15 +240,9 @@ class ComparativeEvaluator:
             addon_model_name = self.addon_config.hf_gguf_repo
             if hasattr(self.addon_config, 'hf_gguf_quantization') and self.addon_config.hf_gguf_quantization:
                 addon_model_name = f"{self.addon_config.hf_gguf_repo}:{self.addon_config.hf_gguf_quantization}"
-        elif hasattr(self.addon_config, 'hyperdrive_uri') and self.addon_config.hyperdrive_uri:
-            # Hyperdrive model - use full URI
-            addon_model_name = self.addon_config.hyperdrive_uri
         elif hasattr(self.addon_config, 'selected_model') and self.addon_config.selected_model:
             # Use selected_model name if available
             addon_model_name = self.addon_config.selected_model.get('name', 'addon_model')
-        elif hasattr(self.addon_config, 'p2p_model_name') and self.addon_config.p2p_model_name:
-            # Use P2P model name
-            addon_model_name = self.addon_config.p2p_model_name
         else:
             addon_model_name = "addon_model"
         

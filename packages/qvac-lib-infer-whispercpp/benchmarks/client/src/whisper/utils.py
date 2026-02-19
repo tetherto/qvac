@@ -177,11 +177,7 @@ def generate_summary():
             
             vad_status = "✓" if "enabled" in vad_info.lower() else "-"
 
-            # derive model name from addon_id (strip prefix up through mlc- and suffix -quant)
-            model = ""
-            if addon_id:
-                mmod = re.search(r"mlc-([^-]+-[^-]+)-" + re.escape(quant), addon_id)
-                model = mmod.group(1) if mmod else addon_id
+            model = addon_id if addon_id else ""
 
             # Dataset
             ds_m = re.search(r"\*\*Dataset:\*\*\s*([^\n]+)", text)

@@ -4,13 +4,13 @@ const path = require('bare-path')
 const os = require('bare-os')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
-const WHISPER_MODEL_HYPERDRIVE_KEY = 'hd://ebfb94b378276da139554668f1ff737644eadff529c2ea0f2662d7df61fd86ca'
+const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
+const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
 let FakeDL = null
 if (!isMobile) {
@@ -21,6 +21,89 @@ if (!isMobile) {
 
 function detectPlatform () {
   return `${platform}-${arch}`
+}
+
+async function downloadWithHttp (url, destPath, maxRedirects = 10) {
+  const https = require('bare-https')
+  const { URL } = require('bare-url')
+
+  const parsedUrl = new URL(url)
+
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume()
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+
+      const dir = path.dirname(destPath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const file = fs.createWriteStream(destPath)
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+
+      file.on('error', (err) => {
+        res.destroy()
+        reject(err)
+      })
+
+      res.on('error', (err) => {
+        file.destroy()
+        reject(err)
+      })
+
+      res.pipe(file)
+
+      file.on('close', () => {
+        if (contentLength > 0) {
+          console.log(`  Downloaded ${(contentLength / 1024 / 1024).toFixed(1)}MB`)
+        }
+        resolve()
+      })
+    })
+
+    req.on('error', reject)
+    req.end()
+  })
+}
+
+async function downloadFile (url, destPath) {
+  return downloadWithHttp(url, destPath)
 }
 
 async function ensureWhisperModel (modelPath) {
@@ -34,48 +117,29 @@ async function ensureWhisperModel (modelPath) {
   if (fs.existsSync(modelPath)) {
     const stats = fs.statSync(modelPath)
     if (stats.size > 1000000) {
-      console.log(`✓ Using cached model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      console.log(`Using cached model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
       return { success: true, path: modelPath, isReal: true }
     }
   }
 
-  console.log(`Downloading ${modelName} from HyperDrive...`)
-  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  const url = `${HF_WHISPER_BASE}/${modelName}`
+  console.log(`Downloading ${modelName} from HuggingFace...`)
 
   try {
-    await loader.ready()
-    const files = await loader.list()
-    console.log(`Found ${files.length} files in HyperDrive`)
-
-    for (const file of files) {
-      const fullPath = path.join(diskPath, file.key)
-      if (fs.existsSync(fullPath)) {
-        const stats = fs.statSync(fullPath)
-        if (stats.size > 1000000) {
-          console.log(`Skipping existing: ${file.key}`)
-          continue
-        }
-      }
-      const dirName = path.dirname(fullPath)
-      fs.mkdirSync(dirName, { recursive: true })
-      const response = await loader.download(file.key, { diskPath: dirName })
-      await response.await()
-      console.log(`Downloaded: ${file.key}`)
-    }
-
-    await loader.close()
+    await downloadFile(url, modelPath)
 
     if (fs.existsSync(modelPath)) {
       const stats = fs.statSync(modelPath)
-      console.log(`✓ Model ready: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
-      return { success: true, path: modelPath, isReal: true }
-    } else {
-      console.log(`Model ${modelName} not found in HyperDrive`)
-      return { success: false, path: modelPath, isReal: false }
+      if (stats.size > 1000000) {
+        console.log(`Downloaded model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+        return { success: true, path: modelPath, isReal: true }
+      }
     }
+
+    console.log(`Download produced invalid file for ${modelName}`)
+    return { success: false, path: modelPath, isReal: false }
   } catch (err) {
-    console.error('HyperDrive download error:', err)
-    if (loader) await loader.close().catch(() => {})
+    console.log(`Failed to download ${modelName}: ${err.message}`)
     return { success: false, path: modelPath, isReal: false, error: err.message }
   }
 }
@@ -87,7 +151,7 @@ async function ensureVADModel (vadModelPath) {
   if (fs.existsSync(vadModelPath)) {
     const stats = fs.statSync(vadModelPath)
     if (stats.size > 500000) {
-      console.log(`✓ Using cached VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      console.log(`Using cached VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
       return true
     }
   }
@@ -96,31 +160,24 @@ async function ensureVADModel (vadModelPath) {
     fs.mkdirSync(diskPath, { recursive: true })
   }
 
-  console.log(`Downloading ${modelName} from HyperDrive...`)
-  const loader = new HyperDriveDL({ key: WHISPER_MODEL_HYPERDRIVE_KEY })
+  const url = `${HF_VAD_BASE}/${modelName}`
+  console.log(`Downloading ${modelName} from HuggingFace...`)
 
   try {
-    await loader.ready()
-    const files = await loader.list()
-
-    const vadFile = files.find(f => f.key.includes('silero') || f.key.includes('vad'))
-    if (vadFile) {
-      const response = await loader.download(vadFile.key, { diskPath })
-      await response.await()
-      console.log(`Downloaded: ${vadFile.key}`)
-    }
-
-    await loader.close()
+    await downloadFile(url, vadModelPath)
 
     if (fs.existsSync(vadModelPath)) {
       const stats = fs.statSync(vadModelPath)
-      console.log(`✓ VAD model ready: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
-      return true
+      if (stats.size > 500000) {
+        console.log(`Downloaded VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+        return true
+      }
     }
+
+    console.log(`Download produced invalid file for ${modelName}`)
     return false
   } catch (err) {
-    console.error('HyperDrive VAD download error:', err)
-    if (loader) await loader.close().catch(() => {})
+    console.log(`Failed to download ${modelName}: ${err.message}`)
     return false
   }
 }
@@ -675,7 +732,5 @@ module.exports = {
   validateAccuracy,
   isMobile,
   platform,
-  arch,
-  WHISPER_MODEL_HYPERDRIVE_KEY,
-  HyperDriveDL
+  arch
 }

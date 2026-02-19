@@ -13,16 +13,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "GPR tag override (optional)"
+        description: "Tag to publish with"
         required: false
-        default: ""
+        default: "dev"
         type: choice
         options:
-          - ""
-          - dev
-          - feature
-          - temp
           - latest
+          - dev
 
 permissions:
   contents: write

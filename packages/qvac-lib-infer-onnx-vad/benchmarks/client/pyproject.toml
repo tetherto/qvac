@@ -1,5 +1,5 @@
 [project]
-name = "tetherto-qvac-lib-inference-addon-mlc-whisper-benchmark-client"
+name = "tetherto-qvac-lib-infer-onnx-vad-benchmark-client"
 version = "0.0.1"
 description = "Benchmark client for Whisper transcription addons"
 authors = [

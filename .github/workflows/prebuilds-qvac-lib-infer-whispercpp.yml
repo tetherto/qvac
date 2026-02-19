@@ -26,10 +26,6 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-mlc-whisper"
       tag:
         description: "Tag to publish"
         type: string
@@ -587,7 +583,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "${WORKDIR}"
 
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
