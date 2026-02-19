@@ -14,8 +14,16 @@ async function runCacheStateMachineTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
 
+async function runConcurrentOperationsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/concurrent-operations.test.js', options)
+}
+
 async function runConfigParametersTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/config-parameters.test.js', options)
+}
+
+async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
 }
 
 async function runImageTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -44,6 +52,10 @@ async function runSlidingContextTest (options = {}) { // eslint-disable-line no-
 
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/tool-calling.test.js', options)
+}
+
+async function runTwoInstancesConcurrentTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/two-instances-concurrent.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
