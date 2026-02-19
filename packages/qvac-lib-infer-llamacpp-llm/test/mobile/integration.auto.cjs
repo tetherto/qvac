@@ -14,10 +14,6 @@ async function runCacheStateMachineTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
 
-async function runConcurrentOperationsTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/concurrent-operations.test.js', options)
-}
-
 async function runConfigParametersTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/config-parameters.test.js', options)
 }
