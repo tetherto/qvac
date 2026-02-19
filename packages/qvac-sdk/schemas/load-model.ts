@@ -187,22 +187,24 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelType: ModelType.parakeetTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: { modelType: data.modelConfig.modelType },
+      modelConfig: {
+        modelType: data.modelConfig.modelType,
+        parakeetEncoderDataSrc: data.modelConfig.parakeetEncoderDataSrc
+          ? modelInputToSrcSchema.parse(data.modelConfig.parakeetEncoderDataSrc)
+          : undefined,
+        parakeetDecoderSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetDecoderSrc,
+        ),
+        parakeetVocabSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetVocabSrc,
+        ),
+        parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetPreprocessorSrc,
+        ),
+      },
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      parakeetEncoderDataSrc: modelInputToSrcSchema.parse(
-        data.modelConfig.parakeetEncoderDataSrc,
-      ),
-      parakeetDecoderSrc: modelInputToSrcSchema.parse(
-        data.modelConfig.parakeetDecoderSrc,
-      ),
-      parakeetVocabSrc: modelInputToSrcSchema.parse(
-        data.modelConfig.parakeetVocabSrc,
-      ),
-      parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
-        data.modelConfig.parakeetPreprocessorSrc,
-      ),
     })),
   z
     .object({
@@ -408,10 +410,6 @@ export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
   modelConfig: z
     .object({ modelType: parakeetModelTypeEnumSchema })
     .passthrough(),
-  parakeetEncoderDataSrc: z.string(),
-  parakeetDecoderSrc: z.string(),
-  parakeetVocabSrc: z.string(),
-  parakeetPreprocessorSrc: z.string(),
 });
 
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({

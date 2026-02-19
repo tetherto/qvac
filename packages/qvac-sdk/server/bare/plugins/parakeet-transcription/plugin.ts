@@ -9,6 +9,7 @@ import {
   ModelType,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveModelPath,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
@@ -41,9 +42,9 @@ function createParakeetModel(
 
   const { encoderDataPath, decoderPath, vocabPath, preprocessorPath } = config;
 
-  if (!encoderDataPath || !decoderPath || !vocabPath || !preprocessorPath) {
+  if (!decoderPath || !vocabPath || !preprocessorPath) {
     throw new ModelLoadFailedError(
-      "Parakeet requires all model file paths: parakeetEncoderDataSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc in modelConfig",
+      "Parakeet requires model file paths: parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc in modelConfig",
     );
   }
 
@@ -55,12 +56,23 @@ function createParakeetModel(
     logger,
     modelName: parseModelPath(dirPath).basePath,
     diskPath: dirPath,
-  } as TranscriptionParakeetArgs;
+  } as unknown as TranscriptionParakeetArgs;
+
+  const filePaths: Record<string, string> = {
+    "encoder-model.onnx": modelPath,
+    "decoder_joint-model.onnx": decoderPath,
+    "vocab.txt": vocabPath,
+    "preprocessor.onnx": preprocessorPath,
+  };
+  if (encoderDataPath) {
+    filePaths["encoder-model.onnx.data"] = encoderDataPath;
+  }
 
   const addonConfig: TranscriptionParakeetConfig = {
     path: dirPath,
+    filePaths,
     encoderPath: modelPath,
-    encoderDataPath,
+    ...(encoderDataPath ? { encoderDataPath } : {}),
     decoderPath,
     vocabPath,
     preprocessorPath,
@@ -78,6 +90,36 @@ export const parakeetPlugin = definePlugin({
   modelType: ModelType.parakeetTranscription,
   displayName: "Parakeet (NVIDIA NeMo ONNX)",
   addonPackage: "@qvac/transcription-parakeet",
+
+  async resolveConfig(
+    modelConfig: Record<string, unknown>,
+    resolve: ResolveModelPath,
+  ): Promise<Record<string, unknown>> {
+    const config = modelConfig as {
+      parakeetEncoderDataSrc?: string;
+      parakeetDecoderSrc?: string;
+      parakeetVocabSrc?: string;
+      parakeetPreprocessorSrc?: string;
+    };
+
+    const [encoderDataPath, decoderPath, vocabPath, preprocessorPath] =
+      await Promise.all([
+        config.parakeetEncoderDataSrc
+          ? resolve(config.parakeetEncoderDataSrc)
+          : undefined,
+        config.parakeetDecoderSrc
+          ? resolve(config.parakeetDecoderSrc)
+          : undefined,
+        config.parakeetVocabSrc
+          ? resolve(config.parakeetVocabSrc)
+          : undefined,
+        config.parakeetPreprocessorSrc
+          ? resolve(config.parakeetPreprocessorSrc)
+          : undefined,
+      ]);
+
+    return { ...modelConfig, encoderDataPath, decoderPath, vocabPath, preprocessorPath };
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const config = (params.modelConfig ?? {}) as ParakeetModelConfig;

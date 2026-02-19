@@ -1,15 +1,13 @@
-import { loadModel, unloadModel, transcribe } from "@qvac/sdk";
-
-const HF_BASE =
-  "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main";
-
-const DEFAULTS = {
-  modelSrc: `${HF_BASE}/encoder-model.onnx`,
-  parakeetEncoderDataSrc: `${HF_BASE}/encoder-model.onnx.data`,
-  parakeetDecoderSrc: `${HF_BASE}/decoder_joint-model.onnx`,
-  parakeetVocabSrc: `${HF_BASE}/vocab.txt`,
-  parakeetPreprocessorSrc: `${HF_BASE}/nemo128.onnx`,
-};
+import {
+  loadModel,
+  unloadModel,
+  transcribe,
+  PARAKEET_ENCODER_FP32,
+  PARAKEET_ENCODER_DATA_FP32,
+  PARAKEET_DECODER_FP32,
+  PARAKEET_VOCAB_FP32,
+  PARAKEET_PREPROCESSOR_FP32,
+} from "@qvac/sdk";
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -20,23 +18,22 @@ if (!args[0]) {
       "[encoder-onnx] [encoder-data] [decoder-onnx] [vocab-txt] [preprocessor-onnx]",
   );
   console.error(
-    "\nIf model paths are omitted, defaults to HuggingFace HTTP URLs.",
+    "\nIf model paths are omitted, defaults to registry models.",
   );
   process.exit(1);
 }
 
 const audioFilePath = args[0];
 
-const modelSrc = args[1] || DEFAULTS.modelSrc;
-const parakeetEncoderDataSrc = args[2] || DEFAULTS.parakeetEncoderDataSrc;
-const parakeetDecoderSrc = args[3] || DEFAULTS.parakeetDecoderSrc;
-const parakeetVocabSrc = args[4] || DEFAULTS.parakeetVocabSrc;
-const parakeetPreprocessorSrc = args[5] || DEFAULTS.parakeetPreprocessorSrc;
+const modelSrc = args[1] || PARAKEET_ENCODER_FP32;
+const parakeetEncoderDataSrc = args[2] || PARAKEET_ENCODER_DATA_FP32;
+const parakeetDecoderSrc = args[3] || PARAKEET_DECODER_FP32;
+const parakeetVocabSrc = args[4] || PARAKEET_VOCAB_FP32;
+const parakeetPreprocessorSrc = args[5] || PARAKEET_PREPROCESSOR_FP32;
 
 try {
   console.log("Starting Parakeet transcription example...");
 
-  // Load the Parakeet model (all file sources passed via modelConfig)
   console.log("Loading Parakeet model...");
   const modelId = await loadModel({
     modelSrc,
@@ -56,14 +53,12 @@ try {
 
   console.log(`Parakeet model loaded with ID: ${modelId}`);
 
-  // Perform transcription
   console.log("Transcribing audio...");
   const text = await transcribe({ modelId, audioChunk: audioFilePath });
 
   console.log("Transcription result:");
   console.log(text);
 
-  // Unload the model when done
   console.log("Unloading Parakeet model...");
   await unloadModel({ modelId });
   console.log("Parakeet model unloaded successfully");

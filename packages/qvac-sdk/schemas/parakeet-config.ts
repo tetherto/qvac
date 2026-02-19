@@ -19,7 +19,7 @@ export const parakeetRuntimeConfigSchema = z.object({
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
-  parakeetEncoderDataSrc: modelSrcInputSchema,
+  parakeetEncoderDataSrc: modelSrcInputSchema.optional(),
   parakeetDecoderSrc: modelSrcInputSchema,
   parakeetVocabSrc: modelSrcInputSchema,
   parakeetPreprocessorSrc: modelSrcInputSchema,

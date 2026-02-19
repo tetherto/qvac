@@ -27,7 +27,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
-  [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema,
+  [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.onnxOcr]: ocrConfigSchema,
 };
 

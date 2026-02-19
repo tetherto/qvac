@@ -53,17 +53,6 @@ export async function handleLoadModel(
       ? (request as { detectorModelSrc?: string }).detectorModelSrc
       : undefined;
 
-  // Parakeet named source fields (promoted from modelConfig by schema transform)
-  const parakeetSrcs =
-    canonicalModelType === ModelType.parakeetTranscription
-      ? (request as {
-          parakeetEncoderDataSrc?: string;
-          parakeetDecoderSrc?: string;
-          parakeetVocabSrc?: string;
-          parakeetPreprocessorSrc?: string;
-        })
-      : undefined;
-
   try {
     const modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
 
@@ -109,49 +98,6 @@ export async function handleLoadModel(
           seed,
         );
       }
-    }
-
-    // Resolve individual Parakeet model file sources and build resolved config
-    let parakeetModelConfig: Record<string, unknown> | undefined;
-    if (canonicalModelType === ModelType.parakeetTranscription && parakeetSrcs) {
-      const {
-        parakeetEncoderDataSrc,
-        parakeetDecoderSrc,
-        parakeetVocabSrc,
-        parakeetPreprocessorSrc,
-      } = parakeetSrcs;
-
-      const [encoderDataPath, decoderPath, vocabPath, preprocessorPath] =
-        await Promise.all([
-          parakeetEncoderDataSrc
-            ? resolveModelPath(parakeetEncoderDataSrc, progressCallback, seed)
-            : undefined,
-          parakeetDecoderSrc
-            ? resolveModelPath(parakeetDecoderSrc, progressCallback, seed)
-            : undefined,
-          parakeetVocabSrc
-            ? resolveModelPath(parakeetVocabSrc, progressCallback, seed)
-            : undefined,
-          parakeetPreprocessorSrc
-            ? resolveModelPath(parakeetPreprocessorSrc, progressCallback, seed)
-            : undefined,
-        ]);
-
-      parakeetModelConfig = {
-        ...(request.modelConfig as Record<string, unknown>),
-        encoderDataPath,
-        decoderPath,
-        vocabPath,
-        preprocessorPath,
-      };
-    }
-
-    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
-    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
-      throw new TTSConfigModelRequiredError();
-    }
-    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
-      throw new ESpeakDataPathRequiredError();
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths

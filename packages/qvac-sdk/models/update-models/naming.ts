@@ -151,6 +151,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateTtsName(input);
     case "ocr":
       return generateOcrName(input);
+    case "parakeet":
+      return generateParakeetName(input);
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ""));
   }
@@ -440,4 +442,28 @@ function generateOcrName({
   }
   const nameParts = [name, language, fileType].filter((p) => p && p !== "");
   return `OCR_${nameParts.map(cleanPart).join("_")}`;
+}
+
+function generateParakeetName({
+  filename,
+  lowerFilename,
+  quantization,
+}: BaseNameInput): string {
+  let fileType = "";
+  if (lowerFilename.includes("encoder") && lowerFilename.endsWith(".data")) {
+    fileType = "ENCODER_DATA";
+  } else if (lowerFilename.includes("encoder")) {
+    fileType = "ENCODER";
+  } else if (lowerFilename.includes("decoder")) {
+    fileType = "DECODER";
+  } else if (lowerFilename.includes("vocab")) {
+    fileType = "VOCAB";
+  } else if (lowerFilename.includes("preprocessor") || lowerFilename.includes("nemo")) {
+    fileType = "PREPROCESSOR";
+  } else {
+    fileType = cleanPart(filename.replace(/\.\w+$/, ""));
+  }
+
+  const nameParts = [fileType, quantization].filter((p) => p && p !== "");
+  return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
 }
