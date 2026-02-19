@@ -11,9 +11,7 @@ Node.js server using `@qvac/tts-onnx` addon for benchmarking.
 
 ```bash
 npm install
-npm run setup        # Piper TTS: eSpeak-ng + models (uses config-tts.yaml) — same as setup:tts
-npm run setup:tts    # Piper TTS (same as setup)
-npm run setup:chatterbox  # Chatterbox: ONNX models only
+npm run setup:chatterbox  # Downloads Chatterbox ONNX models
 ```
 
 ## Usage
@@ -33,7 +31,7 @@ To benchmark a different version of `@qvac/tts-onnx`:
    }
    ```
 
-2. Update the expected version in `../client/config/config.yaml`:
+2. Update the expected version in `../client/config/config-chatterbox.yaml`:
    ```yaml
    server:
      addon_version: "^0.2.0"
@@ -61,26 +59,23 @@ Response:
   "version": "0.1.0",
   "endpoints": {
     "/": "Health check",
-    "/synthesize": "POST - Run Piper TTS synthesis",
     "/synthesize-chatterbox": "POST - Run Chatterbox TTS synthesis"
   }
 }
 ```
 
-### POST /synthesize
+### POST /synthesize-chatterbox
 
-Run TTS synthesis.
+Run Chatterbox TTS synthesis.
 
 Request:
 ```json
 {
   "texts": ["Hello world"],
   "config": {
-    "modelPath": "../shared-data/models/model.onnx",
-    "configPath": "../shared-data/models/config.json",
-    "eSpeakDataPath": "../shared-data/espeak-ng-data",
+    "modelDir": "../shared-data/models/chatterbox",
     "language": "en",
-    "sampleRate": 22050
+    "sampleRate": 24000
   }
 }
 ```
@@ -92,7 +87,7 @@ Response:
     {
       "text": "Hello world",
       "sampleCount": 33075,
-      "sampleRate": 22050,
+      "sampleRate": 24000,
       "durationSec": 1.5,
       "generationMs": 23.5,
       "rtf": 0.064

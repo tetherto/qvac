@@ -10,6 +10,8 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
@@ -17,7 +19,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:

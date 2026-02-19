@@ -139,7 +139,7 @@ private:
       std::vector<llama_token>& inputTokens, bool isCacheLoaded);
 
   bool handleQwen3ReasoningEOS(
-      llama_token& tokenId, std::string& tokenStr, llama_batch* batchPtr,
+      llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
       llama_pos& nPast,
       const std::function<void(const std::string&)>& outputCallback);
 

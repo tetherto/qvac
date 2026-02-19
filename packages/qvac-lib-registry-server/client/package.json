@@ -19,7 +19,8 @@
     "lib/",
     "utils/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "test:unit": "brittle tests/unit/*.test.js",

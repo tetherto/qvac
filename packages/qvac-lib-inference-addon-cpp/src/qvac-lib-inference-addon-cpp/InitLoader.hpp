@@ -23,14 +23,14 @@
 /// obtain `this.addon = this._createAddon(configurationParams)` prior to
 /// triggering any download or streaming. The actual model init method can be
 /// triggered by calling `waitForLoadInitialization` at `addon.activate()` or
-/// `ensureLoadInBackground` at `addon.loadWeights(...)` /
-/// `set_weights_for_file(...)` for models that support incremental file loading
+/// `ensureLoadInBackground` at `addon.loadWeights(...)` or
+/// `setWeightsForFile(...)` for models that support incremental file loading
 /// (sharded).
 class InitLoader {
 public:
   enum LOADER_TYPE : short { DELAYED, BACKGROUND, IMMEDIATE };
 
-  // @brief wait for init() to complete when delayed load has been used.
+  /// @brief wait for init() to complete when delayed load has been used.
   void waitForLoadInitialization() {
     if (loadType_ == LOADER_TYPE::DELAYED) {
       triggerInit();
@@ -111,7 +111,7 @@ public:
   void ensureLoadInBackground() {
     checkForErrors();
     if (loadType_ == LOADER_TYPE::IMMEDIATE) {
-      // Already loaded at init call. Nothing to left to do.
+      // Already loaded at init call. Nothing left to do.
       return;
     }
     if (loadType_ == LOADER_TYPE::DELAYED) {

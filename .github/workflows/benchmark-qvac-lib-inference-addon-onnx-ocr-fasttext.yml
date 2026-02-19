@@ -256,7 +256,7 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           mkdir -p models/ocr/rec_dyn
-          aws s3 cp s3://tether-ai-dev/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive --exclude "*" \
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive --exclude "*" \
             --include "detector_craft.onnx" \
             --include "recognizer_latin.onnx"
           echo "Downloaded QVAC OCR models:"
@@ -267,7 +267,7 @@ jobs:
         run: |
           mkdir -p benchmarks/quality_eval/data
           echo "Downloading OCRBench_v2 dataset from S3..."
-          aws s3 sync s3://tether-ai-dev/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
+          aws s3 sync s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
           echo "Dataset downloaded:"
           ls -la benchmarks/quality_eval/data/OCRBench_v2/ | head -20
 

@@ -1,4 +1,5 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
+import { getCacheDir } from "@/server/utils/cache";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -19,6 +20,7 @@ export async function getRegistryClient(): Promise<QVACRegistryClient> {
 
   registryClient = new QVACRegistryClient({
     registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
+    storage: getCacheDir("registry-corestore"),
   });
 
   await registryClient.ready();
