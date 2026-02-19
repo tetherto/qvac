@@ -135,3 +135,18 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+
+  # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [prebuild-release-npm]
+    if: needs.prebuild-release-npm.result == 'success' && needs.prebuild-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "nmtcpp"
+      release_name: "QVAC NMT Addon"
+      published_version: ${{ needs.prebuild-release-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-nmtcpp"
