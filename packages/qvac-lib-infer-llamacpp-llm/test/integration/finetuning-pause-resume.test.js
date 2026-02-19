@@ -15,12 +15,13 @@ const {
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
+const proc = require('bare-process')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const noGpu = typeof process !== 'undefined' && process.env && process.env.NO_GPU === 'true'
+const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const PAUSE_RESUME_TIMEOUT_MS = 600_000
