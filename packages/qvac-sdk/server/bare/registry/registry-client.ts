@@ -6,7 +6,7 @@ const logger = getServerLogger();
 
 // Public QVAC Registry containing all available models
 const DEFAULT_REGISTRY_CORE_KEY =
-  "u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y";
+  "uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh946e8kwysdes9ko";
 
 let registryClient: QVACRegistryClient | null = null;
 
