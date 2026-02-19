@@ -98,19 +98,6 @@ npm run benchmarks -- \
   --batch-size 4096
 ```
 
-**P2P Model Loading (Hyperdrive)**
-```bash
-# Load GTE-Large FP16 via Hyperdrive P2P
-npm run benchmarks -- \
-  --gguf-model "hd://{KEY}/gte-large_fp16.gguf"
-
-# P2P with quick test (1 sample, 1 dataset)
-npm run benchmarks -- \
-  --gguf-model "hd://{KEY}/gte-large_fp16.gguf" \
-  --samples 1 \
-  --datasets "SciFact"
-```
-
 **Comparative Analysis**
 ```bash
 # Compare addon vs SentenceTransformers
@@ -216,7 +203,6 @@ npm run benchmarks -- \
 |--------|---------|-------------|
 | HuggingFace | `"owner/repo"` | Auto-downloads from HuggingFace Hub |
 | HuggingFace + quant | `"owner/repo:F16"` | Specific quantization variant |
-| P2P Hyperdrive | `"hd://key/model.gguf"` | Load via Hyperdrive P2P |
 
 **SentenceTransformers Model** (for comparative mode only):
 - **HuggingFace**: `"owner/repo"` 
@@ -403,7 +389,7 @@ The `mteb_raw/` folder contains JSON files with **per-query similarity predictio
     │  (Node.js + bare)  │◄──────┤  (evaluate_embed)  │
     │                    │       │                    │
     │  - ModelManager    │       │  - MTEBWrapper     │
-    │  - P2P Loader      │       │  - HF Downloader   │
+    │  - ModelManager    │       │  - HF Downloader   │
     │  - VRAM cleanup    │       │  - Dataset loading │
     │  - HTTP API        │       │  - Results handler │
     └──────────┬─────────┘       └────────────────────┘
@@ -433,8 +419,7 @@ benchmarks/
 │   │   ├── server.js               # HTTP server
 │   │   ├── services/
 │   │   │   ├── modelManager.js     # Local model manager
-│   │   │   ├── p2pModelLoader.js   # P2P Hyperdrive loader
-│   │   │   └── runAddon.js         # Addon interface + routing
+│   │   │   └── runAddon.js         # Addon interface
 │   │   ├── validation/
 │   │   │   └── index.js            # Request validation
 │   │   └── utils/

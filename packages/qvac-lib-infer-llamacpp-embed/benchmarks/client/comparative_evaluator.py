@@ -100,9 +100,6 @@ class ComparativeEvaluator:
             # Initialize addon handler
             logger.info("Initializing @qvac/embed-llamacpp addon handler...")
             self.addon_handler = QvacEmbedHandler(self.addon_config)
-            
-            # For P2P models, wait for the model to be fully downloaded from Hyperdrive
-            self.addon_handler.wait_for_model_ready()
             logger.info("Addon handler initialized successfully")
             
             # Initialize SentenceTransformers handler with resolved dtype
@@ -237,10 +234,7 @@ class ComparativeEvaluator:
     
     def get_addon_model_name(self) -> str:
         """Get the addon model name from configuration"""
-        # Check P2P model first
-        if hasattr(self.addon_config, 'p2p_model_name') and self.addon_config.p2p_model_name:
-            return self.addon_config.p2p_model_name.replace('.gguf', '')
-        # Then check selected_model (HuggingFace download)
+        # Use selected_model (HuggingFace download)
         if hasattr(self.addon_config, 'selected_model') and self.addon_config.selected_model:
             name = self.addon_config.selected_model.get('name', '')
             return name.replace('.gguf', '') if name else ''

@@ -55,7 +55,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const version = "${{ steps.package-version.outputs.version }}";
-            const expected = `release-notes/v${version}.md`;
+            const expected = `packages/qvac-lib-decoder-audio/release-notes/v${version}.md`;
 
             const files = await github.paginate(
               github.rest.pulls.listFiles,

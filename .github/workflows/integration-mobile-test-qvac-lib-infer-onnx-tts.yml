@@ -37,7 +37,7 @@ on:
 env:
   NODE_VERSION: "lts/*"
   ADDON_NAME: "@qvac/tts-onnx"
-  PREBUILD_ARTIFACT_PREFIX: "tts-onnx-" # Prefix for prebuild artifacts (empty string for generic patterns)
+  PREBUILD_ARTIFACT_PREFIX: "onnx-tts-" # Prefix for prebuild artifacts (must match prebuilds workflow upload names)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}

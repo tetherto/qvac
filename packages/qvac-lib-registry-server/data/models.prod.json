@@ -4851,5 +4851,144 @@
       "voice-style"
     ],
     "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder (graph)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 encoder (weights)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/decoder_joint-model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 decoder-joint",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 vocabulary",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "vocab",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet TDT 0.6B v3 preprocessor",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "preprocessor",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/encoder-model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "description": "Parakeet TDT 0.6B v3 encoder INT8 (weights embedded)",
+    "quantization": "int8",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "encoder",
+      "en"
+    ],
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/decoder_joint-model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "description": "Parakeet TDT 0.6B v3 decoder-joint INT8",
+    "quantization": "int8",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "decoder",
+      "en"
+    ],
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/vocab.txt",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "description": "Parakeet TDT 0.6B v3 vocabulary INT8",
+    "quantization": "int8",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "vocab",
+      "en"
+    ],
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/preprocessor.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "description": "Parakeet TDT 0.6B v3 preprocessor INT8",
+    "quantization": "int8",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "preprocessor",
+      "en"
+    ],
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   }
 ]

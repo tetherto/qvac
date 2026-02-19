@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       gguf_model:
-        description: 'GGUF Model to benchmark (HuggingFace format: "owner/repo:quantization" or Hyperdrive: "hd://key/model.gguf")'
+        description: 'GGUF Model to benchmark (HuggingFace format: "owner/repo:quantization")'
         required: true
         default: "ChristianAzinn/gte-large-gguf:F16"
         type: string

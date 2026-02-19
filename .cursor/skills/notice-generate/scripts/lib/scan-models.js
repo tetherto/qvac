@@ -12,6 +12,21 @@ const {
 } = require('./utils')
 
 // ---------------------------------------------------------------------------
+// Strip quantization suffixes for dedup (e.g. -f16, -q4_0, -q5_K_M)
+// ---------------------------------------------------------------------------
+function stripQuantSuffix (name) {
+  return name.replace(/-(f16|f32|q[0-9]+_[A-Za-z0-9_]*)$/, '')
+}
+
+// ---------------------------------------------------------------------------
+// Filter out Bergamot support artifacts (vocab, lex, metadata, etc.)
+// Only model weights (*.alphas) need attribution, not data files.
+// ---------------------------------------------------------------------------
+function isModelArtifact (name) {
+  return /^(vocab|lex|metadata|srcvocab|trgvocab)([.]|$)/.test(name)
+}
+
+// ---------------------------------------------------------------------------
 // Load and pre-process models.prod.json
 // ---------------------------------------------------------------------------
 let _cachedModels = null
@@ -58,12 +73,12 @@ function toAttribution (record) {
 // ---------------------------------------------------------------------------
 function scanAllModels () {
   const models = loadModels()
-  const attributions = models.map(toAttribution)
+  const attributions = models.map(toAttribution).filter(a => !isModelArtifact(a.name))
 
-  // Dedup by URL (same model repo can appear multiple times for different quants)
+  // Dedup by name+url (distinct models may share the same URL, e.g. EasyOCR hub)
   const seen = new Map()
   for (const attr of attributions) {
-    const key = attr.url || attr.name
+    const key = `${stripQuantSuffix(attr.name)}::${attr.url}`
     if (!seen.has(key)) {
       seen.set(key, attr)
     }
@@ -78,12 +93,12 @@ function scanAllModels () {
 function scanModelsByEngines (engines) {
   const models = loadModels()
   const filtered = models.filter(r => engines.includes(r.engine))
-  const attributions = filtered.map(toAttribution)
+  const attributions = filtered.map(toAttribution).filter(a => !isModelArtifact(a.name))
 
-  // Dedup by URL
+  // Dedup by name+url (distinct models may share the same URL, e.g. EasyOCR hub)
   const seen = new Map()
   for (const attr of attributions) {
-    const key = attr.url || attr.name
+    const key = `${stripQuantSuffix(attr.name)}::${attr.url}`
     if (!seen.has(key)) {
       seen.set(key, attr)
     }
