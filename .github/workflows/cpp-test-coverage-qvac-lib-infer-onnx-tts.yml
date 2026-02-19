@@ -1,4 +1,4 @@
-name: CPP Tests(TTS)
+name: CPP Tests (TTS)
 
 on:
   push:

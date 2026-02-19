@@ -1,4 +1,4 @@
-name: CPP Tests(Whispercpp)
+name: CPP Tests (Whispercpp)
 
 on:
   workflow_call:
