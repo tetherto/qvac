@@ -349,6 +349,10 @@ jobs:
           cp test/images/basic_test.png "$ASSETS_DIR/basic_test_png.png"
           cp test/images/unrecognizable_text.bmp "$ASSETS_DIR/unrecognizable_text.bmp"
           cp test/images/portuguese.bmp "$ASSETS_DIR/portuguese.bmp"
+          # DocTR test images
+          cp test/images/english.bmp "$ASSETS_DIR/english.bmp"
+          cp test/images/french.bmp "$ASSETS_DIR/french.bmp"
+          cp test/images/lab_results.png "$ASSETS_DIR/lab_results.png"
           echo "✅ Test assets copied"
           ls -la "$ASSETS_DIR/"
 
