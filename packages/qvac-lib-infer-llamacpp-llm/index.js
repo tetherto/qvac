@@ -9,7 +9,8 @@ const { LlamaInterface } = require('./addon')
 const noop = () => { }
 
 /** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 3_000
+const PREVIOUS_JOB_WAIT_MS = 300
+const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
  * GGML client implementation for Llama LLM model
@@ -161,13 +162,17 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<void>}
    */
   async unload () {
-    const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
-    if (currentJobResponse) {
-      // Make sure not to leak jobs to avoid "job already exists" errors after
-      // loading the model again.
-      currentJobResponse.failed(new Error('Model was unloaded'))
-    }
-    await super.unload()
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
+      if (currentJobResponse) {
+        // Make sure not to leak jobs to avoid "job already exists" errors after
+        // loading the model again.
+        currentJobResponse.failed(new Error('Model was unloaded'))
+        this._deleteJobMapping('OnlyOneJob')
+      }
+      await super.unload()
+    })
   }
 
   /**
@@ -207,10 +212,12 @@ class LlmLlamacpp extends BaseInference {
       // Make sure all events from previous one are done and will not
       // affect our new job. addon-cpp C++ guarantees every accepted job will
       // end with output or exception after finishing processing.
-      // If timeout is hit, exception should surface to avoid infinite await.
+      // - If timeout is hit, exception should surface to avoid infinite await.
+      // - It is expected that we briefly wait for the previous job to settle
+      //   before throwing a busy error.
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-          reject(new Error('Still waiting for previous job to finish processing. Cannot run new job. Only one job per instance is supported.'))
+          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
         }, PREVIOUS_JOB_WAIT_MS)
         this._lastJobResult
           // If last job finished.
@@ -242,7 +249,7 @@ class LlmLlamacpp extends BaseInference {
       }
       if (!accepted) {
         this._deleteJobMapping('OnlyOneJob')
-        const msg = 'Cannot set new job: a job is already set or being processed'
+        const msg = RUN_BUSY_ERROR_MESSAGE
         response.failed(new Error(msg))
         throw new Error(msg)
       }

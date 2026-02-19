@@ -823,7 +823,8 @@ Without coordination, concurrent requests could call `runJob()` while a job is a
 
 ### Decision
 
-Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures only one runJob is in flight at a time, and that the caller receives a clear "not accepted" error if the C++ single-job runner is busy.
+Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures only one runJob is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
+- `"Cannot set new job: a job is already set or being processed"`
 
 **Note:** C++ level thread safety (single-job runner with mutex-protected job state, optional IModelCancel) is handled by the addon-cpp 1.1.x framework; see addon-cpp docs for architecture and decisions.
 

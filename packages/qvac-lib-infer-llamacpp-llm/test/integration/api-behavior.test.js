@@ -99,7 +99,7 @@ test('run | cancel: allowed, cancels current job', { timeout: 600_000 }, async t
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws', { timeout: 600_000 }, async t => {
+test('run | run: second run() throws busy error', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const firstResponse = await model.run(LONG_PROMPT)
   let firstError = null
