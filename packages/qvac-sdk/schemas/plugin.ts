@@ -29,8 +29,11 @@ export interface PluginHandlerDefinition<
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
  * - `vadModelPath` - Whisper voice activity detection model
- * - `ttsConfigModelPath` - TTS config.json path
- * - `eSpeakDataPath` - TTS eSpeak data directory
+ * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
+ * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
+ * - `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
+ * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
+ * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
  * - `detectorModelPath` - OCR detector model
  *
  * Custom plugins can define their own artifact keys.
@@ -62,6 +65,12 @@ export interface PluginLogging {
   namespace: string;
 }
 
+/**
+ * Function to resolve a model source (URL or path) to a local file path.
+ * Passed to resolveConfig hook to allow plugins to resolve their artifacts.
+ */
+export type ResolveModelPath = (src: string) => Promise<string>;
+
 export interface QvacPlugin {
   modelType: string;
   displayName: string;
@@ -69,6 +78,15 @@ export interface QvacPlugin {
   createModel: (params: CreateModelParams) => PluginModelResult;
   handlers: Record<string, PluginHandlerDefinition>;
   logging?: PluginLogging | undefined;
+  /**
+   * Optional hook to resolve model sources in modelConfig to local paths.
+   * Called before createModel if the plugin needs to download/resolve artifacts.
+   * Receives the raw modelConfig and a resolve function, returns transformed config.
+   */
+  resolveConfig?: (
+    modelConfig: Record<string, unknown>,
+    resolve: ResolveModelPath,
+  ) => Promise<Record<string, unknown>>;
 }
 
 // Non-streaming plugin invoke
