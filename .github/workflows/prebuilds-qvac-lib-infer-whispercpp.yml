@@ -544,9 +544,9 @@ jobs:
               || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
             )
           ) }} 
-    continue-on-error: true
+    continue-on-error: false
     outputs:
-      published_version: ${{ steps.capture_version.outputs.published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

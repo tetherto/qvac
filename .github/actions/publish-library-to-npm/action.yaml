@@ -35,6 +35,14 @@ inputs:
     description: "repo suffix name appended to created git tag"
     required: false
 
+outputs:
+  npm_published_version:
+    description: "The version that was actually published to npm (empty if skipped)."
+    value: ${{ steps.publish.outputs.npm_published_version }}
+  npm_publish_skipped:
+    description: "true if publish was skipped (dev/tmp or version already exists), else false."
+    value: ${{ steps.publish.outputs.npm_publish_skipped }}
+
 runs:
   using: composite
   steps:
@@ -45,6 +53,7 @@ runs:
         scope: "@qvac"
 
     - name: Publish to NPM and optionally tag repo
+      id: publish
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ inputs.secret-token }}
@@ -127,6 +136,9 @@ runs:
 
         if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
           echo "Skipping publish to NPM for non-release tag: $TAG"
+          # NEW: explicitly mark skipped and leave published_version empty
+          echo "npm_publish_skipped=true" >> "$GITHUB_OUTPUT"
+          echo "npm_published_version=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -144,6 +156,9 @@ runs:
 
         if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
           echo "Version $VERSION already exists for $PACKAGE_NAME on npm, skipping publish"
+          # NEW: explicitly mark skipped and leave published_version empty
+          echo "npm_publish_skipped=true" >> "$GITHUB_OUTPUT"
+          echo "npm_published_version=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -155,6 +170,10 @@ runs:
         fi
 
         echo "npm publish completed successfully"
+
+        # NEW: publish succeeded — set outputs for downstream workflow/release creation
+        echo "npm_publish_skipped=false" >> "$GITHUB_OUTPUT"
+        echo "npm_published_version=${VERSION}" >> "$GITHUB_OUTPUT"
 
         ####################################################################
         # Optional: create and push git tag v<VERSION>
