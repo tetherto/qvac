@@ -1,17 +1,17 @@
-@qvac/langdetect-text
+@qvac/infer-onnx-base
 Copyright 2026 Tether Data, S.A. de C.V.
 
 This product includes third-party components under their
-respective licenses. @qvac/langdetect-text itself is licensed under
+respective licenses. @qvac/infer-onnx-base itself is licensed under
 Apache-2.0; bundled dependencies are governed by the licenses
 listed below.
 
 =========================================================================
-JavaScript Dependencies
+C++ Dependencies
 =========================================================================
 
 --- mit (MIT License) ---
 
-  tinyld@1.3.4
-    https://github.com/komodojp/tinyld
+  onnxruntime
+    https://github.com/microsoft/onnxruntime
 

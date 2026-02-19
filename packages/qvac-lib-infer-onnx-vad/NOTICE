@@ -50,7 +50,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/blind-relay
   cmake-vcpkg@1.2.0
     https://github.com/holepunchto/cmake-vcpkg
-  compact-encoding@2.18.0
+  compact-encoding@2.19.0
     https://github.com/compact-encoding/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
@@ -67,9 +67,9 @@ JavaScript Dependencies
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-storage@2.4.1
-  hyperdrive@13.2.1
+  hyperdrive@13.3.0
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.19.1
+  hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
   index-encoder@3.4.0
     https://github.com/holepunchto/index-encoder
@@ -135,7 +135,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.1
+  dht-rpc@6.26.2
     https://github.com/mafintosh/dht-rpc
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
@@ -147,7 +147,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.24.0
+  hypercore@11.26.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto

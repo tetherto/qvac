@@ -319,8 +319,13 @@ Python Dependencies
 C++ Dependencies
 =========================================================================
 
---- Unknown ---
+--- apache-2.0 (Apache License 2.0) ---
+
+  opencv4
+    https://github.com/opencv/opencv
+
+--- MIT ---
 
   onnxruntime
-  opencv4
+    https://github.com/microsoft/onnxruntime
 

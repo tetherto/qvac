@@ -14,38 +14,68 @@ Third-Party Model Licenses
 
   de-tiny-ggml-model-f16
     https://huggingface.co/primeline/whisper-tiny-german-1224
+  de-tiny-ggml-model-q8_0
+    https://huggingface.co/primeline/whisper-tiny-german-1224
   en-base-ggml-model-f16
+    https://huggingface.co/openai/whisper-base
+  en-base-ggml-model-q8_0
     https://huggingface.co/openai/whisper-base
   fr-base-ggml-model-f16
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
+  fr-base-ggml-model-q8_0
+    https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
+    https://huggingface.co/JaepaX/whisper-tiny-fr
+  fr-tiny-ggml-model-q8_0
     https://huggingface.co/JaepaX/whisper-tiny-fr
   it-base-ggml-model-f16
     https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it
+  it-base-ggml-model-q8_0
+    https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it
   it-tiny-ggml-model-f16
+    https://huggingface.co/luigisaetta/whisper-tiny-it
+  it-tiny-ggml-model-q8_0
     https://huggingface.co/luigisaetta/whisper-tiny-it
   ja-base-ggml-model-f16
     https://huggingface.co/bygreencn/whisper-base-ja
+  ja-base-ggml-model-q8_0
+    https://huggingface.co/bygreencn/whisper-base-ja
   ja-tiny-ggml-model-f16
+    https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
+  ja-tiny-ggml-model-q8_0
     https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   pt-base-ggml-model-f16
     https://huggingface.co/mariana-coelho-9/whisper-base-pt
+  pt-base-ggml-model-q8_0
+    https://huggingface.co/mariana-coelho-9/whisper-base-pt
   ru-base-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-base-rus-8
+  ru-base-ggml-model-q8_0
+    https://huggingface.co/CheeLi03/whisper-base-rus-8
   ru-tiny-ggml-model-f16
+    https://huggingface.co/yaroslav0530/whisper-tiny-ru
+  ru-tiny-ggml-model-q8_0
     https://huggingface.co/yaroslav0530/whisper-tiny-ru
 
 --- mit (MIT License) ---
 
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
+  de-base-ggml-model-q8_0
+    https://huggingface.co/aware-ai/whisper-base-german
   es-tiny-ggml-model-f16
+    https://huggingface.co/JaepaX/whisper-tiny-es
+  es-tiny-ggml-model-q8_0
     https://huggingface.co/JaepaX/whisper-tiny-es
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
+  pt-tiny-ggml-model-q8_0
+    https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   tiny_acft_q8_0
+    https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
+  tiny_en_acft_q8_0
     https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
@@ -151,7 +181,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-worker
   blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.18.0
+  compact-encoding@2.19.0
     https://github.com/compact-encoding/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
@@ -168,9 +198,9 @@ JavaScript Dependencies
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-storage@2.4.1
-  hyperdrive@13.2.1
+  hyperdrive@13.3.0
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.19.1
+  hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
   index-encoder@3.4.0
     https://github.com/holepunchto/index-encoder
@@ -236,7 +266,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.1
+  dht-rpc@6.26.2
     https://github.com/mafintosh/dht-rpc
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
@@ -248,7 +278,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.24.0
+  hypercore@11.26.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
@@ -345,12 +375,15 @@ Python Dependencies
 
   httpx
     https://github.com/encode/httpx
-  numpy
-    https://numpy.org
   soundfile
     https://github.com/bastibe/python-soundfile
   torch
     https://pytorch.org
+
+--- bsd-3-clause AND 0bsd AND mit AND zlib AND cc0-1.0 ---
+
+  numpy
+    https://numpy.org
 
 --- isc license (iscl) ---
 

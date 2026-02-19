@@ -15,7 +15,7 @@ JavaScript Dependencies
   @qvac/dl-base@0.2.0
   @qvac/error@0.1.1
   @qvac/logging@0.1.0
-  b4a@1.7.4
+  b4a@1.7.5
     https://github.com/holepunchto/b4a
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
@@ -25,7 +25,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
-  bare-stream@2.7.0
+  bare-stream@2.8.0
     https://github.com/holepunchto/bare-stream
   bare-url@2.3.2
     https://github.com/holepunchto/bare-url
@@ -42,4 +42,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/ready-resource
   streamx@2.23.0
     https://github.com/mafintosh/streamx
+  teex@1.0.1
+    https://github.com/mafintosh/teex
 
