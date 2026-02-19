@@ -253,7 +253,7 @@ async function findModelShards(
     logger.info(`📦 Found ${sortedShards.length} shards`);
     return sortedShards;
   } finally {
-    void closeRegistryClient();
+    await closeRegistryClient();
   }
 }
 
