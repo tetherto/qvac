@@ -19,8 +19,8 @@ A Python client for benchmarking SileroVAD (Voice Activity Detection) addons. It
 
 ```bash
 # Clone the repository
-git clone https://github.com/tetherto/qvac-lib-inference-addon-mlc-whisper.git
-cd qvac-lib-inference-addon-mlc-whisper/benchmarks/client
+git clone https://github.com/tetherto/qvac-lib-infer-onnx-vad.git
+cd qvac-lib-infer-onnx-vad/benchmarks/client
 
 # Install poetry if you haven't already
 curl -sSL https://install.python-poetry.org | python3 -

@@ -21,24 +21,21 @@
 // "BSD 3-Clause License") resolve to these canonical forms automatically.
 // ---------------------------------------------------------------------------
 const ALLOWED_LICENSES = [
-  // 'apache-2.0',
-  // 'mit',
-  // 'bsd-2-clause',
-  // 'bsd-3-clause',
-  // 'isc',
-  // 'mpl-2.0',
-  // 'cc0-1.0',
-  // 'cc-by-4.0',
-  // 'unlicense',
-  // '0bsd',
-  // 'zlib',
-  // 'python-2.0',
-  //
-  // Model-specific:
-  // 'llama3.2',
-  // 'gemma',
-  // 'qwen-research',
-  // 'health-ai-developer-foundations',
+  'apache-2.0',
+  'mit',
+  'mit-cmu',
+  'bsd-2-clause',
+  'bsd-3-clause',
+  'isc',
+  'mpl-2.0',
+  'cc-by-4.0',
+  'lgpl-2.1',
+
+  // Model-specific
+  'llama3.2',
+  'gemma',
+  'health-ai-developer-foundations',
+  'openrail',
 ]
 
 // ---------------------------------------------------------------------------

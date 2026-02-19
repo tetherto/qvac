@@ -23,8 +23,8 @@ MOCK_CONFIG = {
     "server": {
         "url": "http://localhost:8080/run",
         "batch_size": 32,
-        "lib": "@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32",
-        "version": "1.1.3",
+        "lib": "@qvac/transcription-whispercpp",
+        "version": "0.3.2",
     },
     "dataset": {
         "speaker_group": "all",
@@ -49,7 +49,7 @@ def test_loads_valid_config(tmp_path):
     cfg = Config.from_yaml(path=str(config_file))
     assert str(cfg.server.url) == MOCK_CONFIG["server"]["url"]
     assert cfg.server.batch_size == 32
-    assert cfg.server.version == "1.1.3"
+    assert cfg.server.version == "0.3.2"
     assert cfg.dataset.speaker_group == SpeakerGroup.ALL
     assert cfg.wer.enabled is True
     assert cfg.cer.enabled is True
@@ -132,20 +132,20 @@ def test_server_config():
     with pytest.raises(ValueError):
         ServerConfig(
             url="invalid_url",
-            lib="@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32",
-            version="1.1.3",
+            lib="@qvac/transcription-whispercpp",
+            version="0.3.2",
             batch_size=32,
         )
 
     cfg = ServerConfig(
         url="http://localhost:8080/run",
-        lib="@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32",
-        version="1.1.3",
+        lib="@qvac/transcription-whispercpp",
+        version="0.3.2",
         batch_size=32,
     )
     assert str(cfg.url) == "http://localhost:8080/run"
-    assert cfg.lib == "@tetherto/qvac-lib-inference-addon-mlc-whisper-tiny-q0f32"
-    assert cfg.version == "1.1.3"
+    assert cfg.lib == "@qvac/transcription-whispercpp"
+    assert cfg.version == "0.3.2"
     assert cfg.batch_size == 32
 
 

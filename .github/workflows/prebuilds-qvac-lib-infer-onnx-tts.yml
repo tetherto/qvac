@@ -37,10 +37,6 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-onnx-tts"
       tag:
         description: "Tag to publish"
         type: string
@@ -611,7 +607,7 @@ jobs:
     needs: [prebuild, merge, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
     outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.capture_version.outputs.published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -641,14 +637,16 @@ jobs:
           git-token: ${{ secrets.PAT_TOKEN }}
           create-tag: "true"
 
-  create-github-release:
-    needs: [publish-npm]
-    if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx-tts.yml
-    secrets: inherit
-    with:
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+      - name: Capture published version
+        id: capture_version
+        if: success()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
