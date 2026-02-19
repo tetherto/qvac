@@ -6,6 +6,7 @@
   "scripts": {
     "setup": "bare chatterbox-setup.js",
     "setup:chatterbox": "bare chatterbox-setup.js",
+    "setup:supertonic": "bare supertonic-setup.js",
     "start": "bare index.js",
     "lint": "standard",
     "lint:fix": "standard --fix"
@@ -18,7 +19,7 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "dependencies": {
-    "@qvac/tts-onnx": "../../",
+    "@qvac/tts-onnx": "0.5.1",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.1.5",
     "bare-http1": "^4.0.2",

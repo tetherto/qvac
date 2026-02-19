@@ -118,46 +118,51 @@ def round_trip_single_implementation(
     original_texts: List[str],
     runs: List[TTSResults],
     whisper_transcriber,
-    implementation_name: str
+    implementation_name: str,
+    lang_per_result: Optional[List[str]] = None,
 ) -> Optional[Dict]:
     """
-    Perform round-trip quality test for a single implementation
-    
+    Perform round-trip quality test for a single implementation.
+
     Args:
         original_texts: Original input texts
         runs: List of results from implementation (one per run)
         whisper_transcriber: Loaded WhisperTranscriber instance
         implementation_name: Name of implementation for logging
-        
+        lang_per_result: Optional language code per result (e.g. for multi-language Supertonic)
+
     Returns:
         Dict with WER/CER metrics for each run or None if samples not available
     """
     from jiwer import wer, cer
-    
+
     if not runs or not runs[0].results:
         return None
-    
+
     # Check if samples are available
     if not runs[0].results[0].samples:
         logger.info(f"Audio samples not available for {implementation_name} round-trip test")
         return None
-    
+
     logger.info(f"Running round-trip quality test for {implementation_name} with {len(runs)} run(s)...")
-    
+
     # Process each run
     run_metrics = []
-    
+
     for run_idx, results in enumerate(runs, 1):
         logger.info(f"Processing {implementation_name} run {run_idx}/{len(runs)}...")
-        
+
         wers = []
         cers = []
-        
+
         for i, (original, result) in enumerate(zip(original_texts, results.results)):
             if result.samples:
-                # Transcribe audio
+                # Transcribe audio (use per-result language when provided, e.g. for en+es)
                 samples = np.array(result.samples, dtype=np.int16)
-                transcription = whisper_transcriber.transcribe_samples(samples, result.sample_rate)
+                lang = lang_per_result[i] if lang_per_result and i < len(lang_per_result) else None
+                transcription = whisper_transcriber.transcribe_samples(
+                    samples, result.sample_rate, language=lang
+                )
                 
                 # Normalize texts for comparison (lowercase, strip)
                 original_norm = original.lower().strip()
