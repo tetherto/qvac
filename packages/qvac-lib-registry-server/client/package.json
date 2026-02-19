@@ -12,6 +12,20 @@
     ".": "./index.js",
     "./types": "./index.d.ts"
   },
+  "imports": {
+    "#os": {
+      "bare": "bare-os",
+      "default": "./lib/compat/os.js"
+    },
+    "#path": {
+      "bare": "bare-path",
+      "default": "./lib/compat/path.js"
+    },
+    "#fs": {
+      "bare": "bare-fs",
+      "default": "./lib/compat/fs.js"
+    }
+  },
   "files": [
     "index.js",
     "index.d.ts",
@@ -36,17 +50,14 @@
     "b4a": "^1.6.7",
     "bare-fs": "^4.5.2",
     "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "corestore": "^7.4.5",
-    "fs": "npm:bare-node-fs",
     "hyperblobs": "^2.8.0",
     "hypercore-id-encoding": "^1.3.0",
     "hyperdb": "^4.16.1",
     "hyperswarm": "^4.14.0",
-    "os": "npm:bare-node-os",
     "paparam": "^1.10.0",
-    "path": "npm:bare-node-path",
-    "process": "npm:bare-node-process",
     "ready-resource": "^1.0.1"
   },
   "devDependencies": {

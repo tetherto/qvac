@@ -3,8 +3,8 @@
 const { getEnv } = require('../utils/env')
 const { ENV_KEYS } = require('@qvac/registry-schema')
 const Logger = require('./logger')
-const os = require('os')
-const path = require('path')
+const os = require('#os')
+const path = require('#path')
 
 const DEFAULT_REGISTRY_CORE_KEY = 'uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh946e8kwysdes9ko'
 
