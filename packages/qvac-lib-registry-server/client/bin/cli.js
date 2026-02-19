@@ -23,7 +23,7 @@ function createClient (parentFlags) {
 }
 
 function getRootFlags (cmd) {
-  let current = cmd
+  let current = cmd.command || cmd
   while (current.parent) current = current.parent
   return current.flags || {}
 }
