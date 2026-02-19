@@ -22,6 +22,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const noGpu = process.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const FINETUNE_MODEL = {
@@ -101,7 +102,7 @@ test('two instances: A run + B run in parallel', { timeout: 60_000, skip: isDarw
   t.pass()
 })
 
-test('two instances: A run + B finetune in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('two instances: A run + B finetune in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 || noGpu }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
@@ -160,7 +161,7 @@ test('two instances: A run + B finetune in parallel', { timeout: FINETUNE_TIMEOU
   t.pass()
 })
 
-test('two instances: A finetune + B run in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('two instances: A finetune + B run in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 || noGpu }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
@@ -214,7 +215,7 @@ test('two instances: A finetune + B run in parallel', { timeout: FINETUNE_TIMEOU
   t.pass()
 })
 
-test('two instances: A finetune + B finetune in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 }, async (t) => {
+test('two instances: A finetune + B finetune in parallel', { timeout: FINETUNE_TIMEOUT_MS, skip: isDarwinX64 || noGpu }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
@@ -287,7 +288,7 @@ const PAUSE_RESUME_TIMEOUT_MS = 600_000
 
 test('two instances: A pause/resume finetune while B runs inference (per-instance resume flag)', {
   timeout: PAUSE_RESUME_TIMEOUT_MS,
-  skip: isDarwinX64
+  skip: isDarwinX64 || noGpu
 }, async (t) => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,

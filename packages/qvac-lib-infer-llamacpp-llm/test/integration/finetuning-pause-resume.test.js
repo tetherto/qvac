@@ -20,6 +20,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const noGpu = process.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const PAUSE_RESUME_TIMEOUT_MS = 600_000
@@ -33,7 +34,7 @@ function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: isDarwinX64 }, async t => {
+test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: isDarwinX64 || noGpu }, async t => {
   const [modelName, modelDir] = await ensureModel({
     modelName: FINETUNE_MODEL.name,
     downloadUrl: FINETUNE_MODEL.url
