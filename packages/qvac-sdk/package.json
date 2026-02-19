@@ -54,6 +54,9 @@
     },
     "./logging": {
       "import": "./dist/logging/index.js"
+    },
+    "./electron-builder": {
+      "require": "./electron-builder/index.cjs"
     }
   },
   "imports": {
@@ -71,6 +74,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "electron-builder/**/*",
     "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
