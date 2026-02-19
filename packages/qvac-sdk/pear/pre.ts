@@ -9,7 +9,7 @@
  * ```json
  * {
  *   "pear": {
- *     "pre": ["pear-electron/pre", "@qvac/sdk/pear-pre"]
+ *     "pre": ["@qvac/sdk/pear-pre"]
  *   }
  * }
  * ```
