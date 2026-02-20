@@ -12,7 +12,6 @@ Full-factorial parameter sweep for `@qvac/llm-llamacpp`, measuring TTFT, TPS, an
 - [Judge Pass](#judge-pass)
 - [Resumability](#resumability)
 - [Results](#results)
-- [PyTorch Comparison](#pytorch-comparison)
 - [Script Reference](#script-reference)
 
 ## Addon Source
@@ -165,24 +164,6 @@ All metrics report mean and population standard deviation across repeats.
 | `ok` | All repeats succeeded |
 | `partial-failure` | Some repeats failed |
 | `failed` | All repeats or case setup failed |
-| `skipped` | Unsupported platform/parameter combo (PyTorch only) |
-
-## PyTorch Comparison
-
-An equivalent PyTorch (HuggingFace Transformers) benchmark lives in `pytorch/` for side-by-side comparison. It produces compatible JSONL with identical case IDs and an `engine: "pytorch"` field.
-
-```bash
-# Install Python dependencies
-pip install -r pytorch/requirements.txt
-
-# Run PyTorch sweep
-python pytorch/run_sweep.py --models qwen3-1.7b --quantization F16 --device gpu --debug
-```
-
-See `pytorch/` for full details. Key differences from the addon benchmark:
-- `batch-size` / `ubatch-size` are recorded but are no-ops (PyTorch doesn't expose chunked prefill)
-- Unsupported parameter combos are `skipped` with a reason (e.g., bitsandbytes requires CUDA)
-- Memory reports RSS + GPU allocated instead of JS heap metrics
 
 ## Script Reference
 
