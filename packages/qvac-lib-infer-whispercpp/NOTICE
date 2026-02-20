@@ -47,6 +47,8 @@ Third-Party Model Licenses
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   tiny_acft_q8_0
     https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
+  tiny_en_acft_q8_0
+    https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
   whisper.cpp
@@ -345,12 +347,15 @@ Python Dependencies
 
   httpx
     https://github.com/encode/httpx
-  numpy
-    https://numpy.org
   soundfile
     https://github.com/bastibe/python-soundfile
   torch
     https://pytorch.org
+
+--- bsd-3-clause AND 0bsd AND mit AND zlib AND cc0-1.0 ---
+
+  numpy
+    https://numpy.org
 
 --- isc license (iscl) ---
 

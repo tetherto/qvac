@@ -326,6 +326,8 @@ jobs:
       - name: Generate presigned URLs for OCR models
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating presigned URLs for OCR models..."
           chmod +x scripts/generate-ocr-presigned-urls.sh

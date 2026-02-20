@@ -63,6 +63,11 @@ class TranscriptionParakeet extends BaseInference {
    * @param {boolean} [args.exclusiveRun=true] - Whether to run exclusively
    * @param {Object} config - environment-specific inference setup configuration
    * @param {string} [config.path] - Direct path to model (alternative to diskPath + modelName)
+   * @param {string} [config.encoderPath] - Absolute path to encoder ONNX graph file
+   * @param {string} [config.encoderDataPath] - Absolute path to encoder ONNX weights file
+   * @param {string} [config.decoderPath] - Absolute path to decoder-joint ONNX file
+   * @param {string} [config.vocabPath] - Absolute path to vocabulary file
+   * @param {string} [config.preprocessorPath] - Absolute path to preprocessor ONNX file
    * @param {Object} config.parakeetConfig - Parakeet-specific configuration
    * @param {string} [config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
    * @param {number} [config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
@@ -99,6 +104,20 @@ class TranscriptionParakeet extends BaseInference {
    */
   validateModelFiles () {
     const modelPath = this._config.path || this._getModelFilePath()
+
+    // When using named path overrides, skip directory-level validation
+    if (this._hasNamedPaths()) {
+      const modelType = this.params.modelType || 'tdt'
+      const requiredFiles = getRequiredModelFiles(modelType)
+      for (const file of requiredFiles) {
+        const filePath = this._resolveFilePath(modelPath, file)
+        if (!fs.existsSync(filePath)) {
+          this.logger.warn(`Model file not found: ${file} (${filePath})`)
+        }
+      }
+      return
+    }
+
     if (!modelPath) {
       return // Skip validation if no path specified yet
     }
@@ -132,6 +151,39 @@ class TranscriptionParakeet extends BaseInference {
       return ''
     }
     return path.join(this._diskPath, this._modelName)
+  }
+
+  /**
+   * Resolve the absolute path for a model file.
+   * Uses named config path if available, otherwise falls back to
+   * path.join(modelPath, filename).
+   * @param {string} modelPath - base model directory path
+   * @param {string} filename - model file name (e.g. 'encoder-model.onnx')
+   * @returns {string} - absolute path to the file
+   * @private
+   */
+  _resolveFilePath (modelPath, filename) {
+    const namedPaths = {
+      'encoder-model.onnx': this._config.encoderPath,
+      'encoder-model.onnx.data': this._config.encoderDataPath,
+      'decoder_joint-model.onnx': this._config.decoderPath,
+      'vocab.txt': this._config.vocabPath,
+      'preprocessor.onnx': this._config.preprocessorPath
+    }
+    if (namedPaths[filename]) {
+      return namedPaths[filename]
+    }
+    return path.join(modelPath, filename)
+  }
+
+  /**
+   * Whether individual file paths have been provided via named config params.
+   * @returns {boolean}
+   * @private
+   */
+  _hasNamedPaths () {
+    return !!(this._config.encoderPath || this._config.encoderDataPath ||
+      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath)
   }
 
   /**
@@ -181,7 +233,7 @@ class TranscriptionParakeet extends BaseInference {
     const requiredFiles = getRequiredModelFiles(modelType)
 
     for (const file of requiredFiles) {
-      const filePath = path.join(modelPath, file)
+      const filePath = this._resolveFilePath(modelPath, file)
       if (fs.existsSync(filePath)) {
         this.logger.debug(`Loading ${file}...`)
 

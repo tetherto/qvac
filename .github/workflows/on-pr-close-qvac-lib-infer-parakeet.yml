@@ -31,7 +31,11 @@ on:
         type: boolean
         default: true
 
-run-name: Delete NPM Versions (parakeet) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+run-name: >-
+  Delete NPM Versions (parakeet)
+  v=${{ inputs.version }}
+  pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+  dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
 
 permissions:
   contents: read
@@ -55,8 +59,8 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-delete-npm-versions.yml@monorepo_update
     with:
       version: ${{ inputs.version }}
-      pr-number: ${{ inputs.pr-number }}
+      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages }}
-      dry-run: ${{ inputs.dry-run || true }}
+      packages: ${{ inputs.packages || 'qvac-lib-infer-parakeet' }}
+      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
     secrets: inherit

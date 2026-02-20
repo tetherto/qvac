@@ -252,9 +252,10 @@ async function ensureBergamotModel () {
 
 /**
  * Creates a logger for capturing C++ addon output
- * Routes all log levels to console with prefix for easy identification
+ * Routes all log levels to console with prefix for easy identification.
+ * Exposes getLevel() so @qvac/logging uses level 'debug' and does not filter debug messages.
  *
- * @returns {Object} Logger object with error, warn, info, debug methods
+ * @returns {Object} Logger object with error, warn, info, debug methods and getLevel
  */
 function createLogger () {
   return {

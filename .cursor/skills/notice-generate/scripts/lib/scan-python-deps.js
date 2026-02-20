@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { exec, sortByName } = require('./utils')
+const { exec, sortByName, fetchPyPILicense, fetchGHRepoLicense } = require('./utils')
 
 // ---------------------------------------------------------------------------
 // Parse requirements.txt — extract package names (ignore versions/comments)
@@ -91,6 +91,7 @@ function runPipLicenses (packageNames, log) {
   const venvDir = path.join(tmpDir, 'venv')
 
   const execOpts = { maxBuffer: 50 * 1024 * 1024 } // 50 MB buffer
+  const failedPackages = new Set()
 
   try {
     // Create virtualenv
@@ -104,16 +105,16 @@ function runPipLicenses (packageNames, log) {
     console.log(`  Installing ${packageNames.length} Python packages...`)
     const installList = packageNames.join(' ')
     try {
-      exec(`${pip} install --quiet --no-cache-dir ${installList}`, { stdio: 'ignore', ...execOpts })
+      exec(`${pip} install --quiet --cache-dir /tmp/notice-pip-cache ${installList}`, { stdio: 'ignore', ...execOpts })
     } catch (err) {
       // Some packages may fail (e.g. torch on some platforms)
       // Try installing one by one to get as many as possible
       log.push(`[Python] Bulk install failed, falling back to one-by-one`)
       for (const pkg of packageNames) {
         try {
-          exec(`${pip} install --quiet --no-cache-dir ${pkg}`, { stdio: 'ignore', ...execOpts })
+          exec(`${pip} install --quiet --cache-dir /tmp/notice-pip-cache ${pkg}`, { stdio: 'ignore', ...execOpts })
         } catch {
-          log.push(`[Python] Failed to install ${pkg}`)
+          failedPackages.add(pkg)
         }
       }
     }
@@ -127,10 +128,10 @@ function runPipLicenses (packageNames, log) {
       { cwd: tmpDir, ...execOpts }
     )
 
-    return JSON.parse(rawJson)
+    return { results: JSON.parse(rawJson), failedPackages }
   } catch (err) {
     log.push(`[Python] pip-licenses failed: ${err.message}`)
-    return []
+    return { results: [], failedPackages }
   } finally {
     // Clean up temp dir
     try {
@@ -150,8 +151,8 @@ async function scanPythonDeps (pkgDir, pythonPaths, log) {
 
   console.log(`  Found ${packageNames.length} Python packages to scan...`)
 
-  const results = runPipLicenses(packageNames, log)
-  if (results.length === 0) return []
+  const { results, failedPackages } = runPipLicenses(packageNames, log)
+  if (results.length === 0 && failedPackages.size === 0) return []
 
   // Map pip-licenses output to our format
   // pip-licenses returns: { Name, Version, License, URL }
@@ -163,21 +164,36 @@ async function scanPythonDeps (pkgDir, pythonPaths, log) {
     // Only include packages we actually requested (skip transitive deps of pip-licenses itself)
     if (!packageNames.includes(name)) continue
 
-    const license = r.License || 'Unknown'
-    const url = r.URL || r.Home || `https://pypi.org/project/${r.Name}/`
+    let license = r.License || 'Unknown'
+    let url = r.URL || r.Home || `https://pypi.org/project/${r.Name}/`
 
+    // PyPI API fallback when pip-licenses returns UNKNOWN
     if (license === 'UNKNOWN' || license === 'Unknown') {
-      log.push(`[Python] Could not determine license for ${name}`)
+      const pypi = await fetchPyPILicense(name)
+      if (pypi.license) {
+        license = pypi.license
+      } else {
+        log.push(`[Python] Could not determine license for ${name}`)
+      }
+      if (pypi.url) url = pypi.url
     }
 
     mapped.push({ name, license, url })
   }
 
-  // Report packages that didn't install
+  // For packages that didn't install, try PyPI API directly
   for (const pkg of packageNames) {
     if (!installedNames.has(pkg)) {
-      log.push(`[Python] Package not installed (may not exist or platform-specific): ${pkg}`)
-      mapped.push({ name: pkg, license: 'Unknown', url: `https://pypi.org/project/${pkg}/` })
+      const pypi = await fetchPyPILicense(pkg)
+      if (pypi.license) {
+        mapped.push({ name: pkg, license: pypi.license, url: pypi.url || `https://pypi.org/project/${pkg}/` })
+        if (failedPackages.has(pkg)) {
+          log.push(`[Python] ${pkg}: pip install failed (likely Python version constraint), license resolved via PyPI`)
+        }
+      } else {
+        log.push(`[Python] ${pkg}: pip install failed and not found on PyPI`)
+        mapped.push({ name: pkg, license: 'Unknown', url: `https://pypi.org/project/${pkg}/` })
+      }
     }
   }
 
