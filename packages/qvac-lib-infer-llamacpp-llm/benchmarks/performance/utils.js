@@ -1,5 +1,7 @@
 'use strict'
 
+const { round, average } = require('./math')
+
 // --- Constants (formerly sweep-shared-constants.js) ---
 
 const DEFAULT_SWEEP_CTX_SIZES = [2048]
@@ -127,19 +129,6 @@ function parseArgs (argv) {
     }
   }
   return parsed
-}
-
-function round (num, digits) {
-  if (typeof num !== 'number' || Number.isNaN(num)) return null
-  const scale = Math.pow(10, digits)
-  return Math.round(num * scale) / scale
-}
-
-function average (values) {
-  if (!values.length) return null
-  let sum = 0
-  for (const value of values) sum += value
-  return sum / values.length
 }
 
 function buildConfigObject (runtimeConfig) {

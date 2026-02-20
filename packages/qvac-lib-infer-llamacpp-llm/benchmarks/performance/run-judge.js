@@ -9,10 +9,9 @@ const {
   resolveAddonCtor,
   createAddonRuntimeLogger,
   parseArgs,
-  round,
-  average,
   buildConfigObject
 } = require('./utils')
+const { round, average } = require('./math')
 
 function clamp01 (value) {
   if (typeof value !== 'number' || Number.isNaN(value)) return null
