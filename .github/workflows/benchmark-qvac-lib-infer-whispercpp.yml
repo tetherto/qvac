@@ -285,9 +285,8 @@ jobs:
           df -h
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Configure scoped registry for @tetherto and @qvac packages

@@ -78,12 +78,12 @@ jobs:
           df -h
 
       - name: Checkout monorepo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
 
       - name: Verify addon directory exists
         run: |
@@ -100,12 +100,12 @@ jobs:
           ls -la "${ADDON_DIR}" | head -50
 
       - name: Checkout mobile test framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tetherto/qvac-test-addon-mobile
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
           path: test-framework
-          ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
 
       - name: Setup Node.js

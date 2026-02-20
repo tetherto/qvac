@@ -74,10 +74,10 @@ jobs:
           sudo rm -rf /usr/share/dotnet
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           lfs: true
           fetch-depth: 0

@@ -28,12 +28,12 @@ runs:
   using: composite
   steps:
     - name: Checkout PR head and target
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
-        fetch-depth: 0
-        token: ${{ inputs.pat-token }}
         repository: ${{ inputs.repository }}
         ref: ${{ inputs.ref }}
+        token: ${{ inputs.pat-token }}
+        fetch-depth: 0
 
     - name: Configure git
       shell: bash

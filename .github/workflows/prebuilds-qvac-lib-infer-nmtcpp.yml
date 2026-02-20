@@ -115,12 +115,12 @@ jobs:
         run: |
           git config --system core.longpaths true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
-          ref: ${{ inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.repository }}
 
       - if: ${{ matrix.platform == 'android' }}
         name: Setup Android NDK
@@ -777,11 +777,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          lfs: false
-          fetch-depth: 1
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
@@ -809,11 +805,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          lfs: false
-          fetch-depth: 1
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
@@ -841,7 +833,7 @@ jobs:
       new_version: ${{ steps.check.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 2
 

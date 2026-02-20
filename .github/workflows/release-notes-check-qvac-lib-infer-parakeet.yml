@@ -28,13 +28,13 @@ jobs:
 
     steps:
       - name: Checkout PR head (into pr/)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
           ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
           path: pr
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -61,13 +61,13 @@ jobs:
           echo "PR version: $version"
 
       - name: Checkout base (into base/)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name }}
           ref: ${{ github.event.pull_request.base.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0
           path: base
+          fetch-depth: 0
 
       - name: Read base package version (monorepo workdir)
         id: base-package-version

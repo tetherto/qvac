@@ -3408,7 +3408,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1 https://github.com/actions/checkout/releases/tag/v4.1.1
+      - uses: actions/checkout@v6 # v6 https://github.com/actions/checkout
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7 # v3.8.2 https://github.com/actions/setup-node/releases/tag/v3.8.2
         with:

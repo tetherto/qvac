@@ -66,11 +66,9 @@ jobs:
       quants: ${{ steps.prepare_quants.outputs.quants }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           lfs: true
-          fetch-depth: 1
 
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5
@@ -126,9 +124,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -216,10 +212,7 @@ jobs:
         quant: ${{ fromJson(needs.setup.outputs.quants) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+        uses: actions/checkout@v6
 
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5

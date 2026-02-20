@@ -139,7 +139,7 @@ jobs:
     steps:
       # Checkout base branch — config file is read from here (trusted)
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -188,7 +188,7 @@ jobs:
     steps:
       # Checkout PR head — this is the code we're actually testing
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 

@@ -144,11 +144,11 @@ jobs:
             ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref }}
           repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup node
         uses: actions/setup-node@v4
@@ -422,9 +422,7 @@ jobs:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
@@ -493,9 +491,7 @@ jobs:
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
         uses: actions/download-artifact@v4
