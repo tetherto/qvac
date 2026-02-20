@@ -80,8 +80,9 @@ LlamaModel::LlamaModel(
 }
 void LlamaModel::init(
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    const std::string&& modelPath, const std::string&& projectionPath,
+    std::string&& modelPathRvalue, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemapRvalue) {
+  std::string modelPath = std::move(modelPathRvalue);
   std::unordered_map<std::string, std::string> configFilemap =
       std::move(configFilemapRvalue);
 
@@ -113,7 +114,8 @@ void LlamaModel::init(
       errorWhenFailed);
 
   // Create the appropriate context based on projectionPath
-  llmContext_ = createContext(projectionPath, params, std::move(llamaInit));
+  llmContext_ =
+      createContext(std::move(projectionPath), params, std::move(llamaInit));
 
   // Apply configured nDiscarded if provided (> 0)
   if (configuredNDiscarded_ > 0 && llmContext_) {
@@ -670,10 +672,10 @@ void LlamaModel::resetState(bool resetStats) {
 }
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
-    const std::string& projectionPath, common_params& params,
+    std::string&& projectionPath, common_params& params,
     common_init_result&& llamaInit) {
   if (!projectionPath.empty()) {
-    params.mmproj.path = projectionPath;
+    params.mmproj.path = std::move(projectionPath);
     isTextLlm_ = false;
     return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
   }

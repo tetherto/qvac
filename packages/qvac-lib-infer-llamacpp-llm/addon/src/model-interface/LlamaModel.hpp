@@ -159,7 +159,7 @@ private:
    * @return unique_ptr to the appropriate LlmContext
    */
   std::unique_ptr<LlmContext> createContext(
-      const std::string& projectionPath, common_params& params,
+      std::string&& projectionPath, common_params& params,
       common_init_result&& llamaInit);
 
   /**
@@ -171,7 +171,7 @@ private:
   bool loadMedia(const std::vector<uint8_t>& input);
 
   void init(
-      const std::string&& modelPath, const std::string&& projectionPath,
+      std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
 
   const std::string loadingContext_;
