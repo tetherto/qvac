@@ -4,7 +4,7 @@
  * Electron-builder integration for QVAC SDK.
  * Provides automatic native addon tree-shaking and prebuild pruning.
  *
- * @compatible electron-builder >=25.0.0 <26.0.0
+ * @compatible electron-builder >=25.0.0
  *
  * Usage:
  *   Option A - extends (minimal config):
@@ -25,7 +25,7 @@
 /**
  * Tested electron-builder version.
  */
-const ELECTRON_BUILDER_COMPAT_RANGE = ">=25.0.0 <26.0.0";
+const ELECTRON_BUILDER_COMPAT_RANGE = ">=25.0.0";
 
 const {
   generateAddonExclusions,
