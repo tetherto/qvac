@@ -19,8 +19,7 @@ async function runConfigParametersTest (options = {}) { // eslint-disable-line n
 }
 
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
-  return
-  return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
+  return { skipped: true }
 }
 
 async function runImageTest (options = {}) { // eslint-disable-line no-unused-vars
