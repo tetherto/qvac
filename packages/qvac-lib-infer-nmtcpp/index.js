@@ -235,7 +235,7 @@ class TranslationNmtcpp extends BaseInference {
    */
   _createResponseHandlers (jobId) {
     return {
-      cancelHandler: () => this.addon.cancel(jobId),
+      cancelHandler: () => this.addon.cancel(),
       pauseHandler: () => this.addon.pause(),
       continueHandler: () => this.addon.activate()
     }
@@ -263,7 +263,7 @@ class TranslationNmtcpp extends BaseInference {
     const response = new QvacIndicTransResponse(
       processor,
       this._params.dstLang,
-      this._createResponseHandlers(JOB_ID)
+      this._createResponseHandlers()
     )
 
     this._saveJobToResponseMapping(JOB_ID, response)
@@ -290,8 +290,8 @@ class TranslationNmtcpp extends BaseInference {
    * @param {number} jobId - The job identifier
    * @returns {QvacResponse} Response object with configured handlers
    */
-  _createStandardResponse (jobId) {
-    const response = new QvacResponse(this._createResponseHandlers(jobId))
+  _createStandardResponse () {
+    const response = new QvacResponse(this._createResponseHandlers())
 
     // Override onUpdate to strip language prefixes from output
     const originalOnUpdate = response.onUpdate.bind(response)
@@ -315,7 +315,7 @@ class TranslationNmtcpp extends BaseInference {
   async _runStandardTranslation (input) {
     const text = this._prepareInputText(input)
     await this.addon.runJob({ type: 'text', input: text })
-    const response = this._createStandardResponse(JOB_ID)
+    const response = this._createStandardResponse()
 
     this._saveJobToResponseMapping(JOB_ID, response)
     return response

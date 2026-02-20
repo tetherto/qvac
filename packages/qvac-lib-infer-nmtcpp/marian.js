@@ -15,8 +15,7 @@ class TranslationInterface {
     this._handle = binding.createInstance(
       this,
       configurationParams,
-      outputCb,
-      transitionCb
+      outputCb
     )
 
     // Set up C++ → JS logger
@@ -111,11 +110,11 @@ class TranslationInterface {
   }
 
   /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
+   * Cancel a inference process 
    */
   async cancel () {
     try {
-      await binding.cancel(this._handle, jobId)
+      await binding.cancel(this._handle)
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_CANCEL,
