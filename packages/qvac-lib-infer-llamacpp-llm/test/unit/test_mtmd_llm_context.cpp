@@ -102,8 +102,11 @@ protected:
     if (!hasValidModel()) {
       return nullptr;
     }
+    std::string modelPath = test_model_path;
+    std::string projectionPath = test_projection_path;
+    auto configCopy = config_files;
     auto model = std::make_unique<LlamaModel>(
-        test_model_path, test_projection_path, config_files);
+        std::move(modelPath), std::move(projectionPath), std::move(configCopy));
     model->waitForLoadInitialization();
     if (!model->isLoaded()) {
       return nullptr;
@@ -135,9 +138,10 @@ TEST_F(MtmdLlmContextTest, ProcessWithStringInput) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello, how are you?"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -155,13 +159,15 @@ TEST_F(MtmdLlmContextTest, ProcessWithCallback) {
   }
 
   std::vector<std::string> generated_tokens;
-  auto callback = [&generated_tokens](const std::string& token) {
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.outputCallback = [&generated_tokens](const std::string& token) {
     generated_tokens.push_back(token);
   };
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input, callback);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     EXPECT_GT(generated_tokens.size(), 0);
     auto stats = model->runtimeStats();
@@ -179,9 +185,10 @@ TEST_F(MtmdLlmContextTest, ProcessAndGetRuntimeStats) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -199,7 +206,10 @@ TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
   }
 
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
-  EXPECT_THROW({ model->process(image_data); }, qvac_errors::StatusError);
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "What is this?"}])";
+  prompt.media.push_back(std::move(image_data));
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(MtmdLlmContextTest, LoadMediaFile) {
@@ -212,9 +222,10 @@ TEST_F(MtmdLlmContextTest, LoadMediaFile) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"type": "media", "content": "nonexistent_image.jpg"}, {"role": "user", "content": "What is this?"}])";
-  EXPECT_THROW({ model->process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(MtmdLlmContextTest, ResetState) {
@@ -227,9 +238,10 @@ TEST_F(MtmdLlmContextTest, ResetState) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -237,9 +249,10 @@ TEST_F(MtmdLlmContextTest, ResetState) {
 
   EXPECT_NO_THROW(model->reset());
 
-  std::string input2 = R"([{"role": "user", "content": "Another hello"}])";
+  LlamaModel::Prompt prompt2;
+  prompt2.input = R"([{"role": "user", "content": "Another hello"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->process(input2);
+    std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
@@ -257,11 +270,16 @@ TEST_F(MtmdLlmContextTest, ResetMedia) {
   }
 
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
-  EXPECT_THROW({ model->process(image_data); }, qvac_errors::StatusError);
+  LlamaModel::Prompt mediaPrompt;
+  mediaPrompt.input = R"([{"role": "user", "content": "What is this?"}])";
+  mediaPrompt.media.push_back(std::move(image_data));
+  EXPECT_THROW(
+      { model->processPrompt(mediaPrompt); }, qvac_errors::StatusError);
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -278,10 +296,11 @@ TEST_F(MtmdLlmContextTest, MultimodalMessages) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"role": "user", "content": "What do you see in this image?"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -298,19 +317,21 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input1 =
+  LlamaModel::Prompt prompt1;
+  prompt1.input =
       R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output1 = model->process(input1);
+    std::string output1 = model->processPrompt(prompt1);
     EXPECT_GE(output1.length(), 0);
     auto stats1 = model->runtimeStats();
     EXPECT_GE(stats1.size(), 0);
   });
 
-  std::string input2 =
+  LlamaModel::Prompt prompt2;
+  prompt2.input =
       R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Follow up message"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->process(input2);
+    std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
@@ -328,7 +349,10 @@ TEST_F(MtmdLlmContextTest, InvalidMedia) {
   }
 
   std::vector<uint8_t> invalid_data = {0x00, 0x01, 0x02};
-  EXPECT_THROW({ model->process(invalid_data); }, qvac_errors::StatusError);
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "What is this?"}])";
+  prompt.media.push_back(std::move(invalid_data));
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(MtmdLlmContextTest, NonexistentFile) {
@@ -341,9 +365,10 @@ TEST_F(MtmdLlmContextTest, NonexistentFile) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"type": "media", "content": "nonexistent_image.jpg"}, {"role": "user", "content": "What is this?"}])";
-  EXPECT_THROW({ model->process(input); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithTools) {
@@ -356,7 +381,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithTools) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "content": "What is the weather in Tokyo?"},
     {
       "type": "function",
@@ -374,7 +400,7 @@ TEST_F(MtmdLlmContextTest, ProcessWithTools) {
   ])";
 
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -391,7 +417,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
     FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "content": "Search for products and add to cart"},
     {
       "type": "function",
@@ -423,7 +450,7 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
   ])";
 
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
