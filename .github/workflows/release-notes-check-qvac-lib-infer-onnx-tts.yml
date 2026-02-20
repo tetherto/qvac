@@ -110,7 +110,7 @@ jobs:
 
       - name: Validate Release Notes on version bump
         if: steps.version.outputs.bumped == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const pullNumber = context.payload.pull_request.number;
