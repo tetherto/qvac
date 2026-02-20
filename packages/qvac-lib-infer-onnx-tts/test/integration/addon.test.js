@@ -455,7 +455,7 @@ test('Chatterbox Multilingual TTS: WER verification for Spanish', { timeout: 180
   console.log('\n' + '='.repeat(60))
   console.log('CHATTERBOX MULTILINGUAL WER TEST SUMMARY')
   console.log('='.repeat(60))
-  console.log(`Language: es`)
+  console.log('Language: es')
   console.log(`Text: "${text}"`)
   console.log(`WER: ${werPct}%`)
   console.log('='.repeat(60))

@@ -365,7 +365,7 @@ async function ensureWhisperModel (targetPath = null) {
 async function ensureChatterboxModels (options = {}) {
   const variant = options.variant || 'fp32'
   const language = options.language || 'en'
-  let targetDir = options.targetDir || path.join(getBaseDir(), 'models', language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
 
   console.log(`\nEnsuring Chatterbox models (variant: ${variant})...`)
 
