@@ -70,13 +70,22 @@ function parseArgs (argv) {
   return parsed
 }
 
+function parseRepeats (value) {
+  if (value == null) return DEFAULT_REPEATS
+  const repeats = Number(value)
+  if (!Number.isInteger(repeats) || repeats <= 0) {
+    throw new Error(`Invalid --repeats value "${value}". Expected a positive integer.`)
+  }
+  return repeats
+}
+
 async function main () {
   const args = parseArgs(process.argv)
   const debugEnabled = Boolean(args.debug)
   const debugLogger = createDebugLogger(debugEnabled)
   const addonSource = parseAddonSource(args['addon-source'])
   const addonCtor = resolveAddonCtor(addonSource)
-  const repeats = args.repeats ? Number(args.repeats) : DEFAULT_REPEATS
+  const repeats = parseRepeats(args.repeats)
   const resultsDir = DEFAULT_RESULTS_DIR
   const inputsFilePath = DEFAULT_INPUTS_FILE
   if (!fs.existsSync(inputsFilePath)) {

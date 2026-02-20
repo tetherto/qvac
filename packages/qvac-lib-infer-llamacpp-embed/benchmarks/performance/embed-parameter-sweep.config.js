@@ -24,6 +24,21 @@ const BENCH_DEFAULT_RUNTIME = {
 const MODEL_RUNTIME_OVERRIDES = {
 }
 
+function toModelRelativePath (localPath) {
+  const normalized = String(localPath || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+  if (!normalized) return null
+
+  // resolved-models.json stores paths relative to benchmark root (for example
+  // "models/<repo>/<revision>/<file>.gguf"). The runtime loader uses modelDir
+  // as root, so strip the leading "models/" segment when present.
+  return normalized.startsWith('models/')
+    ? normalized.slice('models/'.length)
+    : normalized
+}
+
 function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
   const manifestQuants = Array.isArray(manifestModel.gguf && manifestModel.gguf.quantizations)
     ? manifestModel.gguf.quantizations
@@ -32,7 +47,7 @@ function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
   if (resolvedModelEntry && resolvedModelEntry.gguf && resolvedModelEntry.gguf.files) {
     const normalized = {}
     for (const [quantization, localPath] of Object.entries(resolvedModelEntry.gguf.files)) {
-      normalized[quantization] = path.basename(localPath)
+      normalized[quantization] = toModelRelativePath(localPath)
     }
     return normalized
   }
