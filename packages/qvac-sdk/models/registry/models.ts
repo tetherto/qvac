@@ -3849,7 +3849,7 @@ export const models = [
       "istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx",
     registrySource: "hf",
     blobCoreKey:
-      "7e1b9b1f8068c23afa85952688655984306375f4a97e0e6109e5a6ee5b9f6581",
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
     blobBlockOffset: 38909,
     blobBlockLength: 3,
     blobByteOffset: 2549805858,
@@ -3868,7 +3868,7 @@ export const models = [
       "istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
     registrySource: "hf",
     blobCoreKey:
-      "7e1b9b1f8068c23afa85952688655984306375f4a97e0e6109e5a6ee5b9f6581",
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
     blobBlockOffset: 38907,
     blobBlockLength: 2,
     blobByteOffset: 2549711919,
@@ -3887,7 +3887,7 @@ export const models = [
       "qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/decoder_joint-model.onnx",
     registrySource: "s3",
     blobCoreKey:
-      "7e1b9b1f8068c23afa85952688655984306375f4a97e0e6109e5a6ee5b9f6581",
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
     blobBlockOffset: 48864,
     blobBlockLength: 818,
     blobByteOffset: 3202129621,
@@ -3906,7 +3906,7 @@ export const models = [
       "qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/encoder-model.onnx",
     registrySource: "s3",
     blobCoreKey:
-      "7e1b9b1f8068c23afa85952688655984306375f4a97e0e6109e5a6ee5b9f6581",
+      "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
     blobBlockOffset: 38912,
     blobBlockLength: 9952,
     blobByteOffset: 2549945622,

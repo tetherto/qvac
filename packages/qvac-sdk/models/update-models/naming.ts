@@ -446,22 +446,32 @@ function generateOcrName({
 
 function generateParakeetName({
   filename,
-  lowerFilename,
+  tagName,
+  modelName,
   quantization,
 }: BaseNameInput): string {
-  let fileType = "";
-  if (lowerFilename.includes("encoder") && lowerFilename.endsWith(".data")) {
+  const name = tagName || modelName || "";
+  let fileType = name;
+
+  if (!fileType) {
+    const lower = filename.toLowerCase();
+    if (lower.includes("encoder") && lower.endsWith(".data")) {
+      fileType = "ENCODER_DATA";
+    } else if (lower.includes("encoder")) {
+      fileType = "ENCODER";
+    } else if (lower.includes("decoder")) {
+      fileType = "DECODER";
+    } else if (lower.includes("vocab")) {
+      fileType = "VOCAB";
+    } else if (lower.includes("preprocessor") || lower.includes("nemo")) {
+      fileType = "PREPROCESSOR";
+    } else {
+      fileType = cleanPart(filename.replace(/\.\w+$/, ""));
+    }
+  }
+
+  if (fileType.toLowerCase() === "encoder" && filename.toLowerCase().endsWith(".data")) {
     fileType = "ENCODER_DATA";
-  } else if (lowerFilename.includes("encoder")) {
-    fileType = "ENCODER";
-  } else if (lowerFilename.includes("decoder")) {
-    fileType = "DECODER";
-  } else if (lowerFilename.includes("vocab")) {
-    fileType = "VOCAB";
-  } else if (lowerFilename.includes("preprocessor") || lowerFilename.includes("nemo")) {
-    fileType = "PREPROCESSOR";
-  } else {
-    fileType = cleanPart(filename.replace(/\.\w+$/, ""));
   }
 
   const nameParts = [fileType, quantization].filter((p) => p && p !== "");
