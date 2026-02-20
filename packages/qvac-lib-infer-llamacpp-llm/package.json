@@ -16,11 +16,8 @@
     "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "model:init": "qvac-dev model init",
-    "model:new": "qvac-dev model new",
-    "model:generate": "qvac-dev model generate",
     "test:dts": "tsc -p tsconfig.dts.json",
-    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/test/unit/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -85,13 +82,13 @@
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.2.0",
+    "@qvac/infer-base": "^0.2.2",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "require-asset": "^1.1.0"
   },
   "engines": {
-    "bare": ">=1.19.0"
+    "bare": ">=1.24.0"
   },
   "peerDependencies": {
     "@qvac/dl-hyperdrive": "^0.1.0"
