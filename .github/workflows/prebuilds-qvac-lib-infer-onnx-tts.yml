@@ -480,7 +480,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: prebuilds
           merge-multiple: true
@@ -579,7 +579,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.WORKDIR }}/prebuilds
@@ -610,7 +610,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.WORKDIR }}/prebuilds

@@ -151,19 +151,19 @@ jobs:
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
 

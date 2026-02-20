@@ -225,7 +225,7 @@ jobs:
         run: npm install -g bare-runtime
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: qvac-addon-build
           path: ${{ env.PKG_DIR }}
@@ -307,10 +307,10 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: "ggml-opus-*"
           path: merged_raw
+          pattern: ggml-opus-*
           merge-multiple: true
 
       - name: Merge all model artifacts

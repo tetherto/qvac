@@ -114,7 +114,7 @@ jobs:
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
           merge-multiple: true

@@ -679,10 +679,11 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prebuild
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: prebuilds
           merge-multiple: true
+
       - run: |
           tree prebuilds/android-*
           mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
@@ -780,7 +781,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -808,7 +809,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds

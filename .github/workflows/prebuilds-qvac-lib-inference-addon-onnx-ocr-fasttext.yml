@@ -403,7 +403,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: prebuilds
           merge-multiple: true
@@ -530,7 +530,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download prebuild artifacts into package dir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -563,7 +563,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download prebuild artifacts into package dir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds

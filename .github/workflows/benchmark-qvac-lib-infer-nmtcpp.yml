@@ -341,7 +341,7 @@ jobs:
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
@@ -703,7 +703,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: all-results
           pattern: results-*
