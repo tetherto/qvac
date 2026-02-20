@@ -153,7 +153,7 @@ jobs:
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Restore ccache cache
         id: cache-ccache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
@@ -193,7 +193,7 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Restore ccache cache (Windows)
         id: cache-ccache-win
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
@@ -333,7 +333,7 @@ jobs:
 
       - name: Restore vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/ports/**', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-override-triplets/**') }}
@@ -369,21 +369,21 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' && steps.cache-ccache.outputs.cache-hit != 'true' }}
         name: Save ccache cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
 
       - if: ${{ matrix.os == 'windows-2022' && steps.cache-ccache-win.outputs.cache-hit != 'true' }}
         name: Save ccache cache (Windows)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/ports/**', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-override-triplets/**') }}

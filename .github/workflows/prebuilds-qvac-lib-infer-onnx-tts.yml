@@ -199,10 +199,10 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
+          path: ~/.cache/ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -233,10 +233,10 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-infer-onnx-tts/vcpkg.json') }}
+          path: ~\AppData\Local\ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
 

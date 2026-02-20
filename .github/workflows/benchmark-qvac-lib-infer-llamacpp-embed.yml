@@ -254,12 +254,11 @@ jobs:
       - name: Get vcpkg cache (monorepo)
         if: inputs.addon_version == ''
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.WORKDIR }}/vcpkg/cache
           key: linux-x64-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR), 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**') }}
-          restore-keys: |
-            linux-x64-
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: linux-x64-
 
       - name: Build addon from source (monorepo workdir)
         if: inputs.addon_version == ''

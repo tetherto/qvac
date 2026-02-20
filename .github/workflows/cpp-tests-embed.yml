@@ -179,10 +179,8 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache (package-local)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: |
-            ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
           key: >-
             cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
@@ -194,8 +192,8 @@ jobs:
                 'vcpkg/ports/**'
               )
             }}
-          restore-keys: |
-            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Download test models (into package dir)
         shell: bash

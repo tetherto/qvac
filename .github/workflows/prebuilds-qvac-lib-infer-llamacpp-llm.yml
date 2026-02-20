@@ -264,10 +264,10 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache-arm
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ~/.cache/ccache-arm
 
       - if: ${{ matrix.platform == 'linux' }}
         name: Install required packages linux
@@ -372,10 +372,10 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.WORKDIR }}/vcpkg/cache
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR)) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
 
       - if: ${{ inputs.vk-profiling }}

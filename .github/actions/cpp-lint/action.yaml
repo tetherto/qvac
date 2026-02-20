@@ -46,12 +46,11 @@ runs:
 
     - name: Restore npm cache
       id: cache-npm
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
-        path: ~/.npm
         key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
-        restore-keys: |
-          npm-${{ runner.os }}-
+        path: ~/.npm
+        restore-keys: npm-${{ runner.os }}-
 
     - run: |
         # @qvac/* from npmjs.org
@@ -82,10 +81,10 @@ runs:
       run: mkdir -p vcpkg/cache
  
     - name: Get vcpkg cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
-        path: vcpkg/cache
         key: linux-x64-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
+        path: vcpkg/cache
         restore-keys: linux-x64-
 
     - name: Install bare-make

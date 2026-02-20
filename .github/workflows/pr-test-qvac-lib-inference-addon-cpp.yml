@@ -153,10 +153,10 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
 
       - name: Generate buildsystem
         working-directory: ${{ env.PKG_DIR }}

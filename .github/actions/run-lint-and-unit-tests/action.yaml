@@ -29,12 +29,11 @@ runs:
 
     - name: Restore npm cache
       id: cache-npm
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
-        path: ~/.npm
         key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
-        restore-keys: |
-          npm-${{ runner.os }}-
+        path: ~/.npm
+        restore-keys: npm-${{ runner.os }}-
 
     - name: Configure .npmrc for both npmjs and GitHub Packages
       run: |

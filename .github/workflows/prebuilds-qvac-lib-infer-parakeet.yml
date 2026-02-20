@@ -136,10 +136,10 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~\AppData\Local\ccache
           key: ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR)) }}
+          path: ~\AppData\Local\ccache
           restore-keys: |
             ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
@@ -270,10 +270,10 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache
           key: ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR)) }}
+          path: ~/.cache/ccache
           restore-keys: |
             ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-

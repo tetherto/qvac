@@ -151,10 +151,10 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Get ccache cache (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          path: ~\AppData\Local\ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -287,10 +287,10 @@ jobs:
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Get ccache cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir)) }}
+          path: ~/.cache/ccache
           restore-keys: |
             ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             ccache-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -385,14 +385,14 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ inputs.workdir }}/vcpkg/cache
           key: vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles(
             format('{0}/vcpkg.json', inputs.workdir),
             format('{0}/vcpkg-configuration.json', inputs.workdir),
             format('{0}/vcpkg/ports/**', inputs.workdir)
            ) }}
+          path: ${{ inputs.workdir }}/vcpkg/cache
           restore-keys: |
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v2-${{ matrix.platform }}-${{ matrix.arch }}-

@@ -350,7 +350,7 @@ jobs:
 
       - name: Restore vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
@@ -665,7 +665,7 @@ jobs:
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}

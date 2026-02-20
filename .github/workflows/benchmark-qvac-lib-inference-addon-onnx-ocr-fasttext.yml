@@ -107,23 +107,21 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - name: Cache vcpkg packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
+          key: vcpkg-linux-x64-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**/CMakeLists.txt') }}
           path: |
             ${{ env.VCPKG_ROOT }}/installed
             ${{ env.VCPKG_ROOT }}/packages
             ~/.cache/vcpkg
-          key: vcpkg-linux-x64-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**/CMakeLists.txt') }}
-          restore-keys: |
-            vcpkg-linux-x64-
+          restore-keys: vcpkg-linux-x64-
 
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.ccache
           key: ccache-linux-x64-${{ github.sha }}
-          restore-keys: |
-            ccache-linux-x64-
+          path: ~/.ccache
+          restore-keys: ccache-linux-x64-
 
       - name: Install system dependencies
         run: |
@@ -140,12 +138,11 @@ jobs:
           ccache -z
 
       - name: Cache npm dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.npm
           key: npm-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/package-lock.json') }}
-          restore-keys: |
-            npm-
+          path: ~/.npm
+          restore-keys: npm-
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}

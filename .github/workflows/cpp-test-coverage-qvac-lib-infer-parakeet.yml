@@ -78,12 +78,11 @@ jobs:
 
       - name: Get ccache cache
         if: matrix.platform == 'linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache
           key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
-          restore-keys: |
-            ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
