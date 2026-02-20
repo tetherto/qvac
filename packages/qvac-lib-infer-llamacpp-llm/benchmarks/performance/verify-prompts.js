@@ -7,14 +7,12 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
   PROMPT_CTX_SIZES,
-  PROMPT_BATCH_SIZES
-} = require('./sweep-shared-constants')
-const {
+  PROMPT_BATCH_SIZES,
   shouldFallbackToCpu,
   getCtxBudget,
   getBatchBudget,
   getPromptTokens
-} = require('./prompt-shared-utils')
+} = require('./utils')
 
 const PROMPTS_PATH = path.resolve(__dirname, 'test-prompts.json')
 const MODEL_DIR = path.resolve(__dirname, 'models')

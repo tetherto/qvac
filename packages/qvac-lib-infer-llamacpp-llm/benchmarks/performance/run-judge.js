@@ -4,81 +4,15 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const FilesystemDL = require('@qvac/dl-filesystem')
-
-function loadLocalLlmAddon () {
-  return require('../../index')
-}
-
-function loadNpmLlmAddon () {
-  return require('@qvac/llm-llamacpp')
-}
-
-function parseAddonSource (value) {
-  const normalized = String(value || 'local').trim().toLowerCase()
-  if (normalized === 'local' || normalized === 'npm') return normalized
-  throw new Error(`Invalid --addon-source value "${value}". Expected "local" or "npm".`)
-}
-
-function resolveAddonCtor (addonSource) {
-  try {
-    return addonSource === 'npm' ? loadNpmLlmAddon() : loadLocalLlmAddon()
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error)
-    throw new Error(
-      `Failed to load addon source "${addonSource}": ${message}. ` +
-      (addonSource === 'local'
-        ? 'Run `npm run build` for local addon artifacts.'
-        : 'Install `@qvac/llm-llamacpp` first for npm source.')
-    )
-  }
-}
-
-function createAddonRuntimeLogger (debugEnabled) {
-  if (!debugEnabled) {
-    return {
-      error: () => {},
-      warn: () => {},
-      info: () => {},
-      debug: () => {}
-    }
-  }
-  return {
-    error: (...msgs) => console.error(...msgs),
-    warn: (...msgs) => console.warn(...msgs),
-    info: (...msgs) => console.log(...msgs),
-    debug: (...msgs) => console.debug(...msgs)
-  }
-}
-
-function parseArgs (argv) {
-  const parsed = {}
-  for (let i = 2; i < argv.length; i++) {
-    const token = argv[i]
-    if (!token.startsWith('--')) continue
-    const key = token.slice(2)
-    const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
-      parsed[key] = true
-    } else {
-      parsed[key] = next
-      i++
-    }
-  }
-  return parsed
-}
-
-function round (num, digits = 6) {
-  if (typeof num !== 'number' || Number.isNaN(num)) return null
-  const scale = Math.pow(10, digits)
-  return Math.round(num * scale) / scale
-}
-
-function average (values) {
-  if (!values.length) return null
-  let sum = 0
-  for (const value of values) sum += value
-  return sum / values.length
-}
+const {
+  parseAddonSource,
+  resolveAddonCtor,
+  createAddonRuntimeLogger,
+  parseArgs,
+  round,
+  average,
+  buildConfigObject
+} = require('./utils')
 
 function clamp01 (value) {
   if (typeof value !== 'number' || Number.isNaN(value)) return null
@@ -112,21 +46,6 @@ function buildJudgeMessages (reference, candidate) {
         'Score rubric: 1=same meaning, 0=completely different. Return only the score.'
     }
   ]
-}
-
-function buildConfigObject (runtimeConfig) {
-  const config = {}
-  for (const [key, value] of Object.entries(runtimeConfig)) {
-    if (value === null || value === undefined) continue
-    if (key === 'no-mmap' || key === 'no-kv-offload') {
-      if (value === true) config[key] = ''
-    } else if (key === 'flash-attn') {
-      config[key] = String(value)
-    } else {
-      config[key] = String(value)
-    }
-  }
-  return config
 }
 
 function findLatestSweepJsonl (resultsDir) {

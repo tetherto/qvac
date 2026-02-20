@@ -4,14 +4,17 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const FilesystemDL = require('@qvac/dl-filesystem')
-
-function loadLocalLlmAddon () {
-  return require('../../index')
-}
-
-function loadNpmLlmAddon () {
-  return require('@qvac/llm-llamacpp')
-}
+const {
+  parseAddonSource,
+  resolveAddonCtor,
+  createAddonRuntimeLogger,
+  stripSurroundingQuotes,
+  normalizeArgValue,
+  parseArgs,
+  round,
+  average,
+  buildConfigObject
+} = require('./utils')
 
 function createDebugLogger (enabled) {
   return {
@@ -27,26 +30,6 @@ function createDebugLogger (enabled) {
   }
 }
 
-function parseAddonSource (value) {
-  const normalized = String(value || 'local').trim().toLowerCase()
-  if (normalized === 'local' || normalized === 'npm') return normalized
-  throw new Error(`Invalid --addon-source value "${value}". Expected "local" or "npm".`)
-}
-
-function resolveAddonCtor (addonSource) {
-  try {
-    return addonSource === 'npm' ? loadNpmLlmAddon() : loadLocalLlmAddon()
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error)
-    throw new Error(
-      `Failed to load addon source "${addonSource}": ${message}. ` +
-      (addonSource === 'local'
-        ? 'Run `npm run build` for local addon artifacts.'
-        : 'Run `npm run performance:install` to install npm addon package.')
-    )
-  }
-}
-
 const {
   DEFAULT_RESULTS_DIR,
   DEFAULT_REPEATS,
@@ -58,48 +41,6 @@ const {
 const PROMPT_CASES = ['long', 'ctx-filling', 'span-fill']
 // Each case executes exactly one prompt.
 const PROMPTS_PER_CASE = 1
-
-function createAddonRuntimeLogger (debugEnabled) {
-  if (!debugEnabled) {
-    return {
-      error: () => {},
-      warn: () => {},
-      info: () => {},
-      debug: () => {}
-    }
-  }
-
-  return {
-    error: (...msgs) => console.error(...msgs),
-    warn: (...msgs) => console.warn(...msgs),
-    info: (...msgs) => console.log(...msgs),
-    debug: (...msgs) => console.debug(...msgs)
-  }
-}
-
-function parseArgs (argv) {
-  const parsed = {}
-  for (let i = 2; i < argv.length; i++) {
-    const token = argv[i]
-    if (!token.startsWith('--')) continue
-    const inlineEqIndex = token.indexOf('=')
-    if (inlineEqIndex !== -1) {
-      const key = token.slice(2, inlineEqIndex)
-      const value = normalizeArgValue(token.slice(inlineEqIndex + 1))
-      parsed[key] = value
-      continue
-    }
-    const key = token.slice(2)
-    const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
-      parsed[key] = true
-    } else {
-      parsed[key] = normalizeArgValue(next)
-      i++
-    }
-  }
-  return parsed
-}
 
 const SWEEP_OVERRIDE_KEYS = [
   'quantization',
@@ -116,24 +57,6 @@ const SWEEP_OVERRIDE_KEYS = [
 ]
 
 const BOOLEAN_SWEEP_KEYS = new Set(['no-mmap', 'no-kv-offload'])
-
-function stripSurroundingQuotes (value) {
-  const s = String(value)
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1)
-  }
-  return s
-}
-
-function normalizeArgValue (value) {
-  if (value === true || value == null) return value
-  let normalized = String(value).trim()
-  if (normalized.startsWith('=')) {
-    normalized = normalized.slice(1).trim()
-  }
-  normalized = stripSurroundingQuotes(normalized).trim()
-  return normalized
-}
 
 function splitCsvArg (value, key) {
   const normalizedInput = normalizeArgValue(value)
@@ -186,12 +109,6 @@ function elapsedMs (hrStart) {
   return sec * 1000 + nano / 1e6
 }
 
-function round (num, digits = 4) {
-  if (typeof num !== 'number' || Number.isNaN(num)) return null
-  const scale = Math.pow(10, digits)
-  return Math.round(num * scale) / scale
-}
-
 function parsePositiveInt (value, name) {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -215,37 +132,6 @@ function memorySnapshot () {
     heapUsedMb: round(mem.heapUsed / (1024 * 1024), 2),
     externalMb: round(mem.external / (1024 * 1024), 2)
   }
-}
-
-function buildConfigObject (runtimeConfig) {
-  // Convert runtime config to LLM addon config format (kebab-case keys, string values)
-  const config = {}
-  for (const [key, value] of Object.entries(runtimeConfig)) {
-    if (value === null || value === undefined) {
-      continue
-    }
-    // Handle boolean flags: no-mmap, no-kv-offload (true = include flag, false = omit)
-    if (key === 'no-mmap' || key === 'no-kv-offload') {
-      if (value === true) {
-        config[key] = ''
-      }
-      // If false, don't include it (defaults to disabled/offload enabled)
-    } else if (key === 'flash-attn') {
-      // Pass explicit value for compatibility with addon argument parser.
-      // Bare "--flash-attn" can be parsed as requiring a value by some builds.
-      if (value === true) {
-        config[key] = 'on'
-      } else if (value === false) {
-        config[key] = 'off'
-      } else {
-        config[key] = String(value)
-      }
-    } else {
-      // All other values: stringify
-      config[key] = String(value)
-    }
-  }
-  return config
 }
 
 function resolveModelName (modelDef, quantization) {
@@ -355,13 +241,6 @@ function buildCases (modelDef, sweep) {
 
   cases.sort((a, b) => Number(b.isBaseline) - Number(a.isBaseline))
   return cases
-}
-
-function average (values) {
-  if (!values.length) return null
-  let sum = 0
-  for (const value of values) sum += value
-  return sum / values.length
 }
 
 function stddev (values) {

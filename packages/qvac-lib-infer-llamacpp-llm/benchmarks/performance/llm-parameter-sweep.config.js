@@ -6,7 +6,7 @@ const os = require('bare-os')
 const {
   DEFAULT_SWEEP_CTX_SIZES,
   DEFAULT_SWEEP_BATCH_SIZES
-} = require('./sweep-shared-constants')
+} = require('./utils')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
 const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
