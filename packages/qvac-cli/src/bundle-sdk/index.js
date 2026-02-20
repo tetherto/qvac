@@ -5,11 +5,7 @@ import { createLogger } from '../logger.js'
 import { findConfigFile, loadConfig, CONFIG_CANDIDATES } from '../config.js'
 import { BareImportsMapNotFoundError } from '../errors.js'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from './plugins.js'
-import {
-  generateWorkerEntry,
-  generatePearWorkerEntry,
-  toRelativeImportSpecifier
-} from './entry-gen.js'
+import { generateWorkerEntry } from './entry-gen.js'
 import { runBarePack } from './bare-pack.js'
 import { generateAddonsManifest } from './manifest.js'
 
@@ -62,7 +58,6 @@ export async function bundleSdk (options = {}) {
   const projectRoot = options.projectRoot ?? process.cwd()
   const outputDir = path.join(projectRoot, 'qvac')
   const entryPath = path.join(outputDir, 'worker.entry.mjs')
-  const pearWorkerEntryPath = path.join(outputDir, 'worker.pear.entry.mjs')
   const bundlePath = path.join(outputDir, 'worker.bundle.js')
 
   let logLevel = 'info'
@@ -116,24 +111,6 @@ export async function bundleSdk (options = {}) {
   const workerEntry = generateWorkerEntry(pluginSpecifiers, sdkName)
   await fsp.writeFile(entryPath, workerEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-
-  const pearWorker =
-    typeof config.pearWorker === 'string' && config.pearWorker.length > 0
-      ? config.pearWorker
-      : 'worker.js'
-
-  const pearWorkerAbs = path.isAbsolute(pearWorker)
-    ? pearWorker
-    : path.join(projectRoot, pearWorker)
-  const pearWorkerImport = toRelativeImportSpecifier(outputDir, pearWorkerAbs)
-
-  const pearWorkerEntry = generatePearWorkerEntry(
-    pluginSpecifiers,
-    sdkName,
-    pearWorkerImport
-  )
-  await fsp.writeFile(pearWorkerEntryPath, pearWorkerEntry, 'utf8')
-  logger.info(`   Created: ${path.relative(projectRoot, pearWorkerEntryPath)}`)
   logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
   logger.info('\n🔨 Bundling with bare-pack...')
@@ -172,15 +149,9 @@ export async function bundleSdk (options = {}) {
     '  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)'
   )
   logger.info(
-    '  - qvac/worker.pear.entry.mjs (Pear worker entrypoint: plugins + app worker)'
-  )
-  logger.info(
     '  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)'
   )
   logger.info('  - qvac/addons.manifest.json\n')
-  logger.info(
-    'Pear apps: Spawn qvac/worker.pear.entry.mjs as your worker entrypoint'
-  )
   logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
   logger.info(
     'Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n'
@@ -191,8 +162,7 @@ export async function bundleSdk (options = {}) {
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     entryPaths: {
-      worker: entryPath,
-      pearWorker: pearWorkerEntryPath
+      worker: entryPath
     },
     manifestPath: manifestResult.manifestPath
   }
