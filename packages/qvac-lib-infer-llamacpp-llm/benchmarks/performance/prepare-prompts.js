@@ -281,7 +281,7 @@ async function main () {
     fs.writeFileSync(OUTPUT_PATH, `${JSON.stringify(prompts, null, 2)}\n`)
     console.log(`Wrote ${prompts.length} prompts to ${OUTPUT_PATH}`)
   } finally {
-    await model.unload().catch(() => {})
+    if (model) await model.unload().catch(() => {})
     await loader.close().catch(() => {})
   }
 }

@@ -139,7 +139,7 @@ async function main () {
       }
     }
   } finally {
-    await model.unload().catch(() => {})
+    if (model) await model.unload().catch(() => {})
     await loader.close().catch(() => {})
   }
 

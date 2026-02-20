@@ -213,10 +213,11 @@ async function main () {
         const previousRecord = previousCaseRecords.get(caseKey) || null
         seedBaselineCachesFromRecord(previousRecord, baselineOutputs, adaptiveBaselineOutputs)
         if (previousRecord) {
-          caseResults.push({
+          const resumed = {
             ...previousRecord,
             promptCase: previousRecord.promptCase || testCase.promptCase || null
-          })
+          }
+          persistCaseResult(resumed)
         } else if (debugEnabled) {
           debugLogger.warn(`Completed case missing from previous JSONL records: ${caseKey}`)
         }
@@ -409,6 +410,19 @@ async function main () {
               const isContextOverflow = errorMsg && /context|ctx[- ]?size|overflow/i.test(errorMsg)
               if (isContextOverflow) {
                 await new Promise(resolve => setTimeout(resolve, 15000))
+              }
+
+              // Tick progress for the failed repeat and all remaining repeats
+              for (let r = repeat; r <= repeats; r++) {
+                progress.tick({
+                  modelId: modelDef.id,
+                  caseIndex: caseIndex + 1,
+                  caseCount: cases.length,
+                  promptIndex: promptIndex + 1,
+                  promptCount: promptsForCase.length,
+                  repeat: r,
+                  repeats
+                })
               }
 
               // Break out of repeat loop on error (can't continue with this prompt)
