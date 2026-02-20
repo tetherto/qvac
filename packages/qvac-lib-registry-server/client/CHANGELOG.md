@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8]
+
+Release Date: 2026-02-20
+
+### 🔧 Changed
+
+- Fix package name references in README to `@qvac/registry-client`
+
 ## [0.1.7]
 
 Release Date: 2026-02-19
