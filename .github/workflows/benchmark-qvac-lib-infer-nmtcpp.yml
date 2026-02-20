@@ -111,6 +111,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  NODE_VERSION: '22'
 
 jobs:
   setup:
@@ -171,6 +172,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     name: Build QVAC addon
+    outputs:
+      bare_runtime_version: ${{ steps.bare-versions.outputs.bare_runtime_version }}
+      bare_make_version: ${{ steps.bare-versions.outputs.bare_make_version }}
 
     steps:
       - name: Update C++ tools
@@ -191,10 +195,20 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime
+
+      - name: Capture bare-runtime and bare-make versions
+        id: bare-versions
+        run: |
+          BARE_RUNTIME_VER=$(npm list -g bare-runtime --json 2>/dev/null | node -e "process.stdin.setEncoding('utf8');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).dependencies['bare-runtime'].version)}catch{console.log('unknown')}})")
+          BARE_MAKE_VER=$(npm list -g bare-make --json 2>/dev/null | node -e "process.stdin.setEncoding('utf8');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{console.log(JSON.parse(d).dependencies['bare-make'].version)}catch{console.log('unknown')}})")
+          echo "bare_runtime_version=$BARE_RUNTIME_VER" >> $GITHUB_OUTPUT
+          echo "bare_make_version=$BARE_MAKE_VER" >> $GITHUB_OUTPUT
+          echo "Build bare-runtime: $BARE_RUNTIME_VER, bare-make: $BARE_MAKE_VER"
+          echo "Bare binary: $(bare --version 2>/dev/null || echo 'not found')"
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -329,11 +343,21 @@ jobs:
         if: needs.setup.outputs.qvac_needed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install bare-runtime
+      - name: Install bare-runtime (same version as build)
         if: needs.setup.outputs.qvac_needed == 'true'
-        run: npm install -g bare-make bare-runtime
+        run: |
+          BUILD_RT_VER="${{ needs.build.outputs.bare_runtime_version }}"
+          BUILD_MAKE_VER="${{ needs.build.outputs.bare_make_version }}"
+          if [ -n "$BUILD_RT_VER" ] && [ "$BUILD_RT_VER" != "unknown" ]; then
+            echo "Installing pinned bare-runtime@$BUILD_RT_VER and bare-make@$BUILD_MAKE_VER from build job"
+            npm install -g "bare-make@$BUILD_MAKE_VER" "bare-runtime@$BUILD_RT_VER"
+          else
+            echo "WARNING: Build versions not available, installing latest (may cause ABI mismatch)"
+            npm install -g bare-make bare-runtime
+          fi
+          echo "Evaluate bare: $(bare --version 2>/dev/null || echo 'not found')"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -389,12 +413,25 @@ jobs:
           echo "Node: $(node --version)"
           echo "Bare: $(bare --version 2>/dev/null || echo 'not found')"
           echo "bare-make: $(bare-make --version 2>/dev/null || echo 'not found')"
+          echo "Build bare-runtime: ${{ needs.build.outputs.bare_runtime_version }}"
+          echo "Build bare-make: ${{ needs.build.outputs.bare_make_version }}"
           echo ""
           echo "=== Prebuild binary ==="
-          ls -la prebuilds/linux-x64/ 2>/dev/null || echo "ERROR: No linux-x64 prebuilds found after artifact download!"
+          ls -la prebuilds/linux-x64/ || { echo "ERROR: No linux-x64 prebuilds found after artifact download!"; exit 1; }
           echo ""
           echo "=== Addon export check ==="
-          bare -e "const b = require('./binding'); const fns = ['createInstance','activate','append','processBatch','status','pause','stop','cancel','destroyInstance']; fns.forEach(f => console.log(f + ': ' + typeof b[f]))" 2>&1 || echo "ERROR: Addon load check failed"
+          bare -e "
+            const b = require('./binding');
+            const required = ['createInstance','activate','append','processBatch','status','pause','stop','cancel','destroyInstance'];
+            let ok = true;
+            required.forEach(f => {
+              const t = typeof b[f];
+              console.log(f + ': ' + t);
+              if (t !== 'function') { ok = false; }
+            });
+            if (!ok) { console.error('FATAL: Native addon exports are missing or broken (ABI mismatch?)'); process.exit(1); }
+            console.log('All addon exports verified successfully');
+          "
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
