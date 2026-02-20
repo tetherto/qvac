@@ -341,6 +341,14 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
 
+      - name: Remove stale prebuilds before artifact download
+        if: needs.setup.outputs.qvac_needed == 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "Removing stale prebuilds from checkout..."
+          rm -rf prebuilds/
+          echo "Done"
+
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
         uses: actions/download-artifact@v4
@@ -372,6 +380,21 @@ jobs:
             libboost-all-dev \
             ccache \
             libunwind-dev
+
+      - name: Verify addon binary
+        if: needs.setup.outputs.qvac_needed == 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "=== Environment ==="
+          echo "Node: $(node --version)"
+          echo "Bare: $(bare --version 2>/dev/null || echo 'not found')"
+          echo "bare-make: $(bare-make --version 2>/dev/null || echo 'not found')"
+          echo ""
+          echo "=== Prebuild binary ==="
+          ls -la prebuilds/linux-x64/ 2>/dev/null || echo "ERROR: No linux-x64 prebuilds found after artifact download!"
+          echo ""
+          echo "=== Addon export check ==="
+          bare -e "const b = require('./binding'); const fns = ['createInstance','activate','append','processBatch','status','pause','stop','cancel','destroyInstance']; fns.forEach(f => console.log(f + ': ' + typeof b[f]))" 2>&1 || echo "ERROR: Addon load check failed"
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
