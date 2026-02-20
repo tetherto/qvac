@@ -152,8 +152,18 @@ jobs:
             exit 1
           fi
 
-  prebuild:
+  cpp-lint:
     needs: changes
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+
+  prebuild:
+    needs: [sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (
