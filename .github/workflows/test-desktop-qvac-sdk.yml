@@ -166,7 +166,7 @@ jobs:
 
       - name: Upload consumer logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: consumer-log-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/consumer.log
@@ -174,7 +174,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: results-${{ steps.runid.outputs.platform }}-${{ github.run_number }}
           path: ${{ inputs.working-directory }}/reports/results-*.json
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: baseline-${{ steps.runid.outputs.platform }}
           path: ${{ inputs.working-directory }}/reports/results-*.json

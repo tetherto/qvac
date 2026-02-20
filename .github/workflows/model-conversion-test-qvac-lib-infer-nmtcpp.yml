@@ -194,7 +194,7 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: qvac-addon-build
           path: |
@@ -293,7 +293,7 @@ jobs:
           echo "Hello world" | bare nmt-cli --model "models/$TEST_QUANT/$out_prefix/$DATE/$out_prefix.bin" "$SRC" "$DST"
 
       - name: Upload models artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: ${{ inputs.upload_models || github.event.inputs.upload_models }}
         with:
           name: ggml-opus-${{ matrix.quant }}-${{ matrix.model }}
@@ -339,7 +339,7 @@ jobs:
           fi
 
       - name: Upload merged models artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ggml-opus-merged-models
           path: bundle/models

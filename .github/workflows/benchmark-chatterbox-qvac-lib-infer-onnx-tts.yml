@@ -359,7 +359,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: chatterbox-benchmark-results-v${{ steps.version.outputs.version }}
           path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/

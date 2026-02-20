@@ -165,7 +165,7 @@ jobs:
         run: ccache -s
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: qvac-addon-build
           path: |
@@ -349,7 +349,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: ocr-benchmark-results
@@ -358,7 +358,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: ocr-benchmark-logs
@@ -488,7 +488,7 @@ jobs:
           PYTHON_SCRIPT
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ocr-benchmark-consolidated
           path: results

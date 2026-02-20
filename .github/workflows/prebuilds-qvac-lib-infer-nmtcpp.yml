@@ -670,7 +670,7 @@ jobs:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.PKG_DIR }}/prebuilds/*
@@ -689,7 +689,7 @@ jobs:
           cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
           cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
           cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: prebuilds
           path: prebuilds

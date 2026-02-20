@@ -388,7 +388,7 @@ jobs:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/ports/**', 'packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg-override-triplets/**') }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: onnx-ocr-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -416,7 +416,7 @@ jobs:
           cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: prebuilds
           path: prebuilds
@@ -434,7 +434,7 @@ jobs:
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
 
       - name: Upload models artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: models
           path: models
