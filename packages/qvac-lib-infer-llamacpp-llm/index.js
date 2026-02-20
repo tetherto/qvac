@@ -210,10 +210,6 @@ class LlmLlamacpp extends BaseInference {
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
 
-    const transitionCb = this.logger && typeof this.logger.info === 'function'
-      ? this.logger.info.bind(this.logger)
-      : null
-
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
       if (eventType === 'JobEnded' || eventType === 'Error') {
@@ -256,15 +252,10 @@ class LlmLlamacpp extends BaseInference {
       }
     }
 
-    const wrappedOutputCb = this._outputCallback
-
     return new LlamaInterface(
       binding,
       configurationParams,
-      this._addonOutputCallback.bind(this),
-      wrappedOutputCb,
-      transitionCb,
-      finetuningParams
+      this._addonOutputCallback.bind(this)
     )
   }
 

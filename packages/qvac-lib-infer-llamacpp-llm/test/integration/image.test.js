@@ -25,7 +25,20 @@ const MULTIMODAL_MODEL_CONFIG = {
   projModel: {
     modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
     downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
-  }
+  },
+  ctx_size: '2048'
+}
+
+const LARGE_MULTIMODAL_CONFIG = {
+  llmModel: {
+    modelName: 'Qwen3VL-2B-Instruct-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf',
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf'
+  },
+  ctx_size: '7046'
 }
 
 const TEST_CONSTANTS = {
@@ -57,13 +70,13 @@ const DEVICE_CONFIGS = isMobile
  * @param {string} device - Device type ('cpu' or 'gpu')
  * @returns {Object} Model configuration object
  */
-function getConfig (device) {
+function getConfig (device, modelConfig) {
   return {
     gpu_layers: '98',
-    ctx_size: '2048',
     temp: '0.0',
     verbosity: '2',
-    device
+    device,
+    ctx_size: modelConfig.ctx_size
   }
 }
 
@@ -73,25 +86,25 @@ function getConfig (device) {
  * @param {string} device - Device to use ('cpu' or 'gpu')
  * @returns {Promise<{inference: LlmLlamacpp, loader: FilesystemDL}>}
  */
-async function setupMultimodalInference (t, device = 'gpu') {
-  const [modelName, dirPath] = await ensureModel(MULTIMODAL_MODEL_CONFIG.llmModel)
+async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
+  const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
   t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
 
-  const [projModelName] = await ensureModel(MULTIMODAL_MODEL_CONFIG.projModel)
+  const [projModelName] = await ensureModel(modelConfig.projModel)
   t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
 
   const loader = new FilesystemDL({ dirPath })
   const inference = new LlmLlamacpp({
     modelName,
     loader,
+    logger: console,
     diskPath: dirPath,
-    projectionModel: projModelName,
-    logger: console
-  }, getConfig(device))
+    projectionModel: projModelName
+  }, getConfig(device, modelConfig))
 
   t.teardown(async () => {
     await loader.close()
-    await inference.destroy()
+    await inference.unload()
   })
 
   await inference.load()
@@ -114,6 +127,47 @@ async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.
     { role: 'user', type: 'media', content: imageBytes },
     { role: 'user', content: prompt }
   ]
+
+  const startTime = Date.now()
+  const response = await inference.run(messages)
+  const generatedText = []
+  let error = null
+
+  response.onUpdate(data => {
+    generatedText.push(data)
+  }).onError(err => {
+    error = err
+  })
+
+  await response.await()
+
+  if (error) {
+    throw new Error('Inference error: ' + error)
+  }
+
+  return {
+    generatedText: generatedText.join(''),
+    startTime,
+    endTime: Date.now()
+  }
+}
+
+/**
+ * Runs inference with multiple images and a single text prompt (e.g. "what is in these two images?").
+ * @param {LlmLlamacpp} inference - LlmLlamacpp instance
+ * @param {string[]} imageFilePaths - Paths to image files (order preserved)
+ * @param {string} prompt - Text prompt after the images
+ * @returns {Promise<{generatedText: string, startTime: number, endTime: number}>}
+ */
+async function describeMultipleImages (inference, imageFilePaths, prompt) {
+  const messages = [
+    { role: 'system', content: 'You are a helpful, respectful and honest assistant.' }
+  ]
+  for (const imageFilePath of imageFilePaths) {
+    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
+    messages.push({ role: 'user', type: 'media', content: imageBytes })
+  }
+  messages.push({ role: 'user', content: prompt })
 
   const startTime = Date.now()
   const response = await inference.run(messages)
@@ -232,3 +286,46 @@ for (const testCase of imageTestCases) {
     }
   })
 }
+
+// TODO: Fix multi-image for smaller models? Seems like an image per separate message works
+// TODO: on smaller models, rather than all images on same message.
+// TODO: Discussion at: https://github.com/tetherto/qvac/pull/172#discussion_r2807275659
+test('llama addon can handle multiple images in one prompt', { timeout: TEST_CONSTANTS.timeout, skip: true }, async t => {
+  const imageFiles = ['elephant.jpg', 'fruitPlate.png']
+  const imagePaths = imageFiles.map(f => getMediaPath(f))
+  const prompt = 'What is in these two images?'
+
+  for (const deviceConfig of DEVICE_CONFIGS) {
+    const label = `[${deviceConfig.id.toUpperCase()}]`
+
+    const { inference } = await setupMultimodalInference(t, deviceConfig.device, LARGE_MULTIMODAL_CONFIG)
+
+    for (const p of imagePaths) {
+      t.ok(fs.existsSync(p), `${label} image file should exist: ${p}`)
+    }
+
+    const { generatedText, startTime, endTime } = await describeMultipleImages(
+      inference,
+      imagePaths,
+      prompt
+    )
+    const totalTime = endTime - startTime
+
+    t.comment(`${label} Generated text: ${generatedText}`)
+    t.comment(formatPerformanceMetrics(label, totalTime))
+
+    t.ok(generatedText.length > 0, `${label} Should generate some text for multiple images`)
+
+    // Expect output to reference both images: at least one elephant-related and one fruit-related
+    const elephantKeywords = ['elephant', 'elephants']
+    const fruitKeywords = ['fruit', 'fruits', 'plate', 'apple', 'apples']
+    const { hasMatch: hasElephant } = checkKeywordsInText(generatedText, elephantKeywords)
+    const { hasMatch: hasFruit } = checkKeywordsInText(generatedText, fruitKeywords)
+
+    t.ok(
+      hasElephant && hasFruit,
+      `${label} Output should mention both images (elephant and fruit). ` +
+      `Full output: "${generatedText}"`
+    )
+  }
+})
