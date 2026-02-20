@@ -7,7 +7,7 @@
     "prepare:models:all": "node ./prepare-models.js --target all",
     "prepare:prompts": "bare ./prepare-prompts.js",
     "verify:prompts": "bare ./verify-prompts.js",
-    "run:param-sweep": "node ./prepare-models.js --target addon && bare ./llm-parameter-sweep.js",
+    "run:param-sweep": "node ./run-param-sweep.js",
     "run:judge": "node ./prepare-models.js --target addon && bare ./run-judge.js"
   },
   "dependencies": {

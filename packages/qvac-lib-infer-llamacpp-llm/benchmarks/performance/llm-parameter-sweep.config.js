@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
 const {
   DEFAULT_SWEEP_CTX_SIZES,
   DEFAULT_SWEEP_BATCH_SIZES
@@ -40,7 +41,17 @@ const BENCH_DEFAULT_RUNTIME = {
 const MODEL_RUNTIME_OVERRIDES = {
 }
 
+function getDefaultSweepDevices () {
+  const platform = os.platform()
+  // Default to GPU on desktop and most platforms; keep CPU in Android defaults.
+  return platform === 'android' ? ['cpu', 'gpu'] : ['gpu']
+}
+
 function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
+  const manifestQuants = Array.isArray(manifestModel.gguf && manifestModel.gguf.quantizations)
+    ? manifestModel.gguf.quantizations
+    : []
+
   if (resolvedModelEntry && resolvedModelEntry.gguf && resolvedModelEntry.gguf.files) {
     const normalized = {}
     for (const [quantization, localPath] of Object.entries(resolvedModelEntry.gguf.files)) {
@@ -48,7 +59,12 @@ function buildQuantizationFiles (manifestModel, resolvedModelEntry) {
     }
     return normalized
   }
-  return manifestModel.gguf.files || {}
+
+  const fallback = {}
+  for (const quantization of manifestQuants) {
+    fallback[quantization] = null
+  }
+  return fallback
 }
 
 function loadModelsFromManifest () {
@@ -70,7 +86,7 @@ function loadModelsFromManifest () {
       id: model.id,
       source: `https://huggingface.co/${model.gguf.repo}`,
       modelDir: DEFAULT_MODELS_DIR,
-      defaultQuantization: model.gguf.defaultQuantization,
+      quantizations: Array.isArray(model.gguf.quantizations) ? model.gguf.quantizations : [],
       quantizationFiles,
       defaults
     }
@@ -82,7 +98,7 @@ const MODELS = loadModelsFromManifest()
 // Parameter sweep: full factorial (cartesian product)
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
-  device: ['cpu', 'gpu'],
+  device: getDefaultSweepDevices(),
   'ctx-size': DEFAULT_SWEEP_CTX_SIZES.map(String),
   'no-mmap': [false, true],
   threads: ['2', '4', '8'],

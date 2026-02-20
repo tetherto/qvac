@@ -281,7 +281,11 @@ async function main () {
   const judgeModelId = String(args['judge-model'] || MODELS[0].id)
   const judgeModelDef = MODELS.find((m) => m.id === judgeModelId)
   if (!judgeModelDef) throw new Error(`Unknown --judge-model: ${judgeModelId}`)
-  const judgeQuant = String(args['judge-quantization'] || judgeModelDef.defaultQuantization || 'Q4_0')
+  const judgeQuant = String(
+    args['judge-quantization'] ||
+    (Array.isArray(judgeModelDef.quantizations) ? judgeModelDef.quantizations[0] : null) ||
+    'Q4_0'
+  )
   const judgeModelName = judgeModelDef.quantizationFiles[judgeQuant]
   if (!judgeModelName) throw new Error(`Judge quantization "${judgeQuant}" not found for model "${judgeModelId}"`)
 
@@ -317,7 +321,10 @@ async function main () {
       }
       const promptId = p.promptId ? String(p.promptId) : ''
       const candidate = typeof p.outputText === 'string' ? p.outputText : null
-      const baseline = baselineByModelPrompt.get(`${modelId}::${promptId}`) || null
+      const baselineKey = `${modelId}::${promptId}`
+      const baseline = baselineByModelPrompt.has(baselineKey)
+        ? baselineByModelPrompt.get(baselineKey)
+        : null
       if (baseline == null || candidate == null) continue
       const key = pairKey(baseline, candidate)
       if (!scoreTasks.has(key)) {
@@ -362,7 +369,10 @@ async function main () {
       for (const p of prompts) {
         const promptId = p && p.promptId ? String(p.promptId) : ''
         const candidate = p && typeof p.outputText === 'string' ? p.outputText : null
-        const baseline = baselineByModelPrompt.get(`${modelId}::${promptId}`) || null
+        const baselineKey = `${modelId}::${promptId}`
+        const baseline = baselineByModelPrompt.has(baselineKey)
+          ? baselineByModelPrompt.get(baselineKey)
+          : null
         let qualityJudge = p && p.qualityJudge != null && !forceRescore ? p.qualityJudge : null
 
         if (record.isBaseline || (p && p.qualityMatch === 1.0)) {

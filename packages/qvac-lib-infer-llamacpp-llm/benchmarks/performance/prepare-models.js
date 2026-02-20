@@ -230,25 +230,22 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
     const gguf = model.gguf || {}
     const repo = gguf.repo
     const revision = gguf.revision || 'main'
-    const files = gguf.files || {}
-    const defaultQuantization = gguf.defaultQuantization || null
+    const quantizations = gguf.quantizations || []
 
     if (!repo) throw new Error(`Manifest model ${modelId} missing gguf.repo`)
-    if (!files || typeof files !== 'object' || Array.isArray(files)) {
-      throw new Error(`Manifest model ${modelId} missing gguf.files mapping`)
+    if (!Array.isArray(quantizations) || quantizations.length === 0) {
+      throw new Error(`Manifest model ${modelId} missing gguf.quantizations array`)
     }
 
     const quantFiles = {}
-    for (const [quantization, filenameFromManifest] of Object.entries(files)) {
-      let selectedFilename = String(filenameFromManifest || '')
-      let destination = path.join(modelsDir, path.basename(selectedFilename))
-      let last404Url = null
-
-      if (selectedFilename && fs.existsSync(destination)) {
-        console.log(`[addon] ${modelId}:${quantization} already present -> ${destination}`)
-        quantFiles[quantization] = toPortableRelativePath(baseDir, destination)
-        continue
+    for (const quantization of quantizations) {
+      if (!quantization || typeof quantization !== 'string') {
+        throw new Error(`Manifest model ${modelId} has invalid quantization: ${JSON.stringify(quantization)}`)
       }
+
+      let selectedFilename = null
+      let destination = null
+      let last404Url = null
 
       for (const candidateFilename of filenameCandidates(repo, quantization)) {
         const candidateDestination = path.join(modelsDir, candidateFilename)
@@ -275,7 +272,7 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
         }
       }
 
-      if (!selectedFilename || !destination || !fs.existsSync(destination)) {
+      if (!selectedFilename || !destination) {
         selectedFilename = await resolveGgufFilenameForQuantization(repo, revision, quantization, headers)
         destination = path.join(modelsDir, path.basename(selectedFilename))
         if (fs.existsSync(destination)) {
@@ -298,7 +295,6 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
       gguf: {
         repo,
         revision,
-        defaultQuantization,
         files: quantFiles
       }
     }

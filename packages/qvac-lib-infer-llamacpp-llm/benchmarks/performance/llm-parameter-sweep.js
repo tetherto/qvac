@@ -264,8 +264,11 @@ function cartesianProduct (arrays) {
 }
 
 function buildCases (modelDef, sweep) {
-  const baseQuant = modelDef.defaultQuantization
+  const baseQuant = Array.isArray(modelDef.quantizations) ? modelDef.quantizations[0] : null
   const defaults = modelDef.defaults || {}
+  if (baseQuant == null) {
+    throw new Error(`No baseline quantization configured for model "${modelDef.id}"`)
+  }
   const supportedQuants = (sweep.quantization || [])
     .filter((quant) => !!resolveModelName(modelDef, quant))
 
@@ -1247,8 +1250,8 @@ async function main () {
             promptId: p.promptId,
             metrics: p.metrics,
             qualityMatch: p.qualityMatch,
-            outputText: p.outputText || null,
-            baselineReference: p.baselineReference || null,
+            outputText: typeof p.outputText === 'string' ? p.outputText : null,
+            baselineReference: typeof p.baselineReference === 'string' ? p.baselineReference : null,
             error: p.error || null,
             vramError: Boolean(p.vramError)
           })),

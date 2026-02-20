@@ -23,6 +23,8 @@ This command runs:
 1. `prepare-models.js --target addon`
 2. Bare benchmark runner (`llm-parameter-sweep.js`)
 
+When `--models` is provided, model preparation is scoped to those model IDs.
+
 Prompt generation is standalone. Prompts are static fixtures in `benchmarks/performance/test-prompts.json`.
 Prompt content is static at execution time; the runner does not generate or rewrite prompts during the sweep.
 
@@ -135,6 +137,9 @@ npm run run:param-sweep -- --addon-source npm
 - `--prompts-file ./my-prompts.json` (must be JSON array of message objects)
 - `--repeats 5`
 - `--debug`
+- Default `device` sweep is platform-aware:
+  - Desktop/non-Android: `gpu`
+  - Android: `cpu,gpu`
 - Any sweep dimension can be overridden with CSV values, for example:
   - `--quantization=Q8_0,F16`
   - `--device=gpu,cpu`
