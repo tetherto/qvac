@@ -4,8 +4,7 @@
   "description": "Benchmark server for TTS ONNX addon",
   "main": "index.js",
   "scripts": {
-    "setup": "bare tts-setup.js",
-    "setup:tts": "bare tts-setup.js",
+    "setup": "bare chatterbox-setup.js",
     "setup:chatterbox": "bare chatterbox-setup.js",
     "start": "bare index.js",
     "lint": "standard",
@@ -19,7 +18,6 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "dependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/tts-onnx": "../../",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.1.5",

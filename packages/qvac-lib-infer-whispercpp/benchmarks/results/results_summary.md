@@ -6,15 +6,6 @@ Original Model: [Whisper-Tiny](https://huggingface.co/openai/whisper-tiny)
 
 | Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
 |---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
-| clean | q0f32 | 1.3.3 | whisper-tiny | - | 99.99 | 97.00 | Librispeech | Performed on GPU |
-| clean | q0f32 | 1.3.3 | whisper-tiny | ✓ | 99.99 | 96.99 | Librispeech | Performed on GPU |
-| other | q0f32 | 1.3.3 | whisper-tiny | - | 37.81 | 25.42 | Librispeech | Performed on GPU |
-| other | q0f32 | 1.3.3 | whisper-tiny | ✓ | 40.93 | 28.32 | Librispeech | Performed on GPU |
-
-## Whisper.cpp Results
-
-| Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
-|---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
 | clean | whispercpp | 3.1.1 | @tetherto/transcription-whispercpp | - | 71.72 | 69.27 | Librispeech | Performed on GPU |
 | clean | whispercpp | 3.1.1 | @tetherto/transcription-whispercpp | ✓ | 62.30 | 57.87 | Librispeech | Performed on GPU |
 

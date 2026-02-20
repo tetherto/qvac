@@ -73,10 +73,55 @@ async function fetchGHRepoLicense (repo) {
   const url = `https://api.github.com/repos/${repo}/license`
   try {
     const json = await fetchJSON(url, { headers: ghHeaders() })
-    return json.license?.spdx_id || json.license?.key || null
+    const spdx = json.license?.spdx_id || json.license?.key || null
+    if (spdx && spdx !== 'NOASSERTION') return spdx
+
+    // GitHub couldn't detect — try reading LICENSE files directly
+    const licenseFiles = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'LICENCE.md']
+    for (const f of licenseFiles) {
+      try {
+        const headers = ghHeaders()
+        headers.Accept = 'application/vnd.github.v3.raw'
+        const content = await fetchText(
+          `https://api.github.com/repos/${repo}/contents/${f}`,
+          { headers }
+        )
+        const detected = detectLicenseFromContent(content)
+        if (detected) return detected
+      } catch { /* file doesn't exist, try next */ }
+    }
+
+    return spdx // return NOASSERTION if nothing matched
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Detect license SPDX from file content (simple keyword matching)
+// ---------------------------------------------------------------------------
+function detectLicenseFromContent (text) {
+  if (!text) return null
+  const lower = text.toLowerCase()
+
+  // Check for dual/multi-license files — look for the primary code license
+  // Match patterns like "the C++ code ... Apache 2.0" or "source code ... Apache"
+  const codeApache = /(?:c\+\+|source|code)[^.]*apache(?:\s+license)?(?:,?\s*version)?\s*2/i
+  if (codeApache.test(text)) return 'Apache-2.0'
+
+  // Single-license detection (order: most specific first)
+  if (lower.includes('apache license') && lower.includes('version 2.0')) return 'Apache-2.0'
+  if (lower.includes('apache-2.0')) return 'Apache-2.0'
+  if (lower.includes('mit license') || /permission is hereby granted, free of charge/i.test(text)) return 'MIT'
+  if (lower.includes('mozilla public license version 2.0') || lower.includes('mpl-2.0')) return 'MPL-2.0'
+  if (lower.includes('bsd 3-clause') || lower.includes('bsd-3-clause')) return 'BSD-3-Clause'
+  if (lower.includes('bsd 2-clause') || lower.includes('bsd-2-clause')) return 'BSD-2-Clause'
+  if (lower.includes('gnu lesser general public license') && lower.includes('version 2.1')) return 'LGPL-2.1'
+  if (lower.includes('gnu general public license') && lower.includes('version 3')) return 'GPL-3.0'
+  if (lower.includes('gnu general public license') && lower.includes('version 2')) return 'GPL-2.0'
+  if (lower.includes('isc license')) return 'ISC'
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +215,50 @@ function sleep (ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// ---------------------------------------------------------------------------
+// Fetch license from PyPI JSON API
+// Tries: info.license field, then classifiers
+// ---------------------------------------------------------------------------
+async function fetchPyPILicense (packageName) {
+  try {
+    const data = await fetchJSON(`https://pypi.org/pypi/${packageName}/json`)
+    const info = data.info || {}
+
+    // 1. Check info.license field directly
+    if (info.license && info.license !== 'UNKNOWN' && info.license.length < 100) {
+      return { license: info.license, url: info.home_page || info.project_url || '' }
+    }
+
+    // 2. Check classifiers for license
+    const classifiers = info.classifiers || []
+    for (const c of classifiers) {
+      // e.g. "License :: OSI Approved :: Apache Software License"
+      const match = c.match(/^License :: (?:OSI Approved :: )?(.+)$/)
+      if (match) {
+        return { license: match[1], url: info.home_page || info.project_url || '' }
+      }
+    }
+
+    // 3. Check project_urls for a GitHub repo and try GitHub API
+    const urls = info.project_urls || {}
+    const url = urls.Homepage || urls.Repository || urls.Source || urls.homepage || urls.repository || info.home_page || ''
+
+    if (url && url.includes('github.com')) {
+      const ghMatch = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\/|$)/)
+      if (ghMatch) {
+        const ghLicense = await fetchGHRepoLicense(ghMatch[1])
+        if (ghLicense && ghLicense !== 'NOASSERTION') {
+          return { license: ghLicense, url }
+        }
+      }
+    }
+
+    return { license: null, url }
+  } catch {
+    return { license: null, url: '' }
+  }
+}
+
 module.exports = {
   collator,
   sortByName,
@@ -179,6 +268,7 @@ module.exports = {
   ghHeaders,
   fetchGHFileContent,
   fetchGHRepoLicense,
+  fetchPyPILicense,
   isShardRecord,
   shardBaseKey,
   isTensorsTxt,

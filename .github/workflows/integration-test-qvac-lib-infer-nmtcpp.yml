@@ -176,7 +176,7 @@ jobs:
         run: |
           echo "Downloading Bergamot en-it model from S3..."
           mkdir -p model/bergamot/enit
-          aws s3 cp "s3://tether-ai-dev/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
           echo "Bergamot model files:"
           ls -la model/bergamot/enit/
 
@@ -186,7 +186,7 @@ jobs:
         run: |
           echo "Downloading IndicTrans en-indic model from S3..."
           mkdir -p model/indictrans
-          aws s3 cp "s3://tether-ai-dev/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 
