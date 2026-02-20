@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
