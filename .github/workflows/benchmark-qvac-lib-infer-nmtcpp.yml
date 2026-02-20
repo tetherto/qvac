@@ -380,6 +380,21 @@ jobs:
           name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
 
+      - name: Verify addon binary
+        if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "=== Environment ==="
+          echo "Node: $(node --version)"
+          echo "Bare: $(bare --version 2>/dev/null || echo 'not found')"
+          echo "bare-make: $(bare-make --version 2>/dev/null || echo 'not found')"
+          echo ""
+          echo "=== Prebuild binary ==="
+          ls -la prebuilds/linux-x64/ 2>/dev/null || echo "No linux-x64 prebuilds found"
+          echo ""
+          echo "=== Addon export check ==="
+          bare -e "const b = require('./binding'); const fns = ['createInstance','activate','append','processBatch']; fns.forEach(f => console.log(f + ': ' + typeof b[f]))" 2>&1 || echo "Addon load check failed"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
