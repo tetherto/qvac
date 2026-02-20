@@ -17,8 +17,8 @@ A Python client for benchmarking Whisper transcription addons. It sends requests
 
 ```bash
 # Clone the repository
-git clone https://github.com/tetherto/qvac-lib-inference-addon-mlc-whisper.git
-cd qvac-lib-inference-addon-mlc-whisper/benchmarks/client
+git clone https://github.com/tetherto/qvac-lib-infer-whispercpp.git
+cd qvac-lib-infer-whispercpp/benchmarks/client
 
 # Install poetry if you haven't already
 curl -sSL https://install.python-poetry.org | python3 -

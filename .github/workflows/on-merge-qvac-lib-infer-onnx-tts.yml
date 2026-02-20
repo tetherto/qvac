@@ -16,14 +16,11 @@ on:
       tag:
         description: "Tag to publish with"
         required: false
-        default: ""
+        default: "dev"
         type: choice
         options:
-          - ""
-          - dev
-          - feature
-          - temp
           - latest
+          - dev
 
 permissions:
   contents: write
@@ -93,6 +90,7 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   publish-feature-gpr:
     needs: publish-logic
@@ -108,6 +106,7 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -123,6 +122,7 @@ jobs:
       publish_target: "gpr"
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
+      workdir: packages/qvac-lib-infer-onnx-tts
 
   publish-release-npm:
     needs: publish-logic

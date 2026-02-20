@@ -23,21 +23,87 @@ function detectPlatform () {
   return `${platform}-${arch}`
 }
 
-async function downloadFile (url, destPath) {
-  const { spawn } = require('bare-subprocess')
+async function downloadWithHttp (url, destPath, maxRedirects = 10) {
+  const https = require('bare-https')
+  const { URL } = require('bare-url')
+
+  const parsedUrl = new URL(url)
+
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    const curl = spawn('curl', [
-      '-L', '-o', destPath, url,
-      '--fail', '--silent', '--show-error',
-      '--connect-timeout', '30',
-      '--max-time', '600'
-    ])
-    curl.on('exit', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`curl exited with code ${code}`))
+    const req = https.request(options, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume()
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        downloadWithHttp(redirectUrl, destPath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+
+      const dir = path.dirname(destPath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const file = fs.createWriteStream(destPath)
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+
+      file.on('error', (err) => {
+        res.destroy()
+        reject(err)
+      })
+
+      res.on('error', (err) => {
+        file.destroy()
+        reject(err)
+      })
+
+      res.pipe(file)
+
+      file.on('close', () => {
+        if (contentLength > 0) {
+          console.log(`  Downloaded ${(contentLength / 1024 / 1024).toFixed(1)}MB`)
+        }
+        resolve()
+      })
     })
-    curl.on('error', reject)
+
+    req.on('error', reject)
+    req.end()
   })
+}
+
+async function downloadFile (url, destPath) {
+  return downloadWithHttp(url, destPath)
 }
 
 async function ensureWhisperModel (modelPath) {

@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "e66d7bef4ae587ff4585603140fdef8dc83e5462",
+    "baseline": "16b0f8b5ad704ae9e19564802c0030a68bd3c123",
     "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
   },
   "overlay-ports": [
@@ -16,7 +16,7 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "8c901fe2b0e69a542d02810d4089505fd0c480d8",
+      "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "opencv4",

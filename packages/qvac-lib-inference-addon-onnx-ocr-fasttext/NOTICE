@@ -12,7 +12,33 @@ Third-Party Model Licenses
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  detector_craft
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_arabic
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_bengali
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_cyrillic
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_devanagari
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_japanese
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_kannada
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_korean
+    https://www.jaided.ai/easyocr/modelhub/
   recognizer_latin
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_tamil
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_telugu
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_thai
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_zh_sim
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_zh_tra
     https://www.jaided.ai/easyocr/modelhub/
 
 =========================================================================

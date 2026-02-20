@@ -2,6 +2,7 @@ import { QVACRegistryClient } from "@qvac/registry-client";
 import { groupShardedModels } from "./shards";
 import { processRegistryModel } from "./processing";
 import type { CollectOptions, ProcessedModel } from "./types";
+import { DEFAULT_REGISTRY_CORE_KEY } from "@/constants";
 
 // Re-export for backward compat
 export {
@@ -9,9 +10,6 @@ export {
   extractModelName,
   toHexString,
 } from "./processing";
-
-const DEFAULT_REGISTRY_CORE_KEY =
-  "u6pq8h3kof7ck9g6kjusykfxaxqaqtnoydq15hhyuzrf55nt384y";
 
 export async function collectModels(
   options: CollectOptions = {},
