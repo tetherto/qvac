@@ -340,6 +340,14 @@ async function runModelCases ({
 
       debugLogger.log(`Running: ${testCase.caseId}`)
       const inputsRaw = inputsByBatchSize[testCase.runtimeConfig.batchSize]
+      if (!Array.isArray(inputsRaw) || inputsRaw.length === 0) {
+        const configuredBatchSizes = Object.keys(inputsByBatchSize || {}).sort()
+        throw new Error(
+          `Invalid inputs.json for case ${testCase.caseId}: missing or empty inputs for batch size ` +
+          `${testCase.runtimeConfig.batchSize}. Configured batch sizes: ` +
+          `${configuredBatchSizes.length ? configuredBatchSizes.join(', ') : '(none)'}`
+        )
+      }
       const inputs = testCase.inputMode === 'single' ? inputsRaw[0] : inputsRaw
       executionResult = await runCaseWithRepeats({
         addonCtor,

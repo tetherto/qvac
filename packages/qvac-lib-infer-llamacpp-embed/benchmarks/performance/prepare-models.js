@@ -230,6 +230,9 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
     const repo = gguf.repo
     const revision = gguf.revision || 'main'
     const quantizations = gguf.quantizations || []
+    const repoSegment = encodeURIComponent(repo)
+    const revisionSegment = encodeURIComponent(revision)
+    const modelCacheDir = path.join(modelsDir, repoSegment, revisionSegment)
 
     if (!repo) throw new Error(`Manifest model ${modelId} missing gguf.repo`)
     if (!Array.isArray(quantizations) || quantizations.length === 0) {
@@ -247,7 +250,7 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
       let last404Url = null
 
       for (const candidateFilename of filenameCandidates(repo, quantization)) {
-        const candidateDestination = path.join(modelsDir, candidateFilename)
+        const candidateDestination = path.join(modelCacheDir, candidateFilename)
         if (fs.existsSync(candidateDestination)) {
           selectedFilename = candidateFilename
           destination = candidateDestination
@@ -273,7 +276,7 @@ async function prepareAddonModels (selectedModels, modelsDir, headers, baseDir) 
 
       if (!selectedFilename || !destination) {
         selectedFilename = await resolveGgufFilenameForQuantization(repo, revision, quantization, headers)
-        destination = path.join(modelsDir, path.basename(selectedFilename))
+        destination = path.join(modelCacheDir, selectedFilename)
         if (fs.existsSync(destination)) {
           console.log(`[addon] resolved existing file ${selectedFilename} for ${modelId}:${quantization}`)
         } else {

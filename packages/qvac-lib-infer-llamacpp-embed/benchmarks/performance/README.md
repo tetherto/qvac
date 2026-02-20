@@ -56,7 +56,7 @@ Default output directory and files:
 - `embed-parameter-sweep-<timestamp>.md`
 - `embed-parameter-sweep-<timestamp>.jsonl`
 
-Each case metric in outputs includes both mean and standard deviation (for load/run/unload/TPS) across repeats.
+Each case metric in outputs currently reports mean values across repeats (and single load/unload timings per case run).
 
 ## Runtime Defaults
 
