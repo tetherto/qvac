@@ -207,6 +207,9 @@
     "tar-stream": "^3.1.7"
   },
   "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    },
     "@electron-forge/plugin-base": {
       "optional": true
     },

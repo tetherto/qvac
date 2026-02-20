@@ -25,11 +25,15 @@
  *   1. Excludes unused @qvac addon packages based on qvac/addons.manifest.json
  *   2. Prunes non-target platform prebuilds after packaging
  *   3. Ensures asar: false (Forge default; required for Bare worker)
+ *
+ * Notes:
+ *   - macOS universal builds (arch: "universal") are not supported
  */
 
 "use strict";
 
 const { PluginBase } = require("@electron-forge/plugin-base");
+const { createRequire } = require("module");
 const path = require("path");
 const fs = require("fs");
 
@@ -38,6 +42,8 @@ const fs = require("fs");
 // ============================================
 
 const PREFIX = "[qvac:electron-forge]";
+
+const EXPECTED_FS_ERROR_CODES = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR"]);
 
 const LOG_LEVELS = {
   off: 0,
@@ -79,8 +85,7 @@ const logger = {
     if (currentLevel >= LOG_LEVELS.debug) console.log(PREFIX, msg);
   },
   fsError(context, err) {
-    const EXPECTED_CODES = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR"]);
-    if (err && EXPECTED_CODES.has(err.code)) return;
+    if (err && EXPECTED_FS_ERROR_CODES.has(err.code)) return;
     this.warn(`Unexpected error in ${context}: ${err?.message || err}`);
   },
 };
@@ -155,6 +160,28 @@ const MOBILE_PREBUILD_PATTERNS = [
   /[\\/]prebuilds[\\/]ios-/,
 ];
 
+function toArray(value) {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createAddonIgnorePatterns(exclusions) {
+  const patterns = [];
+  for (const addon of exclusions) {
+    const parts = addon.split("/").map(escapeRegExp);
+    patterns.push(
+      new RegExp(
+        `[\\\\/]node_modules[\\\\/]${parts.join("[\\\\/]")}([\\\\/]|$)`,
+      ),
+    );
+  }
+  return patterns;
+}
+
 function isDir(dirPath) {
   try {
     return fs.statSync(dirPath).isDirectory();
@@ -181,7 +208,25 @@ function findQvacScopeDir(startDir) {
   }
 
   logger.debug(`Resolved SDK package: ${sdkPkg.name}`);
-  return path.dirname(path.dirname(sdkPkg.path));
+
+  // Use Node's resolution paths to handle monorepos, workspaces, and hoisted layouts.
+  const baseDir = path.resolve(startDir);
+  const req = createRequire(path.join(baseDir, "package.json"));
+  const nodeModulesDirs = req.resolve.paths(sdkPkg.name) || [];
+
+  for (const nodeModulesDir of nodeModulesDirs) {
+    const scopeDir = path.join(nodeModulesDir, "@qvac");
+    if (isDir(scopeDir)) return scopeDir;
+  }
+
+  // Fallback: derive from SDK path for flat node_modules layouts (npm/yarn/bun).
+  const derived = path.dirname(path.dirname(sdkPkg.path));
+  if (path.basename(derived) === "@qvac" && isDir(derived)) return derived;
+
+  throw new Error(
+    `Could not find @qvac packages. ` +
+      `Ensure dependencies are installed under node_modules (PnP is not supported).`,
+  );
 }
 
 /**
@@ -432,7 +477,10 @@ class QvacForgePlugin extends PluginBase {
       forgeConfig.packagerConfig = {};
     }
 
-    // 1. Set asar: false (Bare worker can't load from asar)
+    // 1. Block macOS universal builds early
+    this.checkForUniversalArch(forgeConfig);
+
+    // 2. Set asar: false (Bare worker can't load from asar)
     if (forgeConfig.packagerConfig.asar === true) {
       logger.warn(
         "asar is enabled — Bare worker may fail to load. Overriding to false.",
@@ -440,18 +488,15 @@ class QvacForgePlugin extends PluginBase {
     }
     forgeConfig.packagerConfig.asar = false;
 
-    // 2. Generate exclusion list for unused addons
+    // 3. Generate exclusion list for unused addons
     const exclusions = generateExclusionList(this.projectDir, this.strict);
 
-    // 3. Create ignore function
+    // 4. Merge ignore patterns to exclude unused addons + mobile prebuilds
     const existingIgnore = forgeConfig.packagerConfig.ignore;
-    forgeConfig.packagerConfig.ignore = this.createIgnoreFunction(
-      exclusions,
-      existingIgnore,
-    );
+    forgeConfig.packagerConfig.ignore = this.createIgnore(exclusions, existingIgnore);
 
-    // 4. Add afterPrune hook for prebuild pruning
-    const existingAfterPrune = forgeConfig.packagerConfig.afterPrune || [];
+    // 5. Add afterPrune hook for prebuild pruning
+    const existingAfterPrune = toArray(forgeConfig.packagerConfig.afterPrune);
     forgeConfig.packagerConfig.afterPrune = [
       ...existingAfterPrune,
       this.createPruneHook(),
@@ -461,46 +506,74 @@ class QvacForgePlugin extends PluginBase {
     return forgeConfig;
   }
 
-  createIgnoreFunction(exclusions, existingIgnore) {
-    return (filePath) => {
-      // Check existing ignore first
-      if (existingIgnore) {
-        if (typeof existingIgnore === "function" && existingIgnore(filePath)) {
-          return true;
-        }
-        if (existingIgnore instanceof RegExp && existingIgnore.test(filePath)) {
-          return true;
-        }
-        if (Array.isArray(existingIgnore)) {
-          for (const pattern of existingIgnore) {
-            if (pattern instanceof RegExp && pattern.test(filePath))
-              return true;
-            if (typeof pattern === "string" && filePath.includes(pattern))
-              return true;
-          }
-        }
+  /**
+   * Blocks macOS universal builds (darwin/universal)
+   * Forge expands universal targets before Packager hooks run, so we must detect
+   * it before pruning runs.
+   */
+  checkForUniversalArch(forgeConfig) {
+    if (forgeConfig?.packagerConfig?.arch === "universal") {
+      throw new Error(
+        `macOS universal packaging is not supported by @qvac/sdk/electron-forge. ` +
+          `Native addon prebuilds are architecture-specific and cannot be merged. ` +
+          `Build separate darwin-arm64 and darwin-x64 packages instead.`,
+      );
+    }
+
+    const args = process.argv.slice(2);
+    let arch = null;
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i];
+
+      if (arg === "--arch" || arg === "-a") {
+        arch = args[i + 1] || null;
+        continue;
       }
 
-      // Check @qvac addon exclusions
-      for (const addon of exclusions) {
-        // Match paths like /node_modules/@qvac/embed-llamacpp/
-        if (
-          filePath.includes(`/node_modules/${addon}/`) ||
-          filePath.includes(`\\node_modules\\${addon}\\`)
-        ) {
-          return true;
-        }
+      if (typeof arg === "string" && arg.startsWith("--arch=")) {
+        arch = arg.slice("--arch=".length) || null;
+        continue;
       }
+    }
 
-      // Always exclude mobile prebuilds in desktop builds
-      for (const pattern of MOBILE_PREBUILD_PATTERNS) {
-        if (pattern.test(filePath)) {
-          return true;
+    if (arch === "universal") {
+      throw new Error(
+        `macOS universal packaging is not supported by @qvac/sdk/electron-forge. ` +
+          `Native addon prebuilds are architecture-specific and cannot be merged. ` +
+          `Build separate darwin-arm64 and darwin-x64 packages instead.`,
+      );
+    }
+  }
+
+  createIgnore(exclusions, existingIgnore) {
+    const addonIgnorePatterns = createAddonIgnorePatterns(exclusions);
+
+    if (typeof existingIgnore === "function") {
+      return (filePath) => {
+        if (existingIgnore(filePath)) return true;
+
+        // Check @qvac addon exclusions
+        for (const pattern of addonIgnorePatterns) {
+          if (pattern.test(filePath)) return true;
         }
-      }
 
-      return false;
-    };
+        // Always exclude mobile prebuilds in desktop builds
+        for (const pattern of MOBILE_PREBUILD_PATTERNS) {
+          if (pattern.test(filePath)) return true;
+        }
+
+        return false;
+      };
+    }
+
+    const patterns = [
+      ...toArray(existingIgnore),
+      /^\/out\//,
+      ...MOBILE_PREBUILD_PATTERNS,
+      ...addonIgnorePatterns,
+    ];
+
+    return patterns;
   }
 
   createPruneHook() {
