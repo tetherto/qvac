@@ -6,8 +6,11 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { LlamaInterface } = require('./addon')
 
-const END_OF_INPUT = 'end of job'
 const noop = () => { }
+
+/** Max ms to wait for the previous job to finish before throwing. */
+const PREVIOUS_JOB_WAIT_MS = 30
+const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
  * GGML client implementation for Llama LLM model
@@ -36,7 +39,7 @@ class LlmLlamacpp extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._runQueueWaiter = Promise.resolve()
+    this._lastJobResult = Promise.resolve()
   }
 
   /**
@@ -109,21 +112,54 @@ class LlmLlamacpp extends BaseInference {
     return new LlamaInterface(
       binding,
       configurationParams,
-      this._outputCallback.bind(this),
-      this.logger.info.bind(this.logger)
+      this._addonOutputCallback.bind(this)
     )
   }
 
-  async _withExclusiveRun (fn) {
-    const prev = this._runQueueWaiter || Promise.resolve()
-    let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
-    await prev
-    try {
-      return await fn()
-    } finally {
-      release()
+  _addonOutputCallback (addon, event, data, error) {
+    // Map C++ mangled type names to expected event names
+    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
+    if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      // Stats object received - this signals job completion
+      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
+
+    let mappedEvent = event
+    if (event.includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (typeof data === 'string') {
+      mappedEvent = 'Output'
+    }
+
+    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
+  }
+
+  /**
+   * Cancel the current task
+   */
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  /**
+   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+   * @returns {Promise<void>}
+   */
+  async unload () {
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
+      if (currentJobResponse) {
+        // Make sure not to leak jobs to avoid "job already exists" errors after
+        // loading the model again.
+        currentJobResponse.failed(new Error('Model was unloaded'))
+        this._deleteJobMapping('OnlyOneJob')
+      }
+      await super.unload()
+    })
   }
 
   /**
@@ -134,34 +170,79 @@ class LlmLlamacpp extends BaseInference {
   async _runInternal (prompt) {
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      // Process prompt to handle media content with user role
-      const processedPrompt = prompt.map(message => {
-        // Check if message has user role and media type with Uint8Array content
+      // Separate media messages from text messages
+      const textMessages = []
+      const mediaItems = []
+
+      for (const message of prompt) {
         if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-          // Send media data as separate append call
-          this.addon.append({ type: 'media', input: message.content })
-            .catch(err => this.logger.error('Failed to send media data:', err))
-
-          // Return modified message with empty string for media content
-          return {
-            ...message,
-            content: ''
-          }
+            message.type === 'media' &&
+            message.content instanceof Uint8Array) {
+          mediaItems.push(message.content)
+          // Keep the message as a placeholder marker (with empty content) for tokenization
+          textMessages.push({ ...message, content: '' })
+        } else {
+          textMessages.push(message)
         }
+      }
 
-        return message
+      const promptMessages = []
+
+      // Send media first (in order) if present
+      for (const mediaData of mediaItems) {
+        promptMessages.push({ type: 'media', content: mediaData })
+      }
+
+      // Send text messages
+      promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
+
+      // Make sure all events from previous one are done and will not
+      // affect our new job. addon-cpp C++ guarantees every accepted job will
+      // end with output or exception after finishing processing.
+      // - If timeout is hit, exception should surface to avoid infinite await.
+      // - It is expected that we briefly wait for the previous job to settle
+      //   before throwing a busy error.
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
+        }, PREVIOUS_JOB_WAIT_MS)
+        this._lastJobResult
+          // If last job finished.
+          .then(() => { clearTimeout(timer); resolve() })
+          // If last job threw, it still finished and no more events will be generated.
+          .catch(() => { clearTimeout(timer); resolve() })
       })
 
-      const serializedPrompt = JSON.stringify(processedPrompt)
+      // At this point, previous job is not using 'OnlyOneJob'
+      // slot anymore, so we can safely overwrite it with new response.
+      // We need to create response before running the job,
+      // any events right after successful runJob are not lost.
+      const response = this._createResponse('OnlyOneJob')
 
-      const jobId = await this.addon.append({ type: 'text', input: serializedPrompt })
+      // addon-cpp C++ guarantees no events will be generated
+      // until job is fully accepted. This means even if trying
+      // to queue a job fails right now as not accepted,
+      // it will not generate events.
+      //
+      // If any unexpected exception is thrown (e.g. in the C++ code)
+      // it will unwind here and the job will not be accepted.
+      let accepted
+      try {
+        accepted = await this.addon.runJob(promptMessages)
+      } catch (error) {
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(error)
+        throw error
+      }
+      if (!accepted) {
+        this._deleteJobMapping('OnlyOneJob')
+        const msg = RUN_BUSY_ERROR_MESSAGE
+        response.failed(new Error(msg))
+        throw new Error(msg)
+      }
 
-      this.logger.info('Created inference job with ID:', jobId)
-
-      const response = this._createResponse(jobId)
-      await this.addon.append({ type: END_OF_INPUT })
+      // Store the finish promise so the next run can wait on it.
+      this._lastJobResult = response.await()
 
       this.logger.info('Inference job started successfully')
 

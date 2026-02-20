@@ -1,5 +1,7 @@
 #include "BertModel.hpp"
 
+#include <algorithm>
+#include <any>
 #include <cctype>
 #include <cstring>
 #include <stdexcept>
@@ -246,105 +248,64 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
 namespace {
-common_params
-setupParams(const std::string& modelGgufPath, std::string_view config) {
+common_params setupParams(
+    const std::string& modelGgufPath,
+    std::unordered_map<std::string, std::string> configFilemap) {
   // Default params
   common_params params;
 
   // Override default params
-  std::vector<std::string> args;
+  std::vector<std::string> configVector;
   // Add program name as first arg
-  args.emplace_back("llama");
-  args.emplace_back("--model");
-  args.emplace_back(modelGgufPath);
+  configVector.emplace_back("llama");
+  configVector.emplace_back("--model");
+  configVector.emplace_back(modelGgufPath);
 
-  // Extract main-gpu from config if present (quick first pass)
-  std::optional<backend_selection::MainGpu> mainGpu = std::nullopt;
-  {
-    std::stringstream configStream(std::string{config});
-    std::string lineStr;
-    while (std::getline(configStream, lineStr, '\n')) {
-      std::stringstream line(lineStr);
-      std::string token;
-      while (std::getline(line, token, '	')) {
-        if (token.empty()) {
-          continue;
-        }
-        if ((token == "--main-gpu" || token == "-main-gpu") &&
-            std::getline(line, token, '	') && !token.empty()) {
-          try {
-            mainGpu = backend_selection::parseMainGpu(token);
-          } catch (const qvac_errors::StatusError&) {
-            qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-                GGML_LOG_LEVEL_WARN,
-                string_format(
-                    "%s: invalid main-gpu value: %s\n", __func__, token.c_str())
-                    .c_str(),
-                nullptr);
-          }
-          break;
-        }
-      }
-      if (mainGpu.has_value()) {
-        break;
-      }
-    }
+  auto deviceIt = configFilemap.find("device");
+  if (deviceIt == configFilemap.end()) {
+    std::string errorMsg =
+        string_format("%s: must specify a device: 'gpu' or 'cpu'.\n", __func__);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        errorMsg);
   }
 
-  auto getDeviceStr = [&args, mainGpu](auto devToken) {
+  {
     using namespace backend_selection;
-    using namespace qvac_lib_infer_llamacpp_embed::logging;
     const BackendType preferredBackend =
-        preferredBackendTypeFromString(devToken);
+        preferredBackendTypeFromString(deviceIt->second);
+    const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
     const std::pair<BackendType, std::string> chosenBackend =
         chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
 
-    if (chosenBackend.first == BackendType::GPU ||
-        chosenBackend.first == BackendType::CPU) {
-      return chosenBackend.second;
+    if (chosenBackend.first != BackendType::GPU &&
+        chosenBackend.first != BackendType::CPU) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InternalError,
+          "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
+          "'cpu'.\n");
     }
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InternalError,
-        "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
-        "'cpu'.\n");
-  };
-
-  // Split config string on newlines and tabs
-  bool emplacedDevice = false;
-  std::stringstream configStream(std::string{config});
-  std::string lineStr;
-  while (std::getline(configStream, lineStr, '\n')) {
-    std::stringstream line(lineStr);
-    std::string token;
-    while (std::getline(line, token, '	')) {
-      if (token.empty()) {
-        continue;
-      }
-      // Skip main-gpu tokens (already processed)
-      if (token == "--main-gpu" || token == "-main-gpu") {
-        std::getline(line, token, '	'); // Skip the value
-        continue;
-      }
-      if ((token == "cpu" || token == "gpu") && args.back() == "-dev") {
-        args.emplace_back(getDeviceStr(token));
-        emplacedDevice = true;
-      } else if (args.back() == "-dev") {
-        args.pop_back();
-      } else {
-        args.emplace_back(token);
-      }
-    }
+    configVector.emplace_back("--device");
+    configVector.emplace_back(chosenBackend.second);
+    configFilemap.erase(deviceIt);
   }
 
-  if (!emplacedDevice) {
-    args.emplace_back("-dev");
-    args.emplace_back(getDeviceStr("gpu"));
+  for (const auto& [key, value] : configFilemap) {
+    if (key.empty()) {
+      continue;
+    }
+    configVector.emplace_back(std::string("--") + key);
+    if (!value.empty()) {
+      configVector.emplace_back(value);
+    }
   }
 
   // Convert to argc/argv format
   std::vector<char*> argv;
-  argv.reserve(args.size());
-  for (std::string& argString : args) {
+  argv.reserve(configVector.size());
+  for (std::string& argString : configVector) {
     argv.push_back(argString.data());
   }
   int argc = static_cast<int>(argv.size());
@@ -362,7 +323,8 @@ setupParams(const std::string& modelGgufPath, std::string_view config) {
 } // namespace
 
 BertModel::BertModel(
-    const std::string& modelGgufPath, const std::string& config,
+    const std::string& modelGgufPath,
+    const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
@@ -370,7 +332,7 @@ BertModel::BertModel(
       shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)) {
   auto modelInit = [this](
                        const std::string& path,
-                       const std::string& cfg,
+                       const std::unordered_map<std::string, std::string>& cfg,
                        const std::string& backendsDir) {
     this->init(path, cfg, backendsDir);
   };
@@ -387,7 +349,7 @@ BertModel::BertModel(common_params& params)
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
       shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
-  auto modelInit = [this](common_params& commonParams) {
+  auto modelInit = [this](common_params commonParams) {
     this->init(commonParams);
   };
 
@@ -395,20 +357,19 @@ BertModel::BertModel(common_params& params)
 }
 
 void BertModel::init(
-    const std::string& modelGgufPath, const std::string& config,
+    const std::string& modelGgufPath,
+    const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir) {
   // Need to initialize backend before setupParams to properly
   // detect available backends and choose properly among them
 
   // Extract and set verbosity level from config (modifies configCopy)
-  std::string configCopy = config;
-  auto verbosityConfig = extractVerbosityConfig(configCopy);
-  setVerbosityLevel(verbosityConfig);
+  auto configCopy = config;
+  setVerbosityLevel(configCopy);
   lazyCommonInit();
   initializeBackend(backendsDir);
 
-  common_params params =
-      setupParams(modelGgufPath, std::string_view{configCopy});
+  common_params params = setupParams(modelGgufPath, configCopy);
   BertModel::init(params);
 }
 
@@ -458,6 +419,16 @@ void BertModel::init(common_params& params) {
   pooling_type = llama_pooling_type(ctx_);
   n_embd = llama_model_n_embd(model_);
 
+  // Set up abort callback for cancellation support during llama_decode
+  // The callback checks stopCancelled_ and returns true to abort if set
+  llama_set_abort_callback(
+      ctx_,
+      [](void* data) -> bool {
+        const auto* model = static_cast<const BertModel*>(data);
+        return model->stopCancelled_.load();
+      },
+      const_cast<BertModel*>(this));
+
   int nCtxTrain = llama_model_n_ctx_train(model_);
   int nCtx = static_cast<int>(llama_n_ctx(ctx_));
 
@@ -505,35 +476,29 @@ BertModel::preprocessPrompt(const std::string& prompt) const {
   return splitLines(prompt, init_.params.embd_sep);
 }
 
-BertEmbeddings BertModel::process(
-    const Input& input,
-    const std::function<void(const BertEmbeddings&)>& callback) {
-  // Use std::visit to handle variant input
-  return std::visit(
-      [&callback, this](const auto& inputValue) -> BertEmbeddings {
-        using T = std::decay_t<decltype(inputValue)>;
-
-        if constexpr (std::is_same_v<T, std::string>) {
-          // Handle string input
-          BertEmbeddings result = encodeHostF32(inputValue);
-          if (callback) {
-            callback(result);
-          }
-          return result;
-        } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
-          // Handle vector of strings input
-          BertEmbeddings result = encodeHostF32Sequences(inputValue);
-          if (callback) {
-            callback(result);
-          }
-          return result;
-        }
-      },
-      input);
-}
-
 bool BertModel::isLoaded() const {
   return is_loaded_ && model_ != nullptr && ctx_ != nullptr;
+}
+
+std::any BertModel::process(const std::any& input) {
+  // Clear batch state from any previous inference to ensure deterministic
+  // results
+  reset();
+
+  if (input.type() == typeid(std::string)) {
+    const auto& text = std::any_cast<const std::string&>(input);
+    BertEmbeddings result = encodeHostF32(text);
+    return result;
+  }
+  if (input.type() == typeid(std::vector<std::string>)) {
+    const auto& sequences =
+        std::any_cast<const std::vector<std::string>&>(input);
+    BertEmbeddings result = encodeHostF32Sequences(sequences);
+    return result;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "BertModel::process: unsupported input type");
 }
 
 void BertModel::initializeBackend(const std::string& backendsDir) {
@@ -541,6 +506,7 @@ void BertModel::initializeBackend(const std::string& backendsDir) {
 }
 
 void BertModel::reset() {
+  stopCancelled_.store(false);
   // Clear the batch state - this is the most important part
   common_batch_clear(batch_);
 
@@ -550,7 +516,9 @@ void BertModel::reset() {
   }
 }
 
-void BertModel::set_weights_for_file(
+void BertModel::cancel() const { stopCancelled_.store(true); }
+
+void BertModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
   isStreaming_ = true;
@@ -634,7 +602,16 @@ BertEmbeddings BertModel::processBatched(
   // break into batches
   std::size_t numStoredEmbeddings = 0; // number of embeddings already stored
   std::size_t numPromptsInBatch = 0;   // number of prompts in current batch
-  for (std::size_t k = 0; k < nPrompts; k++) {
+
+  auto earlyReturn = [&]() {
+    stopCancelled_.store(false);
+    return BertEmbeddings(
+        std::move(embeddings),
+        BertEmbeddings::Layout{
+            numStoredEmbeddings, static_cast<std::size_t>(n_embd)});
+  };
+
+  for (std::size_t k = 0; k < nPrompts && !stopCancelled_.load(); k++) {
     // clamp to n_batch tokens
     const auto& inp = inputs[k];
 
@@ -664,6 +641,10 @@ BertEmbeddings BertModel::processBatched(
     // add to batch
     batchAddSeq(batch_, inp, static_cast<llama_seq_id>(numPromptsInBatch));
     numPromptsInBatch += 1;
+  }
+
+  if (stopCancelled_.load()) {
+    return earlyReturn();
   }
 
   // final batch
@@ -714,6 +695,9 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
 
   int nCtxTrain = llama_model_n_ctx_train(model_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
+    if (stopCancelled_.load()) {
+      throw std::runtime_error("Job cancelled");
+    }
     const auto& sequence = sequenceArray[i];
     std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
