@@ -565,6 +565,8 @@ async function main () {
           }
         }
       } else {
+        let failedCount = 0
+
         // Translate each line sequentially
         for (let i = 0; i < inputLines.length; i++) {
           const line = inputLines[i]
@@ -597,15 +599,29 @@ async function main () {
             console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
             console.log(translation)
           } catch (err) {
+            failedCount++
             console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
             console.log('')
+
+            if (failedCount >= 3 && failedCount === i + 1) {
+              console.error(`[${Date.now()}] All ${failedCount} translations failed, aborting (addon may be incompatible)`)
+              break
+            }
           }
+        }
+
+        if (failedCount > 0) {
+          console.error(`[${Date.now()}] ${failedCount >= 3 ? 'ERROR' : 'WARNING'}: ${failedCount}/${inputLines.length} Bergamot translations failed`)
         }
       }
 
       console.error(`[${Date.now()}] Destroying Bergamot addon...`)
       addon.destroy()
       console.error(`[${Date.now()}] Done`)
+
+      if (failedCount >= 3 && failedCount === inputLines.length) {
+        process.exit(2)
+      }
     } catch (err) {
       console.error('Error: Failed to load or run Bergamot translation model')
       console.error(err)
@@ -666,6 +682,8 @@ async function main () {
       await addon.activate()
       console.error(`[${Date.now()}] Addon activated in ${Date.now() - activateStart}ms`)
 
+      let failedCount = 0
+
       // Translate each line sequentially to avoid race conditions
       for (let i = 0; i < inputLines.length; i++) {
         let line = inputLines[i]
@@ -718,14 +736,29 @@ async function main () {
           console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
           console.log(translation)
         } catch (err) {
+          failedCount++
           console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
           console.log('') // Output empty line on error
+
+          // Abort early if every translation so far has failed (addon is broken)
+          if (failedCount >= 3 && failedCount === i + 1) {
+            console.error(`[${Date.now()}] All ${failedCount} translations failed, aborting (addon may be incompatible)`)
+            break
+          }
         }
       }
 
       console.error(`[${Date.now()}] Destroying addon...`)
       addon.destroy()
       console.error(`[${Date.now()}] Done`)
+
+      if (failedCount > 0) {
+        console.error(`[${Date.now()}] ${failedCount >= 3 ? 'ERROR' : 'WARNING'}: ${failedCount}/${inputLines.length} translations failed`)
+      }
+
+      if (failedCount >= 3 && failedCount === inputLines.length) {
+        process.exit(2)
+      }
     } catch (err) {
       console.error('Error: Failed to load or run translation model')
       console.error(err)

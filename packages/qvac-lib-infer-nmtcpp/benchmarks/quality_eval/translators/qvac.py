@@ -136,7 +136,29 @@ def translate_direct(texts, src_lang, trg_lang, is_quantized):
         filtered_lines_count = 0
         last_stderr_line_count = 0
 
+        proc_exited = False
+        proc_exit_grace_start = None
+        PROC_EXIT_GRACE_PERIOD = 2.0
+
         while time.time() - start_time < timeout:
+            # Check if the nmt-cli process has exited
+            exit_code = proc.poll()
+            if exit_code is not None and not proc_exited:
+                proc_exited = True
+                proc_exit_grace_start = time.time()
+                elapsed = time.time() - start_time
+                print(f"[QVAC] nmt-cli process exited with code {exit_code} after {elapsed:.1f}s", file=sys.stderr)
+                sys.stderr.flush()
+
+            # If process exited, allow a short grace period for output to flush
+            if proc_exited and (time.time() - proc_exit_grace_start) > PROC_EXIT_GRACE_PERIOD:
+                elapsed = time.time() - start_time
+                print(f"[QVAC] Process exited and grace period elapsed. Got {len(translations)}/{len(texts)} translations in {elapsed:.1f}s", file=sys.stderr)
+                if exit_code != 0:
+                    print(f"[QVAC] ERROR: nmt-cli exited with non-zero code {exit_code}", file=sys.stderr)
+                sys.stderr.flush()
+                break
+
             # Check if output file has the expected number of lines
             try:
                 with open(output_path, 'r') as f:
@@ -194,10 +216,11 @@ def translate_direct(texts, src_lang, trg_lang, is_quantized):
                     # Got all translations, kill the process and break
                     elapsed = time.time() - start_time
                     print(f"[QVAC] Translation complete! Received {len(translations)}/{len(texts)} lines in {elapsed:.1f}s", file=sys.stderr)
-                    print(f"[QVAC] Terminating nmt-cli process (PID: {proc.pid})", file=sys.stderr)
-                    proc.kill()
-                    proc.wait()
-                    print(f"[QVAC] Process terminated successfully", file=sys.stderr)
+                    if not proc_exited:
+                        print(f"[QVAC] Terminating nmt-cli process (PID: {proc.pid})", file=sys.stderr)
+                        proc.kill()
+                        proc.wait()
+                        print(f"[QVAC] Process terminated successfully", file=sys.stderr)
                     break
             except FileNotFoundError:
                 # Output file not created yet
