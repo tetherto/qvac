@@ -4,42 +4,25 @@ on:
   workflow_call:
     inputs:
       published_version:
-        description: "Published version"
-        required: true
+        description: "Version published in prebuild workflow"
+        required: false
         type: string
       prev_sha:
-        description: "Previous SHA"
+        description: "Previous commit SHA for version comparison"
         required: false
         type: string
       workdir:
-        description: "Working directory"
+        description: "Working directory (optional)"
         required: false
         type: string
         default: "packages/qvac-lib-infer-parakeet"
-  workflow_dispatch:
-    inputs:
-      published_version:
-        description: "Published version"
-        required: true
-        type: string
-      prev_sha:
-        description: "Previous SHA"
-        required: false
-        type: string
-      workdir:
-        description: "Working directory"
-        required: false
-        type: string
-        default: "packages/qvac-lib-infer-parakeet"
-
-env:
-  PKG_DIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
 permissions:
   contents: write
 
 jobs:
-  create-release:
+  publish-release:
+    if: inputs.published_version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -48,38 +31,32 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Detect version bump
+        id: version
+        uses: ./.github/actions/detect-version-bump
         with:
-          node-version: lts/*
+          current_version: ${{ inputs.published_version }}
+          prev_sha: ${{ inputs.prev_sha }}
+          workdir: ${{ inputs.workdir }}
 
-      - name: Generate release notes
-        id: release-notes
-        working-directory: ${{ env.PKG_DIR }}
+      - name: Verify Release Notes
+        if: steps.version.outputs.bumped == 'true'
+        working-directory: ${{ inputs.workdir }}
         run: |
-          VERSION="${{ inputs.published_version }}"
-          PREV_SHA="${{ inputs.prev_sha }}"
-
-          echo "Generating release notes for version ${VERSION}"
-
-          if [ -f "release-notes/v${VERSION}.md" ]; then
-            NOTES=$(cat "release-notes/v${VERSION}.md")
-            echo "notes<<EOF" >> $GITHUB_OUTPUT
-            echo "$NOTES" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "notes=Release v${VERSION}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          notes_path="release-notes/v${{ steps.version.outputs.current }}.md"
+          if [ ! -s "${notes_path}" ]; then
+            echo "Missing or empty release notes: ${notes_path}"
+            exit 1
           fi
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
+        if: steps.version.outputs.bumped == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.current }}
+          name: QVAC Transcription Parakeet Addon v${{ steps.version.outputs.current }}
+          body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: qvac-lib-infer-parakeet-v${{ inputs.published_version }}
-          release_name: Parakeet v${{ inputs.published_version }}
-          body: ${{ steps.release-notes.outputs.notes }}
-          draft: false
-          prerelease: false

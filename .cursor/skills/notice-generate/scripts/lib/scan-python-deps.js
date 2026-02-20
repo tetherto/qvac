@@ -91,6 +91,7 @@ function runPipLicenses (packageNames, log) {
   const venvDir = path.join(tmpDir, 'venv')
 
   const execOpts = { maxBuffer: 50 * 1024 * 1024 } // 50 MB buffer
+  const failedPackages = new Set()
 
   try {
     // Create virtualenv
@@ -113,7 +114,7 @@ function runPipLicenses (packageNames, log) {
         try {
           exec(`${pip} install --quiet --cache-dir /tmp/notice-pip-cache ${pkg}`, { stdio: 'ignore', ...execOpts })
         } catch {
-          log.push(`[Python] Failed to install ${pkg}`)
+          failedPackages.add(pkg)
         }
       }
     }
@@ -127,10 +128,10 @@ function runPipLicenses (packageNames, log) {
       { cwd: tmpDir, ...execOpts }
     )
 
-    return JSON.parse(rawJson)
+    return { results: JSON.parse(rawJson), failedPackages }
   } catch (err) {
     log.push(`[Python] pip-licenses failed: ${err.message}`)
-    return []
+    return { results: [], failedPackages }
   } finally {
     // Clean up temp dir
     try {
@@ -150,8 +151,8 @@ async function scanPythonDeps (pkgDir, pythonPaths, log) {
 
   console.log(`  Found ${packageNames.length} Python packages to scan...`)
 
-  const results = runPipLicenses(packageNames, log)
-  if (results.length === 0) return []
+  const { results, failedPackages } = runPipLicenses(packageNames, log)
+  if (results.length === 0 && failedPackages.size === 0) return []
 
   // Map pip-licenses output to our format
   // pip-licenses returns: { Name, Version, License, URL }
@@ -186,8 +187,11 @@ async function scanPythonDeps (pkgDir, pythonPaths, log) {
       const pypi = await fetchPyPILicense(pkg)
       if (pypi.license) {
         mapped.push({ name: pkg, license: pypi.license, url: pypi.url || `https://pypi.org/project/${pkg}/` })
+        if (failedPackages.has(pkg)) {
+          log.push(`[Python] ${pkg}: pip install failed (likely Python version constraint), license resolved via PyPI`)
+        }
       } else {
-        log.push(`[Python] Package not installed and not found on PyPI: ${pkg}`)
+        log.push(`[Python] ${pkg}: pip install failed and not found on PyPI`)
         mapped.push({ name: pkg, license: 'Unknown', url: `https://pypi.org/project/${pkg}/` })
       }
     }

@@ -96,7 +96,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+      ref: ${{ github.sha }}
       workdir: "packages/qvac-lib-decoder-audio"
 
   mobile-integration-tests:
@@ -110,7 +110,7 @@ jobs:
     secrets: inherit
     with:
       repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+      ref: ${{ github.sha }}
       workdir: "packages/qvac-lib-decoder-audio"
 
   publish-gpr:

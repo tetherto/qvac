@@ -1,12 +1,12 @@
-name: On PR Close (Parakeet)
+name: On PR Close (Decoder-audio)
 
 on:
   pull_request:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-parakeet/**"
-      - ".github/workflows/*parakeet*.yml"
+      - "packages/qvac-lib-decoder-audio/**"
+      - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -25,14 +25,14 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "qvac-lib-infer-parakeet"
+        default: "qvac-lib-decoder-audio"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
         default: true
 
 run-name: >-
-  Delete NPM Versions (parakeet)
+  Delete NPM Versions (decoder-audio)
   v=${{ inputs.version }}
   pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
   dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
@@ -61,6 +61,6 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'qvac-lib-infer-parakeet' }}
+      packages: ${{ inputs.packages || 'qvac-lib-decoder-audio' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
     secrets: inherit
