@@ -83,23 +83,29 @@ class ModelManager {
       dirPath: diskPath
     })
 
-    // Build addon config string from parameters
-    const configParts = []
-    if (config?.gpu_layers) {
-      configParts.push(`-ngl\t${config.gpu_layers}`)
+    // Build addon config map from parameters
+    // Config is a map with string values: { gpu_layers: '25', ctx_size: '512', batch_size: '512' }
+    const addonConfig = {}
+    if (config?.gpu_layers != null && config.gpu_layers !== '') {
+      addonConfig.gpu_layers = config.gpu_layers
+    } else {
+      addonConfig.gpu_layers = '99'
     }
-    if (config?.ctx_size) {
-      configParts.push(`--ctx-size\t${config.ctx_size}`)
+    if (config?.ctx_size != null && config.ctx_size !== '') {
+      addonConfig.ctx_size = config.ctx_size
+    } else {
+      addonConfig.ctx_size = '512'
     }
-    if (config?.batch_size) {
-      configParts.push(`--batch-size\t${config.batch_size}`)
+    if (config?.batch_size != null && config.batch_size !== '') {
+      addonConfig.batch_size = config.batch_size
+    } else {
+      addonConfig.batch_size = '2048'
     }
-    if (config?.verbosity) {
-      configParts.push(`verbosity\t${config.verbosity}`)
+    if (config?.verbosity != null && config.verbosity !== '') {
+      addonConfig.verbosity = config.verbosity
     }
-    const addonConfig = configParts.join('\n') || '-ngl\t99\n--ctx-size\t512\n--batch-size\t2048'
 
-    logger.info(`Loading model with config: ${addonConfig.replace(/\n/g, ', ')}`)
+    logger.info(`Loading model with config: ${JSON.stringify(addonConfig)}`)
 
     const model = new EmbedLlamacpp({
       diskPath,
