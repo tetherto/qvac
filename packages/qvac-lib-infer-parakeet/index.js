@@ -211,11 +211,21 @@ class TranscriptionParakeet extends BaseInference {
       seed: this.params.seed ?? -1
     }
 
+    // Pass individual file paths to native addon when available
+    if (this._hasNamedPaths()) {
+      if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
+      if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
+      if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
+      if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
+      if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
+    }
+
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
 
-    // Load model weight files
-    await this._loadModelWeights(modelPath, modelType)
+    if (!this._hasNamedPaths()) {
+      await this._loadModelWeights(modelPath, modelType)
+    }
 
     // Activate the model
     await this.addon.activate()
@@ -377,6 +387,14 @@ class TranscriptionParakeet extends BaseInference {
    * @private
    */
   async _downloadWeights (reportProgressCallback, opts) {
+    if (this._hasNamedPaths()) {
+      this.logger.info('File paths provided via config, skipping WeightsProvider download')
+      if (opts.closeLoader) {
+        await this.weightsProvider.loader.close()
+      }
+      return {}
+    }
+
     const modelType = this.params.modelType || 'tdt'
     const models = getRequiredModelFiles(modelType)
 
