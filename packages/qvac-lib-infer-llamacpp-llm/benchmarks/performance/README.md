@@ -1,343 +1,211 @@
-# Performance Benchmarks
+# LLM Performance Benchmarks
 
-This directory contains performance benchmark runners for `@qvac/llm-llamacpp`.
+Full-factorial parameter sweep for `@qvac/llm-llamacpp`, measuring TTFT, TPS, and quality across quantizations, devices, context sizes, batch sizes, and cache configurations.
 
-## Setup
+## Table of Contents
 
-From `packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance`:
+- [Addon Source](#addon-source)
+- [Setup](#setup)
+- [Quick Start](#quick-start)
+- [Sweep Flags](#sweep-flags)
+- [Prompt Cases](#prompt-cases)
+- [Judge Pass](#judge-pass)
+- [Resumability](#resumability)
+- [Results](#results)
+- [PyTorch Comparison](#pytorch-comparison)
+- [Script Reference](#script-reference)
 
-```bash
-npm install
-```
+## Addon Source
 
-## Parameter Sweep
-
-Run from `packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance`:
-
-```bash
-npm run run:param-sweep
-```
-
-This command runs:
-
-1. `prepare-models.js --target addon`
-2. Bare benchmark runner (`llm-parameter-sweep.js`)
-
-When `--models` is provided, model preparation is scoped to those model IDs.
-
-Prompt generation is standalone. Prompts are static fixtures in `benchmarks/performance/test-prompts.json`.
-Prompt content is static at execution time; the runner does not generate or rewrite prompts during the sweep.
-
-## Run Guide (All Common Cases)
-
-### 1) Fresh clone / first-time setup
-
-From repo root:
+| Source | When to Use | Flag |
+|--------|-------------|------|
+| **Local build** (default) | Development, testing local changes | `--addon-source local` |
+| **Published npm** | CI/CD, release verification | `--addon-source npm` |
 
 ```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
-npm install
-npm run run:param-sweep
-```
-
-### 2) Normal repeat run (use committed static prompts)
-
-```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
-npm run run:param-sweep
-```
-
-### 3) Run using published npm addon (instead of local build)
-
-```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+# Install published package first when using npm source
 npm install --workspaces=false @qvac/llm-llamacpp@latest
 npm run run:param-sweep -- --addon-source npm
 ```
 
-### 4) Resume after interruption/failure
-
-- Re-run the same command.
-- The runner resumes from `benchmarks/performance/results/parameter-sweep/llm-parameter-sweep.progress.json`.
-
-### 5) Force a fresh restart (ignore prior progress)
+## Setup
 
 ```bash
 cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
-rm -f ./results/parameter-sweep/llm-parameter-sweep.progress.json
+npm install
+```
+
+## Quick Start
+
+```bash
+# Full sweep (downloads models, runs all cases)
 npm run run:param-sweep
 ```
 
-### 6) Prompt maintenance (only when prompt tooling/config changed)
+### Common Examples
 
-Use this when prompt templates/constants, tokenizer behavior, or hardcoded ctx/batch values change.
+**Targeted debug run**
+```bash
+npm run run:param-sweep -- --models "qwen3-1.7b" --repeats 1 --debug
+```
+
+**Restrict sweep dimensions**
+```bash
+npm run run:param-sweep -- \
+  --quantization=Q8_0,F16 \
+  --device=gpu \
+  --threads=4 \
+  --batch-size=512
+```
+
+**Run judge pass after sweep**
+```bash
+npm run run:judge
+```
+
+## Sweep Flags
+
+All sweep dimensions accept comma-separated values for full-factorial grid.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--models` | `str` | All in manifest | Comma-separated model IDs |
+| `--quantization` | `str` | `Q4_0,Q4_K_M,Q8_0,F16` | Quantization levels |
+| `--device` | `str` | `gpu` | `gpu`, `cpu` |
+| `--ctx-size` | `str` | `2048` | Context sizes |
+| `--batch-size` | `str` | `512,2048` | Batch sizes |
+| `--ubatch-size` | `str` | `128,512` | Micro-batch sizes (must be <= batch-size) |
+| `--threads` | `str` | `2,4,8` | Thread counts |
+| `--no-mmap` | `str` | `false,true` | Disable memory mapping |
+| `--flash-attn` | `str` | `off,on` | Flash attention |
+| `--no-kv-offload` | `str` | `false,true` | Disable KV cache offloading |
+| `--cache-type-k` | `str` | `f16,q8_0,q4_0` | KV cache key type |
+| `--cache-type-v` | `str` | `f16,q8_0,q4_0` | KV cache value type |
+| `--repeats` | `int` | `5` | Repeats per case |
+| `--results-dir` | `str` | `results/parameter-sweep/` | Output directory |
+| `--prompts-file` | `str` | `test-prompts.json` | Prompts file path |
+| `--addon-source` | `str` | `local` | `local` or `npm` |
+| `--debug` | flag | - | Verbose logging |
+
+## Prompt Cases
+
+Each parameter combination runs three prompt cases:
+
+| Case | Description | Prompt Selection |
+|------|-------------|-----------------|
+| `long` | Long-output generation | Static `long` prompt |
+| `ctx-filling` | Maximizes context fill | `ctx-filling__ctx={ctx-size}` |
+| `span-fill` | Spans multiple prefill batches | `batch-spanning__ctx={ctx-size}__bs={batch-size}` |
+
+Prompts are static fixtures in `test-prompts.json`. To regenerate after changing prompt tooling:
 
 ```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
 npm run prepare:prompts
 npm run verify:prompts
 ```
 
-Then run sweep normally (`npm run run:param-sweep`).
+## Judge Pass
 
-### 7) Targeted/debug runs
-
-```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
-npm run run:param-sweep -- --models "qwen3-1.7b" --repeats 1 --debug
-```
-
-### 8) Run semantic judge pass (after sweep)
+Semantic quality scoring runs separately from the timed sweep to avoid benchmark distortion.
 
 ```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
 npm run run:judge
 ```
 
-By default this reads the latest sweep JSONL and writes a sibling `*.judged.jsonl` file.
-It reuses existing `promptResults[].qualityJudge` values only when the input file is already judged/partially judged; pass `-- --force` to rescore everything.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--input` | Latest sweep JSONL | Input file |
+| `--output` | `<input>.judged.jsonl` | Output file |
+| `--judge-model` | Default from manifest | Model ID for judging |
+| `--judge-device` | `gpu` | Device for judge model |
+| `--force` | - | Rescore all (ignore existing scores) |
+| `--debug` | - | Verbose logging |
 
-Optional judge flags:
+## Resumability
 
-- `--results-dir <dir>` (default: parameter-sweep results dir)
-- `--input <jsonl-file>` (default: latest sweep jsonl in results dir)
-- `--output <jsonl-file>` (default: `<input>.judged.jsonl`)
-- `--addon-source local|npm`
-- `--judge-model <model-id>`
-- `--judge-quantization <quantization>`
-- `--judge-device cpu|gpu`
-- `--judge-ctx-size <int>`
-- `--judge-batch-size <int>`
-- `--judge-ubatch-size <int>`
-- `--judge-n-predict <int>`
-- `--force` (ignore existing `qualityJudge` values and rescore)
-- `--debug`
-
-## Addon Source Selection
-
-Addon source is explicit (no automatic fallback). Use:
-
-- `--addon-source local` (default): load local addon from `../../index`
-- `--addon-source npm`: load installed `@qvac/llm-llamacpp`
-
-Examples:
+The sweep saves progress after each completed case. On interruption:
 
 ```bash
-# Local addon (default)
-npm run run:param-sweep -- --addon-source local
+# Just re-run — resumes from last completed case
+npm run run:param-sweep
 
-# npm package addon
-npm run run:param-sweep -- --addon-source npm
+# Force fresh start
+rm -f ./results/parameter-sweep/llm-parameter-sweep.progress.json
+npm run run:param-sweep
 ```
 
-## Optional Sweep Flags
+## Results
 
-- `--models "qwen3-1.7b,qwen3-4b"`
-- `--results-dir ./benchmarks/performance/results/custom`
-- `--prompts-file ./my-prompts.json` (must be JSON array of message objects)
-- `--repeats 5`
-- `--debug`
-- Default `device` sweep is platform-aware:
-  - Desktop/non-Android: `gpu`
-  - Android: `cpu,gpu`
-- Any sweep dimension can be overridden with CSV values, for example:
-  - `--quantization=Q8_0,F16`
-  - `--device=gpu,cpu`
-  - `--threads=2`
-  - `--batch-size=4096,8192`
-  - `--ubatch-size=512,1024`
-  - `--ctx-size=4096`
-  - `--flash-attn=off,on`
-  - `--cache-type-k=f16,q8_0`
-  - `--cache-type-v=f16,q8_0`
-  - `--no-mmap=true,false`
-  - `--no-kv-offload=true,false`
+Output in `results/parameter-sweep/`:
 
-Example:
+```
+results/parameter-sweep/
+├── llm-parameter-sweep-{timestamp}.json      # Full report
+├── llm-parameter-sweep-{timestamp}.jsonl     # Per-case records
+├── llm-parameter-sweep-{timestamp}.md        # Markdown summary
+└── llm-parameter-sweep.progress.json         # Resume checkpoint
+```
+
+### Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `ttftMs` | Time to first token |
+| `tps` | Tokens per second |
+| `runMs` | End-to-end inference time (excluding load/unload) |
+| `loadMs` / `unloadMs` | Model lifecycle time (per case) |
+| `promptTokens` / `generatedTokens` | Token counts |
+| `qualityMatch` | Exact-match vs baseline (1.0 or 0.0) |
+| `qualityJudge` | Semantic agreement score [0, 1] (from judge pass) |
+
+All metrics report mean and population standard deviation across repeats.
+
+### Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `ok` | All repeats succeeded |
+| `partial-failure` | Some repeats failed |
+| `failed` | All repeats or case setup failed |
+| `skipped` | Unsupported platform/parameter combo (PyTorch only) |
+
+## PyTorch Comparison
+
+An equivalent PyTorch (HuggingFace Transformers) benchmark lives in `pytorch/` for side-by-side comparison. It produces compatible JSONL with identical case IDs and an `engine: "pytorch"` field.
 
 ```bash
-npm run run:param-sweep -- --quantization=Q8_0,F16 --device=gpu,cpu --threads=2 --batch-size=4096,8192
+# Install Python dependencies
+pip install -r pytorch/requirements.txt
+
+# Run PyTorch sweep
+python pytorch/run_sweep.py --models qwen3-1.7b --quantization F16 --device gpu --debug
 ```
 
-Supported sweep override keys:
+See `pytorch/` for full details. Key differences from the addon benchmark:
+- `batch-size` / `ubatch-size` are recorded but are no-ops (PyTorch doesn't expose chunked prefill)
+- Unsupported parameter combos are `skipped` with a reason (e.g., bitsandbytes requires CUDA)
+- Memory reports RSS + GPU allocated instead of JS heap metrics
 
-- `quantization`
-- `device`
-- `ctx-size`
-- `no-mmap`
-- `threads`
-- `batch-size`
-- `ubatch-size`
-- `no-kv-offload`
-- `flash-attn`
-- `cache-type-k`
-- `cache-type-v`
+## Script Reference
 
-## Why Overrides Are Needed
-
-The default LLM sweep is a strict full-factorial grid. Even with one prompt per case and practical defaults, it can still produce a large run set.
-That is intentional for reproducible performance validation, but it is still too large for many iterative local debugging sessions.
-
-Dimension overrides let you keep full-factorial behavior while shrinking the search space safely:
-
-- Keep only target quantizations (for example `Q8_0,F16`)
-- Restrict devices/threads to one or two values
-- Focus on large `batch-size` / specific `ctx-size` points
-- Keep metric/report shape identical so results remain comparable
-
-The final JSON/JSONL/Markdown reports include the exact `sweep` dimensions used, plus case/run totals.
-This makes the run reproducible and auditable even when overrides are applied.
-
-### Default Cardinality (Current Defaults)
-
-With current defaults and two configured models:
-
-- Full-grid combinations per model: `4*2*1*2*2*2*2*2*3*3*3 = 6912`
-- Prompt cases per combination: `3` (`long`, `ctx-filling`, `span-fill`)
-- Full-grid cases per model: `6912*3 = 20736`
-- Baseline cases per model: `3`
-- Total cases per model: `20739`
-- Total cases (2 models): `41478`
-- Planned runs at default `--repeats=5`: `41478*1*5 = 207390`
-
-Overrides scale this up or down while keeping the same report/metric schema.
-
-Default output directory:
-
-- `benchmarks/performance/results/parameter-sweep/`
+| Script | Description |
+|--------|-------------|
+| `npm run prepare:models:addon` | Download GGUF models from manifest |
+| `npm run prepare:prompts` | Generate static prompt variants |
+| `npm run verify:prompts` | Validate prompt token budgets |
+| `npm run run:param-sweep` | Run full parameter sweep |
+| `npm run run:judge` | Run semantic judge pass |
 
 ## Runtime Defaults
 
-Baseline/default runtime settings are defined in `llm-parameter-sweep.config.js`:
+Baseline settings from `llm-parameter-sweep.config.js`:
 
-- `BENCH_DEFAULT_RUNTIME` (global defaults for all models)
-- `MODEL_RUNTIME_OVERRIDES` (optional per-model overrides)
+| Setting | Value | Note |
+|---------|-------|------|
+| `ctx-size` | 2048 | |
+| `n-predict` | 1024 | Long-output capped generation |
+| `temp` | 0.1 | Low for reproducibility (addon default: 0.8) |
+| `seed` | 42 | Deterministic (addon default: -1) |
+| `device` | gpu | |
 
-Current default benchmark objective:
-
-- `ctx-size=2048`
-- `n-predict=1024` (long-output capped generation)
-- one prompt per case, with explicit prompt case type (`long`, `ctx-filling`, `span-fill`)
-- default sweep remains intentionally compact; broader values are available via CLI overrides
-
-Model list and quantization files come from:
-
-- `models.manifest.json`
-- `resolved-models.json` (generated by model preparation)
-
-## Script Reference (In This Folder)
-
-- `npm run prepare:models:addon`
-- `npm run prepare:models:all`
-- `npm run prepare:prompts`
-- `npm run verify:prompts`
-- `npm run run:param-sweep`
-- `npm run run:judge`
-
-## Benchmark Workflow
-
-1. **Model Preparation**: Downloads GGUF models listed in `models.manifest.json` to `benchmarks/performance/models/`
-2. **Prompt Generation (standalone)**: Creates static prompts including:
-   - Long prompt for long-output testing
-   - `ctx-filling__ctx=<ctx-size>` variants (one per hardcoded `ctx-size`)
-   - `batch-spanning__ctx=<ctx-size>__bs=<batch-size>` variants (one per hardcoded pair)
-3. **Case Prompt Selection**: Each case runs exactly one prompt by `promptCase`:
-   - `long` -> static `long`
-   - `ctx-filling` -> matching `ctx-filling__ctx=<ctx-size>`
-   - `span-fill` -> matching `batch-spanning__ctx=<ctx-size>__bs=<batch-size>`
-   - Missing exact prompt variants fail fast by default to preserve comparability.
-   - If `batch-size > ctx-size`, span-fill uses the longest safe prompt under ctx budget (documented in prompt metadata).
-4. **Baseline Run**: Runs with default config, saves output for quality comparison
-5. **Parameter Sweep**: Runs all parameter combinations (full factorial design)
-   - Model is loaded once per case and reused for all repeats of that single prompt
-   - Progress is tracked and can be resumed after crashes (debounced saves)
-6. **Quality Check**: Compares each combination's output with exact-match and judge-model scoring
-   - `long` uses baseline-case outputs
-   - fill/span use per-variant baseline keys so scoring remains valid per exact shape
-   - Exact-match (`qualityMatch`) is computed during sweep
-   - Judge score (`qualityJudge`) is computed in a separate pass via `npm run run:judge`
-7. **Report Generation**: Creates JSON and Markdown reports with performance metrics
-
-## Output Quality Comparison
-
-The benchmark compares outputs using two signals:
-- Baseline/reference outputs are persisted per prompt result
-- Each parameter combination's output is compared with baseline
-- `qualityMatch`: 1.0 (exact match) or 0.0 (different)
-- `qualityJudge`: model-judged semantic agreement score in [0, 1]
-
-`qualityJudge` is intentionally separated from the timed sweep. This avoids benchmark distortion from extra inference calls, allows a singleton judge runtime with conservative worst-case settings, and makes re-scoring possible without re-running the full parameter grid.
-The judge pass is optimized to score only unique `(baseline, candidate)` text pairs and then reuse scores across repeats/cases.
-
-## Prompt Tooling (What/Why/How)
-
-- **What**: `prepare-prompts.js` generates static fill/span prompt variants for all hardcoded sweep values.
-- **Why**: Avoid runtime prompt mutation and token-estimation drift; keep sweep deterministic and auditable.
-- **How**:
-  - Uses the addon runtime tokenizer path (`response.stats.promptTokens`) for token-exact sizing.
-  - `ctx-filling` variants target `ctx-size - n_predict_reserve - overhead_reserve`.
-  - `batch-spanning` variants target `min(ctx-budget, batch-size*3)`.
-  - For impossible span cases (`batch-size > ctx-size`), it intentionally uses the longest safe prompt that still fits context.
-  - `verify-prompts.js` re-checks all variants and fails on budget overflow/missing IDs.
-
-## How `targetPromptTokens` Is Derived
-
-All target values are deterministic and come from hardcoded constants in `prepare-prompts.js` / `verify-prompts.js`:
-
-- `PROMPT_CTX_SIZES = [2048, 4096, 8192]`
-- `PROMPT_BATCH_SIZES = [512, 2048, 4096, 8192]`
-- `N_PREDICT_RESERVE = 1024`
-- `PROMPT_OVERHEAD_RESERVE = 128`
-
-Formulas:
-
-- `ctxBudget(ctx) = max(256, ctx - N_PREDICT_RESERVE - PROMPT_OVERHEAD_RESERVE)`
-- `batchDesired(batch) = max(512, batch * 3)` (aim for multi-batch prefill)
-- `batchBudget(ctx, batch) = max(256, min(ctxBudget(ctx), batchDesired(batch)))`
-
-This yields:
-
-- `ctx-filling`
-  - `ctx=2048 -> targetPromptTokens=896`
-  - `ctx=4096 -> targetPromptTokens=2944`
-  - `ctx=8192 -> targetPromptTokens=7040`
-- `batch-spanning`
-  - `ctx=2048`: `bs=512 -> 896`, `bs=2048 -> 896`, `bs=4096 -> 896`, `bs=8192 -> 896`
-  - `ctx=4096`: `bs=512 -> 1536`, `bs=2048 -> 2944`, `bs=4096 -> 2944`, `bs=8192 -> 2944`
-  - `ctx=8192`: `bs=512 -> 1536`, `bs=2048 -> 6144`, `bs=4096 -> 7040`, `bs=8192 -> 7040`
-
-Why this is safe and accurate:
-
-- Prompt sizing uses the addon's own tokenizer stats (`promptTokens`), not word/token heuristics.
-- `prepare-prompts.js` tunes each prompt up to the highest safe value under budget.
-- `verify-prompts.js` recomputes budgets with the same formulas and fails if any prompt exceeds budget or is too short for the intended span behavior.
-- Final static prompts and metadata in `test-prompts.json` are therefore reproducible and auditable for both baseline and sweep cases.
-
-## Performance Metrics
-
-Per-repeat samples:
-- `runMs`, `ttftMs`, `tps`, `promptTokens`, `generatedTokens`, `runtimeMemory.{rssMb,heapUsedMb,externalMb}`
-- `loadMs` / `unloadMs` are measured per case (model lifecycle), then attached to each prompt result
-
-Persisted metrics fields (mean/std across repeats):
-- `loadMsMean`, `loadMsStd`
-- `runMsMean`, `runMsStd`
-- `ttftMsMean`, `ttftMsStd`
-- `tpsMean`, `tpsStd`
-- `unloadMsMean`, `unloadMsStd`
-- `promptTokensMean`, `promptTokensStd`
-- `generatedTokensMean`, `generatedTokensStd`
-- `runtimeMemory.{rssMbMean,rssMbStd,heapUsedMbMean,heapUsedMbStd,externalMbMean,externalMbStd}`
-
-## Reporting Details
-
-- Case-level JSONL records now include:
-  - `metrics` with explicit `*Mean` + `*Std` naming for TTFT/TPS/run/load/unload and token/memory fields
-  - `promptResults[]` with per-prompt metrics, exact-match scores, prompt-level errors, and raw outputs for judge post-processing
-- `npm run run:judge` writes `*.judged.jsonl` with populated per-prompt and per-case `qualityJudge`.
-- Final JSON report includes the same per-case information.
-
-## Deferred Work
-
-- **Native/GPU memory telemetry**: current memory metrics are process-level JS memory (`rss`, `heapUsed`, `external`).  
-  Addon/C++ side metrics for native allocations and VRAM usage are planned later.
+Model list and quantization files come from `models.manifest.json`.
