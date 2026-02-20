@@ -79,7 +79,7 @@ jobs:
         if: steps.version.outputs.bumped == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.current }}
+          tag_name: llamacpp-embed-v${{ steps.version.outputs.current }}
           name: QVAC Embed Addon v${{ steps.version.outputs.current }}
           body_path: ${{ steps.changelog.outputs.release_notes_path }}
         env:

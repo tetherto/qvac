@@ -59,7 +59,9 @@ permissions:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    if: |
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -116,6 +118,7 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: context
     runs-on: ubuntu-latest
     steps:

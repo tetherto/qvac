@@ -104,7 +104,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
         normalize: 1,
         use_gpu: deviceConfig.useGpu
       })
-
+      model.logger.setLevel('debug')
       await model.load()
       t.pass(`${label} Bergamot model loaded successfully`)
 

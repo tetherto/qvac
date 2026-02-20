@@ -1,7 +1,7 @@
 name: Release Notes Check (OCR)
 
 on:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - synchronize
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.sha }}
@@ -76,4 +76,3 @@ jobs:
             } else {
               core.info(`Release notes file found in PR changes: ${expected}`);
             }
-
