@@ -2,7 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-const { round, average, stddev } = require('./math')
+const { round, average, stddev, cartesianProduct } = require('./math')
 const { stripSurroundingQuotes, normalizeArgValue } = require('./utils')
 
 const PROMPT_CASES = ['long', 'ctx-filling', 'span-fill']
@@ -76,13 +76,6 @@ function resolveModelName (modelDef, quantization) {
 
 function checkModelExists (modelDir, modelName) {
   return fs.existsSync(path.join(modelDir, modelName))
-}
-
-function cartesianProduct (arrays) {
-  return arrays.reduce(
-    (acc, curr) => acc.flatMap((prefix) => curr.map((x) => [...prefix, x])),
-    [[]]
-  )
 }
 
 function buildCases (modelDef, sweep) {
@@ -344,7 +337,6 @@ module.exports = {
   ensureDir,
   resolveModelName,
   checkModelExists,
-  cartesianProduct,
   buildCases,
   isAdaptivePromptId,
   selectPromptForCase,

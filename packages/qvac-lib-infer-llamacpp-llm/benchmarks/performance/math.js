@@ -45,6 +45,13 @@ function exactMatch (baseline, candidate) {
   return baseline === candidate ? 1.0 : 0.0
 }
 
+function cartesianProduct (arrays) {
+  return arrays.reduce(
+    (acc, curr) => acc.flatMap((prefix) => curr.map((x) => [...prefix, x])),
+    [[]]
+  )
+}
+
 function memorySnapshot () {
   if (typeof process.memoryUsage !== 'function') {
     return { rssMb: null, heapUsedMb: null, externalMb: null }
@@ -64,5 +71,6 @@ module.exports = {
   elapsedMs,
   parsePositiveInt,
   exactMatch,
+  cartesianProduct,
   memorySnapshot
 }
