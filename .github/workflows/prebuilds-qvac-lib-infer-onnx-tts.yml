@@ -485,13 +485,6 @@ jobs:
           path: prebuilds
           merge-multiple: true
 
-      - name: Replicate android artifacts
-        run: |
-          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
-          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
-          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
-
       - name: Upload merged artifacts
         uses: actions/upload-artifact@v4
         with:

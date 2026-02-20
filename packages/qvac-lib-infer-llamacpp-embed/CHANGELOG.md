@@ -1,5 +1,123 @@
 # Changelog
 
+## [0.10.7] - 2026-02-11
+This release updates the qvac-fabric-llm.cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the fix for apple A19 devices when loading models using Metal backend.
+
+## [0.10.6] - 2026-02-05
+This release updates the underlying llama.cpp native library to v7248.1.2, bringing upstream improvements and fixes.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Other
+
+### Native Library Update
+
+Updated the llama-cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the latest upstream llama.cpp improvements, optimizations, and bug fixes to the embeddings inference addon.
+
+## [0.10.5] - 2026-02-01
+This release fixes a critical crash that occurred when processing large embedding outputs, such as high-dimensional embeddings or large batch sizes.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Bug Fixes
+
+### Large Embedding Output Crash Resolved
+
+Fixed a `RangeError: Invalid string length` crash that occurred when processing large embedding datasets. The issue manifested when running inference on many sequences (e.g., 39,024 sequences from a 10MB text file with 256-character chunks and batch size of 512).
+
+The root cause was in the base inference class, where debug logging attempted to `JSON.stringify` the entire embedding output data. JavaScript strings have a maximum length limit (~2^30-1 characters), which large embedding arrays can exceed.
+
+This is fixed by updating the `@qvac/infer-base` dependency to v0.2.2, which removes the problematic debug logging while preserving all functional behavior. The `response.updateOutput(data)` call continues to work correctly—only the debug log that caused crashes was removed.
+
+## [0.10.4] - 2026-02-01
+This release fixes a library conflict issue affecting certain Linux systems and improves documentation with comprehensive platform support tables and build requirements.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Bug Fixes
+
+### System-Wide Library Conflicts Resolved
+
+Fixed a critical issue where the addon could crash on systems with globally-installed llama.cpp libraries. The runtime's `dlopen()` calls were resolving `libggml-*.so` to system-wide installations (e.g., `/usr/lib/libggml-vulkan.so`) instead of the SDK's bundled backends, causing version mismatches and crashes like:
+
+```
+/usr/lib/libggml-base.so.0: GGML_ASSERT(prev != ggml_uncaught_exception) failed
+```
+
+This is fixed by updating the inference engine (qvac-fabric-llm.cpp 7248.1.0 → 7248.1.1) which introduces two changes:
+
+1. **Namespaced backend libraries**: Backend libraries are now prefixed with `qvac-` (e.g., `libqvac-ggml-vulkan.so`), ensuring the runtime never accidentally loads incompatible system libraries.
+
+2. **Eliminated unnecessary `dlopen()` calls**: On platforms using statically-linked backends (Linux, macOS, iOS, Windows), `dlopen()` is now skipped entirely, removing any risk of loading external libraries.
+
+| Platform | Dynamic Backends | Behavior |
+|----------|------------------|----------|
+| Android | ON | Searches for `libqvac-ggml-*.so` (isolated from system) |
+| Linux/macOS/iOS/Windows | OFF | No `dlopen()` - uses statically linked backends |
+
+## [0.10.3] - 2026-02-01
+This release expands platform support by providing prebuilt binaries for Ubuntu 22.04 on ARM64 systems. Users on older ARM64 Linux distributions can now install the addon without compiling from source.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Features
+
+### Ubuntu 22.04 ARM64 prebuilt binaries
+
+Linux ARM64 prebuilds now target Ubuntu 22.04 instead of Ubuntu 24.04. This broadens compatibility for users running ARM64 servers or devices on the more widely deployed Ubuntu 22.04 LTS release. The prebuilt binaries will work on Ubuntu 22.04 and newer, whereas previously ARM64 users on 22.04 would need to build from source due to glibc version requirements.
+
+## Bug Fixes
+
+There are no user-facing bug fixes in this release.
+
+## [0.10.2] - 2026-02-01
+This release focuses on improving distribution quality for prebuilt artifacts without changing the public API surface. Prebuilds are now leaner, which reduces download size and speeds up installation for supported platforms.
+
+## Breaking Changes
+There are no breaking changes in this release.
+
+## New APIs
+There are no new public APIs in this release.
+
+## Features
+The prebuild workflow now removes debug symbols by applying platform-specific stripping tools, using the Android NDK’s `llvm-strip` on Android, `strip -S` on Apple platforms, and `strip --strip-debug` on Linux, which reduces package size and improves download times while keeping runtime behavior unchanged.
+
+## Bug Fixes
+There are no user-facing bug fixes in this release.
+
+## [0.10.1] - 2026-02-01
+This release improves Linux compatibility by ensuring the addon builds and runs on Ubuntu 22.04 LTS, the oldest currently supported LTS version. This change ensures broader compatibility with older Linux distributions while maintaining support for newer versions.
+
+## Compatibility Improvements
+
+### Enhanced Linux LTS Support
+
+The Linux x64 prebuilds are now built on Ubuntu 22.04 LTS instead of Ubuntu 24.04, ensuring compatibility with the oldest currently supported LTS version. This means the addon will work reliably on systems running Ubuntu 22.04 and later, providing better support for users on older but still-supported Linux distributions. The build process has been updated to install the necessary compiler toolchain (g++-13) on Ubuntu 22.04 to meet build requirements, and integration tests now verify compatibility on both Ubuntu 22.04 and 24.04 to ensure the addon works correctly across the supported LTS range.
+
 ## [0.10.0] - 2025-01-15
 ### Changed 
 - Upgraded llm fabric to 7248.1.0, which containes new Vulkan implementation improvements (VMA, shaders).

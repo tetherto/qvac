@@ -4,21 +4,6 @@ import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference';
 import WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider';
 import type { QvacResponse } from '@qvac/infer-base';
 import type Logger from '@qvac/logging';
-import type { Readable } from 'stream';
-
-/**
- * Loader interface provides the methods required by TranscriptionParakeet to fetch and manage streams.
- */
-export interface Loader {
-  /** Prepare the loader for operations */
-  ready(): Promise<void>;
-  /** Clean up or close any underlying resources */
-  close(): Promise<void>;
-  /** Obtain a readable stream for the specified path */
-  getStream(path: string): Promise<Readable>;
-  /** (Optional) Retrieve the size of a remote file in bytes */
-  getFileSize?(path: string): Promise<number>;
-}
 
 /**
  * Model type options for Parakeet
@@ -51,8 +36,8 @@ export interface ParakeetConfig {
  * Arguments required to construct an instance of TranscriptionParakeet
  */
 export interface TranscriptionParakeetArgs {
-  /** External loader instance */
-  loader: Loader;
+  /** External loader instance (e.g. FilesystemDL, HyperdriveDL) */
+  loader: unknown;
   /** Optional structured logger */
   logger?: Logger;
   /** Name of the model directory */
@@ -71,6 +56,16 @@ export interface TranscriptionParakeetArgs {
 export interface TranscriptionParakeetConfig {
   /** Direct path to model directory (alternative to diskPath + modelName) */
   path?: string;
+  /** Absolute path to encoder ONNX graph file (encoder-model.onnx) */
+  encoderPath?: string;
+  /** Absolute path to encoder ONNX weights file (encoder-model.onnx.data) */
+  encoderDataPath?: string;
+  /** Absolute path to decoder-joint ONNX file (decoder_joint-model.onnx) */
+  decoderPath?: string;
+  /** Absolute path to vocabulary file (vocab.txt) */
+  vocabPath?: string;
+  /** Absolute path to preprocessor ONNX file (preprocessor.onnx / nemo128.onnx) */
+  preprocessorPath?: string;
   /** Enable statistics collection */
   enableStats?: boolean;
   /** Parakeet-specific configuration */
@@ -222,7 +217,6 @@ declare namespace TranscriptionParakeet {
   export {
     TranscriptionParakeet as default,
     TranscriptionParakeet,
-    Loader,
     ModelType,
     ParakeetConfig,
     TranscriptionParakeetArgs,

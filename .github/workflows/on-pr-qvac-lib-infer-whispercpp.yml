@@ -56,13 +56,12 @@ permissions:
   packages: write
   checks: write
 
-env:
-  PKG_DIR: packages/qvac-lib-infer-whispercpp
-
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    if: |
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -119,6 +118,7 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: context
     runs-on: ubuntu-latest
     steps:
@@ -138,6 +138,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   cpp-lint:
     needs: context
@@ -152,7 +153,7 @@ jobs:
   cpp-tests-coverage:
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-tests-whispercpp.yml
+    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -177,6 +178,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      workdir: ${{ needs.context.outputs.workdir }}
 
   run-mobile-integration-tests:
     needs: [context, prebuild]

@@ -145,10 +145,9 @@ jobs:
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-github-release-qvac-lib-infer-llamacpp-llm.yml
     secrets: inherit
     with:
-      repo_name: "llamacpp-llm"
       release_name: "QVAC LLM Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

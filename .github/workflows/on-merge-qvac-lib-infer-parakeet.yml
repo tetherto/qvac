@@ -22,13 +22,6 @@ on:
           - latest
           - dev
 
-  workflow_call:
-    inputs:
-      tag:
-        description: "Tag to publish with"
-        required: false
-        type: string
-
 permissions:
   contents: write
   pull-requests: write
@@ -95,6 +88,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-feature-gpr:
@@ -109,6 +104,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-tmp-gpr:
@@ -123,6 +120,8 @@ jobs:
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-release-npm:
@@ -137,6 +136,8 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
   publish-release:
@@ -151,20 +152,44 @@ jobs:
       prev_sha: ${{ github.event.before }}
       workdir: "packages/qvac-lib-infer-parakeet"
 
-  integration-tests:
-    needs: [publish-main-gpr, publish-feature-gpr, publish-tmp-gpr, publish-release-npm]
-    if: always() && (needs.publish-main-gpr.result == 'success' || needs.publish-feature-gpr.result == 'success' || needs.publish-tmp-gpr.result == 'success' || needs.publish-release-npm.result == 'success')
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+  prebuild:
+    name: Prebuild Gate
+    runs-on: ubuntu-latest
+    needs: [publish-release-npm, publish-main-gpr, publish-tmp-gpr, publish-feature-gpr]
+    if: always()
+    outputs:
+      should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
+    steps:
+      - id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          should="false"
 
-  mobile-tests:
-    needs: [publish-main-gpr, publish-feature-gpr, publish-tmp-gpr, publish-release-npm]
-    if: always() && (needs.publish-main-gpr.result == 'success' || needs.publish-feature-gpr.result == 'success' || needs.publish-tmp-gpr.result == 'success' || needs.publish-release-npm.result == 'success')
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+          if [ "${{ needs.publish-release-npm.result }}" = "success" ] || \
+             [ "${{ needs.publish-main-gpr.result }}" = "success" ] || \
+             [ "${{ needs.publish-tmp-gpr.result }}" = "success" ] || \
+             [ "${{ needs.publish-feature-gpr.result }}" = "success" ]; then
+            should="true"
+          fi
+
+          echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
+
+  integration-tests:
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    needs: prebuild
+    if: needs.prebuild.outputs.should_run_tests == 'true'
     secrets: inherit
     with:
       repository: ${{ github.repository }}
-      ref: ${{ github.ref }}
+      ref: ${{ github.sha }}
+      workdir: "packages/qvac-lib-infer-parakeet"
+
+  mobile-integration-tests:
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    needs: prebuild
+    if: needs.prebuild.outputs.should_run_tests == 'true'
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}

@@ -1,5 +1,155 @@
 # Changelog
 
+## [0.8.9] - 2026-02-11
+This release updates the qvac-fabric-llm.cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the fix for apple A19 devices when loading models using Metal backend.
+
+## [0.8.8] - 2026-02-05
+This release updates the underlying llama.cpp native library to v7248.1.2, bringing upstream improvements and fixes.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Other
+
+### Native Library Update
+
+Updated the llama-cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the latest upstream llama.cpp improvements, optimizations, and bug fixes to the LLM inference addon.
+
+## [0.8.7] - 2026-02-01
+This release fixes a critical crash that occurred when processing large embedding outputs, such as high-dimensional embeddings or large batch sizes.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Bug Fixes
+
+### Large Embedding Output Crash Resolved
+
+Fixed a `RangeError: Invalid string length` crash that occurred when processing large embedding datasets. The issue manifested when running inference on many sequences (e.g., 39,024 sequences from a 10MB text file with 256-character chunks and batch size of 512).
+
+The root cause was in the base inference class, where debug logging attempted to `JSON.stringify` the entire embedding output data. JavaScript strings have a maximum length limit (~2^30-1 characters), which large embedding arrays can exceed.
+
+This is fixed by updating the `@qvac/infer-base` dependency to v0.2.2, which removes the problematic debug logging while preserving all functional behavior. The `response.updateOutput(data)` call continues to work correctly—only the debug log that caused crashes was removed.
+
+## [0.8.6] - 2026-02-01
+This release fixes a library conflict issue affecting certain Linux systems and improves documentation with comprehensive platform support tables and build requirements.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Bug Fixes
+
+### System-Wide Library Conflicts Resolved
+
+Fixed a critical issue where the addon could crash on systems with globally-installed llama.cpp libraries. The runtime's `dlopen()` calls were resolving `libggml-*.so` to system-wide installations (e.g., `/usr/lib/libggml-vulkan.so`) instead of the SDK's bundled backends, causing version mismatches and crashes like:
+
+```
+/usr/lib/libggml-base.so.0: GGML_ASSERT(prev != ggml_uncaught_exception) failed
+```
+
+This is fixed by updating the inference engine (qvac-fabric-llm.cpp 7248.1.0 → 7248.1.1) which introduces two changes:
+
+1. **Namespaced backend libraries**: Backend libraries are now prefixed with `qvac-` (e.g., `libqvac-ggml-vulkan.so`), ensuring the runtime never accidentally loads incompatible system libraries.
+
+2. **Eliminated unnecessary `dlopen()` calls**: On platforms using statically-linked backends (Linux, macOS, iOS, Windows), `dlopen()` is now skipped entirely, removing any risk of loading external libraries.
+
+| Platform | Dynamic Backends | Behavior |
+|----------|------------------|----------|
+| Android | ON | Searches for `libqvac-ggml-*.so` (isolated from system) |
+| Linux/macOS/iOS/Windows | OFF | No `dlopen()` - uses statically linked backends |
+
+## [0.8.5] - 2026-02-01
+This release fixes Android build support by ensuring Vulkan SDK is properly configured in the Android builder.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Features
+
+### Android Build Improvements
+
+Android prebuild workflows now properly install and configure the Vulkan SDK on the builder. The Vulkan SDK is installed on the host, the same way as in Linux x64 builds. This change ensures that Android builds have access to the necessary Vulkan tools and libraries required for building the qvac-fabric dependency.
+
+### Build Workflow Consistency
+
+The build workflow conditions have been updated to use more consistent checks across Ubuntu-based builds. The Vulkan installation and configuration steps now use `startsWith(matrix.os, 'ubuntu-')` conditions instead of platform-specific checks, making the workflow more maintainable and consistent.
+
+## Bug Fixes
+
+There are no user-facing bug fixes in this release.
+
+## [0.8.4] - 2026-02-01
+This release improves compatibility for Linux ARM64 users by building prebuilt binaries on Ubuntu 22.04 instead of Ubuntu 24.04. This results in binaries linked against an older glibc version, enabling the addon to run on a wider range of Linux ARM64 systems.
+
+## Improved Linux ARM64 Compatibility
+
+Linux ARM64 prebuilt binaries are now built on Ubuntu 22.04 runners instead of Ubuntu 24.04. This change produces binaries with lower glibc requirements, making them compatible with more Linux distributions and older system versions. Users on Linux ARM64 systems that previously encountered glibc version errors should now be able to use the prebuilt binaries without issues.
+
+## Internal Changes
+
+- Added Ubuntu 22.04 ARM to the integration test matrix for broader CI coverage
+- Removed obsolete cross-compilation tooling
+
+## [0.8.3] - 2026-02-01
+This release improves addon compatibility by switching Linux x64 builds to Ubuntu 22.04. The change add support for the current oldest Ubuntu LTS version (Ubuntu-22.04), while maintaining support for Ubuntu-24.04.
+
+## Breaking Changes
+
+There are no breaking changes in this release.
+
+## New APIs
+
+There are no new public APIs in this release.
+
+## Features
+
+### Build System Improvements
+
+Linux x64 prebuilds are now built on Ubuntu 22.04 instead of Ubuntu 24.04, providing compatibility with the current oldest Ubuntu LTS release. The build workflow has been updated to install g++-13 on Ubuntu 22.04, providing support for modern C++ features while linking against the Ubuntu-22 glibc version. Integration tests now run on both Ubuntu 22.04 and 24.04 to ensure compatibility across both versions.
+
+### Workflow Simplification
+
+The CI/CD workflows have been simplified with more generic condition checks that work across all Ubuntu versions. This makes the workflows easier to maintain and reduces the need for version-specific conditionals. The ccache configuration has also been simplified for better reliability.
+
+## Bug Fixes
+
+There are no user-facing bug fixes in this release.
+
+## [0.8.2] - 2026-02-01
+This release focuses on improving distribution quality for prebuilt artifacts without changing the public API surface. Prebuilds are now leaner, which reduces download size and speeds up installation for supported platforms.
+
+## Breaking Changes
+There are no breaking changes in this release.
+
+## New APIs
+There are no new public APIs in this release.
+
+## Features
+The prebuild workflow now removes debug symbols by applying platform-specific stripping tools, using the Android NDK’s `llvm-strip` on Android, `strip -S` on Apple platforms, and `strip --strip-debug` on Linux, which reduces package size and improves download times while keeping runtime behavior unchanged.
+
+## Bug Fixes
+There are no user-facing bug fixes in this release.
+
 ## [0.8.1] - 2025-01-15
 ### Changed
 - Cleaned up package.json by removing unused packages and scripts

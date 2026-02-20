@@ -1,12 +1,12 @@
 {
   "dependencies": [
     {
-      "name": "llama-cpp",
-      "version>=": "7248.1.2"
-    },
-    {
       "name": "opencl",
       "platform": "android"
+    },
+    {
+      "name": "qvac-fabric",
+      "version>=": "7248.1.2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
@@ -25,15 +25,21 @@
       ]
     },
     "vk-profiling": {
-      "description": "Force vk performance logging in llama-cpp",
+      "description": "Force vk performance logging in qvac-fabric",
       "dependencies": [
         {
-          "name": "llama-cpp",
+          "name": "qvac-fabric",
           "features": [
             "force-profiler"
           ]
         }
       ]
     }
-  }
+  },
+  "overrides": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version": "0.12.2"
+    }
+  ]
 }

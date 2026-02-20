@@ -26,7 +26,9 @@ permissions:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -150,8 +152,18 @@ jobs:
             exit 1
           fi
 
-  prebuild:
+  cpp-lint:
     needs: changes
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+
+  prebuild:
+    needs: [sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (
