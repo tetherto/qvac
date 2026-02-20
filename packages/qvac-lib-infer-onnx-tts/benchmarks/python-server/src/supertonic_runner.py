@@ -34,9 +34,19 @@ def _lazy_import_supertonic():
                 LATENT_SIZE = BASE_CHUNK_SIZE * CHUNK_COMPRESS_FACTOR
 
                 def __init__(self, model_path: str):
-                    self.model_path = model_path
+                    self.model_path = os.path.abspath(model_path)
+                    if not os.path.isdir(self.model_path):
+                        raise FileNotFoundError(
+                            f"Supertonic model directory not found: {self.model_path}"
+                        )
                     self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
                     onnx_dir = os.path.join(self.model_path, "onnx")
+                    for name in ("text_encoder.onnx", "latent_denoiser.onnx", "voice_decoder.onnx"):
+                        p = os.path.join(onnx_dir, name)
+                        if not os.path.isfile(p):
+                            raise FileNotFoundError(
+                                f"ONNX file not found: {p}. Run npm run setup:supertonic."
+                            )
                     self.text_encoder = ort.InferenceSession(
                         os.path.join(onnx_dir, "text_encoder.onnx")
                     )

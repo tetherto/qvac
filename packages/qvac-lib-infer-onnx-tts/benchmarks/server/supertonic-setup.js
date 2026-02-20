@@ -154,6 +154,16 @@ async function downloadSupertonicModels (destPath, voiceName) {
     results.push({ success: false, path: tokenizerPath })
   }
 
+  const tokenizerConfigUrl = `${BASE_URL}/tokenizer_config.json`
+  const tokenizerConfigPath = path.join(destPath, 'tokenizer_config.json')
+  try {
+    const r = await downloadFileFromUrl(tokenizerConfigUrl, tokenizerConfigPath, 50)
+    results.push(r)
+  } catch (err) {
+    console.error(` ✗ Failed to download tokenizer_config.json: ${err.message}`)
+    results.push({ success: false, path: tokenizerConfigPath })
+  }
+
   const allSuccess = results.every(r => r.success)
   console.log('>>> Supertonic models download complete')
   return { results, success: allSuccess }

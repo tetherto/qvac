@@ -3,7 +3,7 @@ server:
   addon_version: "^0.1.0"
   python_url: "http://localhost:8081/synthesize-supertonic"
   timeout: 600
-  batch_size: 1
+  batch_size: 10
 
 comparison:
   enabled: true
