@@ -29,6 +29,10 @@
     {
       "name": "flatbuffers",
       "version": "23.5.26"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version": "0.12.2"
     }
   ]
 }

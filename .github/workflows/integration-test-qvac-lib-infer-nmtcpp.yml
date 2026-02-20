@@ -25,6 +25,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  NODE_VERSION: '22'
 
 jobs:
   run-integration-tests:
@@ -62,7 +63,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Windows - enable git long paths
         if: ${{ matrix.platform == 'win32' }}

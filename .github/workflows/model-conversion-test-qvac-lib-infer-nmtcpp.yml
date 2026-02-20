@@ -57,6 +57,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  NODE_VERSION: '22'
 
 jobs:
   setup:
@@ -133,7 +134,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -224,7 +225,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5

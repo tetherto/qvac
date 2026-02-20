@@ -37,6 +37,7 @@ on:
 
 env:
   PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  NODE_VERSION: '22'
 
 jobs:
   prebuild:
@@ -146,7 +147,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
         run: npm install -g bare-make bare-runtime

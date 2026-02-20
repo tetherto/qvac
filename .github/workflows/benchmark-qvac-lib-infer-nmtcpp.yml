@@ -421,6 +421,7 @@ jobs:
           echo ""
           echo "=== Addon export check ==="
           bare -e "
+            const process = require('bare-process');
             const b = require('./binding');
             const required = ['createInstance','activate','append','processBatch','status','pause','stop','cancel','destroyInstance'];
             let ok = true;
