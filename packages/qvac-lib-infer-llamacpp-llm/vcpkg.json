@@ -36,11 +36,5 @@
         }
       ]
     }
-  },
-  "overrides": [
-    {
-      "name": "qvac-lib-inference-addon-cpp",
-      "version": "0.12.2"
-    }
-  ]
+  }
 }
