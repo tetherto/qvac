@@ -28,8 +28,8 @@ class BertInterface {
   /**
    * Processes new input
    * @param {Object} data
-   * @param {String} data.type - Either 'text' for string input or 'end of job'
-   * @param {String} data.input - The input text string (arrays are JSON stringified)
+   * @param {String} data.type - Either 'text' for string input or 'sequences' for string array input
+   * @param {String|Array<String>} data.input - Input text (for 'text') or array of texts (for 'sequences')
    * @returns {Promise<bool>} true if the job was accepted, false if busy
    */
   async runJob (data) {
