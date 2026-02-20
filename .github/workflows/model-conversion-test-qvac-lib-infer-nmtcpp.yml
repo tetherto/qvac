@@ -133,7 +133,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: lts/*
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -221,6 +221,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
       - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5
         with:
@@ -229,7 +234,7 @@ jobs:
           cache-dependency-path: ${{ env.PKG_DIR }}/scripts/conversion_scripts/requirements.txt
 
       - name: Install bare-runtime
-        run: npm install -g bare-runtime
+        run: npm install -g bare-make bare-runtime
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
