@@ -143,6 +143,13 @@ void LlamaModel::setWeightsForFile(
     singleGgufStreamedFiles_[filename] = std::move(shard);
     return;
   }
+
+  // TODO move to AsyncWeightsLoader class.
+  // TODO if first shard (check filename) notify metadata in a separate thread,
+  // in order not to halt download. Next time setWeightsWeights.
+  // Double-check fulfill_split futures can be loaded out of order.
+  // Add mutex for singleGgufStreamedFiles_
+
   // Asynchronous shard loading
   initLoader_.ensureLoadInBackground();
   if (!llama_model_load_fulfill_split_future(
