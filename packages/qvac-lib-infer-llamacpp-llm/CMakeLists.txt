@@ -24,7 +24,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(llama CONFIG REQUIRED)
 
 if(WIN32)
@@ -50,8 +50,6 @@ add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
   )
 
   list(APPEND ADDON_SOURCES
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-inference-addon-llama.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
@@ -123,7 +121,7 @@ if(BUILD_CLI)
           llama::mtmd
   )
   
-  find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+  find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
   target_compile_features(cli_tool PRIVATE cxx_std_20)

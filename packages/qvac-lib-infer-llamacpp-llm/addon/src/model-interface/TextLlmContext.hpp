@@ -143,6 +143,11 @@ private:
       llama_pos& nPast,
       const std::function<void(const std::string&)>& outputCallback);
 
+  void flushPendingUtf8ToCallback(
+      const std::function<void(const std::string&)>& outputCallback);
+  void applyContextDiscard();
+  void handleStopRequestAndAddEot(LlamaBatch& batch);
+
   common_init_result llamaInit_;
   llama_model* model_;
   llama_context* lctx_;

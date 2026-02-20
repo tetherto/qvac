@@ -1,13 +1,12 @@
 'use strict'
-
+// test/integration/image.test.js
 const test = require('brittle')
 const fs = require('bare-fs')
-const os = require('bare-os')
-const FilesystemDL = require('@qvac/dl-filesystem')
-
-const LlmLlamacpp = require('../../index.js')
+const path = require('bare-path')
 const { ensureModel, getMediaPath } = require('./utils')
-const { attachSpecLogger } = require('./spec-logger')
+const FilesystemDL = require('@qvac/dl-filesystem')
+const LlmLlamacpp = require('../../index.js')
+const os = require('bare-os')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -26,11 +25,25 @@ const MULTIMODAL_MODEL_CONFIG = {
   projModel: {
     modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
     downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
-  }
+  },
+  ctx_size: '2048'
+}
+
+const LARGE_MULTIMODAL_CONFIG = {
+  llmModel: {
+    modelName: 'Qwen3VL-2B-Instruct-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf'
+  },
+  projModel: {
+    modelName: 'mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf',
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf'
+  },
+  ctx_size: '7046'
 }
 
 const TEST_CONSTANTS = {
   timeout: 900_000, // 15 minutes
+  maxWaitSeconds: 1000,
   defaultPrompt: 'Describe the image briefly in one sentence.'
 }
 
@@ -57,65 +70,56 @@ const DEVICE_CONFIGS = isMobile
  * @param {string} device - Device type ('cpu' or 'gpu')
  * @returns {Object} Model configuration object
  */
-function getConfig (device) {
+function getConfig (device, modelConfig) {
   return {
     gpu_layers: '98',
-    ctx_size: '2048',
     temp: '0.0',
     verbosity: '2',
-    device
+    device,
+    ctx_size: modelConfig.ctx_size
   }
 }
 
 /**
- * Sets up a multimodal addon with LLM and projection models
+ * Sets up a multimodal LlmLlamacpp instance with LLM and projection models
  * @param {Object} t - Test instance
  * @param {string} device - Device to use ('cpu' or 'gpu')
- * @returns {Promise<{addon: LlmLlamacpp, loader: FilesystemDL, llmModelPath: string, projModelPath: string}>}
+ * @returns {Promise<{inference: LlmLlamacpp, loader: FilesystemDL}>}
  */
-async function setupMultimodalAddon (t, device = 'gpu') {
-  const [llmModelName, llmDirPath] = await ensureModel(MULTIMODAL_MODEL_CONFIG.llmModel)
-  const llmModelPath = `${llmDirPath}/${llmModelName}`
-  t.ok(fs.existsSync(llmModelPath), 'LLM model file should exist')
+async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
+  const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
+  t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
 
-  const [projModelName] = await ensureModel(MULTIMODAL_MODEL_CONFIG.projModel)
-  const projModelPath = `${llmDirPath}/${projModelName}`
-  t.ok(fs.existsSync(projModelPath), 'Projection model file should exist')
+  const [projModelName] = await ensureModel(modelConfig.projModel)
+  t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
 
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
-  const loader = new FilesystemDL({ dirPath: llmDirPath })
-
-  const addon = new LlmLlamacpp({
+  const loader = new FilesystemDL({ dirPath })
+  const inference = new LlmLlamacpp({
+    modelName,
     loader,
-    modelName: llmModelName,
-    diskPath: llmDirPath,
-    projectionModel: projModelName,
     logger: console,
-    opts: { stats: true }
-  }, getConfig(device))
-
-  await addon.load()
-
-  const status = await addon.status()
-  t.ok(['LOADING', 'IDLE', 'LISTENING'].includes(status), 'Addon should have valid initial status')
+    diskPath: dirPath,
+    projectionModel: projModelName
+  }, getConfig(device, modelConfig))
 
   t.teardown(async () => {
-    specLogger.release()
-    await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
+    await loader.close()
+    await inference.unload()
   })
 
-  return { addon, loader, llmModelPath, projModelPath }
+  await inference.load()
+
+  return { inference, loader }
 }
 
 /**
- * Describes an image using the addon and collects performance metrics
- * @param {LlmLlamacpp} addon - Addon instance
+ * Describes an image using the inference instance
+ * @param {LlmLlamacpp} inference - LlmLlamacpp instance
  * @param {string} imageFilePath - Path to the image file
  * @param {string} prompt - Custom prompt for image description
- * @returns {Promise<{generatedText: string, totalTime: number, stats: Object}>}
+ * @returns {Promise<{generatedText: string, startTime: number, endTime: number}>}
  */
-async function describeImage (addon, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
+async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
@@ -125,21 +129,67 @@ async function describeImage (addon, imageFilePath, prompt = TEST_CONSTANTS.defa
   ]
 
   const startTime = Date.now()
-  const response = await addon.run(messages)
-  const chunks = []
+  const response = await inference.run(messages)
+  const generatedText = []
+  let error = null
 
-  await response
-    .onUpdate(data => {
-      chunks.push(data)
-    })
-    .await()
+  response.onUpdate(data => {
+    generatedText.push(data)
+  }).onError(err => {
+    error = err
+  })
 
-  const totalTime = Date.now() - startTime
+  await response.await()
+
+  if (error) {
+    throw new Error('Inference error: ' + error)
+  }
 
   return {
-    generatedText: chunks.join(''),
-    totalTime,
-    stats: response.stats || {}
+    generatedText: generatedText.join(''),
+    startTime,
+    endTime: Date.now()
+  }
+}
+
+/**
+ * Runs inference with multiple images and a single text prompt (e.g. "what is in these two images?").
+ * @param {LlmLlamacpp} inference - LlmLlamacpp instance
+ * @param {string[]} imageFilePaths - Paths to image files (order preserved)
+ * @param {string} prompt - Text prompt after the images
+ * @returns {Promise<{generatedText: string, startTime: number, endTime: number}>}
+ */
+async function describeMultipleImages (inference, imageFilePaths, prompt) {
+  const messages = [
+    { role: 'system', content: 'You are a helpful, respectful and honest assistant.' }
+  ]
+  for (const imageFilePath of imageFilePaths) {
+    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
+    messages.push({ role: 'user', type: 'media', content: imageBytes })
+  }
+  messages.push({ role: 'user', content: prompt })
+
+  const startTime = Date.now()
+  const response = await inference.run(messages)
+  const generatedText = []
+  let error = null
+
+  response.onUpdate(data => {
+    generatedText.push(data)
+  }).onError(err => {
+    error = err
+  })
+
+  await response.await()
+
+  if (error) {
+    throw new Error('Inference error: ' + error)
+  }
+
+  return {
+    generatedText: generatedText.join(''),
+    startTime,
+    endTime: Date.now()
   }
 }
 
@@ -167,22 +217,13 @@ function checkKeywordsInText (text, keywords) {
  * Formats performance metrics for test output
  * @param {string} label - Test label (e.g., '[GPU]')
  * @param {number} totalTime - Total execution time in milliseconds
- * @param {Object} stats - Statistics object from addon
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, totalTime, stats) {
-  const ttft = stats.TTFT || 0
-  const tps = stats.TPS || 0
-  const generatedTokens = stats.generatedTokens || 0
-  const promptTokens = stats.promptTokens || 0
+function formatPerformanceMetrics (label, totalTime) {
   const totalSeconds = (totalTime / 1000).toFixed(2)
 
   return `${label} Performance Metrics:
-    - Total time: ${totalTime}ms (${totalSeconds}s)
-    - Time to first token (TTFT): ${ttft}ms
-    - Generated tokens: ${generatedTokens} tokens
-    - Prompt tokens: ${promptTokens} tokens
-    - Tokens per second (TPS): ${tps.toFixed(2)} t/s`
+    - Total time: ${totalTime}ms (${totalSeconds}s)`
 }
 
 /**
@@ -221,21 +262,22 @@ for (const testCase of imageTestCases) {
       const label = `[${deviceConfig.id.toUpperCase()}]`
 
       // Setup test infrastructure
-      const { addon } = await setupMultimodalAddon(t, deviceConfig.device)
+      const { inference } = await setupMultimodalInference(t, deviceConfig.device)
 
       // Verify image file exists
       const imageFilePath = getMediaPath(testCase.imageFile)
       t.ok(fs.existsSync(imageFilePath), `${label} ${testCase.imageFile} image file should exist`)
 
       // Run image description inference
-      const { generatedText, totalTime, stats } = await describeImage(addon, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+      const { generatedText, startTime, endTime } = await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+      const totalTime = endTime - startTime
 
       // Log output and statistics
       t.comment(`${label} Generated text: ${generatedText}`)
-      t.comment(`${label} Stats from addon: ${JSON.stringify(stats, null, 2)}`)
-      t.comment(formatPerformanceMetrics(label, totalTime, stats))
+      t.comment(formatPerformanceMetrics(label, totalTime))
 
       // Assertions: Content recognition
+      t.ok(generatedText.length > 0, `${label} Should generate some text output for the image`)
       const { foundKeywords, hasMatch } = checkKeywordsInText(generatedText, testCase.keywords)
       t.ok(hasMatch,
         `${label} Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
@@ -245,9 +287,45 @@ for (const testCase of imageTestCases) {
   })
 }
 
-// Keep event loop alive briefly to let pending async operations complete
-// This prevents C++ destructors from running while async cleanup is still happening
-// which can cause segfaults (exit code 139)
-setImmediate(() => {
-  setTimeout(() => {}, 500)
+// TODO: Fix multi-image for smaller models? Seems like an image per separate message works
+// TODO: on smaller models, rather than all images on same message.
+// TODO: Discussion at: https://github.com/tetherto/qvac/pull/172#discussion_r2807275659
+test('llama addon can handle multiple images in one prompt', { timeout: TEST_CONSTANTS.timeout, skip: true }, async t => {
+  const imageFiles = ['elephant.jpg', 'fruitPlate.png']
+  const imagePaths = imageFiles.map(f => getMediaPath(f))
+  const prompt = 'What is in these two images?'
+
+  for (const deviceConfig of DEVICE_CONFIGS) {
+    const label = `[${deviceConfig.id.toUpperCase()}]`
+
+    const { inference } = await setupMultimodalInference(t, deviceConfig.device, LARGE_MULTIMODAL_CONFIG)
+
+    for (const p of imagePaths) {
+      t.ok(fs.existsSync(p), `${label} image file should exist: ${p}`)
+    }
+
+    const { generatedText, startTime, endTime } = await describeMultipleImages(
+      inference,
+      imagePaths,
+      prompt
+    )
+    const totalTime = endTime - startTime
+
+    t.comment(`${label} Generated text: ${generatedText}`)
+    t.comment(formatPerformanceMetrics(label, totalTime))
+
+    t.ok(generatedText.length > 0, `${label} Should generate some text for multiple images`)
+
+    // Expect output to reference both images: at least one elephant-related and one fruit-related
+    const elephantKeywords = ['elephant', 'elephants']
+    const fruitKeywords = ['fruit', 'fruits', 'plate', 'apple', 'apples']
+    const { hasMatch: hasElephant } = checkKeywordsInText(generatedText, elephantKeywords)
+    const { hasMatch: hasFruit } = checkKeywordsInText(generatedText, fruitKeywords)
+
+    t.ok(
+      hasElephant && hasFruit,
+      `${label} Output should mention both images (elephant and fruit). ` +
+      `Full output: "${generatedText}"`
+    )
+  }
 })

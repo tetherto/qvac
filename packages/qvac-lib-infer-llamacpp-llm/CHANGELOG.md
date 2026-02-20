@@ -1,5 +1,94 @@
 # Changelog
 
+## [0.9.0] - 2026-02-18
+
+- Use new addon-cpp architecture for simplified Js Addon creation and usage.
+- Use AddonCpp on CLI executable (to mimic JsAddon behavior/usage).
+- Single job per addon instance; no templates, no state tracking.
+- Asynchronous cancel based on futures: `await addon.cancel()` / `await response.cancel()` now wait until the job is actually finished.
+- **Multiple images support:** Prompts can now include several `type: 'media'` user messages; each image is loaded in order and matched to placeholders so the model receives all images.
+- Integration test for multiple images in one prompt (`llama addon can handle multiple images in one prompt`).
+
+---
+
+### Changed
+- Multimodal parser now emits one user message per image (each with a single placeholder) so the tokenizer maps each placeholder to the corresponding bitmap and all images are in context.
+
+### Breaking Changes
+
+**LlamaInterface / Addon (native addon surface):**
+
+- **Constructor:** The 4th argument `transitionCb` (state-change callback) was removed. The addon no longer reports LISTENING / IDLE / STOPPED etc.
+- **Removed methods:** `pause()`, `stop()`, `status()`, **`destroyInstance()`** — single-job addon no longer exposes queue/state or pause/stop. Use **`unload()`** for teardown instead of `destroyInstance()`.
+- **`append(data)` → `runJob(messages)`:** Input was a single object `{ type, input? }` (and a separate "end of job" append); now a **single array** of message objects for the whole run. No longer returns a job ID (only one job per instance).
+- **`cancel(jobId?)` → `cancel()`:** No `jobId` argument (only one job). **Behavior:** `await addon.cancel()` (and thus `await response.cancel()`) now **waits until the job is actually finished** (future-based cancel in C++); previously `await` did not guarantee the job had stopped.
+
+**LlmLlamacpp usage:**
+
+- **Single job per run:** Each `run(prompt)` sends one `runJob(promptMessages)` and uses a fixed job id `'job'`. Queueing multiple `append()` calls and using multiple job IDs is no longer supported.
+- **`END_OF_INPUT` / second append:** No longer used; the full prompt (including optional media) is sent in one `runJob()` call.
+
+#### BEFORE
+
+```typescript
+// Old: constructor with state callback
+const addon = new LlamaInterface(binding, config, outputCb, (state) => logger.info(state))
+
+// Old: queue text then end-of-input; cancel by job ID
+const jobId = await addon.append({ type: 'text', input: JSON.stringify(prompt) })
+await addon.append({ type: 'end of job' })
+// ...
+await addon.cancel(jobId)  // jobId optional; await did NOT guarantee job finished
+
+// Old: state and control
+await addon.status()
+await addon.pause()
+await addon.stop()
+
+// Old: teardown
+await addon.destroyInstance()
+```
+
+#### AFTER
+
+```typescript
+// New: no state callback
+const addon = new LlamaInterface(binding, config, outputCb)
+
+// New: single run with array of messages; cancel with no args and proper completion
+const promptMessages = [
+  { type: 'media', content: mediaUint8Array },
+  { type: 'text', input: JSON.stringify(textMessages) }
+]
+await addon.runJob(promptMessages)
+// ...
+await addon.cancel()  // no jobId; Promise resolves when job is actually finished
+
+// status / pause / stop removed; use unload() for teardown
+await addon.unload()
+```
+
+### API Changes
+
+**Addon (LlamaInterface):**
+
+- **`runJob(messages)`** — Runs one inference job. `messages` is an array of `{ type: 'media', content: Uint8Array }` and/or `{ type: 'text', input: string }` (e.g. JSON-stringified chat messages). No return value (no job ID).
+- **`cancel()`** — Cancels the current job. No arguments. Returns a Promise that resolves when the job has finished (async cancel backed by futures in C++).
+- **Constructor** — `(binding, configurationParams, outputCb)` only; `transitionCb` removed.
+- **Removed:** `append`, `pause`, `stop`, `status`, `destroyInstance`. Use `unload()` for cleanup.
+
+**Usage from LlmLlamacpp (unchanged for callers):**
+
+- `model.run(prompt)` still returns a `QvacResponse`.
+- `response.cancel()` still takes no arguments; the only change is that **`await response.cancel()`** now waits until the underlying job has actually stopped.
+
+```typescript
+// New API usage: single job per run, cancel waits for completion
+await model.run(prompt)
+// … optionally cancel and wait until job is really finished
+await model.cancel()
+```
+
 ## [0.8.9] - 2026-02-11
 This release updates the qvac-fabric-llm.cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the fix for apple A19 devices when loading models using Metal backend.
 
