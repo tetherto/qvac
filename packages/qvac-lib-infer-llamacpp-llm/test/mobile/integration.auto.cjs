@@ -50,10 +50,6 @@ async function runToolCallingTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/tool-calling.test.js', options)
 }
 
-async function runTwoInstancesConcurrentTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/two-instances-concurrent.test.js', options)
-}
-
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/utf8-output.test.js', options)
 }
