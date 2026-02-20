@@ -12,17 +12,13 @@ const SWEEP_OVERRIDE_KEYS = [
   'quantization',
   'device',
   'ctx-size',
-  'no-mmap',
   'threads',
   'batch-size',
   'ubatch-size',
-  'no-kv-offload',
   'flash-attn',
   'cache-type-k',
   'cache-type-v'
 ]
-
-const BOOLEAN_SWEEP_KEYS = new Set(['no-mmap', 'no-kv-offload'])
 
 function splitCsvArg (value, key) {
   const normalizedInput = normalizeArgValue(value)
@@ -39,16 +35,6 @@ function splitCsvArg (value, key) {
   return parts
 }
 
-function parseBooleanToken (token, key) {
-  const normalized = String(token).trim().toLowerCase()
-  if (normalized === 'true' || normalized === '1' || normalized === 'on') return true
-  if (normalized === 'false' || normalized === '0' || normalized === 'off') return false
-  throw new Error(
-    `Invalid boolean value "${token}" for --${key}. ` +
-    'Use true/false (or on/off, 1/0).'
-  )
-}
-
 function buildSweepFromArgs (baseSweep, args) {
   const nextSweep = {}
   for (const [key, values] of Object.entries(baseSweep)) {
@@ -58,9 +44,7 @@ function buildSweepFromArgs (baseSweep, args) {
   for (const key of SWEEP_OVERRIDE_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(args, key)) continue
     const rawValues = splitCsvArg(args[key], key)
-    nextSweep[key] = BOOLEAN_SWEEP_KEYS.has(key)
-      ? rawValues.map((v) => parseBooleanToken(v, key))
-      : rawValues.map((v) => String(v))
+    nextSweep[key] = rawValues.map((v) => String(v))
   }
 
   return nextSweep
@@ -95,9 +79,7 @@ function buildCases (modelDef, sweep) {
   const ctxSizes = sweep['ctx-size'] || []
   const batchSizes = sweep['batch-size'] || []
   const ubatchSizes = sweep['ubatch-size'] || []
-  const noMmapValues = sweep['no-mmap'] || []
   const flashAttnValues = sweep['flash-attn'] || []
-  const noKvOffloadValues = sweep['no-kv-offload'] || []
   const threadsValues = sweep.threads || []
   const cacheTypeKValues = sweep['cache-type-k'] || []
   const cacheTypeVValues = sweep['cache-type-v'] || []
@@ -117,7 +99,7 @@ function buildCases (modelDef, sweep) {
   }
 
   if (devices.length > 0 && ctxSizes.length > 0 && batchSizes.length > 0 && ubatchSizes.length > 0 &&
-      noMmapValues.length > 0 && flashAttnValues.length > 0 && noKvOffloadValues.length > 0 &&
+      flashAttnValues.length > 0 &&
       threadsValues.length > 0 && cacheTypeKValues.length > 0 && cacheTypeVValues.length > 0) {
     const combos = cartesianProduct([
       supportedQuants,
@@ -125,15 +107,13 @@ function buildCases (modelDef, sweep) {
       ctxSizes,
       batchSizes,
       ubatchSizes,
-      noMmapValues,
       flashAttnValues,
-      noKvOffloadValues,
       threadsValues,
       cacheTypeKValues,
       cacheTypeVValues
     ])
 
-    for (const [quantization, device, ctxSize, batchSize, ubatchSize, noMmap, flashAttn, noKvOffload, threads, cacheTypeK, cacheTypeV] of combos) {
+    for (const [quantization, device, ctxSize, batchSize, ubatchSize, flashAttn, threads, cacheTypeK, cacheTypeV] of combos) {
       if (Number(ubatchSize) > Number(batchSize)) {
         continue // Skip combinations where ubatchSize is greater than batchSize
       }
@@ -143,15 +123,13 @@ function buildCases (modelDef, sweep) {
         'ctx-size': ctxSize,
         'batch-size': batchSize,
         'ubatch-size': ubatchSize,
-        'no-mmap': noMmap,
         'flash-attn': flashAttn,
-        'no-kv-offload': noKvOffload,
         threads,
         'cache-type-k': cacheTypeK,
         'cache-type-v': cacheTypeV
       }
 
-      const caseId = `${modelDef.id}__q=${quantization}__dev=${device}__ctx=${ctxSize}__bs=${batchSize}__ubs=${ubatchSize}__mmap=${noMmap ? 'off' : 'on'}__fa=${flashAttn}__kvo=${noKvOffload ? 'off' : 'on'}__t=${threads}__ck=${cacheTypeK}__cv=${cacheTypeV}`
+      const caseId = `${modelDef.id}__q=${quantization}__dev=${device}__ctx=${ctxSize}__bs=${batchSize}__ubs=${ubatchSize}__fa=${flashAttn}__t=${threads}__ck=${cacheTypeK}__cv=${cacheTypeV}`
 
       for (const promptCase of PROMPT_CASES) {
         cases.push({
@@ -229,11 +207,8 @@ function aggregateRunMetrics (runMetrics) {
   const unloadMsValues = runMetrics.map((x) => x.unloadMs).filter((x) => x != null)
   const ttftMsValues = runMetrics.map((x) => x.ttftMs).filter((x) => x != null)
   const tpsValues = runMetrics.map((x) => x.tps).filter((x) => x != null)
-  const promptTokensValues = runMetrics.map((x) => x.promptTokens).filter((x) => x != null)
-  const generatedTokensValues = runMetrics.map((x) => x.generatedTokens).filter((x) => x != null)
-  const rssValues = runMetrics.map((x) => x?.runtimeMemory?.rssMb).filter((x) => x != null)
-  const heapValues = runMetrics.map((x) => x?.runtimeMemory?.heapUsedMb).filter((x) => x != null)
-  const extValues = runMetrics.map((x) => x?.runtimeMemory?.externalMb).filter((x) => x != null)
+  const firstPromptTokens = runMetrics.find((x) => x.promptTokens != null)?.promptTokens ?? null
+  const firstGeneratedTokens = runMetrics.find((x) => x.generatedTokens != null)?.generatedTokens ?? null
 
   return {
     repeats: runMetrics.length,
@@ -247,18 +222,8 @@ function aggregateRunMetrics (runMetrics) {
     ttftMsStd: round(stddev(ttftMsValues), 3),
     tpsMean: round(average(tpsValues), 3),
     tpsStd: round(stddev(tpsValues), 3),
-    promptTokensMean: round(average(promptTokensValues), 0),
-    promptTokensStd: round(stddev(promptTokensValues), 3),
-    generatedTokensMean: round(average(generatedTokensValues), 0),
-    generatedTokensStd: round(stddev(generatedTokensValues), 3),
-    runtimeMemory: {
-      rssMbMean: round(average(rssValues), 2),
-      rssMbStd: round(stddev(rssValues), 3),
-      heapUsedMbMean: round(average(heapValues), 2),
-      heapUsedMbStd: round(stddev(heapValues), 3),
-      externalMbMean: round(average(extValues), 2),
-      externalMbStd: round(stddev(extValues), 3)
-    }
+    promptTokens: firstPromptTokens,
+    generatedTokens: firstGeneratedTokens
   }
 }
 
@@ -330,9 +295,7 @@ module.exports = {
   PROMPT_CASES,
   PROMPTS_PER_CASE,
   SWEEP_OVERRIDE_KEYS,
-  BOOLEAN_SWEEP_KEYS,
   splitCsvArg,
-  parseBooleanToken,
   buildSweepFromArgs,
   ensureDir,
   resolveModelName,

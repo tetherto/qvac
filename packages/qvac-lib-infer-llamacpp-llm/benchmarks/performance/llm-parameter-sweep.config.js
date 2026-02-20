@@ -100,11 +100,9 @@ const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
   device: getDefaultSweepDevices(),
   'ctx-size': DEFAULT_SWEEP_CTX_SIZES.map(String),
-  'no-mmap': [false, true],
   threads: ['2', '4', '8'],
   'batch-size': DEFAULT_SWEEP_BATCH_SIZES.map(String), // max: 10k
   'ubatch-size': ['128', '512'], // must be <= batch-size
-  'no-kv-offload': [false, true],
   'flash-attn': ['off', 'on'],
   'cache-type-k': ['f16', 'q8_0', 'q4_0'],
   'cache-type-v': ['f16', 'q8_0', 'q4_0']

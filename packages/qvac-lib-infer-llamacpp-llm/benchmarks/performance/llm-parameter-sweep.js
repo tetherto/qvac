@@ -11,7 +11,7 @@ const {
   parseArgs,
   buildConfigObject
 } = require('./utils')
-const { round, average, stddev, elapsedMs, parsePositiveInt, exactMatch, memorySnapshot } = require('./math')
+const { round, average, stddev, elapsedMs, parsePositiveInt, exactMatch } = require('./math')
 const { createDebugLogger, truncateText, createProgressReporter } = require('./progress')
 const { tsFileStamp, toMarkdown, compactPromptErrors } = require('./reporters')
 const {
@@ -329,13 +329,10 @@ async function main () {
         const caseMetricSamples = {
           runMs: [],
           ttftMs: [],
-          tps: [],
-          promptTokens: [],
-          generatedTokens: [],
-          rssMb: [],
-          heapUsedMb: [],
-          externalMb: []
+          tps: []
         }
+        let firstPromptTokens = null
+        let firstGeneratedTokens = null
         for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
           const prompt = promptsForCase[promptIndex]
 
@@ -368,19 +365,15 @@ async function main () {
                 ttftMs: round(ttftMs, 3),
                 tps: round(stats.TPS != null ? stats.TPS : null, 3),
                 promptTokens: stats.promptTokens ?? null,
-                generatedTokens: stats.generatedTokens ?? null,
-                runtimeMemory: memorySnapshot()
+                generatedTokens: stats.generatedTokens ?? null
               }
 
               runMetrics.push(metrics)
               caseMetricSamples.runMs.push(metrics.runMs)
               if (metrics.ttftMs != null) caseMetricSamples.ttftMs.push(metrics.ttftMs)
               if (metrics.tps != null) caseMetricSamples.tps.push(metrics.tps)
-              if (metrics.promptTokens != null) caseMetricSamples.promptTokens.push(metrics.promptTokens)
-              if (metrics.generatedTokens != null) caseMetricSamples.generatedTokens.push(metrics.generatedTokens)
-              if (metrics.runtimeMemory?.rssMb != null) caseMetricSamples.rssMb.push(metrics.runtimeMemory.rssMb)
-              if (metrics.runtimeMemory?.heapUsedMb != null) caseMetricSamples.heapUsedMb.push(metrics.runtimeMemory.heapUsedMb)
-              if (metrics.runtimeMemory?.externalMb != null) caseMetricSamples.externalMb.push(metrics.runtimeMemory.externalMb)
+              if (firstPromptTokens == null && metrics.promptTokens != null) firstPromptTokens = metrics.promptTokens
+              if (firstGeneratedTokens == null && metrics.generatedTokens != null) firstGeneratedTokens = metrics.generatedTokens
               caseRepeatsAttempted += 1
               caseRepeatsSucceeded += 1
               if (!firstOutput) {
@@ -549,18 +542,8 @@ async function main () {
               ttftMsStd: round(stddev(caseMetricSamples.ttftMs), 3),
               tpsMean: round(average(caseMetricSamples.tps), 3),
               tpsStd: round(stddev(caseMetricSamples.tps), 3),
-              promptTokensMean: round(average(caseMetricSamples.promptTokens), 0),
-              promptTokensStd: round(stddev(caseMetricSamples.promptTokens), 3),
-              generatedTokensMean: round(average(caseMetricSamples.generatedTokens), 0),
-              generatedTokensStd: round(stddev(caseMetricSamples.generatedTokens), 3),
-              runtimeMemory: {
-                rssMbMean: round(average(caseMetricSamples.rssMb), 2),
-                rssMbStd: round(stddev(caseMetricSamples.rssMb), 3),
-                heapUsedMbMean: round(average(caseMetricSamples.heapUsedMb), 2),
-                heapUsedMbStd: round(stddev(caseMetricSamples.heapUsedMb), 3),
-                externalMbMean: round(average(caseMetricSamples.externalMb), 2),
-                externalMbStd: round(stddev(caseMetricSamples.externalMb), 3)
-              }
+              promptTokens: firstPromptTokens,
+              generatedTokens: firstGeneratedTokens
             }
           : null
 

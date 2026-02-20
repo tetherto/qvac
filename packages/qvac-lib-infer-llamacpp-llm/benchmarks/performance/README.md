@@ -76,9 +76,7 @@ All sweep dimensions accept comma-separated values for full-factorial grid.
 | `--batch-size` | `str` | `512,2048` | Batch sizes |
 | `--ubatch-size` | `str` | `128,512` | Micro-batch sizes (must be <= batch-size) |
 | `--threads` | `str` | `2,4,8` | Thread counts |
-| `--no-mmap` | `str` | `false,true` | Disable memory mapping |
 | `--flash-attn` | `str` | `off,on` | Flash attention |
-| `--no-kv-offload` | `str` | `false,true` | Disable KV cache offloading |
 | `--cache-type-k` | `str` | `f16,q8_0,q4_0` | KV cache key type |
 | `--cache-type-v` | `str` | `f16,q8_0,q4_0` | KV cache value type |
 | `--repeats` | `int` | `5` | Repeats per case |
