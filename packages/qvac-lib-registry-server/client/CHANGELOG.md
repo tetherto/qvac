@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.7]
+
+Release Date: 2026-02-19
+
+### 🐛 Fixed
+
+- Fix Pear app crash (`MODULE_NOT_FOUND: Cannot find module 'os'`) by replacing npm aliases with `#`-prefixed subpath imports for cross-runtime Bare/Node.js compatibility (#446)
+- Update stale `DEFAULT_REGISTRY_CORE_KEY` to current production registry (#446)
+
 ## [0.1.6]
 
 Release Date: 2026-02-17
