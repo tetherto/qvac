@@ -1,11 +1,13 @@
-#include <fstream>
+#include <any>
+#include <chrono>
+#include <functional>
 #include <iostream>
-#include <sstream>
+#include <thread>
 #include <unordered_map>
 
 #include <picojson/picojson.h>
 
-#include "model-interface/LlamaModel.hpp"
+#include "../addon/AddonCpp.hpp"
 
 std::string prompt_with_tool = R"([
   {
@@ -86,18 +88,28 @@ int main(int argc, char* argv[]) {
   config_files["ctx_size"] = "8124";
   config_files["gpu_layers"] = "99";
   try {
-    // Create LlamaModel instance with the correct constructor
-    LlamaModel model(model_path, projector_path, config_files);
+    qvac_lib_inference_addon_llama::AddonInstance addonInstance =
+        qvac_lib_inference_addon_llama::createInstance(
+            std::move(model_path),
+            std::move(projector_path),
+            std::move(config_files));
+    addonInstance.addon->activate();
 
-    model.waitForLoadInitialization();
-
-    // Process the prompt with json
     std::cout << "--------------Prompt------------" << "\n";
     std::cout << prompt_with_tool << "\n";
-    std::string out = model.process(prompt_with_tool);
-    std::cout << "--------------Answer------------" << "\n";
-    std::cout << out << "\n";
+    addonInstance.addon->runJob(LlamaModel::Prompt{.input = prompt_with_tool});
 
+    std::cout << "--------------Answer------------" << "\n";
+    std::optional<std::string> answer =
+        addonInstance.outputHandler->tryPop(std::chrono::seconds(30));
+    if (answer.has_value()) {
+      std::cout << *answer << std::endl;
+    } else {
+      std::cout << "Response timed out." << std::endl;
+    }
+
+    // Give time for other output events (such as stats)
+    std::this_thread::sleep_for(std::chrono::seconds(1));
   } catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return 1;

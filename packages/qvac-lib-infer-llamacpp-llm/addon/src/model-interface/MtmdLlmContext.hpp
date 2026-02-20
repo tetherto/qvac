@@ -172,6 +172,11 @@ private:
    */
   void initVisionContext();
 
+  void flushPendingUtf8ToCallback(
+      const std::function<void(const std::string&)>& outputCallback);
+  void applyContextDiscard();
+  void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
+
   common_init_result llamaInit_;
   mtmd::context_ptr ctxVision_;
   llama_model* model_;

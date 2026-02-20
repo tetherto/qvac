@@ -15,8 +15,7 @@ class TranslationInterface {
     this._handle = binding.createInstance(
       this,
       configurationParams,
-      outputCb,
-      transitionCb
+      outputCb
     )
 
     // Set up C++ → JS logger
@@ -34,16 +33,16 @@ class TranslationInterface {
       this._loggerInitialized = true
     }
   }
+  
+  // For BaseInference.
+  async destroyInstance () {
+    await this.destroy()
+  }
 
   /**
-   * Stops the current process execution,
-   * frees memory allocated for configuration and weights,
-   * destroys the native instance, and moves addon to the UNLOADED state.
+   * Stops addon process and clears resources (including memory).
    */
   async unload () {
-    binding.unload(this._handle)
-    // Automatically destroy the instance to free native resources
-    // This mirrors the pattern used in other QVAC addons
     await this.destroy()
   }
 
@@ -111,33 +110,11 @@ class TranslationInterface {
   }
 
   /**
-   * Pauses current inference process
+   * Cancel a inference process 
    */
-  async pause () {
+  async cancel () {
     try {
-      binding.pause(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_PAUSE,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Pauses current inference process
-   */
-  async stop () {
-    binding.stop(this._handle)
-  }
-
-  /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
-   */
-  async cancel (jobId) {
-    try {
-      binding.cancel(this._handle, jobId)
+      await binding.cancel(this._handle)
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_CANCEL,
@@ -152,11 +129,10 @@ class TranslationInterface {
    * @param {Object} data
    * @param {String} data.type
    * @param {String} data.input
-   * @returns {Number} - job ID
    */
-  async append (data) {
+  async runJob (data) {
     try {
-      return binding.append(this._handle, data)
+      return binding.runJob(this._handle, data)
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_APPEND,
