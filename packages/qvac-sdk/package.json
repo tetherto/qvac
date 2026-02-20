@@ -55,7 +55,10 @@
     "./logging": {
       "import": "./dist/logging/index.js"
     },
-    "./pear-pre": "./dist/pear/pre.js"
+    "./pear-pre": "./dist/pear/pre.js",
+    "./electron-forge": {
+      "require": "./electron-forge/index.cjs"
+    }
   },
   "imports": {
     "#rpc": {
@@ -72,6 +75,7 @@
   "files": [
     "bare-imports.json",
     "dist/**/*",
+    "electron-forge/**/*",
     "expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
@@ -130,6 +134,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@electron-forge/plugin-base": "^7.11.1",
     "@expo/config-plugins": "^54.0.1",
     "@lancedb/lancedb": "^0.21.3",
     "@modelcontextprotocol/sdk": "^1.12.1",
@@ -166,6 +171,7 @@
     "typescript-eslint": "^8.39.0"
   },
   "peerDependencies": {
+    "@electron-forge/plugin-base": "^7.11.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@qvac/cli": "^0.1.2",
     "bare-abort-controller": "^1.0.0",
@@ -201,7 +207,7 @@
     "tar-stream": "^3.1.7"
   },
   "peerDependenciesMeta": {
-    "@qvac/cli": {
+    "@electron-forge/plugin-base": {
       "optional": true
     },
     "@modelcontextprotocol/sdk": {
