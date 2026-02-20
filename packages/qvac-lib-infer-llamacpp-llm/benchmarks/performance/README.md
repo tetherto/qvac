@@ -155,7 +155,7 @@ results/parameter-sweep/
 | `qualityMatch` | Exact-match vs baseline (1.0 or 0.0) |
 | `qualityJudge` | Semantic agreement score [0, 1] (from judge pass) |
 
-All metrics report mean and population standard deviation across repeats.
+Timing metrics report mean and population standard deviation across repeats. Token counts are from the first successful run.
 
 ### Status Values
 

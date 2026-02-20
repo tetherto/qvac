@@ -52,18 +52,6 @@ function cartesianProduct (arrays) {
   )
 }
 
-function memorySnapshot () {
-  if (typeof process.memoryUsage !== 'function') {
-    return { rssMb: null, heapUsedMb: null, externalMb: null }
-  }
-  const mem = process.memoryUsage()
-  return {
-    rssMb: round(mem.rss / (1024 * 1024), 2),
-    heapUsedMb: round(mem.heapUsed / (1024 * 1024), 2),
-    externalMb: round(mem.external / (1024 * 1024), 2)
-  }
-}
-
 module.exports = {
   round,
   average,
@@ -71,6 +59,5 @@ module.exports = {
   elapsedMs,
   parsePositiveInt,
   exactMatch,
-  cartesianProduct,
-  memorySnapshot
+  cartesianProduct
 }

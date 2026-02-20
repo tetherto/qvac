@@ -68,15 +68,23 @@ async function main () {
   ensureDir(resultsDir)
 
   const progressFile = path.join(resultsDir, 'llm-parameter-sweep.progress.json')
+  const sweepFingerprint = JSON.stringify({ repeats, sweep })
   let completedCases = new Set()
   let runStartedAt = null
   try {
     const progressData = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
-    completedCases = new Set(progressData.completedCases || [])
-    runStartedAt = typeof progressData.startedAt === 'string' && progressData.startedAt
-      ? progressData.startedAt
-      : null
-    debugLogger.log(`Resuming: ${completedCases.size} cases already completed`)
+    if (progressData.sweepFingerprint && progressData.sweepFingerprint !== sweepFingerprint) {
+      console.warn(
+        'Progress file sweep parameters differ from current invocation (e.g. --repeats or sweep dimensions changed). ' +
+        'Starting fresh. Delete progress file manually to suppress this warning.'
+      )
+    } else {
+      completedCases = new Set(progressData.completedCases || [])
+      runStartedAt = typeof progressData.startedAt === 'string' && progressData.startedAt
+        ? progressData.startedAt
+        : null
+      debugLogger.log(`Resuming: ${completedCases.size} cases already completed`)
+    }
   } catch {
     // No progress file, start fresh
   }
@@ -93,6 +101,7 @@ async function main () {
       try {
         fs.writeFileSync(progressFile, JSON.stringify({
           startedAt: runStartedAt,
+          sweepFingerprint,
           completedCases: Array.from(completedCases)
         }, null, 2))
       } catch (writeError) {
@@ -112,6 +121,7 @@ async function main () {
     try {
       fs.writeFileSync(progressFile, JSON.stringify({
         startedAt: runStartedAt,
+        sweepFingerprint,
         completedCases: Array.from(completedCases)
       }, null, 2))
     } catch (writeError) {
@@ -211,31 +221,33 @@ async function main () {
       const caseKey = `${modelDef.id}:${testCase.caseId}`
       if (completedCases.has(caseKey)) {
         const previousRecord = previousCaseRecords.get(caseKey) || null
-        seedBaselineCachesFromRecord(previousRecord, baselineOutputs, adaptiveBaselineOutputs)
-        if (previousRecord) {
+        if (!previousRecord) {
+          console.warn(`Progress marks case as complete but JSONL record is missing — re-running: ${caseKey}`)
+          completedCases.delete(caseKey)
+          // Fall through to run the case normally
+        } else {
+          seedBaselineCachesFromRecord(previousRecord, baselineOutputs, adaptiveBaselineOutputs)
           const resumed = {
             ...previousRecord,
             promptCase: previousRecord.promptCase || testCase.promptCase || null
           }
           persistCaseResult(resumed)
-        } else if (debugEnabled) {
-          debugLogger.warn(`Completed case missing from previous JSONL records: ${caseKey}`)
-        }
-        debugLogger.log(`Skipping already completed case: ${caseKey}`)
-        for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
-          for (let repeat = 1; repeat <= repeats; repeat++) {
-            progress.tick({
-              modelId: modelDef.id,
-              caseIndex: caseIndex + 1,
-              caseCount: cases.length,
-              promptIndex: promptIndex + 1,
-              promptCount: promptsForCase.length,
-              repeat,
-              repeats
-            })
+          debugLogger.log(`Skipping already completed case: ${caseKey}`)
+          for (let promptIndex = 0; promptIndex < promptsForCase.length; promptIndex++) {
+            for (let repeat = 1; repeat <= repeats; repeat++) {
+              progress.tick({
+                modelId: modelDef.id,
+                caseIndex: caseIndex + 1,
+                caseCount: cases.length,
+                promptIndex: promptIndex + 1,
+                promptCount: promptsForCase.length,
+                repeat,
+                repeats
+              })
+            }
           }
+          continue
         }
-        continue
       }
       let loader = null
       let model = null
