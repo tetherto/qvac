@@ -3,7 +3,7 @@
 const path = require('path')
 const process = require('process')
 const IdEnc = require('hypercore-id-encoding')
-const { ENV_KEYS } = require('@tetherto/qvac-registry-schema-mono')
+const { ENV_KEYS } = require('@qvac/registry-schema')
 const { getEnv, updateEnvFile } = require('../utils/env')
 
 const AUTOBASE_ENV_KEY = ENV_KEYS.QVAC_AUTOBASE_KEY || 'QVAC_AUTOBASE_KEY'
@@ -155,13 +155,21 @@ class RegistryConfig {
   }
 
   /**
+   * Get S3 bucket name for model artifact storage.
+   * Required when models.prod.json uses bucket-less s3:/// URLs.
+   */
+  getS3Bucket () {
+    return getEnv(ENV_KEYS.QVAC_S3_BUCKET) || null
+  }
+
+  /**
    * Get all AWS credentials
    */
   getAWSCredentials () {
     const creds = {
       accessKeyId: getEnv(ENV_KEYS.AWS_ACCESS_KEY_ID),
       secretAccessKey: getEnv(ENV_KEYS.AWS_SECRET_ACCESS_KEY),
-      region: getEnv(ENV_KEYS.AWS_REGION, 'eu-central-1')
+      region: getEnv(ENV_KEYS.AWS_REGION)
     }
     return creds
   }
@@ -230,6 +238,16 @@ class RegistryConfig {
 
   getAdditionalIndexers () {
     const rawKeys = getEnv(ENV_KEYS.QVAC_ADDITIONAL_INDEXERS, '')
+    if (!rawKeys) return []
+
+    return rawKeys
+      .split(',')
+      .map(key => key.trim())
+      .filter(Boolean)
+  }
+
+  getRemoveIndexers () {
+    const rawKeys = getEnv(ENV_KEYS.QVAC_REMOVE_INDEXERS, '')
     if (!rawKeys) return []
 
     return rawKeys

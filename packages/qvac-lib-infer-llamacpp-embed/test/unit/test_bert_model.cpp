@@ -7,7 +7,7 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "addon/BertErrors.hpp"
-#include "model-interface/BertModel.h"
+#include "model-interface/BertModel.hpp"
 
 namespace fs = std::filesystem;
 
@@ -124,14 +124,14 @@ protected:
     // Try multiple possible locations for the model file
     std::vector<fs::path> possiblePaths = {
         // From workspace root
-        fs::path{"models/unit-test/gte-small.gguf"},
+        fs::path{"models/unit-test/test-model.gguf"},
         // From build/test/unit (go up 3 levels)
-        fs::path{"../../../models/unit-test/gte-small.gguf"},
+        fs::path{"../../../models/unit-test/test-model.gguf"},
         // Absolute path from backendDir location
         backendDir.parent_path().parent_path().parent_path() / "models" /
-            "unit-test" / "gte-small.gguf",
+            "unit-test" / "test-model.gguf",
         // From current working directory
-        fs::current_path() / "models" / "unit-test" / "gte-small.gguf"};
+        fs::current_path() / "models" / "unit-test" / "test-model.gguf"};
 
     test_model_path = "";
     for (const auto& path : possiblePaths) {
@@ -143,7 +143,7 @@ protected:
 
     // If still not found, use relative path as last resort
     if (test_model_path.empty()) {
-      test_model_path = "models/unit-test/gte-small.gguf";
+      test_model_path = "models/unit-test/test-model.gguf";
     }
   }
 
@@ -156,7 +156,7 @@ protected:
 
 TEST_F(BertModelTest, IsLoadedBeforeInit) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -166,7 +166,7 @@ TEST_F(BertModelTest, IsLoadedBeforeInit) {
 
 TEST_F(BertModelTest, InitializeBackend) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -176,7 +176,7 @@ TEST_F(BertModelTest, InitializeBackend) {
 
 TEST_F(BertModelTest, InitializeBackendWithEmptyDir) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -186,7 +186,7 @@ TEST_F(BertModelTest, InitializeBackendWithEmptyDir) {
 
 TEST_F(BertModelTest, ResetMethod) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -196,7 +196,7 @@ TEST_F(BertModelTest, ResetMethod) {
 
 TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -205,7 +205,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   auto stats = model.runtimeStats();
@@ -232,7 +232,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
 
 TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -241,12 +241,12 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   // Process some input to generate stats
   std::string prompt = "Test prompt for stats";
-  model.encode_host_f32(prompt);
+  model.encodeHostF32(prompt);
 
   auto stats = model.runtimeStats();
   EXPECT_GT(stats.size(), 0);
@@ -288,7 +288,7 @@ TEST_F(BertModelTest, ConstructorWithEmptyConfig) {
 
 TEST_F(BertModelTest, ConstructorWithBackendsDir) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -300,7 +300,7 @@ TEST_F(BertModelTest, ConstructorWithBackendsDir) {
 
 TEST_F(BertModelTest, ModelLoadsSuccessfully) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -309,8 +309,8 @@ TEST_F(BertModelTest, ModelLoadsSuccessfully) {
   model.waitForLoadInitialization();
 
   EXPECT_TRUE(model.isLoaded());
-  EXPECT_NE(model.get_model(), nullptr);
-  EXPECT_NE(model.get_ctx(), nullptr);
+  EXPECT_NE(model.getModel(), nullptr);
+  EXPECT_NE(model.getCtx(), nullptr);
 }
 
 TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
@@ -330,7 +330,7 @@ TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
 
 TEST_F(BertModelTest, EncodeHostF32SingleString) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -339,11 +339,11 @@ TEST_F(BertModelTest, EncodeHostF32SingleString) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string prompt = "Hello world";
-  BertEmbeddings embeddings = model.encode_host_f32(prompt);
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -362,7 +362,7 @@ TEST_F(BertModelTest, EncodeHostF32SingleString) {
 
 TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -371,12 +371,12 @@ TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> prompts = {
       "Hello world", "Test embedding", "Another prompt"};
-  BertEmbeddings embeddings = model.encode_host_f32(prompts);
+  BertEmbeddings embeddings = model.encodeHostF32(prompts);
 
   EXPECT_EQ(embeddings.size(), 3);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -401,7 +401,7 @@ TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
 
 TEST_F(BertModelTest, EncodeHostF32EmptyString) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -410,11 +410,11 @@ TEST_F(BertModelTest, EncodeHostF32EmptyString) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string prompt = "";
-  BertEmbeddings embeddings = model.encode_host_f32(prompt);
+  BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -422,7 +422,7 @@ TEST_F(BertModelTest, EncodeHostF32EmptyString) {
 
 TEST_F(BertModelTest, EncodeHostF32Sequences) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -431,11 +431,11 @@ TEST_F(BertModelTest, EncodeHostF32Sequences) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> sequences = {"First sequence", "Second sequence"};
-  BertEmbeddings embeddings = model.encode_host_f32_sequences(sequences);
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
 
   EXPECT_EQ(embeddings.size(), 2);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -447,7 +447,7 @@ TEST_F(BertModelTest, EncodeHostF32Sequences) {
 
 TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -456,11 +456,11 @@ TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> sequences;
-  BertEmbeddings embeddings = model.encode_host_f32_sequences(sequences);
+  BertEmbeddings embeddings = model.encodeHostF32Sequences(sequences);
 
   EXPECT_EQ(embeddings.size(), 0);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -468,7 +468,7 @@ TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
 
 TEST_F(BertModelTest, ProcessWithStringInput) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -477,7 +477,7 @@ TEST_F(BertModelTest, ProcessWithStringInput) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = "Process this text";
@@ -491,7 +491,7 @@ TEST_F(BertModelTest, ProcessWithStringInput) {
 
 TEST_F(BertModelTest, ProcessWithVectorInput) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -500,7 +500,7 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> input = {"First", "Second", "Third"};
@@ -517,7 +517,7 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
 
 TEST_F(BertModelTest, ProcessWithCallback) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -526,7 +526,7 @@ TEST_F(BertModelTest, ProcessWithCallback) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = "Test callback";
@@ -546,7 +546,7 @@ TEST_F(BertModelTest, ProcessWithCallback) {
 
 TEST_F(BertModelTest, ContextOverflowSingleString) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -555,11 +555,11 @@ TEST_F(BertModelTest, ContextOverflowSingleString) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   // Get model's context size
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size when tokenized
@@ -571,13 +571,12 @@ TEST_F(BertModelTest, ContextOverflowSingleString) {
   }
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
-  EXPECT_THROW(
-      { model.encode_host_f32(longString); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -586,10 +585,10 @@ TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size
@@ -603,12 +602,12 @@ TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
       "Normal prompt", longString, "Another normal"};
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
-  EXPECT_THROW({ model.encode_host_f32(prompts); }, qvac_errors::StatusError);
+  EXPECT_THROW({ model.encodeHostF32(prompts); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ContextOverflowSequences) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -617,10 +616,10 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   // Create a string that will exceed context size
@@ -634,13 +633,12 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
   EXPECT_THROW(
-      { model.encode_host_f32_sequences(sequences); },
-      qvac_errors::StatusError);
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }
 
 TEST_F(BertModelTest, ProcessWithContextOverflow) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -649,10 +647,10 @@ TEST_F(BertModelTest, ProcessWithContextOverflow) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  const llama_model* llamaModel = model.get_model();
+  const llama_model* llamaModel = model.getModel();
   int nCtxTrain = llama_model_n_ctx_train(llamaModel);
 
   int repeatCount = (nCtxTrain / 2) + 100;
@@ -669,7 +667,7 @@ TEST_F(BertModelTest, ProcessWithContextOverflow) {
 
 TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -678,13 +676,13 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   // Process multiple times to verify model state is maintained
   for (int i = 0; i < 3; ++i) {
     std::string prompt = "Test prompt " + std::to_string(i);
-    BertEmbeddings embeddings = model.encode_host_f32(prompt);
+    BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
     EXPECT_EQ(embeddings.size(), 1);
     EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -693,7 +691,7 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
 
 TEST_F(BertModelTest, PreprocessPrompt) {
   if (!fs::exists(getValidModelPath())) {
-    GTEST_SKIP() << "Test model not found at: " << getValidModelPath();
+    FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string config = "-dev\tcpu\n";
@@ -702,11 +700,11 @@ TEST_F(BertModelTest, PreprocessPrompt) {
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string prompt = "Line 1\nLine 2\nLine 3";
-  std::vector<std::string> preprocessed = model.preprocess_prompt(prompt);
+  std::vector<std::string> preprocessed = model.preprocessPrompt(prompt);
 
   EXPECT_GT(preprocessed.size(), 0);
   // Preprocessing should split by newlines

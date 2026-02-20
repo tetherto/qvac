@@ -23,8 +23,6 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.1",
     "bare-url": "^2.1.6",
-    "corestore": "^7.4.5",
-    "hyperswarm": "^4.14.0",
     "require-asset": "^1.1.0",
     "zod": "^3.24.4"
   }

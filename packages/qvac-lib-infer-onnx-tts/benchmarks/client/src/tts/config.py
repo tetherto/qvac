@@ -9,7 +9,7 @@ from pydantic import BaseModel, HttpUrl, Field
 class ServerConfig(BaseModel):
     addon_url: HttpUrl = Field(..., description="URL of addon server")
     addon_version: str = Field("^0.1.0", description="Expected version of @qvac/tts-onnx addon")
-    python_url: HttpUrl = Field(..., description="URL of python native server")
+    python_url: Optional[HttpUrl] = Field(None, description="URL of python native server")
     timeout: int = Field(60, gt=0, description="HTTP request timeout in seconds")
     batch_size: int = Field(10, gt=0, description="Batch size for synthesis")
 
@@ -31,11 +31,18 @@ class DatasetConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
-    modelPath: str = Field(..., description="Path to ONNX model")
-    configPath: str = Field(..., description="Path to model config JSON")
-    eSpeakDataPath: str = Field(..., description="Path to eSpeak-ng data")
+    """Model configuration for Chatterbox TTS"""
+    modelDir: Optional[str] = Field(None, description="Path to Chatterbox model directory")
+    tokenizerPath: Optional[str] = Field(None, description="Path to tokenizer (Chatterbox)")
+    speechEncoderPath: Optional[str] = Field(None, description="Path to speech encoder ONNX (Chatterbox)")
+    embedTokensPath: Optional[str] = Field(None, description="Path to embed tokens ONNX (Chatterbox)")
+    conditionalDecoderPath: Optional[str] = Field(None, description="Path to conditional decoder ONNX (Chatterbox)")
+    languageModelPath: Optional[str] = Field(None, description="Path to language model ONNX (Chatterbox)")
+    referenceAudioPath: Optional[str] = Field(None, description="Path to reference audio WAV file (Chatterbox)")
+    variant: str = Field("fp32", description="Model variant (Chatterbox)")
+
     language: str = Field("en", description="Language code")
-    sampleRate: int = Field(22050, description="Audio sample rate")
+    sampleRate: int = Field(24000, description="Audio sample rate")
     useGPU: bool = Field(False, description="Enable GPU acceleration for inference")
 
 
@@ -46,7 +53,7 @@ class Config(BaseModel):
     model: ModelConfig
 
     @classmethod
-    def from_yaml(cls, path: str = "config/config.yaml") -> "Config":
+    def from_yaml(cls, path: str = "config/config-chatterbox.yaml") -> "Config":
         """Load configuration from YAML file"""
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -54,7 +61,5 @@ class Config(BaseModel):
 
 
 if __name__ == "__main__":
-    # Test config loading
     cfg = Config.from_yaml()
     print(cfg.model_dump_json(indent=2))
-

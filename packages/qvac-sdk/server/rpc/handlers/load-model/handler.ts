@@ -6,7 +6,7 @@ import type {
 } from "@/schemas";
 import { normalizeModelType, ModelType } from "@/schemas";
 import { hyperdriveUrlSchema } from "@/schemas/load-model";
-import { loadModel } from "@/server/bare/addons";
+import { loadModel } from "@/server/bare/ops/load-model";
 import { resolveModelPath } from "@/server/rpc/handlers/load-model/resolve";
 import {
   getModelEntry,
@@ -14,14 +14,14 @@ import {
 } from "@/server/bare/registry/model-registry";
 import { generateShortHash, transformConfigForReload } from "@/server/utils";
 import {
-  TTSConfigModelRequiredError,
-  ESpeakDataPathRequiredError,
   ConfigReloadNotSupportedError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
   ModelNotFoundError,
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { OCR_CRAFT_DETECTOR } from "@/models/registry";
+import { getPlugin } from "@/server/plugins";
 
 const logger = getServerLogger();
 
@@ -43,7 +43,6 @@ export async function handleLoadModel(
     seed,
     projectionModelSrc,
     vadModelSrc,
-    configSrc,
   } = request;
   const canonicalModelType = normalizeModelType(request.modelType);
   const srcVocabSrc =
@@ -53,10 +52,6 @@ export async function handleLoadModel(
   const dstVocabSrc =
     canonicalModelType === ModelType.nmtcppTranslation
       ? (request as { dstVocabSrc?: string }).dstVocabSrc
-      : undefined;
-  const eSpeakDataPath =
-    canonicalModelType === ModelType.onnxTts
-      ? (request as { eSpeakDataPath?: string }).eSpeakDataPath
       : undefined;
   const detectorModelSrc =
     canonicalModelType === ModelType.onnxOcr
@@ -84,16 +79,7 @@ export async function handleLoadModel(
       );
     }
 
-    let ttsConfigModelPath: string | undefined;
-    if (configSrc) {
-      ttsConfigModelPath = await resolveModelPath(
-        configSrc,
-        progressCallback,
-        seed,
-      );
-    }
-
-    // For OCR models: use provided detectorModelSrc or auto-derive from same hyperdrive key
+    // For OCR models: use provided detectorModelSrc or auto-derive
     let detectorModelPath: string | undefined;
     if (canonicalModelType === ModelType.onnxOcr) {
       if (detectorModelSrc) {
@@ -110,15 +96,13 @@ export async function handleLoadModel(
           progressCallback,
           seed,
         );
+      } else if (modelSrc.startsWith("registry://")) {
+        detectorModelPath = await resolveModelPath(
+          OCR_CRAFT_DETECTOR,
+          progressCallback,
+          seed,
+        );
       }
-    }
-
-    // For TTS models, ttsConfigModelPath and eSpeakDataPath are required
-    if (canonicalModelType === ModelType.onnxTts && !ttsConfigModelPath) {
-      throw new TTSConfigModelRequiredError();
-    }
-    if (canonicalModelType === ModelType.onnxTts && !eSpeakDataPath) {
-      throw new ESpeakDataPathRequiredError();
     }
 
     // For Bergamot models, resolve vocabulary sources to local paths
@@ -135,8 +119,12 @@ export async function handleLoadModel(
         let resolvedSrcVocabSrc = srcVocabSrc;
         let resolvedDstVocabSrc = dstVocabSrc;
 
-        if ((!srcVocabSrc || !dstVocabSrc) && modelSrc.startsWith("pear://")) {
-          const derivedVocabSrcs = deriveBergamotVocabSources(modelSrc);
+        if (!srcVocabSrc || !dstVocabSrc) {
+          const derivedVocabSrcs = modelSrc.startsWith("pear://")
+            ? deriveBergamotVocabSources(modelSrc)
+            : modelSrc.startsWith("registry://")
+              ? deriveBergamotRegistryVocabSources(modelSrc)
+              : null;
           if (derivedVocabSrcs) {
             resolvedSrcVocabSrc = srcVocabSrc ?? derivedVocabSrcs.srcVocabSrc;
             resolvedDstVocabSrc = dstVocabSrc ?? derivedVocabSrcs.dstVocabSrc;
@@ -160,7 +148,15 @@ export async function handleLoadModel(
       }
     }
 
-    // Generate hash-based modelId
+    // Use plugin's resolveConfig hook if available to resolve model sources
+    let resolvedModelConfig = request.modelConfig as Record<string, unknown> | undefined;
+    const plugin = getPlugin(canonicalModelType);
+    if (plugin?.resolveConfig && resolvedModelConfig) {
+      const resolve = (src: string) => resolveModelPath(src, progressCallback, seed);
+      resolvedModelConfig = await plugin.resolveConfig(resolvedModelConfig, resolve);
+    }
+
+    // Generate hash-based modelId from modelConfig (includes all sources for TTS)
     const configStr = JSON.stringify(
       request.modelConfig,
       Object.keys(request.modelConfig as object).sort(),
@@ -168,14 +164,17 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
+    const loadModelOptions = {
+      ...request,
+      modelConfig: resolvedModelConfig,
+    };
+
     await loadModel({
       modelId,
       modelPath,
-      options: request,
+      options: loadModelOptions,
       projectionModelPath,
       vadModelPath,
-      ttsConfigModelPath,
-      eSpeakDataPath,
       detectorModelPath,
       modelName,
     });
@@ -276,6 +275,30 @@ function deriveBergamotVocabSources(modelSrc: string) {
   }
 
   const sharedVocab = `pear://${key}/vocab.${langPair}.spm`;
+  return {
+    srcVocabSrc: sharedVocab,
+    dstVocabSrc: sharedVocab,
+  };
+}
+
+function deriveBergamotRegistryVocabSources(modelSrc: string) {
+  // registry://s3/path/to/model.enfr.intgemm.alphas.bin
+  const match = modelSrc.match(
+    /^(registry:\/\/.+\/)model\.([a-z]+)\.intgemm\.alphas\.bin$/,
+  );
+  if (!match || !match[1] || !match[2]) return null;
+
+  const basePath = match[1];
+  const langPair = match[2];
+
+  if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
+    return {
+      srcVocabSrc: `${basePath}srcvocab.${langPair}.spm`,
+      dstVocabSrc: `${basePath}trgvocab.${langPair}.spm`,
+    };
+  }
+
+  const sharedVocab = `${basePath}vocab.${langPair}.spm`;
   return {
     srcVocabSrc: sharedVocab,
     dstVocabSrc: sharedVocab,

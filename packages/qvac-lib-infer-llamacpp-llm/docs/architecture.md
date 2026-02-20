@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.8.5  
+**Package:** `@qvac/llm-llamacpp` v0.8.9  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -69,8 +69,8 @@
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-llm.cpp (=7248.1.0): Inference engine
-- Bare Runtime (≥1.19.0): JavaScript runtime
+- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
 ---
@@ -89,6 +89,7 @@ graph TB
     
     subgraph "Inference Addons"
         LLM[llm-llamacpp<br/>LLMs]
+        EMBED[embed-llamacpp<br/>Embeddings]
         WHISPER[whispercpp<br/>STT]
         NMT[nmtcpp<br/>Translation]
     end
@@ -127,8 +128,8 @@ graph TB
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
 | qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework |
-| llama.cpp | Native | ≥7248.1.0 | Inference engine |
-| Bare Runtime | Runtime | ≥1.19.0 | JavaScript execution |
+| llama.cpp | Native | ≥7248.1.2 | Inference engine |
+| Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**
 
@@ -903,6 +904,6 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 ---
 
 **Related Document:**
-- [flows-detailed.md](flows-detailed.md) - Detailed data flow diagrams and sequences
+- [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
 **Last Updated:** 2026-01-19

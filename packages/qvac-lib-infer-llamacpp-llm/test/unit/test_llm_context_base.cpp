@@ -155,12 +155,12 @@ protected:
 
 TEST_F(LlmContextBaseTest, TextLlmContextProcessAndReset) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   auto stats = model->runtimeStats();
@@ -187,12 +187,12 @@ TEST_F(LlmContextBaseTest, TextLlmContextProcessAndReset) {
 
 TEST_F(LlmContextBaseTest, MtmdLlmContextProcessAndReset) {
   if (!hasValidMultimodalModel()) {
-    GTEST_SKIP() << "Multimodal model or projection file not found";
+    FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createMultimodalModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   auto stats = model->runtimeStats();
@@ -219,12 +219,12 @@ TEST_F(LlmContextBaseTest, MtmdLlmContextProcessAndReset) {
 
 TEST_F(LlmContextBaseTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -238,12 +238,12 @@ TEST_F(LlmContextBaseTest, ProcessAndGetRuntimeStats) {
 
 TEST_F(LlmContextBaseTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> tokens;
@@ -263,12 +263,12 @@ TEST_F(LlmContextBaseTest, ProcessWithCallback) {
 
 TEST_F(LlmContextBaseTest, ResetStateClearsCache) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -290,12 +290,12 @@ TEST_F(LlmContextBaseTest, ResetStateClearsCache) {
 
 TEST_F(LlmContextBaseTest, TextContextRejectsBinaryInput) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> media = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
@@ -307,12 +307,12 @@ TEST_F(LlmContextBaseTest, TextContextRejectsBinaryInput) {
 
 TEST_F(LlmContextBaseTest, MultipleProcessCalls) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -334,13 +334,13 @@ TEST_F(LlmContextBaseTest, MultipleProcessCalls) {
 
 TEST_F(LlmContextBaseTest, VirtualDestructor) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   {
     auto model = createModel();
     if (!model) {
-      GTEST_SKIP() << "Model failed to load";
+      FAIL() << "Model failed to load";
     }
 
     std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -366,12 +366,12 @@ TEST_F(LlmContextBaseTest, VirtualDestructor) {
 
 TEST_F(LlmContextBaseTest, RuntimeStatsAccuracy) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -390,12 +390,12 @@ TEST_F(LlmContextBaseTest, RuntimeStatsAccuracy) {
 
 TEST_F(LlmContextBaseTest, RuntimeStatsConsistency) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";

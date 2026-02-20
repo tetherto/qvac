@@ -2,14 +2,19 @@
 
 This library simplifies running Text-to-Speech (TTS) models within QVAC runtime applications. It provides an easy interface to load, execute, and manage TTS instances, supporting multiple data sources (called data loaders) and leveraging ONNX Runtime for efficient inference.
 
-The TTS system uses the Piper neural text-to-speech model to convert text into natural-sounding speech audio files.
+The package supports two TTS engines:
+- **Chatterbox** - Neural TTS with voice cloning from reference audio (24 kHz)
+- **Supertonic** - Diffusion-based TTS with pre-trained voice styles (44.1 kHz)
+
+The engine is auto-detected based on the arguments you provide.
 
 ## Table of Contents
 
 - [Supported Platforms](#supported-platforms)
+- [TTS Engines](#tts-engines)
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
-- [Usage](#usage)
+- [Usage: Chatterbox](#usage-chatterbox)
   - [1. Import the Model Class](#1-import-the-model-class)
   - [2. Create a Data Loader](#2-create-a-data-loader)
   - [3. Create the `args` obj](#3-create-the-args-obj)
@@ -18,7 +23,13 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
   - [6. Load Model](#6-load-model)
   - [7. Run TTS Synthesis](#7-run-tts-synthesis)
   - [8. Release Resources](#8-release-resources)
-- [Quickstart Example](#quickstart-example)
+- [Usage: Supertonic](#usage-supertonic)
+  - [Model Directory Setup](#model-directory-setup)
+  - [Basic Usage (modelDir)](#basic-usage-modeldir)
+  - [Explicit Paths Usage](#explicit-paths-usage)
+  - [Supertonic Args Reference](#supertonic-args-reference)
+  - [Available Voices](#available-voices)
+  - [Supported Languages](#supported-languages)
 - [Output Format](#output-format)
 - [Other Examples](#other-examples)
 - [Tests](#tests)
@@ -40,9 +51,29 @@ The TTS system uses the Piper neural text-to-speech model to convert text into n
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
-- Piper TTS: Neural text-to-speech model
-- Bare Runtime (≥1.17.3): JavaScript runtime
+- Chatterbox TTS: Neural text-to-speech engine with voice cloning
+- Supertonic TTS: Diffusion-based text-to-speech engine with pre-trained voices
+- Bare Runtime (>=1.17.3): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
+
+## TTS Engines
+
+This package supports two TTS engines. The engine is auto-detected based on the arguments you provide:
+
+- If you pass `modelDir` + `voiceName`, or `textEncoderPath`, the **Supertonic** engine is used.
+- Otherwise, the **Chatterbox** engine is used.
+
+| Feature | Chatterbox | Supertonic |
+|---------|-----------|------------|
+| Architecture | Transformer-based language model | Diffusion-based latent denoising |
+| Sample Rate | 24,000 Hz | 44,100 Hz |
+| Voice Method | Voice cloning from reference audio | Pre-trained voice styles (`.bin` files) |
+| ONNX Models | 5 (tokenizer, speech_encoder, embed_tokens, conditional_decoder, language_model) | 3 (text_encoder, latent_denoiser, voice_decoder) |
+| Languages | en, es, fr, de, it, pt, ru | en, ko, es, pt, fr |
+| Speed Control | N/A | Configurable via `speed` parameter |
+| Inference Steps | Single-pass | Configurable via `numInferenceSteps` (default: 5) |
+| Use Case | Voice cloning from a reference audio sample | General-purpose TTS with selectable voice presets |
+| Real Time Factor | Usually >1.0 | <1.0 |
 
 ## Installation
 
@@ -142,7 +173,7 @@ npm run test:integration  # Requires model files
 
 **Note**: Integration tests require model files to be present in the `model/` directory. See the [CI integration test script](.github/workflows/integration-test.yaml) for details on model requirements.
 
-## Usage
+## Usage: Chatterbox
 
 ### 1. Import the Model Class
 
@@ -154,16 +185,12 @@ const { ONNXTTS } = require('@qvac/tts-onnx')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](https://github.com/tetherto/qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
 
 ```js
-const store = new Corestore('./store')
-const hdStore = store.namespace('hd')
-
-// see examples folder for existing keys
-const hdDL = new HyperDriveDL({
-  key: 'hd://your-hyperdrive-key-here',
-  store: hdStore
+const FilesystemDL = require('@qvac/dl-filesystem')
+const fsDL = new FilesystemDL({
+  dirPath: './path/to/model/files'
 })
 ```
 
@@ -171,13 +198,16 @@ const hdDL = new HyperDriveDL({
 
 ```js
 const args = {
-  loader: hdDL,                              // Data loader instance
-  opts: { stats: true },                     // Enable performance statistics
-  logger: console,                           // Logger instance
-  cache: './models/',                        // Local cache directory
-  mainModelUrl: 'en_US-amy-low.onnx',        // Main ONNX model file
-  configJsonPath: 'en_US-amy-low.onnx.json', // Model configuration file
-  eSpeakDataPath: 'espeak-ng-data'           // eSpeak data directory
+  loader: fsDL,
+  opts: { stats: true },
+  logger: console,
+  cache: './models/',
+  tokenizerPath: 'chatterbox/tokenizer.json',
+  speechEncoderPath: 'chatterbox/speech_encoder.onnx',
+  embedTokensPath: 'chatterbox/embed_tokens.onnx',
+  conditionalDecoderPath: 'chatterbox/conditional_decoder.onnx',
+  languageModelPath: 'chatterbox/language_model.onnx',
+  referenceAudio: referenceAudioFloat32Array
 }
 ```
 
@@ -187,28 +217,28 @@ The `args` obj contains the following properties:
 * `logger`: This property is used to create logging functionality. 
 * `opts.stats`: This flag determines whether to calculate inference stats.
 * `cache`: The local directory where the model files will be downloaded to.
-* `mainModelUrl`: The name of the main TTS ONNX model file in the Data Loader (the model used for inference).
-* `configJsonPath`: The name of the model configuration JSON file in the Data Loader (the file used to configure the ONNX model).
-* `eSpeakDataPath`: The name of the espeak-ng-data directory in the Data Loader (which contains language data such as dictionaries, phonemes, voices, etc.)
+* `tokenizerPath`: Path to the Chatterbox tokenizer JSON file.
+* `speechEncoderPath`: Path to the speech encoder ONNX model.
+* `embedTokensPath`: Path to the embed tokens ONNX model.
+* `conditionalDecoderPath`: Path to the conditional decoder ONNX model.
+* `languageModelPath`: Path to the language model ONNX model.
+* `referenceAudio`: Float32Array of reference audio samples for voice cloning.
 
 ### 4. Create the `config` obj
 
 The `config` obj consists of a set of parameters which can be used to tweak the behaviour of the TTS model.
 
 ```js
-// an example of possible configuration
 const config = {
-  language: 'en',                    // Language code (ISO 639-1 format)
-  engine: 'piper',                   // TTS engine to use (currently supports 'piper')
-  useGPU: true,                   // Boolean to useGPU and it selects EP as per platform otherwise fallbacks to CPU from version 0.3.4 for both Android / iOS
+  language: 'en',
+  useGPU: true,
 }
 ```
 
 | Parameter        | Type    | Default | Description                                    |
 |------------------|---------|---------|------------------------------------------------|
 | language         | string  | 'en'    | Language code (ISO 639-1 format)               |
-| engine           | string  | 'piper' | TTS engine to use (currently supports 'piper') |
-| useGPU           | boolean | true    | Enable Piper to use GPU based on EP provider   |
+| useGPU           | boolean | false   | Enable GPU acceleration based on EP provider   |
 
 ### 5. Create Model Instance
 
@@ -276,7 +306,7 @@ try {
     .await() // Wait for the entire process to complete
 
   console.log(`Total audio samples generated: ${audioSamples.length}`)
-  
+    
   // audioSamples now contains the complete audio as PCM data (16-bit, 16kHz, mono)
   // You can create WAV files, stream to audio APIs, etc.
 
@@ -297,109 +327,151 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  // Close P2P resources if applicable
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
 ```
 
-## Quickstart Example
+## Usage: Supertonic
 
-Follow these simple steps to run the Quickstart demo:
+Supertonic is a diffusion-based TTS engine that uses pre-trained voice styles instead of voice cloning. It produces high-quality speech at 44.1 kHz.
 
-### 0. Install Bare
+### Model Directory Setup
 
-```bash
-npm install -g bare
+Supertonic expects the following directory layout:
+
+```
+models/supertonic/
+├── tokenizer.json
+├── onnx/
+│   ├── text_encoder.onnx
+│   ├── text_encoder.onnx_data
+│   ├── latent_denoiser.onnx
+│   ├── latent_denoiser.onnx_data
+│   ├── voice_decoder.onnx
+│   └── voice_decoder.onnx_data
+└── voices/
+    ├── F1.bin
+    ├── F2.bin
+    ├── ...
+    └── M5.bin
 ```
 
-### 1. Create a new Project
+Models can be downloaded from the [Hugging Face repository](https://huggingface.co/onnx-community/Supertonic-TTS-ONNX).
 
-```bash
-mkdir qvac-tts-quickstart
-cd qvac-tts-quickstart
-npm init -y
-```
+### Basic Usage (modelDir)
 
-### 2. Install Dependencies
+The simplest way to use Supertonic is by passing a `modelDir` and `voiceName`. All model file paths are derived automatically from the directory structure.
 
-```bash
-npm install @qvac/tts-onnx
-```
-
-### 3. Copy Quickstart code into `index.js`
 ```js
-'use strict'
-
+const path = require('bare-path')
 const { ONNXTTS } = require('@qvac/tts-onnx')
 
-async function main () {
-  // Configure TTS parameters
-  const args = {
-    mainModelUrl: './path/to/your/model.onnx',
-    configJsonPath: './path/to/your/model.onnx.json',
-    eSpeakDataPath: './path/to/espeak-ng-data',
-    opts: { stats: true }
-  }
+const SUPERTONIC_SAMPLE_RATE = 44100
 
-  const config = {
-    language: 'en',
-    engine: 'piper',
-    streamingEnabled: false
-  }
-
-  const model = new ONNXTTS(args, config)
-
-  try {
-    console.log('Loading TTS model...')
-    await model.load()
-    console.log('Model loaded successfully.')
-
-    const textToSynthesize = 'Hello world! This is a test of the TTS system using ONNX.'
-    console.log(`Running TTS on: "${textToSynthesize}"`)
-    
-    let audioSamples = []
-    const response = await model.run({
-      input: textToSynthesize,
-      type: 'text'
-    })
-
-    console.log('Waiting for TTS results...')
-    await response
-      .onUpdate(data => {
-        if (data.outputArray) {
-          const samples = Array.from(data.outputArray)
-          audioSamples = audioSamples.concat(samples)
-          console.log(`Received ${samples.length} audio samples`)
-        }
-        if (data.event === 'JobEnded') {
-          console.log('Job completed with stats:', data.stats)
-        }
-      })
-      .await() // Wait for the final result
-
-    console.log('TTS synthesis completed!')
-    console.log(`Total audio samples: ${audioSamples.length}`)
-    if (response.stats) {
-      console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
-    }
-  } catch (err) {
-    console.error('Error during TTS processing:', err)
-  } finally {
-    console.log('Unloading model...')
-    await model.unload()
-    console.log('Model unloaded.')
-  }
+const args = {
+  modelDir: path.join(__dirname, 'models', 'supertonic'),
+  voiceName: 'F1',
+  speed: 1,
+  numInferenceSteps: 5,
+  opts: { stats: true },
+  logger: console
 }
 
-main().catch(console.error)
+const config = {
+  language: 'en'
+}
+
+const model = new ONNXTTS(args, config)
+
+await model.load()
+
+const response = await model.run({
+  input: 'Hello world! This is Supertonic TTS.',
+  type: 'text'
+})
+
+let audioSamples = []
+await response
+  .onUpdate(data => {
+    if (data && data.outputArray) {
+      audioSamples = audioSamples.concat(Array.from(data.outputArray))
+    }
+  })
+  .await()
+
+// audioSamples contains PCM data (16-bit, 44100 Hz, mono)
+
+await model.unload()
 ```
 
-### 4. Run `index.js`
+### Explicit Paths Usage
 
-```bash
-bare index.js
+Alternatively, you can provide explicit paths to each model file instead of using `modelDir`:
+
+```js
+const args = {
+  tokenizerPath: '/path/to/tokenizer.json',
+  textEncoderPath: '/path/to/onnx/text_encoder.onnx',
+  latentDenoiserPath: '/path/to/onnx/latent_denoiser.onnx',
+  voiceDecoderPath: '/path/to/onnx/voice_decoder.onnx',
+  voicesDir: '/path/to/voices',
+  voiceName: 'M1',
+  speed: 1.2,
+  numInferenceSteps: 10,
+  opts: { stats: true },
+  logger: console
+}
+
+const model = new ONNXTTS(args, { language: 'es' })
 ```
+
+### Supertonic Args Reference
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `modelDir` | string | - | Base directory containing tokenizer, onnx/, and voices/ subdirectories |
+| `tokenizerPath` | string | - | Path to `tokenizer.json` (auto-derived from `modelDir`) |
+| `textEncoderPath` | string | - | Path to `text_encoder.onnx` (auto-derived from `modelDir`) |
+| `latentDenoiserPath` | string | - | Path to `latent_denoiser.onnx` (auto-derived from `modelDir`) |
+| `voiceDecoderPath` | string | - | Path to `voice_decoder.onnx` (auto-derived from `modelDir`) |
+| `voicesDir` | string | - | Path to directory containing voice `.bin` files (auto-derived from `modelDir`) |
+| `voiceName` | string | `'F1'` | Voice preset name (e.g., `'F1'`, `'M1'`) |
+| `speed` | number | `1` | Speech speed multiplier (1.0 = normal speed) |
+| `numInferenceSteps` | number | `5` | Number of diffusion denoising steps (higher = better quality, slower) |
+| `loader` | Loader | - | Optional data loader for streaming model files |
+| `cache` | string | `'.'` | Local directory for caching model files |
+| `opts.stats` | boolean | `false` | Enable inference performance statistics |
+| `logger` | object | - | Logger instance for debug output |
+
+### Available Voices
+
+Supertonic includes 10 pre-trained voice styles:
+
+| Voice | Gender | Description |
+|-------|--------|-------------|
+| `F1` | Female | Female voice style 1 (default) |
+| `F2` | Female | Female voice style 2 |
+| `F3` | Female | Female voice style 3 |
+| `F4` | Female | Female voice style 4 |
+| `F5` | Female | Female voice style 5 |
+| `M1` | Male | Male voice style 1 |
+| `M2` | Male | Male voice style 2 |
+| `M3` | Male | Male voice style 3 |
+| `M4` | Male | Male voice style 4 |
+| `M5` | Male | Male voice style 5 |
+
+### Supported Languages
+
+Supertonic supports the following languages via the `language` config parameter:
+
+| Code | Language |
+|------|----------|
+| `en` | English |
+| `ko` | Korean |
+| `es` | Spanish |
+| `pt` | Portuguese |
+| `fr` | French |
 
 ## Output Format
 
@@ -434,7 +506,7 @@ When synthesis completes, performance statistics are provided:
 ```
 
 **Audio Format Specifications:**
-- **Sample Rate:** 16000 Hz
+- **Sample Rate:** 24,000 Hz (Chatterbox) or 44,100 Hz (Supertonic)
 - **Format:** 16-bit signed PCM, mono channel
 - **Data Type:** Int16Array containing raw audio samples
 
@@ -452,9 +524,8 @@ const response = await model.run({
 
 await response
   .onUpdate(data => {
-    // Check if this is an audio output event
     if (data.outputArray) {
-      // Collect raw PCM audio samples
+      // Check if this is an audio output event
       const samples = Array.from(data.outputArray)
       audioSamples = audioSamples.concat(samples)
       console.log(`Received ${samples.length} audio samples`)
@@ -466,39 +537,17 @@ await response
   .await()
 
 // audioSamples now contains all PCM samples as 16-bit integers
-// Sample rate: 16000 Hz, Format: mono PCM
+// Sample rate: 24000 Hz (Chatterbox) or 44100 Hz (Supertonic), mono PCM
 console.log(`Total audio samples generated: ${audioSamples.length}`)
 ```
 
 ## Other Examples
 
--   [Basic TTS](examples/example-onnx-tts.js) – Demonstrates basic text-to-speech synthesis.
--   [Hyperdrive TTS](examples/example-hd-onnx-tts.js) – Demonstrates TTS with Hyperdrive data loader.
+-   [Chatterbox TTS](examples/example-chatterbox-tts.js) - Text-to-speech synthesis with voice cloning from reference audio.
+-   [Supertonic TTS](examples/example-supertonic-tts.js) - Text-to-speech synthesis with pre-trained voice styles.
 -   Check the `examples/` directory for more usage examples.
 
-### Setting up eSpeak-ng Data
-
-The TTS system requires eSpeak-ng phoneme data to function properly. You need to download and compile the espeak-ng data from the official repository.
-It can be fetched from: https://github.com/rhasspy/espeak-ng/tree/0f65aa301e0d6bae5e172cc74197d32a6182200f
-
-#### Using the eSpeak Data in Your Project
-
-Once you have the espeak-ng-data directory, reference it in your TTS configuration:
-
-```javascript
-const args = {
-  mainModelUrl: './path/to/your/model.onnx',
-  configJsonPath: './path/to/your/model.onnx.json',
-  eSpeakDataPath: './espeak-ng-data',  // Path to your espeak data
-  opts: { stats: true }
-}
-```
-
-**Important Notes:**
-- The `eSpeakDataPath` parameter is **required** and must point to a valid espeak-ng-data directory
-
 ## Tests
-
 
 ```bash
 # js integration tests
@@ -515,19 +564,20 @@ npm run coverage:cpp
 
 ## Glossary
 
-• **Bare** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
-• **QVAC** – QVAC is our open-source AI-SDK for building decentralized AI applications.  
-• **ONNX** – Open Neural Network Exchange is an open format built to represent machine learning models. [Learn more](https://onnx.ai/).  
-• **Piper** – A fast, local neural text-to-speech system. [Learn more](https://github.com/rhasspy/piper).  
-• **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
-• **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
+- **Bare** - Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).  
+- **QVAC** - QVAC is our open-source AI-SDK for building decentralized AI applications.  
+- **ONNX** - Open Neural Network Exchange is an open format built to represent machine learning models. [Learn more](https://onnx.ai/).  
+- **Chatterbox** - A neural text-to-speech system with voice cloning capabilities. [Learn more](https://github.com/ResembleAI/chatterbox).  
+- **Supertonic** - A diffusion-based text-to-speech system with pre-trained voice styles. [Learn more](https://huggingface.co/onnx-community/Supertonic-TTS-ONNX).  
+- **Corestore** - Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
 
 ## Resources
 
 *   **QVAC Examples Repo:** [https://github.com/tetherto/qvac-examples](https://github.com/tetherto/qvac-examples)
 *   **ONNX Runtime:** [https://onnxruntime.ai/](https://onnxruntime.ai/)
 *   **Base ONNX Addon:** [https://github.com/tetherto/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac-lib-infer-onnx-base)
-*   **Piper TTS:** [https://github.com/rhasspy/piper](https://github.com/rhasspy/piper)
+*   **Chatterbox TTS:** [https://github.com/ResembleAI/chatterbox](https://github.com/ResembleAI/chatterbox)
+*   **Supertonic TTS:** [https://huggingface.co/onnx-community/Supertonic-TTS-ONNX](https://huggingface.co/onnx-community/Supertonic-TTS-ONNX)
 
 ## Contributing
 
@@ -535,6 +585,6 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the Apache-2.0 License – see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the Apache-2.0 License - see the [LICENSE](./LICENSE) file for details.
 
 _For questions or issues, please open an issue on the GitHub repository._

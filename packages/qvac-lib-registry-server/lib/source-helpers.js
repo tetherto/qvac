@@ -16,7 +16,7 @@ function parseCanonicalSource (source) {
 
   if (trimmed.startsWith('s3://')) {
     const url = new URL(trimmed)
-    const bucket = url.hostname
+    const bucket = url.hostname || null
     const key = normalizePath(url.pathname)
     return {
       canonicalUrl: trimmed,
@@ -47,6 +47,32 @@ function parseCanonicalSource (source) {
   )
 }
 
+/**
+ * Resolve the S3 bucket for a parsed source.
+ * If the source already contains a bucket, returns as-is.
+ * Otherwise injects the bucket from the provided value.
+ * @param {object} sourceInfo - Result from parseCanonicalSource
+ * @param {string} bucket - Bucket name to inject when source has none
+ * @returns {object} sourceInfo with resolved bucket
+ */
+function resolveS3Bucket (sourceInfo, bucket) {
+  if (sourceInfo.protocol !== 's3') return sourceInfo
+  if (sourceInfo.bucket) return sourceInfo
+
+  if (!bucket) {
+    throw new Error(
+      'QVAC_S3_BUCKET is not set. S3 source URLs require a bucket name. Set QVAC_S3_BUCKET in .env or environment.'
+    )
+  }
+
+  return {
+    ...sourceInfo,
+    bucket,
+    canonicalUrl: `s3://${bucket}/${sourceInfo.key}`
+  }
+}
+
 module.exports = {
-  parseCanonicalSource
+  parseCanonicalSource,
+  resolveS3Bucket
 }

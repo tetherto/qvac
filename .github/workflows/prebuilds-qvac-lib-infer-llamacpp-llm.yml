@@ -53,7 +53,7 @@ on:
     outputs:
       published_version:
         description: "The version that was published"
-        value: ${{ jobs.publish-npm.outputs.npm_published_version || jobs.publish-gpr.outputs.npm_published_version }}
+        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -303,7 +303,7 @@ jobs:
           
           # Extract SDK major.minor version from README.txt (e.g., "1.4" from "1.4.341.0")
           SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
-          S3_BUCKET="tether-ai-dev"
+          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
           S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
           
           echo "Vulkan SDK version: ${SDK_VERSION}"
@@ -473,7 +473,7 @@ jobs:
             ) }}
     continue-on-error: true
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -495,7 +495,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       - name: Scope package as @tetherto for GPR
         shell: bash
@@ -527,10 +527,10 @@ jobs:
             ) }}
     continue-on-error: false
     outputs:
-      npm_published_version: ${{ steps.publish.outputs.npm_published_version }}
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
@@ -549,10 +549,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: prebuilds
-          path: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
 
       # Re-assert scope for public npm (fresh checkout)
       - name: Scope package as @qvac for npm
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           set -euo pipefail
@@ -565,3 +566,6 @@ jobs:
         with:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
+          workdir: ${{ env.WORKDIR }}
+          repo_name: "llamacpp-llm"
+          git-token: ${{ secrets.GITHUB_TOKEN }}

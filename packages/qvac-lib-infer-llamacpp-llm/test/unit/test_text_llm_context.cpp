@@ -101,12 +101,12 @@ protected:
 
 TEST_F(TextLlmContextTest, Constructor) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_TRUE(model->isLoaded());
@@ -114,12 +114,12 @@ TEST_F(TextLlmContextTest, Constructor) {
 
 TEST_F(TextLlmContextTest, ProcessWithStringInput) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello, how are you?"}])";
@@ -133,12 +133,12 @@ TEST_F(TextLlmContextTest, ProcessWithStringInput) {
 
 TEST_F(TextLlmContextTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> generated_tokens;
@@ -158,12 +158,12 @@ TEST_F(TextLlmContextTest, ProcessWithCallback) {
 
 TEST_F(TextLlmContextTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -177,12 +177,12 @@ TEST_F(TextLlmContextTest, ProcessAndGetRuntimeStats) {
 
 TEST_F(TextLlmContextTest, ResetState) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -201,12 +201,12 @@ TEST_F(TextLlmContextTest, ResetState) {
 
 TEST_F(TextLlmContextTest, LoadMediaDoesNothing) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
@@ -217,12 +217,12 @@ TEST_F(TextLlmContextTest, LoadMediaDoesNothing) {
 
 TEST_F(TextLlmContextTest, MultipleMessages) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input =
@@ -237,12 +237,12 @@ TEST_F(TextLlmContextTest, MultipleMessages) {
 
 TEST_F(TextLlmContextTest, MultipleProcessCalls) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -264,12 +264,12 @@ TEST_F(TextLlmContextTest, MultipleProcessCalls) {
 
 TEST_F(TextLlmContextTest, StopMethod) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW(model->stop());
@@ -277,12 +277,12 @@ TEST_F(TextLlmContextTest, StopMethod) {
 
 TEST_F(TextLlmContextTest, ProcessWithTools) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([
@@ -312,12 +312,12 @@ TEST_F(TextLlmContextTest, ProcessWithTools) {
 
 TEST_F(TextLlmContextTest, ProcessWithToolsInvalidFormat) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([
@@ -332,12 +332,12 @@ TEST_F(TextLlmContextTest, ProcessWithToolsInvalidFormat) {
 
 TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([

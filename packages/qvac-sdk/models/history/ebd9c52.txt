@@ -1,0 +1,11 @@
+commit=ebd9c52428e36bf726da1b376947b5e96fa89fad
+timestamp=2026-02-11T11:07:26.055Z
+previous_count=149
+new_count=153
+
+[added]
+Q8_1
+SALAMANDRA_Q8
+WHISPER_BASE_F16
+WHISPER_BASE_Q8_0
+

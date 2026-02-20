@@ -1,0 +1,17 @@
+@qvac/infer-onnx-base
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/infer-onnx-base itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+C++ Dependencies
+=========================================================================
+
+--- mit (MIT License) ---
+
+  onnxruntime
+    https://github.com/microsoft/onnxruntime
+

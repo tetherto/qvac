@@ -1,6 +1,6 @@
 {
   "name": "@qvac/decoder-audio",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "",
   "license": "Apache-2.0",
   "author": "Tether",
@@ -25,7 +25,9 @@
     "constants.d.ts",
     "utils",
     "index.d.ts",
-    "test/mobile"
+    "test/mobile",
+    "LICENSE",
+    "NOTICE"
   ],
   "exports": {
     "./package": "./package.json",

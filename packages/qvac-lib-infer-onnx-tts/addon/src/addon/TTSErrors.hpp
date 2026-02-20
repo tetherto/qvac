@@ -9,7 +9,8 @@ namespace qvac_errors {
 
 namespace tts_error {
 
-constexpr std::string_view TTSAddonId = /* NOLINT(readability-identifier-naming) */ "TTS";
+constexpr std::string_view TTSAddonId =
+    /* NOLINT(readability-identifier-naming) */ "TTS";
 
 enum TTSErrorCode : uint32_t {
   OK = 0,
@@ -45,8 +46,10 @@ inline std::string toString(uint32_t code) {
 } // namespace tts_error
 
 // Convenience function to create TTS-specific StatusError
-inline StatusError createTTSError(tts_error::TTSErrorCode code, const std::string& message) {
-  return StatusError(std::string(tts_error::TTSAddonId), tts_error::toString(code), message);
+inline StatusError createTTSError(tts_error::TTSErrorCode code,
+                                  const std::string &message) {
+  return StatusError(std::string(tts_error::TTSAddonId),
+                     tts_error::toString(code), message);
 }
 
-} // namespace qvac_errors 
+} // namespace qvac_errors

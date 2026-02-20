@@ -91,18 +91,38 @@ export const modelTypeSchema = modelTypeInputSchema.transform(
   },
 );
 
-/** Normalize model type input to canonical form */
-export function normalizeModelType(input: ModelTypeInput): CanonicalModelType {
+/**
+ * Normalize model type input to canonical form.
+ * Custom plugin types (not in built-ins) are returned as-is.
+ */
+export function normalizeModelType(input: string): string {
   // If already canonical, return as-is
   if (canonicalValuesSet.has(input)) {
-    return input as CanonicalModelType;
+    return input;
   }
-  // Otherwise, look up in aliases
-  return ModelTypeAliases[input as AliasKey];
+  // If it's an alias, normalize to canonical
+  if (input in ModelTypeAliases) {
+    return ModelTypeAliases[input as AliasKey];
+  }
+  // Custom plugin type - return as-is
+  return input;
 }
 
-/** Check if input is an alias (not canonical) */
-export function isModelTypeAlias(input: ModelTypeInput): boolean {
+/**
+ * Type guard to check if a string is a canonical (built-in) model type.
+ * Returns false for custom plugin types.
+ */
+export function isCanonicalModelType(
+  input: string,
+): input is CanonicalModelType {
+  return canonicalValuesSet.has(input);
+}
+
+/**
+ * Check if input is a built-in alias (not canonical or custom).
+ * Returns false for custom plugin types.
+ */
+export function isModelTypeAlias(input: string): boolean {
   return input in ModelTypeAliases;
 }
 

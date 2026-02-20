@@ -24,6 +24,7 @@ env:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -98,7 +99,10 @@ jobs:
 
   validate-json:
     needs: detect-changes
-    if: needs.detect-changes.outputs.models_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.models_changed == 'true' &&
+      (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +137,10 @@ jobs:
 
   test:
     needs: detect-changes
-    if: needs.detect-changes.outputs.other_changed == 'true'
+    if: |
+      needs.detect-changes.outputs.other_changed == 'true' &&
+      (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -186,8 +193,9 @@ jobs:
   sync-staging:
     needs: [detect-changes, validate-json, test]
     if: |
-      contains(github.event.pull_request.labels.*.name, 'staging') &&
       always() &&
+      contains(github.event.pull_request.labels.*.name, 'staging') &&
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.models_changed == 'true' &&
       needs.validate-json.result == 'success' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
@@ -251,7 +259,6 @@ jobs:
 
   smoke-test:
     needs: sync-staging
-    if: needs.sync-staging.result == 'success'
     runs-on: ubuntu-latest
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}

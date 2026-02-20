@@ -5,22 +5,29 @@ import { createLogger } from '../logger.js'
 import { findConfigFile, loadConfig, CONFIG_CANDIDATES } from '../config.js'
 import { BareImportsMapNotFoundError } from '../errors.js'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from './plugins.js'
-import {
-  generateWorkerEntry,
-  generatePearWorkerEntry,
-  toRelativeImportSpecifier
-} from './entry-gen.js'
+import { generateWorkerEntry } from './entry-gen.js'
 import { runBarePack } from './bare-pack.js'
 import { generateAddonsManifest } from './manifest.js'
 
-async function resolveSdkName (projectRoot) {
-  const sdkPackageJsonPath = path.join(
-    projectRoot,
-    'node_modules',
-    '@qvac',
-    'sdk',
-    'package.json'
-  )
+/**
+ * Resolves the SDK path.
+ * If explicitSdkPath is provided, uses that directly.
+ * Otherwise, auto-detects from node_modules/@qvac/sdk.
+ */
+function resolveSdkPath (projectRoot, explicitSdkPath) {
+  if (explicitSdkPath) {
+    return path.isAbsolute(explicitSdkPath)
+      ? explicitSdkPath
+      : path.join(projectRoot, explicitSdkPath)
+  }
+  return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+}
+
+/**
+ * Reads the SDK package name from its package.json.
+ */
+async function resolveSdkName (sdkPath) {
+  const sdkPackageJsonPath = path.join(sdkPath, 'package.json')
 
   try {
     if (fs.existsSync(sdkPackageJsonPath)) {
@@ -35,19 +42,14 @@ async function resolveSdkName (projectRoot) {
   return DEFAULT_SDK_NAME
 }
 
-function resolveImportsMapPath (projectRoot, sdkName) {
-  const fromNodeModules = path.join(
-    projectRoot,
-    'node_modules',
-    sdkName,
-    'bare-imports.json'
-  )
+function resolveImportsMapPath (sdkPath, sdkName) {
+  const importsMapPath = path.join(sdkPath, 'bare-imports.json')
 
-  if (fs.existsSync(fromNodeModules)) {
-    return fromNodeModules
+  if (fs.existsSync(importsMapPath)) {
+    return importsMapPath
   }
 
-  throw new BareImportsMapNotFoundError(sdkName, fromNodeModules)
+  throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
 export async function bundleSdk (options = {}) {
@@ -56,43 +58,46 @@ export async function bundleSdk (options = {}) {
   const projectRoot = options.projectRoot ?? process.cwd()
   const outputDir = path.join(projectRoot, 'qvac')
   const entryPath = path.join(outputDir, 'worker.entry.mjs')
-  const pearWorkerEntryPath = path.join(outputDir, 'worker.pear.entry.mjs')
   const bundlePath = path.join(outputDir, 'worker.bundle.js')
 
-  let logLevel = 'normal'
-  if (options.quiet) logLevel = 'quiet'
-  else if (options.verbose) logLevel = 'verbose'
+  let logLevel = 'info'
+  if (options.quiet) logLevel = 'silent'
+  else if (options.verbose) logLevel = 'debug'
 
   const logger = createLogger(logLevel)
 
-  logger.log('🔧 QVAC SDK Worker Bundler\n')
+  logger.info('🔧 QVAC SDK Worker Bundler\n')
 
   const configPath = findConfigFile(projectRoot, options.configPath)
 
   let config = {}
   if (configPath) {
-    logger.log(`📄 Config: ${path.relative(projectRoot, configPath)}`)
+    logger.info(`📄 Config: ${path.relative(projectRoot, configPath)}`)
     config = await loadConfig(configPath)
   } else {
-    logger.log('📄 Config: (none)')
-    logger.log('⚠️  No config file found — continuing with defaults.')
-    logger.log(
+    logger.info('📄 Config: (none)')
+    logger.warn('No config file found — continuing with defaults.')
+    logger.info(
       '   To customize bundling, create one of:\n' +
       CONFIG_CANDIDATES.map((c) => `     - ${c}`).join('\n') +
       '\n'
     )
   }
 
-  const sdkName = await resolveSdkName(projectRoot)
-  logger.log(`📦 SDK: ${sdkName}`)
+  const sdkPath = resolveSdkPath(projectRoot, options.sdkPath)
+  const sdkName = await resolveSdkName(sdkPath)
+  logger.info(`📦 SDK: ${sdkName}`)
+  logger.debug(`   Path: ${sdkPath}`)
+
+  const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
 
   const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
-  logger.log(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
+  logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
   for (const spec of pluginSpecifiers) {
     const label = parseBuiltinSpecifier(spec, sdkName)
       ? '✓ built-in'
       : '⊕ custom'
-    logger.log(`   ${label}: ${spec}`)
+    logger.info(`   ${label}: ${spec}`)
   }
 
   const hosts =
@@ -102,36 +107,16 @@ export async function bundleSdk (options = {}) {
 
   await fsp.mkdir(outputDir, { recursive: true })
 
-  logger.log('\n📝 Generating worker entry...')
+  logger.info('\n📝 Generating worker entry...')
   const workerEntry = generateWorkerEntry(pluginSpecifiers, sdkName)
   await fsp.writeFile(entryPath, workerEntry, 'utf8')
-  logger.log(`   Created: ${path.relative(projectRoot, entryPath)}`)
+  logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
+  logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
-  const pearWorker =
-    typeof config.pearWorker === 'string' && config.pearWorker.length > 0
-      ? config.pearWorker
-      : 'worker.js'
-
-  const pearWorkerAbs = path.isAbsolute(pearWorker)
-    ? pearWorker
-    : path.join(projectRoot, pearWorker)
-  const pearWorkerImport = toRelativeImportSpecifier(outputDir, pearWorkerAbs)
-
-  const pearWorkerEntry = generatePearWorkerEntry(
-    pluginSpecifiers,
-    sdkName,
-    pearWorkerImport
-  )
-  await fsp.writeFile(pearWorkerEntryPath, pearWorkerEntry, 'utf8')
-  logger.log(`   Created: ${path.relative(projectRoot, pearWorkerEntryPath)}`)
-
-  const importsMapPath = resolveImportsMapPath(projectRoot, sdkName)
-  logger.log(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
-
-  logger.log('\n🔨 Bundling with bare-pack...')
-  logger.log(`   Hosts: ${hosts.join(', ')}`)
+  logger.info('\n🔨 Bundling with bare-pack...')
+  logger.debug(`   Hosts: ${hosts.join(', ')}`)
   if (deferModules.length > 0) {
-    logger.log(`   Deferred: ${deferModules.join(', ')}`)
+    logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
   await runBarePack({
@@ -147,8 +132,8 @@ export async function bundleSdk (options = {}) {
 
   const stats = await fsp.stat(bundlePath)
   const sizeKB = (stats.size / 1024).toFixed(1)
-  logger.log(`\n✅ Bundle created: ${path.relative(projectRoot, bundlePath)}`)
-  logger.log(`   Size: ${sizeKB} KB`)
+  logger.info(`\n✅ Bundle created: ${path.relative(projectRoot, bundlePath)}`)
+  logger.info(`   Size: ${sizeKB} KB`)
 
   const manifestResult = await generateAddonsManifest({
     bundlePath,
@@ -158,23 +143,17 @@ export async function bundleSdk (options = {}) {
   })
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
-  logger.log(`\n🎉 Done in ${elapsed}s!\n`)
-  logger.log('Generated files:')
-  logger.log(
+  logger.info(`\n🎉 Done in ${elapsed}s!\n`)
+  logger.info('Generated files:')
+  logger.info(
     '  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)'
   )
-  logger.log(
-    '  - qvac/worker.pear.entry.mjs (Pear worker entrypoint: plugins + app worker)'
-  )
-  logger.log(
+  logger.info(
     '  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)'
   )
-  logger.log('  - qvac/addons.manifest.json\n')
-  logger.log(
-    'Pear apps: Spawn qvac/worker.pear.entry.mjs as your worker entrypoint'
-  )
-  logger.log('Mobile: Expo plugin auto-configures worker.bundle.js')
-  logger.log(
+  logger.info('  - qvac/addons.manifest.json\n')
+  logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
+  logger.info(
     'Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n'
   )
 
@@ -183,8 +162,7 @@ export async function bundleSdk (options = {}) {
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     entryPaths: {
-      worker: entryPath,
-      pearWorker: pearWorkerEntryPath
+      worker: entryPath
     },
     manifestPath: manifestResult.manifestPath
   }

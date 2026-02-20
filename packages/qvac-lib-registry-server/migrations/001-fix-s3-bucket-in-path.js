@@ -5,7 +5,7 @@
  *
  * Background:
  * A bug in source-helpers.js caused S3 model paths to include the bucket name:
- *   - Wrong: "tether-ai-dev/qvac_models_compiled/ggml/..."
+ *   - Wrong: "<bucket>/qvac_models_compiled/ggml/..."
  *   - Correct: "qvac_models_compiled/ggml/..."
  *
  * This migration fixes existing records by:
@@ -21,8 +21,8 @@
  *   node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=<path> [--bootstrap=<key>] [--dry-run]
  *
  * Example:
- *   node migrations/001-fix-s3-bucket-in-path.js --bucket=tether-ai-dev --storage=./storage --dry-run
- *   node migrations/001-fix-s3-bucket-in-path.js --bucket=tether-ai-dev --storage=./storage --bootstrap=<autobase-key>
+ *   node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=./storage --dry-run
+ *   node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=./storage --bootstrap=<autobase-key>
  *
  * The bootstrap key can also be read from .env file (QVAC_AUTOBASE_KEY)
  */
@@ -33,7 +33,7 @@ const Corestore = require('corestore')
 const Autobase = require('autobase')
 const IdEnc = require('hypercore-id-encoding')
 
-const schema = require('@tetherto/qvac-registry-schema')
+const schema = require('@qvac/registry-schema')
 const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
 const { QVAC_MAIN_REGISTRY } = schema
@@ -108,7 +108,7 @@ function printUsage () {
   console.log('  --dry-run           Show what would be changed without making changes')
   console.log('')
   console.log('Example:')
-  console.log('  node migrations/001-fix-s3-bucket-in-path.js --bucket=tether-ai-dev --storage=./storage --dry-run')
+  console.log('  node migrations/001-fix-s3-bucket-in-path.js --bucket=<bucket-name> --storage=./storage --dry-run')
 }
 
 async function runMigration () {

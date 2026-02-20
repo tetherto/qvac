@@ -1,9 +1,10 @@
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/worker";
+import { getEnv } from "@/server/env";
 import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
 import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";
+import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -63,6 +64,35 @@ export function getShardedModelCacheDir(hyperdriveKey: string): string {
 }
 
 /**
+ * Get cache directory for ONNX model with external data
+ * Returns: cache/onnx/<cacheKey>/
+ */
+function getOnnxModelCacheDir(cacheKey: string): string {
+  const baseCache = getModelsCacheDir();
+  const onnxDir = validateAndJoinPath(baseCache, "onnx", cacheKey);
+
+  try {
+    fs.mkdirSync(onnxDir, { recursive: true });
+  } catch (error) {
+    logger.error(
+      `Error creating ONNX model cache directory:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  return onnxDir;
+}
+
+/**
+ * Get full path to ONNX file in cache
+ * Returns: cache/onnx/<cacheKey>/<filename>
+ */
+export function getOnnxModelPath(cacheKey: string, filename: string): string {
+  const onnxDir = getOnnxModelCacheDir(cacheKey);
+  return validateAndJoinPath(onnxDir, filename);
+}
+
+/**
  * Get full path to specific shard file
  * Returns: cache/sharded/<hyperdriveKey>/<shardFilename>
  */
@@ -71,7 +101,7 @@ export function getShardPath(
   shardFilename: string,
 ): string {
   const shardDir = getShardedModelCacheDir(hyperdriveKey);
-  return path.join(shardDir, shardFilename);
+  return validateAndJoinPath(shardDir, shardFilename);
 }
 
 /**

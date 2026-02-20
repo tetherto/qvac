@@ -1,10 +1,12 @@
 'use strict'
 
 const { getEnv } = require('../utils/env')
-const { ENV_KEYS } = require('@tetherto/qvac-registry-schema-mono')
+const { ENV_KEYS } = require('@qvac/registry-schema')
 const Logger = require('./logger')
-const os = require('os')
-const path = require('path')
+const os = require('#os')
+const path = require('#path')
+
+const DEFAULT_REGISTRY_CORE_KEY = 'uf1fm44uzockp6azhcdiqt1esjgm65fwtimsh946e8kwysdes9ko'
 
 class RegistryConfig {
   constructor (opts = {}) {
@@ -38,8 +40,9 @@ class RegistryConfig {
     }
 
     const envKey = getEnv(ENV_KEYS.QVAC_REGISTRY_CORE_KEY)
-    this.logger.debug('getRegistryCoreKey loaded from env', { envKey })
-    return envKey || null
+    const result = envKey || DEFAULT_REGISTRY_CORE_KEY
+    this.logger.debug('getRegistryCoreKey resolved', { fromEnv: !!envKey, usingDefault: !envKey })
+    return result
   }
 }
 

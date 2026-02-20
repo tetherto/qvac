@@ -1,0 +1,10 @@
+# Core dependencies
+fastapi>=0.104.1
+uvicorn>=0.24.0
+pydantic>=2.5.0
+
+# Chatterbox TTS (PyTorch-based) - requires Python 3.11
+torch>=2.0.0
+torchaudio>=2.0.0
+chatterbox-tts>=0.1.0
+soundfile>=0.12.0  # For saving reference audio to temp file

@@ -33,8 +33,8 @@ async function findProjectRoot(): Promise<string | undefined> {
         currentDir = parentDir;
       }
     }
-  } catch {
-    // Fall through
+  } catch (error) {
+    logger.debug("Project root search failed, using cwd:", { error });
   }
 
   return process.cwd();
@@ -99,11 +99,36 @@ async function findConfigFile(
   return undefined;
 }
 
+function getResourcesPath(): string | undefined {
+  const { resourcesPath } = process as { resourcesPath?: string };
+  return typeof resourcesPath === "string" ? resourcesPath : undefined;
+}
+
+async function findPackagedConfig(): Promise<string | undefined> {
+  const resourcesPath = getResourcesPath();
+  if (!resourcesPath) return undefined;
+
+  const candidates = [
+    path.join(resourcesPath, "app", "qvac.config.json"),
+    path.join(resourcesPath, "app.asar.unpacked", "qvac.config.json"),
+    path.join(resourcesPath, "qvac.config.json"),
+  ];
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Resolution order for Node.js:
  * 1. QVAC_CONFIG_PATH environment variable
- * 2. Config file in project root (qvac.config.ts, qvac.config.js, qvac.config.json)
- * 3. SDK defaults
+ * 2. Packaged Electron app (via process.resourcesPath)
+ * 3. Config file in project root (qvac.config.ts, qvac.config.js, qvac.config.json)
+ * 4. SDK defaults
  */
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   const configPath = process.env["QVAC_CONFIG_PATH"] as string | undefined;
@@ -125,6 +150,13 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
       logger.info(`✅ Loaded config from: ${normalizedPath}`);
       return config;
     }
+  }
+
+  const packagedConfig = await findPackagedConfig();
+  if (packagedConfig) {
+    const config = await loadJsonConfig(packagedConfig);
+    logger.info(`✅ Loaded config from packaged app: ${packagedConfig}`);
+    return config;
   }
 
   const projectRoot = await findProjectRoot();

@@ -1,4 +1,3 @@
-// NOLINTBEGIN(readability-identifier-naming)
 #include "StepBoundingBox.hpp"
 
 #include <opencv2/opencv.hpp>
@@ -505,4 +504,3 @@ std::vector<UnalignedBox> StepBoundingBox::getOutputUnalignedBoxes(const float i
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext
-// NOLINTEND(readability-identifier-naming)

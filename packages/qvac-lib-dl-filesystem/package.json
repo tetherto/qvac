@@ -31,6 +31,8 @@
   "bugs": "https://github.com/tetherto/qvac-lib-dl-filesystem/issues",
   "files": [
     "src",
-    "index.d.ts"
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
   ]
 }

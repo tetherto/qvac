@@ -23,11 +23,11 @@ on:
         type: string
         required: false
         default: main
-      version:
-        description: "NPM package version to test (default: latest)"
+      package_spec:
+        description: "Package to test (name@version). Use @qvac/tts-onnx@... for npm, @tetherto/tts-onnx@... for GPR"
         type: string
         required: false
-        default: latest
+        default: "@qvac/tts-onnx@latest"
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -37,7 +37,7 @@ on:
 env:
   NODE_VERSION: "lts/*"
   ADDON_NAME: "@qvac/tts-onnx"
-  PREBUILD_ARTIFACT_PREFIX: "tts-onnx-" # Prefix for prebuild artifacts (empty string for generic patterns)
+  PREBUILD_ARTIFACT_PREFIX: "onnx-tts-" # Prefix for prebuild artifacts (must match prebuilds workflow upload names)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
@@ -171,28 +171,45 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.ADDON_DIR }}
         run: |
-          VERSION="${{ inputs.version || 'latest' }}"
-          echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
+          PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/tts-onnx@latest' }}"
+          echo "📦 Downloading $PACKAGE_SPEC for manual trigger..."
 
-          # Download package from npm
-          if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then
-            echo "ERROR: Failed to download version $VERSION from npm"
-            echo "Please check that the version exists at https://www.npmjs.com/package/${{ env.ADDON_NAME }}"
+          # Download package (npm or GPR depending on scope in package_spec)
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC"
+            echo "For npm use @qvac/tts-onnx@<version>, for GPR use @tetherto/tts-onnx@<version>"
             exit 1
           fi
 
           # Extract the tarball (pattern matches any addon name)
           tar -xzf *.tgz
 
-          # Validate prebuilds directory exists
-          if [ ! -d "package/prebuilds" ]; then
+          # Find prebuilds: addon layout has package/prebuilds; mono layout may nest under package/packages/.../prebuilds
+          PREBUILDS_SRC=""
+          if [ -d "package/prebuilds" ]; then
+            PREBUILDS_SRC="package/prebuilds"
+          else
+            # Search for prebuilds under package/ (e.g. mono: package/packages/qvac-lib-infer-onnx-tts/prebuilds)
+            CANDIDATE=$(find package -type d -name prebuilds 2>/dev/null | head -1)
+            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
+              PREBUILDS_SRC="$CANDIDATE"
+              echo "Using prebuilds from mono/nested layout: $PREBUILDS_SRC"
+            fi
+          fi
+
+          if [ -z "$PREBUILDS_SRC" ] || [ ! -d "$PREBUILDS_SRC" ]; then
             echo "ERROR: No prebuilds directory found in package"
-            echo "The downloaded package may not contain prebuilt binaries"
+            echo "Contents of downloaded package:"
+            ls -la package/ 2>/dev/null || true
+            find package -type d -name prebuilds 2>/dev/null || true
+            echo ""
+            echo "Use a package that includes prebuilt binaries (e.g. @qvac/tts-onnx, @tetherto/tts-onnx, or @tetherto/tts-onnx-mono with prebuilds)."
             exit 1
           fi
 
           # Move prebuilds to expected location
-          mv package/prebuilds ./prebuilds
+          rm -rf ./prebuilds
+          cp -r "$PREBUILDS_SRC" ./prebuilds
 
           # Cleanup
           rm -rf package *.tgz
@@ -1319,72 +1336,3 @@ jobs:
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
 
-      - name: Comment PR with results
-        if: always() && github.event.pull_request.number
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
-            const jobStatus = '${{ job.status }}';
-            const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
-            const platform = '${{ matrix.platform }}';
-            const prNumber = context.payload.pull_request.number;
-
-            const total = '${{ steps.monitor_run.outputs.test_total }}' || '0';
-            const passed = '${{ steps.monitor_run.outputs.test_passed }}' || '0';
-            const failed = '${{ steps.monitor_run.outputs.test_failed }}' || '0';
-            const skipped = '${{ steps.monitor_run.outputs.test_skipped }}' || '0';
-
-            let emoji = jobStatus === 'success' ? '✅' : '❌';
-            let statusText = jobStatus === 'success' ? 'PASSED' : 'FAILED';
-
-            // Extract PROJECT_ID and RUN_ID from ARN
-            // ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
-            let deviceFarmLink = 'https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects';
-            const arnMatch = runArn.match(/:run:([^/]+)\/(.+)$/);
-            if (arnMatch) {
-              const projectId = arnMatch[1];
-              const runId = arnMatch[2];
-              deviceFarmLink = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${projectId}/runs/${runId}`;
-            }
-
-            // Build test summary table
-            const testSummary = `
-            | Metric | Count |
-            |--------|-------|
-            | Total Tests | ${total} |
-            | ✅ Passed | ${passed} |
-            | ❌ Failed | ${failed} |
-            | ⏭️ Skipped | ${skipped} |
-            `;
-
-            const comment = `
-            ## ${emoji} E2E Mobile Test Results - ${platform}
-
-            **Overall Status**: ${statusText}
-            **Device Farm Result**: ${testResult}
-            **Platform**: ${platform}
-            **Addon**: ${{ env.ADDON_NAME }}
-            **PR**: #${prNumber}
-            **Commit**: ${context.sha.substring(0, 7)}
-
-            ### Test Summary
-            ${testSummary}
-
-            ### Links
-            - 🔗 **Device Farm Run**: [View on AWS Device Farm](${deviceFarmLink})
-            - 🔗 **Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
-            - 📋 **Run ARN**: \`${runArn}\`
-
-            ---
-            *Automated E2E mobile testing powered by AWS Device Farm*
-            *Tests located in: \`test/mobile/\`*
-            `;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: comment
-            });

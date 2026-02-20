@@ -10,8 +10,11 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-infer-nmtcpp/**"
+      - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
 
 concurrency:
@@ -51,10 +54,15 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-infer-nmtcpp/**"
+              - ".github/workflows/*nmtcpp*.yml"
 
   sanity-checks:
     needs: changes
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      ((needs.changes.outputs.pkg == 'true' &&
+        contains(github.event.pull_request.labels.*.name, 'verify')) ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -164,7 +172,11 @@ jobs:
 
   cpp-lint:
     needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      ((needs.changes.outputs.pkg == 'true' &&
+        contains(github.event.pull_request.labels.*.name, 'verify')) ||
+       github.event_name == 'workflow_dispatch')
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
     secrets: inherit
     with:
@@ -174,7 +186,11 @@ jobs:
 
   cpp-tests:
     needs: [changes, sanity-checks]
-    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: |
+      always() &&
+      ((needs.changes.outputs.pkg == 'true' &&
+        contains(github.event.pull_request.labels.*.name, 'verify')) ||
+       github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/reusable-cpp-tests-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
