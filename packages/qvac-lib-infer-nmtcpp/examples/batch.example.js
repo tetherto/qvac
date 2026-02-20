@@ -53,80 +53,55 @@ const textsToTranslate = [
 async function testBatchTranslation () {
   console.log('\n=== Batch Translation Example ===\n')
 
-  // Use local model path for Bergamot
+  const {
+    ensureBergamotModelFiles,
+    getBergamotFileNames,
+    getBergamotHyperdriveKey
+  } = require('../lib/bergamot-model-fetcher')
+
+  const srcLang = 'en'
+  const dstLang = 'it'
+
+  // Use local model path if provided, otherwise auto-download
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'
 
-  console.log('Model path:', bergamotPath)
+  // Ensure model files are present (Hyperdrive first, Firefox CDN fallback)
+  const modelDir = await ensureBergamotModelFiles(srcLang, dstLang, bergamotPath)
+  console.log('Model directory:', modelDir)
 
-  // Check if model directory exists
-  if (!fs.existsSync(bergamotPath)) {
-    console.log('Bergamot model directory not found!')
-    console.log('Set BERGAMOT_MODEL_PATH env var or place model in ./model/bergamot/enit')
-    console.log('\nNote: Source language is fixed to English (en). Target language depends on model (e.g., it, es, de, fr).')
-    console.log('\nExpected files (auto-detected):')
-    console.log('  - model.*.intgemm.*.bin (model weights)')
-    console.log('  - vocab.*.spm or srcvocab.*.spm (source vocabulary)')
-    console.log('  - trgvocab.*.spm (optional, target vocabulary if different from source)')
-    console.log('\nExample:')
-    console.log('  BERGAMOT_MODEL_PATH=/path/to/bergamot/enes bare examples/batch.example.js')
-    return
-  }
+  const fileNames = getBergamotFileNames(srcLang, dstLang)
 
-  // Auto-detect model and vocab files in the directory
-  const files = fs.readdirSync(bergamotPath)
-  const modelFile = files.find(f => f.includes('.intgemm.') && f.endsWith('.bin'))
+  // Decide loader: Hyperdrive key available → use HyperdriveDL, else local files
+  const hdKey = getBergamotHyperdriveKey(srcLang, dstLang)
+  let loader
 
-  // Try to find vocab files: srcvocab/trgvocab (separate) or vocab (shared)
-  let srcVocabFile = files.find(f => f.startsWith('srcvocab.') && f.endsWith('.spm'))
-  let dstVocabFile = files.find(f => (f.startsWith('trgvocab.') || f.startsWith('dstvocab.')) && f.endsWith('.spm'))
-
-  // Fallback to shared vocab file if separate ones not found
-  if (!srcVocabFile) {
-    srcVocabFile = files.find(f => f.startsWith('vocab.') && f.endsWith('.spm'))
-  }
-  if (!dstVocabFile) {
-    dstVocabFile = srcVocabFile // Use same vocab for both if no separate dst vocab
-  }
-
-  if (!modelFile || !srcVocabFile) {
-    console.log('Could not find required model files!')
-    console.log('Found files:', files.join(', '))
-    console.log('\nExpected: *.intgemm.*.bin and (srcvocab.*.spm or vocab.*.spm) files')
-    return
-  }
-
-  console.log('Detected model file:', modelFile)
-  console.log('Detected src vocab file:', srcVocabFile)
-  console.log('Detected dst vocab file:', dstVocabFile)
-
-  // Create a local file loader
-  const localLoader = {
-    ready: async () => {},
-    close: async () => {},
-    download: async (filename) => {
-      const filePath = path.join(bergamotPath, filename)
-      return fs.readFileSync(filePath)
-    },
-    getFileSize: async (filename) => {
-      const filePath = path.join(bergamotPath, filename)
-      const stats = fs.statSync(filePath)
-      return stats.size
+  if (hdKey) {
+    const HyperdriveDL = require('@qvac/dl-hyperdrive')
+    loader = new HyperdriveDL({ key: `hd://${hdKey}` })
+    console.log('Using HyperdriveDL loader')
+  } else {
+    loader = {
+      ready: async () => {},
+      close: async () => {},
+      download: async (filename) => fs.readFileSync(path.join(modelDir, filename)),
+      getFileSize: async (filename) => fs.statSync(path.join(modelDir, filename)).size
     }
+    console.log('Using local file loader (Firefox CDN download)')
   }
 
   // Create model args
   const args = {
-    loader: localLoader,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: bergamotPath,
-    modelName: modelFile,
+    loader,
+    params: { mode: 'full', dstLang, srcLang },
+    diskPath: modelDir,
+    modelName: fileNames.modelName,
     logger
   }
 
   // Config for Bergamot model
   const config = {
-    srcVocabName: srcVocabFile,
-    dstVocabName: dstVocabFile,
+    srcVocabName: fileNames.srcVocabName,
+    dstVocabName: fileNames.dstVocabName,
     modelType: TranslationNmtcpp.ModelTypes.Bergamot
   }
 
@@ -173,7 +148,7 @@ async function testBatchTranslation () {
   } finally {
     console.log('\nUnloading model...')
     await model.unload()
-    await localLoader.close()
+    await loader.close()
     console.log('Done!')
   }
 }
