@@ -212,9 +212,9 @@ jobs:
 
       - name: Setup Node
         if: matrix.pkg_manager == 'npm'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: 22
 
       - name: Configure scoped registry
         env:

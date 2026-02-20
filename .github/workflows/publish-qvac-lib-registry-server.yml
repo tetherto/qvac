@@ -305,9 +305,9 @@ jobs:
           git checkout --detach ${{ github.event.pull_request.head.sha }}
 
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Configure npm for package registries
         shell: bash
