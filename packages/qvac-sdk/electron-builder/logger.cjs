@@ -1,5 +1,7 @@
 const PREFIX = "[qvac:electron-builder]";
 
+const EXPECTED_FS_ERROR_CODES = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR"]);
+
 const LOG_LEVELS = {
   off: 0,
   error: 1,
@@ -58,8 +60,7 @@ const logger = {
    * @param {Error} err - The error object
    */
   fsError(context, err) {
-    const EXPECTED_CODES = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR"]);
-    if (err && EXPECTED_CODES.has(err.code)) {
+    if (err && EXPECTED_FS_ERROR_CODES.has(err.code)) {
       // Expected FS errors are silently ignored
       return;
     }

@@ -42,9 +42,20 @@ const { prunePrebuildsHook } = require("./prebuilds.cjs");
  * x64 and arm64 binaries, but prebuilds have arch-specific directories which are incompatible.
  *
  * @param {object} config - electron-builder configuration
+ * @param {object} [context] - electron-builder config function context
  * @throws {Error} If universal arch is detected
  */
-function checkForUniversalArch(config) {
+function checkForUniversalArch(config, context) {
+  const contextArch = context?.arch;
+  if (contextArch === "universal" || contextArch === 4) {
+    throw new Error(
+      "[qvac:electron-builder] Universal arch is not supported.\n\n" +
+        "  macOS universal builds are incompatible with native addon prebuilds.\n" +
+        "  The @electron/universal merger cannot handle arch-specific prebuild directories.\n\n" +
+        "  Solution: Configure separate arm64 and x64 targets instead of universal.\n"
+    );
+  }
+
   const macConfig = config.mac;
   if (!macConfig) return;
 
@@ -103,7 +114,7 @@ function withQvacElectronBuilder(userConfig, options = {}) {
     logger.debug(`Project directory: ${projectDir}`);
     logger.debug(`Strict mode: ${strict}`);
 
-    checkForUniversalArch(resolvedUserConfig);
+    checkForUniversalArch(resolvedUserConfig, context);
 
     const addonExclusions = generateAddonExclusions(projectDir, strict);
 

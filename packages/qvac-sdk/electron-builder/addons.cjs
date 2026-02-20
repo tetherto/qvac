@@ -4,6 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { createRequire } = require("module");
 const { logger } = require("./logger.cjs");
 const { readManifest } = require("./manifest.cjs");
 
@@ -24,36 +25,77 @@ const MOBILE_PREBUILD_PATTERNS = [
   "!**/prebuilds/ios-*/**/*",
 ];
 
+const SDK_PACKAGE_NAMES = ["@qvac/sdk", "@tetherto/sdk-mono"];
+
 /**
- * Finds the @qvac scope directory using Node's module resolution,
- * with a fallback to walking up the directory tree.
+ * Resolves the installed SDK package path using Node's module resolution.
+ *
+ * @param {string} startDir - Directory to start resolution from
+ * @returns {{ name: string, path: string }|null} Package info or null if not found
+ */
+function resolveSDKPackage(startDir) {
+  for (const name of SDK_PACKAGE_NAMES) {
+    try {
+      const pkgPath = require.resolve(`${name}/package`, { paths: [startDir] });
+      return { name, path: pkgPath };
+    } catch {
+      // Try next package name
+    }
+  }
+  return null;
+}
+
+/**
+ * Finds the @qvac scope directory using Node's module resolution paths, which
+ * works reliably for monorepos, workspaces, and hoisted node_modules layouts.
  *
  * @param {string} startDir - Directory to start searching from
  * @returns {string} Path to node_modules/@qvac
  * @throws {Error} If @qvac scope directory cannot be found
  */
 function findQvacScopeDir(startDir) {
-  try {
-    const sdkPkgPath = require.resolve("@qvac/sdk/package", {
-      paths: [startDir],
-    });
-    return path.dirname(path.dirname(sdkPkgPath));
-  } catch {
-    let dir = path.resolve(startDir);
-    while (true) {
-      const candidate = path.join(dir, "node_modules", "@qvac");
-      if (isDir(candidate)) return candidate;
-
-      const parent = path.dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-
+  const sdkPkg = resolveSDKPackage(startDir);
+  if (!sdkPkg) {
     throw new Error(
-      `Could not find @qvac packages. ` +
-      `Ensure @qvac/sdk is installed in "${startDir}" or a parent directory.`
+      `Could not find QVAC SDK. ` +
+        `Ensure one of [${SDK_PACKAGE_NAMES.join(", ")}] is installed.`,
     );
   }
+
+  logger.debug(`Resolved SDK package: ${sdkPkg.name}`);
+
+  const baseDir = path.resolve(startDir);
+  try {
+    const req = createRequire(path.join(baseDir, "package.json"));
+    const nodeModulesDirs = req.resolve.paths(sdkPkg.name) || [];
+
+    for (const nodeModulesDir of nodeModulesDirs) {
+      const scopeDir = path.join(nodeModulesDir, "@qvac");
+      if (isDir(scopeDir)) return scopeDir;
+    }
+  } catch (err) {
+    logger.debug(
+      `Failed to derive node resolution paths for addon discovery: ${err?.message || err}`,
+    );
+  }
+
+  const derived = path.dirname(path.dirname(sdkPkg.path));
+  if (path.basename(derived) === "@qvac" && isDir(derived)) return derived;
+
+  let dir = baseDir;
+  while (true) {
+    const candidate = path.join(dir, "node_modules", "@qvac");
+    if (isDir(candidate)) return candidate;
+
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  throw new Error(
+    `Could not find @qvac packages. ` +
+      `Ensure dependencies are installed under node_modules (PnP is not supported).`,
+  );
 }
 
 /**
@@ -64,7 +106,13 @@ function findQvacScopeDir(startDir) {
  * @returns {string[]} Array of package names like "@qvac/llm-llamacpp"
  */
 function discoverQvacAddonPackages(projectDir) {
-  const scopeDir = findQvacScopeDir(projectDir);
+  let scopeDir;
+  try {
+    scopeDir = findQvacScopeDir(projectDir);
+  } catch (err) {
+    logger.warn(err?.message || String(err));
+    return [];
+  }
 
   let entries;
   try {
