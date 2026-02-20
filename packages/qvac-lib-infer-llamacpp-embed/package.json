@@ -28,6 +28,9 @@
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:dts": "tsc -p tsconfig.dts.json",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
+    "performance:install": "cd ./benchmarks/performance && npm install",
+    "performance:prepare-models": "cd ./benchmarks/performance && npm run prepare:models:addon",
+    "benchmarks:param-sweep": "cd ./benchmarks/performance && npm run run:param-sweep --",
     "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
   },
   "standard": {
