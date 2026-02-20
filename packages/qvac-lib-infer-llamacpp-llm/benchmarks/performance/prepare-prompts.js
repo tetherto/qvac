@@ -86,8 +86,8 @@ async function tuneToBudget (model, templateMessages, budget) {
   let bestTokens = -1
 
   // Initial guess close to target.
-  let guessWords = Math.max(1, Math.min(words.length, Math.floor((budget / probeTokens) * probeWords * 0.95)))
-  let guessTokens = await tokensForWords(guessWords)
+  const guessWords = Math.max(1, Math.min(words.length, Math.floor((budget / probeTokens) * probeWords * 0.95)))
+  const guessTokens = await tokensForWords(guessWords)
   if (Number.isFinite(guessTokens) && guessTokens <= budget) {
     bestWords = guessWords
     bestTokens = guessTokens

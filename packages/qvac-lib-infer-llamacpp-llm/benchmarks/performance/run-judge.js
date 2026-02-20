@@ -324,7 +324,7 @@ async function main () {
     fs.closeSync(outFd)
   }
 
-  console.log(`Judge scoring complete.`)
+  console.log('Judge scoring complete.')
   console.log(`Input: ${inputJsonl}`)
   console.log(`Output: ${outputJsonl}`)
   console.log(`Judge model: ${judgeModelId} (${judgeQuant})`)

@@ -531,7 +531,7 @@ async function main () {
         const successfulResults = promptResults.filter(p => p.metrics != null && !p.error)
         const aggregatedMetrics = successfulResults.length > 0
           ? {
-              repeats: repeats,
+              repeats,
               loadMsMean: round(loadMs, 3), // Load time is per-case
               loadMsStd: loadMs != null ? 0 : null,
               runMsMean: round(average(caseMetricSamples.runMs), 3),
