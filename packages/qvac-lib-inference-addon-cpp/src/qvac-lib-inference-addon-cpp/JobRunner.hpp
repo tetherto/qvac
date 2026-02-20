@@ -122,7 +122,7 @@ public:
 
   ~JobRunner() {
     if (running_) {
-      QLOG(logger::Priority::DEBUG, "Stopping job");
+      QLOG_DEBUG("Stopping job");
       {
         std::lock_guard lock(mtx_);
         running_ = false;
