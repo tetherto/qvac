@@ -23,7 +23,6 @@ const BENCH_DEFAULT_RUNTIME = {
   verbosity: '0',
   'batch-size': '512',
   'ubatch-size': '512',
-  'no-mmap': false,
   'flash-attn': 'off',
   temp: '0.1', // Override: addon default 0.8, using 0.1 for reproducibility
   seed: '42', // Override: addon default -1, using 42 for determinism
@@ -33,7 +32,7 @@ const BENCH_DEFAULT_RUNTIME = {
   'repeat-penalty': '1.1', // Addon default
   'presence-penalty': '0', // Addon default
   'frequency-penalty': '0' // Addon default
-  // Not set (use llama.cpp defaults): threads, cache-type-k, cache-type-v, no-kv-offload
+  // Not set (use llama.cpp defaults): threads, cache-type-k, cache-type-v
 }
 
 // Optional per-model runtime overrides for local testing
