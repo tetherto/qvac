@@ -245,7 +245,7 @@ function createDefaultGpuConfig (overrides = {}) {
   }
 }
 
-function createTestAddon (binding, modelPath, projectionPath, config, onOutput, transitionCb = null) {
+function createTestAddon (binding, modelPath, projectionPath, config, onOutput) {
   const { LlamaInterface } = require('../../addon.js')
   return new LlamaInterface(
     binding,
@@ -254,8 +254,7 @@ function createTestAddon (binding, modelPath, projectionPath, config, onOutput, 
       projectionPath,
       config
     },
-    onOutput,
-    transitionCb
+    onOutput
   )
 }
 
