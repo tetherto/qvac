@@ -132,7 +132,8 @@ void ParakeetModel::load() {
         // ONNX Runtime resolves external data relative to the model file.
         // Stage symlinks with canonical names so the .data file is found.
         stagingDir = std::filesystem::temp_directory_path() /
-            ("parakeet_enc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+                     ("parakeet_enc_" +
+                      std::to_string(reinterpret_cast<uintptr_t>(this)));
         std::filesystem::create_directories(stagingDir);
 
         auto encLink = stagingDir / "encoder-model.onnx";
@@ -154,8 +155,14 @@ void ParakeetModel::load() {
         std::filesystem::remove_all(stagingDir);
         stagingDir.clear();
       } else {
+#ifdef _WIN32
+        std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
+        encoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, wPath.c_str(), session_options);
+#else
         encoder_session_ = std::make_unique<Ort::Session>(
             *ort_env_, cfg_.encoderPath.c_str(), session_options);
+#endif
       }
     } else {
       auto encoderIt = model_weights_.find("encoder-model.onnx");
@@ -191,7 +198,8 @@ void ParakeetModel::load() {
         }
       } else {
         encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, encoderIt->second.data(), encoderIt->second.size(), session_options);
+            *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
+            session_options);
       }
     }
 
@@ -199,8 +207,14 @@ void ParakeetModel::load() {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
          "Loading decoder session...");
     if (useNamedPaths && !cfg_.decoderPath.empty()) {
+#ifdef _WIN32
+      std::wstring wPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
+      decoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
       decoder_session_ = std::make_unique<Ort::Session>(
           *ort_env_, cfg_.decoderPath.c_str(), session_options);
+#endif
     } else {
       auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
       if (decoderIt == model_weights_.end()) {
@@ -209,26 +223,36 @@ void ParakeetModel::load() {
         throw std::runtime_error("Decoder model not loaded");
       }
       decoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, decoderIt->second.data(), decoderIt->second.size(), session_options);
+          *ort_env_, decoderIt->second.data(), decoderIt->second.size(),
+          session_options);
     }
 
     // === Preprocessor (optional) ===
     if (useNamedPaths && !cfg_.preprocessorPath.empty()) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
            "Loading preprocessor session...");
+#ifdef _WIN32
+      std::wstring wPath(cfg_.preprocessorPath.begin(),
+                         cfg_.preprocessorPath.end());
+      preprocessor_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
       preprocessor_session_ = std::make_unique<Ort::Session>(
           *ort_env_, cfg_.preprocessorPath.c_str(), session_options);
+#endif
     } else {
       auto preprocessorIt = model_weights_.find("preprocessor.onnx");
       if (preprocessorIt != model_weights_.end()) {
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
              "Loading preprocessor session...");
         preprocessor_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, preprocessorIt->second.data(), preprocessorIt->second.size(), session_options);
+            *ort_env_, preprocessorIt->second.data(),
+            preprocessorIt->second.size(), session_options);
       }
     }
 
-    // === Vocabulary (load from file if not already loaded via set_weights_for_file) ===
+    // === Vocabulary (load from file if not already loaded via
+    // set_weights_for_file) ===
     if (useNamedPaths && vocab_.empty() && !cfg_.vocabPath.empty()) {
       std::ifstream vocabFile(cfg_.vocabPath, std::ios::binary);
       if (vocabFile.is_open()) {
@@ -238,7 +262,7 @@ void ParakeetModel::load() {
         loadVocabulary(vocabData);
       }
     }
-    
+
     is_loaded_ = true;
     
     auto loadEnd = std::chrono::high_resolution_clock::now();
