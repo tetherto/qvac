@@ -1,0 +1,17 @@
+{
+  "name": "@qvac/embed-llamacpp-performance",
+  "private": true,
+  "description": "Performance and parameter sweep runners for embed addon",
+  "scripts": {
+    "prepare:models:addon": "node ./prepare-models.js --target addon",
+    "prepare:models:all": "node ./prepare-models.js --target all",
+    "run:param-sweep": "node ./prepare-models.js --target addon && bare ./embed-parameter-sweep.js"
+  },
+  "dependencies": {
+    "@qvac/dl-filesystem": "latest",
+    "@qvac/embed-llamacpp": "latest",
+    "bare-fs": "latest",
+    "bare-path": "latest",
+    "bare-process": "latest"
+  }
+}
