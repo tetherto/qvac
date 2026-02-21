@@ -32,8 +32,7 @@ auto callTypeChecked(F&& function, const std::any& arg, Obj* obj) {
 
 template <typename T> bool canHandle(const any& input) {
   bool result = input.type() == typeid(T);
-  QLOG(
-      Priority::DEBUG,
+  QLOG_DEBUG(
       "canHandle<" + string(typeid(T).name()) + "> for input type " +
           string(input.type().name()) + " = " + (result ? "TRUE" : "FALSE"));
   return result;

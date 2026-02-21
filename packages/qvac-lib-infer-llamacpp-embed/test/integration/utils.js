@@ -146,11 +146,11 @@ class TestLogger {
  * @param {Object} t - Test instance from brittle
  * @param {string} modelName - The model name to use
  * @param {string} device - Device to use: 'cpu' or 'gpu' (default: 'gpu')
- * @param {string} ngl - Number of GPU layers (default: '999' for GPU, '0' for CPU)
+ * @param {string} gpuLayers - Number of GPU layers (default: '999' for GPU, '0' for CPU)
  * @param {string} batchSize - Batch size (default: '1024')
  * @returns {Promise<{inference: GGMLBert, loader: FilesystemDL}>}
  */
-async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', ngl = null, batchSize = '1024') {
+async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
   const [, modelDir] = await ensureModel(modelName)
   const diskPath = modelDir
 
@@ -166,24 +166,26 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', ngl =
     console.log('Platform detected: darwin-x64, forcing device to CPU')
   }
 
-  // Determine ngl based on device if not explicitly provided
-  const actualNgl = ngl !== null ? ngl : (device === 'cpu' ? '0' : '999')
+  // Determine gpu_layers based on device if not explicitly provided
+  const actualGpuLayers = gpuLayers !== null ? gpuLayers : (device === 'cpu' ? '0' : '999')
 
-  // Build config string with device and ngl parameters
-  const configParts = [`-ngl\t${actualNgl}`, `--batch_size\t${batchSize}`]
+  // Build config object with device and gpu_layers parameters
+  const config = {
+    gpu_layers: actualGpuLayers,
+    batch_size: batchSize
+  }
 
   // Add device preference if specified
   if (device === 'cpu' || device === 'gpu') {
-    configParts.push(`-dev\t${device}`)
+    config.device = device
   }
 
-  // Add -fa\toff for Android platform
+  // Disable flash attention on Android
   if (os.platform() === 'android') {
-    configParts.push('-fa\toff')
-    console.log('Platform detected: Android, adding -fa\\toff to config')
+    config.flash_attn = 'off'
+    console.log('Platform detected: Android, setting flash_attn to off')
   }
 
-  const config = configParts.join('\n')
   const inference = new GGMLBert({ modelName, loader, logger, diskPath }, config)
 
   await inference.load()
@@ -249,22 +251,6 @@ async function cleanupResources (loader, inference) {
   await inference.unload()
 }
 
-/**
- * Cancels a job if it exists
- * @param {Object} inference - The inference instance
- * @param {string|null} jobId - The job ID to cancel
- * @returns {Promise<void>}
- */
-async function cancelJobIfExists (inference, jobId) {
-  if (jobId != null) {
-    try {
-      await inference.addon.cancel(jobId)
-    } catch (e) {
-      // Ignore cancel errors - job may already be completed/failed
-    }
-  }
-}
-
 module.exports = {
   downloadFile,
   ensureModel,
@@ -277,6 +263,5 @@ module.exports = {
   waitForCompletion,
   setupErrorHandlers,
   removeErrorHandlers,
-  cleanupResources,
-  cancelJobIfExists
+  cleanupResources
 }

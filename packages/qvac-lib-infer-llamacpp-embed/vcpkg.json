@@ -10,7 +10,7 @@
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "0.12.2"
+      "version>=": "1.1.1"
     },
     {
       "name": "qvac-lint-cpp",
@@ -35,11 +35,5 @@
         }
       ]
     }
-  },
-  "overrides": [
-    {
-      "name": "qvac-lib-inference-addon-cpp",
-      "version": "0.12.2"
-    }
-  ]
+  }
 }

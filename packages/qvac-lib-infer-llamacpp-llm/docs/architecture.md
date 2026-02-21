@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.8.9  
+**Package:** `@qvac/llm-llamacpp` v0.9.0  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -68,8 +68,8 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- qvac-lib-inference-addon-cpp (≥1.1.1): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
+- llama-cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
@@ -127,7 +127,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
 | @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework |
+| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework (single-job runner) |
 | llama.cpp | Native | ≥7248.1.2 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
@@ -230,8 +230,8 @@ graph TB
     end
     
     subgraph "Layer 3: C++ Addon"
-        JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
-        ADDON["Addon<LlamaModel><br/>(addon/Addon.cpp)"]
+        JSINTERFACE["JsInterface<br/>(addon-cpp JsInterface)"]
+        ADDONCPP["AddonCpp / AddonJs<br/>(addon-cpp + addon/AddonJs.hpp)"]
         WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
     
@@ -257,9 +257,9 @@ graph TB
     BINDING --> JSINTERFACE
     WEIGHTSPR --> WEIGHTSLOAD
     
-    JSINTERFACE --> ADDON
-    ADDON --> WEIGHTSLOAD
-    ADDON --> LLAMAMODEL
+    JSINTERFACE --> ADDONCPP
+    ADDONCPP --> WEIGHTSLOAD
+    ADDONCPP --> LLAMAMODEL
     
     LLAMAMODEL --> TEXTCTX
     LLAMAMODEL --> MTMDCTX
@@ -270,7 +270,7 @@ graph TB
     GGML --> GPU
     
     style LLMCLASS fill:#e1f5ff
-    style ADDON fill:#ffe1e1
+    style ADDONCPP fill:#ffe1e1
     style LLAMAMODEL fill:#ffe1e1
     style LLAMACPP fill:#e1ffe1
 ```
@@ -284,7 +284,7 @@ graph TB
 |-------|------------|----------------|----------|----------------|
 | 1. JavaScript API | LlmLlamacpp, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, Addon<T> | Job queue, threading, callbacks | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, Contexts | Inference logic, chat formatting | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
@@ -341,17 +341,17 @@ graph TB
 - Memory-efficient token processing
 - Native GPU backend access
 
-#### **Addon<LlamaModel> (addon/Addon.cpp)**
+#### **AddonCpp / AddonJs (addon-cpp + addon/AddonJs.hpp)**
 
-**Responsibility:** Template specialization of addon framework
+**Responsibility:** Addon-cpp framework integration; LLM addon provides createInstance and runJob over JsInterface
 
 **Why C++:**
-- Provides job queue and priority scheduling
-- Dedicated processing thread
-- Thread-safe state machine
+- Single-job runner (one job at a time, runJob returns boolean accepted)
+- Dedicated processing thread via addon-cpp JobRunner
+- Thread-safe job submission and cancellation (IModelCancel)
 - Output dispatching via uv_async
 
-**Specialization:** Constructor parses config into llama.cpp `common_params`
+**LLM specialization:** createInstance builds LlamaModel with config; runJob parses inputs array (media + text) into LlamaModel::Prompt
 
 #### **WeightsProvider (@qvac/infer-base)**
 
@@ -399,24 +399,24 @@ sequenceDiagram
     participant JS as JavaScript
     participant IF as LlamaInterface
     participant Bind as Native Binding
-    participant Addon as Addon<LlamaModel>
+    participant Addon as AddonCpp/AddonJs
     participant Model as LlamaModel
     participant Llama as llama.cpp
     
     JS->>IF: run(messages)
-    IF->>Bind: append({type:'text', input:json})
-    Bind->>Addon: append() [lock mutex]
-    Addon->>Addon: Enqueue job
+    IF->>Bind: runJob(handle, inputsArray)
+    Bind->>Addon: runJob(inputs) [lock mutex]
+    Addon->>Addon: Set job input
     Addon->>Addon: cv.notify_one()
-    Bind-->>IF: jobId
+    Bind-->>IF: accepted (boolean)
     IF-->>JS: QvacResponse
     
     Note over Addon: Processing Thread
-    Addon->>Addon: Dequeue job
+    Addon->>Addon: Take job
     Addon->>Addon: uv_async_send (JobStarted)
     
     loop For each token
-        Addon->>Model: process(input)
+        Addon->>Model: process(std::any)
         Model->>Llama: llama_decode()
         Llama-->>Model: tokens
         Model->>Model: Sample token
@@ -445,13 +445,13 @@ sequenceDiagram
 
 | Primitive | Purpose | Held Duration | Risk |
 |-----------|---------|---------------|------|
-| std::mutex | Protect job queue | <1ms | Low (brief) |
+| std::mutex | Protect single job state | <1ms | Low (brief) |
 | std::condition_variable | Wake processing thread | N/A | None |
 | uv_async_t | Wake JS thread | N/A | None |
 
 **Thread Safety Rules:**
 
-1. ✅ Call addon methods from any thread
+1. ✅ Call addon methods from any thread (runJob, cancel, activate, loadWeights, destroyInstance)
 2. ✅ Processing thread calls model methods
 3. ❌ Don't call JS functions from C++ thread (use uv_async_send)
 4. ❌ Don't call model methods from JS thread
@@ -815,26 +815,25 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 
 ### Context
 
-A single inference request may involve multiple `append()` calls:
-1. `append({ type: 'media', input: Uint8Array })` - Send image/audio data
-2. `append({ type: 'text', input: JSON.stringify(messages) })` - Send chat history
-3. `append({ type: 'end of job' })` - Signal end of input
+A single inference request sends one `runJob(inputs)` call with an array of inputs:
+1. Zero or more `{ type: 'media', content: Uint8Array }` - Image/audio data
+2. One `{ type: 'text', input: JSON.stringify(messages) }` - Chat history
 
-Without coordination, concurrent requests could interleave these operations, corrupting the message stream sent to the model.
+Without coordination, concurrent requests could call `runJob()` while a job is already set or running; the addon returns `false` (not accepted) in that case.
 
 ### Decision
 
-Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures all append operations within a request complete atomically before the next request begins.
+Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures only one runJob is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
+- `"Cannot set new job: a job is already set or being processed"`
 
-**Note:** C++ level thread safety (mutex-protected job queue) is handled by the addon-cpp framework and documented in `architecture/dependencies/addoncpp/DECISIONS.md`.
-TODO: update to a correct gh repo link once available
+**Note:** C++ level thread safety (single-job runner with mutex-protected job state, optional IModelCancel) is handled by the addon-cpp 1.1.x framework; see addon-cpp docs for architecture and decisions.
 
 ### Rationale
 
 **Atomicity:**
 - Ensures multi-part messages (media + text + end-of-input) are sent as complete units
 - Prevents another request from inserting messages mid-stream
-- Each request gets exclusive access to append until completion
+- Each request gets exclusive run so only one runJob is in flight at a time
 
 **Message Integrity:**
 - Model receives coherent message sequences
@@ -906,4 +905,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-02-17
