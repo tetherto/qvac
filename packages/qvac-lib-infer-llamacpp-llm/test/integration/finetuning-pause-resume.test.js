@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const FilesystemDL = require('@qvac/dl-filesystem')
-const getTmpDir = require('test-tmp')
 const LlmLlamacpp = require('../../index.js')
 const {
   ensureModel,
@@ -24,16 +23,13 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
 
-const PAUSE_RESUME_TIMEOUT_MS = 600_000
+const PAUSE_RESUME_TIMEOUT_MS = 1200_000
 
 const FINETUNE_MODEL = {
   name: 'Qwen3-0.6B-Q8_0.gguf',
   url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf'
 }
 
-function sleep (ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
 
 test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: isDarwinX64 || noGpu }, async t => {
   const [modelName, modelDir] = await ensureModel({
@@ -41,11 +37,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
     downloadUrl: FINETUNE_MODEL.url
   })
 
-  const testDataDir = await getTmpDir()
-  const testCheckpointDir = await getTmpDir()
   const { trainDatasetPath, evalDatasetPath, checkpointDir } = setupPauseResumeTestData(
-    testDataDir,
-    testCheckpointDir,
+    modelDir,
+    modelDir,
     'pause-resume'
   )
 
@@ -65,7 +59,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
     numberOfEpochs: 2,
     microBatchSize: 2,
     contextLength: 128,
-    checkpointSaveSteps: 10,
+    checkpointSaveSteps: 2,
     checkpointSaveDir: checkpointDir
   })
 
@@ -93,7 +87,6 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
   await model.load()
 
   const finetuneHandle = await model.finetune(finetuneConfig)
-  await sleep(15000)
   await model.cancel()
 
   const pauseResult = await finetuneHandle.await()

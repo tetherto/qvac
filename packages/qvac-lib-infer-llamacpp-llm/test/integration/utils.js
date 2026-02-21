@@ -383,7 +383,7 @@ function findPauseCheckpoint (checkpointDir) {
 }
 
 function getDefaultFinetuneConfig (overrides = {}) {
-  const testOutputDir = path.join('test', 'finetune-output')
+  const testOutputDir = path.resolve('test', 'finetune-output')
   return {
     trainDatasetDir: '',
     evalDatasetDir: '',
