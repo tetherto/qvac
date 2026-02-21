@@ -336,6 +336,12 @@ class LlmLlamacpp extends BaseInference {
   }
 
   async finetune (finetuningOptions = undefined) {
+    if (!this.addon) {
+      throw new Error(
+        'Addon not initialized. Call load() first.'
+      )
+    }
+
     const params = finetuningOptions ?? this._defaultFinetuneParams
     if (!params) {
       throw new Error(

@@ -5,8 +5,7 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const {
   ensureModel,
-  setupPauseResumeTestData,
-  getDefaultFinetuneConfig,
+  setupParams,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
@@ -37,11 +36,13 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
     downloadUrl: FINETUNE_MODEL.url
   })
 
-  const { trainDatasetPath, evalDatasetPath, checkpointDir } = setupPauseResumeTestData(
-    modelDir,
-    modelDir,
-    'pause-resume'
-  )
+  const finetuneConfig = setupParams(modelDir, {
+    numberOfEpochs: 2,
+    microBatchSize: 2,
+    contextLength: 128,
+    checkpointSaveSteps: 2
+  })
+  const checkpointDir = finetuneConfig.checkpointSaveDir
 
   const loader = new FilesystemDL({ dirPath: modelDir })
   const loggerHandle = attachSpecLogger({ forwardToConsole: false })
@@ -50,18 +51,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
     gpu_layers: '999',
     ctx_size: '512',
     device: useCpu ? 'cpu' : 'gpu',
-    flash_attn: 'off'
+    flash_attn: 'off',
+    verbosity: '2'
   }
-
-  const finetuneConfig = getDefaultFinetuneConfig({
-    trainDatasetDir: trainDatasetPath,
-    evalDatasetDir: evalDatasetPath,
-    numberOfEpochs: 2,
-    microBatchSize: 2,
-    contextLength: 128,
-    checkpointSaveSteps: 2,
-    checkpointSaveDir: checkpointDir
-  })
 
   const model = new LlmLlamacpp(
     {
