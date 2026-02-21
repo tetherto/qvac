@@ -4859,6 +4859,7 @@
     "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
+    "deprecated": false,
     "tags": [
       "transcription",
       "parakeet",
@@ -4874,6 +4875,7 @@
     "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
+    "deprecated": false,
     "tags": [
       "transcription",
       "parakeet",
@@ -4889,6 +4891,7 @@
     "quantization": "fp32",
     "params": "0.6B",
     "license": "CC-BY-4.0",
+    "deprecated": false,
     "tags": [
       "transcription",
       "parakeet",
