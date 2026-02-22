@@ -90,11 +90,11 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
 
   await verifyPauseCheckpoint(t, checkpointDir, 2000)
 
-  // const resumeHandle = await model.finetune()
-  // const result = await resumeHandle.await()
+  const resumeHandle = await model.finetune()
+  const result = await resumeHandle.await()
 
-  // t.ok(result, 'Resume must return result')
-  // await verifyFinalStatus(t, model, result)
+  t.ok(result, 'Resume must return result')
+  await verifyFinalStatus(t, model, result)
   cleanupCheckpoints(checkpointDir)
 
   t.pass('finetuning pause and resume completed')
