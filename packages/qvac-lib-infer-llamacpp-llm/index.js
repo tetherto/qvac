@@ -341,7 +341,7 @@ class LlmLlamacpp extends BaseInference {
         'Addon not initialized. Call load() first.'
       )
     }
-
+    
     const params = finetuningOptions ?? this._defaultFinetuneParams
     if (!params) {
       throw new Error(
@@ -354,12 +354,6 @@ class LlmLlamacpp extends BaseInference {
     const paramsToSend = normalizeFinetuneParams(params)
     this.logger?.info?.('finetune() called')
     this.logger?.info?.('Finetuning parameters:', params)
-
-    if (!this.addon) {
-      this.logger?.info?.('Addon not loaded, calling load()...')
-      await this.load()
-      this.logger?.info?.('Addon loaded')
-    }
 
     if (this._jobInProgress) {
       throw new Error(RUN_QUEUE_BUSY_ERROR)
