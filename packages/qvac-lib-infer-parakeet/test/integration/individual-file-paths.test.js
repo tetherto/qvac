@@ -20,38 +20,6 @@ const { modelPath, samplesDir } = getTestPaths()
 const expectedText = 'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations'
 
 /**
- * Helper: run a transcription and return the output text.
- * Accepts either a pre-created ParakeetInterface (directory-based, weights
- * already loaded) or creates one from config (individual file paths).
- */
-async function transcribe (parakeet, audioData) {
-  const transcriptions = []
-  let outputResolve = null
-  const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-  parakeet._outputCallback = function (handle, event, id, output, error) {
-    if (event === 'Output' && Array.isArray(output)) {
-      for (const segment of output) {
-        if (segment && segment.text) transcriptions.push(segment)
-      }
-      if (transcriptions.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
-    }
-  }
-
-  await parakeet.append({ type: 'audio', data: audioData.buffer })
-  await parakeet.append({ type: 'end of job' })
-
-  const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-  await outputPromise
-  clearTimeout(timeout)
-
-  return transcriptions.map(s => s.text).join(' ').trim()
-}
-
-/**
  * Test both directory-based and individual file path loading methods,
  * verifying each produces correct transcription output and that both
  * methods yield equivalent results.
