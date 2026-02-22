@@ -3,7 +3,6 @@
 #include <atomic>
 #include <condition_variable>
 #include <filesystem>
-#include <functional>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -58,7 +57,6 @@ struct TrainingCheckpointState {
   float loraAlpha = 0.0f;
   uint32_t targetModules = 0;
   LoraLrSchedulerState* scheduler = nullptr;
-  std::function<void(const std::string&)> logFn;
   std::atomic<bool> pauseRequested{false};
   std::atomic<bool> shouldExit{false};
   std::atomic<bool> pauseCheckpointSaved{false};

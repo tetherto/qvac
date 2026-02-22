@@ -230,7 +230,7 @@ std::any LlamaModel::process(const std::any& input) {
   const Prompt& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
-    return std::any(finetune(*prompt.finetuningParams, prompt.outputCallback));
+    return std::any(finetune(*prompt.finetuningParams));
   }
 #else
   if (prompt.finetuningParams.has_value()) {
@@ -743,8 +743,7 @@ bool LlamaModel::LoadMedia(const std::vector<uint8_t>& input) {
 // Finetuning implementation
 #ifndef STANDALONE_TEST_BUILD
 std::string LlamaModel::finetune(
-    const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-    std::function<void(const std::string&)> logCallback) {
+    const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
   using namespace llama_finetuning_helpers;
 
   llama_context* ctx = getContext();
@@ -752,9 +751,7 @@ std::string LlamaModel::finetune(
   if (ctx == nullptr || mdl == nullptr) {
     std::string errorMsg =
         "Finetune error: model/context not available. Call activate() first.";
-    if (logCallback) {
-      logCallback("ERROR: " + errorMsg);
-    }
+    QLOG_IF(Priority::ERROR, errorMsg);
     return "ERROR";
   }
 
@@ -823,24 +820,22 @@ std::string LlamaModel::finetune(
       evalSplit = datasetSampleCount - trainSplit;
     }
 
-    if (logCallback) {
-      std::ostringstream datasetInfo;
-      datasetInfo << "Finetune dataset prepared | mode="
-                  << (params.assistantLossOnly ? "sft" : "causal")
-                  << " | sequenceLength=" << sequenceLength
-                  << " | samples=" << datasetSampleCount
-                  << " | trainSplit=" << trainSplit
-                  << " | evalSplit=" << evalSplit
-                  << " | microBatch=" << actualMicroBatch;
-      logCallback(datasetInfo.str());
-    }
+    std::ostringstream datasetInfo;
+    datasetInfo << "Finetune dataset prepared | mode="
+                << (params.assistantLossOnly ? "sft" : "causal")
+                << " | sequenceLength=" << sequenceLength
+                << " | samples=" << datasetSampleCount
+                << " | trainSplit=" << trainSplit
+                << " | evalSplit=" << evalSplit
+                << " | microBatch=" << actualMicroBatch;
+    QLOG_IF(Priority::DEBUG, datasetInfo.str());
 
-    if (actualMicroBatch != requestedMicroBatch && logCallback) {
+    if (actualMicroBatch != requestedMicroBatch) {
       std::ostringstream microBatchMsg;
       microBatchMsg << "Requested microBatch=" << requestedMicroBatch
                     << " but using " << actualMicroBatch
                     << " due to dataset size";
-      logCallback(microBatchMsg.str());
+      QLOG_IF(Priority::WARNING, microBatchMsg.str());
     }
 
     const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
@@ -862,19 +857,16 @@ std::string LlamaModel::finetune(
         const auto metadataPath = pausePath / "metadata.json";
         if (parseCheckpointMetadata(metadataPath, resumeMeta)) {
           resumingFromPause = true;
-          if (logCallback) {
-            std::ostringstream resumeMsg;
-            resumeMsg << "Resuming training from checkpoint: "
-                      << pausePath.string() << " | epoch "
-                      << (resumeMeta.epoch + 1) << " | expected next batch: "
-                      << (resumeMeta.globalStep + 1);
-            logCallback(resumeMsg.str());
-          }
+          std::ostringstream resumeMsg;
+          resumeMsg << "Resuming training from checkpoint: "
+                    << pausePath.string() << " | epoch "
+                    << (resumeMeta.epoch + 1) << " | expected next batch: "
+                    << (resumeMeta.globalStep + 1);
+          QLOG_IF(Priority::DEBUG, resumeMsg.str());
         } else {
-          if (logCallback) {
-            logCallback(
-                "Warning: Failed to parse checkpoint metadata, starting fresh");
-          }
+          QLOG_IF(
+              Priority::WARNING,
+              "Failed to parse checkpoint metadata, starting fresh");
         }
       }
     }
@@ -900,9 +892,7 @@ std::string LlamaModel::finetune(
       if (!std::filesystem::exists(adapterPath)) {
         std::string errorMsg =
             "Checkpoint adapter file not found: " + adapterPath.string();
-        if (logCallback) {
-          logCallback("ERROR: " + errorMsg);
-        }
+        QLOG_IF(Priority::ERROR, errorMsg);
         throw std::runtime_error(errorMsg);
       }
     } else {
@@ -915,7 +905,7 @@ std::string LlamaModel::finetune(
     currentCheckpointState_.store(nullptr, std::memory_order_release);
 
     auto checkpointState = initializeCheckpointing(
-        params, adapterPtr.get(), &schedulerState, logCallback);
+        params, adapterPtr.get(), &schedulerState);
 
     if (checkpointState) {
       if (resumingFromPause) {
@@ -933,12 +923,12 @@ std::string LlamaModel::finetune(
         checkpointState->batchOffsetWithinEpoch = batchOffset;
         checkpointState->skippingBatches = (batchOffset > 0);
 
-        if (logCallback && batchOffset > 0) {
+        if (batchOffset > 0) {
           std::ostringstream batchOffsetMsg;
           batchOffsetMsg << "Resuming from batch " << (batchOffset + 1) << "/"
                          << trainSplit << " within epoch "
                          << (resumeMeta.epoch + 1);
-          logCallback(batchOffsetMsg.str());
+          QLOG_IF(Priority::DEBUG, batchOffsetMsg.str());
         }
       }
     }
@@ -950,8 +940,8 @@ std::string LlamaModel::finetune(
         checkpointState.get(),
         resumingFromPause);
 
-    if (resumingFromPause && logCallback) {
-      logCallback("Checkpoint loaded successfully");
+    if (resumingFromPause) {
+      QLOG_IF(Priority::DEBUG, "Checkpoint loaded successfully");
     }
 
     if (resumingFromPause && checkpointState) {
@@ -976,11 +966,9 @@ std::string LlamaModel::finetune(
       if (evalDatasetSampleCount <= 0) {
         throw std::runtime_error("Eval dataset has no samples");
       }
-      if (logCallback) {
-        std::ostringstream evalMsg;
-        evalMsg << "Eval dataset loaded | samples=" << evalDatasetSampleCount;
-        logCallback(evalMsg.str());
-      }
+      std::ostringstream evalMsg;
+      evalMsg << "Eval dataset loaded | samples=" << evalDatasetSampleCount;
+      QLOG_IF(Priority::DEBUG, evalMsg.str());
     }
 
     try {
@@ -991,7 +979,6 @@ std::string LlamaModel::finetune(
           evalSplit,
           schedulerState,
           checkpointState.get(),
-          logCallback,
           resumingFromPause ? resumeMeta.epoch : 0,
           resumingFromPause,
           evalDatasetPtr.get(),
@@ -1027,13 +1014,10 @@ std::string LlamaModel::finetune(
     if (!wasPaused) {
       saveLoraAdapter(adapterPtr.get(), params);
 
-      if (logCallback) {
-        const auto adapterPath =
-            llama_finetuning_helpers::resolveAdapterOutputPath(params);
-        logCallback("LoRA adapter saved to: " + adapterPath);
-        logCallback("Finetune completed successfully");
-        logCallback(R"({"type":"FinetuneComplete","status":"COMPLETED"})");
-      }
+      const auto adapterPath =
+          llama_finetuning_helpers::resolveAdapterOutputPath(params);
+      QLOG_IF(Priority::DEBUG, "LoRA adapter saved to: " + adapterPath);
+      QLOG_IF(Priority::DEBUG, "Finetune completed successfully");
     }
     return wasPaused ? "PAUSED" : "COMPLETED";
   } catch (const std::exception& ex) {
@@ -1044,10 +1028,7 @@ std::string LlamaModel::finetune(
       pausedCheckpointState_->setIdle();
     llama_finetuning_helpers::clearCurrentCheckpointState();
     currentCheckpointState_.store(nullptr, std::memory_order_release);
-    if (logCallback) {
-      logCallback(std::string{"Finetune error: "} + ex.what());
-      logCallback(R"({"type":"FinetuneComplete","status":"ERROR"})");
-    }
+    QLOG_IF(Priority::ERROR, std::string{"Finetune error: "} + ex.what());
     return "ERROR";
   }
 }
@@ -1211,8 +1192,7 @@ std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
 LlamaModel::initializeCheckpointing(
     const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
     llama_adapter_lora* adapter,
-    llama_finetuning_helpers::LoraLrSchedulerState* scheduler,
-    std::function<void(const std::string&)> logFn) {
+    llama_finetuning_helpers::LoraLrSchedulerState* scheduler) {
   using namespace llama_finetuning_helpers;
 
   bool periodicCheckpointingEnabled = params.checkpointSaveSteps > 0;
@@ -1237,7 +1217,6 @@ LlamaModel::initializeCheckpointing(
           ? std::filesystem::path{"./checkpoints"}
           : std::filesystem::path{params.checkpointSaveDir};
   checkpointState->scheduler = scheduler;
-  checkpointState->logFn = logFn;
   checkpointState->loraRank = params.loraRank;
   checkpointState->loraAlpha = static_cast<float>(params.loraAlpha);
   checkpointState->targetModules = parseLoraModules(params.loraModules);
@@ -1246,29 +1225,24 @@ LlamaModel::initializeCheckpointing(
   std::error_code dirErr;
   std::filesystem::create_directories(checkpointState->checkpointDir, dirErr);
   if (dirErr) {
-    if (logFn) {
-      std::ostringstream msg;
-      msg << "Checkpointing disabled | directory='"
-          << checkpointState->checkpointDir.string()
-          << "' | error=" << dirErr.message();
-      logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Checkpointing disabled | directory='"
+        << checkpointState->checkpointDir.string()
+        << "' | error=" << dirErr.message();
+    QLOG_IF(Priority::WARNING, msg.str());
     return nullptr;
   }
 
-  if (logFn) {
-    if (periodicCheckpointingEnabled) {
-      std::ostringstream msg;
-      msg << "Checkpointing enabled | dir="
-          << checkpointState->checkpointDir.string()
-          << " | interval=" << checkpointState->checkpointInterval;
-      logFn(msg.str());
-    } else {
-      std::ostringstream msg;
-      msg << "Pause/resume checkpointing enabled | dir="
-          << checkpointState->checkpointDir.string();
-      logFn(msg.str());
-    }
+  if (periodicCheckpointingEnabled) {
+    std::ostringstream msg;
+    msg << "Checkpointing enabled | dir=" << checkpointState->checkpointDir.string()
+        << " | interval=" << checkpointState->checkpointInterval;
+    QLOG_IF(Priority::DEBUG, msg.str());
+  } else {
+    std::ostringstream msg;
+    msg << "Pause/resume checkpointing enabled | dir="
+        << checkpointState->checkpointDir.string();
+    QLOG_IF(Priority::DEBUG, msg.str());
   }
 
   return checkpointState;
@@ -1309,8 +1283,13 @@ void LlamaModel::configureOptimizer(
       // Verify optimizer.gguf exists in checkpoint directory
       const auto optimizerPath = checkpointPath / "optimizer.gguf";
       if (std::filesystem::exists(optimizerPath)) {
-        // Log will be done by caller's logCallback if available
+        QLOG_IF(
+            Priority::DEBUG,
+            "Optimizer checkpoint found: " + optimizerPath.string());
       } else {
+        QLOG_IF(
+            Priority::WARNING,
+            "Optimizer checkpoint missing: " + optimizerPath.string());
       }
     } else {
       optParams.checkpoint_path = nullptr;
@@ -1334,8 +1313,7 @@ void LlamaModel::executeTrainingLoop(
     ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
     llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
     llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
-    std::function<void(const std::string&)> logCallback, uint32_t startEpoch,
-    bool resumingFromPause, ggml_opt_dataset_t evalDataset,
+    uint32_t startEpoch, bool resumingFromPause, ggml_opt_dataset_t evalDataset,
     int64_t evalDatasetSampleCount) {
   using namespace llama_finetuning_helpers;
   using OptResultPtr = std::unique_ptr<
@@ -1363,18 +1341,14 @@ void LlamaModel::executeTrainingLoop(
 
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
     if (checkpointState && checkpointState->shouldExit.load()) {
-      if (logCallback) {
-        logCallback("Training paused");
-      }
+      QLOG_IF(Priority::DEBUG, "Training paused");
       break;
     }
 
-    if (logCallback) {
-      std::ostringstream startMsg;
-      startMsg << "Starting finetune epoch " << (epoch + 1) << "/"
-               << params.numberOfEpochs;
-      logCallback(startMsg.str());
-    }
+    std::ostringstream startMsg;
+    startMsg << "Starting finetune epoch " << (epoch + 1) << "/"
+             << params.numberOfEpochs;
+    QLOG_IF(Priority::DEBUG, startMsg.str());
 
     if (checkpointEnabled) {
       checkpointState->currentEpoch = static_cast<int32_t>(epoch);
@@ -1424,17 +1398,15 @@ void LlamaModel::executeTrainingLoop(
 
     double lossValue = 0.0;
     ggml_opt_result_loss(trainResult.get(), &lossValue, nullptr);
-    if (logCallback) {
-      std::ostringstream epochMsg;
-      epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
-      if (hasEval) {
-        double valLoss = 0.0;
-        ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
-        epochMsg << " | val_loss=" << valLoss;
-      }
-      epochMsg << " | lr=" << scheduler.lastLr;
-      logCallback(epochMsg.str());
+    std::ostringstream epochMsg;
+    epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
+    if (hasEval) {
+      double valLoss = 0.0;
+      ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
+      epochMsg << " | val_loss=" << valLoss;
     }
+    epochMsg << " | lr=" << scheduler.lastLr;
+    QLOG_IF(Priority::DEBUG, epochMsg.str());
     ggml_opt_result_reset(trainResult.get());
     if (hasEval) {
       ggml_opt_result_reset(evalResult.get());
