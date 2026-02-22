@@ -341,7 +341,7 @@ class LlmLlamacpp extends BaseInference {
         'Addon not initialized. Call load() first.'
       )
     }
-    
+
     const params = finetuningOptions ?? this._defaultFinetuneParams
     if (!params) {
       throw new Error(
