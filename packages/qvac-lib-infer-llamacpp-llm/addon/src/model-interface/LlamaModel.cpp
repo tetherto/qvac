@@ -230,7 +230,7 @@ std::any LlamaModel::process(const std::any& input) {
   const Prompt& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
-    return std::any(finetune(*prompt.finetuningParams, prompt.outputCallback));
+    return std::any(finetune(*prompt.finetuningParams));
   }
 #else
   if (prompt.finetuningParams.has_value()) {
