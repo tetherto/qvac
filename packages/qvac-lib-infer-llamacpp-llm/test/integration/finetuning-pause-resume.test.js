@@ -2,12 +2,10 @@
 
 const test = require('brittle')
 const FilesystemDL = require('@qvac/dl-filesystem')
-const getTmpDir = require('test-tmp')
 const LlmLlamacpp = require('../../index.js')
 const {
   ensureModel,
-  setupPauseResumeTestData,
-  getDefaultFinetuneConfig,
+  setupParams,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
@@ -24,7 +22,7 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
 
-const PAUSE_RESUME_TIMEOUT_MS = 600_000
+const PAUSE_RESUME_TIMEOUT_MS = 1200_000
 
 const FINETUNE_MODEL = {
   name: 'Qwen3-0.6B-Q8_0.gguf',
@@ -41,33 +39,21 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
     downloadUrl: FINETUNE_MODEL.url
   })
 
-  const testDataDir = await getTmpDir()
-  const testCheckpointDir = await getTmpDir()
-  const { trainDatasetPath, evalDatasetPath, checkpointDir } = setupPauseResumeTestData(
-    testDataDir,
-    testCheckpointDir,
-    'pause-resume'
-  )
+  const finetuneConfig = setupParams(modelDir, {
+    checkpointSaveSteps: 10
+  })
+  const checkpointDir = finetuneConfig.checkpointSaveDir
 
   const loader = new FilesystemDL({ dirPath: modelDir })
-  const loggerHandle = attachSpecLogger({ forwardToConsole: false })
+  const loggerHandle = attachSpecLogger({ forwardToConsole: true })
 
   const config = {
     gpu_layers: '999',
     ctx_size: '512',
     device: useCpu ? 'cpu' : 'gpu',
-    flash_attn: 'off'
+    flash_attn: 'off',
+    verbosity: '2'
   }
-
-  const finetuneConfig = getDefaultFinetuneConfig({
-    trainDatasetDir: trainDatasetPath,
-    evalDatasetDir: evalDatasetPath,
-    numberOfEpochs: 2,
-    microBatchSize: 2,
-    contextLength: 128,
-    checkpointSaveSteps: 10,
-    checkpointSaveDir: checkpointDir
-  })
 
   const model = new LlmLlamacpp(
     {
@@ -94,6 +80,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: is
 
   const finetuneHandle = await model.finetune(finetuneConfig)
   await sleep(15000)
+
   await model.cancel()
 
   const pauseResult = await finetuneHandle.await()

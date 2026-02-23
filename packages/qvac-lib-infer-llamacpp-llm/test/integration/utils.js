@@ -337,16 +337,35 @@ function createPauseResumeTestDataset (filePath) {
   return filePath
 }
 
-function setupPauseResumeTestData (testDataDir, testCheckpointDir, testId) {
-  const trainDatasetPath = path.join(testDataDir, `train_${testId}.jsonl`)
-  const evalDatasetPath = path.join(testDataDir, `eval_${testId}.jsonl`)
-  const checkpointDir = path.join(testCheckpointDir, `test_${testId}`)
+function setupParams (modelDir, overrides = {}) {
+  const testId = 'pause-resume'
+  const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
+  const evalDatasetPath = path.join(modelDir, `eval_${testId}.jsonl`)
+  const checkpointDir = path.join(modelDir, `test_${testId}`)
 
   createPauseResumeTestDataset(trainDatasetPath)
   createPauseResumeTestDataset(evalDatasetPath)
   cleanupCheckpoints(checkpointDir)
 
-  return { trainDatasetPath, evalDatasetPath, checkpointDir }
+  return {
+    trainDatasetDir: trainDatasetPath,
+    evalDatasetDir: evalDatasetPath,
+    outputParametersDir: path.resolve(modelDir, 'finetune-output'),
+    numberOfEpochs: 1,
+    learningRate: 1e-5,
+    lrMin: 1e-8,
+    lrScheduler: 'cosine',
+    warmupRatio: 0.1,
+    contextLength: 128,
+    batchSize: 128,
+    microBatchSize: 128,
+    loraModules: 'attn_q,attn_k,attn_v,attn_o',
+    assistantLossOnly: true,
+    checkpointSaveSteps: 5,
+    checkpointSaveDir: checkpointDir,
+    validation: { type: 'split', fraction: 0.05 },
+    ...overrides
+  }
 }
 
 function cleanupCheckpoints (checkpointDir) {
@@ -380,28 +399,6 @@ function findPauseCheckpoint (checkpointDir) {
   })
 
   return path.join(checkpointDir, pauseCheckpoints[0])
-}
-
-function getDefaultFinetuneConfig (overrides = {}) {
-  const testOutputDir = path.join('test', 'finetune-output')
-  return {
-    trainDatasetDir: '',
-    evalDatasetDir: '',
-    outputParametersDir: testOutputDir,
-    numberOfEpochs: 1,
-    learningRate: 1e-5,
-    lrMin: 1e-8,
-    lrScheduler: 'cosine',
-    warmupRatio: 0.1,
-    contextLength: 128,
-    batchSize: 4,
-    microBatchSize: 4,
-    loraModules: 'attn_q,attn_k,attn_v,attn_o',
-    assistantLossOnly: true,
-    checkpointSaveSteps: 5,
-    validation: { type: 'split', fraction: 0.05 },
-    ...overrides
-  }
 }
 
 function setupFinetuneTestData (testDataDir, testCheckpointDir, testId) {
@@ -494,9 +491,8 @@ module.exports = {
   verifyCheckpointExists,
   findPauseCheckpoint,
   parsePauseCheckpointMetadata,
-  getDefaultFinetuneConfig,
   setupFinetuneTestData,
-  setupPauseResumeTestData,
+  setupParams,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus

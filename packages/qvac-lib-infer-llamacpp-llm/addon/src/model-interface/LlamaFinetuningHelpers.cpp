@@ -23,7 +23,11 @@
 #include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 #endif
 
+#include "../utils/LoggingMacros.hpp"
+
 namespace llama_finetuning_helpers {
+
+using qvac_lib_inference_addon_cpp::logger::Priority;
 
 static thread_local TrainingCheckpointState* tlsCurrentCheckpointState =
     nullptr;
@@ -281,35 +285,29 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   std::error_code ec;
   std::filesystem::create_directories(stepDir, ec);
   if (ec) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Checkpoint save skipped at step " << step
-          << " | directory error: " << ec.message();
-      state.logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Checkpoint save skipped at step " << step
+        << " | directory error: " << ec.message();
+    QLOG_IF(Priority::WARNING, msg.str());
     return false;
   }
 
   const std::string stepDirStr = stepDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, stepDirStr.c_str(), state.model, state.ctx)) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Failed to save LoRA checkpoint at step " << step << " in "
-          << stepDirStr;
-      state.logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Failed to save LoRA checkpoint at step " << step << " in "
+        << stepDirStr;
+    QLOG_IF(Priority::ERROR, msg.str());
     return false;
   }
 
   const auto optimizerPath = stepDir / "optimizer.gguf";
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Unable to save optimizer state alongside checkpoint at step "
-          << step;
-      state.logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Unable to save optimizer state alongside checkpoint at step "
+        << step;
+    QLOG_IF(Priority::WARNING, msg.str());
   }
 
   const auto metadataPath = stepDir / "metadata.json";
@@ -330,10 +328,10 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
     metadata << "target_modules=" << meta.targetModules << '\n';
     metadata << "global_step=" << meta.globalStep << '\n';
     metadata << "current_step=" << meta.currentStep << '\n';
-  } else if (state.logFn) {
+  } else {
     std::ostringstream msg;
     msg << "Checkpoint metadata write failed at step " << step;
-    state.logFn(msg.str());
+    QLOG_IF(Priority::WARNING, msg.str());
   }
 
   return true;
@@ -391,33 +389,24 @@ bool savePauseCheckpoint(
   std::error_code ec;
   std::filesystem::create_directories(pauseDir, ec);
   if (ec) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Pause checkpoint save skipped | directory error: "
-          << ec.message();
-      state.logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Pause checkpoint save skipped | directory error: " << ec.message();
+    QLOG_IF(Priority::WARNING, msg.str());
     return false;
   }
 
   const std::string pauseDirStr = pauseDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, pauseDirStr.c_str(), state.model, state.ctx)) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Failed to save LoRA pause checkpoint in " << pauseDirStr;
-      state.logFn(msg.str());
-    }
+    std::ostringstream msg;
+    msg << "Failed to save LoRA pause checkpoint in " << pauseDirStr;
+    QLOG_IF(Priority::ERROR, msg.str());
     return false;
   }
 
   const auto optimizerPath = pauseDir / "optimizer.gguf";
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
-    if (state.logFn) {
-      std::ostringstream msg;
-      msg << "Unable to save optimizer state for pause checkpoint";
-      state.logFn(msg.str());
-    }
+    QLOG_IF(Priority::WARNING, "Unable to save optimizer state for pause checkpoint");
   }
 
   const auto metadataPath = pauseDir / "metadata.json";
@@ -440,19 +429,17 @@ bool savePauseCheckpoint(
     metadata << "target_modules=" << meta.targetModules << '\n';
     metadata << "global_step=" << meta.globalStep << '\n';
     metadata << "current_step=" << meta.currentStep << '\n';
-  } else if (state.logFn) {
+  } else {
     std::ostringstream msg;
     msg << "Pause checkpoint metadata write failed";
-    state.logFn(msg.str());
+    QLOG_IF(Priority::WARNING, msg.str());
   }
 
   state.pauseCheckpointPath = pauseDir;
 
-  if (state.logFn) {
-    std::ostringstream msg;
-    msg << "Pause checkpoint saved -> " << pauseDirStr;
-    state.logFn(msg.str());
-  }
+  std::ostringstream msg;
+  msg << "Pause checkpoint saved -> " << pauseDirStr;
+  QLOG_IF(Priority::DEBUG, msg.str());
 
   return true;
 }
@@ -477,21 +464,17 @@ bool tryHandlePauseRequest(
     state->shouldExit.store(true);
     state->isFinetuning.store(false);
     state->isPaused.store(true);
-    if (state->logFn) {
-      std::ostringstream pauseMsg;
-      pauseMsg << "Training paused";
-      if (pausedDuringValidation) {
-        pauseMsg << " during validation";
-      }
-      pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
-               << " | epoch " << (state->currentEpoch + 1)
-               << " | Checkpoint saved at: "
-               << state->pauseCheckpointPath.string();
-      state->logFn(pauseMsg.str());
-      state->logFn(R"({"type":"FinetunePaused"})");
+    std::ostringstream pauseMsg;
+    pauseMsg << "Training paused";
+    if (pausedDuringValidation) {
+      pauseMsg << " during validation";
     }
-  } else if (state->logFn) {
-    state->logFn("Warning: Failed to save pause checkpoint");
+    pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
+             << " | epoch " << (state->currentEpoch + 1)
+             << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
+    QLOG_IF(Priority::DEBUG, pauseMsg.str());
+  } else {
+    QLOG_IF(Priority::WARNING, "Failed to save pause checkpoint");
   }
   state->pauseWaitDone.store(true);
   state->pauseDoneCv.notify_all();
@@ -570,20 +553,16 @@ void optEpochCallback(
   if (state->skippingBatches && state->batchOffsetWithinEpoch >= 0) {
     if (ibatch == state->batchOffsetWithinEpoch) {
       state->skippingBatches = false;
-      if (state->logFn) {
-        std::ostringstream resumeMsg;
-        resumeMsg << "Resumed from batch " << (ibatch + 1) << "/" << ibatchMax
-                  << " (globalStep will be " << (state->globalStep + 1) << ")";
-        state->logFn(resumeMsg.str());
-      }
+      std::ostringstream resumeMsg;
+      resumeMsg << "Resumed from batch " << (ibatch + 1) << "/" << ibatchMax
+                << " (globalStep will be " << (state->globalStep + 1) << ")";
+      QLOG_IF(Priority::DEBUG, resumeMsg.str());
     } else if (ibatch < state->batchOffsetWithinEpoch) {
-      if (state->logFn) {
-        std::ostringstream warnMsg;
-        warnMsg << "Warning: Processing batch " << (ibatch + 1)
-                << " but expected to resume from batch "
-                << (state->batchOffsetWithinEpoch + 1);
-        state->logFn(warnMsg.str());
-      }
+      std::ostringstream warnMsg;
+      warnMsg << "Processing batch " << (ibatch + 1)
+              << " but expected to resume from batch "
+              << (state->batchOffsetWithinEpoch + 1);
+      QLOG_IF(Priority::WARNING, warnMsg.str());
       return;
     }
   }
@@ -596,22 +575,22 @@ void optEpochCallback(
 
   state->globalStep += 1;
 
-  if (!state->finetuningStartedEmitted && state->logFn) {
+  if (!state->finetuningStartedEmitted) {
     state->finetuningStartedEmitted = true;
     state->isIdle.store(false);
     state->isFinetuning.store(true);
     state->isPaused.store(false);
-    state->logFn(R"({"type":"FinetuningStarted"})");
+    QLOG_IF(Priority::INFO, "Finetuning started");
   }
 
-  if (state->expectedFirstBatchAfterResume >= 0 && state->logFn) {
+  if (state->expectedFirstBatchAfterResume >= 0) {
     if (!state->firstBatchAfterResumeLogged) {
       if (state->globalStep == state->expectedFirstBatchAfterResume) {
         std::ostringstream verifyMsg;
         verifyMsg << "First batch after resume: " << state->globalStep
                   << " (expected: " << state->expectedFirstBatchAfterResume
                   << ")";
-        state->logFn(verifyMsg.str());
+        QLOG_IF(Priority::DEBUG, verifyMsg.str());
         state->firstBatchAfterResumeLogged = true;
       }
     }
