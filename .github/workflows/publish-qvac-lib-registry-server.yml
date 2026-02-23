@@ -26,57 +26,75 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
-  release-pr-guard-schema:
-    name: Release PR Guard (Schema)
+  release-merge-guard-schema:
+    name: Release Merge Guard (Schema)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-schema')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-schema
-      package-json-path: packages/qvac-lib-registry-server/shared/package.json
-      changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-schema') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-pr-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-schema
+          package-json-path: packages/qvac-lib-registry-server/shared/package.json
+          changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
 
-  release-pr-guard-client:
-    name: Release PR Guard (Client)
+  release-merge-guard-client:
+    name: Release Merge Guard (Client)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-client')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-client
-      package-json-path: packages/qvac-lib-registry-server/client/package.json
-      changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-client') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-pr-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-client
+          package-json-path: packages/qvac-lib-registry-server/client/package.json
+          changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
-  release-pr-guard-server:
-    name: Release PR Guard (Server)
+  release-merge-guard-server:
+    name: Release Merge Guard (Server)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-server')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-server
-      package-json-path: packages/qvac-lib-registry-server/package.json
-      changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-server') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-pr-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-server
+          package-json-path: packages/qvac-lib-registry-server/package.json
+          changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
 
   detect-changes:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'verify')
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -139,7 +157,10 @@ jobs:
 
   publish-logic:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'verify')
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -188,8 +209,7 @@ jobs:
 
   publish-schema-gpr:
     needs: [detect-changes, publish-logic]
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+    if: >-
       needs.detect-changes.outputs.schema_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
@@ -223,11 +243,13 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs: [detect-changes, publish-logic]
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+    needs: [detect-changes, publish-logic, release-merge-guard-schema]
+    if: >-
+      needs.detect-changes.result == 'success' &&
+      needs.publish-logic.result == 'success' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      needs.release-merge-guard-schema.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -262,8 +284,7 @@ jobs:
   publish-schema:
     name: Publish Schema (meta)
     needs: [publish-schema-gpr, publish-schema-npm]
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+    if: >-
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
     runs-on: ubuntu-latest
@@ -272,17 +293,8 @@ jobs:
 
   lint-and-test:
     needs: detect-changes
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
-      needs.detect-changes.outputs.client_changed == 'true' &&
-      (
-        github.event_name == 'push' ||
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'pull_request_target' &&
-          contains(github.event.pull_request.labels.*.name, 'verify')
-        )
-      )
+    if: >-
+      needs.detect-changes.outputs.client_changed == 'true'
     permissions:
       contents: read
       packages: read
@@ -349,8 +361,7 @@ jobs:
 
   publish-client-gpr:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+    if: >-
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
@@ -388,13 +399,13 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
-    if: |
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+    needs: [detect-changes, publish-logic, publish-schema, lint-and-test, release-merge-guard-client]
+    if: >-
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      needs.release-merge-guard-client.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

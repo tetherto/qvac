@@ -28,17 +28,6 @@ env:
   PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-infer-llamacpp-llm
-      package-json-path: packages/qvac-lib-infer-llamacpp-llm/package.json
-      changelog-path: packages/qvac-lib-infer-llamacpp-llm/CHANGELOG.md
-
   sanity-checks:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -142,7 +131,6 @@ jobs:
         cpp-tests,
         cpp-lint,
         ts-checks,
-        release-pr-guard
       ]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
