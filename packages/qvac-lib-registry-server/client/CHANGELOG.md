@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.6]
+
+Release Date: 2026-02-17
+
+### ✨ Features
+
+- Download resume support: interrupted model downloads can now be resumed instead of restarting from scratch (#387)
+
+### 🔧 Changed
+
+- Added NOTICE file and updated license metadata for sub-package compliance (#394)
+
+### 🐛 Fixed
+
+- Added missing `@qvac/error` devDependency to `@qvac/registry-server`, fixing CI integration test failures (#405)
+
 ## [0.1.5]
 
 Release Date: 2026-02-14

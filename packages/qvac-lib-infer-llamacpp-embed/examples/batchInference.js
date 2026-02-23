@@ -25,7 +25,7 @@ async function main () {
     diskPath: dirPath,
     modelName
   }
-  const config = '-ngl\t25\n--batch_size\t128' // large enough batch size to run all test prompts in one pass
+  const config = { device: 'gpu', gpu_layers: '25', batch_size: '128' } // large enough batch size to run all test prompts in one pass
 
   // 4. Loading model
   const model = new GGMLBert(args, config)

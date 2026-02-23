@@ -76,16 +76,17 @@ jobs:
 
   detect-changes:
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Fetch PR head commits
@@ -138,6 +139,7 @@ jobs:
 
   publish-logic:
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -187,6 +189,7 @@ jobs:
   publish-schema-gpr:
     needs: [detect-changes, publish-logic]
     if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
@@ -197,11 +200,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -221,18 +224,21 @@ jobs:
 
   publish-schema-npm:
     needs: [detect-changes, publish-logic]
-    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true'
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -257,7 +263,7 @@ jobs:
     name: Publish Schema (meta)
     needs: [publish-schema-gpr, publish-schema-npm]
     if: |
-      always() &&
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
     runs-on: ubuntu-latest
@@ -267,6 +273,7 @@ jobs:
   lint-and-test:
     needs: detect-changes
     if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       (
         github.event_name == 'push' ||
@@ -282,11 +289,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout PR head
@@ -298,9 +305,9 @@ jobs:
           git checkout --detach ${{ github.event.pull_request.head.sha }}
 
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Configure npm for package registries
         shell: bash
@@ -343,8 +350,8 @@ jobs:
   publish-client-gpr:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      always() &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
@@ -356,11 +363,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -383,8 +390,8 @@ jobs:
   publish-client-npm:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      always() &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.lint-and-test.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true'
@@ -394,11 +401,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -419,4 +426,3 @@ jobs:
           workdir: ${{ env.PKG_DIR }}/client
           repo_name: "registry-server"
           git-token: ${{ secrets.GITHUB_TOKEN }}
-

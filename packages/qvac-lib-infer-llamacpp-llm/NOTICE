@@ -35,6 +35,8 @@ Third-Party Model Licenses
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005
+    https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   gpt-oss-20b-GGUF
     https://huggingface.co/unsloth/gpt-oss-20b-GGUF
   laser-dolphin-mixtral-2x7b-dpo-GGUF
@@ -45,6 +47,8 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
   Qwen3-1.7B-GGUF
     https://huggingface.co/unsloth/Qwen3-1.7B-GGUF
+  Qwen3-1.7B-Q4_0-00001-of-00005
+    https://huggingface.co/unsloth/Qwen3-1.7B-GGUF
   Qwen3-4B-Q4_0-00001-of-00005
     https://huggingface.co/unsloth/Qwen3-4B-GGUF
   Qwen3-4B-Q4_K_M
@@ -53,6 +57,10 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-8B-GGUF
   Qwen3-VL-2B-Instruct-GGUF
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
+  salamandrata_2b_inst_q4-00001-of-00003
+    https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
+  salamandrata_2b_inst_q8-00001-of-00004
+    https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
   salamandraTA-2B-instruct-GGUF
     https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
   SmolVLM2-500M-Video-Instruct-GGUF
@@ -61,6 +69,10 @@ Third-Party Model Licenses
 --- health-ai-developer-foundations (HAI-DEF Terms of Use) ---
 
   medgemma-4b-it-GGUF
+    https://huggingface.co/unsloth/medgemma-4b-it-GGUF
+  medgemma-4b-it-Q4_1-00001-of-00005
+    https://huggingface.co/unsloth/medgemma-4b-it-GGUF
+  medgemma-4b-it-Q8_0-00001-of-00005
     https://huggingface.co/unsloth/medgemma-4b-it-GGUF
 
 --- llama3.2 (Llama 3.2 Community License) ---
