@@ -21,6 +21,9 @@ on:
       - "packages/qvac-lib-registry-server/client/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
