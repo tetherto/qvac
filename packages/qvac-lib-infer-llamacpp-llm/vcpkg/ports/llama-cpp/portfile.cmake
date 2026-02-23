@@ -1,8 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac-fabric-llm.cpp
-  REF fabric-llm-finetune
-  SHA512 55d2f2af536f952ccd205181fec1cba98f280f8667dfeb4d3ddb1be828eecff66b45e7062a7526da2eb306be86dc24df44487b60e64f2c0cb9adc7dea86be392
+  REPO tetherto/qvac-ext-lib-llama.cpp
+  REF 5475b60648469d46cbaf12629cea3f11ca540324
+  SHA512 a8a187e2d3499c55b37e9ee0ce3a4ff1111f909fa91bbd2e8852416544932b35b009fc86f6e663f0387a9d41f736149d372e59b447d4d12537cd0d9c83b481c6
 )
 
 vcpkg_check_features(
@@ -44,6 +44,16 @@ else()
   list(APPEND PLATFORM_OPTIONS -DGGML_VULKAN=ON)
 endif()
 
+if(VCPKG_TARGET_IS_ANDROID)
+  set(DL_BACKENDS ON)
+  list(APPEND PLATFORM_OPTIONS
+    -DGGML_BACKEND_DL=ON
+    -DGGML_CPU_ALL_VARIANTS=ON
+    -DGGML_CPU_REPACK=ON)
+else()
+  set(DL_BACKENDS OFF)
+endif()
+
 if (VCPKG_TARGET_IS_ANDROID)
   list(APPEND PLATFORM_OPTIONS
     -DGGML_VULKAN_DISABLE_COOPMAT=ON
@@ -55,6 +65,7 @@ vcpkg_cmake_configure(
   SOURCE_PATH "${SOURCE_PATH}"
   DISABLE_PARALLEL_CONFIGURE
   OPTIONS
+    -DGGML_NATIVE=OFF
     -DGGML_CCACHE=OFF
     -DGGML_OPENMP=OFF
     -DGGML_LLAMAFILE=OFF
@@ -65,7 +76,6 @@ vcpkg_cmake_configure(
     -DLLAMA_BUILD_EXAMPLES=OFF
     -DLLAMA_BUILD_SERVER=OFF
     -DLLAMA_ALL_WARNINGS=OFF
-    -DBUILD_SHARED_LIBS=OFF
     ${PLATFORM_OPTIONS}
     ${FEATURE_OPTIONS}
 )
@@ -75,12 +85,15 @@ vcpkg_cmake_config_fixup(
   PACKAGE_NAME llama)
 vcpkg_cmake_config_fixup(
   PACKAGE_NAME ggml)
+
 vcpkg_copy_pdbs()
 vcpkg_fixup_pkgconfig()
 
 file(MAKE_DIRECTORY "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
 file(RENAME "${CURRENT_PACKAGES_DIR}/bin/convert_hf_to_gguf.py" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/convert-hf-to-gguf.py")
 file(INSTALL "${SOURCE_PATH}/gguf-py" DESTINATION "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
+file(RENAME "${CURRENT_PACKAGES_DIR}/bin/vulkan_profiling_analyzer.py" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/vulkan_profiling_analyzer.py")
+
 if (NOT VCPKG_BUILD_TYPE)
   file(REMOVE "${CURRENT_PACKAGES_DIR}/debug/bin/convert_hf_to_gguf.py")
 endif()
@@ -88,7 +101,7 @@ endif()
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
-if (VCPKG_LIBRARY_LINKAGE MATCHES "static")
+if (NOT DL_BACKENDS AND VCPKG_LIBRARY_LINKAGE MATCHES "static")
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/bin")
   file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/bin")
 endif()
