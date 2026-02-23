@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.11.0] - 2026-02-18
+
+- Use new addon-cpp architecture for simplified Js Addon creation and usage.
+- Use AddonCpp on test executable (to mimick JsAddon behavior/usage).
+- Add inference stopping feature
+
+---
+
+### Breaking Changes
+
+**BertInterface / Addon (native addon surface):**
+
+- **Constructor:** The 4th argument `transitionCb` (state-change callback) was removed. The addon no longer reports LISTENING / IDLE / STOPPED etc.
+- **Removed methods:** `pause()`, `stop()`, `status()`, **`destroyInstance()`** — single-job addon no longer exposes queue/state or pause/stop. Use **`unload()`** instead of `destroyInstance()` to release the addon and clear resources.
+- **`runJob(input)`:** Input remains a single object `{ type: 'text' | 'sequences', input }` (one string or array of sequences). **No longer returns a job ID** (only one job per instance); it now returns a boolean accepted flag (false when busy).
+- **`cancel(jobId?)` → `cancel()`:** No `jobId` argument (only one job). **Behavior:** `await addon.cancel()` (and thus `await response.cancel()`) now **waits until the job is actually finished** (future-based cancel in C++); previously `await` did not guarantee the job had stopped.
+
+**GGMLBert usage:**
+
+- **Single job per run:** Each `run(text)` sends one `runJob(input)` and uses a fixed job id `'job'`. Queueing multiple jobs or using multiple job IDs is no longer supported.
+- **Full input in one call:** The full input (single string or array of sequences) is sent in one `runJob()` call.
+
+#### BEFORE
+
+```typescript
+// Old: constructor with state callback
+const addon = new BertInterface(binding, config, outputCb, (state) => logger.info(state))
+
+// Old: runJob returned job ID; cancel by job ID
+const jobId = await addon.runJob({ type: 'text', input: singleString })
+// or
+const jobId = await addon.runJob({ type: 'sequences', input: stringArray })
+// ...
+await addon.cancel(jobId)  // jobId optional; await did NOT guarantee job finished
+
+// Old: state and control
+await addon.status()
+await addon.pause()
+await addon.stop()
+```
+
+#### AFTER
+
+```typescript
+// New: no state callback
+const addon = new BertInterface(binding, config, outputCb)
+
+// New: single run with one input object; returns boolean accepted (no job ID); cancel with no args and proper completion
+const accepted = await addon.runJob({ type: 'text', input: singleString })
+if (!accepted) throw new Error('Addon busy')
+// or
+const acceptedSeq = await addon.runJob({ type: 'sequences', input: stringArray })
+if (!acceptedSeq) throw new Error('Addon busy')
+// ...
+await addon.cancel()  // no jobId; Promise resolves when job is actually finished
+
+// status / pause / stop removed
+```
+
+### API Changes
+
+**Addon (BertInterface):**
+
+- **`runJob(input)`** — Runs one embedding job. `input` is `{ type: 'text', input: string }` or `{ type: 'sequences', input: string[] }`. Returns Promise<boolean> (true if accepted, false if busy). No job ID is returned.
+- **`cancel()`** — Cancels the current job. No arguments. Returns a Promise that resolves when the job has finished (async cancel backed by futures in C++).
+- **Constructor** — `(binding, configurationParams, outputCb)` only; `transitionCb` removed.
+- **Removed:** `pause`, `stop`, `status`, **`destroyInstance`** (use `unload()` only).
+
+**Usage from GGMLBert (unchanged for callers):**
+
+- `model.run(text)` still returns a `QvacResponse` (single string or array of sequences).
+- `response.cancel()` still takes no arguments; the only change is that **`await response.cancel()`** now waits until the underlying job has actually stopped.
+
+```typescript
+// New API usage: single job per run, cancel waits for completion
+await model.run(text)  // text: string | string[]
+// … optionally cancel and wait until job is really finished
+await model.cancel()
+```
+
 ## [0.10.7] - 2026-02-11
 This release updates the qvac-fabric-llm.cpp vcpkg dependency from v7248.1.1 to v7248.1.2. This brings the fix for apple A19 devices when loading models using Metal backend.
 

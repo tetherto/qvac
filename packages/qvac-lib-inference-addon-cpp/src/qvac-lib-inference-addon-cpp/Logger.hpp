@@ -43,3 +43,10 @@ do { \
 std::cout << "[" << qvac_lib_inference_addon_cpp::logger::to_string(prio)<<"]: "<< msg <<std::endl; \
 } while (0)
 #endif
+
+// Enable QLOG_DEBUG in debug builds (NDEBUG not set), not compiled in release.
+#ifndef NDEBUG
+#define QLOG_DEBUG(msg) QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, msg)
+#else
+#define QLOG_DEBUG(msg) ((void)0)
+#endif

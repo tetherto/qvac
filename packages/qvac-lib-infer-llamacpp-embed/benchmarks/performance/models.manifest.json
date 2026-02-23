@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "embeddingGemma",
+      "gguf": {
+        "repo": "unsloth/embeddinggemma-300m-GGUF",
+        "revision": "main",
+        "quantizations": ["Q8_0", "Q4_0"]
+      },
+      "pytorch": {
+        "repo": "google/embeddinggemma-300m",
+        "revision": "main"
+      }
+    },
+    {
+      "id": "Qwen3-embedding-0.6B",
+      "gguf": {
+        "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+        "revision": "main",
+        "quantizations": ["Q8_0", "F16"]
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-Embedding-0.6B",
+        "revision": "main"
+      }
+    },
+    {
+      "id": "Qwen3-embedding-4B-gguf",
+      "gguf": {
+        "repo": "Qwen/Qwen3-Embedding-4B-GGUF",
+        "revision": "main",
+        "quantizations": ["Q8_0", "Q4_K_M", "F16"]
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-Embedding-4B",
+        "revision": "main"
+      }
+    }
+  ]
+}

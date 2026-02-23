@@ -10,11 +10,10 @@ endif()
 
 add_executable(
   addon-test
-  # Implemented tests
   test_llama_model.cpp
   test_cache_management.cpp
   test_text_llm_context.cpp
-  # Backend selection tests
+  test_addon_cpp.cpp
   test_backend_selection.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp

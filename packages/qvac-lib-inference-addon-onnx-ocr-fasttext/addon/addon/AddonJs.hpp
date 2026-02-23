@@ -205,7 +205,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<PipelineOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env, args[0], args[2], args[3], std::move(outHandlers));
+      env, args[0], args[2], std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
 

@@ -12,12 +12,12 @@ This document contains detailed diagrams showing how data moves through the `@qv
 **Communication Pattern:**
 - Two-thread architecture: JavaScript thread + dedicated C++ processing thread
 - Synchronization via mutex and condition variables
-- Cross-thread flow: JS → queue job → wake C++ → process → output → uv_async_send → JS callback
+- Cross-thread flow: JS → submit job via `runJob(inputs)` → wake C++ → process single job → output → uv_async_send → JS callback
 
 **Inference Path:**
 - JS calls `run(messages)` → returns QvacResponse immediately (non-blocking)
-- C++ thread dequeues highest priority job
-- Calls `model.process()` → generates tokens
+- JS builds inputs array (media items + text), calls `addon.runJob(inputs)` once; returns boolean (accepted or job already active)
+- C++ single-job runner takes the job, calls `model.process(std::any)` → generates tokens
 - Queues output events → triggers JS callback asynchronously
 - Emits: Output (streaming), JobStarted, JobEnded, Error
 
@@ -53,30 +53,29 @@ flowchart TD
     Start([JS: model.run]) --> ParseMsg[Parse messages array]
     ParseMsg --> CheckMedia{Has media?}
     
-    CheckMedia -->|Yes| SendMedia[Send media via<br/>separate append]
+    CheckMedia -->|Yes| BuildMedia[Build media items<br/>type: 'media', content]
     CheckMedia -->|No| SerializeJSON[Serialize to JSON]
-    SendMedia --> SerializeJSON
+    BuildMedia --> SerializeJSON
     
-    SerializeJSON --> JSAppend[addon.append<br/>type: 'text']
-    JSAppend --> EndOfJob[addon.append<br/>type: 'end of job']
-    EndOfJob --> CreateResp[Create QvacResponse]
+    SerializeJSON --> BuildInputs[Build inputs array:<br/>media items + text]
+    BuildInputs --> RunJob[addon.runJob&#40;inputs&#41;]
+    RunJob --> CreateResp[Create QvacResponse]
     CreateResp --> ReturnJS([Return to JavaScript])
     
-    JSAppend -.->|Enters C++| LockQueue[Lock job queue mutex]
-    LockQueue --> CreateJob[Create Job object]
-    CreateJob --> Enqueue[Add to priority queue]
-    Enqueue --> NotifyCV[Notify condition variable]
-    NotifyCV --> UnlockQueue[Unlock mutex]
+    RunJob -.->|Enters C++| LockMutex[Lock mutex]
+    LockMutex --> SetJob[Set single job input]
+    SetJob --> NotifyCV[Notify condition variable]
+    NotifyCV --> UnlockMutex[Unlock mutex]
     
     NotifyCV -.->|Wakes| ProcThread[Processing Thread]
     
     ProcThread --> WaitWork{Has work?}
-    WaitWork -->|No| SleepCV[cv.wait 100ms]
+    WaitWork -->|No| SleepCV[cv.wait]
     SleepCV --> WaitWork
     
     WaitWork -->|Yes| LockProc[Lock mutex]
-    LockProc --> DequeueJob[Dequeue highest priority]
-    DequeueJob --> UnlockProc[Unlock mutex]
+    LockProc --> TakeJob[Take job input]
+    TakeJob --> UnlockProc[Unlock mutex]
     UnlockProc --> EmitStart[Queue JobStarted event]
     EmitStart --> SendAsync1[uv_async_send]
     
@@ -131,12 +130,12 @@ flowchart TD
 |------|--------|----------|-----------|-----------|
 | 1 | JS | <0.1ms | Parse messages | No |
 | 2 | JS | <0.1ms | Serialize to JSON | No |
-| 3 | JS | <1ms | Call addon.append() | No |
+| 3 | JS | <1ms | Call addon.runJob(inputs) | No |
 | 4 | JS | <0.1ms | Lock mutex | No |
-| 5 | JS | <0.1ms | Enqueue job | No |
+| 5 | JS | <0.1ms | Set job input | No |
 | 6 | JS | <0.1ms | Signal CV | No |
 | 7 | JS | <0.1ms | Unlock mutex | No |
-| 8 | JS | <0.1ms | Return jobId | No |
+| 8 | JS | <0.1ms | Return accepted (boolean) | No |
 | 9 | C++ | - | Wake from cv.wait() | - |
 
 **Phase 2: Processing (C++ Background Thread)**
@@ -144,7 +143,7 @@ flowchart TD
 | Step | Thread | Duration | Operation | Blocks JS? |
 |------|--------|----------|-----------|------------|
 | 10 | C++ | <0.1ms | Lock mutex | No |
-| 11 | C++ | <0.1ms | Dequeue job | No |
+| 11 | C++ | <0.1ms | Take job input | No |
 | 12 | C++ | <0.1ms | Unlock mutex | No |
 | 13 | C++ | <1ms | Parse JSON | No |
 | 14 | C++ | 1-10ms | Format chat template | No |
@@ -293,13 +292,14 @@ For vision + text models (e.g., LLaVA, Qwen2.5-Omni):
 flowchart LR
     Start([JS: run with media]) --> CheckMsg{Message has<br/>type: 'media'?}
     
-    CheckMsg -->|Yes| SendMedia[addon.append<br/>type: media, input: Uint8Array]
-    CheckMsg -->|No| SendText
+    CheckMsg -->|Yes| BuildMedia[Build media items<br/>type: 'media', content: Uint8Array]
+    CheckMsg -->|No| BuildText
     
-    SendMedia --> ModifyMsg[Modify message<br/>content: empty string]
-    ModifyMsg --> SendText[addon.append<br/>type: text, input: JSON]
+    BuildMedia --> ModifyMsg[Modify message<br/>content: empty string]
+    ModifyMsg --> BuildText[Build text item<br/>type: 'text', input: JSON]
     
-    SendText --> ProcessMedia{Has media?}
+    BuildText --> RunJob[addon.runJob&#40;[media..., text]&#41;]
+    RunJob --> ProcessMedia{Has media?}
     ProcessMedia -->|Yes| LoadImage[LlamaModel.LoadMedia<br/>load image via llava]
     ProcessMedia -->|No| SkipMedia
     
@@ -319,9 +319,9 @@ flowchart LR
 **Message Processing:**
 
 | Message | Role | Type | Content | Processing |
-|---------|------|------|---------|------------|
-| 1 | user | media | Uint8Array (image) or string (path) | Send via separate append, clear content |
-| 2 | user | text | "What do you see?" | Include in chat JSON |
+|---------|------|------|---------|-------------|
+| 1 | user | media | Uint8Array (image) | Add to inputs array as `{ type: 'media', content }`, clear content in chat |
+| 2 | user | text | "What do you see?" | Add to inputs array as `{ type: 'text', input: JSON }` |
 
 **Image Loading Methods:**
 
@@ -372,5 +372,5 @@ flowchart TD
 **Related Documents:**
 - [architecture.md](architecture.md) - Complete architecture documentation
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-02-17
 

@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [6. Load the model](#6-load-the-model)
   - [7. Generate embeddings for input sequence](#7-generate-embeddings-for-input-sequence)
   - [8. Unload the model](#8-unload-the-model)
+- [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
@@ -34,8 +35,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- qvac-lib-inference-addon-cpp (≥1.1.1): C++ addon framework
+- llama.cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
@@ -121,12 +122,16 @@ The `args` obj contains the following properties:
 
 ### 4. Create `config`
 
-The `config` is a string consisting of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-Each parameter is separated by a tab (`\t`) from its value, and different parameters are separated by newlines (`\n`).
+The `config` is a dictionary (object) consisting of hyper-parameters which can be used to tweak the behaviour of the model.  
+All parameter values should be strings.
 
 ```js
-// an example of possible configuration
-const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
+const config = {
+  device: 'gpu',
+  gpu_layers: '99',
+  batch_size: '1024',
+  ctx_size: '512'
+}
 ```
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
@@ -209,6 +214,22 @@ try {
   console.error('Failed to unload model:', error)
 }
 ```
+
+### API behavior by state
+
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+
+| Current state | Action called | What happens |
+|---------------|----------------|----------------------------------------------------------------|
+| idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
+| idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves       |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
+| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped      |
+
+When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
+- `"Cannot set new job: a job is already set or being processed"`
+
+**Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
 
 ## Quickstart Example
 

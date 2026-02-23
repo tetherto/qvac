@@ -8,6 +8,7 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isWindowsX64 = os.platform() === 'win32' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const useCpu = isLinuxArm64
 
@@ -127,7 +128,10 @@ function createFollowUpMessages (initialMessages, previousResponse) {
     }
   ]
 }
-test('reasoning tag EOS replacement works with tools=false', { skip: isDarwinX64, timeout: 600_000 }, async t => {
+test('reasoning tag EOS replacement works with tools=false', {
+  skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
+  timeout: 600_000
+}, async t => {
   const { inference } = await setupReasoningModel(t, false)
 
   // First completion - should work correctly
@@ -146,7 +150,10 @@ test('reasoning tag EOS replacement works with tools=false', { skip: isDarwinX64
   t.comment(`Second completion output length: ${response2.length}`)
 })
 
-test('reasoning tag EOS replacement works with tools=true', { skip: isDarwinX64, timeout: 600_000 }, async t => {
+test('reasoning tag EOS replacement works with tools=true', {
+  skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
+  timeout: 600_000
+}, async t => {
   const { inference } = await setupReasoningModel(t, true)
 
   // First completion - should work correctly

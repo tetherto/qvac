@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "cd26df3b3f4d3ba46efacdf8625f2a8fb5b4420b",
+    "baseline": "9503ea89fa282691596d0ab9cf74a6c5a178f5ae",
     "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -77,7 +77,8 @@
         "vcpkg-boost",
         "mimalloc",
         "wil",
-        "gtest"
+        "gtest",
+        "fxdiv"
       ]
     }
   ]
