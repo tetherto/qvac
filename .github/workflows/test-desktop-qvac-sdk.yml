@@ -6,7 +6,12 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: "Working directory for tests"
+        description: "Working directory for tests (consumer/test runner)"
+        required: false
+        type: string
+        default: "."
+      project-directory:
+        description: "Root project directory (where package.json lives). Defaults to repo root."
         required: false
         type: string
         default: "."
@@ -19,6 +24,10 @@ on:
         required: false
         type: number
         default: 30
+      filter:
+        description: 'Filter tests by category or testId prefix (comma-separated, e.g., "model,completion")'
+        required: false
+        type: string
     secrets:
       MQTT_PROTOCOL:
         required: true
@@ -37,9 +46,9 @@ on:
       MQTT_CLIENT_KEY:
         required: false
       NPM_TOKEN:
-        required: false
+        required: true
       PAT_TOKEN:
-        required: false
+        required: true
 
 jobs:
   test-desktop:
@@ -49,6 +58,8 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -58,111 +69,284 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Configure npm registries
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        shell: bash
+        shell: node {0}
         run: |
-          : > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          const fs = require('fs');
+          const path = require('path');
+
+          if (!process.env.NPM_TOKEN) { console.log('❌ NPM_TOKEN is empty'); process.exit(1); }
+          if (!process.env.PAT_TOKEN) { console.log('❌ PAT_TOKEN is empty'); process.exit(1); }
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
+            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+          ];
+          const npmrc = lines.join('\n');
+          const projectDir = '${{ inputs.project-directory }}';
+          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+          console.log(`✅ .npmrc configured at ${target}`);
 
       - name: Setup MQTT certificates
-        shell: bash
+        shell: node {0}
         env:
           CA_CERT: ${{ secrets.MQTT_CA_CERT }}
           CLIENT_CERT: ${{ secrets.MQTT_CLIENT_CERT }}
           CLIENT_KEY: ${{ secrets.MQTT_CLIENT_KEY }}
         run: |
-          mkdir -p /tmp/mqtt-certs
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
 
-          if [ -n "$CA_CERT" ]; then
-            echo "$CA_CERT" > /tmp/mqtt-certs/ca.crt
-            echo "MQTT_CA_PATH=/tmp/mqtt-certs/ca.crt" >> $GITHUB_ENV
-          fi
+          const certsDir = path.join(os.tmpdir(), 'mqtt-certs');
+          fs.mkdirSync(certsDir, { recursive: true });
 
-          if [ -n "$CLIENT_CERT" ]; then
-            echo "$CLIENT_CERT" > /tmp/mqtt-certs/client.crt
-            echo "MQTT_CERT_PATH=/tmp/mqtt-certs/client.crt" >> $GITHUB_ENV
-          fi
+          if (process.env.CA_CERT) {
+            const caPath = path.join(certsDir, 'ca.crt');
+            fs.writeFileSync(caPath, process.env.CA_CERT, 'utf8');
+            fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CA_PATH=${caPath}\n`, 'utf8');
+            console.log('✅ CA certificate written');
+          }
 
-          if [ -n "$CLIENT_KEY" ]; then
-            echo "$CLIENT_KEY" > /tmp/mqtt-certs/client.key
-            echo "MQTT_KEY_PATH=/tmp/mqtt-certs/client.key" >> $GITHUB_ENV
-          fi
+          if (process.env.CLIENT_CERT) {
+            const certPath = path.join(certsDir, 'client.crt');
+            fs.writeFileSync(certPath, process.env.CLIENT_CERT, 'utf8');
+            fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_CERT_PATH=${certPath}\n`, 'utf8');
+            console.log('✅ Client certificate written');
+          }
 
-      - name: Install dependencies
+          if (process.env.CLIENT_KEY) {
+            const keyPath = path.join(certsDir, 'client.key');
+            fs.writeFileSync(keyPath, process.env.CLIENT_KEY, 'utf8');
+            fs.appendFileSync(process.env.GITHUB_ENV, `MQTT_KEY_PATH=${keyPath}\n`, 'utf8');
+            console.log('✅ Client key written');
+          }
+
+      - name: Install dependencies (root)
+        working-directory: ${{ inputs.project-directory }}
+        run: bun install
+
+      - name: Build project (root)
+        working-directory: ${{ inputs.project-directory }}
+        shell: node {0}
+        run: |
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (packageJson.scripts && packageJson.scripts.build) {
+            console.log('Building root project...');
+            execSync('bun run build', { stdio: 'inherit' });
+          } else {
+            console.log('⚠️  No build script found in root package.json - skipping');
+          }
+
+      - name: Copy .npmrc to consumer directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const projectDir = '${{ inputs.project-directory }}';
+          const consumerDir = '${{ inputs.working-directory }}';
+          if (consumerDir !== projectDir) {
+            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const npmrcContent = fs.readFileSync(source, 'utf8');
+            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
+            console.log('✅ .npmrc copied to consumer directory');
+          } else {
+            console.log('ℹ️  Consumer directory is project root, .npmrc already present');
+          }
+
+      - name: Install dependencies (consumer)
         working-directory: ${{ inputs.working-directory }}
-        run: npm install
+        run: npm install --install-links
 
-      - name: Build project
+      - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
-        run: npm run build
+        run: bun run build
 
       - name: Generate runId
         id: runid
-        shell: bash
+        shell: node {0}
         run: |
-          PLATFORM="${{ matrix.os }}"
-          PLATFORM_SHORT=$(echo "$PLATFORM" | sed -E 's/.*(mac).*/macos/; t; s/.*(win).*/windows/; t; s/.*(linux|ubuntu).*/linux/')
-          RUN_ID="${GITHUB_REPOSITORY##*/}-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA:0:7}-$(date +%s)-${PLATFORM_SHORT}"
-          echo "runId=$RUN_ID" >> $GITHUB_OUTPUT
-          echo "platform=$PLATFORM_SHORT" >> $GITHUB_OUTPUT
+          const fs = require('fs');
+          const platform = "${{ matrix.os }}";
+          let platformShort = 'unknown';
+          if (/mac/i.test(platform)) platformShort = 'macos';
+          else if (/win/i.test(platform)) platformShort = 'windows';
+          else if (/linux|ubuntu/i.test(platform)) platformShort = 'linux';
+
+          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
+          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
+          const sha = process.env.GITHUB_SHA.substring(0, 7);
+          const timestamp = Math.floor(Date.now() / 1000);
+          const runId = `${repoName}-${refName}-${sha}-${timestamp}-${platformShort}`;
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `platform=${platformShort}\n`, 'utf8');
+          console.log(`Generated runId: ${runId}`);
 
       - name: Run tests (consumer + producer)
         working-directory: ${{ inputs.working-directory }}
-        shell: bash
+        timeout-minutes: 15
+        shell: node {0}
         run: |
-          # Start consumer in background
-          npx qvac-test run:consumer:desktop \
-            --runId=${{ steps.runid.outputs.runId }} \
-            --config=. \
-            > consumer.log 2>&1 &
-          CONSUMER_PID=$!
-          echo $CONSUMER_PID > consumer.pid
+          (async () => {
+            const { spawn, spawnSync } = require('child_process');
+            const fs = require('fs');
 
-          # Brief pause to let consumer initialize
-          sleep 2
+            const filter = '${{ inputs.filter }}';
+            const filterArgs = filter ? ['--filter=' + filter] : [];
 
-          # Check if consumer is running
-          if ps -p $CONSUMER_PID > /dev/null 2>&1; then
-            echo "✅ Consumer running (PID: $CONSUMER_PID)"
-          else
-            echo "❌ Consumer died immediately"
-            cat consumer.log || true
-            exit 1
-          fi
+            const logStream = fs.createWriteStream('consumer.log', { flags: 'w' });
+            const consumer = spawn('npx', [
+              'qvac-test', 'run:consumer:desktop',
+              '--runId=${{ steps.runid.outputs.runId }}',
+              '--config=.'
+            ], { detached: false, shell: true });
 
-          # Run producer in foreground
-          npx qvac-test run:producer \
-            --runId=${{ steps.runid.outputs.runId }} \
-            --consumer-timeout=${{ inputs.consumer-timeout }} \
-            --config=.
+            let consumerClosed = false;
+            let consumerExitCode = 0;
 
-          PRODUCER_EXIT=$?
+            consumer.stdout.pipe(logStream, { end: false });
+            consumer.stderr.pipe(logStream, { end: false });
 
-          # Clean up consumer
-          kill $CONSUMER_PID 2>/dev/null || true
+            consumer.on('exit', (code, signal) => {
+              if (code !== 0 || signal) {
+                console.log(`❌ Consumer exited (code: ${code}, signal: ${signal})`);
+              }
+            });
 
-          exit $PRODUCER_EXIT
+            const consumerDone = new Promise(resolve => {
+              consumer.on('close', (code, signal) => {
+                consumerClosed = true;
+                consumerExitCode = code ?? 0;
+                console.log(`Consumer closed (code: ${code}, signal: ${signal})`);
+                resolve();
+              });
+            });
+
+            fs.writeFileSync('consumer.pid', consumer.pid.toString(), 'utf8');
+
+            // Brief pause to let consumer initialize
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Check if consumer is running
+            let consumerAlive = !consumer.killed;
+            try { process.kill(consumer.pid, 0); } catch (e) { consumerAlive = false; }
+
+            if (consumerAlive) {
+              console.log(`✅ Consumer running (PID: ${consumer.pid})`);
+            } else {
+              console.log('❌ Consumer died immediately');
+              logStream.end();
+              await new Promise(resolve => logStream.on('finish', resolve));
+              if (fs.existsSync('consumer.log')) {
+                console.log('\n--- Consumer log ---');
+                console.log(fs.readFileSync('consumer.log', 'utf8'));
+              }
+              process.exit(1);
+            }
+
+            // Run producer in foreground
+            console.log('Starting producer...');
+            const producerArgs = [
+              'qvac-test', 'run:producer',
+              '--runId=${{ steps.runid.outputs.runId }}',
+              '--consumer-timeout=${{ inputs.consumer-timeout }}',
+              '--config=.',
+              ...filterArgs
+            ];
+            console.log('Producer command: npx ' + producerArgs.join(' '));
+
+            const producer = spawnSync('npx', producerArgs, { stdio: 'inherit', shell: true });
+
+            console.log(`Producer exited with status: ${producer.status}`);
+            let producerExit = producer.status || 0;
+
+            // Wait for consumer with timeout
+            console.log('Waiting for consumer to close...');
+            const timeout = new Promise(resolve => setTimeout(() => {
+              if (!consumerClosed) {
+                console.log('⚠️  Consumer did not close within 30s timeout, killing...');
+                try {
+                  process.kill(consumer.pid, 'SIGTERM');
+                  console.log('Sent SIGTERM to consumer');
+                } catch (e) {
+                  console.log(`Failed to kill consumer: ${e.message}`);
+                }
+              }
+              resolve();
+            }, 30000));
+
+            await Promise.race([consumerDone, timeout]);
+
+            if (!consumerClosed) {
+              console.log('Waiting 5s for consumer to terminate...');
+              await Promise.race([
+                consumerDone,
+                new Promise(resolve => setTimeout(resolve, 5000))
+              ]);
+            }
+
+            logStream.end();
+            await new Promise(resolve => logStream.on('finish', resolve));
+            console.log('📄 Consumer log written to consumer.log');
+
+            const exitCode = producerExit || consumerExitCode;
+            if (exitCode !== 0) {
+              console.log(`❌ Tests failed with exit code: ${exitCode}`);
+              if (producerExit !== 0) console.log('   Producer failed');
+              if (consumerExitCode !== 0) console.log('   Consumer failed');
+            }
+            process.exit(exitCode);
+          })();
 
       - name: Stop consumer (safety)
         if: always()
-        shell: bash
+        shell: node {0}
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f consumer.pid ]; then
-            kill $(cat consumer.pid) 2>/dev/null || true
-          fi
+          const fs = require('fs');
+          if (!fs.existsSync('consumer.pid')) {
+            console.log('ℹ️  No consumer.pid file found');
+            return;
+          }
+
+          const pid = parseInt(fs.readFileSync('consumer.pid', 'utf8').trim());
+          console.log(`Found consumer PID: ${pid}`);
+
+          let isAlive = false;
+          try {
+            process.kill(pid, 0);
+            isAlive = true;
+          } catch (e) {
+            console.log('ℹ️  Consumer process already terminated');
+            return;
+          }
+
+          if (isAlive) {
+            try {
+              process.kill(pid, 'SIGTERM');
+              console.log('✅ Sent SIGTERM to consumer');
+            } catch (e) {
+              console.log(`⚠️  Failed to kill consumer: ${e.message}`);
+            }
+          }
 
       - name: Upload consumer logs
         if: always()
@@ -191,38 +375,66 @@ jobs:
 
       - name: Show consumer log on failure
         if: failure()
+        shell: node {0}
         working-directory: ${{ inputs.working-directory }}
-        run: cat consumer.log || true
+        run: |
+          const fs = require('fs');
+          if (fs.existsSync('consumer.log')) {
+            console.log(fs.readFileSync('consumer.log', 'utf8'));
+          }
 
   compare-results:
     needs: test-desktop
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     permissions:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
 
       - name: Configure npm registries
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        shell: bash
+        shell: node {0}
         run: |
-          : > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-          echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          const fs = require('fs');
+          const path = require('path');
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
+            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+          ];
+          const npmrc = lines.join('\n');
+          const projectDir = '${{ inputs.project-directory }}';
+          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+
+      - name: Copy .npmrc to consumer directory
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const projectDir = '${{ inputs.project-directory }}';
+          const consumerDir = '${{ inputs.working-directory }}';
+          if (consumerDir !== projectDir) {
+            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const npmrcContent = fs.readFileSync(source, 'utf8');
+            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
+          }
 
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
-        run: npm install --ignore-scripts
+        run: npm install --install-links --ignore-scripts
 
       - name: Download current results
         uses: actions/download-artifact@v7
@@ -236,7 +448,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
-          workflow: test-desktop.yml
+          workflow: test-desktop-qvac-sdk.yml
           branch: ${{ github.event.pull_request.base.ref }}
           name: baseline-*
           path: ${{ inputs.working-directory }}/baseline-results/
@@ -244,81 +456,116 @@ jobs:
 
       - name: Check baseline availability
         id: check-baseline
-        shell: bash
+        shell: node {0}
         run: |
-          if [ -d "${{ inputs.working-directory }}/baseline-results" ] && [ "$(ls -A ${{ inputs.working-directory }}/baseline-results/*.json 2>/dev/null | wc -l)" -gt 0 ]; then
-            echo "has_baseline=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_baseline=false" >> $GITHUB_OUTPUT
-          fi
+          const fs = require('fs');
+          const path = require('path');
+          const baselineDir = path.join('${{ inputs.working-directory }}', 'baseline-results');
+          let hasBaseline = false;
+          if (fs.existsSync(baselineDir)) {
+            const files = fs.readdirSync(baselineDir).filter(f => f.endsWith('.json'));
+            hasBaseline = files.length > 0;
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_baseline=${hasBaseline}\n`, 'utf8');
+          console.log(`Baseline available: ${hasBaseline}`);
 
       - name: Compare results
         if: steps.check-baseline.outputs.has_baseline == 'true'
         working-directory: ${{ inputs.working-directory }}
-        shell: bash
+        shell: node {0}
         run: |
-          for platform in linux macos windows; do
-            current=$(ls current-results/*${platform}*.json 2>/dev/null | head -n1)
-            baseline=$(ls baseline-results/*${platform}*.json 2>/dev/null | head -n1)
-            
-            if [ -n "$current" ] && [ -n "$baseline" ]; then
-              npx qvac-test report:compare \
-                --baseline "$baseline" \
-                --current "$current" \
-                --output "comparison-${platform}.json"
-            fi
-          done
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+          const path = require('path');
+
+          function getPlatform(filePath) {
+            try {
+              const json = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+              return json.system?.platform || 'unknown';
+            } catch (e) {
+              return 'unknown';
+            }
+          }
+
+          const currentFiles = fs.existsSync('current-results')
+            ? fs.readdirSync('current-results').filter(f => f.endsWith('.json'))
+            : [];
+          const baselineFiles = fs.existsSync('baseline-results')
+            ? fs.readdirSync('baseline-results').filter(f => f.endsWith('.json'))
+            : [];
+
+          const currentByPlatform = {};
+          for (const f of currentFiles) {
+            const filePath = path.join('current-results', f);
+            const platform = getPlatform(filePath);
+            currentByPlatform[platform] = filePath;
+          }
+
+          const baselineByPlatform = {};
+          for (const f of baselineFiles) {
+            const filePath = path.join('baseline-results', f);
+            const platform = getPlatform(filePath);
+            baselineByPlatform[platform] = filePath;
+          }
+
+          for (const platform of Object.keys(currentByPlatform)) {
+            if (baselineByPlatform[platform]) {
+              const current = currentByPlatform[platform];
+              const baseline = baselineByPlatform[platform];
+              console.log(`Comparing ${platform}: ${baseline} vs ${current}`);
+              execSync(`npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-${platform}.json"`, { stdio: 'inherit' });
+            } else {
+              console.log(`No baseline for platform: ${platform}`);
+            }
+          }
 
       - name: Format comparison
         working-directory: ${{ inputs.working-directory }}
-        shell: bash
+        shell: node {0}
         run: |
-          echo "# 🧪 QVAC Test Results" > comment.md
-          echo "" >> comment.md
-          echo "**Branch**: \`${{ github.head_ref }}\` | **Commit**: \`${GITHUB_SHA:0:7}\` | **Base**: \`${{ github.event.pull_request.base.ref }}\`" >> comment.md
-          echo "" >> comment.md
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+          const path = require('path');
 
-          if [ "${{ steps.check-baseline.outputs.has_baseline }}" = "false" ]; then
-            echo "⚠️ **No baseline found** - showing current results only" >> comment.md
-            echo "" >> comment.md
-            echo "| Platform | Passed | Failed | Total | Rate | Duration |" >> comment.md
-            echo "|----------|--------|--------|-------|------|----------|" >> comment.md
-            
-            for result in current-results/*.json; do
-              if [ -f "$result" ]; then
-                platform=$(basename "$result" | sed 's/results-//' | sed 's/-.*//')
-                passed=$(jq -r '.summary.passed' "$result")
-                failed=$(jq -r '.summary.failed' "$result")
-                total=$(jq -r '.summary.total' "$result")
-                rate=$(jq -r '.summary.successRate' "$result")
-                duration=$(jq -r '.summary.duration' "$result")
-                echo "| $platform | $passed | $failed | $total | ${rate}% | ${duration}s |" >> comment.md
-              fi
-            done
-            
-            echo "" >> comment.md
-            echo "### 📦 Artifacts" >> comment.md
-            echo "" >> comment.md
-            echo "[View all artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)" >> comment.md
-          else
-            for comparison in comparison-*.json; do
-              if [ -f "$comparison" ]; then
-                platform=$(basename "$comparison" | sed 's/comparison-//' | sed 's/.json//')
-                npx qvac-test report:format \
-                  --input "$comparison" \
-                  --format markdown \
-                  --output "platform-${platform}.md"
-                
-                echo "## ${platform}" >> comment.md
-                cat "platform-${platform}.md" >> comment.md
-                echo "" >> comment.md
-              fi
-            done
-            
-            echo "### 📦 Artifacts" >> comment.md
-            echo "" >> comment.md
-            echo "[View all artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts)" >> comment.md
-          fi
+          let comment = '# 🧪 QVAC Test Results\n\n';
+          const sha = '${{ github.event.pull_request.head.sha }}'.substring(0, 7);
+          comment += `**Branch**: \`${{ github.head_ref }}\` | **Commit**: \`${sha}\` | **Base**: \`${{ github.event.pull_request.base.ref }}\`\n\n`;
+
+          if ("${{ steps.check-baseline.outputs.has_baseline }}" === "false") {
+            comment += '⚠️ **No baseline found** - showing current results only\n\n';
+            comment += '| Platform | Passed | Failed | Total | Rate | Duration |\n';
+            comment += '|----------|--------|--------|-------|------|----------|\n';
+
+            if (fs.existsSync('current-results')) {
+              const results = fs.readdirSync('current-results').filter(f => f.endsWith('.json'));
+              for (const result of results) {
+                try {
+                  const json = JSON.parse(fs.readFileSync(path.join('current-results', result), 'utf8'));
+                  const platform = json.system?.platform || 'unknown';
+                  comment += `| ${platform} | ${json.summary.passed} | ${json.summary.failed} | ${json.summary.total} | ${json.summary.successRate}% | ${json.summary.duration}s |\n`;
+                } catch (e) {
+                  console.log(`Failed to parse ${result}: ${e.message}`);
+                }
+              }
+            }
+
+            comment += '\n### 📦 Artifacts\n\n';
+            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+          } else {
+            const comparisons = fs.readdirSync('.').filter(f => f.startsWith('comparison-') && f.endsWith('.json'));
+            for (const comparison of comparisons) {
+              const platform = path.basename(comparison, '.json').replace('comparison-', '');
+              execSync(`npx qvac-test report:format --input "${comparison}" --format markdown --output "platform-${platform}.md"`, { stdio: 'inherit' });
+
+              comment += `## ${platform}\n`;
+              comment += fs.readFileSync(`platform-${platform}.md`, 'utf8') + '\n';
+            }
+
+            comment += '### 📦 Artifacts\n\n';
+            comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+          }
+
+          fs.writeFileSync('comment.md', comment, 'utf8');
 
       - name: Comment on PR
         uses: actions/github-script@v8
