@@ -7,11 +7,21 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
 
-const tokenizerPath = 'models/chatterbox/tokenizer.json'
-const speechEncoderPath = 'models/chatterbox/speech_encoder.onnx'
-const embedTokensPath = 'models/chatterbox/embed_tokens.onnx'
-const conditionalDecoderPath = 'models/chatterbox/conditional_decoder.onnx'
-const languageModelPath = 'models/chatterbox/language_model.onnx'
+const modeArg = global.Bare ? global.Bare.argv[2] : process.argv[2]
+if (!modeArg || !['english', 'multilingual'].includes(modeArg)) {
+  console.error('Usage: example-chatterbox-tts.js <english|multilingual>')
+  if (global.Bare) global.Bare.exit(1)
+  else process.exit(1)
+}
+
+const isMultilingual = modeArg === 'multilingual'
+const modelsDir = isMultilingual ? 'models/chatterbox-multilingual' : 'models/chatterbox'
+
+const tokenizerPath = `${modelsDir}/tokenizer.json`
+const speechEncoderPath = `${modelsDir}/speech_encoder.onnx`
+const embedTokensPath = `${modelsDir}/embed_tokens.onnx`
+const conditionalDecoderPath = `${modelsDir}/conditional_decoder.onnx`
+const languageModelPath = `${modelsDir}/language_model.onnx`
 
 const refWavPath = path.join(__dirname, '..', 'test', 'reference-audio', 'jfk.wav')
 
@@ -44,7 +54,14 @@ async function main () {
     throw err
   }
 
-  // Chatterbox configuration
+  const language = isMultilingual ? 'it' : 'en'
+  const textToSynthesize = isMultilingual
+    ? 'Ciao mondo! Questo è un test del sistema Chatterbox TTS. Come stai?'
+    : 'Hello world! This is a test of the Chatterbox TTS system. How are you doing?'
+  const outputFile = isMultilingual ? 'chatterbox-multilingual-output.wav' : 'chatterbox-output.wav'
+
+  console.log(`Mode: ${modeArg}, language: ${language}, models: ${modelsDir}`)
+
   const chatterboxArgs = {
     tokenizerPath,
     speechEncoderPath,
@@ -57,7 +74,7 @@ async function main () {
   }
 
   const config = {
-    language: 'en'
+    language
   }
 
   const model = new ONNXTTS(chatterboxArgs, config)
@@ -67,7 +84,6 @@ async function main () {
     await model.load()
     console.log('Model loaded.')
 
-    const textToSynthesize = 'Hello world! This is a test of the Chatterbox TTS system. how are you doing'
     console.log(`Running TTS on: "${textToSynthesize}"`)
 
     const response = await model.run({
@@ -92,8 +108,8 @@ async function main () {
     }
 
     console.log('Writing to .wav file...')
-    createWav(buffer, CHATTERBOX_SAMPLE_RATE, 'chatterbox-output.wav')
-    console.log('Finished writing to chatterbox-output.wav')
+    createWav(buffer, CHATTERBOX_SAMPLE_RATE, outputFile)
+    console.log(`Finished writing to ${outputFile}`)
   } catch (err) {
     console.error('Error during TTS processing:', err)
   } finally {

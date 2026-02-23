@@ -89,25 +89,25 @@ jobs:
           df -h
 
       - name: Checkout addon repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          path: addon
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          path: addon
           fetch-depth: 0
 
       - name: Checkout mobile test framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tetherto/qvac-test-addon-mobile
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
           token: ${{ secrets.PAT_TOKEN }}
           path: test-framework
-          ref: ${{ env.TEST_FRAMEWORK_REF }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -151,19 +151,19 @@ jobs:
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           path: ${{ env.ADDON_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
         continue-on-error: true
 
@@ -424,10 +424,10 @@ jobs:
       # Android-specific steps
       - name: Set up JDK 17
         if: matrix.platform == 'Android'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
-          java-version: "17"
-          distribution: "temurin"
+          java-version: 17
+          distribution: temurin
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
@@ -759,7 +759,7 @@ jobs:
           fi
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

@@ -1,10 +1,13 @@
 #pragma once
 
+#include <any>
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -14,6 +17,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
+#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 #include "utils.hpp"
 
@@ -67,7 +71,9 @@ struct BertCommonInitResult {
 /// similarity or to search for most meaningful entries on a vector database.
 // NOLINTBEGIN(cppcoreguidelines-non-private-member-variables-in-classes,
 // readability-avoid-const-params-in-decls)
-class BertModel {
+class BertModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                  public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
+                  public qvac_lib_inference_addon_cpp::model::IModelCancel {
 private:
   BertCommonInitResult init_;
   llama_model* model_;
@@ -84,6 +90,7 @@ private:
   std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
       singleGgufStreamedFiles_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
+  mutable std::atomic<bool> stopCancelled_{false};
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
@@ -95,11 +102,12 @@ public:
   using TokenizerHandle = void*;
 
   /// @brief This constructor allows to specify model to load more clearly and
-  /// override default common params by a configuration string.
+  /// override default common params by a configuration object.
   ///
-  /// @param config: Each argv is separated by a new line or tab.
+  /// @param config: Configuration key/value map.
   BertModel(
-      const std::string& modelGgufPath, const std::string& config,
+      const std::string& modelGgufPath,
+      const std::unordered_map<std::string, std::string>& config,
       const std::string& backendsDir = "");
 
   /// @brief Construct with already parsed parameters.
@@ -108,13 +116,14 @@ public:
   /// @see BertModel::BertModel(common_params)
   void init(common_params& params);
 
-  /// @see BertModel::BertModel(string, string)
+  /// @see BertModel::BertModel(string, unordered_map)
   void init(
-      const std::string& modelGgufPath, const std::string& config,
+      const std::string& modelGgufPath,
+      const std::unordered_map<std::string, std::string>& config,
       const std::string& backendsDir);
 
   /// @brief Deletes model implementation.
-  ~BertModel();
+  ~BertModel() override;
 
   BertModel(const BertModel&) = delete;
   BertModel& operator=(const BertModel&) = delete;
@@ -156,30 +165,25 @@ public:
 
   std::vector<std::string> preprocessPrompt(const std::string& prompt) const;
 
-  // Methods below are accessed by the Addon<BertModel> template.
+  void cancel() const final;
+
+  [[nodiscard]] std::string getName() const final { return "BertModel"; }
 
   void reset();
-  void reload() {}
-  void load() {}
-  void unload() {}
-
-  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
 
   /// @brief Process input (string or vector of strings) and return embeddings
-  /// @param input Variant containing either std::string or
-  /// std::vector<std::string>
-  /// @param callback Optional callback function for embeddings
+  /// @param input Either std::string or std::vector<std::string>
   /// @returns Embeddings with one embedding per input sequence
-  BertEmbeddings process(
-      const Input& input,
-      const std::function<void(const BertEmbeddings&)>& callback = nullptr);
+  std::any process(const std::any& input) final;
+
+  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
+  runtimeStats() const final;
 
   bool isLoaded() const;
 
-  void set_weights_for_file( // NOLINT(readability-identifier-naming) used from
-                             // addon template / other packages
+  void setWeightsForFile(
       const std::string& filename,
-      std::unique_ptr<std::basic_streambuf<char>>&& shard);
+      std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
 
   void unloadWeights() {}
 
@@ -189,7 +193,9 @@ public:
   void initializeBackend(const std::string& backendsDir = "");
 
   /// @brief Ensure model is initialized
-  void waitForLoadInitialization() { initLoader_.waitForLoadInitialization(); }
+  void waitForLoadInitialization() final {
+    initLoader_.waitForLoadInitialization();
+  }
 
 private:
   /// @param prompts_size: Number of parsed prompts after splitting into lines.

@@ -30,7 +30,7 @@ jobs:
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
       other_changed: ${{ steps.filter.outputs.other }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -105,15 +105,15 @@ jobs:
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages
@@ -143,15 +143,15 @@ jobs:
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: |
             ${{ env.PKG_DIR }}/package-lock.json
             ${{ env.PKG_DIR }}/client/package-lock.json
@@ -193,7 +193,9 @@ jobs:
   sync-staging:
     needs: [detect-changes, validate-json, test]
     if: |
+      always() &&
       contains(github.event.pull_request.labels.*.name, 'staging') &&
+      contains(github.event.pull_request.labels.*.name, 'verify') &&
       needs.detect-changes.outputs.models_changed == 'true' &&
       needs.validate-json.result == 'success' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
@@ -204,7 +206,7 @@ jobs:
       QVAC_WRITER_PUBLIC_KEY: ${{ secrets.QVAC_WRITER_PUBLIC_KEY }}
       QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -224,10 +226,10 @@ jobs:
           echo "✓ All required secrets are set"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages
@@ -261,7 +263,7 @@ jobs:
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -276,10 +278,10 @@ jobs:
           echo "✓ All required secrets are set"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: ${{ env.PKG_DIR }}/package-lock.json
 
       - name: Configure npm for private packages

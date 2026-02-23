@@ -23,7 +23,7 @@ public:
 private:
   std::vector<int64_t> tokenize(const std::string &text);
 
-  void runEmbedTokensInfer(const std::vector<int64_t> &inputIds);
+  void runEmbedTokensInfer(const std::vector<int64_t> &inputIds, const std::vector<int64_t> &positionIds);
   void runSpeechEncoderInfer();
   void runLanguageModelInfer(
       const TensorData<float> &inputsEmbs,
@@ -35,15 +35,17 @@ private:
                                   const TensorData<float> &speakerEmbeddings,
                                   const TensorData<float> &speakerFeatures);
 
-  ChatterboxConfig config_;
-  std::string language_;
-  bool loaded_ = false;
-  TokenizerHandle tokenizerHandle_; // using c api since c++ api does not
-                                    // provide add_special_tokens functionality
+  TokenizerHandle tokenizerHandle_; // using c api since c++ api does not provide add_special_tokens functionality
   std::unique_ptr<OnnxInferSession> speechEncoderSession_;
   std::unique_ptr<OnnxInferSession> embedTokensSession_;
   std::unique_ptr<OnnxInferSession> conditionalDecoderSession_;
   std::unique_ptr<OnnxInferSession> languageModelSession_;
+
+  ChatterboxConfig config_;  
+  bool loaded_ = false;
+  std::string language_;
+  bool isEnglish_ = true;
+  int keyValueOffset_ = 0; // index where the key-value inputs start in languageModelSession_
 };
 
 } // namespace qvac::ttslib::chatterbox

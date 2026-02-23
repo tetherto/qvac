@@ -53,6 +53,17 @@
       "dependencies": [
         "gtest"
       ]
+    },
+    "xnnpack": {
+      "description": "Enable XNNPack execution provider for optimized CPU inference",
+      "dependencies": [
+        {
+          "name": "onnxruntime",
+          "features": [
+            "xnnpack-ep"
+          ]
+        }
+      ]
     }
   },
   "overrides": [
