@@ -6,6 +6,7 @@
 #include <complex>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -116,68 +117,152 @@ void ParakeetModel::load() {
                ")");
     }
 
-    auto encoderIt = model_weights_.find("encoder-model.onnx");
-    if (encoderIt == model_weights_.end()) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-           "Encoder model weights not found");
-      throw std::runtime_error("Encoder model not loaded");
-    }
-    
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "Loading encoder session...");
+    const bool useNamedPaths = !cfg_.encoderPath.empty();
+    std::filesystem::path stagingDir;
 
-    // Check for external data file on disk (not in memory - it's too large)
-    std::string encoderPath = cfg_.modelPath + "/encoder-model.onnx";
-    std::string encoderDataPath = cfg_.modelPath + "/encoder-model.onnx.data";
-    bool hasExternalData = std::filesystem::exists(encoderDataPath);
+    // === Encoder ===
+    if (useNamedPaths) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "Loading encoder from path: " + cfg_.encoderPath);
 
-    if (hasExternalData) {
-      // For models with external data, we need to load from file path
-      // Change to model directory so ONNX Runtime can find the .data file
-      auto originalCwd = std::filesystem::current_path();
-      std::filesystem::current_path(cfg_.modelPath);
-      try {
+      bool hasExternalData = !cfg_.encoderDataPath.empty() &&
+                             std::filesystem::exists(cfg_.encoderDataPath);
+
+      if (hasExternalData) {
+        // ONNX Runtime resolves external data relative to the model file.
+        // Stage symlinks with canonical names so the .data file is found.
+        stagingDir = std::filesystem::temp_directory_path() /
+                     ("parakeet_enc_" +
+                      std::to_string(reinterpret_cast<uintptr_t>(this)));
+        std::filesystem::create_directories(stagingDir);
+
+        auto encLink = stagingDir / "encoder-model.onnx";
+        auto dataLink = stagingDir / "encoder-model.onnx.data";
+        std::filesystem::create_symlink(cfg_.encoderPath, encLink);
+        std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
+
+        auto originalCwd = std::filesystem::current_path();
+        std::filesystem::current_path(stagingDir);
+        try {
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, encLink.c_str(), session_options);
+          std::filesystem::current_path(originalCwd);
+        } catch (...) {
+          std::filesystem::current_path(originalCwd);
+          std::filesystem::remove_all(stagingDir);
+          throw;
+        }
+        std::filesystem::remove_all(stagingDir);
+        stagingDir.clear();
+      } else {
 #ifdef _WIN32
-        // Windows requires wchar_t* for file paths
-        std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
+        std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
         encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, wEncoderPath.c_str(), session_options);
+            *ort_env_, wPath.c_str(), session_options);
 #else
         encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, encoderPath.c_str(), session_options);
+            *ort_env_, cfg_.encoderPath.c_str(), session_options);
 #endif
-        std::filesystem::current_path(originalCwd);
-      } catch (...) {
-        std::filesystem::current_path(originalCwd);
-        throw;
       }
     } else {
-      encoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, encoderIt->second.data(), encoderIt->second.size(), session_options);
+      auto encoderIt = model_weights_.find("encoder-model.onnx");
+      if (encoderIt == model_weights_.end()) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+             "Encoder model weights not found");
+        throw std::runtime_error("Encoder model not loaded");
+      }
+
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "Loading encoder session...");
+
+      std::string encoderPath = cfg_.modelPath + "/encoder-model.onnx";
+      std::string encoderDataPath = cfg_.modelPath + "/encoder-model.onnx.data";
+      bool hasExternalData = std::filesystem::exists(encoderDataPath);
+
+      if (hasExternalData) {
+        auto originalCwd = std::filesystem::current_path();
+        std::filesystem::current_path(cfg_.modelPath);
+        try {
+#ifdef _WIN32
+          std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, wEncoderPath.c_str(), session_options);
+#else
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, encoderPath.c_str(), session_options);
+#endif
+          std::filesystem::current_path(originalCwd);
+        } catch (...) {
+          std::filesystem::current_path(originalCwd);
+          throw;
+        }
+      } else {
+        encoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
+            session_options);
+      }
     }
 
-    // Load decoder model from memory
+    // === Decoder ===
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
          "Loading decoder session...");
-    
-    auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
-    if (decoderIt == model_weights_.end()) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-           "Decoder model weights not found");
-      throw std::runtime_error("Decoder model not loaded");
+    if (useNamedPaths && !cfg_.decoderPath.empty()) {
+#ifdef _WIN32
+      std::wstring wPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
+      decoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      decoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.decoderPath.c_str(), session_options);
+#endif
+    } else {
+      auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
+      if (decoderIt == model_weights_.end()) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+             "Decoder model weights not found");
+        throw std::runtime_error("Decoder model not loaded");
+      }
+      decoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, decoderIt->second.data(), decoderIt->second.size(),
+          session_options);
     }
-    decoder_session_ = std::make_unique<Ort::Session>(
-        *ort_env_, decoderIt->second.data(), decoderIt->second.size(), session_options);
-    
-    // Load preprocessor model (optional - for accurate mel spectrogram computation)
-    auto preprocessorIt = model_weights_.find("preprocessor.onnx");
-    if (preprocessorIt != model_weights_.end()) {
+
+    // === Preprocessor (optional) ===
+    if (useNamedPaths && !cfg_.preprocessorPath.empty()) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
            "Loading preprocessor session...");
+#ifdef _WIN32
+      std::wstring wPath(cfg_.preprocessorPath.begin(),
+                         cfg_.preprocessorPath.end());
       preprocessor_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, preprocessorIt->second.data(), preprocessorIt->second.size(), session_options);
+          *ort_env_, wPath.c_str(), session_options);
+#else
+      preprocessor_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, cfg_.preprocessorPath.c_str(), session_options);
+#endif
+    } else {
+      auto preprocessorIt = model_weights_.find("preprocessor.onnx");
+      if (preprocessorIt != model_weights_.end()) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Loading preprocessor session...");
+        preprocessor_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, preprocessorIt->second.data(),
+            preprocessorIt->second.size(), session_options);
+      }
     }
-    
+
+    // === Vocabulary (load from file if not already loaded via
+    // set_weights_for_file) ===
+    if (useNamedPaths && vocab_.empty() && !cfg_.vocabPath.empty()) {
+      std::ifstream vocabFile(cfg_.vocabPath, std::ios::binary);
+      if (vocabFile.is_open()) {
+        std::vector<uint8_t> vocabData(
+            (std::istreambuf_iterator<char>(vocabFile)),
+            std::istreambuf_iterator<char>());
+        loadVocabulary(vocabData);
+      }
+    }
+
     is_loaded_ = true;
     
     auto loadEnd = std::chrono::high_resolution_clock::now();
