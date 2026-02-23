@@ -305,6 +305,7 @@ jobs:
         env:
           BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
           AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating Bergamot model URLs for mobile tests..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -327,6 +328,7 @@ jobs:
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
           AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating IndicTrans model URLs for mobile tests..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
