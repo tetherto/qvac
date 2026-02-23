@@ -74,16 +74,16 @@ jobs:
           sudo rm -rf /usr/share/dotnet
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           lfs: true
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -169,7 +169,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ matrix.coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -199,7 +199,7 @@ jobs:
     if: ${{ always() }}
     steps:
       - name: Download all coverage reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: coverage-reports
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.2] - 2026-02-20
+Reduce noise from logs, macro for compile-time enabling of debug logs.
+
+## [1.1.1] - 2026-02-17
+- await addon.cancel() does not guarantee job is finished even though await is specified.
+- Other improvement/fixes related to run and cancel:
+
+Some tests were hanging when using cancel.
+- Detect reliably of job already running.
+
+Other improvements:
+- transitionCb unused
+
 ## [1.0.0] - 2025-12-15
 
 Refactored from complex templated Addon and JsInterface classes to a simpler architecture using `std::any` and output handlers. The use of `std::any` is better aligned with the already dynamic handling of JavaScript types. Refer to [docs/usage.md](docs/usage.md) for updated usage and examples.

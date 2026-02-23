@@ -6,6 +6,7 @@ endif()
 
 add_executable(
   addon-test
+  test_addon_cpp.cpp
   test_backend_selection.cpp
   test_bert_model.cpp
   test_llama_lazy_init_backend.cpp

@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/api-behavior.test.js', options)
+}
+
 async function runCacheStateMachineTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }

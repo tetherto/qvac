@@ -81,7 +81,7 @@ public:
       if (it != shards_in_progress.end()) {
         auto data = std::move(it->second);
         shards_in_progress.erase(it);
-        QLOG(logger::Priority::DEBUG, "Finalizing shard " + filename);
+        QLOG_DEBUG("Finalizing shard " + filename);
         return std::make_unique<FinalizedStream<T>>(
             env, filename, std::move(data));
       }

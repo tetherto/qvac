@@ -125,9 +125,8 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Publish to GitHub Packages
@@ -149,9 +148,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
+        uses: actions/checkout@v6
 
       - name: Publish to NPM Package Registry
         id: publish

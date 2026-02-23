@@ -126,16 +126,13 @@ sequenceDiagram
     
     App->>GGMLBert: run(["text1", "text2", "text3"])
     GGMLBert->>GGMLBert: Detect array input
-    GGMLBert->>BI: append({type: 'sequences', input: ["text1", "text2", "text3"]})
-    BI->>Addon: append(handle, {type: 'sequences', input: array})
+    GGMLBert->>BI: runJob({type: 'sequences', input: ["text1", "text2", "text3"]})
+    BI->>Addon: runJob(handle, {type: 'sequences', input: array})
     Addon->>Addon: Enqueue job [lock mutex]
     Addon->>Addon: cv.notify_one()
-    Addon-->>BI: jobId
-    BI-->>GGMLBert: jobId
-    GGMLBert->>BI: append({type: 'end of job'})
-    BI->>Addon: append(handle, {type: 'end of job'})
-    Addon->>Addon: Mark job input complete
-    GGMLBert-->>App: QvacResponse
+    Addon-->>BI: success
+    BI-->>GGMLBert: success
+    GGMLBert-->>App: QvacResponse (fixed job id 'job')
     
     Note over Addon: Processing Thread
     Addon->>Addon: Dequeue job
@@ -294,15 +291,13 @@ sequenceDiagram
     
     App->>GGMLBert: run("Hello world")
     GGMLBert->>GGMLBert: Detect string input
-    GGMLBert->>BI: append({type: 'text', input: "Hello world"})
-    BI->>Addon: append(handle, {type: 'text', input: string})
+    GGMLBert->>BI: runJob({type: 'text', input: "Hello world"})
+    BI->>Addon: runJob(handle, {type: 'text', input: string})
     Addon->>Addon: Enqueue job [lock mutex]
     Addon->>Addon: cv.notify_one()
-    Addon-->>BI: jobId
-    BI-->>GGMLBert: jobId
-    GGMLBert->>BI: append({type: 'end of job'})
-    BI->>Addon: append(handle, {type: 'end of job'})
-    GGMLBert-->>App: QvacResponse
+    Addon-->>BI: success
+    BI-->>GGMLBert: success
+    GGMLBert-->>App: QvacResponse (fixed job id 'job')
     
     Note over Addon: Processing Thread
     Addon->>Addon: Dequeue job
@@ -347,10 +342,9 @@ flowchart TD
     Start([run input]) --> CheckType{Is Array?}
     CheckType -->|Yes| ArrayPath[type: 'sequences'<br/>input: string[]]
     CheckType -->|No| StringPath[type: 'text'<br/>input: string]
-    ArrayPath --> Append[append to addon]
-    StringPath --> Append
-    Append --> EndOfJob[append end of job]
-    EndOfJob --> Return[Return QvacResponse]
+    ArrayPath --> RunJob[runJob to addon]
+    StringPath --> RunJob
+    RunJob --> Return[Return QvacResponse with fixed job id]
 ```
 
 ### C++ Input Routing
@@ -378,4 +372,4 @@ flowchart TD
 
 ---
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-02-17
