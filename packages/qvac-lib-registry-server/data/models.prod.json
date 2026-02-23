@@ -4615,7 +4615,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual conditional decoder (fp32, graph)",
     "quantization": "fp32",
@@ -4634,7 +4634,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual conditional decoder (fp32, weights)",
     "quantization": "fp32",
@@ -4653,7 +4653,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual token embeddings (fp32, graph)",
     "quantization": "fp32",
@@ -4672,7 +4672,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual token embeddings (fp32, weights)",
     "quantization": "fp32",
@@ -4691,7 +4691,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual speech encoder (fp32, graph)",
     "quantization": "fp32",
@@ -4710,7 +4710,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual speech encoder (fp32, weights)",
     "quantization": "fp32",
@@ -4729,7 +4729,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (fp32, graph)",
     "quantization": "fp32",
@@ -4748,7 +4748,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (fp32, weights)",
     "quantization": "fp32",
@@ -4767,7 +4767,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (fp16, graph)",
     "quantization": "fp16",
@@ -4786,7 +4786,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (fp16, weights)",
     "quantization": "fp16",
@@ -4805,7 +4805,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (q4, graph)",
     "quantization": "q4",
@@ -4824,7 +4824,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (q4, weights)",
     "quantization": "q4",
@@ -4843,7 +4843,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (q4f16, graph)",
     "quantization": "q4f16",
@@ -4860,7 +4860,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual language model (q4f16, weights)",
     "quantization": "q4f16",
@@ -4879,7 +4879,7 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json",
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Chatterbox multilingual tokenizer",
     "quantization": "",
