@@ -110,7 +110,16 @@ async function runAndCollect (model, prompt) {
   const response = await model.run(prompt)
   const chunks = []
   response.onUpdate(data => { chunks.push(data) })
-  await response.await()
+  // Bare runtime on arm64 may not drain promise microtasks from native addon
+  // (uv_async) callbacks until another macrotask fires. A periodic setInterval
+  // ensures the event loop stays active and microtasks are flushed promptly,
+  // preventing response.await() from hanging until the test timeout.
+  const ticker = setInterval(() => {}, 50)
+  try {
+    await response.await()
+  } finally {
+    clearInterval(ticker)
+  }
   // Native log callbacks (JsLogger) and output/completion callbacks (OutputCallbackJs)
   // are delivered via separate uv_async handles with no ordering guarantee. Yield to the
   // event loop so any pending log callbacks are processed before the caller reads the
