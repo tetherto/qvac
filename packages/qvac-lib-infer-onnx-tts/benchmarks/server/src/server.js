@@ -4,11 +4,11 @@ const http = require('bare-http1')
 const logger = require('./utils/logger')
 const ApiError = require('./utils/ApiError')
 const { HTTP_METHODS, ERRORS } = require('./utils/constants')
-const { runTTS } = require('./services/runTTS')
+const { runChatterboxTTS } = require('./services/runChatterboxTTS')
 const { URL } = require('bare-url')
 const { processJsonRequest, formatZodError } = require('./utils/helper')
 const { ZodError } = require('zod')
-const { TTSRequestSchema } = require('./validation')
+const { ChatterboxRequestSchema } = require('./validation')
 
 /**
  * Handle errors and send appropriate response
@@ -95,14 +95,14 @@ const handleRequest = async (req, res) => {
         version,
         endpoints: {
           '/': 'Health check',
-          '/synthesize': 'POST - Run TTS synthesis'
+          '/synthesize-chatterbox': 'POST - Run Chatterbox TTS synthesis'
         }
       }))
     }
 
-    if (pathname === '/synthesize' && method === HTTP_METHODS.POST) {
-      const validated = TTSRequestSchema.parse(body)
-      const result = await runTTS(validated)
+    if (pathname === '/synthesize-chatterbox' && method === HTTP_METHODS.POST) {
+      const validated = ChatterboxRequestSchema.parse(body)
+      const result = await runChatterboxTTS(validated)
       return res.end(JSON.stringify(result))
     }
 

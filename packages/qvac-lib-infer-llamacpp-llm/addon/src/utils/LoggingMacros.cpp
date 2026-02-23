@@ -11,7 +11,7 @@ namespace logging {
 // only ERROR messages will be shown, preventing log spam
 Priority g_verbosityLevel = Priority::ERROR;
 
-void SetVerbosityLevel(
+void setVerbosityLevel(
     std::unordered_map<std::string, std::string>& configFilemap) {
   // Parse verbosity level from config and set it globally
   // This must be called before initializeBackend() to ensure llamaLogCallback

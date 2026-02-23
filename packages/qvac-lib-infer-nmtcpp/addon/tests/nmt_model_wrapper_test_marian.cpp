@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <any>
 #include <cmath>
 #include <filesystem>
 #include <memory>
@@ -13,7 +14,7 @@
 #include "../src/model-interface/TranslationModel.hpp"
 #include "NmtSharedTests.hpp"
 
-using qvac_lib_inference_addon_mlc_marian::TranslationModel;
+using qvac_lib_inference_addon_marian::TranslationModel;
 
 namespace qvac_lib_inference_addon_nmt::test {
 
@@ -21,9 +22,9 @@ std::string getValidModelPath();
 
 std::string getInvalidModelPath();
 
-std::string make_valid_input();
+std::any make_valid_input();
 
-std::string make_empty_input();
+std::any make_empty_input();
 
 // ============================================================================
 // Generic Model API Tests
@@ -49,11 +50,11 @@ TestModel make_valid_model() {
   return TranslationModel(getValidModelPath());
 }
 
-TestModel make_invalid_model() { return TranslationModel(); }
+TestModel make_invalid_model() { return TestModel(); }
 
-std::string make_valid_input() { return "Hello, my name is Bob."; }
+std::any make_valid_input() { return std::string("Hello, my name is Bob."); }
 
-std::string make_empty_input() { return std::string(); }
+std::any make_empty_input() { return std::string(); }
 
 }; // namespace qvac_lib_inference_addon_nmt::test
 
@@ -83,7 +84,6 @@ TEST_P(NmtCppModelWrapperTest, InitialState) {
 TEST_P(NmtCppModelWrapperTest, LoadingLifecycle) {
   TranslationModel wrapper(getValidModelPath());
 
-  EXPECT_NO_THROW(wrapper.initializeBackend());
   EXPECT_NO_THROW(wrapper.load());
 
   EXPECT_TRUE(wrapper.isLoaded());
@@ -94,19 +94,16 @@ TEST_P(NmtCppModelWrapperTest, LoadingLifecycle) {
 TEST_P(NmtCppModelWrapperTest, LoadWithInvalidModelPath) {
   TranslationModel wrapper(getInvalidModelPath());
 
-  EXPECT_NO_THROW(wrapper.initializeBackend());
   EXPECT_THROW(wrapper.load(), std::runtime_error);
 }
 
 TEST_P(NmtCppModelWrapperTest, DefaultConstructor_LoadThrowsDueToEmptyPath) {
   TranslationModel wrapper; // no modelPath
-  wrapper.initializeBackend();
   EXPECT_THROW(wrapper.load(), std::runtime_error);
 }
 
 TEST_P(NmtCppModelWrapperTest, SaveLoadParamsEmptyPath_ThenLoadThrows) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.saveLoadParams("");
   EXPECT_THROW(wrapper.load(), std::runtime_error);
 }
@@ -114,7 +111,6 @@ TEST_P(NmtCppModelWrapperTest, SaveLoadParamsEmptyPath_ThenLoadThrows) {
 TEST_P(
     NmtCppModelWrapperTest, SaveLoadParamsAfterLoad_TakesEffectOnlyOnReload) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
   EXPECT_TRUE(wrapper.isLoaded());
 
@@ -124,7 +120,7 @@ TEST_P(
   // Still loaded; process should continue to work
   auto input = make_valid_input();
   EXPECT_NO_THROW({
-    auto out = wrapper.process(input);
+    std::string out = std::any_cast<std::string>(wrapper.process(input));
     EXPECT_GE(out.size(), 0);
   });
 
@@ -135,7 +131,6 @@ TEST_P(
 TEST_P(NmtCppModelWrapperTest, ReloadCycle) {
   TranslationModel wrapper(getValidModelPath());
 
-  wrapper.initializeBackend();
   wrapper.load();
   EXPECT_TRUE(wrapper.isLoaded());
 
@@ -145,7 +140,6 @@ TEST_P(NmtCppModelWrapperTest, ReloadCycle) {
 
 TEST_P(NmtCppModelWrapperTest, Reset) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   EXPECT_NO_THROW(wrapper.reset());
@@ -153,26 +147,24 @@ TEST_P(NmtCppModelWrapperTest, Reset) {
 
 TEST_P(NmtCppModelWrapperTest, ProcessValidInput) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.setUseGpu(false);  // Use CPU-only to avoid GPU hang with indictrans2
-  wrapper.initializeBackend();
+  wrapper.setUseGpu(false); // Use CPU-only to avoid GPU hang with indictrans2
   wrapper.load();
 
   auto validInput = make_valid_input();
 
   EXPECT_NO_THROW({
-    auto result = wrapper.process(validInput);
+    auto result = std::any_cast<std::string>(wrapper.process(validInput));
     EXPECT_GE(result.size(), 0); // Should return vector (possibly empty)
   });
 }
 
 TEST_P(NmtCppModelWrapperTest, ProcessEmptyInput) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   auto emptyInput = make_empty_input();
   EXPECT_NO_THROW({
-    auto result = wrapper.process(emptyInput);
+    auto result = std::any_cast<std::string>(wrapper.process(emptyInput));
     EXPECT_EQ(result.size(), 0); // Empty input should return empty result
   });
 }
@@ -192,16 +184,10 @@ TEST_P(
   // Not loaded: runtimeStats should be empty
   const auto stats = wrapper.runtimeStats();
   EXPECT_TRUE(stats.empty());
-
-  // toString should reflect no stats
-  const auto statsStr = wrapper.runtimeStatsToString();
-  EXPECT_NE(
-      statsStr.find("No runtime statistics available"), std::string::npos);
 }
 
 TEST_P(NmtCppModelWrapperTest, RuntimeStats_ResetClearsStats) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   auto input = make_valid_input();
@@ -245,22 +231,17 @@ TEST_P(
     NmtCppModelWrapperTest,
     RuntimeStatsToString_HasExpectedKeysWhenStatsExist) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   auto input = make_valid_input();
   wrapper.process(input);
 
-  const auto statsStr = wrapper.runtimeStatsToString();
-  EXPECT_NE(statsStr.find("totalTokens"), std::string::npos);
-  EXPECT_NE(statsStr.find("totalTime"), std::string::npos);
-  EXPECT_NE(statsStr.find("encodeTime"), std::string::npos);
-  EXPECT_NE(statsStr.find("decodeTime"), std::string::npos);
+  const auto stats = wrapper.runtimeStats();
+  EXPECT_FALSE(stats.empty());
 }
 
 TEST_P(NmtCppModelWrapperTest, RuntimeStatsDisabled) {
   TranslationModel wrapper(getValidModelPath()); // Stats disabled
-  wrapper.initializeBackend();
   wrapper.load();
 
   auto stats = wrapper.runtimeStats();
@@ -314,7 +295,6 @@ TEST_P(NmtCppModelWrapperTest, SetConfigStoredBeforeLoad_NoLoad) {
 
 TEST_P(NmtCppModelWrapperTest, SetConfigBeforeLoad_NotAppliedUntilAfterLoad) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
 
   wrapper.load();
 
@@ -325,14 +305,14 @@ TEST_P(NmtCppModelWrapperTest, SetConfigBeforeLoad_NotAppliedUntilAfterLoad) {
       "times to ensure length effects. This is a very long input sentence.";
 
   // Since pre-load config was not applied, this should be unconstrained/default
-  auto out_before = wrapper.process(longInput);
+  auto out_before = std::any_cast<std::string>(wrapper.process(longInput));
   EXPECT_FALSE(out_before.empty());
 
   // Apply the same limiting config AFTER load (should now affect decoding)
   wrapper.setConfig(
       {{"maxlength", static_cast<int64_t>(5)},
        {"beamsize", static_cast<int64_t>(1)}});
-  auto out_after = wrapper.process(longInput);
+  auto out_after = std::any_cast<std::string>(wrapper.process(longInput));
   EXPECT_FALSE(out_after.empty());
 
   // Expect a difference, or at least a shorter output after applying maxlength
@@ -341,7 +321,6 @@ TEST_P(NmtCppModelWrapperTest, SetConfigBeforeLoad_NotAppliedUntilAfterLoad) {
 
 TEST_P(NmtCppModelWrapperTest, UnknownKeysIgnored_NoSideEffects) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   // Setting unknown keys should not throw an exception
@@ -352,7 +331,6 @@ TEST_P(NmtCppModelWrapperTest, UnknownKeysIgnored_NoSideEffects) {
 
 TEST_P(NmtCppModelWrapperTest, ReapplyConfigOverridesPrevious_LastWriteWins) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   EXPECT_NO_THROW(wrapper.setConfig({{"beamsize", static_cast<int64_t>(4)}}));
@@ -365,7 +343,6 @@ TEST_P(NmtCppModelWrapperTest, ReapplyConfigOverridesPrevious_LastWriteWins) {
 
 TEST_P(NmtCppModelWrapperTest, MultipleProcessCalls) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   auto validInput = make_valid_input();
@@ -373,7 +350,7 @@ TEST_P(NmtCppModelWrapperTest, MultipleProcessCalls) {
   // Multiple consecutive processing calls should work
   for (int i = 0; i < 3; ++i) {
     EXPECT_NO_THROW({
-      auto result = wrapper.process(validInput);
+      auto result = std::any_cast<std::string>(wrapper.process(validInput));
       EXPECT_GE(result.size(), 0);
     });
   }
@@ -383,7 +360,6 @@ TEST_P(NmtCppModelWrapperTest, DestructorCleanup) {
   // Test that destructor properly cleans up
   {
     TranslationModel wrapper(getValidModelPath());
-    wrapper.initializeBackend();
     wrapper.load();
     // Wrapper destructor should be called here
   }
@@ -396,7 +372,6 @@ TEST_P(NmtCppModelWrapperTest, LoadUnloadSequence) {
 
   // Multiple load/unload cycles
   for (int cycle = 0; cycle < 2; ++cycle) {
-    wrapper.initializeBackend();
     wrapper.load();
     EXPECT_TRUE(wrapper.isLoaded());
 
@@ -410,7 +385,6 @@ TEST_P(NmtCppModelWrapperTest, LoadUnloadSequence) {
 
 TEST_P(NmtCppModelWrapperTest, UnloadWhenNotLoadedIsIdempotent) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
 
   EXPECT_NO_THROW(wrapper.unload());
   EXPECT_FALSE(wrapper.isLoaded());
@@ -421,7 +395,6 @@ TEST_P(NmtCppModelWrapperTest, UnloadWhenNotLoadedIsIdempotent) {
 
 TEST_P(NmtCppModelWrapperTest, IsLoadedFalseAfterUnload) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
   EXPECT_TRUE(wrapper.isLoaded());
 
@@ -431,7 +404,6 @@ TEST_P(NmtCppModelWrapperTest, IsLoadedFalseAfterUnload) {
 
 TEST_P(NmtCppModelWrapperTest, ReloadWhenNotLoadedWithValidPath) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
 
   EXPECT_NO_THROW(wrapper.reload());
   EXPECT_TRUE(wrapper.isLoaded());
@@ -439,7 +411,6 @@ TEST_P(NmtCppModelWrapperTest, ReloadWhenNotLoadedWithValidPath) {
 
 TEST_P(NmtCppModelWrapperTest, ReloadWhenNotLoadedWithInvalidPath) {
   TranslationModel wrapper(getInvalidModelPath());
-  wrapper.initializeBackend();
 
   // TODO Change to qvac_errors::StatusError
   EXPECT_THROW(wrapper.reload(), std::runtime_error);
@@ -447,7 +418,6 @@ TEST_P(NmtCppModelWrapperTest, ReloadWhenNotLoadedWithInvalidPath) {
 
 TEST_P(NmtCppModelWrapperTest, ReloadAfterUnloadRestoresLoadedState) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
   EXPECT_TRUE(wrapper.isLoaded());
 
@@ -460,7 +430,6 @@ TEST_P(NmtCppModelWrapperTest, ReloadAfterUnloadRestoresLoadedState) {
 
 TEST_P(NmtCppModelWrapperTest, DoubleReloadMaintainsStability) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
 
   EXPECT_NO_THROW(wrapper.reload());
   EXPECT_TRUE(wrapper.isLoaded());
@@ -474,7 +443,6 @@ TEST_P(NmtCppModelWrapperTest, ModelApi_InitializeLoadUnloadReloadReset) {
   TranslationModel wrapper(getValidModelPath());
 
   // Initialize and load
-  EXPECT_NO_THROW(wrapper.initializeBackend());
   EXPECT_NO_THROW(wrapper.load());
   EXPECT_TRUE(wrapper.isLoaded());
 
@@ -493,11 +461,10 @@ TEST_P(NmtCppModelWrapperTest, ModelApi_InitializeLoadUnloadReloadReset) {
 // Skip-capable equivalents of ModelApi tests (RuntimeStats_AfterProcess)
 TEST_P(NmtCppModelWrapperTest, ModelApi_RuntimeStats_AfterProcess) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
   wrapper.load();
 
   // Process some input
-  auto result = wrapper.process(make_valid_input());
+  auto result = std::any_cast<std::string>(wrapper.process(make_valid_input()));
   EXPECT_FALSE(result.empty());
 
   // Check runtime stats exist
@@ -508,7 +475,6 @@ TEST_P(NmtCppModelWrapperTest, ModelApi_RuntimeStats_AfterProcess) {
 // Skip-capable equivalents of ModelApi tests (Process_EmptyInput_NoThrow)
 TEST_P(NmtCppModelWrapperTest, ModelApi_Process_EmptyInput_NoThrow) {
   TranslationModel wrapper(getValidModelPath());
-  wrapper.initializeBackend();
 
   // Empty input should not throw
   EXPECT_NO_THROW(wrapper.process(make_empty_input()));

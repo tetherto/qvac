@@ -1,0 +1,112 @@
+import whisperAddonLogging from "@qvac/transcription-whispercpp/addonLogging";
+import TranscriptionWhispercpp, {
+  type WhisperConfig as TranscriptionWhisperConfig,
+} from "@qvac/transcription-whispercpp";
+import {
+  definePlugin,
+  defineHandler,
+  transcribeStreamRequestSchema,
+  transcribeStreamResponseSchema,
+  ModelType,
+  type CreateModelParams,
+  type PluginModelResult,
+  type WhisperConfig,
+} from "@/schemas";
+import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
+import { parseModelPath } from "@/server/utils";
+import FilesystemDL from "@qvac/dl-filesystem";
+import { transcribe } from "@/server/bare/plugins/whispercpp-transcription/ops/transcribe-stream";
+
+function createWhisperModel(
+  modelId: string,
+  modelPath: string,
+  whisperConfig: WhisperConfig,
+  vadModelPath?: string,
+) {
+  const { dirPath, basePath } = parseModelPath(modelPath);
+
+  let vadModelName = "";
+
+  const effectiveVadPath = vadModelPath || whisperConfig.vad_model_path;
+  if (effectiveVadPath) {
+    const vadParsed = parseModelPath(effectiveVadPath);
+    vadModelName = vadParsed.basePath;
+  }
+
+  const loader = new FilesystemDL({ dirPath });
+  const logger = createStreamLogger(modelId, "whispercpp");
+
+  const args = {
+    loader,
+    logger,
+    modelName: basePath,
+    diskPath: dirPath,
+    vadModelName,
+    opts: {
+      stats: false,
+    },
+  };
+
+  const { contextParams, miscConfig, ...whisperParams } = whisperConfig;
+
+  const config = {
+    whisperConfig: whisperParams as TranscriptionWhisperConfig,
+    ...(contextParams && { contextParams }),
+    ...(miscConfig && { miscConfig }),
+  };
+
+  const model = new TranscriptionWhispercpp(args, config);
+
+  return { model, loader };
+}
+
+export const whisperPlugin = definePlugin({
+  modelType: ModelType.whispercppTranscription,
+  displayName: "Whisper (whisper.cpp)",
+  addonPackage: "@qvac/transcription-whispercpp",
+
+  createModel(params: CreateModelParams): PluginModelResult {
+    const whisperConfig = (params.modelConfig ?? {}) as WhisperConfig;
+
+    const { model, loader } = createWhisperModel(
+      params.modelId,
+      params.modelPath,
+      whisperConfig,
+      params.artifacts?.["vadModelPath"],
+    );
+
+    return { model, loader };
+  },
+
+  handlers: {
+    transcribeStream: defineHandler({
+      requestSchema: transcribeStreamRequestSchema,
+      responseSchema: transcribeStreamResponseSchema,
+      streaming: true,
+
+      handler: async function* (request) {
+        for await (const text of transcribe({
+          modelId: request.modelId,
+          audioChunk: request.audioChunk,
+          prompt: request.prompt,
+        })) {
+          yield {
+            type: "transcribeStream" as const,
+            text,
+          };
+        }
+
+        yield {
+          type: "transcribeStream" as const,
+          text: "",
+          done: true,
+        };
+      },
+    }),
+  },
+
+  logging: {
+    module: whisperAddonLogging,
+    namespace: ADDON_NAMESPACES.WHISPERCPP,
+  },
+});

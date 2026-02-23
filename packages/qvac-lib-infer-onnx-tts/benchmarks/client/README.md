@@ -15,14 +15,14 @@ poetry install
 
 ## Configuration
 
-Edit `config/config.yaml`:
+Edit `config/config-chatterbox.yaml`:
 
 ```yaml
 server:
-  addon_url: "http://localhost:8080/synthesize"
-  python_url: "http://localhost:8081/synthesize"
-  timeout: 60
-  batch_size: 10
+  addon_url: "http://localhost:8080/synthesize-chatterbox"
+  python_url: "http://localhost:8081/synthesize-chatterbox"
+  timeout: 600
+  batch_size: 1
 
 comparison:
   enabled: true
@@ -30,17 +30,15 @@ comparison:
   run_python: true
 
 dataset:
-  name: "harvard"  # Options: harvard, ag_news, librispeech
+  name: "harvard"
   split: "test"
-  max_samples: 0  # 0 = unlimited
+  max_samples: 1
 
 model:
-  # Paths relative to benchmarks/ directory
-  modelPath: "shared-data/models/model.onnx"
-  configPath: "shared-data/models/config.json"
-  eSpeakDataPath: "shared-data/espeak-ng-data"
+  modelDir: "shared-data/models/chatterbox"
+  referenceAudioPath: "assets/ref.wav"
   language: "en"
-  sampleRate: 22050
+  sampleRate: 24000
 ```
 
 ## Usage
@@ -48,12 +46,12 @@ model:
 Ensure both servers are running, then:
 
 ```bash
-python -m src.tts.main --config config/config.yaml
+python -m src.tts.main --config config/config-chatterbox.yaml
 ```
 
 Or with Poetry:
 ```bash
-poetry run python -m src.tts.main --config config/config.yaml
+poetry run python -m src.tts.main --config config/config-chatterbox.yaml
 ```
 
 ## Output
@@ -68,13 +66,10 @@ Reports are saved to `../results/`:
 
 **RTF (Real-Time Factor)** = `audio_duration / generation_time`
 
-- RTF < 1.0 = faster than real-time
-- Lower is better
-
-**Speed** = `1 / RTF`
-
-- How many times faster than real-time
+- RTF > 1.0 = faster than real-time (generate more than 1 s of audio per 1 s of compute)
 - Higher is better
+
+**Speed** = `1 / RTF` = how many times faster than real-time (higher is better)
 
 ## Datasets
 
@@ -101,10 +96,10 @@ The benchmark supports multiple datasets for testing:
 - **Best for**: Large-scale testing with natural speech patterns
 - **Config**: `name: "librispeech"`
 
-To change dataset, edit `config/config.yaml`:
+To change dataset, edit `config/config-chatterbox.yaml`:
 
 ```yaml
 dataset:
-  name: "harvard"  # Options: harvard, ag_news, librispeech
-  max_samples: 0   # Limit samples (0 = use all)
+  name: "harvard"
+  max_samples: 0
 ```

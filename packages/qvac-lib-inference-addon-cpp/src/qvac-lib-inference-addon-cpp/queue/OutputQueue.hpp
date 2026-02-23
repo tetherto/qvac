@@ -45,7 +45,7 @@ public:
 
   ~OutputQueue() = default;
 
-  /// @brief Return current output queue and clears internal queue
+  /// @brief Returns the current output queue and clears the internal queue.
   std::vector<std::any> clear() {
     std::scoped_lock lk{mtx_};
     auto result = std::move(outputQueue_);
@@ -56,10 +56,9 @@ public:
   void queueJobEnded() { return queueOutput(model_.runtimeStats()); }
 
   void queueResult(std::any&& output) {
-    QLOG(
-        logger::Priority::DEBUG,
+    QLOG_DEBUG(
         std::string("[OutputQueue] queueResult called with type: ") +
-            output.type().name());
+        output.type().name());
     queueOutput(std::move(output));
   }
 

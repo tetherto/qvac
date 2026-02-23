@@ -44,11 +44,15 @@ const ENV_KEYS = {
   QVAC_WRITER_SECRET_KEY: 'QVAC_WRITER_SECRET_KEY',
   // Additional indexer writer local keys (comma-separated z-base-32 keys)
   QVAC_ADDITIONAL_INDEXERS: 'QVAC_ADDITIONAL_INDEXERS',
+  // Indexer keys to remove from quorum on startup (comma-separated z-base-32, one-shot)
+  QVAC_REMOVE_INDEXERS: 'QVAC_REMOVE_INDEXERS',
 
   // AWS S3 credentials
   AWS_ACCESS_KEY_ID: 'AWS_ACCESS_KEY_ID',
   AWS_SECRET_ACCESS_KEY: 'AWS_SECRET_ACCESS_KEY',
   AWS_REGION: 'AWS_REGION',
+  // S3 bucket name (required for S3 source URLs)
+  QVAC_S3_BUCKET: 'QVAC_S3_BUCKET',
 
   // HuggingFace token
   HUGGINGFACE_TOKEN: 'HUGGINGFACE_TOKEN'

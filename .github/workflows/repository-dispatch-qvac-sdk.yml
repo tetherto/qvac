@@ -15,17 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout merge commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
 
       - name: Detect README change
         id: changed
         shell: bash
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }} 
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           WORKDIR: ${{ env.WORKDIR }}
         run: |
           set -euo pipefail
@@ -61,7 +61,7 @@ jobs:
         if: steps.changed.outputs.readme_changed == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.pat_token }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: tetherto/qvac-docs
           event-type: readme-changed
           client-payload: >

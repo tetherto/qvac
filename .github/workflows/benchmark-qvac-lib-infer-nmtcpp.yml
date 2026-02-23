@@ -183,13 +183,12 @@ jobs:
           sudo ./llvm.sh 19 all
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -293,9 +292,9 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: qvac-addon-build
+          name: qvac-addon-build-${{ inputs.translators }}
           path: |
             ${{ env.PKG_DIR }}/prebuilds/
             ${{ env.PKG_DIR }}/node_modules/
@@ -320,32 +319,31 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: 20
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
         run: npm install -g bare-runtime
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: 3.10
+          cache: pip
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
-          name: qvac-addon-build
+          name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
 
       - name: Install system dependencies
@@ -360,7 +358,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -395,10 +393,10 @@ jobs:
             # Download f16 or q4 model from S3
             if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
               echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
             else
               echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
-              aws_path="s3://tether-ai-dev/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
             fi
             echo "AWS PATH: $aws_path"
             if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
@@ -476,12 +474,11 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
           key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
-          restore-keys: |
-            datasets-
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
+          restore-keys: datasets-
 
       - name: Free up disk space
         run: |
@@ -549,7 +546,7 @@ jobs:
 
           echo "Downloading Bergamot model for $pair_code from S3..."
 
-          S3_BASE="s3://tether-ai-dev/qvac_models_compiled/bergamot/bergamot-${pair_code}"
+          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-${pair_code}"
 
           # Find the latest date folder (sorted alphabetically, last one is latest)
           latest_date=$(aws s3 ls "${S3_BASE}/" | grep PRE | awk '{print $2}' | tr -d '/' | sort | tail -1)
@@ -681,7 +678,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
@@ -689,7 +686,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
@@ -705,7 +702,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: all-results
           pattern: results-*
@@ -815,8 +812,8 @@ jobs:
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: consolidated-results
+          name: consolidated-results-${{ inputs.translators }}
           path: all-results
           retention-days: 90

@@ -89,8 +89,11 @@ protected:
     if (!hasValidModel()) {
       return nullptr;
     }
+    std::string modelPath = test_model_path;
+    std::string projectionPath = test_projection_path;
+    auto configCopy = config_files;
     auto model = std::make_unique<LlamaModel>(
-        test_model_path, test_projection_path, config_files);
+        std::move(modelPath), std::move(projectionPath), std::move(configCopy));
     model->waitForLoadInitialization();
     if (!model->isLoaded()) {
       return nullptr;
@@ -101,12 +104,12 @@ protected:
 
 TEST_F(TextLlmContextTest, Constructor) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_TRUE(model->isLoaded());
@@ -114,17 +117,18 @@ TEST_F(TextLlmContextTest, Constructor) {
 
 TEST_F(TextLlmContextTest, ProcessWithStringInput) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello, how are you?"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -133,22 +137,24 @@ TEST_F(TextLlmContextTest, ProcessWithStringInput) {
 
 TEST_F(TextLlmContextTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> generated_tokens;
-  auto callback = [&generated_tokens](const std::string& token) {
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.outputCallback = [&generated_tokens](const std::string& token) {
     generated_tokens.push_back(token);
   };
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input, callback);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     EXPECT_GT(generated_tokens.size(), 0);
     auto stats = model->runtimeStats();
@@ -158,17 +164,18 @@ TEST_F(TextLlmContextTest, ProcessWithCallback) {
 
 TEST_F(TextLlmContextTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -177,17 +184,18 @@ TEST_F(TextLlmContextTest, ProcessAndGetRuntimeStats) {
 
 TEST_F(TextLlmContextTest, ResetState) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
 
     auto statsBefore = model->runtimeStats();
@@ -201,34 +209,38 @@ TEST_F(TextLlmContextTest, ResetState) {
 
 TEST_F(TextLlmContextTest, LoadMediaDoesNothing) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
   if (test_projection_path.empty()) {
-    EXPECT_THROW({ model->process(binary_input); }, qvac_errors::StatusError);
+    LlamaModel::Prompt prompt;
+    prompt.input = R"([{"role": "user", "content": "Hello"}])";
+    prompt.media.push_back(std::move(binary_input));
+    EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }
 
 TEST_F(TextLlmContextTest, MultipleMessages) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input =
+  LlamaModel::Prompt prompt;
+  prompt.input =
       R"([{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}, {"role": "user", "content": "How are you?"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -237,55 +249,58 @@ TEST_F(TextLlmContextTest, MultipleMessages) {
 
 TEST_F(TextLlmContextTest, MultipleProcessCalls) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([{"role": "user", "content": "Hello"}])";
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
 
-  std::string input2 = R"([{"role": "user", "content": "Follow up"}])";
+  LlamaModel::Prompt prompt2;
+  prompt2.input = R"([{"role": "user", "content": "Follow up"}])";
   EXPECT_NO_THROW({
-    std::string output2 = model->process(input2);
+    std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);
     auto stats2 = model->runtimeStats();
     EXPECT_GE(stats2.size(), 0);
   });
 }
 
-TEST_F(TextLlmContextTest, StopMethod) {
+TEST_F(TextLlmContextTest, CancelMethod) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  EXPECT_NO_THROW(model->stop());
+  EXPECT_NO_THROW(model->cancel());
 }
 
 TEST_F(TextLlmContextTest, ProcessWithTools) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "content": "What is the weather in Tokyo?"},
     {
       "type": "function",
@@ -303,7 +318,7 @@ TEST_F(TextLlmContextTest, ProcessWithTools) {
   ])";
 
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
@@ -312,35 +327,37 @@ TEST_F(TextLlmContextTest, ProcessWithTools) {
 
 TEST_F(TextLlmContextTest, ProcessWithToolsInvalidFormat) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "content": "Hello"},
     {
       "type": "function"
     }
   ])";
 
-  EXPECT_THROW({ model->process(input); }, std::runtime_error);
+  EXPECT_THROW({ model->processPrompt(prompt); }, std::runtime_error);
 }
 
 TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
   if (!hasValidModel()) {
-    GTEST_SKIP() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-    GTEST_SKIP() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
-  std::string input = R"([
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
     {"role": "user", "content": "Search for laptops and add to cart"},
     {
       "type": "function",
@@ -372,7 +389,7 @@ TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
   ])";
 
   EXPECT_NO_THROW({
-    std::string output = model->process(input);
+    std::string output = model->processPrompt(prompt);
     EXPECT_GE(output.length(), 0);
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);

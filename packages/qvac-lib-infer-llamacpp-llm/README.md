@@ -15,8 +15,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [6. Load Model](#6-load-model)
   - [7. Run Inference](#7-run-inference)
   - [8. Release Resources](#8-release-resources)
+- [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
-- [Model Registry](#model-registry)
 - [Other Examples](#other-examples)
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
@@ -35,8 +35,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
-- qvac-fabric-llm.cpp (=7248.1.0): Inference engine
+- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
+- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
@@ -84,27 +84,29 @@ const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. It is recommended to utilize a [`HyperdriveDataLoader`](https://github.com/tetherto/qvac-lib-dl-hyperdrive) to stream the model file(s) from a `hyperdrive`. Optionally, you could use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
 
 ```js
-const store = new Corestore('./store')
-const hdStore = store.namespace('hd')
+const FilesystemDL = require('@qvac/dl-filesystem')
 
-const hdDL = new HyperDriveDL({
-  key: 'hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3',
-  store: hdStore
-})
+// Download model from HuggingFace (see examples/utils.js for downloadModel helper)
+const [modelName, dirPath] = await downloadModel(
+  'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
+  'Llama-3.2-1B-Instruct-Q4_0.gguf'
+)
+
+const fsDL = new FilesystemDL({ dirPath })
 ```
 
 ### 3. Create the `args` obj
 
 ```js
 const args = {
-  loader: hdDL,
+  loader: fsDL,
   opts: { stats: true },
   logger: console,
-  diskPath: './models',
-  modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
+  diskPath: dirPath,
+  modelName,
   // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
 }
 ```
@@ -112,7 +114,7 @@ const args = {
 The `args` obj contains the following properties:
 
 * `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a [`QvacLogger`](https://github.com/tetherto/qvac-lib-logging) instance, which handles all logging functionality. 
+* `logger`: This property is used to create a [`QvacLogger`](../qvac-lib-logging) instance, which handles all logging functionality. 
 * `opts.stats`: This flag determines whether to calculate inference stats.
 * `diskPath`: The local directory where the model file will be downloaded to.
 * `modelName`: The name of model file in the Data Loader.
@@ -237,11 +239,25 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  // Close P2P resources if applicable
+  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
 ```
+
+### API behavior by state
+
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+
+| Current state | Action called | What happens |
+|---------------|----------------|----------------------------------------------------------------|
+| idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
+| idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
+| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
+| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
+
+When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
+- `"Cannot set new job: a job is already set or being processed"`
 
 ## Quickstart Example
 
@@ -261,31 +277,17 @@ npm run quickstart
 ```
 
 
-## Model registry
-
-| Hyperdrive Key                                                   | `.gguf` File Name                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3 | Llama-3.2-1B-Instruct-Q4_0.gguf                                                      |
-| 211874c9885f6b88b9926904420e365f5e74e1b6ac47207b7536408539bef4b7 | Qwen3-0.6B-Q4_0.gguf                                                                 |
-| 05d3d7ad9cd650f53c28f85e312ef09a645dd487845897958b3be8a19cb3aab9 | Qwen3-1.7B-Q4_0.gguf                                                                 |
-| 73b1bc01d01e25fa27be7d7f434337d14f054b0315e8463766ca31e778ac6576 | SmolVLM2-500M-Video-Instruct-Q8_0.gguf+mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf |
-| 1610d81772a9e7c37660666dbdfdcef915b6b83c522ea1ad31c19cab0075811d | salamandrata_2b_inst_q4.gguf                                                         |
-| 1839dcabe1df8fdf1c83cd3d7a306c6e01e3c67e8542b0dd1e78cdfc86e75e2d | medgemma-4b-it-Q4_1-00001-of-00005.gguf                                              |
-
-
 ## Other examples
 
--   [SalamandraTA](examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
--   [Multimodal](examples/multiModal.js) – Demonstrates how to run multimodal inference.
--   [Multi-Cache](examples/multiCache.js) – Demonstrates session handling and caching capabilities.
--   [Native Logging](examples/nativelog.js) – Demonstrates C++ addon logging integration.
--   [FileSystem](examples/filesystem.js) – Demonstrates loading a model from the local filesystem using @qvac/dl-filesystem.
--   [Sharded Loading](examples/shardedLoading.js) – Demonstrates loading sharded model files.
--   [Tool Calling](examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [SalamandraTA](./examples/salamandraTA.js) – Demonstrates SalamandraTA model usage.
+-   [Multimodal](./examples/multiModal.js) – Demonstrates how to run multimodal inference.
+-   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
+-   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
+-   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
 
 ## Architecture
 
-See [docs/ ](./docs)  for a detailed explanation of the architecture and data flow logic.
+See [docs/](./docs) for a detailed explanation of the architecture and data flow logic.
 
 
 ## Benchmarking
@@ -311,30 +313,23 @@ npm run benchmarks -- \
   --transformers-model "meta-llama/Llama-3.2-1B-Instruct" \
   --hf-token YOUR_TOKEN \
   --samples 10
-
-# P2P Hyperdrive models
-npm run benchmarks -- \
-  --gguf-model "hd://key/model.gguf" \
-  --samples 10
 ```
 
 **Platform Support**: Unix/Linux/macOS (bash), Windows (PowerShell, Git Bash)
 
-**→ For detailed guide, see [benchmarks/README.md](benchmarks/README.md)**
+**→ For detailed guide, see [benchmarks/README.md](./benchmarks/README.md)**
 
 ## Tests
 
-Integration tests are located in [`test/integration/`](test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
+Integration tests are located in [`test/integration/`](./test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
 These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
-Unit tests are located in [`test/unit/`](test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
 These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary
 
-• **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).  
-• **Hyperdrive** – Hyperdrive is a secure, real-time distributed file system designed for easy P2P file sharing. [Learn more](https://docs.pears.com/building-blocks/hyperdrive).  
-• **Corestore** – Corestore is a Hypercore factory that makes it easier to manage large collections of named Hypercores. [Learn more](https://docs.pears.com/helpers/corestore).
+• **Bare Runtime** – Small and modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/reference/bare-overview).
 
 ## License
 

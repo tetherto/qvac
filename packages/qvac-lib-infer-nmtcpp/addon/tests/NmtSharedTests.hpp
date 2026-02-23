@@ -11,24 +11,25 @@ namespace qvac_lib_inference_addon_nmt::test_shared {
 class NmtParamProvider {
 public:
   using StringFunc = std::string (*)();
+  using AnyFunc = std::any (*)();
 
   NmtParamProvider(
       StringFunc getValidModelPath, StringFunc getInvalidModelPath,
-      StringFunc makeValidInput, StringFunc makeEmptyInput)
+      AnyFunc makeValidInput, AnyFunc makeEmptyInput)
       : getValidModelPath_(getValidModelPath),
         getInvalidModelPath_(getInvalidModelPath),
         makeValidInput_(makeValidInput), makeEmptyInput_(makeEmptyInput) {}
 
   std::string getValidModelPath() const { return getValidModelPath_(); }
   std::string getInvalidModelPath() const { return getInvalidModelPath_(); }
-  std::string makeValidInput() const { return makeValidInput_(); }
-  std::string emptyInput() const { return makeEmptyInput_(); }
+  std::any makeValidInput() const { return makeValidInput_(); }
+  std::any emptyInput() const { return makeEmptyInput_(); }
 
 private:
   StringFunc getValidModelPath_;
   StringFunc getInvalidModelPath_;
-  StringFunc makeValidInput_;
-  StringFunc makeEmptyInput_;
+  AnyFunc makeValidInput_;
+  AnyFunc makeEmptyInput_;
 };
 
 // Non-templated GoogleTest fixture parametrized by NmtParamProvider.
@@ -54,8 +55,8 @@ protected:
   std::string getInvalidModelPath() const {
     return provider().getInvalidModelPath();
   }
-  std::string make_valid_input() const { return provider().makeValidInput(); }
-  std::string make_empty_input() const { return provider().emptyInput(); }
+  std::any make_valid_input() const { return provider().makeValidInput(); }
+  std::any make_empty_input() const { return provider().emptyInput(); }
 };
 
 } // namespace qvac_lib_inference_addon_nmt::test_shared

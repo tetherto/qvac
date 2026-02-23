@@ -10,8 +10,11 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
     paths:
       - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+      - ".github/workflows/*ocr*.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -23,7 +26,9 @@ permissions:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -39,10 +44,10 @@ jobs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -50,10 +55,14 @@ jobs:
           filters: |
             pkg:
               - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+              - ".github/workflows/*ocr*.yml"
 
   sanity-checks:
     needs: changes
-    if: needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'
+    if: |
+      (needs.changes.outputs.pkg == 'true' &&
+       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -61,14 +70,14 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
       PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
             packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+          fetch-depth: 0
 
       - name: Fetch PR head and target branch
         id: fetch_pr
@@ -143,8 +152,18 @@ jobs:
             exit 1
           fi
 
-  prebuild:
+  cpp-lint:
     needs: changes
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+
+  prebuild:
+    needs: [sanity-checks, cpp-lint]
     if: |
       (needs.changes.outputs.pkg == 'true') &&
       (

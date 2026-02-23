@@ -14,7 +14,7 @@ const HyperDBBuilder = require('hyperdb/builder')
 const Hyperdispatch = require('hyperdispatch')
 const Hyperschema = require('hyperschema')
 const generateQVACRegistrySchema = require('../lib/generate-schema')
-const { QVAC_MAIN_REGISTRY } = require('@tetherto/qvac-registry-schema')
+const { QVAC_MAIN_REGISTRY } = require('@qvac/registry-schema')
 
 const SCHEMA_DIR = path.join(__dirname, '..', 'shared', 'spec', 'hyperschema')
 const DB_DIR = path.join(__dirname, '..', 'shared', 'spec', 'hyperdb')
@@ -62,6 +62,13 @@ registryDB.indexes.register({
   collection: `@${QVAC_MAIN_REGISTRY}/model`,
   unique: false,
   key: ['quantization']
+})
+
+registryDB.indexes.register({
+  name: 'models-by-engine-quantization',
+  collection: `@${QVAC_MAIN_REGISTRY}/model`,
+  unique: false,
+  key: ['engine', 'quantization']
 })
 
 HyperDBBuilder.toDisk(db)

@@ -91,14 +91,14 @@
                     "garantem a sobrevivência;",
                     "Verifica as anomalias diariamente,",
                     "Atinge metas   (PDCA).",
-                    "atuando de forma complementar:",
+                    "atuando de forma complementar.",
                     "Relata as anomalias;",
                     "Cumpre os procedimentos",
                     "Operacional",
-                    "Conduz a análise de anomalia, atuando",
+                    "Conduz a análise de anomalia , atuando",
                     "(SDCA) .",
                     "nas causas imediatas.",
-                    "Fonte: Tabela de Nemoto: Adaptada de Gerenciamento da",
+                    "Fonte: Tabela de Nemoto. Adaptada de Gerenciamento da",
                     "Rotina do Trabalho do Dia-a-Dia (Vicente Falconi)"
                 ]
             },
@@ -109,13 +109,13 @@
                 },
                 "expectedOutput": [
                     "então: rotina X resultados X função Situação Função Normal Ocorrência de Anomalia",
-                    "Elimina as anomalias crônicas, atacando as causas fundamentais (PDCA); Verifica as anomalias diariamente, atuando de forma complementar:",
+                    "Elimina as anomalias crônicas, atacando as causas fundamentais (PDCA); Verifica as anomalias diariamente, atuando de forma complementar.",
                     "Estabelece metas que garantem a sobrevivência; Atinge metas   (PDCA).",
                     "Gerencial",
-                    "Relata as anomalias; Conduz a análise de anomalia, atuando nas causas imediatas.",
+                    "Relata as anomalias; Conduz a análise de anomalia , atuando nas causas imediatas.",
                     "Cumpre os procedimentos (SDCA) .",
                     "Operacional",
-                    "Fonte: Tabela de Nemoto: Adaptada de Gerenciamento da Rotina do Trabalho do Dia-a-Dia (Vicente Falconi)"
+                    "Fonte: Tabela de Nemoto. Adaptada de Gerenciamento da Rotina do Trabalho do Dia-a-Dia (Vicente Falconi)"
                 ]
             }
         ]

@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/api-behavior.test.js', options)
+}
+
 async function runCacheStateMachineTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
@@ -26,8 +30,16 @@ async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moe.test.js', options)
 }
 
+async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/multi-instance.test.js', options)
+}
+
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/reasoning.test.js', options)
+}
+
+async function runSlidingContextTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/sliding-context.test.js', options)
 }
 
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars

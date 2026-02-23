@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
+
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
  message(STATUS "enter special apple")
@@ -64,6 +66,10 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
+if(ENABLE_XNNPACK)
+  list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
@@ -104,7 +110,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
 find_package(onnxruntime CONFIG REQUIRED)
 
@@ -113,9 +119,7 @@ add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
 target_sources(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
   PRIVATE
-    addon/addon/Addon.cpp
     addon/js-interface/binding.cpp
-    addon/js-interface/qvac-lib-inference-addon-onnx-ocr-fasttext.cpp
     addon/pipeline/Lang.cpp
     addon/pipeline/Pipeline.cpp
     addon/pipeline/Steps.cpp
@@ -164,7 +168,7 @@ target_compile_definitions(
 function(strip_libraries LIB_DIR LIB_NAMES)
   foreach(LIB_NAME IN LISTS LIB_NAMES)
     set(LIB_PATH "${LIB_DIR}/${LIB_NAME}")
-    
+
     execute_process(
       COMMAND ${LLVM_STRIP} --strip-debug "${LIB_PATH}"
       ERROR_VARIABLE STRIP_ERROR

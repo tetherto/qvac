@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout merge commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -38,7 +38,7 @@ jobs:
         if: steps.changed.outputs.readme_changed == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.pat_token }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: tetherto/qvac-docs
 
           event-type: readme-changed

@@ -44,7 +44,9 @@
     "lib",
     "index.d.ts",
     "test/mobile",
-    "test/integration"
+    "test/integration",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",

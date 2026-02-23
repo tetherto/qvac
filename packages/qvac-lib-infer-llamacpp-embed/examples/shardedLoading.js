@@ -27,7 +27,7 @@ async function main () {
     diskPath: './models',
     modelName: 'gte-large.Q2_K-00001-of-00005.gguf'
   }
-  const config = '-ngl\t25'
+  const config = { device: 'gpu', gpu_layers: '25' }
 
   // 3. Loading model
   await hdDL.ready()

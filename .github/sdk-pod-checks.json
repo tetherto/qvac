@@ -1,0 +1,27 @@
+[
+  {
+    "package": "qvac-sdk",
+    "path": "packages/qvac-sdk",
+    "pkg_manager": "bun"
+  },
+  {
+    "package": "qvac-cli",
+    "path": "packages/qvac-cli"
+  },
+  {
+    "package": "qvac-lib-rag",
+    "path": "packages/qvac-lib-rag"
+  },
+  {
+    "package": "qvac-lib-logging",
+    "path": "packages/qvac-lib-logging"
+  },
+  {
+    "package": "qvac-lib-error-base",
+    "path": "packages/qvac-lib-error-base"
+  },
+  {
+    "package": "docs",
+    "path": "packages/docs"
+  }
+]

@@ -5,20 +5,22 @@
 name: QVAC Tests (Qvac-sdk)
 
 on:
-  pull_request:
-    paths:
-      - "packages/qvac-sdk/**"
-    branches:
-      - main
-      - release-*
-  push:
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/qvac-sdk/**"
+  # Disabled until it's stabilised, to not waste compute resources
+  workflow_dispatch:
+  # pull_request:
+  #   paths:
+  #     - "packages/qvac-sdk/**"
+  #   branches:
+  #     - main
+  #     - release-*
+  # push:
+  #   branches:
+  #     - main
+  #     - release-*
+  #     - feature-*
+  #     - tmp-*
+  #   paths:
+  #     - "packages/qvac-sdk/**"
 
 permissions:
   contents: read

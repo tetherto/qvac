@@ -14,7 +14,7 @@ const fs = require('fs')
 
 const RegistryService = require('../lib/registry-service')
 const RegistryConfig = require('../lib/config')
-const { AUTOBASE_NAMESPACE } = require('@tetherto/qvac-registry-schema')
+const { AUTOBASE_NAMESPACE } = require('@qvac/registry-schema')
 
 const DEFAULT_STORAGE = './corestore'
 const DEFAULT_WRITER_STORAGE = './writer-storage'
@@ -41,6 +41,9 @@ const runCmd = command('run',
       : config.getBlindPeerKeys()
 
     const primaryKey = config.getPrimaryKey(flags.primaryKey)
+    if (primaryKey) {
+      logger.warn('Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.')
+    }
     const storeOpts = primaryKey ? { primaryKey, unsafe: true } : {}
     const store = new Corestore(storagePath, storeOpts)
     await store.ready()
@@ -91,6 +94,9 @@ const initWriter = command('init-writer',
     try {
       const config = new RegistryConfig({ logger })
       const primaryKey = config.getWriterPrimaryKey(flags.primaryKey)
+      if (primaryKey) {
+        logger.warn('Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.')
+      }
       const storeOpts = primaryKey ? { primaryKey, unsafe: true } : {}
       const store = new Corestore(storagePath, storeOpts)
       await store.ready()

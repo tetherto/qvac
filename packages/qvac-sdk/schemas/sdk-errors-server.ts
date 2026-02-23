@@ -16,8 +16,8 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_FILE_LOCATE_FAILED: 52203,
   PROJECTION_MODEL_REQUIRED: 52204,
   VAD_MODEL_REQUIRED: 52205,
-  TTS_CONFIG_MODEL_REQUIRED: 52206,
-  ESPEAK_DATA_PATH_REQUIRED: 52207,
+  TTS_ARTIFACTS_REQUIRED: 52208,
+  TTS_REFERENCE_AUDIO_REQUIRED: 52209,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -66,6 +66,7 @@ export const SDK_SERVER_ERROR_CODES = {
   ARCHIVE_UNSUPPORTED_TYPE: 53012,
   ARCHIVE_MISSING_SHARDS: 53013,
   PARTIAL_DOWNLOAD_OFFLINE: 53014,
+  REGISTRY_DOWNLOAD_FAILED: 53015,
 
   // Cache Operations (53,200-53,349)
   DELETE_CACHE_FAILED: 53200,
@@ -82,9 +83,29 @@ export const SDK_SERVER_ERROR_CODES = {
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
 
-  // RPC/Delegation (Server-side) (53,700-53,899)
+  // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
   DELEGATE_CONNECTION_FAILED: 53701,
+  DELEGATE_PROVIDER_ERROR: 53702,
+  RPC_NO_DATA_RECEIVED: 53703,
+  RPC_UNKNOWN_REQUEST_TYPE: 53704,
+
+  // Plugin Errors (53,850-53,899)
+  PLUGIN_NOT_FOUND: 53850,
+  PLUGIN_HANDLER_NOT_FOUND: 53851,
+  PLUGIN_REQUEST_VALIDATION_FAILED: 53852,
+  PLUGIN_RESPONSE_VALIDATION_FAILED: 53853,
+  PLUGIN_ALREADY_REGISTERED: 53854,
+  PLUGIN_HANDLER_TYPE_MISMATCH: 53855,
+  PLUGIN_LOGGING_INVALID: 53856,
+  PLUGIN_DEFINITION_INVALID: 53857,
+
+  // Security (53,900-53,949)
+  PATH_TRAVERSAL: 53900,
+
+  // QVAC Model Registry Operations (53,950-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
 } as const;
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -109,7 +130,8 @@ const serverErrorDefinitions: ErrorCodesMap = {
   },
   [SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE]: {
     name: "UNKNOWN_MODEL_TYPE",
-    message: (modelType: string) => `Unknown model type: ${modelType}`,
+    message: (modelType: string) =>
+      `Unknown model type: ${modelType}. If using a custom worker bundle, ensure the plugin for "${modelType}" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`,
   },
 
   // Model Loading Errors (52,200-52,399)
@@ -140,13 +162,15 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "VAD_MODEL_REQUIRED",
     message: "VAD model source is required for this configuration",
   },
-  [SDK_SERVER_ERROR_CODES.TTS_CONFIG_MODEL_REQUIRED]: {
-    name: "TTS_CONFIG_MODEL_REQUIRED",
-    message: "ttsConfigModelPath is required for TTS models",
+  [SDK_SERVER_ERROR_CODES.TTS_ARTIFACTS_REQUIRED]: {
+    name: "TTS_ARTIFACTS_REQUIRED",
+    message:
+      "TTS (Chatterbox) requires ttsTokenizerSrc, ttsSpeechEncoderSrc, ttsEmbedTokensSrc, ttsConditionalDecoderSrc, and ttsLanguageModelSrc",
   },
-  [SDK_SERVER_ERROR_CODES.ESPEAK_DATA_PATH_REQUIRED]: {
-    name: "ESPEAK_DATA_PATH_REQUIRED",
-    message: "eSpeakDataPath is required for TTS models",
+  [SDK_SERVER_ERROR_CODES.TTS_REFERENCE_AUDIO_REQUIRED]: {
+    name: "TTS_REFERENCE_AUDIO_REQUIRED",
+    message:
+      "TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning)",
   },
 
   // Model Operations (52,400-52,799)
@@ -324,6 +348,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "HYPERDRIVE_DOWNLOAD_FAILED",
     message: (details: string) => `Hyperdrive download failed: ${details}`,
   },
+  [SDK_SERVER_ERROR_CODES.REGISTRY_DOWNLOAD_FAILED]: {
+    name: "REGISTRY_DOWNLOAD_FAILED",
+    message: (details: string) => `Registry download failed: ${details}`,
+  },
   [SDK_SERVER_ERROR_CODES.INVALID_SHARD_URL_PATTERN]: {
     name: "INVALID_SHARD_URL_PATTERN",
     message: (url: string) =>
@@ -406,6 +434,79 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "DELEGATE_CONNECTION_FAILED",
     message: (details: string) =>
       `Failed to connect to delegated provider: ${details}`,
+  },
+  [SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
+    name: "DELEGATE_PROVIDER_ERROR",
+    message: (details: string, providerCode?: string) =>
+      `Delegated provider error: ${details}` +
+      (providerCode ? ` (code: ${providerCode})` : ""),
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED]: {
+    name: "RPC_NO_DATA_RECEIVED",
+    message: "No data received from request",
+  },
+  [SDK_SERVER_ERROR_CODES.RPC_UNKNOWN_REQUEST_TYPE]: {
+    name: "RPC_UNKNOWN_REQUEST_TYPE",
+    message: (requestType: string) =>
+      `Unknown request type received: ${requestType}`,
+  },
+
+  // Plugin Errors (53,850-53,899)
+  [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
+    name: "PLUGIN_NOT_FOUND",
+    message: (modelType: string) =>
+      `Plugin not found for model type "${modelType}". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND]: {
+    name: "PLUGIN_HANDLER_NOT_FOUND",
+    message: (modelType: string, handler: string, availableHandlers?: string) =>
+      `Handler "${handler}" not found in plugin "${modelType}"` +
+      (availableHandlers ? `. Available handlers: ${availableHandlers}` : ""),
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED]: {
+    name: "PLUGIN_REQUEST_VALIDATION_FAILED",
+    message: (handler: string, details?: string) =>
+      `Request validation failed for handler "${handler}"${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED]: {
+    name: "PLUGIN_RESPONSE_VALIDATION_FAILED",
+    message: (handler: string, details?: string) =>
+      `Response validation failed for handler "${handler}"${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED]: {
+    name: "PLUGIN_ALREADY_REGISTERED",
+    message: (modelType: string) =>
+      `Plugin already registered for modelType: ${modelType}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_TYPE_MISMATCH]: {
+    name: "PLUGIN_HANDLER_TYPE_MISMATCH",
+    message: (handlerName: string, expected: string, actual: string) =>
+      `Handler "${handlerName}" is ${actual}, but was called as ${expected}. Use invokePlugin() for reply handlers and invokePluginStream() for streaming handlers.`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_LOGGING_INVALID]: {
+    name: "PLUGIN_LOGGING_INVALID",
+    message: (modelType: string, reason: string) =>
+      `Plugin "${modelType}" has invalid logging configuration: ${reason}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_DEFINITION_INVALID]: {
+    name: "PLUGIN_DEFINITION_INVALID",
+    message: (modelType: string, details: string) =>
+      `Plugin definition invalid for "${modelType}": ${details}`,
+  },
+
+  // Security (53,900-53,949)
+  [SDK_SERVER_ERROR_CODES.PATH_TRAVERSAL]: {
+    name: "PATH_TRAVERSAL",
+    message: (component: string, basePath: string) =>
+      `Path traversal detected: "${component}" escapes base directory "${basePath}"`,
+  },
+
+  // QVAC Model Registry Operations (53,950-54,000)
+  // Note: Registry client errors (19,001-20,000) are re-thrown directly
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED]: {
+    name: "QVAC_MODEL_REGISTRY_QUERY_FAILED",
+    message: (details?: string) =>
+      `QVAC model registry query failed${details ? `: ${details}` : ""}`,
   },
 };
 

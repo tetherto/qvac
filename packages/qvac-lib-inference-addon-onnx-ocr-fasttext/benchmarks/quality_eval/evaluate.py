@@ -326,6 +326,11 @@ def print_summary(all_results: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
     default=None,
     help="Filter samples by image_path containing this string (e.g., 'HierText')"
 )
+@click.option(
+    "--model-dir",
+    default="rec_dyn",
+    help="Model directory name within models/ocr/ (default: rec_dyn)"
+)
 def main(
     dataset_path: str,
     backends: str,
@@ -336,7 +341,8 @@ def main(
     limit: int,
     qvac_addon_path: Optional[str],
     gpu: bool,
-    dataset_filter: Optional[str]
+    dataset_filter: Optional[str],
+    model_dir: str
 ):
     """OCR Quality Evaluation Framework.
 
@@ -385,8 +391,10 @@ def main(
         # Create backend
         try:
             backend_kwargs = {"gpu": gpu}
-            if backend_name == "qvac" and qvac_addon_path:
-                backend_kwargs["addon_path"] = qvac_addon_path
+            if backend_name == "qvac":
+                backend_kwargs["model_dir"] = model_dir
+                if qvac_addon_path:
+                    backend_kwargs["addon_path"] = qvac_addon_path
 
             backend = create_backend(backend_name, **backend_kwargs)
             backend.initialize()

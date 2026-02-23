@@ -42,7 +42,6 @@ Options:
   --gguf-model <spec>        GGUF model specification (required)
                              Formats:
                                - HuggingFace: "owner/repo" or "owner/repo:quantization"
-                               - P2P Hyperdrive: "hd://key/model.gguf"
   --hf-token <token>         HuggingFace token for accessing gated models
   --samples <number>         Number of samples per dataset (default: full dataset)
   --datasets <list>          Comma-separated list of datasets or "all"
@@ -67,9 +66,6 @@ Examples:
   
   # HuggingFace with token for gated models
   ./benchmarks/run-benchmarks.sh --gguf-model "org/gated-model" --hf-token "\$HF_TOKEN"
-  
-  # P2P model via Hyperdrive
-  ./benchmarks/run-benchmarks.sh --gguf-model "hd://KEY/gte-large_fp16.gguf"
   
   # Specific datasets
   ./benchmarks/run-benchmarks.sh --gguf-model "ChristianAzinn/gte-large-gguf" --datasets "ArguAna,SciFact"
