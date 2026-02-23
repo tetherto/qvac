@@ -6,8 +6,8 @@ Get started with qvac-lib-infer-parakeet in 5 minutes!
 
 ```bash
 # Clone the repository
-git clone https://github.com/aegioscy/qvac-lib-infer-parakeet.git
-cd qvac-lib-infer-parakeet
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/qvac-lib-infer-parakeet
 
 # Install dependencies and build
 npm install
@@ -97,8 +97,8 @@ bare examples/transcribe.js -f examples/samples/croatian.raw -m models/parakeet-
 
 ## Getting Help
 
-- 🐛 [Report issues](https://github.com/YOUR_USERNAME/qvac-lib-infer-parakeet/issues)
-- 💬 [Discussions](https://github.com/YOUR_USERNAME/qvac-lib-infer-parakeet/discussions)
+- 🐛 [Report issues](https://github.com/tetherto/qvac/issues)
+- 💬 [Discussions](https://github.com/tetherto/qvac/discussions)
 
 ## Model Comparison
 
