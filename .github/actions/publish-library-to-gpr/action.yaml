@@ -44,10 +44,10 @@ runs:
         ls -l ${{ inputs.path }}
         tree ${{ inputs.path }}
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: lts/*
-        registry-url: "https://npm.pkg.github.com/"
+        registry-url: https://npm.pkg.github.com/
         scope: "@tetherto"
 
     - name: Resolve publish directory
