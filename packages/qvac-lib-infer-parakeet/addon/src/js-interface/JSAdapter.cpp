@@ -82,6 +82,33 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     config.seed = seedOpt.value().as<int32_t>(env);
   }
 
+  // Get individual file paths
+  auto encoderPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "encoderPath");
+  if (encoderPathOpt.has_value()) {
+    config.encoderPath = encoderPathOpt.value().as<std::string>(env);
+  }
+  auto encoderDataPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "encoderDataPath");
+  if (encoderDataPathOpt.has_value()) {
+    config.encoderDataPath = encoderDataPathOpt.value().as<std::string>(env);
+  }
+  auto decoderPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "decoderPath");
+  if (decoderPathOpt.has_value()) {
+    config.decoderPath = decoderPathOpt.value().as<std::string>(env);
+  }
+  auto vocabPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "vocabPath");
+  if (vocabPathOpt.has_value()) {
+    config.vocabPath = vocabPathOpt.value().as<std::string>(env);
+  }
+  auto preprocessorPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "preprocessorPath");
+  if (preprocessorPathOpt.has_value()) {
+    config.preprocessorPath = preprocessorPathOpt.value().as<std::string>(env);
+  }
+
   // Check for nested config object
   auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
   if (innerConfigOpt.has_value()) {
