@@ -29,6 +29,10 @@ public:
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
 
+  /// @brief Expands shard filenames and resolves them to absolute paths
+  /// relative to the parent directory of @p modelPath.
+  static GGUFShards expandAndResolveShards(const std::string& modelPath);
+
   /**
    * The Constructor for llama model.
    * @param modelPath - path to the model file.

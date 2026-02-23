@@ -63,11 +63,22 @@ static std::vector<std::string> split(const std::string& str, char delimiter) {
   return tokens;
 }
 
+GGUFShards LlamaModel::expandAndResolveShards(const std::string& modelPath) {
+  auto shards = GGUFShards::expandGGUFIntoShards(modelPath);
+  if (shards.gguf_files.empty()) return shards;
+  auto baseDir = std::filesystem::path(modelPath).parent_path();
+  if (baseDir.empty()) return shards;
+  for (auto& f : shards.gguf_files)
+    f = (baseDir / f).string();
+  shards.tensors_file = (baseDir / shards.tensors_file).string();
+  return shards;
+}
+
 LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(modelPath)) {
+      shards_(expandAndResolveShards(modelPath)) {
   auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };

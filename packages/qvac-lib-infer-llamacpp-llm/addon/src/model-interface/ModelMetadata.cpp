@@ -79,6 +79,8 @@ void ModelMetaData::parse(
     MetaResultStatus status =
         llama_model_meta_from_streambuf(streambuf, out_metadata);
     if (status != MetaResultStatus::SUCCESS) {
+      // leave object in a consistent uninitialized state, library can leave it in an invalid state
+      *out_metadata = nullptr;  
       std::string statusStr = std::to_string(status);
       std::string errorMsg = string_format(
           "ModelMetadata::loadFromStreambuf: failed to load model metadata "
@@ -98,6 +100,7 @@ void ModelMetaData::parse(
     MetaResultStatus status =
         llama_model_meta_from_file(diskPath.c_str(), out_metadata);
     if (status != MetaResultStatus::SUCCESS) {
+      *out_metadata = nullptr;
       std::string statusStr = std::to_string(status);
       std::string errorMsg = string_format(
           "ModelMetadata::loadFromDisk: failed to load model metadata "
