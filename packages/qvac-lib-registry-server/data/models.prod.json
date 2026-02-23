@@ -4692,6 +4692,7 @@
   },
   {
     "source": "https://huggingface.co/api/resolve-cache/models/onnx-community/chatterbox-multilingual-ONNX/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
+    "engine": "@qvac/tts",
     "description": "Chatterbox multilingual speech encoder (fp32, graph)",
     "quantization": "fp32",
     "params": "",
