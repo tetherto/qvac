@@ -44,10 +44,10 @@ jobs:
       pkg: ${{ steps.filter.outputs.pkg }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -70,14 +70,14 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
       PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
             packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+          fetch-depth: 0
 
       - name: Fetch PR head and target branch
         id: fetch_pr
