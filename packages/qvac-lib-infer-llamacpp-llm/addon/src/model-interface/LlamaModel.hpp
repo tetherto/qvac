@@ -129,12 +129,12 @@ public:
   /**
    * Finetune the model using LoRA.
    * @param params - finetuning parameters
-   * @param logCallback - callback function for logging messages
+   * @param eventCallback - optional completion event callback for JS
    * @return "COMPLETED" on success, "PAUSED" when paused, "ERROR" on failure
    */
   std::string finetune(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      std::function<void(const std::string&)> logCallback = {});
+      std::function<void(const std::string&)> eventCallback = {});
 
   /**
    * Get the llama context. Returns nullptr if context is not initialized.
@@ -263,8 +263,7 @@ private:
   initializeCheckpointing(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       llama_adapter_lora* adapter,
-      llama_finetuning_helpers::LoraLrSchedulerState* scheduler,
-      std::function<void(const std::string&)> logFn);
+      llama_finetuning_helpers::LoraLrSchedulerState* scheduler);
   void configureOptimizer(
       const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
       llama_adapter_lora* adapter,
@@ -276,7 +275,6 @@ private:
       ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
       llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
-      std::function<void(const std::string&)> logCallback,
       uint32_t startEpoch = 0, bool resumingFromPause = false,
       ggml_opt_dataset_t evalDataset = nullptr,
       int64_t evalDatasetSampleCount = 0);

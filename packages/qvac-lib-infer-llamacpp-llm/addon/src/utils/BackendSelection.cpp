@@ -90,12 +90,10 @@ void emplaceIfValidDevice(
       openClBackends.emplace_back(devDescr.gpuBackend);
     } else if (!IS_OPEN_CL) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
-      if (BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        if (isIntegratedGpu(devDescr)) {
-          igpuBackends.emplace_back(devDescr.gpuBackend);
-        } else {
-          gpuBackends.emplace_back(devDescr.gpuBackend);
-        }
+      if (isIntegratedGpu(devDescr)) {
+        igpuBackends.emplace_back(devDescr.gpuBackend);
+      } else {
+        gpuBackends.emplace_back(devDescr.gpuBackend);
       }
     }
   }
@@ -105,8 +103,10 @@ bool shouldProcessDevice(
     const enum ggml_backend_dev_type BACKEND_TYPE_ENUM,
     const DeviceDescription& DEV_DESCR,
     const std::optional<MainGpuType> MAIN_GPU_TYPE) {
-  const bool ANY_GPU = !MAIN_GPU_TYPE.has_value() &&
-                       BACKEND_TYPE_ENUM == GGML_BACKEND_DEVICE_TYPE_GPU;
+  const bool ANY_GPU = !MAIN_GPU_TYPE.has_value();
+
+  printf(">>>> DEV_DESCR.gpuBackend: %s, BACKEND_TYPE_ENUM: %d\n", DEV_DESCR.gpuBackend.c_str(), BACKEND_TYPE_ENUM);
+
   const bool INTEGRATED_GPU =
       MAIN_GPU_TYPE.has_value() &&
       MAIN_GPU_TYPE.value() == MainGpuType::Integrated &&
@@ -254,10 +254,10 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
   // check if Adreno GPU is present and force OpenCL backend, otherwise let
   // llama.cpp choose Vulkan GPU backend
-  if (!openClBackends.empty()) {
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
-    return {BackendType::GPU, openClBackends.front()};
-  }
+  // if (!openClBackends.empty()) {
+  //   bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
+  //   return {BackendType::GPU, openClBackends.front()};
+  // }
 
   // Prefer GPU over iGPU when possible
   if (!gpuBackends.empty()) {
