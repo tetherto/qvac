@@ -125,7 +125,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       if (model) {
         try {
           await model.unload()
-	  t.pass(`${label} After model.unload().`)
+          t.pass(`${label} After model.unload().`)
         } catch (e) {
           t.comment(`${label} unload() error: ` + e.message)
         }
