@@ -94,7 +94,11 @@ async function setupModel (t, overrides = {}) {
   specLogger.logs.length = 0
 
   t.teardown(async () => {
-    await model.unload().catch(() => {})
+    // Guard against model.unload() hanging after context overflow (seen on darwin-arm64 CI).
+    // If unload doesn't complete within 30s, continue cleanup to avoid blocking the suite.
+    const unloadDone = model.unload().catch(() => {})
+    const unloadTimeout = new Promise(resolve => setTimeout(resolve, 30_000))
+    await Promise.race([unloadDone, unloadTimeout])
     await loader.close().catch(() => {})
     releaseLogger()
   })
@@ -106,7 +110,21 @@ async function runAndCollect (model, prompt) {
   const response = await model.run(prompt)
   const chunks = []
   response.onUpdate(data => { chunks.push(data) })
-  await response.await()
+  // Bare runtime on arm64 may not drain promise microtasks from native addon
+  // (uv_async) callbacks until another macrotask fires. A periodic setInterval
+  // ensures the event loop stays active and microtasks are flushed promptly,
+  // preventing response.await() from hanging until the test timeout.
+  const ticker = setInterval(() => {}, 50)
+  try {
+    await response.await()
+  } finally {
+    clearInterval(ticker)
+  }
+  // Native log callbacks (JsLogger) and output/completion callbacks (OutputCallbackJs)
+  // are delivered via separate uv_async handles with no ordering guarantee. Yield to the
+  // event loop so any pending log callbacks are processed before the caller reads the
+  // shared logs array.
+  await new Promise(resolve => setTimeout(resolve, 50))
   return { text: chunks.join(''), stats: response.stats }
 }
 

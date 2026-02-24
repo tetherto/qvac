@@ -76,6 +76,27 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-lib-infer-whispercpp
+          package-json-path: packages/qvac-lib-infer-whispercpp/package.json
+          changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
+
   publish-main-gpr:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
@@ -125,7 +146,7 @@ jobs:
       workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release-npm:
-    needs: publish-logic
+    needs: [publish-logic, release-merge-guard]
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
@@ -142,7 +163,7 @@ jobs:
 
   publish-release:
     needs: [publish-release-npm]
-    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-whispercpp.yml
