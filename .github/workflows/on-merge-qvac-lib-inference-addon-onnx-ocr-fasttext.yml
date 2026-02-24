@@ -154,7 +154,7 @@ jobs:
 
   publish-release:
     needs: [publish-release-npm]
-    if: needs.publish-release-npm.outputs.published_version != ''
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
