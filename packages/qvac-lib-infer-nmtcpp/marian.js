@@ -33,7 +33,7 @@ class TranslationInterface {
       this._loggerInitialized = true
     }
   }
-  
+
   // For BaseInference.
   async destroyInstance () {
     await this.destroy()
@@ -110,7 +110,7 @@ class TranslationInterface {
   }
 
   /**
-   * Cancel a inference process 
+   * Cancel a inference process
    */
   async cancel () {
     try {
