@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.11.1] - 2026-02-23
+- Use patched version of addon-cpp to reduce logging noise.
+
 ## [0.11.0] - 2026-02-18
 
 - Use new addon-cpp architecture for simplified Js Addon creation and usage.
