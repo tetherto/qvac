@@ -1,19 +1,18 @@
 # Contributing
 
-## Pull Request Labels
+We welcome contributions! Feel free to open a pull request, report bugs, or share ideas through issues and discussions.
 
-The following labels control CI workflow behavior:
+## PR Labels
 
-- **`verify`** - Triggers extended integration tests, benchmarks, and model validation
-- **`safe-to-test`** - Required for external fork PRs to run CI checks (security gate)
-- **`staging`** - Triggers staging environment deployment for model validation
-- **`review`** - Triggers approval check workflow
-- **`tier1`** - Priority tier 1 issues/PRs
-- **`nlp`** - Natural language processing related changes
+Labels that control CI workflows:
 
-### Label Usage
+- `verify` - Runs integration tests, benchmarks, model validation
+- `safe-to-test` - Security gate for external fork PRs
+- `staging` - Deploys to staging environment
+- `review` - Triggers approval check
+- `tier1`, `tier2` - Approval groups
+- `nlp` - NLP-related changes
 
-- Add `verify` when changes need thorough integration testing before merge
-- Team members must add `safe-to-test` to external PRs after code review
-- Use `staging` to validate models in staging environment before production
-- Comment with `/review` or add `review` label to trigger approval checks
+## Changelog
+
+Version bumps require CHANGELOG.md updates with version, date, changes by category (✨ Features, 🐛 Fixes, 🔧 Changed, etc.), and PR links.
