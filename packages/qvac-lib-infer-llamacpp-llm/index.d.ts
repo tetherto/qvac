@@ -17,42 +17,12 @@ export interface Loader {
   getFileSize?(path: string): Promise<number>
 }
 
-export interface FinetuningParams {
-  trainDatasetDir: string
-  evalDatasetDir: string
-  outputParametersDir: string
-  numberOfEpochs?: number
-  learningRate?: number
-  lrMin?: number
-  lrScheduler?: string
-  warmupRatio?: number
-  warmupSteps?: number
-  loraRank?: number
-  loraAlpha?: number
-  loraModules?: string
-  loraDropout?: number
-  loraInitStd?: number
-  outputAdapterPath?: string
-  weightDecay?: number
-  checkpointSaveSteps?: number
-  checkpointSaveDir?: string
-  resumeFromCheckpoint?: string
-  autoResume?: boolean
-  assistantLossOnly?: boolean
-  chatTemplatePath?: string
-  contextLength?: number
-  batchSize?: number
-  microBatchSize?: number
-}
-
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
   runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
   cancel(): Promise<void>
-  status?(): Promise<string>
-  pause?(): Promise<boolean>
-  finetune?(params?: FinetuningParams): Promise<void>
+  finetune?(params?: Record<string, any>): Promise<void>
   unload(): Promise<void>
 }
 
@@ -82,38 +52,91 @@ export interface LlamaConfig {
 export interface LlmLlamacppArgs {
   loader: Loader
   logger?: QvacLogger | Console | null
-  opts?: Record<string, unknown>
+  opts?: { stats?: boolean }
   diskPath?: string
   modelName: string
   projectionModel?: string
+  modelPath?: string
+  modelConfig?: Record<string, string>
 }
 
-export interface Message {
+export interface UserTextMessage {
   role: 'system' | 'assistant' | 'user' | 'tool' | 'session' | string
   content: string
-  type?: 'media'
-  [key: string]: unknown
+  type?: undefined
+  [key: string]: any
 }
 
-declare class LlmLlamacpp extends BaseInference {
+export interface UserMediaMessage {
+  role: 'user'
+  type: 'media'
+  content: Uint8Array
+}
+
+export interface ChatFunctionDefinition {
+  type: 'function'
+  name: string
+  description?: string
+  parameters?: Record<string, any>
+}
+
+export type Message =
+  | UserTextMessage
+  | UserMediaMessage
+  | ChatFunctionDefinition
+
+export interface DownloadWeightsOptions {
+  closeLoader?: boolean
+}
+
+export interface DownloadResult {
+  filePath: string | null
+  error: boolean
+  completed: boolean
+}
+
+export interface FinetuneHandle {
+  await(): Promise<{ status: string }>
+}
+
+export default class LlmLlamacpp extends BaseInference {
+  protected addon: Addon
+
   constructor(
     args: LlmLlamacppArgs,
     config: LlamaConfig,
-    finetuningParams?: FinetuningParams | null
+    finetuningParams?: Record<string, any> | null
   )
   _load(
     closeLoader?: boolean,
     onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
   ): Promise<void>
 
+  load(
+    closeLoader?: boolean,
+    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
+  ): Promise<void>
+
+  downloadWeights(
+    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
+    opts?: DownloadWeightsOptions
+  ): Promise<Record<string, DownloadResult>>
+
+  _downloadWeights(
+    onDownloadProgress?: (progress: Record<string, any>, opts: DownloadWeightsOptions) => any,
+    opts?: DownloadWeightsOptions
+  ): Promise<Record<string, DownloadResult>>
+
   _runInternal(prompt: Message[]): Promise<QvacResponse>
+
   run(prompt: Message[]): Promise<QvacResponse>
+
+  finetune(finetuningOptions?: Record<string, any>): Promise<FinetuneHandle>
+
   cancel(): Promise<void>
+
   unload(): Promise<void>
-  finetune(options?: FinetuningParams): Promise<{ status: string }>
-  pauseFinetune(): Promise<void>
-  resumeFinetune(): Promise<void>
-  status(): Promise<string>
+
 }
 
-export = LlmLlamacpp
+export { ReportProgressCallback, QvacResponse, FinetuneHandle }

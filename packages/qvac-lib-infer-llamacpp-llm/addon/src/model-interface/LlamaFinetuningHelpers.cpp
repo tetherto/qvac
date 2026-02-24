@@ -290,6 +290,7 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   }
 
   const std::string stepDirStr = stepDir.string();
+#if QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API
   if (!llama_lora_save_checkpoint(
           state.adapter, stepDirStr.c_str(), state.model, state.ctx)) {
     std::ostringstream msg;
@@ -298,14 +299,23 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
     QLOG_IF(Priority::ERROR, msg.str());
     return false;
   }
+#else
+  QLOG_IF(
+      Priority::WARNING,
+      "LoRA checkpoint save API not available in this llama build; "
+      "skipping periodic checkpoint save");
+  return false;
+#endif
 
   const auto optimizerPath = stepDir / "optimizer.gguf";
+#if QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
     std::ostringstream msg;
     msg << "Unable to save optimizer state alongside checkpoint at step "
         << step;
     QLOG_IF(Priority::WARNING, msg.str());
   }
+#endif
 
   const auto metadataPath = stepDir / "metadata.json";
   std::ofstream metadata(metadataPath);
@@ -393,6 +403,7 @@ bool savePauseCheckpoint(
   }
 
   const std::string pauseDirStr = pauseDir.string();
+#if QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API
   if (!llama_lora_save_checkpoint(
           state.adapter, pauseDirStr.c_str(), state.model, state.ctx)) {
     std::ostringstream msg;
@@ -400,11 +411,20 @@ bool savePauseCheckpoint(
     QLOG_IF(Priority::ERROR, msg.str());
     return false;
   }
+#else
+  QLOG_IF(
+      Priority::WARNING,
+      "LoRA checkpoint save API not available in this llama build; "
+      "cannot create pause checkpoint");
+  return false;
+#endif
 
   const auto optimizerPath = pauseDir / "optimizer.gguf";
+#if QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
     QLOG_IF(Priority::WARNING, "Unable to save optimizer state for pause checkpoint");
   }
+#endif
 
   const auto metadataPath = pauseDir / "metadata.json";
   std::ofstream metadata(metadataPath);
@@ -450,9 +470,11 @@ bool tryHandlePauseRequest(
   if (state->pauseCheckpointSaved.load()) {
     return true;
   }
+#if QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API
   if (state->ctx != nullptr) {
     llama_opt_request_stop(state->ctx);
   }
+#endif
   const bool pausedDuringValidation = !train;
   const bool saved =
       savePauseCheckpoint(optCtx, *state, pausedDuringValidation);

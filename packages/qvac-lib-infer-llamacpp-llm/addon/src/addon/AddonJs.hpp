@@ -1,10 +1,7 @@
 #pragma once
-#include <atomic>
+#include <functional>
 #include <iostream>
 #include <memory>
-#include <mutex>
-#include <thread>
-#include <unordered_map>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
@@ -13,18 +10,116 @@
 #include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
-#include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 
+#include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
-#include "FinetuneParamStore.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
-namespace {
-std::mutex g_modelMapMutex;
-std::unordered_map<void*, LlamaModel*> g_modelMap;
-std::atomic<bool> shouldResumeFromPause{false};
-} // namespace
+namespace js = qvac_lib_inference_addon_cpp::js;
+
+inline LlamaModel*
+getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return static_cast<LlamaModel*>(&instance.addonCpp->model.get());
+}
+
+inline std::function<void(const std::string&)>
+makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return [&instance](const std::string& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s));
+  };
+}
+
+inline LlamaFinetuningParams
+parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
+  LlamaFinetuningParams params;
+  params.outputParametersDir =
+      jsObj.getProperty<js::String>(env, "outputParametersDir")
+          .as<std::string>(env);
+  params.numberOfEpochs =
+      static_cast<int>(
+          jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(
+              env));
+  params.learningRate =
+      jsObj.getProperty<js::Number>(env, "learningRate").as<double>(env);
+  params.trainDatasetDir =
+      jsObj.getProperty<js::String>(env, "trainDatasetDir")
+          .as<std::string>(env);
+  params.evalDatasetDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
+          .value_or("");
+  params.evalDatasetPath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "evalDatasetPath")
+          .value_or("");
+  params.contextLength =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
+          .value_or(0);
+  params.microBatchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
+          .value_or(0);
+  params.assistantLossOnly =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
+          .value_or(false);
+  params.checkpointSaveDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "checkpointSaveDir")
+          .value_or("");
+  params.loraModules =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
+          .value_or("");
+  params.loraRank =
+      jsObj.getOptionalPropertyAs<js::Number, int32_t>(env, "loraRank")
+          .value_or(8);
+  params.loraAlpha =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
+          .value_or(16.0);
+  params.loraDropout =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraDropout")
+          .value_or(0.0);
+  params.loraInitStd =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
+          .value_or(0.01);
+  params.chatTemplatePath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "chatTemplatePath")
+          .value_or("");
+  params.checkpointSaveSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(
+               env, "checkpointSaveSteps")
+          .value_or(0);
+  params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
+                     .value_or(0.0);
+  params.lrScheduler =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
+          .value_or("constant");
+  params.warmupRatio =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
+          .value_or(0.0);
+  params.batchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
+          .value_or(0);
+  params.weightDecay =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
+          .value_or(0.0);
+  params.warmupStepsSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
+          .value_or(false);
+  params.warmupSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps")
+          .value_or(0);
+  params.warmupRatioSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet")
+          .value_or(false);
+  params.validationSplit =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
+          .value_or(0.05);
+  params.useEvalDatasetForValidation =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(
+               env, "useEvalDatasetForValidation")
+          .value_or(false);
+  return params;
+}
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -36,7 +131,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       args.getMapEntry(1, "projectionPath"),
       args.getSubmap(1, "config"));
 
-  LlamaModel* llamaModelPtr = dynamic_cast<LlamaModel*>(model.get());
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
@@ -46,12 +140,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
-  void* addonCppPtr = addon->addonCpp.get();
-  if (llamaModelPtr != nullptr && addonCppPtr != nullptr) {
-    std::scoped_lock lock{g_modelMapMutex};
-    g_modelMap[addonCppPtr] = llamaModelPtr;
-  }
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -65,9 +153,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   vector<pair<string, js::Object>> inputs = JsInterface::getInputsArray(args);
 
   LlamaModel::Prompt prompt;
-  prompt.outputCallback = [&](const string& tokenOut) {
-    instance.addonCpp->outputQueue->queueResult(any(tokenOut));
-  };
+  prompt.outputCallback = makeQueueOutputCallback(instance);
 
   auto parseText = [&](js::Object& inputObj) {
     if (!prompt.input.empty()) {
@@ -83,11 +169,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   auto parseMedia = [&](js::Object& inputObj) {
-    std::vector<uint8_t> mediaBytes =
+    if (prompt.media.has_value()) {
+      throw StatusError(
+          general_error::InvalidArgument, "Only one media input is allowed");
+    }
+    prompt.media =
         js::TypedArray<uint8_t>(
             env, inputObj.getProperty<js::TypedArray<uint8_t>>(env, "content"))
             .as<std::vector<uint8_t>>(env);
-    prompt.media.push_back(std::move(mediaBytes));
   };
 
   for (auto& input : inputs) {
@@ -101,13 +190,31 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  if (prompt.input.empty() && prompt.media.empty()) {
+  if (prompt.input.empty() && !prompt.media.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
         "At least one of text or media input is required");
   }
 
   return instance.runJob(any(std::move(prompt)));
+}
+JSCATCH
+
+inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  LlamaModel* llamaModel = getLlamaModel(instance);
+  auto* addonCpp = instance.addonCpp.get();
+
+  return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
+    if (llamaModel && llamaModel->isFinetuneRunning() &&
+        llamaModel->requestPause())
+      llamaModel->waitUntilFinetuningPauseComplete();
+    else
+      addonCpp->cancelJob();
+  });
 }
 JSCATCH
 
@@ -118,188 +225,33 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
 
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
+  LlamaModel* llamaModel = getLlamaModel(instance);
   if (llamaModel == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
         "Model not available or not a LlamaModel");
   }
 
-  js_value_t* arg1 = args.get(1, "finetuningParams");
-  if (!js::is<js::Undefined>(env, arg1) && !js::is<js::Null>(env, arg1)) {
-    if (!js::is<js::Object>(env, arg1)) {
-      throw StatusError(
-          general_error::InvalidArgument,
-          "Expected finetuning parameters as an object.");
-    }
-    auto finetuningParametersObj = js::Object{env, arg1};
-    FinetuningParameters finetuningArgs(env, finetuningParametersObj);
-    qvac_lib_inference_addon_llama_detail::put(
-        instance.addonCpp.get(), finetuningArgs);
-  }
-
-  FinetuningParameters params;
-  bool hasParams =
-      qvac_lib_inference_addon_llama_detail::take(instance.addonCpp.get(), params);
-  if (!hasParams) {
+  auto paramsOpt = args.tryGetObject<LlamaFinetuningParams>(
+      1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
+        return parseLlamaFinetuningParams(e, jsObj);
+      });
+  if (!paramsOpt.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
-        "Finetuning parameters not provided and not stored");
+        "Finetuning parameters not provided");
   }
 
-  // Keep params available for resume attempts via activate().
-  qvac_lib_inference_addon_llama_detail::put(instance.addonCpp.get(), params);
+  LlamaModel::Prompt prompt;
+  prompt.finetuningParams = *paramsOpt;
+  prompt.outputCallback = makeQueueOutputCallback(instance);
 
-  auto* outputQueue = instance.addonCpp->outputQueue.get();
-  auto enqueueLog = [outputQueue](const string& message) {
-    if (outputQueue != nullptr) {
-      outputQueue->queueResult(any(message));
-    }
-  };
-
-  bool allowResume = shouldResumeFromPause.exchange(false);
-  // Run finetune in a separate thread to avoid blocking JavaScript event loop
-  std::thread finetuneThread([llamaModel, params, enqueueLog, allowResume]() {
-    try {
-      llamaModel->finetune(params, enqueueLog, allowResume);
-    } catch (const std::exception& e) {
-      std::cerr << "[ERROR] Finetuning thread exception: " << e.what()
-                << std::endl;
-    }
-  });
-  finetuneThread.detach();
-
-  return nullptr;
-}
-JSCATCH
-
-inline js_value_t* pause(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
-  if (llamaModel == nullptr) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "Model not available or not a LlamaModel");
-  }
-
-  bool didPause = llamaModel->requestPause();
-  shouldResumeFromPause.store(false);
-  return js::Boolean::create(env, didPause);
-}
-JSCATCH
-
-inline js_value_t* status(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
-  if (llamaModel != nullptr) {
-    auto* checkpointState = llamaModel->getCurrentCheckpointState();
-    if (checkpointState != nullptr) {
-      const bool shouldExit = checkpointState->shouldExit.load();
-      const bool pauseCheckpointSaved =
-          checkpointState->pauseCheckpointSaved.load();
-      if (shouldExit && pauseCheckpointSaved) {
-        return js::String::create(env, "PAUSED");
-      }
-      if (!shouldExit) {
-        return js::String::create(env, "FINETUNING");
-      }
-    }
-  }
-
-  return js::String::create(env, "IDLE");
-}
-JSCATCH
-
-inline js_value_t* isFinetuningRunning(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
-  bool running = false;
-  if (llamaModel != nullptr) {
-    auto* checkpointState = llamaModel->getCurrentCheckpointState();
-    if (checkpointState != nullptr && !checkpointState->shouldExit.load()) {
-      running = true;
-    }
-  }
-
-  return js::Boolean::create(env, running);
+  return instance.runJob(any(std::move(prompt)));
 }
 JSCATCH
 
 inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-
-  LlamaModel* llamaModel = nullptr;
-  {
-    std::scoped_lock lock{g_modelMapMutex};
-    auto it = g_modelMap.find(instance.addonCpp.get());
-    if (it != g_modelMap.end()) {
-      llamaModel = it->second;
-    }
-  }
-
-  if (llamaModel != nullptr) {
-    auto* checkpointState = llamaModel->getCurrentCheckpointState();
-    if (checkpointState != nullptr && checkpointState->shouldExit.load() &&
-        checkpointState->pauseCheckpointSaved.load()) {
-      FinetuningParameters params;
-      bool hasParams =
-          qvac_lib_inference_addon_llama_detail::take(instance.addonCpp.get(), params);
-      if (hasParams) {
-        qvac_lib_inference_addon_llama_detail::put(instance.addonCpp.get(), params);
-        llamaModel->clearPauseRequest();
-        shouldResumeFromPause.store(true);
-        return finetune(env, info);
-      }
-    }
-  }
-
-  return JsInterface::activate(env, info);
+  return qvac_lib_inference_addon_cpp::JsInterface::activate(env, info);
 }
 JSCATCH
 

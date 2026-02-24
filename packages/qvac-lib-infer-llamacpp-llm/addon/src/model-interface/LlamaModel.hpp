@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -12,6 +13,7 @@
 #include <picojson/picojson.h>
 
 #include "CacheManager.hpp"
+#include "LlamaFinetuningParams.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
@@ -45,8 +47,10 @@ public:
   struct Prompt {
     std::string input;
     bool prefill = false;
-    std::vector<std::vector<uint8_t>> media;
+    std::optional<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
+    std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
+        finetuningParams;
   };
 
   std::any process(const std::any& input) final;
@@ -67,19 +71,17 @@ public:
   static void
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
-  void finetune(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      std::function<void(const std::string&)> logCallback = {},
-      bool allowResumeFromPause = false);
+  std::string finetune(
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
+  bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
-  llama_finetuning_helpers::TrainingCheckpointState*
-  getCurrentCheckpointState() const {
-    return currentCheckpointState_;
-  }
+  llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState()
+      const;
 
-  /** Block until the training thread has completed the pause path. */
-  void waitUntilPauseComplete();
+  /** Block until the training thread has completed the finetuning pause path.
+   */
+  void waitUntilFinetuningPauseComplete();
 
 private:
   struct ResolvedPrompt {
@@ -119,40 +121,46 @@ private:
   std::optional<CacheManager> cacheManager_;
 
   void validateFinetuningParams(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
   ggml_opt_dataset_t prepareTrainingDataset(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
+  ggml_opt_dataset_t prepareEvalDataset(
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
+  ggml_opt_dataset_t prepareDatasetFromPath(
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
+      const std::string& datasetPath, const char* errorLabel,
+      const char* constructKind);
   void initializeLoraAdapter(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       uint32_t targetModules, llama_adapter_lora*& adapter);
   llama_finetuning_helpers::LoraLrSchedulerState createLrScheduler(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       int64_t totalSteps);
   std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
   initializeCheckpointing(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       llama_adapter_lora* adapter,
-      llama_finetuning_helpers::LoraLrSchedulerState* scheduler,
-      std::function<void(const std::string&)> logFn);
+      llama_finetuning_helpers::LoraLrSchedulerState* scheduler);
   void configureOptimizer(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       llama_adapter_lora* adapter,
       llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
       bool loadOptimizerState = false);
   void executeTrainingLoop(
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params,
-      ggml_opt_dataset_t dataset, int64_t trainSplit,
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
+      ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
       llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
-      std::function<void(const std::string&)> logCallback,
-      uint32_t startEpoch = 0, bool resumingFromPause = false);
+      uint32_t startEpoch = 0, bool resumingFromPause = false,
+      ggml_opt_dataset_t evalDataset = nullptr,
+      int64_t evalDatasetSampleCount = 0);
   void saveLoraAdapter(
       llama_adapter_lora* adapter,
-      const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
 
-  llama_finetuning_helpers::TrainingCheckpointState* currentCheckpointState_ =
-      nullptr;
+  std::atomic<llama_finetuning_helpers::TrainingCheckpointState*>
+      currentCheckpointState_{nullptr};
   std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       pausedCheckpointState_;
   bool optimizerInitialized_ = false;

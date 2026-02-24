@@ -68,39 +68,6 @@ class LlamaInterface {
   }
 
   /**
-   * Pause finetuning.
-   * @returns {Promise<boolean>} true when pause completed, false when not finetuning
-   */
-  async pause () {
-    if (typeof this._binding.pause !== 'function') {
-      throw new Error('Pause is not exposed by this native binding')
-    }
-    const didPause = await this._binding.pause(this._handle)
-    if (!didPause) return false
-    return new Promise((resolve) => {
-      this._pauseCompleteResolve = () => resolve(true)
-    })
-  }
-
-  resolvePauseComplete () {
-    if (this._pauseCompleteResolve) {
-      this._pauseCompleteResolve()
-      this._pauseCompleteResolve = null
-    }
-  }
-
-  /**
-   * Return addon status when native binding provides support.
-   * @returns {String} Current status (IDLE, FINETUNING, PAUSED, UNKNOWN)
-   */
-  async status () {
-    if (typeof this._binding.status !== 'function') {
-      return 'UNKNOWN'
-    }
-    return this._binding.status(this._handle)
-  }
-
-  /**
    * Run one inference job with an array of message objects.
    * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
    */

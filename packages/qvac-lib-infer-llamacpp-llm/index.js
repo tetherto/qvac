@@ -8,9 +8,53 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
-/** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+const RUN_QUEUE_BUSY_ERROR =
+  'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
+
+const VALIDATION_TYPES = ['none', 'split', 'dataset']
+const DEFAULT_VALIDATION_FRACTION = 0.05
+
+function normalizeFinetuneParams (opts) {
+  const validation = opts.validation
+  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
+    throw new Error(
+      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
+      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
+    )
+  }
+  const out = { ...opts }
+  const type = validation.type
+  if (!VALIDATION_TYPES.includes(type)) {
+    throw new Error(
+      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
+    )
+  }
+  if (type === 'none') {
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = false
+  } else if (type === 'split') {
+    const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
+    out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
+    out.useEvalDatasetForValidation = false
+  } else {
+    const evalPath = validation.path ?? opts.evalDatasetDir
+    if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
+      throw new Error(
+        "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
+      )
+    }
+    if (evalPath === opts.trainDatasetDir) {
+      throw new Error(
+        "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
+      )
+    }
+    out.evalDatasetPath = evalPath
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = true
+  }
+  delete out.validation
+  return out
+}
 
 /**
  * GGML client implementation for Llama LLM model
@@ -42,7 +86,7 @@ class LlmLlamacpp extends BaseInference {
     this._projectionModel = projectionModel
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._lastJobResult = Promise.resolve()
+    this._jobInProgress = false
     this._defaultFinetuneParams = finetuningParams ?? null
   }
 
@@ -73,7 +117,7 @@ class LlmLlamacpp extends BaseInference {
       }
 
       this.logger.info('Creating addon with configuration:', configurationParams)
-      this.addon = this._createAddon(configurationParams, this._defaultFinetuneParams)
+      this.addon = this._createAddon(configurationParams)
 
       if (this._shards !== null) {
         await this._loadWeights(onDownloadProgress)
@@ -121,7 +165,7 @@ class LlmLlamacpp extends BaseInference {
    * @param {Object} configurationParams.settings - LLM-specific settings
    * @returns {Addon} The instantiated addon interface
    */
-  _createAddon (configurationParams, finetuningParams = null) {
+  _createAddon (configurationParams) {
     this.logger.info(
       'Creating Llama interface with configuration:',
       configurationParams
@@ -159,7 +203,6 @@ class LlmLlamacpp extends BaseInference {
       }
     }
     
-    // BaseInference._outputCallback uses logger.warn() for "No response found for job"
     filteredLogger.warn = (...args) => {
       if (shouldSuppressMessage(args)) return
       if (originalWarn) {
@@ -170,42 +213,15 @@ class LlmLlamacpp extends BaseInference {
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
     
-    // Override _outputCallback to intercept BaseInference's logging for finetuning
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
-      if (typeof data === 'string') {
-        try {
-          const obj = JSON.parse(data)
-          if (obj?.type === 'FinetuningStarted') {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: true })
-              this._finetuneStartedResolve = null
-            }
-            return
-          }
-          if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: false })
-              this._finetuneStartedResolve = null
-            }
-            this._finetuneCompletionResolve(obj.status)
-            if ((obj.status === 'IDLE' || obj.status === 'ERROR')) {
-              this.addon?.resolvePauseComplete?.()
-            }
-            return
-          }
-          if (obj?.type === 'FinetunePaused') {
-            if (this._finetuneStartedResolve) {
-              this._finetuneStartedResolve({ started: false })
-              this._finetuneStartedResolve = null
-            }
-            this.addon?.resolvePauseComplete?.()
-            if (this._finetuneCompletionResolve) {
-              this._finetuneCompletionResolve('PAUSED')
-            }
-            return
-          }
-        } catch (_) {}
+      if (eventType === 'JobEnded' || eventType === 'Error') {
+        this._jobInProgress = false
+      }
+      if (typeof data === 'string' && (data === 'COMPLETED' || data === 'PAUSED' || data === 'ERROR') && this._finetuneCompletionResolve) {
+        this._finetuneCompletionResolve(data)
+        this._finetuneCompletionResolve = null
+        return
       }
 
       if (eventType === 'LogMsg') {
@@ -234,9 +250,7 @@ class LlmLlamacpp extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
     }
 
     let mappedEvent = event
@@ -246,31 +260,32 @@ class LlmLlamacpp extends BaseInference {
       mappedEvent = 'Output'
     }
 
-    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 
   /**
-   * Cancel the current task
+   * Cancel the current task (or pause finetuning if finetune is running).
    */
   async cancel () {
-    if (this.addon?.cancel) {
-      await this.addon.cancel()
+    if (!this.addon) {
+      throw new Error('Addon not initialized')
     }
+    await this.addon.cancel()
   }
 
   /**
-   * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
+   * Unload model safely by cancelling and clearing pending jobs.
    * @returns {Promise<void>}
    */
   async unload () {
     return await this._withExclusiveRun(async () => {
-      await this.cancel()
-      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
+      try {
+        await this.cancel()
+      } catch (_) {}
+      const currentJobResponse = this._jobToResponse.get('job')
       if (currentJobResponse) {
-        // Make sure not to leak jobs to avoid "job already exists" errors after
-        // loading the model again.
         currentJobResponse.failed(new Error('Model was unloaded'))
-        this._deleteJobMapping('OnlyOneJob')
+        this._deleteJobMapping('job')
       }
       await super.unload()
     })
@@ -282,18 +297,22 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
+    if (this._jobInProgress) {
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
+    }
     this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
-      // Separate media messages from text messages
       const textMessages = []
-      const mediaItems = []
+      let mediaData = null
 
       for (const message of prompt) {
         if (message.role === 'user' &&
             message.type === 'media' &&
             message.content instanceof Uint8Array) {
-          mediaItems.push(message.content)
-          // Keep the message as a placeholder marker (with empty content) for tokenization
+          if (mediaData !== null) {
+            throw new Error('Only one media message is supported at the moment')
+          }
+          mediaData = message.content
           textMessages.push({ ...message, content: '' })
         } else {
           textMessages.push(message)
@@ -302,61 +321,20 @@ class LlmLlamacpp extends BaseInference {
 
       const promptMessages = []
 
-      // Send media first (in order) if present
-      for (const mediaData of mediaItems) {
+      if (mediaData) {
         promptMessages.push({ type: 'media', content: mediaData })
       }
 
-      // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
-
-      // Make sure all events from previous one are done and will not
-      // affect our new job. addon-cpp C++ guarantees every accepted job will
-      // end with output or exception after finishing processing.
-      // - If timeout is hit, exception should surface to avoid infinite await.
-      // - It is expected that we briefly wait for the previous job to settle
-      //   before throwing a busy error.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
-        }, PREVIOUS_JOB_WAIT_MS)
-        this._lastJobResult
-          // If last job finished.
-          .then(() => { clearTimeout(timer); resolve() })
-          // If last job threw, it still finished and no more events will be generated.
-          .catch(() => { clearTimeout(timer); resolve() })
-      })
-
-      // At this point, previous job is not using 'OnlyOneJob'
-      // slot anymore, so we can safely overwrite it with new response.
-      // We need to create response before running the job,
-      // any events right after successful runJob are not lost.
-      const response = this._createResponse('OnlyOneJob')
-
-      // addon-cpp C++ guarantees no events will be generated
-      // until job is fully accepted. This means even if trying
-      // to queue a job fails right now as not accepted,
-      // it will not generate events.
-      //
-      // If any unexpected exception is thrown (e.g. in the C++ code)
-      // it will unwind here and the job will not be accepted.
-      let accepted
+      this._jobInProgress = true
       try {
-        accepted = await this.addon.runJob(promptMessages)
-      } catch (error) {
-        this._deleteJobMapping('OnlyOneJob')
-        response.failed(error)
-        throw error
-      }
-      if (!accepted) {
-        this._deleteJobMapping('OnlyOneJob')
-        const msg = RUN_BUSY_ERROR_MESSAGE
-        response.failed(new Error(msg))
-        throw new Error(msg)
+        await this.addon.runJob(promptMessages)
+      } catch (err) {
+        this._jobInProgress = false
+        throw err
       }
 
-      // Store the finish promise so the next run can wait on it.
-      this._lastJobResult = response.await()
+      const response = this._createResponse('job')
 
       this.logger.info('Inference job started successfully')
 
@@ -364,98 +342,52 @@ class LlmLlamacpp extends BaseInference {
     })
   }
 
-  async finetune (finetuningOptions = undefined, options = {}) {
-    if (arguments.length === 1 &&
-        finetuningOptions &&
-        typeof finetuningOptions === 'object' &&
-        finetuningOptions.resume === true &&
-        Object.keys(finetuningOptions).length === 1) {
-      options = finetuningOptions
-      finetuningOptions = undefined
-    }
-    options = options ?? {}
-    const { resume = false } = options
-    const params = finetuningOptions ?? this._defaultFinetuneParams
-    if (!resume && !params) {
-      throw new Error('Finetuning parameters are required but not provided.')
-    }
-    if (resume && !this._defaultFinetuneParams) {
-      throw new Error('No stored finetuning parameters. Call finetune(opts) first before pausing.')
+  async finetune (finetuningOptions = undefined) {
+    if (!this.addon) {
+      throw new Error(
+        'Addon not initialized. Call load() first.'
+      )
     }
 
-    if (!resume) {
+    const params = finetuningOptions ?? this._defaultFinetuneParams
+    if (!params) {
+      throw new Error(
+        'Finetuning parameters are required but not provided. Call finetune(opts) first; use finetune() with no args to resume from a pause.'
+      )
+    }
+    if (finetuningOptions != null) {
       this._defaultFinetuneParams = params
     }
-    this.logger?.info?.(resume ? 'finetune() called (resume)' : 'finetune() called')
-    this.logger?.info?.('Finetuning parameters:', params ?? this._defaultFinetuneParams)
+    const paramsToSend = normalizeFinetuneParams(params)
+    this.logger?.info?.('finetune() called')
+    this.logger?.info?.('Finetuning parameters:', params)
 
-    if (!this.addon) {
-      this.logger?.info?.('Addon not loaded, calling load()...')
-      await this.load()
-      this.logger?.info?.('Addon loaded')
+    if (this._jobInProgress) {
+      throw new Error(RUN_QUEUE_BUSY_ERROR)
     }
 
-    return this._withExclusiveRun(async () => {
-      let resolveCompletion
-      this._finetuneCompletionPromise = new Promise((resolve) => {
-        resolveCompletion = resolve
-      })
-      this._finetuneCompletionResolve = resolveCompletion
-      let resolveStarted
-      this._finetuneStartedPromise = new Promise((resolve) => {
-        resolveStarted = resolve
-      })
-      this._finetuneStartedResolve = resolveStarted
-      try {
-        if (resume) {
-          this.logger?.info?.('Calling addon.activate() to resume...')
-          await this.addon.activate()
-        } else {
-          this.logger?.info?.('Calling addon.finetune()...')
-          await this.addon.finetune(params)
-        }
-        this.logger?.info?.('Waiting for completion...')
-        const finalStatus = await this._waitForFinetuneCompletion()
-        this.logger?.info?.(`Finetuning completed with status: ${finalStatus}`)
-        return { status: finalStatus }
-      } finally {
-        this._finetuneCompletionResolve = null
-        this._finetuneStartedResolve = null
-      }
+    let resolveCompletion
+    let rejectCompletion
+    const completionPromise = new Promise((resolve, reject) => {
+      resolveCompletion = resolve
+      rejectCompletion = reject
     })
-  }
+    this._finetuneCompletionResolve = resolveCompletion
 
-  async _waitForFinetuneCompletion ({ timeoutMs = 100000000000 } = {}) {
-    let timeoutId
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Time out')), timeoutMs)
-    })
+    const handle = {
+      await: () => completionPromise.then(status => ({ status }))
+    }
+
+    this._jobInProgress = true
     try {
-      return await Promise.race([
-        this._finetuneCompletionPromise,
-        timeoutPromise
-      ])
-    } finally {
-      clearTimeout(timeoutId)
+      await this.addon.finetune(paramsToSend)
+      return handle
+    } catch (err) {
+      this._jobInProgress = false
+      this._finetuneCompletionResolve = null
+      rejectCompletion(err)
+      throw err
     }
-  }
-
-  /**
-   * Pause finetuning. Saves checkpoint and pauses training.
-   * @returns {Promise<void>}
-   */
-  getFinetuningStartedPromise () {
-    return this._finetuneStartedPromise ?? Promise.resolve({ started: false })
-  }
-
-  async pauseFinetune () {
-    if (!this.addon) {
-      throw new Error('Addon not initialized')
-    }
-    if (!this.addon.isFinetuningRunning()) {
-      throw new Error('Finetuning not running')
-    }
-    await this.addon.pause()
   }
 
 }
