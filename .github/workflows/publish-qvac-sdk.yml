@@ -18,6 +18,9 @@ on:
       - labeled
     branches:
       - release-*
+      - feature-*
+      - tmp-*
+      - main
     paths:
       - "packages/qvac-sdk/**"
 
