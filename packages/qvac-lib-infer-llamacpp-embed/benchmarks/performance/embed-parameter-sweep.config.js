@@ -91,7 +91,7 @@ const MODELS = loadModelsFromManifest()
 
 const PARAMETER_SWEEP = {
   quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
-  device: ['cpu','gpu'],
+  device: ['cpu', 'gpu'],
   batchSize: [256, 512, 1024, 2048],
   noMmap: [false, true],
   flashAttn: ['off', 'on']

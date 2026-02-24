@@ -302,6 +302,6 @@ C++ Dependencies
 
 --- mit (MIT License) ---
 
-  llama-cpp
-    https://github.com/tetherto/qvac-ext-lib-llama.cpp
+  qvac-fabric
+    https://github.com/tetherto/qvac-fabric-llm.cpp
 
