@@ -6,10 +6,6 @@
 #include <iostream>
 #include <numeric>
 
-#ifdef __APPLE__
-#include <TargetConditionals.h>
-#endif
-
 namespace {
 
 // parameters
@@ -118,10 +114,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
 
   config_ = cfg;
   language_ = cfg.language;
-
-#if defined(__APPLE__) && TARGET_OS_IPHONE
-  lazySessionLoading_ = true;
-#endif
+  lazySessionLoading_ = cfg.lazySessionLoading;
 
   const std::string blob = qvac::ttslib::loadFileBytes(cfg.tokenizerPath);
   tokenizerHandle_ = tokenizers_new_from_str(blob.data(), blob.length());
