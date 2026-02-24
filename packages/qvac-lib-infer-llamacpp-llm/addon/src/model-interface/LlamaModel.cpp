@@ -77,7 +77,8 @@ LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(modelPath)) {
+      shards_(GGUFShards::expandGGUFIntoShards(modelPath)),
+      asyncWeightsLoader_(shards_, initLoader_, loadingContext_) {
   auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };
@@ -112,18 +113,19 @@ void LlamaModel::init(
   common_params params;
   commonParamsParse(modelPath, configFilemap, params);
 
-  if (!isStreaming_) {
+  if (!asyncWeightsLoader_.isStreaming()) {
     resolveShardPaths(shards_, modelPath);
   }
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
+  auto streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
   common_init_result llamaInit = initFromConfig(
       params,
       modelPath,
-      singleGgufStreamedFiles_,
+      streamedFiles,
       shards_,
       loadingContext_,
-      isStreaming_,
+      asyncWeightsLoader_.isStreaming(),
       ADDON_ID,
       errorWhenFailed);
 
@@ -151,29 +153,7 @@ void LlamaModel::initializeBackend(const std::string& backendsDir) {
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  isStreaming_ = true;
-  if (shards_.gguf_files.empty()) {
-    // Store it and make it available when `init` is called
-    singleGgufStreamedFiles_[filename] = std::move(shard);
-    return;
-  }
-
-  // TODO move to AsyncWeightsLoader class.
-  // TODO if first shard (check filename) notify metadata in a separate thread,
-  // in order not to halt download. Next time setWeightsWeights.
-  // Double-check fulfill_split futures can be loaded out of order.
-  // Add mutex for singleGgufStreamedFiles_
-
-  // Asynchronous shard loading
-  initLoader_.ensureLoadInBackground();
-  if (!llama_model_load_fulfill_split_future(
-          filename.c_str(), loadingContext_.c_str(), std::move(shard))) {
-    std::string errorMsg = string_format(
-        "%s: failed to load model from %s\n", __func__, filename.c_str());
-
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadModel), errorMsg);
-  }
+  asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
 }
 
 bool LlamaModel::isLoaded() { return static_cast<bool>(llmContext_); }

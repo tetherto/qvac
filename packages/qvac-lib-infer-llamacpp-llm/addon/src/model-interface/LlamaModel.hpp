@@ -9,6 +9,7 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
+#include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
@@ -183,11 +184,9 @@ private:
   GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
+  AsyncWeightsLoader asyncWeightsLoader_;
 
   bool isTextLlm_ = false;
-  bool isStreaming_ = false;
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
-      singleGgufStreamedFiles_;
 
   // Backend handle must be declared before llmContext_ to ensure
   // llmContext_ is destroyed first (members destroyed in reverse order)
