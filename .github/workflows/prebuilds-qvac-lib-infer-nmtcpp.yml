@@ -115,12 +115,12 @@ jobs:
         run: |
           git config --system core.longpaths true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
-          ref: ${{ inputs.ref || github.ref }}
-          repository: ${{ inputs.repository || github.repository }}
 
       - if: ${{ matrix.platform == 'android' }}
         name: Setup Android NDK
@@ -144,7 +144,7 @@ jobs:
           echo "  API Level: 24"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -350,7 +350,7 @@ jobs:
 
       - name: Restore vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
@@ -665,12 +665,12 @@ jobs:
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-nmtcpp/vcpkg.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-configuration.json', 'packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/**') }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.PKG_DIR }}/prebuilds/*
@@ -679,17 +679,18 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prebuild
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: prebuilds
           merge-multiple: true
+
       - run: |
           tree prebuilds/android-*
           mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
           cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
           cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
           cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: prebuilds
           path: prebuilds
@@ -777,14 +778,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          lfs: false
-          fetch-depth: 1
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -809,14 +806,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          lfs: false
-          fetch-depth: 1
+        uses: actions/checkout@v6
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
@@ -841,7 +834,7 @@ jobs:
       new_version: ${{ steps.check.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 2
 

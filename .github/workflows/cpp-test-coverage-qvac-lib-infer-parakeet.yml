@@ -37,15 +37,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           lfs: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -78,12 +78,11 @@ jobs:
 
       - name: Get ccache cache
         if: matrix.platform == 'linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ~/.cache/ccache
           key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
-          restore-keys: |
-            ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.PKG_DIR }}
@@ -189,7 +188,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: matrix.coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -198,43 +197,6 @@ jobs:
             ${{ env.PKG_DIR }}/build/coverage-summary.txt
             ${{ env.PKG_DIR }}/build/cpp-test-results.xml
           retention-days: 30
-
-      - name: Comment Coverage on PR
-        if: matrix.coverage && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && matrix.platform == 'linux'
-        env:
-          COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
-          PLATFORM: ${{ matrix.platform }}
-          ARCH: ${{ matrix.arch }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summaryPath = '${{ env.PKG_DIR }}/build/coverage-summary.txt';
-
-            if (fs.existsSync(summaryPath)) {
-              const summary = fs.readFileSync(summaryPath, 'utf8');
-              const platform = process.env.PLATFORM;
-              const arch = process.env.ARCH;
-              const coverage = process.env.COVERAGE_PERCENTAGE;
-              const repo = process.env.REPO;
-              const runId = process.env.RUN_ID;
-
-              const body = '## 🧪 C++ Test Coverage Report (Parakeet)\n\n' +
-                '**Platform:** ' + platform + '-' + arch + '\n' +
-                '**Overall Line Coverage:** ' + coverage + '\n\n' +
-                '```\n' + summary + '\n```\n\n' +
-                '---\n\n' +
-                '📥 **[Download Full HTML Report](https://github.com/' + repo + '/actions/runs/' + runId + ')** - Click "coverage-report" artifact';
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            }
 
       - name: Check if test results exist
         id: check-test-results
@@ -275,7 +237,7 @@ jobs:
     if: always()
     steps:
       - name: Download all coverage reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: coverage-reports
 

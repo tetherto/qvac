@@ -94,7 +94,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
         modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
         use_gpu: deviceConfig.useGpu
       })
-
+      model.logger.setLevel('debug')
       await model.load()
       t.pass(`${label} IndicTrans model loaded successfully`)
 
@@ -125,6 +125,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       if (model) {
         try {
           await model.unload()
+	  t.pass(`${label} After model.unload().`)
         } catch (e) {
           t.comment(`${label} unload() error: ` + e.message)
         }

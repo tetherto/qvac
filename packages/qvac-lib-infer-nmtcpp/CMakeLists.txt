@@ -52,7 +52,7 @@ if(ANDROID)
   set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
 
 find_package(ggml CONFIG REQUIRED)
 find_package(absl CONFIG QUIET)
@@ -133,9 +133,7 @@ add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
 target_sources(
   ${qvac-lib-infer-nmtcpp}
   PRIVATE
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-infer-nmtcpp.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp

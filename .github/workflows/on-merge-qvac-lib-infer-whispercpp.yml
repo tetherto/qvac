@@ -86,9 +86,10 @@ jobs:
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
     secrets: inherit
     with:
-      # workflow_dispatch -> github.event.inputs.tag is set; push -> fallback to computed gpr_tag
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-feature-gpr:
@@ -103,6 +104,8 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-tmp-gpr:
@@ -117,6 +120,8 @@ jobs:
     with:
       tag: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.tag) || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release-npm:
@@ -131,6 +136,8 @@ jobs:
     with:
       tag: "latest"
       publish_target: "npm"
+      repository: ${{ github.repository }}
+      ref: ${{ github.ref }}
       workdir: "packages/qvac-lib-infer-whispercpp"
 
   publish-release:
@@ -176,6 +183,7 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
+      workdir: "packages/qvac-lib-infer-whispercpp"
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml

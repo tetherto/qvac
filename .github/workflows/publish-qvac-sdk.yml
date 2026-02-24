@@ -9,8 +9,13 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-sdk/**"
-
-  pull_request:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - labeled
     branches:
       - release-*
     paths:
@@ -33,7 +38,7 @@ permissions:
 jobs:
   release-pr-guard:
     name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
+    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -43,6 +48,10 @@ jobs:
       changelog-path: packages/qvac-sdk/CHANGELOG.md
 
   build:
+    if: >
+      github.event_name != 'pull_request_target' ||
+      github.event.pull_request.head.repo.fork == false ||
+      contains(github.event.pull_request.labels.*.name, 'verify')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -53,9 +62,10 @@ jobs:
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ env.READ_REPO_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -177,7 +187,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
@@ -271,10 +281,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
@@ -329,10 +339,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/

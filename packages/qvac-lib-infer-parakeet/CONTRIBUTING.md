@@ -94,8 +94,8 @@ Quick setup:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/qvac-lib-infer-parakeet.git
-cd qvac-lib-infer-parakeet
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/qvac-lib-infer-parakeet
 
 # Install dependencies
 npm install
@@ -139,7 +139,7 @@ We welcome contributions in these areas:
 
 ## Questions?
 
-- 💬 Open a [discussion](https://github.com/YOUR_USERNAME/qvac-lib-infer-parakeet/discussions)
+- 💬 Open a [discussion](https://github.com/tetherto/qvac/discussions)
 - 📧 Contact the maintainers
 
 ## License

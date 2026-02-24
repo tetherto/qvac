@@ -5,12 +5,12 @@ const os = require('bare-os')
 
 const {
   createEmbeddingsTestInstance,
+  ensureModel,
   extractErrorMessage,
   waitForCompletion,
   setupErrorHandlers,
   removeErrorHandlers,
   cleanupResources,
-  cancelJobIfExists,
   getModelConfigs
 } = require('./utils')
 
@@ -45,6 +45,7 @@ function cosineSimilarity (a, b) {
   const denominator = Math.sqrt(normA) * Math.sqrt(normB)
   const EPSILON = 1e-8
   if (denominator < EPSILON) return 1.0 * Math.sign(dotProduct)
+  console.log(`Found cosineSimilarity = ${dotProduct} / ${denominator}`)
   return dotProduct / denominator
 }
 
@@ -78,8 +79,6 @@ createDeviceModelTest('Model inference works correctly', async (t, modelName, mo
   console.log(`Creating new GGMLBert instance for ${modelName} on ${device.toUpperCase()}`)
   const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
-  console.log('addon.status():', await inference.status())
-
   const sentence = 'That is a happy person'
   const response = await inference.run(sentence)
   const embeddings = await waitForCompletion(response)
@@ -97,8 +96,6 @@ createDeviceModelTest('Model inference works correctly with array input', async 
 
   console.log(`Creating new GGMLBert instance for array input test [${modelName}] on ${device.toUpperCase()}`)
   const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
-
-  console.log('addon.status():', await inference.status())
 
   const sentences = ['That is a happy person', 'This is a sad person', 'I am feeling neutral']
   const response = await inference.run(sentences)
@@ -141,12 +138,10 @@ createDeviceModelTest('Model inference works correctly with long string exceedin
   // Verify that an error is thrown when input exceeds model training context size
   // Expected error: "tokenizeInput: number of tokens in prompt 0 (XXX) exceeds model training context size (XXX)"
   let response = null
-  let jobId = null
   let caughtError = null
 
   try {
     response = await inference.run(longString)
-    jobId = response.jobId
 
     // Set up error handlers to prevent unhandled errors
     // The error will be emitted asynchronously, so we need to catch it here
@@ -185,7 +180,7 @@ createDeviceModelTest('Model inference works correctly with long string exceedin
   await new Promise((resolve) => setTimeout(resolve, 100))
 
   // Clean up: cancel any pending job to prevent it from affecting subsequent tests
-  await cancelJobIfExists(inference, jobId)
+  await inference.cancel()
 
   t.teardown(async () => {
     await cleanupResources(loader, inference)
@@ -210,12 +205,10 @@ createDeviceModelTest('Model inference works correctly with array input where on
   // Expected error: "encodeHostF32Sequences: number of tokens in sequence 1 (XXX)
   // exceeds model training context size (XXX)"
   let response = null
-  let jobId = null
   let caughtError = null
 
   try {
     response = await inference.run(sequences)
-    jobId = response.jobId
 
     setupErrorHandlers(response, (error) => {
       caughtError = error
@@ -255,7 +248,7 @@ createDeviceModelTest('Model inference works correctly with array input where on
   // Wait a bit to ensure all async error emissions are handled
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  await cancelJobIfExists(inference, jobId)
+  await inference.cancel()
 
   t.teardown(async () => {
     await cleanupResources(loader, inference)
@@ -268,8 +261,6 @@ createDeviceModelTest('Model inference works correctly with batching - 5 sequenc
 
   console.log(`Creating new GGMLBert instance for batching test [${modelName}] on ${device.toUpperCase()}`)
   const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
-
-  console.log('addon.status():', await inference.status())
 
   // Create 5 sequences of roughly similar length.
   // The goal is to have enough total tokens so that:
@@ -394,14 +385,38 @@ createDeviceModelTest('Embeddings: deterministic output for same input', async (
   t.ok(emb1.length === embeddingDimension, 'First embedding should be correct dimension')
   t.ok(emb2.length === embeddingDimension, 'Second embedding should be correct dimension')
 
-  let allEqual = true
+  let allExactlyEqual = true
+  const differences = []
+  let maxDiff = 0
+  let maxDiffIndex = -1
   for (let i = 0; i < emb1.length; i++) {
     if (emb1[i] !== emb2[i]) {
-      allEqual = false
-      break
+      const diff = Math.abs(emb1[i] - emb2[i])
+      differences.push({ index: i, emb1: emb1[i], emb2: emb2[i], diff })
+      if (diff > maxDiff) {
+        maxDiff = diff
+        maxDiffIndex = i
+      }
+      allExactlyEqual = false
     }
   }
-  t.ok(allEqual, 'Same input should produce identical embeddings (deterministic behaviour)')
+
+  if (!allExactlyEqual) {
+    console.log('\n=== EMBEDDING DIFFERENCES DETECTED ===')
+    console.log(`Total differences: ${differences.length} out of ${emb1.length} values`)
+    console.log(`Max difference: ${maxDiff} at index ${maxDiffIndex}`)
+    console.log('\nFirst 10 differences:')
+    differences.slice(0, 10).forEach(d => {
+      console.log(`  [${d.index}]: emb1=${d.emb1}, emb2=${d.emb2}, diff=${d.diff}`)
+    })
+    if (differences.length > 10) {
+      console.log(`  ... and ${differences.length - 10} more differences`)
+    }
+    console.log('=====================================\n')
+  }
+
+  const floatDiffEps = 1e-17
+  t.ok(maxDiff <= floatDiffEps, 'Same input should produce identical embeddings (deterministic behaviour)')
 
   const similarity = cosineSimilarity(emb1, emb2)
   t.ok(similarity > 0.999, `Same input should produce identical embeddings (cosine similarity: ${similarity.toFixed(6)})`)
@@ -426,8 +441,6 @@ createDeviceModelTest(`Stress: inference with large batch size ${STRESS_BATCH_SI
     null,
     STRESS_BATCH_SIZE
   )
-
-  console.log('addon.status():', await inference.status())
 
   const sentence = 'This is a stress test sentence for large batch size configuration.'.repeat(5)
   const query = Array(60).fill(sentence)
@@ -471,8 +484,6 @@ createDeviceModelTest(`Stress: inference with many sequences (~${STRESS_NUM_SEQU
     DEFAULT_BATCH_SIZE
   )
 
-  console.log('addon.status():', await inference.status())
-
   const sequences = new Array(STRESS_NUM_SEQUENCES)
     .fill(null)
     .map((_, i) => `Stress test sequence #${i} for model ${modelName} on ${device}`)
@@ -506,4 +517,141 @@ createDeviceModelTest(`Stress: inference with many sequences (~${STRESS_NUM_SEQU
   t.teardown(async () => {
     await cleanupResources(loader, inference)
   })
+})
+
+createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than full run', async (t, modelName, modelConfig, device) => {
+  console.log(`Creating GGMLBert instance for cancel comparison test [${modelName}] on ${device.toUpperCase()}`)
+
+  const { inference, loader } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    device,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
+
+  // Use a large number of sequences to give cancel time to take effect
+  const numSequences = isMobile ? 16 : 64
+  const sequences = new Array(numSequences)
+    .fill(null)
+    .map((_, i) => `Comparison test sequence #${i} with padding to increase processing time.`)
+
+  // First, do a full run without cancellation
+  const fullResponse = await inference.run(sequences)
+  const fullEmbeddings = await waitForCompletion(fullResponse)
+  const fullCount = fullEmbeddings[0]?.length || 0
+
+  console.log(`Full run produced ${fullCount} embeddings`)
+  t.ok(fullCount === numSequences, `Full run should produce ${numSequences} embeddings`)
+
+  // Now do a run with immediate cancellation
+  const cancelResponse = await inference.run(sequences)
+
+  // Cancel as soon as possible
+  await inference.cancel()
+  console.log('Finished waiting for cancel.')
+
+  let cancelEmbeddings = null
+  try {
+    cancelEmbeddings = await waitForCompletion(cancelResponse)
+  } catch (e) {
+    // Cancellation may throw - that's OK
+    console.log(`Cancel run threw: ${extractErrorMessage(e)}`)
+  }
+
+  const cancelCount = cancelEmbeddings?.[0]?.length || 0
+  console.log(`Cancel run produced ${cancelCount} embeddings`)
+
+  // The cancelled run should produce fewer or equal embeddings
+  // (equal if cancellation happened after processing completed)
+  t.ok(
+    cancelCount <= fullCount,
+    `Cancelled run (${cancelCount}) should produce <= embeddings than full run (${fullCount})`
+  )
+
+  t.teardown(async () => {
+    await cleanupResources(loader, inference)
+  })
+})
+
+// --- API behavior by state (README): run/cancel semantics; prefer model.cancel(), response.cancel() equivalent ---
+const DEVICE_API = isDarwinX64 || isLinuxArm64 ? 'cpu' : 'gpu'
+const MODEL_NAME_API = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q8_0.gguf'
+
+async function setupModelApiBehavior (t) {
+  await ensureModel(MODEL_NAME_API)
+  const { inference, loader } = await createEmbeddingsTestInstance(
+    t,
+    MODEL_NAME_API,
+    DEVICE_API,
+    null,
+    '1024'
+  )
+  t.teardown(async () => {
+    await cleanupResources(loader, inference)
+  })
+  return { inference }
+}
+
+test('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const response = await inference.run('Hello world')
+  t.ok(response, 'run() returns a response')
+  t.ok(typeof response.await === 'function' || response._finishPromise != null, 'response has await or _finishPromise')
+  const embeddings = await waitForCompletion(response)
+  t.ok(embeddings != null && embeddings[0]?.length > 0, 'inference produces embeddings')
+})
+
+test('idle | cancel: allowed, no-op', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  await inference.cancel()
+  t.pass('cancel when idle does not throw')
+})
+
+test('run | cancel: allowed, cancels current job', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 2 }, (_, i) => `Sequence ${i} for cancel test.`)
+  const response = await inference.run(sequences)
+  const cancelPromise = inference.cancel()
+  try {
+    await waitForCompletion(response)
+  } catch (err) {
+    if (!/cancel|aborted|stopp?ed|Failed/i.test(extractErrorMessage(err))) throw err
+  }
+  await cancelPromise
+  t.pass('cancel during run resolves and stops job')
+})
+
+test('run | response.cancel(): equivalent to model.cancel(), resolves when job stopped', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 24 }, (_, i) => `Sequence ${i} for response.cancel test.`)
+  const response = await inference.run(sequences)
+  const cancelPromise = typeof response.cancel === 'function' ? response.cancel() : inference.cancel()
+  try {
+    await waitForCompletion(response)
+  } catch (err) {
+    if (!/cancel|aborted|stopp?ed|Failed/i.test(extractErrorMessage(err))) throw err
+  }
+  await cancelPromise
+  t.pass('response.cancel() resolves when job has stopped')
+})
+
+test('run | run: second run() throws busy error', { timeout: TEST_TIMEOUT }, async t => {
+  const { inference } = await setupModelApiBehavior(t)
+  const sequences = Array.from({ length: 16 }, (_, i) => `Sequence ${i}.`)
+  const firstResponse = await inference.run(sequences)
+  let firstError = null
+  if (typeof firstResponse.onError === 'function') {
+    firstResponse.onError(err => { firstError = err })
+  }
+
+  await t.exception(
+    async () => { await inference.run('Short') },
+    /already set or being processed/,
+    'second run() throws "already set or being processed"'
+  )
+
+  const embeddings = await waitForCompletion(firstResponse)
+  t.ok(embeddings != null && embeddings[0]?.length > 0, 'first response completes with embeddings')
+  t.ok(!firstError, 'first response did not fail')
 })

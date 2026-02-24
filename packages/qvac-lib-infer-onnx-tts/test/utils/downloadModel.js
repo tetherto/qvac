@@ -364,7 +364,8 @@ async function ensureWhisperModel (targetPath = null) {
  */
 async function ensureChatterboxModels (options = {}) {
   const variant = options.variant || 'fp32'
-  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', 'chatterbox')
+  const language = options.language || 'en'
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
 
   console.log(`\nEnsuring Chatterbox models (variant: ${variant})...`)
 
@@ -373,13 +374,14 @@ async function ensureChatterboxModels (options = {}) {
     fs.mkdirSync(targetDir, { recursive: true })
   }
 
-  const baseUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/onnx'
+  const repositoryName = language === 'en' ? 'ResembleAI/chatterbox-turbo-ONNX' : 'onnx-community/chatterbox-multilingual-ONNX'
+  const baseUrl = `https://huggingface.co/${repositoryName}/resolve/main/onnx`
 
   // Define file suffixes based on variant
   const suffix = variant === 'fp32' ? '' : `_${variant}`
 
   // Files to download (each model has .onnx and .onnx_data files)
-  const modelFiles = [
+  const modelFilesEng = [
     { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
     { name: `speech_encoder${suffix}.onnx_data`, minSize: 950000000 }, // ~1GB for fp32 (offset ~982MB in .onnx)
     { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
@@ -389,6 +391,19 @@ async function ensureChatterboxModels (options = {}) {
     { name: `language_model${suffix}.onnx`, minSize: 100000 },
     { name: `language_model${suffix}.onnx_data`, minSize: 100000000 } // ~1.27GB for fp32
   ]
+
+  const modelFilesMultilingual = [
+    { name: `speech_encoder${suffix}.onnx`, minSize: 1000000 }, // ~1.1MB for fp32
+    { name: `speech_encoder${suffix}.onnx_data`, minSize: 500000000 }, // ~564MB for fp32
+    { name: `embed_tokens${suffix}.onnx`, minSize: 10000 }, // ~13KB for fp32
+    { name: `embed_tokens${suffix}.onnx_data`, minSize: 50000000 }, // ~65MB for fp32
+    { name: `conditional_decoder${suffix}.onnx`, minSize: 5000000 }, // ~6MB for fp32
+    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 400000000 }, // ~509MB for fp32
+    { name: `language_model${suffix}.onnx`, minSize: 150000 }, // ~167KB for fp32
+    { name: `language_model${suffix}.onnx_data`, minSize: 1500000000 } // ~1.94GB for fp32
+  ]
+
+  const modelFiles = language === 'en' ? modelFilesEng : modelFilesMultilingual
 
   // Adjust minimum sizes for smaller variants
   if (variant === 'fp16') {
@@ -473,7 +488,7 @@ async function ensureChatterboxModels (options = {}) {
   }
 
   // Download tokenizer.json separately (it's in a different location)
-  const tokenizerUrl = 'https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/main/tokenizer.json'
+  const tokenizerUrl = `https://huggingface.co/${repositoryName}/resolve/main/tokenizer.json`
   const tokenizerPath = path.join(targetDir, 'tokenizer.json')
 
   console.log('\n Downloading tokenizer.json...')
