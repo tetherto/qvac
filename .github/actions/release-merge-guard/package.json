@@ -1,5 +1,5 @@
 {
-  "name": "release-pr-guard",
+  "name": "release-merge-guard",
   "private": true,
   "main": "dist/index.js",
   "scripts": {

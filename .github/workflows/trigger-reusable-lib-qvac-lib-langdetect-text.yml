@@ -17,11 +17,6 @@ on:
       - tmp-*
     paths:
       - "packages/qvac-lib-langdetect-text/**"
-  pull_request:
-    branches:
-      - release-*
-    paths:
-      - "packages/qvac-lib-langdetect-text/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -35,16 +30,26 @@ on:
         type: string
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-langdetect-text
-      package-json-path: packages/qvac-lib-langdetect-text/package.json
-      changelog-path: packages/qvac-lib-langdetect-text/CHANGELOG.md
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-lib-langdetect-text
+          package-json-path: packages/qvac-lib-langdetect-text/package.json
+          changelog-path: packages/qvac-lib-langdetect-text/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -117,7 +122,7 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: publish-logic
+    needs: [publish-logic, release-merge-guard]
     permissions:
       contents: write
       packages: write
