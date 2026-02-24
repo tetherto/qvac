@@ -29,9 +29,10 @@ public:
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
 
-  /// @brief Expands shard filenames and resolves them to absolute paths
-  /// relative to the parent directory of @p modelPath.
-  static GGUFShards expandAndResolveShards(const std::string& modelPath);
+  /// @brief Resolves shard basenames in-place to absolute paths relative to
+  /// the parent directory of @p modelPath.
+  static void resolveShardPaths(
+      GGUFShards& shards, const std::string& modelPath);
 
   /**
    * The Constructor for llama model.
@@ -179,7 +180,7 @@ private:
       std::unordered_map<std::string, std::string>&& configFilemap);
 
   const std::string loadingContext_;
-  const GGUFShards shards_;
+  GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
 

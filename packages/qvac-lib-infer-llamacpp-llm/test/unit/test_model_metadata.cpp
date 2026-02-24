@@ -41,9 +41,12 @@ protected:
       sharded_first_shard_path_ = defaultShardedPath;
     }
 
-    if (!sharded_first_shard_path_.empty())
+    if (!sharded_first_shard_path_.empty()) {
       shards_with_paths_ =
-          LlamaModel::expandAndResolveShards(sharded_first_shard_path_);
+          GGUFShards::expandGGUFIntoShards(sharded_first_shard_path_);
+      LlamaModel::resolveShardPaths(
+          shards_with_paths_, sharded_first_shard_path_);
+    }
 
     // Auto-discover sharded bitnet model
     // https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded
@@ -52,7 +55,9 @@ protected:
     if (fs::exists(p)) {
       bitnet_sharded_first_shard_path_ = p;
       bitnet_shards_with_paths_ =
-          LlamaModel::expandAndResolveShards(bitnet_sharded_first_shard_path_);
+          GGUFShards::expandGGUFIntoShards(bitnet_sharded_first_shard_path_);
+      LlamaModel::resolveShardPaths(
+          bitnet_shards_with_paths_, bitnet_sharded_first_shard_path_);
     }
   }
 

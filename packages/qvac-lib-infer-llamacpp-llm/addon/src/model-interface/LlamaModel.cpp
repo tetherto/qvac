@@ -63,22 +63,21 @@ static std::vector<std::string> split(const std::string& str, char delimiter) {
   return tokens;
 }
 
-GGUFShards LlamaModel::expandAndResolveShards(const std::string& modelPath) {
-  auto shards = GGUFShards::expandGGUFIntoShards(modelPath);
-  if (shards.gguf_files.empty()) return shards;
+void LlamaModel::resolveShardPaths(
+    GGUFShards& shards, const std::string& modelPath) {
+  if (shards.gguf_files.empty()) return;
   auto baseDir = std::filesystem::path(modelPath).parent_path();
-  if (baseDir.empty()) return shards;
+  if (baseDir.empty()) return;
   for (auto& f : shards.gguf_files)
     f = (baseDir / f).string();
   shards.tensors_file = (baseDir / shards.tensors_file).string();
-  return shards;
 }
 
 LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      shards_(expandAndResolveShards(modelPath)) {
+      shards_(GGUFShards::expandGGUFIntoShards(modelPath)) {
   auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };
@@ -112,6 +111,10 @@ void LlamaModel::init(
 
   common_params params;
   commonParamsParse(modelPath, configFilemap, params);
+
+  if (!isStreaming_) {
+    resolveShardPaths(shards_, modelPath);
+  }
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   common_init_result llamaInit = initFromConfig(
