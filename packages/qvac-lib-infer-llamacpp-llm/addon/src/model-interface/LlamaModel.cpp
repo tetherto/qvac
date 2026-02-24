@@ -1275,13 +1275,12 @@ void LlamaModel::configureOptimizer(
         llama_finetuning_helpers::findLatestPauseCheckpoint(
             checkpointState->checkpointDir);
     if (!checkpointPath.empty() && std::filesystem::exists(checkpointPath)) {
-      checkpointPathStr = checkpointPath.string();
-      optParams.checkpoint_path = checkpointPathStr.c_str();
-      optParams.load_optimizer_state = true;
-
-      // Verify optimizer.gguf exists in checkpoint directory
       const auto optimizerPath = checkpointPath / "optimizer.gguf";
-      if (std::filesystem::exists(optimizerPath)) {
+      if (std::filesystem::exists(optimizerPath) &&
+          std::filesystem::is_regular_file(optimizerPath)) {
+        checkpointPathStr = optimizerPath.string();
+        optParams.checkpoint_path = checkpointPathStr.c_str();
+        optParams.load_optimizer_state = true;
         QLOG_IF(
             Priority::DEBUG,
             "Optimizer checkpoint found: " + optimizerPath.string());
@@ -1289,6 +1288,8 @@ void LlamaModel::configureOptimizer(
         QLOG_IF(
             Priority::WARNING,
             "Optimizer checkpoint missing: " + optimizerPath.string());
+        optParams.checkpoint_path = nullptr;
+        optParams.load_optimizer_state = false;
       }
     } else {
       optParams.checkpoint_path = nullptr;
