@@ -135,13 +135,11 @@ jobs:
 
   model-conversion-test:
     needs: [prebuild-main-gpr]
-    if: needs.prebuild-main-gpr.result == 'success'
     uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
 
   run-integration-tests:
     needs: [prebuild-main-gpr]
-    if: needs.prebuild-main-gpr.result == 'success'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -150,9 +148,7 @@ jobs:
 
   prebuild-release-npm:
     needs: [publish-logic, release-merge-guard]
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success'
+    if: needs.publish-logic.outputs.publish_release == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:

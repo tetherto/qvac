@@ -248,11 +248,8 @@ jobs:
   publish-schema-npm:
     needs: [detect-changes, publish-logic, release-merge-guard-schema]
     if: >-
-      needs.detect-changes.result == 'success' &&
-      needs.publish-logic.result == 'success' &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard-schema.result == 'success'
+      needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -367,7 +364,6 @@ jobs:
     if: >-
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
@@ -406,9 +402,7 @@ jobs:
     if: >-
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard-client.result == 'success'
+      needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

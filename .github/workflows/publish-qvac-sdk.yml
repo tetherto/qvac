@@ -342,10 +342,7 @@ jobs:
   publish-npm:
     name: Publish to NPM
     needs: [build, publish-logic, release-merge-guard]
-    if: >-
-      needs.build.result == 'success' &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success'
+    if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

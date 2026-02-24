@@ -141,9 +141,7 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard]
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success'
+    if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
       packages: write
@@ -156,7 +154,7 @@ jobs:
 
   publish-release:
     needs: [publish-release-npm]
-    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    if: needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-inference-addon-onnx-ocr-fasttext.yml

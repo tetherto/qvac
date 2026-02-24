@@ -162,11 +162,7 @@ jobs:
 
   publish-release-npm:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success' &&
-      needs.run-integration-tests.result == 'success' &&
-      needs.mobile-integration-tests.result == 'success'
+    if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
