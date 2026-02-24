@@ -223,6 +223,7 @@ The `args` obj contains the following properties:
 * `conditionalDecoderPath`: Path to the conditional decoder ONNX model.
 * `languageModelPath`: Path to the language model ONNX model.
 * `referenceAudio`: Float32Array of reference audio samples for voice cloning.
+* `lazySessionLoading`: (optional) Boolean to defer ONNX session creation until first use. Defaults to `true` on iOS, `false` on all other platforms.
 
 ### 4. Create the `config` obj
 

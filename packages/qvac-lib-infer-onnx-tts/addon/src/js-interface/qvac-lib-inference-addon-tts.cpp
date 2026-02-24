@@ -118,6 +118,11 @@ getTTSConfigMap(js_env_t *env, js::Object configurationParams) {
         numInferenceStepsOpt.value().as<std::string>(env);
   }
 
+  auto lazySessionLoadingOpt = configurationParams.getOptionalProperty<js::Boolean>(env, "lazySessionLoading");
+  if (lazySessionLoadingOpt.has_value()) {
+    configMap["lazySessionLoading"] = lazySessionLoadingOpt.value().as<bool>(env) ? "true" : "false";
+  }
+
   return configMap;
 }
 

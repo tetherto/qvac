@@ -1,0 +1,21 @@
+name: Release Merge Guard
+description: Enforces release branch naming, version bump and changelog update on merge
+inputs:
+  github-token:
+    required: true
+  base-ref:
+    required: true
+  base-sha:
+    required: true
+  head-sha:
+    required: true
+  package-slug:
+    required: true
+  package-json-path:
+    required: true
+  changelog-path:
+    required: true
+
+runs:
+  using: node20
+  main: dist/index.js

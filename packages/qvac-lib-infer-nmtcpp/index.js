@@ -405,7 +405,7 @@ class TranslationNmtcpp extends BaseInference {
     }
     return this._outputCallback(addon, mappedEvent, JOB_ID, data, error)
   }
-  
+
   async _downloadWeights (reportProgressCallback) {
     const models = this._getFilesToDownload()
     if (!models.length) {

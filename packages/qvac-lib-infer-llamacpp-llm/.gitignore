@@ -27,5 +27,8 @@ p2p-models/
 # Added by qvac-lint-cpp
 .clang-format
 benchmarks/results
+benchmarks/performance/results/
+benchmarks/performance/models/
+benchmarks/performance/resolved-models.json
 
 /test_cpp/build/
