@@ -85,6 +85,27 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-lib-infer-nmtcpp
+          package-json-path: packages/qvac-lib-infer-nmtcpp/package.json
+          changelog-path: packages/qvac-lib-infer-nmtcpp/CHANGELOG.md
+
   prebuild-main-gpr:
     needs: publish-logic
     if: needs.publish-logic.outputs.publish_main == 'true'
@@ -114,13 +135,11 @@ jobs:
 
   model-conversion-test:
     needs: [prebuild-main-gpr]
-    if: needs.prebuild-main-gpr.result == 'success'
     uses: ./.github/workflows/model-conversion-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
 
   run-integration-tests:
     needs: [prebuild-main-gpr]
-    if: needs.prebuild-main-gpr.result == 'success'
     uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
@@ -128,7 +147,7 @@ jobs:
       ref: ${{ github.ref }}
 
   prebuild-release-npm:
-    needs: publish-logic
+    needs: [publish-logic, release-merge-guard]
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
