@@ -1,4 +1,19 @@
 # Changelog
+## [Unreleased]
+
+### Fixed
+
+#### GGUF streambuf reader fails to align data section
+
+Fixed a bug in the GGUF buffer reader (`gguf_bytes_buffer_reader::align`) where `pubseekoff` was called without specifying a direction (`std::ios_base::in`). The default `which` parameter is `ios_base::in | ios_base::out`, and per the C++ spec, `std::stringbuf::seekoff` with `way=cur` and both directions set always returns `-1` — regardless of the streambuf's open mode. This caused `"gguf_init_from_reader_impl: failed to align data section"` when loading model metadata from an in-memory stream (e.g. during streaming model loads), while the disk-backed `FILE*` path was unaffected because `fseek` has no direction concept.
+
+The fix passes `std::ios_base::in` explicitly to `pubseekoff` in the llamacpp tether layer.
+
+### Changed
+
+#### ModelMetaData streaming synchronization refactored
+
+Replaced the `std::future`/`std::promise` handoff for the first streamed GGUF file with a `std::shared_ptr<std::basic_streambuf<char>>` protected by a mutex and condition variable. The synchronization state is encapsulated in a public nested class `ModelMetaData::FirstFileFromGgufStreamState` with `wait()`, `get()`, and `provide()` methods. This eliminates a race condition where `parse()` could call `future::get()` before the future had been moved in from the lender thread, and simplifies the API surface.
 
 ## [0.9.1] - 2026-02-23
 - Use patched version of addon-cpp to reduce logging noise.
