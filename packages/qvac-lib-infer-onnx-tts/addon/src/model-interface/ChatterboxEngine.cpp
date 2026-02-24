@@ -120,14 +120,10 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   tokenizerHandle_ = tokenizers_new_from_str(blob.data(), blob.length());
 
   if (!lazySessionLoading_) {
-    speechEncoderSession_ =
-        std::make_unique<OnnxInferSession>(cfg.speechEncoderPath);
-    embedTokensSession_ =
-        std::make_unique<OnnxInferSession>(cfg.embedTokensPath);
-    conditionalDecoderSession_ =
-        std::make_unique<OnnxInferSession>(cfg.conditionalDecoderPath);
-    languageModelSession_ =
-        std::make_unique<OnnxInferSession>(cfg.languageModelPath);
+    speechEncoderSession_ = std::make_unique<OnnxInferSession>(cfg.speechEncoderPath);
+    embedTokensSession_ = std::make_unique<OnnxInferSession>(cfg.embedTokensPath);
+    conditionalDecoderSession_ = std::make_unique<OnnxInferSession>(cfg.conditionalDecoderPath);
+    languageModelSession_ = std::make_unique<OnnxInferSession>(cfg.languageModelPath);
   }
 
   isEnglish_ = language_ == "en";
@@ -137,15 +133,13 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   keyValueOffset_ = isEnglish_ ? OFFSET : OFFSET_MULTILINGUAL;
 }
 
-void ChatterboxEngine::ensureSession(
-    std::unique_ptr<OnnxInferSession> &session, const std::string &modelPath) {
+void ChatterboxEngine::ensureSession(std::unique_ptr<OnnxInferSession> &session, const std::string &modelPath) {
   if (!session) {
     session = std::make_unique<OnnxInferSession>(modelPath);
   }
 }
 
-void ChatterboxEngine::releaseSession(
-    std::unique_ptr<OnnxInferSession> &session) {
+void ChatterboxEngine::releaseSession(std::unique_ptr<OnnxInferSession> &session) {
   if (lazySessionLoading_) {
     session.reset();
   }
@@ -324,8 +318,7 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
   releaseSession(conditionalDecoderSession_);
 
-  std::cout << "Generated audio size: " << wav.size() / 24000.0 << " seconds"
-            << std::endl;
+  std::cout << "Generated audio size: " << wav.size() / 24000.0 << " seconds" << std::endl;
 
   AudioResult result;
   result.sampleRate = SAMPLE_RATE;

@@ -35,8 +35,7 @@ private:
                                   const TensorData<float> &speakerEmbeddings,
                                   const TensorData<float> &speakerFeatures);
 
-  void ensureSession(std::unique_ptr<OnnxInferSession> &session,
-                     const std::string &modelPath);
+  void ensureSession(std::unique_ptr<OnnxInferSession> &session, const std::string &modelPath);
   void releaseSession(std::unique_ptr<OnnxInferSession> &session);
 
   TokenizerHandle tokenizerHandle_;
