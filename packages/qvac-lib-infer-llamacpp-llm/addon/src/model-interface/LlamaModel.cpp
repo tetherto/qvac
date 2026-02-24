@@ -1260,7 +1260,9 @@ void LlamaModel::configureOptimizer(
   }
 
   llama_opt_params optParams{};
-  optParams.n_ctx_train = 0;
+  optParams.n_ctx_train = params.contextLength > 0
+      ? static_cast<uint32_t>(params.contextLength)
+      : 0;
   optParams.param_filter = llama_opt_param_filter_lora;
   optParams.param_filter_ud = adapter;
   optParams.get_opt_pars = schedulerOptimizerParams;
@@ -1298,6 +1300,14 @@ void LlamaModel::configureOptimizer(
   }
 
   optParams.assistant_loss_only = params.assistantLossOnly;
+
+  {
+    std::ostringstream optimizerMsg;
+    optimizerMsg << "Optimizer config | n_ctx_train=" << optParams.n_ctx_train
+                 << " | model_ctx=" << llama_n_ctx(ctx)
+                 << " | assistant_loss_only=" << (optParams.assistant_loss_only ? "true" : "false");
+    QLOG_IF(Priority::DEBUG, optimizerMsg.str());
+  }
 
   llama_opt_cleanup(ctx);
 
