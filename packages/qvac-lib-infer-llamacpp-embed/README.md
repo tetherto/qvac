@@ -35,8 +35,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.1): C++ addon framework
-- llama.cpp (≥7248.1.2): Inference engine
+- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
+- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 

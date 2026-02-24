@@ -20,7 +20,7 @@ function toMarkdown (report) {
   lines.push(`- Started: ${report.startedAt}`)
   lines.push(`- Finished: ${report.finishedAt}`)
   lines.push(`- Repeats per case: ${report.repeats}`)
-  lines.push(`- Sweep mode: full-grid`)
+  lines.push('- Sweep mode: full-grid')
   lines.push('')
   for (const model of report.models) {
     lines.push(`## Model: ${model.modelId}`)

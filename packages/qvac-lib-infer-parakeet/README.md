@@ -64,8 +64,8 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/tetherto/qvac-lib-infer-parakeet.git
-   cd qvac-lib-infer-parakeet
+   git clone https://github.com/tetherto/qvac.git
+   cd qvac/packages/qvac-lib-infer-parakeet
    ```
 
 2. **Install npm dependencies** (includes cmake-bare and cmake-vcpkg):
@@ -298,8 +298,8 @@ The output callback receives these events:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/qvac-lib-infer-parakeet.git
-   cd qvac-lib-infer-parakeet
+   git clone https://github.com/tetherto/qvac.git
+   cd qvac/packages/qvac-lib-infer-parakeet
    ```
 
 2. **Configure with vcpkg:**
