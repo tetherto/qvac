@@ -21,58 +21,55 @@ on:
       - "packages/qvac-lib-registry-server/client/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
 
 jobs:
-  release-pr-guard-schema:
-    name: Release PR Guard (Schema)
+  release-merge-guard-schema:
+    name: Release Merge Guard (Schema)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-schema')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-schema
-      package-json-path: packages/qvac-lib-registry-server/shared/package.json
-      changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-schema') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-schema
+          package-json-path: packages/qvac-lib-registry-server/shared/package.json
+          changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
 
-  release-pr-guard-client:
-    name: Release PR Guard (Client)
+  release-merge-guard-client:
+    name: Release Merge Guard (Client)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-client')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-client
-      package-json-path: packages/qvac-lib-registry-server/client/package.json
-      changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
-
-  release-pr-guard-server:
-    name: Release PR Guard (Server)
-    if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-server')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-server
-      package-json-path: packages/qvac-lib-registry-server/package.json
-      changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-client') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-client
+          package-json-path: packages/qvac-lib-registry-server/client/package.json
+          changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
   detect-changes:
     runs-on: ubuntu-latest
