@@ -9,7 +9,7 @@ Labels that control CI workflows:
 - `verify` - Adding `verify` label to an open PR runs integration tests, benchmarks, model validation
 - `safe-to-test` - Security gate for external fork PRs
 - `staging` - Deploys to staging environment
--  Commenting`/review` or `/review` within a PR - Triggers approval check
+-  Commenting`review` or `/review` within a PR - Triggers approval check
 - `tier1`, `tier2` - Approval groups
 - `nlp` - NLP-related changes
 
