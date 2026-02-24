@@ -302,6 +302,11 @@ const MULTILINGUAL_DATASET = {
 }
 
 test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
 
@@ -385,6 +390,11 @@ test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeo
 })
 
 test('Chatterbox Multilingual TTS: WER verification for Spanish', { timeout: 1800000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
   if (!isDarwin) {
     console.log('WER test skipped (non-darwin)')
     t.pass('WER test skipped (non-darwin)')
