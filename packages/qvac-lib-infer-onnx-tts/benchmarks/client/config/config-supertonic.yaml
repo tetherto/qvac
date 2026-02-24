@@ -1,0 +1,29 @@
+server:
+  addon_url: "http://localhost:8080/synthesize-supertonic"
+  addon_version: "^0.1.0"
+  python_url: "http://localhost:8081/synthesize-supertonic"
+  timeout: 600
+  batch_size: 10
+
+comparison:
+  enabled: true
+  run_addon: true
+  run_python: true
+  round_trip_test: true
+  whisper_model: "tiny"
+  seed: 42
+  num_runs: 1
+
+dataset:
+  name: "harvard"
+  split: "test"
+  max_samples: 0
+
+model:
+  modelDir: "shared-data/models/supertonic"
+  voiceName: "F1"
+  language: "en"
+  sampleRate: 44100
+  speed: 1.0
+  numInferenceSteps: 5
+  useGPU: false
