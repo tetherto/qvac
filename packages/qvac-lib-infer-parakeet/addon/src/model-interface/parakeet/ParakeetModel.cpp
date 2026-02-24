@@ -130,7 +130,8 @@ void ParakeetModel::load() {
 
       if (hasExternalData) {
         // ONNX Runtime resolves external data relative to the model file.
-        // Stage symlinks with canonical names so the .data file is found.
+        // Stage symlinks with canonical names so the .data file is found
+        // alongside the .onnx file in the same directory.
         stagingDir = std::filesystem::temp_directory_path() /
                      ("parakeet_enc_" +
                       std::to_string(reinterpret_cast<uintptr_t>(this)));
@@ -141,14 +142,10 @@ void ParakeetModel::load() {
         std::filesystem::create_symlink(cfg_.encoderPath, encLink);
         std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
 
-        auto originalCwd = std::filesystem::current_path();
-        std::filesystem::current_path(stagingDir);
         try {
           encoder_session_ = std::make_unique<Ort::Session>(
               *ort_env_, encLink.c_str(), session_options);
-          std::filesystem::current_path(originalCwd);
         } catch (...) {
-          std::filesystem::current_path(originalCwd);
           std::filesystem::remove_all(stagingDir);
           throw;
         }
@@ -180,22 +177,16 @@ void ParakeetModel::load() {
       bool hasExternalData = std::filesystem::exists(encoderDataPath);
 
       if (hasExternalData) {
-        auto originalCwd = std::filesystem::current_path();
-        std::filesystem::current_path(cfg_.modelPath);
-        try {
+        // ONNX Runtime resolves external data files relative to the model
+        // file's directory when given an absolute path, so no chdir needed.
 #ifdef _WIN32
-          std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
-          encoder_session_ = std::make_unique<Ort::Session>(
-              *ort_env_, wEncoderPath.c_str(), session_options);
+        std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
+        encoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, wEncoderPath.c_str(), session_options);
 #else
-          encoder_session_ = std::make_unique<Ort::Session>(
-              *ort_env_, encoderPath.c_str(), session_options);
+        encoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, encoderPath.c_str(), session_options);
 #endif
-          std::filesystem::current_path(originalCwd);
-        } catch (...) {
-          std::filesystem::current_path(originalCwd);
-          throw;
-        }
       } else {
         encoder_session_ = std::make_unique<Ort::Session>(
             *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
