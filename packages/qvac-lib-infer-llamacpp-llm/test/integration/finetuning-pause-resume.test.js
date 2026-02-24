@@ -107,7 +107,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: us
       loggerHandle.release()
       await model.unload().catch(() => {})
       await loader.close().catch(() => {})
-      // cleanupCheckpoints(checkpointDir)
+      cleanupCheckpoints(checkpointDir)
     }
   }
 })
