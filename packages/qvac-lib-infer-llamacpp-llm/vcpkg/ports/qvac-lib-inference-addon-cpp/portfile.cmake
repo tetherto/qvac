@@ -21,15 +21,6 @@ vcpkg_cmake_configure(
 
 vcpkg_cmake_install()
 
-# Patch FinetuningParameters.hpp to add missing fields after installation
-file(READ "${CURRENT_PACKAGES_DIR}/include/qvac-lib-inference-addon-cpp/FinetuningParameters.hpp" FINETUNING_PARAMS_CONTENT)
-# Always apply patch if contextLength is missing (indicates file needs updating)
-if(NOT FINETUNING_PARAMS_CONTENT MATCHES "contextLength")
-  # Read the patched version from our patches directory
-  file(READ "${CMAKE_CURRENT_LIST_DIR}/patches/FinetuningParameters.hpp.patched" PATCHED_CONTENT)
-  file(WRITE "${CURRENT_PACKAGES_DIR}/include/qvac-lib-inference-addon-cpp/FinetuningParameters.hpp" "${PATCHED_CONTENT}")
-endif()
-
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug")
 
 file(
