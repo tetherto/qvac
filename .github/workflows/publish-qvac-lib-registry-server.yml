@@ -71,27 +71,6 @@ jobs:
           package-json-path: packages/qvac-lib-registry-server/client/package.json
           changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
-  release-merge-guard-server:
-    name: Release Merge Guard (Server)
-    if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-qvac-registry-server') &&
-      github.event.before != '0000000000000000000000000000000000000000'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/release-merge-guard
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          base-ref: ${{ github.ref_name }}
-          base-sha: ${{ github.event.before }}
-          head-sha: ${{ github.sha }}
-          package-slug: qvac-registry-server
-          package-json-path: packages/qvac-lib-registry-server/package.json
-          changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
-
   detect-changes:
     runs-on: ubuntu-latest
     if: >-
@@ -362,6 +341,7 @@ jobs:
   publish-client-gpr:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: >-
+      needs.lint-and-test.result == 'success' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
@@ -400,6 +380,8 @@ jobs:
   publish-client-npm:
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test, release-merge-guard-client]
     if: >-
+      needs.lint-and-test.result == 'success' &&
+      needs.release-merge-guard-client.result == 'success' &&
       needs.detect-changes.outputs.client_changed == 'true' &&
       (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
       needs.publish-logic.outputs.publish_release == 'true'
