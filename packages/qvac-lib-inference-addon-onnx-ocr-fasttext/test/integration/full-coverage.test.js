@@ -1,8 +1,6 @@
 'use strict'
 
-const { ONNXOcr } = require('../..')
-const { QvacErrorAddonOcr, ERR_CODES } = require('../../lib/error')
-const binding = require('../../binding')
+const { ONNXOcr, QvacErrorAddonOcr, ERR_CODES, binding } = require('../..')
 const test = require('brittle')
 const { isMobile, ensureModelPath, getImagePath } = require('./utils')
 
@@ -134,13 +132,13 @@ test('_addonOutputCallback passes through unmapped events as-is', function (t) {
 // =============================================
 
 test('addonLogging exports setLogger and releaseLogger as functions', function (t) {
-  const logging = require('../../addonLogging')
+  const { addonLogging: logging } = require('../..')
   t.is(typeof logging.setLogger, 'function')
   t.is(typeof logging.releaseLogger, 'function')
 })
 
 test('addonLogging setLogger and releaseLogger execute without error', function (t) {
-  const logging = require('../../addonLogging')
+  const { addonLogging: logging } = require('../..')
   logging.setLogger(function () {})
   t.pass('setLogger accepted a callback')
   logging.releaseLogger()

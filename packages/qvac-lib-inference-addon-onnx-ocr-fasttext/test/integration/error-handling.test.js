@@ -1,7 +1,6 @@
 'use strict'
 
-const { ONNXOcr } = require('../..')
-const { QvacErrorAddonOcr, ERR_CODES } = require('../../lib/error')
+const { ONNXOcr, QvacErrorAddonOcr, ERR_CODES } = require('../..')
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')

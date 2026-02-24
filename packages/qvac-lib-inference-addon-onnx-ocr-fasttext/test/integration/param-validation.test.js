@@ -1,7 +1,7 @@
 'use strict'
 
 const { ONNXOcr } = require('../..')
-const { QvacErrorAddonOcr, ERR_CODES } = require('../../lib/error')
+const { QvacErrorAddonOcr, ERR_CODES } = require('../..')
 const test = require('brittle')
 const { isMobile } = require('./utils')
 
