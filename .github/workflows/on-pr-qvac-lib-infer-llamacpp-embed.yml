@@ -27,17 +27,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-pr-guard:
-    name: Release PR Guard
-    if: github.event_name == 'pull_request_target' && startsWith(github.event.pull_request.base.ref, 'release-')
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-lib-infer-llamacpp-embed
-      package-json-path: packages/qvac-lib-infer-llamacpp-embed/package.json
-      changelog-path: packages/qvac-lib-infer-llamacpp-embed/CHANGELOG.md
-      
   sanity-checks:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

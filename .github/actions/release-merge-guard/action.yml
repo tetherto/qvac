@@ -1,5 +1,5 @@
-name: Release PR Guard
-description: Enforces release branch naming, version bump and changelog update
+name: Release Merge Guard
+description: Enforces release branch naming, version bump and changelog update on merge
 inputs:
   github-token:
     required: true

@@ -82,6 +82,27 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-lib-decoder-audio
+          package-json-path: packages/qvac-lib-decoder-audio/package.json
+          changelog-path: packages/qvac-lib-decoder-audio/CHANGELOG.md
+
   run-integration-tests:
     needs: publish-logic
     if: |
@@ -140,7 +161,7 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic, run-integration-tests, mobile-integration-tests]
+    needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
     if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
