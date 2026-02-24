@@ -47,7 +47,7 @@ jobs:
 
   sanity-checks:
     needs: changes
-    if: needs.changes.outputs.pkg == 'true' && (contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch')
+    if: always() && ((needs.changes.outputs.pkg == 'true' && contains(github.event.pull_request.labels.*.name, 'verify')) || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Run Sanity checks
