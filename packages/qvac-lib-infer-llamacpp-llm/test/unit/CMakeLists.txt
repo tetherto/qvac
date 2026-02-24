@@ -19,6 +19,7 @@ add_executable(
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
   test_model_metadata.cpp
+  test_model_full_loading.cpp
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp

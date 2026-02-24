@@ -57,9 +57,11 @@ struct BaseTestModelPath {
   static std::string get() {
     fs::path base = path();
     fs::path p = base / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(p)) return p.string();
+    if (fs::exists(p))
+      return p.string();
     p = base / "test_model.gguf";
-    if (fs::exists(p)) return p.string();
+    if (fs::exists(p))
+      return p.string();
     return "Llama-3.2-1B-Instruct-Q4_0.gguf";
   }
 
@@ -70,7 +72,8 @@ struct BaseTestModelPath {
    */
   static std::string getSharded() {
     fs::path p = path() / "Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf";
-    if (fs::exists(p)) return p.string();
+    if (fs::exists(p))
+      return p.string();
     return "Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf";
   }
 
@@ -80,7 +83,8 @@ struct BaseTestModelPath {
    */
   static std::string get(const char* filename) {
     fs::path p = path() / filename;
-    if (fs::exists(p)) return p.string();
+    if (fs::exists(p))
+      return p.string();
     return filename;
   }
 
@@ -90,8 +94,10 @@ struct BaseTestModelPath {
    */
   static std::string get(const char* preferred, const char* fallback) {
     fs::path base = path();
-    if (fs::exists(base / preferred)) return (base / preferred).string();
-    if (fs::exists(base / fallback)) return (base / fallback).string();
+    if (fs::exists(base / preferred))
+      return (base / preferred).string();
+    if (fs::exists(base / fallback))
+      return (base / fallback).string();
     return preferred;
   }
 };
