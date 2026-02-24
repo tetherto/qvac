@@ -452,6 +452,8 @@ function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
 
       const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
       t.ok(fs.existsSync(modelPath), 'Pause checkpoint must contain model.gguf (LoRA adapter)')
+      const optimizerPath = path.join(pauseCheckpointPath, 'optimizer.gguf')
+      t.ok(fs.existsSync(optimizerPath), 'Pause checkpoint must contain optimizer.gguf (optimizer state)')
 
       resolve(pauseCheckpointPath)
     }, waitMs)

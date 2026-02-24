@@ -940,10 +940,6 @@ std::string LlamaModel::finetune(
       QLOG_IF(Priority::DEBUG, "Checkpoint loaded successfully");
     }
 
-    if (resumingFromPause && checkpointState) {
-      clearPauseCheckpoint(checkpointState->checkpointDir);
-    }
-
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       currentCheckpointState_.store(
