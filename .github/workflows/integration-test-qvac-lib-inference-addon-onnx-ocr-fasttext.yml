@@ -147,6 +147,8 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
+      # Required for all OCR integration tests (param-validation, lifecycle, image-formats,
+      # full-ocr-suite, etc.). Provides detector + all recognizers under rec_dyn.
       - name: Download onnx model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
