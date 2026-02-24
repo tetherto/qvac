@@ -399,12 +399,12 @@ async function ensureChatterboxModels (options = {}) {
   ]
 
   const modelFilesMultilingual = [
-    { name: `speech_encoder.onnx`, minSize: 1000000 },
-    { name: `speech_encoder.onnx_data`, minSize: 500000000 },
-    { name: `embed_tokens.onnx`, minSize: 10000 },
-    { name: `embed_tokens.onnx_data`, minSize: 50000000 },
-    { name: `conditional_decoder.onnx`, minSize: 5000000 },
-    { name: `conditional_decoder.onnx_data`, minSize: 400000000 },
+    { name: 'speech_encoder.onnx', minSize: 1000000 },
+    { name: 'speech_encoder.onnx_data', minSize: 500000000 },
+    { name: 'embed_tokens.onnx', minSize: 10000 },
+    { name: 'embed_tokens.onnx_data', minSize: 50000000 },
+    { name: 'conditional_decoder.onnx', minSize: 5000000 },
+    { name: 'conditional_decoder.onnx_data', minSize: 400000000 },
     { name: `language_model${lmSuffix}.onnx`, minSize: 150000 },
     { name: `language_model${lmSuffix}.onnx_data`, minSize: 1500000000 }
   ]
