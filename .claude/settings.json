@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(while read f)",
+      "Bash(do sed -i 's|\\\\.github/actions/release-pr-guard|.github/actions/release-merge-guard|g' \"$f\")",
+      "Bash(done)",
+      "Read(//c/Users/oluse/Downloads/Tether/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\oluse\\Downloads\\Tether"
+    ]
+  }
+}

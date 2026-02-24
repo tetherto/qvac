@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/release-pr-guard
+      - uses: ./.github/actions/release-merge-guard
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           base-ref: ${{ github.ref_name }}
