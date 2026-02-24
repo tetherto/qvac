@@ -3,7 +3,6 @@
 #include <iostream>
 #include <memory>
 
-#include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
 #include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
@@ -12,9 +11,12 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 
 namespace qvac_lib_inference_addon_llama {
+
+namespace js = qvac_lib_inference_addon_cpp::js;
 
 inline LlamaModel*
 getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
@@ -26,6 +28,97 @@ makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   return [&instance](const std::string& s) {
     instance.addonCpp->outputQueue->queueResult(std::any(s));
   };
+}
+
+inline LlamaFinetuningParams
+parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
+  LlamaFinetuningParams params;
+  params.outputParametersDir =
+      jsObj.getProperty<js::String>(env, "outputParametersDir")
+          .as<std::string>(env);
+  params.numberOfEpochs =
+      static_cast<int>(
+          jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(
+              env));
+  params.learningRate =
+      jsObj.getProperty<js::Number>(env, "learningRate").as<double>(env);
+  params.trainDatasetDir =
+      jsObj.getProperty<js::String>(env, "trainDatasetDir")
+          .as<std::string>(env);
+  params.evalDatasetDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
+          .value_or("");
+  params.evalDatasetPath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "evalDatasetPath")
+          .value_or("");
+  params.contextLength =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
+          .value_or(0);
+  params.microBatchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
+          .value_or(0);
+  params.assistantLossOnly =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
+          .value_or(false);
+  params.checkpointSaveDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "checkpointSaveDir")
+          .value_or("");
+  params.loraModules =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
+          .value_or("");
+  params.loraRank =
+      jsObj.getOptionalPropertyAs<js::Number, int32_t>(env, "loraRank")
+          .value_or(8);
+  params.loraAlpha =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
+          .value_or(16.0);
+  params.loraDropout =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraDropout")
+          .value_or(0.0);
+  params.loraInitStd =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
+          .value_or(0.01);
+  params.chatTemplatePath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "chatTemplatePath")
+          .value_or("");
+  params.checkpointSaveSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(
+               env, "checkpointSaveSteps")
+          .value_or(0);
+  params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
+                     .value_or(0.0);
+  params.lrScheduler =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
+          .value_or("constant");
+  params.warmupRatio =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
+          .value_or(0.0);
+  params.batchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
+          .value_or(0);
+  params.weightDecay =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
+          .value_or(0.0);
+  params.warmupStepsSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
+          .value_or(false);
+  params.warmupSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps")
+          .value_or(0);
+  params.warmupRatioSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet")
+          .value_or(false);
+  params.validationSplit =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
+          .value_or(0.05);
+  params.useEvalDatasetForValidation =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(
+               env, "useEvalDatasetForValidation")
+          .value_or(false);
+  return params;
 }
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -142,9 +235,9 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         "Model not available or not a LlamaModel");
   }
 
-  auto paramsOpt = args.tryGetObject<FinetuningParameters>(
+  auto paramsOpt = args.tryGetObject<LlamaFinetuningParams>(
       1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
-        return FinetuningParameters(e, jsObj);
+        return parseLlamaFinetuningParams(e, jsObj);
       });
   if (!paramsOpt.has_value()) {
     throw StatusError(

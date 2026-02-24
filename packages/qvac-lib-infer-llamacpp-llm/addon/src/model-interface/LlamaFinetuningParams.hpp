@@ -3,15 +3,9 @@
 #include <cstdint>
 #include <string>
 
-// Stub for standalone C++ tests; real header pulls in JS deps.
-namespace qvac_lib_inference_addon_cpp {
+namespace qvac_lib_inference_addon_llama {
 
-struct FinetuningParameters {
-  FinetuningParameters() = default;
-
-  double validationSplit{0.05};
-  bool useEvalDatasetForValidation{false};
-
+struct LlamaFinetuningParams {
   std::string outputParametersDir;
   int numberOfEpochs{0};
   double learningRate{0.0};
@@ -30,13 +24,15 @@ struct FinetuningParameters {
   std::string chatTemplatePath;
   int64_t checkpointSaveSteps{0};
   double lrMin{0.0};
-  std::string lrScheduler;
+  std::string lrScheduler{"constant"};
   double warmupRatio{0.0};
   int64_t batchSize{0};
   double weightDecay{0.0};
   bool warmupStepsSet{false};
   int64_t warmupSteps{0};
   bool warmupRatioSet{false};
+  double validationSplit{0.05};
+  bool useEvalDatasetForValidation{false};
 };
 
-} // namespace qvac_lib_inference_addon_cpp
+} // namespace qvac_lib_inference_addon_llama

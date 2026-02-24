@@ -10,10 +10,7 @@
 #include <ggml-opt.h>
 #include <llama.h>
 
-// Forward declaration to avoid pulling in Bare runtime dependencies
-namespace qvac_lib_inference_addon_cpp {
-struct FinetuningParameters;
-}
+#include "LlamaFinetuningParams.hpp"
 
 namespace llama_finetuning_helpers {
 
@@ -134,6 +131,6 @@ void clearCurrentCheckpointState();
 
 // Utility functions
 std::string resolveAdapterOutputPath(
-    const qvac_lib_inference_addon_cpp::FinetuningParameters& params);
+    const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
 
 } // namespace llama_finetuning_helpers

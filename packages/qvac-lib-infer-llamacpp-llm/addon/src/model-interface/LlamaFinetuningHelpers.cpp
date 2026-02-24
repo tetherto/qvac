@@ -19,9 +19,6 @@
 #include <common/common.h>
 #include <common/log.h>
 #include <ggml-opt.h>
-#ifndef STANDALONE_TEST_BUILD
-#include <qvac-lib-inference-addon-cpp/FinetuningParameters.hpp>
-#endif
 
 #include "../utils/LoggingMacros.hpp"
 
@@ -634,7 +631,7 @@ void clearCurrentCheckpointState() { tlsCurrentCheckpointState = nullptr; }
 
 #ifndef STANDALONE_TEST_BUILD
 std::string resolveAdapterOutputPath(
-    const qvac_lib_inference_addon_cpp::FinetuningParameters& params) {
+    const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params) {
   namespace fs = std::filesystem;
   fs::path base(params.outputParametersDir);
   if (base.empty()) {

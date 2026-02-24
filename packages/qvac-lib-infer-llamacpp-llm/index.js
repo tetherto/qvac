@@ -215,22 +215,10 @@ class LlmLlamacpp extends BaseInference {
       if (eventType === 'JobEnded' || eventType === 'Error') {
         this._jobInProgress = false
       }
-      if (typeof data === 'string') {
-        try {
-          const obj = JSON.parse(data)
-          if (obj?.type === 'FinetuneComplete' && this._finetuneCompletionResolve) {
-            this._finetuneCompletionResolve(obj.status)
-            this._finetuneCompletionResolve = null
-            return
-          }
-          if (obj?.type === 'FinetunePaused') {
-            if (this._finetuneCompletionResolve) {
-              this._finetuneCompletionResolve('PAUSED')
-              this._finetuneCompletionResolve = null
-            }
-            return
-          }
-        } catch (_) {}
+      if (typeof data === 'string' && (data === 'COMPLETED' || data === 'PAUSED' || data === 'ERROR') && this._finetuneCompletionResolve) {
+        this._finetuneCompletionResolve(data)
+        this._finetuneCompletionResolve = null
+        return
       }
 
       if (eventType === 'LogMsg') {
