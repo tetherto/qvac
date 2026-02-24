@@ -12,44 +12,6 @@
 
 #include "LlamaFinetuningParams.hpp"
 
-// Newer llama.cpp forks expose explicit LoRA target bitmasks and checkpoint
-// save APIs. If the current headers do not provide the bitmasks, we also treat
-// checkpoint save APIs as unavailable and compile with fallbacks.
-#ifndef LLAMA_LORA_TARGET_ATTN_Q
-#define QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API 0
-#define LLAMA_LORA_TARGET_ATTN_Q (1u << 0)
-#else
-#define QVAC_LLAMA_HAS_LORA_TRAINING_CHECKPOINT_API 1
-#endif
-#ifndef LLAMA_LORA_TARGET_ATTN_K
-#define LLAMA_LORA_TARGET_ATTN_K (1u << 1)
-#endif
-#ifndef LLAMA_LORA_TARGET_ATTN_V
-#define LLAMA_LORA_TARGET_ATTN_V (1u << 2)
-#endif
-#ifndef LLAMA_LORA_TARGET_ATTN_O
-#define LLAMA_LORA_TARGET_ATTN_O (1u << 3)
-#endif
-#ifndef LLAMA_LORA_TARGET_FFN_GATE
-#define LLAMA_LORA_TARGET_FFN_GATE (1u << 4)
-#endif
-#ifndef LLAMA_LORA_TARGET_FFN_UP
-#define LLAMA_LORA_TARGET_FFN_UP (1u << 5)
-#endif
-#ifndef LLAMA_LORA_TARGET_FFN_DOWN
-#define LLAMA_LORA_TARGET_FFN_DOWN (1u << 6)
-#endif
-#ifndef LLAMA_LORA_TARGET_OUTPUT
-#define LLAMA_LORA_TARGET_OUTPUT (1u << 7)
-#endif
-#ifndef LLAMA_LORA_TARGET_ALL
-#define LLAMA_LORA_TARGET_ALL ( \
-    LLAMA_LORA_TARGET_ATTN_Q | LLAMA_LORA_TARGET_ATTN_K | \
-    LLAMA_LORA_TARGET_ATTN_V | LLAMA_LORA_TARGET_ATTN_O | \
-    LLAMA_LORA_TARGET_FFN_GATE | LLAMA_LORA_TARGET_FFN_UP | \
-    LLAMA_LORA_TARGET_FFN_DOWN | LLAMA_LORA_TARGET_OUTPUT)
-#endif
-
 namespace llama_finetuning_helpers {
 
 // Types and Enums

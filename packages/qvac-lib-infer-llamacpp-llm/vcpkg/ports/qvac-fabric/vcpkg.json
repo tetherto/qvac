@@ -1,8 +1,8 @@
 {
-  "name": "llama-cpp",
+  "name": "qvac-fabric",
   "version": "7248.1.2",
   "description": "LLM inference in C/C++",
-  "homepage": "https://github.com/ggml-org/llama.cpp",
+  "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
   "dependencies": [
     {
