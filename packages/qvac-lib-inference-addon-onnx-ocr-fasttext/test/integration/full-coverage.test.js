@@ -60,14 +60,24 @@ test('JOB_ID is job', function (t) {
 test('_normalizePath returns path unchanged on non-win32', function (t) {
   const onnxOcr = createMinimalOcr()
   const input = '/some/path/to/image.bmp'
-  t.is(onnxOcr._normalizePath(input), input)
+  const result = onnxOcr._normalizePath(input)
+  const os = require('bare-os')
+  if (os.platform() === 'win32') {
+    t.is(result, '\\\\?\\' + input, 'Win32 should prepend long-path prefix')
+  } else {
+    t.is(result, input)
+  }
 })
 
 test('_normalizePath handles various path formats', function (t) {
   const onnxOcr = createMinimalOcr()
-  t.is(onnxOcr._normalizePath('relative/path.bmp'), 'relative/path.bmp')
-  t.is(onnxOcr._normalizePath(''), '')
-  t.is(onnxOcr._normalizePath('./file.bmp'), './file.bmp')
+  const os = require('bare-os')
+  const isWin = os.platform() === 'win32'
+  const prefix = isWin ? '\\\\?\\' : ''
+
+  t.is(onnxOcr._normalizePath('relative/path.bmp'), prefix + 'relative/path.bmp')
+  t.is(onnxOcr._normalizePath(''), isWin ? '\\\\?\\' : '')
+  t.is(onnxOcr._normalizePath('./file.bmp'), prefix + './file.bmp')
 })
 
 // =============================================
