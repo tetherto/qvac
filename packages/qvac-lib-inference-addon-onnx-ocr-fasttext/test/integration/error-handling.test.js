@@ -5,7 +5,7 @@ const { QvacErrorAddonOcr, ERR_CODES } = require('../../lib/error')
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
-const { isMobile, ensureModelPath } = require('./utils')
+const { isMobile } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 60 * 1000
