@@ -45,7 +45,8 @@ Options:
                               Default: uses local development version
   -compare                     Run comparative evaluation (addon vs transformers)
   -ggufModel <spec>            GGUF model for addon (required with -compare)
-                              Format: HuggingFace ("owner/repo:quantization")
+                              Formats: HuggingFace ("owner/repo:quantization")
+                                       Hyperdrive ("hd://key/model.gguf")
   -transformersModel <name>    HuggingFace transformers model (required with -compare)
   -hfToken <token>             HuggingFace token for gated models
   -temperature <float>         Temperature for text generation (e.g., 0.1, 0.7, 1.0)
@@ -71,6 +72,9 @@ Examples:
   
   # Comparative analysis
   .\benchmarks\run-benchmarks.ps1 -compare -ggufModel "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" -transformersModel "meta-llama/Llama-3.2-1B-Instruct" -hfToken $env:HF_TOKEN -samples 10
+  
+  # Hyperdrive P2P model
+  .\benchmarks\run-benchmarks.ps1 -ggufModel "hd://afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3/Llama-3.2-1B-Instruct-Q4_0.gguf" -samples 10
   
   # Advanced parameter tuning
   .\benchmarks\run-benchmarks.ps1 -ggufModel "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0" -samples 100 -temperature 0.6 -topK 40 -repeatPenalty 1.1 -presencePenalty 0.1 -seed 123

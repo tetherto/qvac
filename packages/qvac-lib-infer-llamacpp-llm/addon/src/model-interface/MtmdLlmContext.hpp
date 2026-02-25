@@ -37,8 +37,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded)
+      override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -73,6 +73,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.

@@ -1,4 +1,3 @@
-from typing import Any
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from huggingface_hub import login, hf_hub_download, list_repo_files
@@ -10,6 +9,7 @@ import os
 import signal
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from typing import List, Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def download_gguf_from_huggingface(repo_id: str, quantization: str | None = None, hf_token: str | None = None) -> str:
+def download_gguf_from_huggingface(repo_id: str, quantization: Optional[str] = None, hf_token: Optional[str] = None) -> str:
     """
     Download a GGUF model from HuggingFace Hub
     
@@ -119,6 +119,7 @@ class ServerConfig:
                  server_dir: str = None,
                  log_dir: str = "logs",
                  response_timeout: int = 600,
+                 hyperdrive_uri: str = None,
                  cli_samples: int = None,
                  cli_datasets: str = None,
                  cli_device: str = None,
@@ -156,6 +157,17 @@ class ServerConfig:
         self.top_k = DEFAULT_CONFIG['top_k']
         self.repeat_penalty = DEFAULT_CONFIG['repeat_penalty']
         self.seed = DEFAULT_CONFIG['seed']
+        
+        # P2P model parameters - split URI once here
+        self.hyperdrive_uri = hyperdrive_uri
+        if hyperdrive_uri and hyperdrive_uri.startswith("hd://"):
+            # Split URI: hd://key/filename
+            uri_parts = hyperdrive_uri[5:].split("/", 1)  # Remove 'hd://' prefix
+            self.hyperdrive_key = "hd://" + uri_parts[0]
+            self.p2p_model_name = uri_parts[1] if len(uri_parts) > 1 else None
+        else:
+            self.hyperdrive_key = None
+            self.p2p_model_name = None
         
         # Set default benchmark configuration
         self.benchmark_config = {
@@ -234,7 +246,7 @@ class ServerConfig:
             self.seed = str(cli_seed)
             print(f"CLI override: seed = {cli_seed}")
     
-    def get_enabled_datasets(self) -> list[str]:
+    def get_enabled_datasets(self) -> List[str]:
         """Get list of enabled datasets"""
         return self.benchmark_config.get('datasets', ['squad', 'arc', 'mmlu', 'gsm8k'])
     
@@ -242,7 +254,7 @@ class ServerConfig:
         """Get number of samples for benchmark"""
         return self.benchmark_config.get('num_samples', 10)
     
-    def get_model_config(self) -> dict[str, str]:
+    def get_model_config(self) -> Dict[str, str]:
         """
         Get model configuration as a dictionary suitable for sending to server
         
@@ -276,6 +288,10 @@ class QvacModelHandler:
         self.server_process = None
         self.executor = ThreadPoolExecutor(max_workers=1)
         
+        # P2P model parameters (already split in ServerConfig)
+        self.hyperdrive_key = getattr(server_cfg, 'hyperdrive_key', None)
+        self.p2p_model_name = getattr(server_cfg, 'p2p_model_name', None)
+        self.p2p_model_config = getattr(server_cfg, 'p2p_model_config', None)
         # Create log directory if it doesn't exist
         os.makedirs(self.log_dir, exist_ok=True)
         
@@ -286,20 +302,16 @@ class QvacModelHandler:
         if self.server_process is not None:
             self.stop_server()
         
-        # Ensure log directory exists
-        os.makedirs(self.log_dir, exist_ok=True)
-        
-        # Create timestamp for log files
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        stdout_log = os.path.join(self.log_dir, f"server_stdout_{timestamp}.log")
-        stderr_log = os.path.join(self.log_dir, f"server_stderr_{timestamp}.log")
-        
-        # Open log files - track for cleanup on failure
-        stdout_file = None
-        stderr_file = None
-        popen_succeeded = False
-        
         try:
+            # Ensure log directory exists
+            os.makedirs(self.log_dir, exist_ok=True)
+            
+            # Create timestamp for log files
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            stdout_log = os.path.join(self.log_dir, f"server_stdout_{timestamp}.log")
+            stderr_log = os.path.join(self.log_dir, f"server_stderr_{timestamp}.log")
+            
+            # Open log files (unbuffered)
             stdout_file = open(stdout_log, 'w', buffering=1)  # Line buffered
             stderr_file = open(stderr_log, 'w', buffering=1)  # Line buffered
             
@@ -319,8 +331,10 @@ class QvacModelHandler:
                 universal_newlines=True,  # Text mode
                 preexec_fn=os.setsid  # Create new process group
             )
-            popen_succeeded = True  # Popen now owns the file handles
             os.chdir("../../")  # Return to original directory
+            
+            # Wait for 2 seconds to allow server to initialize
+            #time.sleep(2)
             
             # Wait for server to start
             self._wait_for_server()
@@ -329,13 +343,6 @@ class QvacModelHandler:
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
             raise
-        finally:
-            # Only close files if Popen didn't take ownership
-            if not popen_succeeded:
-                if stdout_file is not None:
-                    stdout_file.close()
-                if stderr_file is not None:
-                    stderr_file.close()
 
     def stop_server(self):
         """Stop the server process"""
@@ -371,6 +378,82 @@ class QvacModelHandler:
             time.sleep(retry_delay)
         raise Exception("Server failed to start within timeout")
     
+    def _wait_for_model_ready(self, max_retries=60, retry_delay=10):
+        """Wait for P2P model to be fully loaded and ready"""
+        if not (self.hyperdrive_key and self.p2p_model_name):
+            return True  # Not a P2P model, no need to wait
+        
+        base_url = self.url.split("/run")[0]  # Get base URL without /run
+        logger.info(f"⏳ Waiting for P2P model to load from hyperdrive...")
+        logger.info(f"   Model: {self.p2p_model_name}")
+        logger.info(f"   This may take several minutes for large models...")
+        
+        for i in range(max_retries):
+            try:
+                # First check if server is healthy
+                health_response = httpx.get(f"{base_url}/", timeout=5)
+                if health_response.status_code != 200:
+                    logger.debug(f"Server not healthy, retrying... ({i+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    continue
+                
+                # Try a simple test request to see if model is ready
+                model_config = self.server_cfg.get_model_config()
+                model_config["hyperdriveKey"] = self.hyperdrive_key
+                model_config["modelName"] = self.p2p_model_name
+                
+                test_payload = {
+                    "inputs": ["test"],
+                    "config": model_config
+                }
+                
+                response = httpx.post(self.url, json=test_payload, timeout=60)
+                
+                if response.status_code == 200:
+                    logger.info("✅ P2P model is ready!")
+                    return True
+                    
+                elif response.status_code == 500:
+                    # Check if it's a "model loading" error vs a real failure
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get('error', {}).get('message', '')
+                        
+                        # These are temporary errors during model loading
+                        loading_errors = [
+                            'CONNECTION_FAILED',
+                            'Failed to connect to Hyperdrive',
+                            'Corestore is closed',
+                            'Hyperdrive is not ready',
+                            'DRIVE_NOT_READY'
+                        ]
+                        
+                        is_loading = any(err in str(error_msg) for err in loading_errors)
+                        
+                        if is_loading:
+                            elapsed = (i + 1) * retry_delay
+                            logger.info(f"📦 Model downloading from hyperdrive... ({elapsed}s elapsed, attempt {i+1}/{max_retries})")
+                        else:
+                            logger.warning(f"⚠️  Server error: {error_msg} (attempt {i+1}/{max_retries})")
+                    except:
+                        logger.info(f"📦 Model loading... (attempt {i+1}/{max_retries})")
+                    
+                    time.sleep(retry_delay)
+                    continue
+                    
+                else:
+                    logger.warning(f"Unexpected response {response.status_code} (attempt {i+1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    
+            except httpx.TimeoutException:
+                logger.info(f"⏱️  Request timeout, model still loading... (attempt {i+1}/{max_retries})")
+                time.sleep(retry_delay)
+            except Exception as e:
+                logger.debug(f"Waiting for model... (attempt {i+1}/{max_retries}): {str(e)}")
+                time.sleep(retry_delay)
+        
+        raise Exception("P2P model failed to load within timeout")
+        raise Exception(f"❌ P2P model failed to load within timeout ({max_retries * retry_delay}s)")
     def _check_server_health(self):
         """Check if server is healthy"""
         try:
@@ -380,7 +463,7 @@ class QvacModelHandler:
         except:
             return False
 
-    def _make_request_with_timeout(self, json_req: dict[str, Any]) -> str:
+    def _make_request_with_timeout(self, json_req: Dict[str, Any]) -> str:
         """Make request with timeout using ThreadPoolExecutor"""
         try:
             future = self.executor.submit(
@@ -439,14 +522,22 @@ class QvacModelHandler:
         if system_prompt:
             json_req["systemPrompt"] = system_prompt
         
-        # Build config for local models
+        # Build unified config for both P2P and local models
         model_config = self.server_cfg.get_model_config()
-
-        # Local GGUF model - add diskPath to config
-        if hasattr(self.server_cfg, 'selected_model'):
-            selected_model = self.server_cfg.selected_model
-            model_config["modelName"] = selected_model.get('name')
-            model_config["diskPath"] = selected_model.get('diskPath', './models/')
+        
+        # Check if this is a P2P model request
+        is_p2p_model = self.hyperdrive_key and self.p2p_model_name
+        
+        if is_p2p_model:
+            # P2P model - add hyperdriveKey to config
+            model_config["hyperdriveKey"] = self.hyperdrive_key
+            model_config["modelName"] = self.p2p_model_name
+        else:
+            # Local GGUF model - add diskPath to config
+            if hasattr(self.server_cfg, 'selected_model'):
+                selected_model = self.server_cfg.selected_model
+                model_config["modelName"] = selected_model.get('name')
+                model_config["diskPath"] = selected_model.get('diskPath', './models/')
         
         json_req.update({
             "config": model_config
@@ -601,7 +692,7 @@ class ModelHandler:
         
         # Use the minimum of model's max and configured ctx_size (to avoid exceeding model capacity)
         if model_max_length:
-            max_length = min(model_max_length, config_ctx_size)
+            max_length = max(model_max_length, config_ctx_size)
         else:
             max_length = config_ctx_size
         
@@ -719,9 +810,9 @@ class ModelEvaluator:
         self.handler = handler
         self.model_name = model_name
     
-    def evaluate_dataset(self, dataset_name: str, prompts: list[str], 
-                        ground_truths: list[str], metric_fn, 
-                        system_prompt: str = None) -> tuple[list[float], int]:
+    def evaluate_dataset(self, dataset_name: str, prompts: List[str], 
+                        ground_truths: List[str], metric_fn, 
+                        system_prompt: str = None) -> Tuple[List[float], int]:
         """
         Generic dataset evaluation that works with any handler
         
