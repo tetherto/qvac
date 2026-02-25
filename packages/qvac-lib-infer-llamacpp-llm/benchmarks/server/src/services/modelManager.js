@@ -19,7 +19,10 @@ class ModelManager {
    * Generate a unique key for a model configuration
    */
   _generateModelKey (modelPath, config) {
-    return `${modelPath}:${config?.device || 'cpu'}:${config?.gpu_layers || '0'}`
+    const device = config?.device || 'cpu'
+    const gpuLayers = config?.gpu_layers || '0'
+    const ctxSize = config?.ctx_size || '8192'
+    return `${modelPath}:${device}:${gpuLayers}:${ctxSize}`
   }
 
   /**
