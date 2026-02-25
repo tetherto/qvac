@@ -1,5 +1,4 @@
 # Changelog
-## [1.0.0] - 2025-12-15
 
 ## [0.9.1] - 2026-02-23
 - Use patched version of addon-cpp to reduce logging noise.
@@ -8,7 +7,6 @@
 
 - Use new addon-cpp architecture for simplified Js Addon creation and usage.
 - Use AddonCpp on CLI executable (to mimic JsAddon behavior/usage).
-- Finetuning refactored according to the new addon-cpp architecture (pause/status/activate/checkpoint preserved).
 - Single job per addon instance; no templates, no state tracking.
 - Asynchronous cancel based on futures: `await addon.cancel()` / `await response.cancel()` now wait until the job is actually finished.
 - **Multiple images support:** Prompts can now include several `type: 'media'` user messages; each image is loaded in order and matched to placeholders so the model receives all images.
@@ -243,6 +241,14 @@ The prebuild workflow now removes debug symbols by applying platform-specific st
 
 ## Bug Fixes
 There are no user-facing bug fixes in this release.
+
+## [0.8.1] - 2025-01-15
+### Changed
+- Cleaned up package.json by removing unused packages and scripts
+
+## [0.8.0] - 2025-01-15
+### Changed 
+- Upgraded llm fabric to 7248.1.0, which containes new Vulkan implementation improvements (VMA, shaders).
 
 ## [0.7.1] - 2025-01-14
 ### Added
