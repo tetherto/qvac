@@ -11,6 +11,7 @@
 
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
+#include "ModelMetadata.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "common/chat.h"
@@ -184,6 +185,7 @@ private:
   GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
+  ModelMetaData metadata_;
   AsyncWeightsLoader asyncWeightsLoader_;
 
   bool isTextLlm_ = false;

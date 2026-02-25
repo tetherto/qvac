@@ -119,6 +119,18 @@ void ModelMetaData::checkInitialized() const {
   }
 }
 
+std::optional<uint32_t> ModelMetaData::tryGetU32(const char* key) const {
+  if (metadata_ == nullptr) {
+    return std::nullopt;
+  }
+  uint32_t value = 0;
+  MetaResultStatus status = llama_model_meta_get_u32(metadata_, key, &value);
+  if (status != MetaResultStatus::SUCCESS) {
+    return std::nullopt;
+  }
+  return value;
+}
+
 bool ModelMetaData::isU32OneOf(
     const char* key, std::initializer_list<uint32_t> values) const {
   checkInitialized();

@@ -78,7 +78,7 @@ LlamaModel::LlamaModel(
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
       shards_(GGUFShards::expandGGUFIntoShards(modelPath)),
-      asyncWeightsLoader_(shards_, initLoader_, loadingContext_) {
+      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
   auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };
@@ -100,6 +100,17 @@ void LlamaModel::init(
   // Set verbosity level
   setVerbosityLevel(configFilemap);
 
+  if (!asyncWeightsLoader_.isStreaming()) {
+    resolveShardPaths(shards_, modelPath);
+  }
+
+  metadata_.parse(modelPath, shards_, asyncWeightsLoader_.isStreaming(), ADDON_ID);
+  { 
+    auto fileType = metadata_.tryGetU32("general.file_type");
+    QLOG_IF(
+      Priority::DEBUG, string_format("[LlamaModel] general.file_type = %s\n", fileType.has_value() ? std::to_string(*fileType).c_str() : "unknown"));
+  }
+
   {
     std::string backendsDir;
     if (auto backendsDirIt = configFilemap.find("backendsDir");
@@ -112,10 +123,6 @@ void LlamaModel::init(
 
   common_params params;
   commonParamsParse(modelPath, configFilemap, params);
-
-  if (!asyncWeightsLoader_.isStreaming()) {
-    resolveShardPaths(shards_, modelPath);
-  }
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
