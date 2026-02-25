@@ -8,7 +8,8 @@ const {
   setupParams,
   verifyPauseCheckpoint,
   handleEarlyCompletion,
-  verifyFinalStatus
+  verifyFinalStatus,
+  cleanupCheckpoints
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
@@ -32,8 +33,7 @@ const FINETUNE_MODELS = [
   {
     id: 'bitnet-b1_58-large-tq2_0',
     name: 'bitnet_b1_58-large-TQ2_0.gguf',
-    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
-    skipOnDarwin: true // Metal backend lacks kernel_mul_mm_tq2_0_f32 for TQ2_0
+    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
   }
 ]
 
@@ -111,7 +111,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: us
       loggerHandle.release()
       await model.unload().catch(() => {})
       await loader.close().catch(() => {})
-      // cleanupCheckpoints(checkpointDir)
+      cleanupCheckpoints(checkpointDir)
     }
   }
 })
