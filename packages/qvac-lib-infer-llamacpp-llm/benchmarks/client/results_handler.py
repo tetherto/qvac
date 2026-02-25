@@ -22,8 +22,25 @@ class ResultsHandler:
             # Create directory name from model name (handle colons and slashes)
             # e.g., "unsloth/Qwen3-1.7B-GGUF:Q4_0" -> "Qwen3-1.7B-GGUF_Q4_0"
             results_dir_name = model_name.split('/')[-1].replace(':', '_').replace('.gguf', '')
+        
         self.date_str = datetime.now().strftime("%Y-%m-%d")
-        self.results_dir = os.path.join("benchmarks/client/benchmarking_results", results_dir_name)
+        
+        # Determine the correct results directory path
+        # When running from benchmarks/client/, we need to go up one level
+        current_dir = os.getcwd()
+        if os.path.basename(current_dir) == 'client':
+            # Running from benchmarks/client/ - go up one level to benchmarks/
+            self.results_dir = os.path.join(os.path.dirname(current_dir), "results", results_dir_name)
+        elif os.path.basename(current_dir) == 'benchmarks':
+            # Running from benchmarks/ directory
+            self.results_dir = os.path.join(current_dir, "results", results_dir_name)
+        elif os.path.exists(os.path.join(current_dir, 'benchmarks')):
+            # Running from project root
+            self.results_dir = os.path.join(current_dir, "benchmarks", "results", results_dir_name)
+        else:
+            # Fallback to relative path (shouldn't happen normally)
+            self.results_dir = os.path.join("benchmarks", "results", results_dir_name)
+        
         self.server_config = server_config
         
     def create_results_directory(self):
