@@ -11,17 +11,23 @@ export {
   toHexString,
 } from "./processing";
 
-async function fetchFromRegistry(
-  registryCoreKey: string,
-  label: string,
+export async function collectModels(
+  options: CollectOptions = {},
 ): Promise<ProcessedModel[]> {
+  const { showDuplicates = false, noDedup = false } = options;
   const models: ProcessedModel[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const registryCoreKey: string =
+    process.env["QVAC_REGISTRY_CORE_KEY"] ?? DEFAULT_REGISTRY_CORE_KEY;
   const client = new QVACRegistryClient({ registryCoreKey });
 
   try {
     await client.ready();
+
     const registryModels = await client.findModels({});
-    console.log(`📦 Found ${registryModels.length} entries in ${label}`);
+
+    console.log(`📦 Found ${registryModels.length} entries in registry`);
 
     for (const registryModel of registryModels) {
       const processed = processRegistryModel(registryModel);
@@ -29,35 +35,6 @@ async function fetchFromRegistry(
     }
   } finally {
     await client.close();
-  }
-
-  return models;
-}
-
-export async function collectModels(
-  options: CollectOptions = {},
-): Promise<ProcessedModel[]> {
-  const { showDuplicates = false, noDedup = false } = options;
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const registryCoreKey: string =
-    process.env["QVAC_REGISTRY_CORE_KEY"] ?? DEFAULT_REGISTRY_CORE_KEY;
-
-  const models = await fetchFromRegistry(registryCoreKey, "registry");
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const additionalKeys: string | undefined =
-    process.env["QVAC_REGISTRY_ADDITIONAL_KEYS"];
-  if (additionalKeys) {
-    const keys = additionalKeys.split(",").filter(Boolean);
-    for (const key of keys) {
-      const trimmed = key.trim();
-      const extra = await fetchFromRegistry(
-        trimmed,
-        `additional registry (${trimmed.slice(0, 8)}...)`,
-      );
-      models.push(...extra);
-    }
   }
 
   const groupedModels = groupShardedModels(models);
