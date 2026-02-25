@@ -337,12 +337,10 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test]
     if: |
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
@@ -377,12 +375,10 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test]
     if: |
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
