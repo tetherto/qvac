@@ -229,14 +229,24 @@ export const loadModelOptionsToRequestSchema = z.union([
           modelConfig: {
             ttsEngine: "chatterbox" as const,
             language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsSpeechEncoderSrc),
-            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsEmbedTokensSrc),
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTokenizerSrc,
+            ),
+            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsSpeechEncoderSrc,
+            ),
+            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsEmbedTokensSrc,
+            ),
             ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
               data.modelConfig.ttsConditionalDecoderSrc,
             ),
-            ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsLanguageModelSrc),
-            referenceAudioSrc: modelInputToSrcSchema.parse(data.modelConfig.referenceAudioSrc),
+            ttsLanguageModelSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsLanguageModelSrc,
+            ),
+            referenceAudioSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.referenceAudioSrc,
+            ),
           },
           seed: data.seed ?? false,
           withProgress: data.withProgress ?? !!data.onProgress,
@@ -251,13 +261,21 @@ export const loadModelOptionsToRequestSchema = z.union([
           modelConfig: {
             ttsEngine: "supertonic" as const,
             language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-            ttsTextEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTextEncoderSrc),
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTokenizerSrc,
+            ),
+            ttsTextEncoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTextEncoderSrc,
+            ),
             ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
               data.modelConfig.ttsLatentDenoiserSrc,
             ),
-            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceDecoderSrc),
-            ttsVoiceSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceSrc),
+            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsVoiceDecoderSrc,
+            ),
+            ttsVoiceSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsVoiceSrc,
+            ),
             ttsSpeed: data.modelConfig.ttsSpeed,
             ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
           },
@@ -353,15 +371,17 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
   dstVocabSrc: z.string().optional(),
 });
 
-export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsChatterboxRequestConfigSchema,
-});
+export const loadTtsChatterboxModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsChatterboxRequestConfigSchema,
+  });
 
-export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsSupertonicRequestConfigSchema,
-});
+export const loadTtsSupertonicModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsSupertonicRequestConfigSchema,
+  });
 
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),

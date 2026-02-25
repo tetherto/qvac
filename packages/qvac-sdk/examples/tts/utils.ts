@@ -39,7 +39,10 @@ export function createWavHeader(
 export function int16ArrayToBuffer(samples: number[]): Buffer {
   const buffer = Buffer.alloc(samples.length * 2);
   for (let i = 0; i < samples.length; i++) {
-    const value = Math.max(-32768, Math.min(32767, Math.round(samples[i] ?? 0)));
+    const value = Math.max(
+      -32768,
+      Math.min(32767, Math.round(samples[i] ?? 0)),
+    );
     buffer.writeInt16LE(value, i * 2);
   }
   return buffer;
