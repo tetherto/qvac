@@ -17,21 +17,12 @@ export interface Loader {
   getFileSize?(path: string): Promise<number>
 }
 
-export interface AddonMessage {
-  type: 'text'
-  input: string
-}
-export interface AddonMediaMessage {
-  type: 'media'
-  content: Uint8Array
-}
-export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
-
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  runJob(messages: AddonRunJobMessage[]): Promise<boolean>
+  runJob(data: Array<{ type: 'text'; input?: string } | { type: 'media'; content?: Uint8Array }>): Promise<unknown>
   cancel(): Promise<void>
+  finetune?(params?: Record<string, any>): Promise<void>
   unload(): Promise<void>
 }
 
@@ -104,11 +95,18 @@ export interface DownloadResult {
   completed: boolean
 }
 
+export interface FinetuneHandle {
+  await(): Promise<{ status: string }>
+}
+
 export default class LlmLlamacpp extends BaseInference {
   protected addon: Addon
 
-  constructor(args: LlmLlamacppArgs, config: LlamaConfig)
-
+  constructor(
+    args: LlmLlamacppArgs,
+    config: LlamaConfig,
+    finetuningParams?: Record<string, any> | null
+  )
   _load(
     closeLoader?: boolean,
     onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
@@ -133,11 +131,12 @@ export default class LlmLlamacpp extends BaseInference {
 
   run(prompt: Message[]): Promise<QvacResponse>
 
-  unload(): Promise<void>
+  finetune(finetuningOptions?: Record<string, any>): Promise<FinetuneHandle>
 
   cancel(): Promise<void>
 
-  getApiDefinition(): string
+  unload(): Promise<void>
+
 }
 
-export { ReportProgressCallback, QvacResponse }
+export { ReportProgressCallback, QvacResponse, FinetuneHandle }

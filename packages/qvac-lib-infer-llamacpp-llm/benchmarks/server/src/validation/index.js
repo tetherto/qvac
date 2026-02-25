@@ -5,9 +5,10 @@ const { z } = require('zod')
 const InferenceArgsSchema = z.object({
   inputs: z.array(z.string()),
   config: z.object({
-    // Model source (local model path)
+    // Model source (local or P2P)
     modelName: z.string().optional(),
     diskPath: z.string().optional(), // Local GGUF models
+    hyperdriveKey: z.string().optional(), // P2P models
     // Inference parameters
     device: z.string().optional(),
     gpu_layers: z.string().optional(),
