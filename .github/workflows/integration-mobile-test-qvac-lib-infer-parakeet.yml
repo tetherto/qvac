@@ -336,9 +336,6 @@ jobs:
         run: |
           echo "Setting up mobile test framework..."
           npm install
-          # Pin react-native-screens to 4.23.0 to avoid breaking rename in 4.24.0
-          # (RNSBottomTabs* -> RNSTabs* breaks expo-router 6.x)
-          npm install react-native-screens@4.23.0
           echo "Test framework dependencies installed"
 
       - name: Build test app with addon
