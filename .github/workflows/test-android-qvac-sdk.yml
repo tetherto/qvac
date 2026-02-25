@@ -196,6 +196,8 @@ jobs:
 
       - name: Build mobile consumer APK
         working-directory: ${{ inputs.working-directory }}
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ inputs.working-directory }}/.npmrc
         run: |
           echo "Building Android consumer APK..."
           echo "   Run ID: ${{ steps.runid.outputs.runId }}"
