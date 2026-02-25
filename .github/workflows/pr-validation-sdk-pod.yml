@@ -17,6 +17,8 @@ on:
     branches:
       - main
       - release-*
+      - feature-*
+      - tmp-*
 
 jobs:
   validate-pr:
