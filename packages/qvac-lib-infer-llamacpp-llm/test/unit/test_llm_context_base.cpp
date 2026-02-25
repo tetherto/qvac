@@ -39,6 +39,7 @@ double getStatValue(
   }
   return 0.0;
 }
+
 std::string processPromptString(
     const std::unique_ptr<LlamaModel>& model, const std::string& input) {
   LlamaModel::Prompt prompt;
@@ -171,18 +172,18 @@ protected:
 
 TEST_F(LlmContextBaseTest, TextLlmContextProcessAndReset) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   auto stats = model->runtimeStats();
   EXPECT_GE(getStatValue(stats, "CacheTokens"), 0.0);
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output =
         processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
@@ -192,7 +193,7 @@ EXPECT_NO_THROW({
 
   EXPECT_NO_THROW(model->reset());
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output2 = processPromptString(
         model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
@@ -203,18 +204,18 @@ EXPECT_NO_THROW({
 
 TEST_F(LlmContextBaseTest, MtmdLlmContextProcessAndReset) {
   if (!hasValidMultimodalModel()) {
-FAIL() << "Multimodal model or projection file not found";
+    FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createMultimodalModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   auto stats = model->runtimeStats();
   EXPECT_GE(getStatValue(stats, "CacheTokens"), 0.0);
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output =
         processPromptString(model, R"([{"role": "user", "content": "Hello"}])");
     EXPECT_GE(output.length(), 0);
@@ -224,7 +225,7 @@ EXPECT_NO_THROW({
 
   EXPECT_NO_THROW(model->reset());
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output2 = processPromptString(
         model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
@@ -235,12 +236,12 @@ EXPECT_NO_THROW({
 
 TEST_F(LlmContextBaseTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
@@ -254,12 +255,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(LlmContextBaseTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> tokens;
@@ -281,12 +282,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(LlmContextBaseTest, ResetStateClearsCache) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
@@ -297,7 +298,7 @@ FAIL() << "Model failed to load";
 
   model->reset();
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output2 = processPromptString(
         model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
@@ -308,12 +309,12 @@ EXPECT_NO_THROW({
 
 TEST_F(LlmContextBaseTest, TextContextRejectsBinaryInput) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> media = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
@@ -321,19 +322,19 @@ FAIL() << "Model failed to load";
   if (test_projection_path.empty()) {
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "Hello"}])";
-    prompt.media = std::move(media);
+    prompt.media.push_back(std::move(media));
     EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }
 
 TEST_F(LlmContextBaseTest, MultipleProcessCalls) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW({
@@ -344,7 +345,7 @@ FAIL() << "Model failed to load";
     EXPECT_GE(stats.size(), 0);
   });
 
-EXPECT_NO_THROW({
+  EXPECT_NO_THROW({
     std::string output2 = processPromptString(
         model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
@@ -355,13 +356,13 @@ EXPECT_NO_THROW({
 
 TEST_F(LlmContextBaseTest, VirtualDestructor) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   {
     auto model = createModel();
     if (!model) {
-FAIL() << "Model failed to load";
+      FAIL() << "Model failed to load";
     }
 
     EXPECT_NO_THROW({
@@ -376,7 +377,7 @@ FAIL() << "Model failed to load";
   {
     auto model2 = createModel();
     if (model2) {
-EXPECT_NO_THROW({
+      EXPECT_NO_THROW({
         std::string output = processPromptString(
             model2, R"([{"role": "user", "content": "Test 2"}])");
         EXPECT_GE(output.length(), 0);
@@ -387,12 +388,12 @@ EXPECT_NO_THROW({
 
 TEST_F(LlmContextBaseTest, RuntimeStatsAccuracy) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
@@ -411,18 +412,18 @@ FAIL() << "Model failed to load";
 
 TEST_F(LlmContextBaseTest, RuntimeStatsConsistency) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::string input = R"([{"role": "user", "content": "Hello"}])";
 
   for (int i = 0; i < 3; ++i) {
-processPromptString(model, input);
+    processPromptString(model, input);
     auto stats = model->runtimeStats();
 
     double promptTokens = getStatValue(stats, "promptTokens");

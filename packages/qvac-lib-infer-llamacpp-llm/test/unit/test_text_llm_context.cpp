@@ -104,12 +104,12 @@ protected:
 
 TEST_F(TextLlmContextTest, Constructor) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_TRUE(model->isLoaded());
@@ -117,12 +117,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessWithStringInput) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -137,12 +137,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> generated_tokens;
@@ -164,12 +164,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -184,12 +184,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ResetState) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -209,31 +209,31 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, LoadMediaDoesNothing) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
   if (test_projection_path.empty()) {
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "Hello"}])";
-    prompt.media = std::move(binary_input);
+    prompt.media.push_back(std::move(binary_input));
     EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }
 
 TEST_F(TextLlmContextTest, MultipleMessages) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -249,12 +249,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, MultipleProcessCalls) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -278,12 +278,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, CancelMethod) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW(model->cancel());
@@ -291,12 +291,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessWithTools) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -327,12 +327,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessWithToolsInvalidFormat) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -348,12 +348,12 @@ FAIL() << "Model failed to load";
 
 TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
   if (!hasValidModel()) {
-FAIL() << "Test model not found";
+    FAIL() << "Test model not found";
   }
 
   auto model = createModel();
   if (!model) {
-FAIL() << "Model failed to load";
+    FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
