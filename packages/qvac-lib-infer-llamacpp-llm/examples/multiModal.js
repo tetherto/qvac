@@ -81,7 +81,7 @@ async function main () {
     console.log(`Inference stats: ${JSON.stringify(response1.stats)}`)
     console.log('\n')
 
-    // 6. Second inference with image file path
+    // 7. Second inference with image file path
     const messages2 = [
       {
         role: 'system',
