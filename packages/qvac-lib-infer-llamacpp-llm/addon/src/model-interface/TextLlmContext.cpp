@@ -211,6 +211,10 @@ void TextLlmContext::tokenizeChat(
   }
   prompt = getPrompt(tmpls_.get(), inputs);
 
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format("[TextLlm] formatted prompt: %s\n", prompt.c_str()));
+
   if (!prompt.empty()) {
     inputTokens = common_tokenize(lctx_, prompt, addSpecial, true);
   } else {
@@ -256,8 +260,7 @@ bool TextLlmContext::evalMessage(
 
 bool TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools,
-    bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
@@ -338,8 +341,7 @@ bool TextLlmContext::evalMessageWithTools(
     }
     bool isLastToken = (tokenIndex == nTokens);
     if (isLastToken) {
-      textBatch->logits[textBatch->n_tokens - 1] =
-          static_cast<int8_t>(true);
+      textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     int ret = llama_decode(lctx_, *textBatch);
@@ -422,6 +424,7 @@ bool TextLlmContext::generateResponse(
     flushPendingUtf8ToCallback(outputCallback);
     return true;
   }
+
   while (nRemain != 0) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
@@ -561,6 +564,7 @@ llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
 
   return tokensToRemove;
 }
+
 bool TextLlmContext::handleQwen3ReasoningEOS(
     llama_token& tokenId, std::string& tokenStr, llama_batch& batch,
     llama_pos& nPast,

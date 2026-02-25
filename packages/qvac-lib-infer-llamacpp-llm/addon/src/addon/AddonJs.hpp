@@ -30,6 +30,24 @@ makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   };
 }
 
+struct JsFinetuneTerminalOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::
+          JsBaseOutputHandler<FinetuneTerminalResult> {
+  JsFinetuneTerminalOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::
+            JsBaseOutputHandler<FinetuneTerminalResult>(
+                [this](const FinetuneTerminalResult& result) -> js_value_t* {
+                  js::Object payload = js::Object::create(this->env_);
+                  payload.setProperty(
+                      this->env_, "op", js::String::create(this->env_, result.op));
+                  payload.setProperty(
+                      this->env_,
+                      "status",
+                      js::String::create(this->env_, result.status));
+                  return payload;
+                }) {}
+};
+
 inline LlamaFinetuningParams
 parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   LlamaFinetuningParams params;
@@ -133,6 +151,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<JsFinetuneTerminalOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),

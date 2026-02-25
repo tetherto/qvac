@@ -11,6 +11,9 @@ const noop = () => { }
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 const RUN_QUEUE_BUSY_ERROR =
   'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
+/** Max ms to wait for the previous inference job to settle before throwing. */
+const PREVIOUS_JOB_WAIT_MS = 30
+const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
@@ -90,6 +93,7 @@ class LlmLlamacpp extends BaseInference {
     this._hasActiveResponse = false
     this._jobInProgress = false
     this._defaultFinetuneParams = finetuningParams ?? null
+    this._lastJobResult = Promise.resolve()
   }
 
   /**
@@ -217,13 +221,24 @@ class LlmLlamacpp extends BaseInference {
 
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
-      if (eventType === 'JobEnded' || eventType === 'Error') {
-        this._jobInProgress = false
-      }
-      if (typeof data === 'string' && (data === 'COMPLETED' || data === 'PAUSED' || data === 'ERROR') && this._finetuneCompletionResolve) {
-        this._finetuneCompletionResolve(data)
+      const finetuneStatus = (
+        data &&
+        typeof data === 'object' &&
+        data.op === 'finetune' &&
+        typeof data.status === 'string'
+      )
+        ? data.status
+        : null
+      if (finetuneStatus && this._finetuneCompletionResolve) {
+        this._finetuneActive = false
+        this._finetuneCompletionResolve(finetuneStatus)
         this._finetuneCompletionResolve = null
         return
+      }
+      if (eventType === 'Error' && this._finetuneCompletionResolve) {
+        this._finetuneActive = false
+        this._finetuneCompletionResolve('ERROR')
+        this._finetuneCompletionResolve = null
       }
 
       if (eventType === 'LogMsg') {
@@ -252,7 +267,15 @@ class LlmLlamacpp extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
-      return this._outputCallback(addon, 'JobEnded', 'job', data, null)
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+    }
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      data.op === 'finetune' &&
+      typeof data.status === 'string'
+    ) {
+      return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
 
     let mappedEvent = event
@@ -262,17 +285,16 @@ class LlmLlamacpp extends BaseInference {
       mappedEvent = 'Output'
     }
 
-    return this._outputCallback(addon, mappedEvent, 'job', data, error)
+    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
   }
 
   /**
    * Cancel the current task (or pause finetuning if finetune is running).
    */
   async cancel () {
-    if (!this.addon) {
-      throw new Error('Addon not initialized')
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
     }
-    await this.addon.cancel()
   }
 
   /**
@@ -284,10 +306,10 @@ class LlmLlamacpp extends BaseInference {
       try {
         await this.cancel()
       } catch (_) {}
-      const currentJobResponse = this._jobToResponse.get('job')
+      const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
         currentJobResponse.failed(new Error('Model was unloaded'))
-        this._deleteJobMapping('job')
+        this._deleteJobMapping('OnlyOneJob')
       }
       this._hasActiveResponse = false
       await super.unload()
@@ -306,19 +328,15 @@ class LlmLlamacpp extends BaseInference {
       }
 
       this.logger.info('Starting inference with prompt:', prompt)
-
     return this._withExclusiveRun(async () => {
       const textMessages = []
-      let mediaData = null
+      const mediaItems = []
 
       for (const message of prompt) {
         if (message.role === 'user' &&
             message.type === 'media' &&
             message.content instanceof Uint8Array) {
-          if (mediaData !== null) {
-            throw new Error('Only one media message is supported at the moment')
-          }
-          mediaData = message.content
+          mediaItems.push(message.content)
           textMessages.push({ ...message, content: '' })
         } else {
           textMessages.push(message)
@@ -327,7 +345,7 @@ class LlmLlamacpp extends BaseInference {
 
       const promptMessages = []
 
-      if (mediaData) {
+      for (const mediaData of mediaItems) {
         promptMessages.push({ type: 'media', content: mediaData })
       }
 
@@ -345,9 +363,10 @@ class LlmLlamacpp extends BaseInference {
       let accepted
       this._jobInProgress = true
       try {
-        await this.addon.runJob(promptMessages)
+        accepted = await this.addon.runJob(promptMessages)
       } catch (err) {
-        this._jobInProgress = false
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(err)
         throw err
       }
 
@@ -383,7 +402,7 @@ class LlmLlamacpp extends BaseInference {
     this.logger?.info?.('finetune() called')
     this.logger?.info?.('Finetuning parameters:', params)
 
-    if (this._jobInProgress) {
+    if (this._finetuneActive) {
       throw new Error(RUN_QUEUE_BUSY_ERROR)
     }
 
@@ -400,12 +419,12 @@ class LlmLlamacpp extends BaseInference {
     }
 
     return this._withExclusiveRun(async () => {
-      this._jobInProgress = true
+      this._finetuneActive = true
       try {
         await this.addon.finetune(paramsToSend)
         return handle
       } catch (err) {
-        this._jobInProgress = false
+        this._finetuneActive = false
         this._finetuneCompletionResolve = null
         rejectCompletion(err)
         throw err
