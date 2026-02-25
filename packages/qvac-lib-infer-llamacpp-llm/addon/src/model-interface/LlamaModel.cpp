@@ -1234,12 +1234,10 @@ LlamaModel::initializeCheckpointing(
   std::error_code dirErr;
   std::filesystem::create_directories(checkpointState->checkpointDir, dirErr);
   if (dirErr) {
-    std::ostringstream msg;
-    msg << "Checkpointing disabled | directory='"
-        << checkpointState->checkpointDir.string() << "' | error="
-        << dirErr.message();
-    QLOG_IF(Priority::WARNING, msg.str());
-    return nullptr;
+    throw std::runtime_error(
+        "Checkpoint directory creation failed: directory='" +
+        checkpointState->checkpointDir.string() + "' error=" +
+        dirErr.message());
   }
 
   if (periodicCheckpointingEnabled) {

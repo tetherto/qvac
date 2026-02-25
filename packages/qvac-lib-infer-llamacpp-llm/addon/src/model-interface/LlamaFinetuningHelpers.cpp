@@ -271,10 +271,30 @@ findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir) {
   return latestPath;
 }
 
-bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
+static void writeCheckpointMetadata(const std::filesystem::path& path,
+                                    const CheckpointMetadata& meta) {
+  std::ofstream out(path);
+  if (!out) {
+    throw std::runtime_error("Failed to open checkpoint metadata: " +
+                             path.string());
+  }
+  out << "epoch=" << meta.epoch << '\n'
+      << "lora_rank=" << meta.loraRank << '\n'
+      << std::fixed << std::setprecision(6)
+      << "lora_alpha=" << meta.loraAlpha << '\n'
+      << "target_modules=" << meta.targetModules << '\n'
+      << "global_step=" << meta.globalStep << '\n'
+      << "current_step=" << meta.currentStep << '\n';
+  if (!out) {
+    throw std::runtime_error("Failed to write checkpoint metadata: " +
+                             path.string());
+  }
+}
+
+void saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   if (state.checkpointInterval <= 0 || state.adapter == nullptr ||
       state.ctx == nullptr || state.model == nullptr) {
-    return false;
+    return;
   }
 
   const int64_t step = state.globalStep;
@@ -282,56 +302,32 @@ bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   std::error_code ec;
   std::filesystem::create_directories(stepDir, ec);
   if (ec) {
-    std::ostringstream msg;
-    msg << "Checkpoint save skipped at step " << step
-        << " | directory error: " << ec.message();
-    QLOG_IF(Priority::WARNING, msg.str());
-    return false;
+    throw std::runtime_error("Checkpoint directory creation failed at step " +
+                             std::to_string(step) + ": " + ec.message());
   }
 
   const std::string stepDirStr = stepDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, stepDirStr.c_str(), state.model, state.ctx)) {
-    std::ostringstream msg;
-    msg << "Failed to save LoRA checkpoint at step " << step << " in "
-        << stepDirStr;
-    QLOG_IF(Priority::ERROR, msg.str());
-    return false;
+    throw std::runtime_error("Failed to save LoRA checkpoint at step " +
+                             std::to_string(step) + " in " + stepDirStr);
   }
 
   const auto optimizerPath = stepDir / "optimizer.gguf";
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
-    std::ostringstream msg;
-    msg << "Unable to save optimizer state alongside checkpoint at step "
-        << step;
-    QLOG_IF(Priority::WARNING, msg.str());
+    throw std::runtime_error(
+        "Failed to save optimizer state at step " + std::to_string(step) +
+        " in " + optimizerPath.string());
   }
 
-  const auto metadataPath = stepDir / "metadata.json";
-  std::ofstream metadata(metadataPath);
-  if (metadata.is_open()) {
-    CheckpointMetadata meta{};
-    meta.epoch = state.currentEpoch;
-    meta.loraRank = state.loraRank;
-    meta.loraAlpha = state.loraAlpha;
-    meta.targetModules = state.targetModules;
-    meta.globalStep = state.globalStep;
-    meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
-
-    metadata << "epoch=" << meta.epoch << '\n';
-    metadata << "lora_rank=" << meta.loraRank << '\n';
-    metadata << std::fixed << std::setprecision(6);
-    metadata << "lora_alpha=" << meta.loraAlpha << '\n';
-    metadata << "target_modules=" << meta.targetModules << '\n';
-    metadata << "global_step=" << meta.globalStep << '\n';
-    metadata << "current_step=" << meta.currentStep << '\n';
-  } else {
-    std::ostringstream msg;
-    msg << "Checkpoint metadata write failed at step " << step;
-    QLOG_IF(Priority::WARNING, msg.str());
-  }
-
-  return true;
+  CheckpointMetadata meta{};
+  meta.epoch = state.currentEpoch;
+  meta.loraRank = state.loraRank;
+  meta.loraAlpha = state.loraAlpha;
+  meta.targetModules = state.targetModules;
+  meta.globalStep = state.globalStep;
+  meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
+  writeCheckpointMetadata(stepDir / "metadata.json", meta);
 }
 
 bool parseCheckpointMetadata(
@@ -373,12 +369,13 @@ bool parseCheckpointMetadata(
   return true;
 }
 
-bool savePauseCheckpoint(
+void savePauseCheckpoint(
     ggml_opt_context_t optCtx, TrainingCheckpointState& state,
     bool pausedDuringValidation) {
   if (state.adapter == nullptr || state.ctx == nullptr ||
       state.model == nullptr) {
-    return false;
+    throw std::runtime_error(
+        "Cannot save pause checkpoint: adapter, context or model is null");
   }
 
   const auto pauseDir =
@@ -386,63 +383,39 @@ bool savePauseCheckpoint(
   std::error_code ec;
   std::filesystem::create_directories(pauseDir, ec);
   if (ec) {
-    std::ostringstream msg;
-    msg << "Pause checkpoint save skipped | directory error: " << ec.message();
-    QLOG_IF(Priority::WARNING, msg.str());
-    return false;
+    throw std::runtime_error("Pause checkpoint directory creation failed: " +
+                             ec.message());
   }
 
   const std::string pauseDirStr = pauseDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, pauseDirStr.c_str(), state.model, state.ctx)) {
-    std::ostringstream msg;
-    msg << "Failed to save LoRA pause checkpoint in " << pauseDirStr;
-    QLOG_IF(Priority::ERROR, msg.str());
-    return false;
+    throw std::runtime_error("Failed to save LoRA pause checkpoint in " +
+                             pauseDirStr);
   }
 
   const auto optimizerPath = pauseDir / "optimizer.gguf";
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
-    std::ostringstream msg;
-    msg << "Unable to save optimizer state for pause checkpoint in "
-        << optimizerPath.string();
-    QLOG_IF(Priority::ERROR, msg.str());
-    return false;
+    throw std::runtime_error(
+        "Failed to save optimizer state for pause checkpoint in " +
+        optimizerPath.string());
   }
 
-  const auto metadataPath = pauseDir / "metadata.json";
-  std::ofstream metadata(metadataPath);
-  if (metadata.is_open()) {
-    CheckpointMetadata meta{};
-    meta.epoch =
-        pausedDuringValidation ? state.currentEpoch + 1 : state.currentEpoch;
-    meta.loraRank = state.loraRank;
-    meta.loraAlpha = state.loraAlpha;
-    meta.targetModules = state.targetModules;
-    meta.globalStep =
-        pausedDuringValidation ? state.globalStep + 1 : state.globalStep;
-    meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
-
-    metadata << "epoch=" << meta.epoch << '\n';
-    metadata << "lora_rank=" << meta.loraRank << '\n';
-    metadata << std::fixed << std::setprecision(6);
-    metadata << "lora_alpha=" << meta.loraAlpha << '\n';
-    metadata << "target_modules=" << meta.targetModules << '\n';
-    metadata << "global_step=" << meta.globalStep << '\n';
-    metadata << "current_step=" << meta.currentStep << '\n';
-  } else {
-    std::ostringstream msg;
-    msg << "Pause checkpoint metadata write failed";
-    QLOG_IF(Priority::WARNING, msg.str());
-  }
+  CheckpointMetadata meta{};
+  meta.epoch =
+      pausedDuringValidation ? state.currentEpoch + 1 : state.currentEpoch;
+  meta.loraRank = state.loraRank;
+  meta.loraAlpha = state.loraAlpha;
+  meta.targetModules = state.targetModules;
+  meta.globalStep =
+      pausedDuringValidation ? state.globalStep + 1 : state.globalStep;
+  meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
+  writeCheckpointMetadata(pauseDir / "metadata.json", meta);
 
   state.pauseCheckpointPath = pauseDir;
-
   std::ostringstream msg;
   msg << "Pause checkpoint saved -> " << pauseDirStr;
   QLOG_IF(Priority::DEBUG, msg.str());
-
-  return true;
 }
 
 bool tryHandlePauseRequest(
@@ -458,25 +431,26 @@ bool tryHandlePauseRequest(
     llama_opt_request_stop(state->ctx);
   }
   const bool pausedDuringValidation = !train;
-  const bool saved =
-      savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
-  if (saved) {
-    state->pauseCheckpointSaved.store(true);
-    state->shouldExit.store(true);
-    state->isFinetuning.store(false);
-    state->isPaused.store(true);
-    std::ostringstream pauseMsg;
-    pauseMsg << "Training paused";
-    if (pausedDuringValidation) {
-      pauseMsg << " during validation";
-    }
-    pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
-             << " | epoch " << (state->currentEpoch + 1)
-             << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
-    QLOG_IF(Priority::DEBUG, pauseMsg.str());
-  } else {
-    QLOG_IF(Priority::WARNING, "Failed to save pause checkpoint");
+  try {
+    savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
+  } catch (...) {
+    state->pauseWaitDone.store(true);
+    state->pauseDoneCv.notify_all();
+    throw;
   }
+  state->pauseCheckpointSaved.store(true);
+  state->shouldExit.store(true);
+  state->isFinetuning.store(false);
+  state->isPaused.store(true);
+  std::ostringstream pauseMsg;
+  pauseMsg << "Training paused";
+  if (pausedDuringValidation) {
+    pauseMsg << " during validation";
+  }
+  pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
+           << " | epoch " << (state->currentEpoch + 1)
+           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
+  QLOG_IF(Priority::DEBUG, pauseMsg.str());
   state->pauseWaitDone.store(true);
   state->pauseDoneCv.notify_all();
   return true;
@@ -644,12 +618,22 @@ std::string resolveAdapterOutputPath(
 
   if (base.has_extension() && base.extension() == ".gguf") {
     if (base.has_parent_path()) {
-      fs::create_directories(base.parent_path());
+      std::error_code ec;
+      fs::create_directories(base.parent_path(), ec);
+      if (ec) {
+        throw std::runtime_error(
+            "Failed to create adapter output directory: " + ec.message());
+      }
     }
     return base.string();
   }
 
-  fs::create_directories(base);
+  std::error_code ec;
+  fs::create_directories(base, ec);
+  if (ec) {
+    throw std::runtime_error(
+        "Failed to create adapter output directory: " + ec.message());
+  }
   return (base / "trained-lora-adapter.gguf").string();
 }
 #endif // STANDALONE_TEST_BUILD
