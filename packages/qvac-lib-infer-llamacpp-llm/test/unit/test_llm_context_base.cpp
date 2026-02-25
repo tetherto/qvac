@@ -321,7 +321,7 @@ FAIL() << "Model failed to load";
   if (test_projection_path.empty()) {
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "Hello"}])";
-prompt.media.push_back(std::move(media));
+    prompt.media = std::move(media);
     EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }

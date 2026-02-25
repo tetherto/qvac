@@ -33,7 +33,7 @@ static MockDevice createGPUDevice(std::string&& desc, std::string&& backend) {
 }
 
 static MockDevice createIGPUDevice(std::string&& desc, std::string&& backend) {
-  return {std::move(desc), std::move(backend), GGML_BACKEND_DEVICE_TYPE_GPU};
+  return {std::move(desc), std::move(backend), GGML_BACKEND_DEVICE_TYPE_IGPU};
 }
 
 static MockDevice createACCELDevice(std::string&& desc, std::string&& backend) {
