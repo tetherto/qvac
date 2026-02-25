@@ -183,6 +183,23 @@ test('finetune(opts with resume key) passes opts to addon.finetune', async (t) =
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle')
 })
 
+test('finetune() runs inside exclusive queue wrapper', async (t) => {
+  const model = createModelWithMockAddon(null)
+  const opts = baseFinetuneOpts({ evalDatasetDir: '/tmp/eval.jsonl', validation: { type: 'split' } })
+  model.addon.finetune.callsFake(completeFinetuneWith(model))
+
+  let wrapperCalled = false
+  model._withExclusiveRun = async (fn) => {
+    wrapperCalled = true
+    return await fn()
+  }
+
+  const handle = await model.finetune(opts)
+  t.ok(wrapperCalled, 'finetune should execute inside _withExclusiveRun')
+  const result = await handle.await()
+  t.alike(result, { status: 'COMPLETED' })
+})
+
 test('cancel() throws when addon not initialized', async (t) => {
   const model = createModelWithMockAddon(null)
   model.addon = null
