@@ -154,12 +154,6 @@ public:
   virtual llama_model* getModel() = 0;
 
   /**
-   * The get params method. It returns a reference to the common parameters
-   * associated with this context.
-   */
-  virtual common_params& getParams() = 0;
-
-  /**
    * The get nPast method. It returns the nPast.
    *
    * @return - the nPast.

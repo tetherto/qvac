@@ -196,13 +196,6 @@ llama_model* LlamaModel::getModel() {
   return llmContext_->getModel();
 }
 
-common_params& LlamaModel::getCommonParams() {
-  if (!llmContext_) {
-    throw std::runtime_error("Model context not initialized");
-  }
-  return llmContext_->getParams();
-}
-
 void LlamaModel::llamaLogCallback(
     ggml_log_level level, const char* text, void* userData) {
   (void)userData;
@@ -246,7 +239,10 @@ std::any LlamaModel::process(const std::any& input) {
   const auto& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
-    return std::any(finetune(*prompt.finetuningParams));
+    return std::any(FinetuneTerminalResult{
+        "finetune",
+        finetune(*prompt.finetuningParams),
+    });
   }
 #else
   if (prompt.finetuningParams.has_value()) {

@@ -29,6 +29,11 @@
 
 using namespace qvac_lib_inference_addon_cpp::model;
 
+struct FinetuneTerminalResult {
+  std::string op;
+  std::string status;
+};
+
 class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
 public:
   LlamaModel(const LlamaModel&) = delete;
@@ -79,7 +84,6 @@ public:
 
   llama_context* getContext();
   llama_model* getModel();
-  common_params& getCommonParams();
 
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
   static void

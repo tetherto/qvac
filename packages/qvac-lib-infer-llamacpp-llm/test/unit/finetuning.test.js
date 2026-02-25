@@ -200,13 +200,10 @@ test('finetune() runs inside exclusive queue wrapper', async (t) => {
   t.alike(result, { status: 'COMPLETED' })
 })
 
-test('cancel() throws when addon not initialized', async (t) => {
+test('cancel() is no-op when addon not initialized', async (t) => {
   const model = createModelWithMockAddon(null)
   model.addon = null
-  await t.exception(
-    () => model.cancel(),
-    /Addon not initialized/
-  )
+  await t.execution(async () => { await model.cancel() })
 })
 
 test('cancel() does not throw when finetuning not running', async (t) => {

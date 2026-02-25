@@ -214,8 +214,7 @@ bool MtmdLlmContext::evalMessage(
 
 bool MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools,
-    bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
 
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
