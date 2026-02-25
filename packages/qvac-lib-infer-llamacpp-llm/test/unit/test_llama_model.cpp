@@ -86,7 +86,7 @@ protected:
 
 TEST_F(LlamaModelTest, ConstructorValidParams) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   EXPECT_NO_THROW({ LlamaModel model = createModel(); });
@@ -94,7 +94,7 @@ TEST_F(LlamaModelTest, ConstructorValidParams) {
 
 TEST_F(LlamaModelTest, IsLoadedMethodBeforeInit) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
@@ -103,7 +103,7 @@ TEST_F(LlamaModelTest, IsLoadedMethodBeforeInit) {
 
 TEST_F(LlamaModelTest, InitializeBackend) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
@@ -127,7 +127,7 @@ TEST_F(LlamaModelTest, InvalidModelPath) {
 
 TEST_F(LlamaModelTest, InvalidConfig) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> invalid_config;
@@ -140,14 +140,14 @@ TEST_F(LlamaModelTest, InvalidConfig) {
 
 TEST_F(LlamaModelTest, RuntimeStatsBeforeProcessing) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   auto stats = model.runtimeStats();
@@ -156,7 +156,7 @@ TEST_F(LlamaModelTest, RuntimeStatsBeforeProcessing) {
 
 TEST_F(LlamaModelTest, ResetMethod) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
@@ -171,14 +171,14 @@ TEST_F(LlamaModelTest, ResetMethod) {
 
 TEST_F(LlamaModelTest, ProcessStringInput) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -193,14 +193,14 @@ TEST_F(LlamaModelTest, ProcessStringInput) {
 
 TEST_F(LlamaModelTest, ProcessWithCallback) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> received_tokens;
@@ -222,14 +222,14 @@ TEST_F(LlamaModelTest, ProcessWithCallback) {
 
 TEST_F(LlamaModelTest, ProcessBinaryInput) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
@@ -250,14 +250,14 @@ TEST_F(LlamaModelTest, ProcessBinaryInput) {
 
 TEST_F(LlamaModelTest, ProcessEmptyInput) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -267,7 +267,7 @@ TEST_F(LlamaModelTest, ProcessEmptyInput) {
 
 TEST_F(LlamaModelTest, ProcessAfterInitialization) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   {
@@ -282,7 +282,7 @@ TEST_F(LlamaModelTest, ProcessAfterInitialization) {
     }
 
     if (!model.isLoaded()) {
-      FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
     }
 
     {
@@ -304,14 +304,14 @@ TEST_F(LlamaModelTest, ProcessAfterInitialization) {
 
 TEST_F(LlamaModelTest, IsLoadedAfterProcessing) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -326,14 +326,14 @@ TEST_F(LlamaModelTest, IsLoadedAfterProcessing) {
 
 TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -349,14 +349,14 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
 
 TEST_F(LlamaModelTest, RuntimeStatsAfterReset) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -376,14 +376,14 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterReset) {
 
 TEST_F(LlamaModelTest, CancelMethod) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   EXPECT_NO_THROW(model.cancel());
@@ -391,14 +391,14 @@ TEST_F(LlamaModelTest, CancelMethod) {
 
 TEST_F(LlamaModelTest, MultipleProcessCalls) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -416,7 +416,7 @@ TEST_F(LlamaModelTest, MultipleProcessCalls) {
 
 TEST_F(LlamaModelTest, DestructorCleanup) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   {
@@ -438,7 +438,7 @@ TEST_F(LlamaModelTest, DestructorCleanup) {
 
 TEST_F(LlamaModelTest, SetWeightsForFile) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
@@ -475,14 +475,14 @@ TEST_F(LlamaModelTest, LlamaLogCallback) {
 
 TEST_F(LlamaModelTest, InvalidJSONInput) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -492,14 +492,14 @@ TEST_F(LlamaModelTest, InvalidJSONInput) {
 
 TEST_F(LlamaModelTest, MalformedChatMessageFormat) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt1;
@@ -513,14 +513,14 @@ TEST_F(LlamaModelTest, MalformedChatMessageFormat) {
 
 TEST_F(LlamaModelTest, EmptyMessagesArray) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -535,14 +535,14 @@ TEST_F(LlamaModelTest, EmptyMessagesArray) {
 
 TEST_F(LlamaModelTest, VeryLongInput) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::string long_content(10000, 'a');
@@ -560,14 +560,14 @@ TEST_F(LlamaModelTest, VeryLongInput) {
 
 TEST_F(LlamaModelTest, SpecialCharactersAndUnicode) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
   model.waitForLoadInitialization();
 
   if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -582,7 +582,7 @@ TEST_F(LlamaModelTest, SpecialCharactersAndUnicode) {
 
 TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> config_no_device;
@@ -601,7 +601,7 @@ TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
   EXPECT_THROW(
       {
         LlamaModel model(
-            getValidModelPath(),
+getValidModelPath(),
             std::string(test_projection_path),
             std::unordered_map<std::string, std::string>(config_no_device));
         model.waitForLoadInitialization();
@@ -611,7 +611,7 @@ TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
 
 TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> config;
@@ -631,7 +631,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(
+LlamaModel model(
             getValidModelPath(),
             std::string(test_projection_path),
             std::unordered_map<std::string, std::string>(config));
@@ -642,7 +642,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidNDiscarded) {
 
 TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> config;
@@ -662,7 +662,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(
+LlamaModel model(
             getValidModelPath(),
             std::string(test_projection_path),
             std::unordered_map<std::string, std::string>(config));
@@ -673,7 +673,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model(
@@ -693,7 +693,7 @@ TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
 
 TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string multimodalModelPath = test_common::BaseTestModelPath::get(
@@ -703,7 +703,7 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
       "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
-    FAIL() << "Multimodal model and projection required for this test";
+FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
@@ -725,7 +725,7 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
 
 TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::string multimodalModelPath = test_common::BaseTestModelPath::get(
@@ -735,7 +735,7 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
       "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
-    FAIL() << "Multimodal model and projection required for this test";
+FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
@@ -755,7 +755,7 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
 
 TEST_F(LlamaModelTest, ProcessContextOverflow) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> small_ctx_config;
@@ -772,7 +772,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(
+LlamaModel model(
       getValidModelPath(),
       std::string(test_projection_path),
       std::unordered_map<std::string, std::string>(small_ctx_config));
@@ -791,7 +791,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflow) {
 
 TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> small_ctx_config;
@@ -809,7 +809,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
 #endif
   small_ctx_config["backendsDir"] = backendDir.string();
 
-  LlamaModel model(
+LlamaModel model(
       getValidModelPath(),
       std::string(test_projection_path),
       std::unordered_map<std::string, std::string>(small_ctx_config));
@@ -829,7 +829,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
   });
 
   std::string long_content(30000, 'a');
-  LlamaModel::Prompt overflow_prompt;
+LlamaModel::Prompt overflow_prompt;
   overflow_prompt.input =
       R"([{"role": "user", "content": ")" + long_content + R"("}])";
 
@@ -839,7 +839,7 @@ TEST_F(LlamaModelTest, ProcessContextOverflowAfterDiscardFails) {
 
 TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model(
@@ -865,7 +865,7 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
 
 TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
   if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
+FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   std::unordered_map<std::string, std::string> config;
@@ -886,7 +886,7 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
 
   EXPECT_THROW(
       {
-        LlamaModel model(
+LlamaModel model(
             getValidModelPath(),
             std::string(test_projection_path),
             std::unordered_map<std::string, std::string>(config));

@@ -5,6 +5,7 @@ Utility functions for benchmark evaluation
 import re
 import string
 import collections
+from typing import List, Tuple
 from datasets import load_dataset
 
 # Fixed random seed for reproducibility
@@ -26,7 +27,7 @@ def normalize_answer(s: str) -> str:
     return white_space_fix(remove_articles(remove_punc(lower(s))))
 
 
-def get_tokens(s: str) -> list[str]:
+def get_tokens(s: str) -> List[str]:
     """Get normalized tokens from string"""
     if not s:
         return []
@@ -159,7 +160,7 @@ class DatasetLoader:
     """Handles loading and preparing datasets for evaluation"""
     
     @staticmethod
-    def load_squad(num_samples: int) -> tuple[list[str], list[str], dict]:
+    def load_squad(num_samples: int) -> Tuple[List[str], List[str], dict]:
         """
         Load and prepare SQuAD dataset
         
@@ -185,7 +186,7 @@ class DatasetLoader:
         return prompts, ground_truths, config
     
     @staticmethod
-    def load_arc(num_samples: int) -> tuple[list[str], list[str], dict]:
+    def load_arc(num_samples: int) -> Tuple[List[str], List[str], dict]:
         """
         Load and prepare ARC dataset
         
@@ -208,7 +209,7 @@ class DatasetLoader:
         return prompts, ground_truths, config
     
     @staticmethod
-    def load_mmlu(num_samples: int) -> tuple[list[str], list[str], dict]:
+    def load_mmlu(num_samples: int) -> Tuple[List[str], List[str], dict]:
         """
         Load and prepare MMLU dataset
         
@@ -231,7 +232,7 @@ class DatasetLoader:
         return prompts, ground_truths, config
     
     @staticmethod
-    def load_gsm8k(num_samples: int) -> tuple[list[str], list[str], dict]:
+    def load_gsm8k(num_samples: int) -> Tuple[List[str], List[str], dict]:
         """
         Load and prepare GSM8K dataset
         

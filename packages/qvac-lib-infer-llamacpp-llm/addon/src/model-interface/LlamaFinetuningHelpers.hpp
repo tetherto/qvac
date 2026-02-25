@@ -98,6 +98,7 @@ ggml_opt_optimizer_params schedulerOptimizerParams(void* userdata);
 std::filesystem::path
 checkpointStepDirectory(const TrainingCheckpointState& state, int64_t step);
 void saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state);
+
 bool parseCheckpointMetadata(
     const std::filesystem::path& metadataPath, CheckpointMetadata& meta);
 std::filesystem::path pauseCheckpointDirectory(

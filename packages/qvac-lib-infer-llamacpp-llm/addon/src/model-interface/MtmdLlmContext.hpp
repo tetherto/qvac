@@ -80,6 +80,11 @@ public:
   llama_model* getModel() override { return model_; }
 
   /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
+
+  /**
    * The get n_past method. It returns the n_past.
    *
    * @return - the n_past.
