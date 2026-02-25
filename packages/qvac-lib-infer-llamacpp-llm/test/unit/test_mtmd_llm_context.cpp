@@ -182,7 +182,7 @@ TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media.push_back(std::move(image_data));
+  prompt.media = std::move(image_data);
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
@@ -246,7 +246,7 @@ TEST_F(MtmdLlmContextTest, ResetMedia) {
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
   LlamaModel::Prompt mediaPrompt;
   mediaPrompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  mediaPrompt.media.push_back(std::move(image_data));
+  mediaPrompt.media = std::move(image_data);
   EXPECT_THROW(
       { model->processPrompt(mediaPrompt); }, qvac_errors::StatusError);
 
@@ -325,7 +325,7 @@ TEST_F(MtmdLlmContextTest, InvalidMedia) {
   std::vector<uint8_t> invalid_data = {0x00, 0x01, 0x02};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media.push_back(std::move(invalid_data));
+  prompt.media = std::move(invalid_data);
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
 }
 
