@@ -30,7 +30,6 @@ makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   };
 }
 
-<<<<<<< HEAD
 struct JsFinetuneTerminalOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::
           JsBaseOutputHandler<FinetuneTerminalResult> {
@@ -49,8 +48,11 @@ struct JsFinetuneTerminalOutputHandler
                 }) {}
 };
 
+<<<<<<< HEAD
 =======
 >>>>>>> c0aaf1e (feat: add finetuning workspace changes)
+=======
+>>>>>>> e0f559e (Merge remote-tracking branch 'origin/feature-llm-finetuning' into feature-llm-finetuning)
 inline LlamaFinetuningParams
 parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   LlamaFinetuningParams params;
