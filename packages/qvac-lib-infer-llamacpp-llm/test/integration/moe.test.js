@@ -45,8 +45,8 @@ test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
   const inference = new LlmLlamacpp({
     modelName,
     loader,
-    diskPath: dirPath,
     logger: console,
+    diskPath: dirPath,
     opts: { stats: true }
   }, CONFIG)
 
