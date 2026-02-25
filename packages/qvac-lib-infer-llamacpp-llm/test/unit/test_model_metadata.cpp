@@ -3,11 +3,14 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 
 #include <gtest/gtest.h>
 
+#include "model-interface/AsyncWeightsLoader.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/ModelMetadata.hpp"
 #include "test_common.hpp"
@@ -89,15 +92,9 @@ TEST_F(
   if (!hasNormalModel()) {
     FAIL() << "Test model not found at: " << normal_model_path_;
   }
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   GGUFShards emptyShards;
   ModelMetaData meta;
-  meta.parse(
-      normal_model_path_,
-      emptyMap,
-      emptyShards,
-      false /* isStreaming */,
-      "Test");
+  meta.parse(normal_model_path_, emptyShards, false /* isStreaming */, "Test");
   EXPECT_FALSE(meta.hasOneBitQuantization());
 }
 
@@ -109,15 +106,9 @@ TEST_F(
            "models/unit-test); see "
            "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0";
   }
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   GGUFShards emptyShards;
   ModelMetaData meta;
-  meta.parse(
-      bitnet_model_path_,
-      emptyMap,
-      emptyShards,
-      false /* isStreaming */,
-      "Test");
+  meta.parse(bitnet_model_path_, emptyShards, false /* isStreaming */, "Test");
   EXPECT_TRUE(meta.hasOneBitQuantization());
 }
 
@@ -128,14 +119,8 @@ TEST_F(ModelMetadataTest, DiskShards_NormalModel_HasOneBitQuantizationFalse) {
     GTEST_SKIP() << "No sharded model in setup (set "
                     "SHARDED_MODEL_FIRST_SHARD_PATH)";
   }
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   ModelMetaData meta;
-  meta.parse(
-      sharded_first_shard_path_,
-      emptyMap,
-      shards_with_paths_,
-      false /* isStreaming */,
-      "Test");
+  meta.parse(sharded_first_shard_path_, shards_with_paths_, false /* isStreaming */, "Test");
   EXPECT_FALSE(meta.hasOneBitQuantization());
 }
 
@@ -144,14 +129,8 @@ TEST_F(ModelMetadataTest, DiskShards_BitnetModel_HasOneBitQuantizationTrue) {
     GTEST_SKIP() << "Sharded bitnet model not found; split with "
                     "llama-gguf-split (see test_common.hpp)";
   }
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   ModelMetaData meta;
-  meta.parse(
-      bitnet_sharded_first_shard_path_,
-      emptyMap,
-      bitnet_shards_with_paths_,
-      false /* isStreaming */,
-      "Test");
+  meta.parse(bitnet_sharded_first_shard_path_, bitnet_shards_with_paths_, false /* isStreaming */, "Test");
   EXPECT_TRUE(meta.hasOneBitQuantization());
 }
 
@@ -178,22 +157,14 @@ TEST_F(
   }
   auto streambuf = readFileToStreambufBinary(normal_model_path_);
   ASSERT_NE(streambuf, nullptr);
-  std::string filename = fs::path(normal_model_path_).filename().string();
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> streamed;
-  streamed[filename] = std::move(streambuf);
   GGUFShards emptyShards;
   std::shared_ptr<std::basic_streambuf<char>> firstFileFromGgufStream(
-      streamed[filename].get(), [](std::basic_streambuf<char>*) {});
+      streambuf.get(), [](std::basic_streambuf<char>*) {});
   ModelMetaData meta;
   std::thread lenderThread([&meta, &firstFileFromGgufStream]() {
     meta.firstFileFromGgufStreamState.provide(firstFileFromGgufStream);
   });
-  meta.parse(
-      normal_model_path_,
-      streamed,
-      emptyShards,
-      true /* isStreaming */,
-      "Test");
+  meta.parse(normal_model_path_, emptyShards, true /* isStreaming */, "Test");
   lenderThread.join();
   EXPECT_FALSE(meta.hasOneBitQuantization());
 }
@@ -208,22 +179,14 @@ TEST_F(
   }
   auto streambuf = readFileToStreambufBinary(bitnet_model_path_);
   ASSERT_NE(streambuf, nullptr);
-  std::string filename = fs::path(bitnet_model_path_).filename().string();
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> streamed;
-  streamed[filename] = std::move(streambuf);
   GGUFShards emptyShards;
   std::shared_ptr<std::basic_streambuf<char>> firstFileFromGgufStream(
-      streamed[filename].get(), [](std::basic_streambuf<char>*) {});
+      streambuf.get(), [](std::basic_streambuf<char>*) {});
   ModelMetaData meta;
   std::thread lenderThread([&meta, &firstFileFromGgufStream]() {
     meta.firstFileFromGgufStreamState.provide(firstFileFromGgufStream);
   });
-  meta.parse(
-      bitnet_model_path_,
-      streamed,
-      emptyShards,
-      true /* isStreaming */,
-      "Test");
+  meta.parse(bitnet_model_path_, emptyShards, true /* isStreaming */, "Test");
   lenderThread.join();
   EXPECT_TRUE(meta.hasOneBitQuantization());
 }
@@ -240,17 +203,11 @@ TEST_F(
   ASSERT_NE(streambuf, nullptr);
   std::shared_ptr<std::basic_streambuf<char>> firstFileFromGgufStream =
       std::move(streambuf);
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   ModelMetaData meta;
   std::thread lenderThread([&meta, &firstFileFromGgufStream]() {
     meta.firstFileFromGgufStreamState.provide(firstFileFromGgufStream);
   });
-  meta.parse(
-      sharded_first_shard_path_,
-      emptyMap,
-      shards_with_paths_,
-      true /* isStreaming */,
-      "Test");
+  meta.parse(sharded_first_shard_path_, shards_with_paths_, true /* isStreaming */, "Test");
   lenderThread.join();
   EXPECT_FALSE(meta.hasOneBitQuantization());
 }
@@ -266,17 +223,203 @@ TEST_F(
   ASSERT_NE(streambuf, nullptr);
   std::shared_ptr<std::basic_streambuf<char>> firstFileFromGgufStream =
       std::move(streambuf);
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> emptyMap;
   ModelMetaData meta;
   std::thread lenderThread([&meta, &firstFileFromGgufStream]() {
     meta.firstFileFromGgufStreamState.provide(firstFileFromGgufStream);
   });
-  meta.parse(
-      bitnet_sharded_first_shard_path_,
-      emptyMap,
-      bitnet_shards_with_paths_,
-      true /* isStreaming */,
-      "Test");
+  meta.parse(bitnet_sharded_first_shard_path_, bitnet_shards_with_paths_, true /* isStreaming */, "Test");
   lenderThread.join();
   EXPECT_TRUE(meta.hasOneBitQuantization());
+}
+
+// ---- AsyncWeightsLoader: mock and streaming tests ----
+//
+// MockAsyncWeightsLoader overrides fulfillSplitFuture so tests never touch
+// the global promise registry (which would leak a permanent entry because no
+// llama_model_load_from_split_futures consumer is set up to erase it).
+// fulfilledFilenames records every call for assertion; waitForFulfillCount()
+// synchronises with the detached thread used by the sharded path.
+
+class MockAsyncWeightsLoader : public AsyncWeightsLoader {
+public:
+  using AsyncWeightsLoader::AsyncWeightsLoader;
+
+  std::multiset<std::string> fulfilledFilenames;
+
+  /// Block until at least @p n calls to fulfillSplitFuture have been recorded.
+  void waitForFulfillCount(std::size_t n) {
+    std::unique_lock<std::mutex> lock(mu_);
+    cv_.wait(lock, [&] { return fulfilledFilenames.size() >= n; });
+  }
+
+protected:
+  void fulfillSplitFuture(
+      const std::string& filename, std::unique_ptr<Buf>&&) override {
+    // shard destructs here; global promise registry is not touched
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      fulfilledFilenames.insert(filename);
+    }
+    cv_.notify_all();
+  }
+
+private:
+  std::mutex mu_;
+  std::condition_variable cv_;
+};
+
+// ---- AsyncWeightsLoader: streaming single file ----
+//
+// Mirrors real delayed-load usage: setWeightsForFile is called during the
+// download phase (before activate()), so by the time parse() runs it finds
+// the single file already in streamedFiles_ and the wait() flag already set.
+// fulfillSplitFuture is never called for single-GGUF; the multiset stays empty.
+
+TEST_F(
+    ModelMetadataTest,
+    AsyncLoader_SingleFile_NormalModel_MetadataParsedAndShardAvailable) {
+  if (!hasNormalModel()) {
+    FAIL() << "Test model not found at: " << normal_model_path_;
+  }
+  auto singleFileStreambuf = readFileToStreambufBinary(normal_model_path_);
+  ASSERT_NE(singleFileStreambuf, nullptr);
+
+  const std::string filename = fs::path(normal_model_path_).filename().string();
+  GGUFShards emptyShards;
+  InitLoader initLoader;
+  const std::string loadingContext = "test-normal";
+  ModelMetaData meta;
+  MockAsyncWeightsLoader loader(emptyShards, initLoader, loadingContext, &meta);
+
+  loader.setWeightsForFile(filename, std::move(singleFileStreambuf));
+  meta.parse(normal_model_path_, emptyShards, true /* isStreaming */, "Test");
+  auto extracted = loader.extractIndividualStreamedFiles();
+  EXPECT_FALSE(meta.hasOneBitQuantization());
+  EXPECT_NE(extracted.find(filename), extracted.end());
+  EXPECT_TRUE(loader.fulfilledFilenames.empty());
+}
+
+TEST_F(
+    ModelMetadataTest,
+    AsyncLoader_SingleFile_BitnetModel_MetadataParsedAndShardAvailable) {
+  if (!hasBitnetModel()) {
+    GTEST_SKIP()
+        << "bitnet_b1_58-large-TQ2_0.gguf not found; see "
+           "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0";
+  }
+  auto singleFileStreambuf = readFileToStreambufBinary(bitnet_model_path_);
+  ASSERT_NE(singleFileStreambuf, nullptr);
+
+  const std::string filename = fs::path(bitnet_model_path_).filename().string();
+  GGUFShards emptyShards;
+  InitLoader initLoader;
+  const std::string loadingContext = "test-bitnet";
+  ModelMetaData meta;
+  MockAsyncWeightsLoader loader(emptyShards, initLoader, loadingContext, &meta);
+
+  loader.setWeightsForFile(filename, std::move(singleFileStreambuf));
+  meta.parse(bitnet_model_path_, emptyShards, true /* isStreaming */, "Test");
+  auto extracted = loader.extractIndividualStreamedFiles();
+  EXPECT_TRUE(meta.hasOneBitQuantization());
+  EXPECT_NE(extracted.find(filename), extracted.end());
+  EXPECT_TRUE(loader.fulfilledFilenames.empty());
+}
+
+TEST_F(
+    ModelMetadataTest,
+    AsyncLoader_SingleFile_NoMetadata_ShardStoredWithoutLending) {
+  if (!hasNormalModel()) {
+    FAIL() << "Test model not found at: " << normal_model_path_;
+  }
+  auto singleFileStreambuf = readFileToStreambufBinary(normal_model_path_);
+  ASSERT_NE(singleFileStreambuf, nullptr);
+
+  const std::string filename = fs::path(normal_model_path_).filename().string();
+  GGUFShards emptyShards;
+  InitLoader initLoader;
+  const std::string loadingContext = "test-no-meta";
+  // No ModelMetaData — lending is skipped entirely.
+  MockAsyncWeightsLoader loader(emptyShards, initLoader, loadingContext);
+
+  loader.setWeightsForFile(filename, std::move(singleFileStreambuf));
+
+  auto extracted = loader.extractIndividualStreamedFiles();
+  EXPECT_TRUE(loader.isStreaming());
+  EXPECT_NE(extracted.find(filename), extracted.end());
+  EXPECT_TRUE(loader.fulfilledFilenames.empty());
+}
+
+// ---- AsyncWeightsLoader: streaming shards ----
+//
+// For sharded models, parse() blocks at wait() and is unblocked by the
+// detached thread that lendFirstShard() spawns inside setWeightsForFile().
+// waitForFulfillCount(1) synchronises with that detached thread so assertions
+// on fulfilledFilenames are race-free.
+
+TEST_F(ModelMetadataTest, AsyncLoader_Shards_NormalModel_MetadataParsed) {
+  if (!hasShardedModel()) {
+    GTEST_SKIP()
+        << "No sharded model in setup (set SHARDED_MODEL_FIRST_SHARD_PATH)";
+  }
+
+  // Unresolved basenames: what AsyncWeightsLoader sees during streaming.
+  GGUFShards shards =
+      GGUFShards::expandGGUFIntoShards(sharded_first_shard_path_);
+  const std::string firstShardFilename = shards.gguf_files.front();
+
+  // Read the first shard from disk via its resolved absolute path.
+  auto firstShardBuf =
+      readFileToStreambufBinary(shards_with_paths_.gguf_files.front());
+  ASSERT_NE(firstShardBuf, nullptr);
+
+  InitLoader initLoader;
+  const std::string loadingContext =
+      InitLoader::getLoadingContext("TestShardsNormal");
+  ModelMetaData meta;
+  MockAsyncWeightsLoader loader(shards, initLoader, loadingContext, &meta);
+
+  // parse() blocks at wait() until the detached thread inside setWeightsForFile
+  // provides the first shard via lendFirstShard().
+  std::thread parseThread([&]() {
+    meta.parse(sharded_first_shard_path_, shards_with_paths_, true /* isStreaming */, "Test");
+  });
+
+  loader.setWeightsForFile(firstShardFilename, std::move(firstShardBuf));
+  parseThread.join();
+  loader.waitForFulfillCount(1);
+
+  EXPECT_FALSE(meta.hasOneBitQuantization());
+  EXPECT_EQ(loader.fulfilledFilenames.count(firstShardFilename), 1u);
+}
+
+TEST_F(ModelMetadataTest, AsyncLoader_Shards_BitnetModel_MetadataParsed) {
+  if (!hasShardedBitnetModel()) {
+    GTEST_SKIP() << "Sharded bitnet model not found; split with "
+                    "llama-gguf-split (see test_common.hpp)";
+  }
+
+  GGUFShards shards =
+      GGUFShards::expandGGUFIntoShards(bitnet_sharded_first_shard_path_);
+  const std::string firstShardFilename = shards.gguf_files.front();
+
+  auto firstShardBuf =
+      readFileToStreambufBinary(bitnet_shards_with_paths_.gguf_files.front());
+  ASSERT_NE(firstShardBuf, nullptr);
+
+  InitLoader initLoader;
+  const std::string loadingContext =
+      InitLoader::getLoadingContext("TestShardsBitnet");
+  ModelMetaData meta;
+  MockAsyncWeightsLoader loader(shards, initLoader, loadingContext, &meta);
+
+  std::thread parseThread([&]() {
+    meta.parse(bitnet_sharded_first_shard_path_, bitnet_shards_with_paths_, true /* isStreaming */, "Test");
+  });
+
+  loader.setWeightsForFile(firstShardFilename, std::move(firstShardBuf));
+  parseThread.join();
+  loader.waitForFulfillCount(1);
+
+  EXPECT_TRUE(meta.hasOneBitQuantization());
+  EXPECT_EQ(loader.fulfilledFilenames.count(firstShardFilename), 1u);
 }
