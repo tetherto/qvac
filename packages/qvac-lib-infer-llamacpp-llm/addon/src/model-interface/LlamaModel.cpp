@@ -196,6 +196,13 @@ llama_model* LlamaModel::getModel() {
   return llmContext_->getModel();
 }
 
+common_params& LlamaModel::getCommonParams() {
+  if (!llmContext_) {
+    throw std::runtime_error("Model context not initialized");
+  }
+  return llmContext_->getParams();
+}
+
 void LlamaModel::llamaLogCallback(
     ggml_log_level level, const char* text, void* userData) {
   (void)userData;
@@ -239,10 +246,14 @@ std::any LlamaModel::process(const std::any& input) {
   const auto& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
+<<<<<<< HEAD
     return std::any(FinetuneTerminalResult{
         "finetune",
         finetune(*prompt.finetuningParams),
     });
+=======
+    return std::any(finetune(*prompt.finetuningParams));
+>>>>>>> c0aaf1e (feat: add finetuning workspace changes)
   }
 #else
   if (prompt.finetuningParams.has_value()) {
@@ -1230,10 +1241,19 @@ LlamaModel::initializeCheckpointing(
   std::error_code dirErr;
   std::filesystem::create_directories(checkpointState->checkpointDir, dirErr);
   if (dirErr) {
+<<<<<<< HEAD
     throw std::runtime_error(
         "Checkpoint directory creation failed: directory='" +
         checkpointState->checkpointDir.string() + "' error=" +
         dirErr.message());
+=======
+    std::ostringstream msg;
+    msg << "Checkpointing disabled | directory='"
+        << checkpointState->checkpointDir.string() << "' | error="
+        << dirErr.message();
+    QLOG_IF(Priority::WARNING, msg.str());
+    return nullptr;
+>>>>>>> c0aaf1e (feat: add finetuning workspace changes)
   }
 
   if (periodicCheckpointingEnabled) {

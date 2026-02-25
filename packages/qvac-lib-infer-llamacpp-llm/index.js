@@ -8,12 +8,55 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
+const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 const RUN_QUEUE_BUSY_ERROR =
   'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
-/** Max ms to wait for the previous inference job to settle before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+
+const VALIDATION_TYPES = ['none', 'split', 'dataset']
+const DEFAULT_VALIDATION_FRACTION = 0.05
+
+function normalizeFinetuneParams (opts) {
+  const validation = opts.validation
+  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
+    throw new Error(
+      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
+      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
+    )
+  }
+  const out = { ...opts }
+  const type = validation.type
+  if (!VALIDATION_TYPES.includes(type)) {
+    throw new Error(
+      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
+    )
+  }
+  if (type === 'none') {
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = false
+  } else if (type === 'split') {
+    const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
+    out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
+    out.useEvalDatasetForValidation = false
+  } else {
+    const evalPath = validation.path ?? opts.evalDatasetDir
+    if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
+      throw new Error(
+        "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
+      )
+    }
+    if (evalPath === opts.trainDatasetDir) {
+      throw new Error(
+        "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
+      )
+    }
+    out.evalDatasetPath = evalPath
+    out.validationSplit = 0
+    out.useEvalDatasetForValidation = true
+  }
+  delete out.validation
+  return out
+}
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
@@ -285,16 +328,17 @@ class LlmLlamacpp extends BaseInference {
       mappedEvent = 'Output'
     }
 
-    return this._outputCallback(addon, mappedEvent, 'OnlyOneJob', data, error)
+    return this._outputCallback(addon, mappedEvent, 'job', data, error)
   }
 
   /**
    * Cancel the current task (or pause finetuning if finetune is running).
    */
   async cancel () {
-    if (this.addon?.cancel) {
-      await this.addon.cancel()
+    if (!this.addon) {
+      throw new Error('Addon not initialized')
     }
+    await this.addon.cancel()
   }
 
   /**
@@ -309,7 +353,7 @@ class LlmLlamacpp extends BaseInference {
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
         currentJobResponse.failed(new Error('Model was unloaded'))
-        this._deleteJobMapping('OnlyOneJob')
+        this._deleteJobMapping('job')
       }
       this._hasActiveResponse = false
       await super.unload()
@@ -330,7 +374,7 @@ class LlmLlamacpp extends BaseInference {
       this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
       const textMessages = []
-      const mediaItems = []
+      let mediaData = null
 
       for (const message of prompt) {
         if (message.role === 'user' &&

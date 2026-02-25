@@ -91,12 +91,12 @@ protected:
 
 TEST_F(MtmdLlmContextTest, Constructor) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   EXPECT_TRUE(model->isLoaded());
@@ -104,12 +104,12 @@ TEST_F(MtmdLlmContextTest, Constructor) {
 
 TEST_F(MtmdLlmContextTest, ProcessWithStringInput) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -124,12 +124,12 @@ TEST_F(MtmdLlmContextTest, ProcessWithStringInput) {
 
 TEST_F(MtmdLlmContextTest, ProcessWithCallback) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> generated_tokens;
@@ -151,12 +151,12 @@ TEST_F(MtmdLlmContextTest, ProcessWithCallback) {
 
 TEST_F(MtmdLlmContextTest, ProcessAndGetRuntimeStats) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -171,12 +171,12 @@ TEST_F(MtmdLlmContextTest, ProcessAndGetRuntimeStats) {
 
 TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
@@ -188,12 +188,12 @@ TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
 
 TEST_F(MtmdLlmContextTest, LoadMediaFile) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -204,12 +204,12 @@ TEST_F(MtmdLlmContextTest, LoadMediaFile) {
 
 TEST_F(MtmdLlmContextTest, ResetState) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -235,12 +235,12 @@ TEST_F(MtmdLlmContextTest, ResetState) {
 
 TEST_F(MtmdLlmContextTest, ResetMedia) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> image_data = {0xFF, 0xD8, 0xFF, 0xE0};
@@ -262,12 +262,12 @@ TEST_F(MtmdLlmContextTest, ResetMedia) {
 
 TEST_F(MtmdLlmContextTest, MultimodalMessages) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -283,12 +283,12 @@ TEST_F(MtmdLlmContextTest, MultimodalMessages) {
 
 TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt1;
@@ -314,12 +314,12 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
 
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   std::vector<uint8_t> invalid_data = {0x00, 0x01, 0x02};
@@ -331,12 +331,12 @@ TEST_F(MtmdLlmContextTest, InvalidMedia) {
 
 TEST_F(MtmdLlmContextTest, NonexistentFile) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -347,12 +347,12 @@ TEST_F(MtmdLlmContextTest, NonexistentFile) {
 
 TEST_F(MtmdLlmContextTest, ProcessWithTools) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
@@ -383,12 +383,12 @@ TEST_F(MtmdLlmContextTest, ProcessWithTools) {
 
 TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
   if (!hasValidModel()) {
-    FAIL() << "Multimodal model or projection file not found";
+FAIL() << "Multimodal model or projection file not found";
   }
 
   auto model = createModel();
   if (!model) {
-    FAIL() << "Model failed to load";
+FAIL() << "Model failed to load";
   }
 
   LlamaModel::Prompt prompt;
