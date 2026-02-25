@@ -41,8 +41,8 @@ async function setupReasoningModel (t, toolsEnabled) {
     loader,
     modelName,
     diskPath: dirPath,
-    projectionPath: '',
     logger: console,
+    projectionPath: '',
     opts: { stats: true }
   }, config)
 

@@ -171,8 +171,6 @@ protected:
 // GPU Description
 constexpr const char* ADRENO_DESC = "Adreno (TM) 740";
 constexpr const char* MALI_DESC = "Mali-G715";
-// Intel UHD matches isIntegratedGpu() for backend selection tests
-constexpr const char* INTEL_IGPU_DESC = "Intel UHD 630";
 
 // GPU Backend
 constexpr const char* VULKAN0_BACK = "Vulkan0";
@@ -268,7 +266,7 @@ TEST_F(BackendSelectionTest, VulkanIGPU) {
 
 // Vulkan GPU backend prefered over integrated GPU
 TEST_F(BackendSelectionTest, VulkanGPUOverIGPUWhenGPUBack) {
-  mockBackend.addDevice(createIGPUDevice(INTEL_IGPU_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan1");
 }
@@ -429,7 +427,7 @@ TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndex) {
 
 // Integration test: chooseBackend with main-gpu integrated enum
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegrated) {
-  mockBackend.addDevice(createIGPUDevice(INTEL_IGPU_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = MainGpuType::Integrated;
@@ -438,7 +436,7 @@ TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegrated) {
 
 // Integration test: chooseBackend with main-gpu dedicated enum
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuDedicated) {
-  mockBackend.addDevice(createIGPUDevice(INTEL_IGPU_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = MainGpuType::Dedicated;
