@@ -1,6 +1,0 @@
-epoch=0
-lora_rank=8
-lora_alpha=16.000000
-target_modules=127
-global_step=20
-current_step=21
