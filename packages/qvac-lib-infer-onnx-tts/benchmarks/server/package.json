@@ -6,6 +6,7 @@
   "scripts": {
     "setup": "bare chatterbox-setup.js",
     "setup:chatterbox": "bare chatterbox-setup.js",
+    "setup:supertonic": "bare supertonic-setup.js",
     "start": "bare index.js",
     "lint": "standard",
     "lint:fix": "standard --fix"

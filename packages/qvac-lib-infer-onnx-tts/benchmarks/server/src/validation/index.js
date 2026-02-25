@@ -22,7 +22,25 @@ const ChatterboxRequestSchema = z.object({
   includeSamples: z.boolean().optional().default(false)
 })
 
+const SupertonicConfigSchema = z.object({
+  modelDir: z.string().optional(),
+  voiceName: z.string().optional().default('F1'),
+  language: z.string().default('en'),
+  sampleRate: z.number().int().positive().default(44100),
+  speed: z.number().optional().default(1),
+  numInferenceSteps: z.number().int().min(1).optional().default(5),
+  useGPU: z.boolean().optional().default(false)
+})
+
+const SupertonicRequestSchema = z.object({
+  texts: z.array(z.string()).min(1),
+  config: SupertonicConfigSchema,
+  includeSamples: z.boolean().optional().default(false)
+})
+
 module.exports = {
   ChatterboxConfigSchema,
-  ChatterboxRequestSchema
+  ChatterboxRequestSchema,
+  SupertonicConfigSchema,
+  SupertonicRequestSchema
 }

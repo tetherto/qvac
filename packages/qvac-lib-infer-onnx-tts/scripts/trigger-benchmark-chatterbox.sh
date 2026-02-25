@@ -43,7 +43,7 @@ OPTIONS:
     -w, --whisper-model     Whisper model: tiny, base, small, medium (default: $WHISPER_MODEL)
     -n, --num-runs          Number of runs per sample (default: $NUM_RUNS)
     -g, --use-gpu           Enable GPU acceleration: true/false (default: $USE_GPU)
-    -V, --variant           Chatterbox model variant: fp32, fp16, q4 (default: $MODEL_VARIANT)
+    -V, --variant           Chatterbox model variant: fp32, fp16, q4, q4f16, quantized (default: $MODEL_VARIANT)
     -b, --branch            Git branch to run workflow on (default: current branch)
     -R, --remote            Git remote to use: origin, upstream (default: $REMOTE)
     -W, --watch             Watch workflow and parse results to CSV/Sheets (default: $WATCH)

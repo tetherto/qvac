@@ -765,4 +765,14 @@ jobs:
 
             # Add AraDiaWER metrics for Arabic
             if [ "${{ github.event.inputs.language }}" = "arabic" ]; then
-              ARADIAWER=$(grep "Ara
+              ARADIAWER=$(grep "AraDiaWER:" "$RESULT_FILE" | head -1 | sed 's/.*AraDiaWER: //' | sed 's/\*\*//' || echo "N/A")
+              if [ "$ARADIAWER" != "N/A" ]; then
+                echo "| AraDiaWER | ${ARADIAWER} |" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+
+            echo "| Load Time | ${LOAD_TIME} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Run Time | ${RUN_TIME} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Results file not found: $RESULT_FILE" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -19,6 +19,8 @@ declare interface ChatterboxTTSArgs {
   languageModelPath: string
   /** Reference audio (Float32Array) for voice cloning */
   referenceAudio?: Float32Array | number[]
+  /** Defer ONNX session creation until first use. Defaults to true on iOS, false otherwise. */
+  lazySessionLoading?: boolean
   cache?: string
   logger?: Object
 }

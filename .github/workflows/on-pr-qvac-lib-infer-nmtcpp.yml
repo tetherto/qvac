@@ -47,84 +47,17 @@ jobs:
 
   sanity-checks:
     needs: changes
-    if: |
-      always() &&
-      ((needs.changes.outputs.pkg == 'true' &&
-        contains(github.event.pull_request.labels.*.name, 'verify')) ||
-       github.event_name == 'workflow_dispatch')
+    if: always() && ((needs.changes.outputs.pkg == 'true' && contains(github.event.pull_request.labels.*.name, 'verify')) || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - name: Run Sanity checks
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Fetch PR head and target branch
-        id: fetch_pr
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
-
-      - name: Check PR Status with Target Branch
-        continue-on-error: true
-        id: target_branch_checks
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
-          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
-            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
-          fi
-
-      - name: Check for disallowed dependencies
-        id: check_dependencies
-        continue-on-error: true
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
-            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
-          fi
-
-      - name: Run tests
-        id: run_tests
-        continue-on-error: true
-        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
-        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          workdir: ${{ env.PKG_DIR }}
-
-      - name: Check for errors
-        run: |
-          count=0
-          if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
-            echo "::error::Step - Lint or unit tests failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check for disallowed dependencies failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check PR Status with Target Branch failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
-            echo "::error::Step - Fetch PR head and target branch failed"
-            count=$((count + 1))
-          fi
-          if [ $count -gt 0 ]; then
-            echo "::error::There were $count failed checks"
-            exit 1
-          fi
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/qvac-lib-infer-nmtcpp
 
   ts-checks:
     needs: [changes, sanity-checks]
