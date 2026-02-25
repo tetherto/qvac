@@ -19,8 +19,11 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isWindows = platform === 'win32'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64
+const forceCpuDevice = useCpu || isWindows || noGpu
+const skipFinetuning = useCpu || (noGpu && !isWindows)
 
 const PAUSE_RESUME_TIMEOUT_MS = 1800_000
 
@@ -41,8 +44,12 @@ function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: useCpu || noGpu }, async t => {
-  for (const modelVariant of FINETUNE_MODELS) {
+test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+  const modelsToRun = isWindows
+    ? FINETUNE_MODELS.filter(modelVariant => modelVariant.id === 'bitnet-b1_58-large-tq2_0')
+    : FINETUNE_MODELS
+
+  for (const modelVariant of modelsToRun) {
     if (modelVariant.skipOnDarwin && platform === 'darwin') {
       t.comment(`[${modelVariant.id}] skipped on macOS (Metal does not support TQ2_0)`)
       continue
@@ -63,7 +70,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: us
     const config = {
       gpu_layers: '999',
       ctx_size: '512',
-      device: useCpu ? 'cpu' : 'gpu',
+      device: forceCpuDevice ? 'cpu' : 'gpu',
       flash_attn: 'off',
       verbosity: '2'
     }

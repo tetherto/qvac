@@ -399,16 +399,18 @@ class LlmLlamacpp extends BaseInference {
       await: () => completionPromise.then(status => ({ status }))
     }
 
-    this._jobInProgress = true
-    try {
-      await this.addon.finetune(paramsToSend)
-      return handle
-    } catch (err) {
-      this._jobInProgress = false
-      this._finetuneCompletionResolve = null
-      rejectCompletion(err)
-      throw err
-    }
+    return this._withExclusiveRun(async () => {
+      this._jobInProgress = true
+      try {
+        await this.addon.finetune(paramsToSend)
+        return handle
+      } catch (err) {
+        this._jobInProgress = false
+        this._finetuneCompletionResolve = null
+        rejectCompletion(err)
+        throw err
+      }
+    })
   }
 }
 
