@@ -124,6 +124,7 @@
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.1.5",
     "@qvac/rag": "^0.4.2",
+    "@qvac/registry-client": "^0.1.6",
     "@qvac/transcription-parakeet": "^0.1.8",
     "@qvac/transcription-whispercpp": "^0.3.17",
     "@qvac/translation-nmtcpp": "^0.3.9",
