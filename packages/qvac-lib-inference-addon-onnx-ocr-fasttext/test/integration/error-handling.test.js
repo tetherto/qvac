@@ -10,7 +10,9 @@ const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 60 * 1000
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
-const TMP_DIR = path.resolve('.', 'test', 'tmp')
+const TMP_DIR = isMobile
+  ? path.join(global.testDir || '/tmp', 'test-tmp')
+  : path.resolve('.', 'test', 'tmp')
 
 function setupTmpDir () {
   if (!fs.existsSync(TMP_DIR)) {
