@@ -235,7 +235,7 @@ TEST_F(LlamaModelTest, ProcessBinaryInput) {
   std::vector<uint8_t> binary_input = {0x48, 0x65, 0x6c, 0x6c, 0x6f};
   LlamaModel::Prompt prompt;
   prompt.input = R"([{"role": "user", "content": "What is this?"}])";
-  prompt.media.push_back(std::move(binary_input));
+  prompt.media = std::move(binary_input);
   if (test_projection_path.empty()) {
     EXPECT_THROW({ model.processPrompt(prompt); }, qvac_errors::StatusError);
   } else {
