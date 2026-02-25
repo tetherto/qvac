@@ -1,0 +1,34 @@
+// SDK-specific Metro configuration
+const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
+const fs = require('fs');
+
+const config = getDefaultConfig(__dirname);
+
+// Find the actual qvac-sdk location by following the symlink
+const projectRoot = __dirname;
+
+// When this runs from build/consumers/android, node_modules/@qvac/sdk is a symlink
+// Follow it to find the real SDK location
+const sdkSymlink = path.join(projectRoot, 'node_modules/@qvac/sdk');
+let qvacSdkPath;
+
+try {
+    if (fs.existsSync(sdkSymlink)) {
+        qvacSdkPath = fs.realpathSync(sdkSymlink);
+        console.log('[Metro] Resolved @qvac/sdk symlink to:', qvacSdkPath);
+
+        config.watchFolders = [projectRoot, qvacSdkPath];
+
+        // Add SDK's node_modules to resolver paths
+        config.resolver = config.resolver || {};
+        config.resolver.nodeModulesPaths = [
+            path.resolve(projectRoot, 'node_modules'),
+            path.resolve(qvacSdkPath, 'node_modules'),
+        ];
+    }
+} catch (e) {
+    console.error('[Metro] Failed to resolve @qvac/sdk symlink:', e.message);
+}
+
+module.exports = config;

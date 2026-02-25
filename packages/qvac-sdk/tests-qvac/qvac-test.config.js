@@ -1,4 +1,5 @@
 // SDK tests configuration
+/** @type {import('@tetherto/qvac-test-suite').QvacTestConfig} */
 export default {
   // All MQTT configuration under one object
   mqtt: {
@@ -7,6 +8,7 @@ export default {
       protocol: { env: "MQTT_PROTOCOL" },
       host: { env: "MQTT_HOST" },
       port: { env: "MQTT_PORT" },
+      path: { env: "MQTT_PATH" },
     },
 
     // Authentication
@@ -30,6 +32,21 @@ export default {
       entry: "./dist/tests/desktop/consumer.js",
       include: ["./tests/**"],
       dependencies: "auto",
+    },
+    mobile: {
+      platforms: ["ios", "android"],
+      entry: "./dist/tests/mobile/consumer.js",
+      include: ["./dist/tests/**"],
+      dependencies: "auto",
+      metroConfig: "./metro.config.js",
+      expoPlugins: [
+        "@qvac/sdk/expo-plugin",
+      ],
+      assets: {
+        patterns: [
+          "./assets/audio/**/*",
+        ],
+      },
     },
   },
 };

@@ -180,14 +180,6 @@ export const tests = [
   // Vision tests (SKIPPED - see vision-tests.ts for details)
   ...visionTests,
 
-  // Model tests (second section - duplicates like old structure)
-  modelLoadLlm,
-  modelLoadEmbedding,
-  modelLoadInvalid,
-  modelUnload,
-  modelLoadConcurrent,
-  modelReloadLlm,
-
   // Additional model tests
   modelSwitchLlm,
   modelReloadAfterError,
