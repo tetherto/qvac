@@ -18,6 +18,7 @@ import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
 import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
 import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
+import { discoverAgentSkills } from "@/client/agent-skills/discover-skills.bare";
 import { getClientLogger } from "@/logging";
 import { getAllPlugins } from "@/server/plugins";
 import { initializeWorkerCore } from "@/server/worker-core";
@@ -269,6 +270,7 @@ export async function getRPC() {
     const runtimeContext: RuntimeContext = {
       runtime: "bare",
       platform: os.platform() as "darwin" | "linux" | "win32",
+      agentSkills: discoverAgentSkills(),
     };
     await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;

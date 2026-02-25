@@ -5,6 +5,7 @@ import type {
 import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { getRPC } from "@/server/bare/delegate-rpc-client";
 import { stream } from "@/server/rpc/delegate-transport";
+import { injectAgentSkillContext } from "@/server/utils/skill-context";
 import { ModelIsDelegatedError } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 
@@ -13,6 +14,19 @@ const logger = getServerLogger();
 export async function* handleCompletionStreamDelegated(
   request: CompletionStreamRequest,
 ): AsyncGenerator<CompletionStreamResponse> {
+  const filteredHistory = request.history.map(
+    ({ role, content, attachments }) => ({
+      role,
+      content,
+      attachments: attachments ?? [],
+    }),
+  );
+  const historyWithSkills = injectAgentSkillContext(filteredHistory);
+  const delegatedRequest: CompletionStreamRequest = {
+    ...request,
+    history: historyWithSkills,
+  };
+
   // Get delegation info from model registry
   const entry = getModelEntry(request.modelId);
 
@@ -31,7 +45,7 @@ export async function* handleCompletionStreamDelegated(
     const rpc = await getRPC(topic, providerPublicKey, { timeout });
 
     // Use the regular stream function with the HyperSwarm RPC instance
-    const responseStream = stream(request, rpc, { timeout });
+    const responseStream = stream(delegatedRequest, rpc, { timeout });
 
     // Yield each response from the stream
     for await (const response of responseStream) {

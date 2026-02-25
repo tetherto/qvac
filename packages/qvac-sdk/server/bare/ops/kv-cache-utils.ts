@@ -54,8 +54,16 @@ export interface CacheMessage {
 }
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
-  const systemMessage = messages.find((msg) => msg.role === "system");
-  return systemMessage ? systemMessage.content : null;
+  const systemMessages = messages
+    .filter((msg) => msg.role === "system")
+    .map((msg) => msg.content.trim())
+    .filter((content) => content.length > 0);
+
+  if (systemMessages.length === 0) {
+    return null;
+  }
+
+  return systemMessages.join("\n\n");
 }
 
 interface ToolLike {

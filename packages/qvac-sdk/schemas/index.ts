@@ -39,6 +39,15 @@ export {
   type DevicePattern,
 } from "./sdk-config";
 export { runtimeContextSchema, type RuntimeContext } from "./runtime-context";
+export {
+  agentSkillSourceKindSchema,
+  agentSkillScopeSchema,
+  agentSkillSchema,
+  agentSkillsSchema,
+  type AgentSkillSourceKind,
+  type AgentSkillScope,
+  type AgentSkill,
+} from "./agent-skills";
 export * from "./get-model-info";
 export * from "./model-src-utils";
 export * from "./json-schema";

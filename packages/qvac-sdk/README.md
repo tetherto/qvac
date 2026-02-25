@@ -172,6 +172,7 @@ bun run examples/path/to/example.ts
 - `llama.cpp` with tools/function calls: [`examples/llamacpp-native-tools.ts`](examples/llamacpp-native-tools.ts)
 - `llama.cpp` with multimodal inference: [`examples/llamacpp-multimodal.ts`](examples/llamacpp-multimodal.ts)
 - `llama.cpp` with KV cache: [`examples/kv-cache-example.ts`](examples/kv-cache-example.ts)
+- `llama.cpp` with agent skills context: [`examples/llamacpp-agent-skills.ts`](examples/llamacpp-agent-skills.ts)
 
 ### Transcription
 
@@ -264,6 +265,42 @@ Customize SDK behavior using a config file. The SDK auto-discovers `qvac.config.
 | `httpConnectionTimeoutMs` | `number`   | `10000`          | HTTP connection timeout in milliseconds             |
 
 - Config usage example: [`examples/default-config-usage.ts`](examples/default-config-usage.ts)
+
+### Agent skills context (completion)
+
+`completion()` automatically discovers and injects local agent skill guidance with a progressive model:
+
+- Always injects a compact skill catalog (`name`, `description`, source).
+- Injects full `SKILL.md` content only for matched skills (or explicit `/skill-name` invocation).
+- Runs discovery once during SDK initialization through runtime context.
+
+Supported project directories (from current directory up to git/worktree root):
+
+- `.cursor/skills/*/SKILL.md`
+- `.claude/skills/*/SKILL.md`
+- `.codex/skills/*/SKILL.md`
+- `.agents/skills/*/SKILL.md`
+- `.opencode/skills/*/SKILL.md`
+
+Supported user directories:
+
+- `~/.cursor/skills/*/SKILL.md`
+- `~/.claude/skills/*/SKILL.md`
+- `~/.codex/skills/*/SKILL.md`
+- `~/.agents/skills/*/SKILL.md`
+- `~/.config/opencode/skills/*/SKILL.md`
+
+Explicit-only skills are supported via frontmatter:
+
+```md
+---
+name: deploy
+description: Deploy the app to production
+disable-model-invocation: true
+---
+```
+
+When `disable-model-invocation: true` is set, the skill is only injected on explicit `/deploy` usage.
 
 ### Download Lifecycle
 

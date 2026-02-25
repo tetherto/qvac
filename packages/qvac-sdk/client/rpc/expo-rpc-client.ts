@@ -6,6 +6,7 @@ import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.expo";
 import { getClientLogger } from "@/logging";
 import { getDeviceInfo } from "@/client/rpc/expo-device-info";
+import { discoverAgentSkills } from "@/client/agent-skills/discover-skills.expo";
 import type { RuntimeContext } from "@/schemas";
 
 const logger = getClientLogger();
@@ -30,6 +31,7 @@ async function getRuntimeContext(): Promise<RuntimeContext> {
     platform,
     deviceModel,
     deviceBrand,
+    agentSkills: discoverAgentSkills(),
   };
 
   return cachedRuntimeContext;

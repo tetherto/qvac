@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { RPCRequestNotSentError } from "@/utils/errors-client";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
+import { discoverAgentSkills } from "@/client/agent-skills/discover-skills.node";
 import { getClientLogger } from "@/logging";
 import type { RuntimeContext } from "@/schemas";
 
@@ -233,6 +234,7 @@ async function ensureRPC(): Promise<RPC> {
   const runtimeContext: RuntimeContext = {
     runtime: "node",
     platform: process.platform as "darwin" | "linux" | "win32",
+    agentSkills: await discoverAgentSkills(),
   };
   await initializeConfig(rpc, resolveConfig, runtimeContext);
 

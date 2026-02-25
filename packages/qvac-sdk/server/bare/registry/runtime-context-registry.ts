@@ -1,4 +1,4 @@
-import type { RuntimeContext } from "@/schemas";
+import type { AgentSkill, RuntimeContext } from "@/schemas";
 
 // ============================================
 // Runtime context state
@@ -15,6 +15,10 @@ export function setRuntimeContext(ctx: RuntimeContext) {
 
 export function getRuntimeContext(): RuntimeContext {
   return context;
+}
+
+export function getAgentSkills(): AgentSkill[] {
+  return context.agentSkills ?? [];
 }
 
 // ============================================

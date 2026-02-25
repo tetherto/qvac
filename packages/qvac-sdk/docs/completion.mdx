@@ -12,3 +12,45 @@ LLM inference via [`llama.cpp`](https://github.com/ggml-org/llama.cpp) — i.e.,
 ```ts file=../examples/llamacpp-hyperdrive.ts
 
 ```
+
+## Agent skills context
+
+`completion()` can automatically enrich context with local agent skills discovered from common ecosystem directories.
+
+Progressive loading behavior:
+
+- Injects a compact skills catalog (`name`, `description`, source) for discovered skills.
+- Injects full `SKILL.md` instructions only for matched skills.
+- Supports explicit `/skill-name` invocation to force a match.
+
+Supported project skill paths:
+
+- `.cursor/skills/*/SKILL.md`
+- `.claude/skills/*/SKILL.md`
+- `.codex/skills/*/SKILL.md`
+- `.agents/skills/*/SKILL.md`
+- `.opencode/skills/*/SKILL.md`
+
+Supported user skill paths:
+
+- `~/.cursor/skills/*/SKILL.md`
+- `~/.claude/skills/*/SKILL.md`
+- `~/.codex/skills/*/SKILL.md`
+- `~/.agents/skills/*/SKILL.md`
+- `~/.config/opencode/skills/*/SKILL.md`
+
+Use `disable-model-invocation: true` in `SKILL.md` frontmatter to make a skill explicit-only (injected only when `/skill-name` is used).
+
+```md
+---
+name: deploy
+description: Deploy the app
+disable-model-invocation: true
+---
+```
+
+Example:
+
+```ts file=../examples/llamacpp-agent-skills.ts
+
+```
