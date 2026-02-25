@@ -2,7 +2,6 @@
 
 #include <condition_variable>
 #include <initializer_list>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -23,15 +22,11 @@ public:
   ModelMetaData() = default;
 
   /// @param modelPath Model to load (single .gguf)
-  /// @param singleGgufStreamedFiles Map containing .gguf files that finished
-  /// streaming
   /// @param shards Containing sharded files, if any
   /// @param isStreaming Whether metadata is loaded from streamed buffers
   /// @param AddonID Identifier for error reporting
   void parse(
       const std::string& modelPath,
-      std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>&
-          singleGgufStreamedFiles,
       const GGUFShards& shards, bool isStreaming, const char* AddonID);
 
   /// @brief Returns true if the u32 value at @p key matches any of @p values.
@@ -45,6 +40,7 @@ public:
   class FirstFileFromGgufStreamState {
   public:
     void wait();
+    void waitForRelease();
     std::shared_ptr<std::basic_streambuf<char>> get();
     /// @brief Provides the first streamed GGUF file.
     /// @note To avoid deadlock, if ModelMetaData::parse() is already waiting

@@ -1,7 +1,5 @@
 #include "model-interface/ModelMetadata.hpp"
 
-#include <stdexcept>
-
 #include <common/common.h>
 #include <common/log.h>
 #include <llama-cpp.h>
@@ -9,37 +7,16 @@
 
 #include "addon/LlmErrors.hpp"
 
-namespace {
-void throwSinggleGgufStreamErrorNotFound(
-    std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>&
-        singleGgufStreamedFiles,
-    const std::string& modelPath, const char* AddonID) {
-  std::string availableFiles = " No files available.";
-  if (!singleGgufStreamedFiles.empty()) {
-    availableFiles = " Available files: ";
-    auto it = singleGgufStreamedFiles.begin();
-    availableFiles += it->first;
-    ++it;
-    for (; it != singleGgufStreamedFiles.end(); ++it) {
-      availableFiles += ", " + it->first;
-    }
-  }
-  std::string errorMsg = string_format(
-      "%s: failed to load model metadata. path=%s%s\n",
-      __func__,
-      modelPath.c_str(),
-      availableFiles.c_str());
-  throw qvac_errors::StatusError(
-      AddonID,
-      toString(qvac_lib_inference_addon_llama::errors::UnableToLoadMetadata),
-      errorMsg);
-}
-} // namespace
-
 void ModelMetaData::FirstFileFromGgufStreamState::wait() {
   std::unique_lock<std::mutex> lock(firstFileFromGgufStreamMutex_);
   firstFileFromGgufStreamCv_.wait(
       lock, [this]() { return hasFirstFileFromGgufStream_; });
+}
+
+void ModelMetaData::FirstFileFromGgufStreamState::waitForRelease() {
+  std::unique_lock<std::mutex> lock(firstFileFromGgufStreamMutex_);
+  firstFileFromGgufStreamCv_.wait(
+      lock, [this]() { return hasFirstFileFromGgufStream_ && !firstFileFromGgufStream_; });
 }
 
 std::shared_ptr<std::basic_streambuf<char>>
@@ -65,12 +42,11 @@ void ModelMetaData::FirstFileFromGgufStreamState::provide(
 void ModelMetaData::FirstFileFromGgufStreamState::clear() {
   std::lock_guard<std::mutex> lock(firstFileFromGgufStreamMutex_);
   firstFileFromGgufStream_.reset();
+  firstFileFromGgufStreamCv_.notify_all();
 }
 
 void ModelMetaData::parse(
     const std::string& modelPath,
-    std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>&
-        singleGgufStreamedFiles,
     const GGUFShards& shards, bool isStreaming, const char* AddonID) {
 
   auto loadFromStreambuf = [&modelPath,
@@ -118,25 +94,9 @@ void ModelMetaData::parse(
   if (isStreaming) {
     // Wait for the first file from the gguf stream to be available.
     firstFileFromGgufStreamState.wait();
-    if (shards.gguf_files.empty()) {
-      LOG_INF(
-          "%s: load the model metadata from memory (single file).\n", __func__);
-
-      // After waiting for the first file from the gguf stream to be available,
-      // It should have been inserted into singleGgufStreamedFiles but we will
-      // double check the inserted filename matches.
-      auto modelFilename = std::filesystem::path(modelPath).filename().string();
-      auto itGgufModelPath = singleGgufStreamedFiles.find(modelFilename);
-      if (itGgufModelPath == singleGgufStreamedFiles.end()) {
-        throwSinggleGgufStreamErrorNotFound(
-            singleGgufStreamedFiles, modelPath, AddonID);
-      }
-      loadFromStreambuf(*itGgufModelPath->second);
-    } else {
-      LOG_INF("%s: load the model metadata from memory shards.\n", __func__);
-      auto firstFileFromGgufStream = firstFileFromGgufStreamState.get();
-      loadFromStreambuf(*firstFileFromGgufStream);
-    }
+    LOG_INF("%s: load the model metadata from memory.\n", __func__);
+    auto firstFileFromGgufStream = firstFileFromGgufStreamState.get();
+    loadFromStreambuf(*firstFileFromGgufStream);
     firstFileFromGgufStreamState.clear();
   } else {
     if (shards.gguf_files.empty()) {
