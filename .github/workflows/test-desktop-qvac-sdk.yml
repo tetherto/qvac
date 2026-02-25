@@ -11,10 +11,9 @@ on:
         type: string
         default: "."
       project-directory:
-        description: "Root project directory (where package.json lives). Defaults to repo root."
-        required: false
+        description: "Root project directory (where package.json lives)"
+        required: true
         type: string
-        default: "."
       platforms:
         description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "macos-latest-xlarge"])'
         required: true
@@ -70,6 +69,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@v6
         with:
@@ -96,10 +96,9 @@ jobs:
             `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
           ];
           const npmrc = lines.join('\n');
-          const projectDir = '${{ inputs.project-directory }}';
-          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
-          console.log(`✅ .npmrc configured at ${target}`);
+          console.log(`.npmrc configured at ${target}`);
 
       - name: Setup MQTT certificates
         shell: node {0}
@@ -163,12 +162,10 @@ jobs:
           const projectDir = '${{ inputs.project-directory }}';
           const consumerDir = '${{ inputs.working-directory }}';
           if (consumerDir !== projectDir) {
-            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const source = path.join(projectDir, '.npmrc');
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-            console.log('✅ .npmrc copied to consumer directory');
-          } else {
-            console.log('ℹ️  Consumer directory is project root, .npmrc already present');
+            console.log('.npmrc copied to consumer directory');
           }
 
       - name: Install dependencies (consumer)
@@ -396,6 +393,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@v6
         with:
@@ -415,8 +413,7 @@ jobs:
             `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
           ];
           const npmrc = lines.join('\n');
-          const projectDir = '${{ inputs.project-directory }}';
-          const target = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
 
       - name: Copy .npmrc to consumer directory
@@ -427,7 +424,7 @@ jobs:
           const projectDir = '${{ inputs.project-directory }}';
           const consumerDir = '${{ inputs.working-directory }}';
           if (consumerDir !== projectDir) {
-            const source = projectDir === '.' ? '.npmrc' : path.join(projectDir, '.npmrc');
+            const source = path.join(projectDir, '.npmrc');
             const npmrcContent = fs.readFileSync(source, 'utf8');
             fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
           }
