@@ -27,6 +27,10 @@ on:
         description: 'Filter tests by category or testId prefix (comma-separated, e.g., "model,completion")'
         required: false
         type: string
+      test-version:
+        description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
+        required: false
+        type: string
     secrets:
       MQTT_PROTOCOL:
         required: true
@@ -67,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
@@ -392,6 +396,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: ${{ inputs.project-directory }}
 
