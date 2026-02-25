@@ -1,12 +1,12 @@
 'use strict'
 
 /**
- * HyperdriveDL Bergamot Example
+ * HyperdriveDL Example
  *
- * This example demonstrates translation using the Bergamot model with
- * model and vocabulary files downloaded via HyperdriveDL from the distributed network.
+ * This example demonstrates translation using the GGML backend with model
+ * downloaded via HyperdriveDL from the distributed network.
  *
- * Translates a long English text (Alice in Wonderland excerpt) to French using Bergamot.
+ * Translates a long English text (Alice in Wonderland excerpt) to Italian.
  *
  * Usage:
  *   bare examples/example.hd.js
@@ -26,13 +26,13 @@ const process = require('bare-process')
 const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true'
 
 const logger = VERBOSE
-  ? {
+    ? {
       info: (msg) => console.log('[C++ INFO]', msg),
       warn: (msg) => console.warn('[C++ WARN]', msg),
       error: (msg) => console.error('[C++ ERROR]', msg),
       debug: (msg) => console.log('[C++ DEBUG]', msg)
     }
-  : null // null = suppress all C++ logs
+    : null // null = suppress all C++ logs
 
 const text = `
   Down, down, down. Would the fall never come to an end? "I wonder how many miles I've fallen by this time?" she said aloud. "I must be getting somewhere near the centre of the earth. Let me see: that would be four thousand miles down. I think—" (for, you see, Alice had learnt several things of this sort in her lessons in the schoolroom, and though this was not a very good opportunity for showing off her knowledge, as there was no one to listen to her, still it was good practice to say it over) "—yes, that's about the right distance—but then I wonder what Latitude or Longitude I've got to?" (Alice had no idea what Latitude was, or Longitude either, but thought they were nice grand words to say.)
@@ -42,50 +42,31 @@ const text = `
   `
 
 async function main () {
-  // Note: Using a placeholder key - replace with actual Bergamot EN-FR model hyperdrive key
-  // The key should point to a hyperdrive containing:
-  // - model.enfr.intgemm.alphas.bin (the Bergamot model file)
-  // - vocab.enfr.spm (the vocabulary file, optional if embedded in model)
-  //
-  // For production use, you might want to use the model constants from @qvac/sdk:
-  // import { BERGAMOT_EN_FR, BERGAMOT_EN_FR_VOCAB } from '@qvac/sdk'
-  // These contain the proper registry paths and blob keys for official models
   const hdDL = new HyperdriveDL({
-    key: 'hd://0a4f388c0449b7774043e5ba8a1a2f735dc22a0a8e01d8bcd593e28db2909abf'
+    // The hyperdrive key for en-it translation model weights and config
+    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
   })
 
   const args = {
     loader: hdDL,
-    params: { mode: 'full', dstLang: 'fr', srcLang: 'en' },
+    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
     diskPath: './models',
-    modelName: 'model.enfr.intgemm.alphas.bin', // Bergamot model file
+    modelName: 'model.bin',
     logger // Pass logger to enable/disable C++ logs
   }
-  
-  // Bergamot-specific configuration
-  const config = {
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot, // Specify Bergamot model type
-    beamsize: 1, // Bergamot typically uses beam size of 1 for speed
-    normalize: 1, // Enable normalization for Bergamot
-    temperature: 0.2, // Temperature for sampling
-    norepeatngramsize: 3, // Prevent repetition
-    lengthpenalty: 1.2, // Length penalty for beam search
-    // Optional: If vocabulary files are separate (not embedded in model)
-    srcVocabName: 'vocab.enfr.spm', // Source vocabulary file name
-    dstVocabName: 'vocab.enfr.spm'  // Destination vocabulary file name (often same as source)
-  }
+  const config = { beamsize: 4, topk: 100 }
   const model = new TranslationNmtcpp(args, config)
   await model.load()
   try {
     const response = await model.run(text)
 
     await response
-      .onUpdate(data => {
-        console.log(data)
-      })
-      .await()
+        .onUpdate(data => {
+          console.log(data)
+        })
+        .await()
 
-    console.log('Translation finished (EN -> FR with Bergamot)!')
+    console.log('translation finished!')
   } finally {
     await model.unload()
   }
