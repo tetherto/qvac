@@ -29962,7 +29962,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
-const github = __importStar(__nccwpck_require__(3228));
 const child_process_1 = __nccwpck_require__(5317);
 function parseVersion(v) {
     const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
@@ -29979,22 +29978,18 @@ function isGreater(a, b) {
     }
     return false;
 }
-async function run() {
-    const token = core.getInput('github-token', { required: true });
+try {
     const baseRef = core.getInput('base-ref', { required: true });
     const baseSha = core.getInput('base-sha', { required: true });
     const headSha = core.getInput('head-sha', { required: true });
     const pkgSlug = core.getInput('package-slug', { required: true });
     const pkgJsonPath = core.getInput('package-json-path', { required: true });
     const changelogPath = core.getInput('changelog-path', { required: true });
-    const octokit = github.getOctokit(token);
-    const { owner, repo } = github.context.repo;
-    const prNumber = github.context.payload.pull_request?.number;
     const errors = [];
     // ── Branch name validation
     const match = baseRef.match(/^release-(.+)-(\d+\.\d+\.\d+)$/);
     if (!match) {
-        errors.push(`❌ **Invalid release branch name**\nExpected: \`release-${pkgSlug}-x.y.z\`\nActual: \`${baseRef}\``);
+        errors.push(`Invalid release branch name — expected: release-${pkgSlug}-x.y.z, actual: ${baseRef}`);
     }
     let branchPkg = '';
     let branchVersion = '';
@@ -30002,37 +29997,33 @@ async function run() {
         branchPkg = match[1];
         branchVersion = match[2];
         if (branchPkg !== pkgSlug) {
-            errors.push(`❌ **Package mismatch**\nBranch targets \`${branchPkg}\`, workflow expects \`${pkgSlug}\``);
+            errors.push(`Package mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'`);
         }
     }
     // ── Read versions
     const basePkg = JSON.parse((0, child_process_1.execSync)(`git show ${baseSha}:${pkgJsonPath}`).toString());
     const headPkg = JSON.parse((0, child_process_1.execSync)(`git show ${headSha}:${pkgJsonPath}`).toString());
     if (branchVersion && headPkg.version !== branchVersion) {
-        errors.push(`❌ **Version mismatch**\nBranch version: \`${branchVersion}\`\npackage.json: \`${headPkg.version}\``);
+        errors.push(`Version mismatch — branch version: ${branchVersion}, package.json: ${headPkg.version}`);
     }
     if (!isGreater(headPkg.version, basePkg.version)) {
-        errors.push(`❌ **Version not incremented**\nBase: \`${basePkg.version}\`\nPR: \`${headPkg.version}\``);
+        errors.push(`Version not incremented — base: ${basePkg.version}, head: ${headPkg.version}`);
     }
     // ── Changelog must be modified
     const changedFiles = (0, child_process_1.execSync)(`git diff --name-only ${baseSha} ${headSha}`).toString();
     if (!changedFiles.includes(changelogPath)) {
-        errors.push(`❌ **Missing CHANGELOG update**\nFile not modified: \`${changelogPath}\``);
+        errors.push(`Missing CHANGELOG update — file not modified: ${changelogPath}`);
     }
     // ── Report results
-    if (errors.length && prNumber) {
-        await octokit.rest.issues.createComment({
-            owner,
-            repo,
-            issue_number: prNumber,
-            body: `### 🚫 Release PR validation failed\n\n${errors.join('\n\n')}`
-        });
+    for (const err of errors) {
+        core.error(err);
     }
     if (errors.length) {
-        core.setFailed('Release PR validation failed');
+        core.setFailed(`Release merge guard failed with ${errors.length} error(s):\n${errors.join('\n')}`);
     }
+} catch (err) {
+    core.setFailed(err instanceof Error ? err.message : String(err));
 }
-run().catch(err => core.setFailed(err.message));
 
 
 /***/ }),
