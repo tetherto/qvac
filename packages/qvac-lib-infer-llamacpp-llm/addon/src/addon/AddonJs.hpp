@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+#include <iostream>
 #include <memory>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
@@ -9,10 +11,115 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
+namespace js = qvac_lib_inference_addon_cpp::js;
+
+inline LlamaModel*
+getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return static_cast<LlamaModel*>(&instance.addonCpp->model.get());
+}
+
+inline std::function<void(const std::string&)>
+makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return [&instance](const std::string& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s));
+  };
+}
+
+inline LlamaFinetuningParams
+parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
+  LlamaFinetuningParams params;
+  params.outputParametersDir =
+      jsObj.getProperty<js::String>(env, "outputParametersDir")
+          .as<std::string>(env);
+  params.numberOfEpochs =
+      static_cast<int>(
+          jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(
+              env));
+  params.learningRate =
+      jsObj.getProperty<js::Number>(env, "learningRate").as<double>(env);
+  params.trainDatasetDir =
+      jsObj.getProperty<js::String>(env, "trainDatasetDir")
+          .as<std::string>(env);
+  params.evalDatasetDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
+          .value_or("");
+  params.evalDatasetPath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "evalDatasetPath")
+          .value_or("");
+  params.contextLength =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
+          .value_or(0);
+  params.microBatchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
+          .value_or(0);
+  params.assistantLossOnly =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
+          .value_or(false);
+  params.checkpointSaveDir =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "checkpointSaveDir")
+          .value_or("");
+  params.loraModules =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
+          .value_or("");
+  params.loraRank =
+      jsObj.getOptionalPropertyAs<js::Number, int32_t>(env, "loraRank")
+          .value_or(8);
+  params.loraAlpha =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
+          .value_or(16.0);
+  params.loraDropout =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraDropout")
+          .value_or(0.0);
+  params.loraInitStd =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
+          .value_or(0.01);
+  params.chatTemplatePath =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(
+               env, "chatTemplatePath")
+          .value_or("");
+  params.checkpointSaveSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(
+               env, "checkpointSaveSteps")
+          .value_or(0);
+  params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
+                     .value_or(0.0);
+  params.lrScheduler =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
+          .value_or("constant");
+  params.warmupRatio =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
+          .value_or(0.0);
+  params.batchSize =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
+          .value_or(0);
+  params.weightDecay =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
+          .value_or(0.0);
+  params.warmupStepsSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
+          .value_or(false);
+  params.warmupSteps =
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps")
+          .value_or(0);
+  params.warmupRatioSet =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet")
+          .value_or(false);
+  params.validationSplit =
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
+          .value_or(0.05);
+  params.useEvalDatasetForValidation =
+      jsObj.getOptionalPropertyAs<js::Boolean, bool>(
+               env, "useEvalDatasetForValidation")
+          .value_or(false);
+  return params;
+}
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -33,7 +140,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
-
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -47,9 +153,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   vector<pair<string, js::Object>> inputs = JsInterface::getInputsArray(args);
 
   LlamaModel::Prompt prompt;
-  prompt.outputCallback = [&](const string& tokenOut) {
-    instance.addonCpp->outputQueue->queueResult(any(tokenOut));
-  };
+  prompt.outputCallback = makeQueueOutputCallback(instance);
 
   auto parseText = [&](js::Object& inputObj) {
     if (!prompt.input.empty()) {
@@ -65,11 +169,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   auto parseMedia = [&](js::Object& inputObj) {
-    std::vector<uint8_t> mediaBytes =
+    if (prompt.media.has_value()) {
+      throw StatusError(
+          general_error::InvalidArgument, "Only one media input is allowed");
+    }
+    prompt.media =
         js::TypedArray<uint8_t>(
             env, inputObj.getProperty<js::TypedArray<uint8_t>>(env, "content"))
             .as<std::vector<uint8_t>>(env);
-    prompt.media.push_back(std::move(mediaBytes));
   };
 
   for (auto& input : inputs) {
@@ -83,13 +190,68 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
-  if (prompt.input.empty() && prompt.media.empty()) {
+  if (prompt.input.empty() && !prompt.media.has_value()) {
     throw StatusError(
         general_error::InvalidArgument,
         "At least one of text or media input is required");
   }
 
   return instance.runJob(any(std::move(prompt)));
+}
+JSCATCH
+
+inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  LlamaModel* llamaModel = getLlamaModel(instance);
+  auto* addonCpp = instance.addonCpp.get();
+
+  return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
+    if (llamaModel && llamaModel->isFinetuneRunning() &&
+        llamaModel->requestPause())
+      llamaModel->waitUntilFinetuningPauseComplete();
+    else
+      addonCpp->cancelJob();
+  });
+}
+JSCATCH
+
+inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  LlamaModel* llamaModel = getLlamaModel(instance);
+  if (llamaModel == nullptr) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "Model not available or not a LlamaModel");
+  }
+
+  auto paramsOpt = args.tryGetObject<LlamaFinetuningParams>(
+      1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
+        return parseLlamaFinetuningParams(e, jsObj);
+      });
+  if (!paramsOpt.has_value()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "Finetuning parameters not provided");
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.finetuningParams = *paramsOpt;
+  prompt.outputCallback = makeQueueOutputCallback(instance);
+
+  return instance.runJob(any(std::move(prompt)));
+}
+JSCATCH
+
+inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
+  return qvac_lib_inference_addon_cpp::JsInterface::activate(env, info);
 }
 JSCATCH
 

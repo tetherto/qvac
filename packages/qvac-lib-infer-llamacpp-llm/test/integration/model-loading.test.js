@@ -122,7 +122,6 @@ test('model unload is clean and idempotent', { timeout: 600_000 }, async t => {
     await loader.close().catch(() => {})
   }
 })
-
 // Keep event loop alive briefly to let pending async operations complete
 // This prevents C++ destructors from running while async cleanup is still happening
 // which can cause segfaults (exit code 139)

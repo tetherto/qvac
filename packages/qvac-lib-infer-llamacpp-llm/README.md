@@ -1,9 +1,9 @@
 # qvac-lib-infer-llamacpp-llm
 
-This native C++ addon, built using the `Bare` Runtime, simplifies running Large Language Models (LLMs) within QVAC runtime applications. It provides an easy interface to load, execute, and manage LLM instances.
+This library simplifies running Large Language Models (LLMs) within QVAC runtime applications. It provides an easy interface to load, execute, and manage LLM instances, supporting multiple data sources (called data loaders).
 
 ## Table of Contents
-- [Supported platforms](#supported-platforms)
+
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Usage](#usage)
@@ -17,8 +17,8 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [8. Release Resources](#8-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Quickstart Example](#quickstart-example)
+- [Fine-tuning](#fine-tuning)
 - [Other Examples](#other-examples)
-- [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
 - [Glossary](#glossary)
@@ -39,16 +39,20 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
-
 ## Installation
 
 ### Prerequisites
 
-Ensure that the Bare Runtime is installed globally on your system. If it's not already installed, you can install it using:
+Install [Bare](#glossary) Runtime:
+```bash
+npm install -g bare-runtime
+```
+Note : Make sure the Bare version is `>= 1.19.0`. Check this using : 
 
 ```bash
-npm install -g bare@latest
+bare -v
 ```
+
 Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
 
 ```bash
@@ -66,8 +70,15 @@ This configuration ensures secure access to NPM Packages when installing scoped 
 
 ### Installing the Package
 
+Check the [Model registry](#model-registry) for the list of supported models.
+
+Install the desired Llama model package (adjust name for model/quantization):
 ```bash
 npm install @qvac/llm-llamacpp@latest
+```
+Or install a specific known stable version:
+```bash
+npm install @qvac/llm-llamacpp@0.6.0
 ```
 
 ## Building from Source
@@ -139,6 +150,7 @@ const config = {
 | device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| system_prompt     | string                                      | —                            | System prompt to prepend to conversations             |
 | lora              | string                                      | —                            | Path to LoRA adapter file                             |
 | temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
 | top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |
@@ -154,16 +166,6 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-
-
-#### IGPU/GPU  selection logic:
-
-| Scenario                       | main-gpu not specified                | main-gpu: `"dedicated"`             | main-gpu: `"integrated"`           |
-|---------------------------------|---------------------------------------|-------------------------------------|-------------------------------------|
-| Devices considered              | All GPUs (dedicated + integrated)     | Only dedicated GPUs                 | Only integrated GPUs                |
-| System with iGPU only           | ✅ Uses iGPU                          | ❌ Falls back to CPU                | ✅ Uses iGPU                        |
-| System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
-| System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
 
 ### 5. Create Model Instance
@@ -261,21 +263,148 @@ When `run()` is called while another job is active, the implementation first wai
 
 ## Quickstart Example
 
-Clone the repository and navigate to it:
+Follow these simple steps to run the Quickstart demo using the Hyperdrive loader:
+
+### 0. Install Bare
+
 ```bash
-cd qvac-lib-infer-llamacpp-llm
+npm install -g bare
 ```
 
-Install dependencies:
+### 1. Create a new Project
+
 ```bash
-npm install
+mkdir qvac-llm-quickstart
+cd qvac-llm-quickstart
+npm init -y
 ```
 
-Run the quickstart example (uses examples/quickstart.js):
+### 2. Install Dependencies
+
 ```bash
-npm run quickstart
+npm install hyperswarm corestore @qvac/dl-hyperdrive @qvac/llm-llamacpp bare-process
 ```
 
+### 3. Copy Quickstart code into `index.js`
+```js
+'use strict'
+
+const Corestore = require('corestore')
+const HyperDriveDL = require('@qvac/dl-hyperdrive')
+const LlmLlamacpp = require('../index')
+const process = require('bare-process')
+
+async function main () {
+  console.log('Quickstart Example: Basic model loading and inference demonstration')
+  console.log('===================================================================')
+
+  // 1. Initializing data loader
+  const store = new Corestore('./store')
+  const hdStore = store.namespace('hd')
+
+  const hdKey = 'afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3'
+  const hdDL = new HyperDriveDL({
+    key: `hd://${hdKey}`,
+    store: hdStore
+  })
+
+  // 2. Configuring model settings
+  const args = {
+    loader: hdDL,
+    opts: { stats: true },
+    logger: console,
+    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
+    diskPath: './models'
+  }
+
+  const config = {
+    device: 'gpu',
+    gpu_layers: '999',
+    ctx_size: '1024'
+  }
+
+  // 3. Loading model
+  await hdDL.ready()
+  const model = new LlmLlamacpp(args, config)
+  const closeLoader = true
+  let totalProgress = 0
+  const reportProgressCallback = (report) => {
+    if (typeof report === 'object' && Number(report.overallProgress) > totalProgress) {
+      process.stdout.write(
+        `\r${report.overallProgress}%: ${report.action} [${report.filesProcessed}/${report.totalFiles}] ${report.currentFileProgress}% ${report.currentFile}`
+      )
+      if (Number(report.currentFileProgress) === 100) {
+        process.stdout.write('\n')
+      }
+      totalProgress = Number(report.overallProgress)
+    }
+  }
+  await model.load(closeLoader, reportProgressCallback)
+
+  try {
+    // 4. Running inference with conversation prompt
+    const prompt = [
+      {
+        role: 'system',
+        content: 'You are a helpful, respectful and honest assistant.'
+      },
+      {
+        role: 'user',
+        content: 'what is bitcoin?'
+      },
+      {
+        role: 'assistant',
+        content: "It's a digital currency."
+      },
+      {
+        role: 'user',
+        content: 'Can you elaborate on the previous topic?'
+      }
+    ]
+
+    const response = await model.run(prompt)
+    let fullResponse = ''
+
+    await response
+      .onUpdate(data => {
+        process.stdout.write(data)
+        fullResponse += data
+      })
+      .await()
+
+    console.log('\n')
+    console.log('Full response:\n', fullResponse)
+    console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+  } finally {
+    // 5. Cleaning up resources
+    await store.close()
+    await hdDL.close()
+    await model.unload()
+  }
+}
+
+main().catch(error => {
+  console.error('Fatal error in main function:', {
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  })
+  process.exit(1)
+})
+```
+
+### 4. Run `index.js`
+
+```bash
+bare index.js
+```
+
+
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
 
 ## Other examples
 
@@ -284,11 +413,15 @@ npm run quickstart
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [Finetuning](docs/finetuning.md) – Guide to LoRA finetuning: API, dataset format, and examples.
+-   [FileSystem](./examples/filesystem.js) – Demonstrates loading a model from the local filesystem using `@qvac/dl-filesystem`.
+-   [LoRA Finetuning](./examples/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](./examples/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 
 ## Architecture
 
 See [docs/](./docs) for a detailed explanation of the architecture and data flow logic.
-
 
 ## Benchmarking
 
@@ -324,7 +457,7 @@ npm run benchmarks -- \
 Integration tests are located in [`test/integration/`](./test/integration/) and cover core functionality including model loading, inference, tool calling, multimodal capabilities, and configuration parameters.  
 These tests help prevent regressions and ensure the library remains stable as contributions are made to the project.
 
-Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.  
+Unit tests are located in [`test/unit/`](./test/unit/) and test the C++ addon components at a lower level, including backend selection, cache management, chat templates, context handling, and UTF8 token processing.
 These tests validate the native implementation and help catch issues early in development.
 
 ## Glossary
