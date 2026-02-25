@@ -5,7 +5,7 @@ import {
   GTE_LARGE_FP16,
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
-  QWEN_3_1_7B_INST_Q4,
+  QWEN3_1_7B_INST_Q4,
 } from "@qvac/sdk";
 
 export class ModelManager {
@@ -104,7 +104,7 @@ export class ModelManager {
     if (!this.toolsModelId) {
       console.log("    [ModelManager] Loading Tools model (Qwen 7B)...");
       const modelId = await loadModel({
-        modelSrc: QWEN_3_1_7B_INST_Q4,
+        modelSrc: QWEN3_1_7B_INST_Q4,
         modelType: "llm",
         modelConfig: {
           ctx_size: 4096, // Qwen needs larger context for tools
