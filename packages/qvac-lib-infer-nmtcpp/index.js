@@ -370,7 +370,7 @@ class TranslationNmtcpp extends BaseInference {
 
     // Call batch translation
     await this.addon.runJob({ type: 'sequences', input: processedTexts })
-    
+
     const response = new QvacResponse(this._createResponseHandlers())
     this._saveJobToResponseMapping(JOB_ID, response)
 
@@ -419,7 +419,7 @@ class TranslationNmtcpp extends BaseInference {
       // Batch translation result - array of strings
       mappedEvent = 'Output'
     }
-    
+
     return this._outputCallback(addon, mappedEvent, JOB_ID, data, error)
   }
 
