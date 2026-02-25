@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "qwen3-1.7b",
+      "gguf": {
+        "repo": "unsloth/Qwen3-1.7B-GGUF",
+        "revision": "main",
+        "quantizations": ["Q4_0", "Q4_K_M", "Q8_0", "F16"]
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-1.7B",
+        "revision": "main"
+      }
+    },
+    {
+      "id": "qwen3-4b",
+      "gguf": {
+        "repo": "unsloth/Qwen3-4B-GGUF",
+        "revision": "main",
+        "quantizations": ["Q4_0", "Q4_K_M", "Q8_0", "F16"]
+      },
+      "pytorch": {
+        "repo": "Qwen/Qwen3-4B",
+        "revision": "main"
+      }
+    }
+  ]
+}

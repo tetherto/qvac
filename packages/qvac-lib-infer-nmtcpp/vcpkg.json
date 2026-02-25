@@ -1,21 +1,17 @@
 {
   "dependencies": [
+    "bergamot-translator",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "0.12.2"
+      "version>=": "1.1.2"
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.3.0"
+      "version>=": "1.4.4"
     },
     "sentencepiece",
-    "whisper-cpp",
     "ssplit",
-    {
-      "name": "qvac-lint-cpp",
-      "version>=": "1.4.1"
-    },
-    "bergamot-translator"
+    "whisper-cpp"
   ],
   "features": {
     "tests": {

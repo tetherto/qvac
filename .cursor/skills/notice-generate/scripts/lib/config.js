@@ -77,7 +77,7 @@ const PYTHON_DEP_PATHS = {
     'benchmarks/client/pyproject.toml'
   ],
   'qvac-lib-infer-onnx-tts': [
-    'benchmarks/python-server/requirements.txt',
+    'benchmarks/python-server/requirements-supertonic.txt',
     'benchmarks/python-server/requirements-chatterbox.txt',
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
