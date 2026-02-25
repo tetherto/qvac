@@ -403,7 +403,11 @@ bool savePauseCheckpoint(
 
   const auto optimizerPath = pauseDir / "optimizer.gguf";
   if (!ggml_opt_save_state(optCtx, optimizerPath.string().c_str())) {
-    QLOG_IF(Priority::WARNING, "Unable to save optimizer state for pause checkpoint");
+    std::ostringstream msg;
+    msg << "Unable to save optimizer state for pause checkpoint in "
+        << optimizerPath.string();
+    QLOG_IF(Priority::ERROR, msg.str());
+    return false;
   }
 
   const auto metadataPath = pauseDir / "metadata.json";

@@ -941,10 +941,6 @@ std::string LlamaModel::finetune(
       QLOG_IF(Priority::DEBUG, "Checkpoint loaded successfully");
     }
 
-    if (resumingFromPause && checkpointState) {
-      clearPauseCheckpoint(checkpointState->checkpointDir);
-    }
-
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       currentCheckpointState_.store(
@@ -1261,7 +1257,9 @@ void LlamaModel::configureOptimizer(
   }
 
   llama_opt_params optParams{};
-  optParams.n_ctx_train = 0;
+  optParams.n_ctx_train = params.contextLength > 0
+      ? static_cast<uint32_t>(params.contextLength)
+      : 0;
   optParams.param_filter = llama_opt_param_filter_lora;
   optParams.param_filter_ud = adapter;
   optParams.get_opt_pars = schedulerOptimizerParams;
@@ -1274,12 +1272,12 @@ void LlamaModel::configureOptimizer(
         llama_finetuning_helpers::findLatestPauseCheckpoint(
             checkpointState->checkpointDir);
     if (!checkpointPath.empty() && std::filesystem::exists(checkpointPath)) {
-      checkpointPathStr = checkpointPath.string();
-      optParams.checkpoint_path = checkpointPathStr.c_str();
-      optParams.load_optimizer_state = true;
-
       const auto optimizerPath = checkpointPath / "optimizer.gguf";
-      if (std::filesystem::exists(optimizerPath)) {
+      if (std::filesystem::exists(optimizerPath) &&
+          std::filesystem::is_regular_file(optimizerPath)) {
+        checkpointPathStr = optimizerPath.string();
+        optParams.checkpoint_path = checkpointPathStr.c_str();
+        optParams.load_optimizer_state = true;
         QLOG_IF(
             Priority::DEBUG,
             "Optimizer checkpoint found: " + optimizerPath.string());
@@ -1287,6 +1285,8 @@ void LlamaModel::configureOptimizer(
         QLOG_IF(
             Priority::WARNING,
             "Optimizer checkpoint missing: " + optimizerPath.string());
+        optParams.checkpoint_path = nullptr;
+        optParams.load_optimizer_state = false;
       }
     } else {
       optParams.checkpoint_path = nullptr;
@@ -1298,6 +1298,14 @@ void LlamaModel::configureOptimizer(
   }
 
   optParams.assistant_loss_only = params.assistantLossOnly;
+
+  {
+    std::ostringstream optimizerMsg;
+    optimizerMsg << "Optimizer config | n_ctx_train=" << optParams.n_ctx_train
+                 << " | model_ctx=" << llama_n_ctx(ctx)
+                 << " | assistant_loss_only=" << (optParams.assistant_loss_only ? "true" : "false");
+    QLOG_IF(Priority::DEBUG, optimizerMsg.str());
+  }
 
   llama_opt_cleanup(ctx);
 

@@ -171,12 +171,12 @@ class LlmLlamacpp extends BaseInference {
       configurationParams
     )
     const binding = require('./binding')
-    
+
     const originalLogger = this.logger
-    const originalInfo = originalLogger && typeof originalLogger.info === 'function' 
-      ? originalLogger.info.bind(originalLogger) 
+    const originalInfo = originalLogger && typeof originalLogger.info === 'function'
+      ? originalLogger.info.bind(originalLogger)
       : null
-    
+
     const shouldSuppressMessage = (args) => {
       const message = args.map(arg => {
         if (typeof arg === 'string') return arg
@@ -191,28 +191,28 @@ class LlmLlamacpp extends BaseInference {
 
     const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
     Object.assign(filteredLogger, originalLogger)
-    
+
     const originalWarn = originalLogger && typeof originalLogger.warn === 'function'
       ? originalLogger.warn.bind(originalLogger)
       : null
-    
+
     filteredLogger.info = (...args) => {
       if (shouldSuppressMessage(args)) return
       if (originalInfo) {
         return originalInfo.apply(originalLogger, args)
       }
     }
-    
+
     filteredLogger.warn = (...args) => {
       if (shouldSuppressMessage(args)) return
       if (originalWarn) {
         return originalWarn.apply(originalLogger, args)
       }
     }
-    
+
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
-    
+
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
       if (eventType === 'JobEnded' || eventType === 'Error') {
@@ -389,7 +389,6 @@ class LlmLlamacpp extends BaseInference {
       throw err
     }
   }
-
 }
 
 module.exports = LlmLlamacpp
