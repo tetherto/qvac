@@ -29962,7 +29962,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(7484));
-const github = __importStar(__nccwpck_require__(3228));
 const child_process_1 = __nccwpck_require__(5317);
 function parseVersion(v) {
     const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
@@ -29979,7 +29978,7 @@ function isGreater(a, b) {
     }
     return false;
 }
-function run() {
+try {
     const baseRef = core.getInput('base-ref', { required: true });
     const baseSha = core.getInput('base-sha', { required: true });
     const headSha = core.getInput('head-sha', { required: true });
@@ -30022,8 +30021,9 @@ function run() {
     if (errors.length) {
         core.setFailed(`Release merge guard failed with ${errors.length} error(s):\n${errors.join('\n')}`);
     }
+} catch (err) {
+    core.setFailed(err instanceof Error ? err.message : String(err));
 }
-run();
 
 
 /***/ }),

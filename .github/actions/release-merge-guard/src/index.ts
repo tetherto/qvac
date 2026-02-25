@@ -17,7 +17,7 @@ function isGreater(a: string, b: string): boolean {
   return false
 }
 
-function run() {
+try {
   const baseRef = core.getInput('base-ref', { required: true })
   const baseSha = core.getInput('base-sha', { required: true })
   const headSha = core.getInput('head-sha', { required: true })
@@ -84,6 +84,6 @@ function run() {
   if (errors.length) {
     core.setFailed(`Release merge guard failed with ${errors.length} error(s):\n${errors.join('\n')}`)
   }
+} catch (err) {
+  core.setFailed(err instanceof Error ? err.message : String(err))
 }
-
-run()
