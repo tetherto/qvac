@@ -1,12 +1,12 @@
 'use strict'
 
 /**
- * HyperdriveDL Example
+ * HyperdriveDL Bergamot Example
  *
- * This example demonstrates translation using the GGML backend with model
- * downloaded via HyperdriveDL from the distributed network.
+ * This example demonstrates translation using the Bergamot model with
+ * model and vocabulary files downloaded via HyperdriveDL from the distributed network.
  *
- * Translates a long English text (Alice in Wonderland excerpt) to Italian.
+ * Translates a long English text (Alice in Wonderland excerpt) to French using Bergamot.
  *
  * Usage:
  *   bare examples/example.hd.js
@@ -42,19 +42,38 @@ const text = `
   `
 
 async function main () {
+  // Note: Using a placeholder key - replace with actual Bergamot EN-FR model hyperdrive key
+  // The key should point to a hyperdrive containing:
+  // - model.enfr.intgemm.alphas.bin (the Bergamot model file)
+  // - vocab.enfr.spm (the vocabulary file, optional if embedded in model)
+  //
+  // For production use, you might want to use the model constants from @qvac/sdk:
+  // import { BERGAMOT_EN_FR, BERGAMOT_EN_FR_VOCAB } from '@qvac/sdk'
+  // These contain the proper registry paths and blob keys for official models
   const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
-    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
+    key: 'hd://0a4f388c0449b7774043e5ba8a1a2f735dc22a0a8e01d8bcd593e28db2909abf'
   })
 
   const args = {
     loader: hdDL,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
+    params: { mode: 'full', dstLang: 'fr', srcLang: 'en' },
     diskPath: './models',
-    modelName: 'model.bin',
+    modelName: 'model.enfr.intgemm.alphas.bin', // Bergamot model file
     logger // Pass logger to enable/disable C++ logs
   }
-  const config = { beamsize: 4, topk: 100 }
+  
+  // Bergamot-specific configuration
+  const config = {
+    modelType: TranslationNmtcpp.ModelTypes.Bergamot, // Specify Bergamot model type
+    beamsize: 1, // Bergamot typically uses beam size of 1 for speed
+    normalize: 1, // Enable normalization for Bergamot
+    temperature: 0.2, // Temperature for sampling
+    norepeatngramsize: 3, // Prevent repetition
+    lengthpenalty: 1.2, // Length penalty for beam search
+    // Optional: If vocabulary files are separate (not embedded in model)
+    srcVocabName: 'vocab.enfr.spm', // Source vocabulary file name
+    dstVocabName: 'vocab.enfr.spm'  // Destination vocabulary file name (often same as source)
+  }
   const model = new TranslationNmtcpp(args, config)
   await model.load()
   try {
@@ -66,7 +85,7 @@ async function main () {
       })
       .await()
 
-    console.log('translation finished!')
+    console.log('Translation finished (EN -> FR with Bergamot)!')
   } finally {
     await model.unload()
   }
