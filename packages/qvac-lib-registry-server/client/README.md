@@ -1,4 +1,4 @@
-# @tetherto/qvac-lib-registry-client
+# @qvac/registry-client
 
 Read-only client library for querying the QVAC Registry. It replicates the registry HyperDB via Hyperswarm and provides APIs for searching and retrieving model information.
 
@@ -13,7 +13,7 @@ Read-only client library for querying the QVAC Registry. It replicates the regis
 ## Installation
 
 ```bash
-npm install @tetherto/qvac-lib-registry-client
+npm install @qvac/registry-client
 ```
 
 Ensure the registry core key is available via environment variables or provided via options.
@@ -24,7 +24,7 @@ Ensure the registry core key is available via environment variables or provided 
 
 ```javascript
 'use strict'
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
+const { QVACRegistryClient } = require('@qvac/registry-client')
 
 async function main () {
   const client = new QVACRegistryClient({
@@ -112,12 +112,8 @@ The package includes a CLI for querying and downloading models from the registry
 
 ### Install
 
-The package is hosted on GitHub Packages. Configure npm to use the GitHub registry for the `@tetherto` scope, then install globally:
-
 ```bash
-echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT" >> ~/.npmrc
-npm install -g @tetherto/registry-client-mono
+npm install -g @qvac/registry-client
 ```
 
 Verify installation:
@@ -271,8 +267,8 @@ The client uses custom error codes in the range 19001-20000. All errors extend `
 ### Error Handling Example
 
 ```javascript
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
-const { QvacErrorRegistryClient } = require('@tetherto/qvac-lib-registry-client/utils/error')
+const { QVACRegistryClient } = require('@qvac/registry-client')
+const { QvacErrorRegistryClient } = require('@qvac/registry-client/utils/error')
 
 async function handleErrors () {
   const client = new QVACRegistryClient({
