@@ -97,14 +97,14 @@ ggml_opt_optimizer_params schedulerOptimizerParams(void* userdata);
 // Checkpoint management functions
 std::filesystem::path
 checkpointStepDirectory(const TrainingCheckpointState& state, int64_t step);
-bool saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state);
+void saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state);
 bool parseCheckpointMetadata(
     const std::filesystem::path& metadataPath, CheckpointMetadata& meta);
 std::filesystem::path pauseCheckpointDirectory(
     const std::filesystem::path& checkpointDir, int64_t step);
 std::filesystem::path
 findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir);
-bool savePauseCheckpoint(
+void savePauseCheckpoint(
     ggml_opt_context_t optCtx, TrainingCheckpointState& state,
     bool pausedDuringValidation = false);
 bool tryHandlePauseRequest(
