@@ -180,21 +180,6 @@ async function main () {
     console.log('Loading model...')
     client = new LlamaClient(args, config)
 
-    const originalCreateAddon = client._createAddon?.bind(client)
-    if (originalCreateAddon) {
-      client._createAddon = function (configurationParams, finetuningParams) {
-        const originalOutputCb = this._outputCallback?.bind(this)
-        this._outputCallback = function (instance, eventType, jobId, data, extra) {
-          const dataStr = typeof data === 'string' ? data : (data?.message || JSON.stringify(data) || '')
-          if (dataStr && dataStr.includes('No response found for job')) return
-          if (originalOutputCb) {
-            return originalOutputCb(instance, eventType, jobId, data, extra)
-          }
-        }
-        return originalCreateAddon(configurationParams, finetuningParams)
-      }
-    }
-
     await client.load()
     console.log('Model loaded successfully\n')
 

@@ -210,35 +210,11 @@ async function main () {
   }
 
   let client
-  const logMessages = []
 
   try {
     console.log('=== Pause Finetuning, Inference, and Resume Test ===\n')
     console.log('Loading model...')
     client = new LlamaClient(args, config)
-
-    const originalCreateAddon = client._createAddon?.bind(client)
-    if (originalCreateAddon) {
-      client._createAddon = function (configurationParams, finetuningParams) {
-        const originalOutputCb = this._outputCallback?.bind(this)
-        this._outputCallback = function (instance, eventType, jobId, data, extra) {
-          const dataStr = typeof data === 'string' ? data : (data?.message || JSON.stringify(data) || '')
-          if (dataStr && dataStr.includes('No response found for job')) {
-            return // Suppress these messages during finetuning - don't call originalOutputCb
-          }
-
-          if (eventType === 'LogMsg') {
-            const logMsg = dataStr
-            logMessages.push(logMsg)
-            console.log(logMsg)
-          }
-          if (originalOutputCb) {
-            return originalOutputCb(instance, eventType, jobId, data, extra)
-          }
-        }
-        return originalCreateAddon(configurationParams, finetuningParams)
-      }
-    }
 
     await client.load()
     console.log('Model loaded successfully\n')

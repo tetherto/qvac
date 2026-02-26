@@ -208,6 +208,13 @@ async function runFinetuningTests () {
     const handle = await model.finetune(finetuneOptions)
     const finetuneResult = await handle.await()
     console.log('Finetune completed:', finetuneResult)
+    if (args.opts?.stats) {
+      if (finetuneResult && typeof finetuneResult.stats === 'object' && finetuneResult.stats !== null) {
+        console.log('✅ Finetune terminal stats:', finetuneResult.stats)
+      } else {
+        console.warn('⚠️  opts.stats is enabled, but no finetune terminal stats were returned')
+      }
+    }
   } catch (error) {
     console.error('Test failed:', error.message)
     console.error('Stack:', error.stack)
