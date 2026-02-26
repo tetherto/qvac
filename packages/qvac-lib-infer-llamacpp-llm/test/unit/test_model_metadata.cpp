@@ -73,50 +73,53 @@ protected:
   void SetUp() override {
     using MP = test_common::TestModelPath;
 
-    normalModel_ =
-        MP("Llama-3.2-1B-Instruct-Q4_0.gguf", nullptr, MP::OnMissing::Fail, "");
+    normalModel_ = MP(
+        "Llama-3.2-1B-Instruct-Q4_0.gguf",
+        nullptr,
+        MP::OnMissing::Fail,
+        "");
 
-    bitnetModel_ =
-        MP("bitnet_b1_58-large-TQ2_0.gguf",
-           "BITNET_MODEL_PATH",
-           MP::OnMissing::Skip,
-           "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0");
+    bitnetModel_ = MP(
+        "bitnet_b1_58-large-TQ2_0.gguf",
+        "BITNET_MODEL_PATH",
+        MP::OnMissing::Skip,
+        "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0");
 
-    qwen3Model_ =
-        MP("Qwen3-0.6B-Q8_0.gguf",
-           "QWEN3_MODEL_PATH",
-           MP::OnMissing::Skip,
-           "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF");
+    qwen3Model_ = MP(
+        "Qwen3-0.6B-Q8_0.gguf",
+        "QWEN3_MODEL_PATH",
+        MP::OnMissing::Skip,
+        "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF");
 
     // MedGemma is a Gemma-3-based model used in integration tests.
     // https://huggingface.co/unsloth/medgemma-4b-it-GGUF
-    gemma3Model_ =
-        MP("medgemma-4b-it-Q4_1.gguf",
-           "GEMMA3_MODEL_PATH",
-           MP::OnMissing::Skip,
-           "https://huggingface.co/unsloth/medgemma-4b-it-GGUF");
+    gemma3Model_ = MP(
+        "medgemma-4b-it-Q4_1.gguf",
+        "GEMMA3_MODEL_PATH",
+        MP::OnMissing::Skip,
+        "https://huggingface.co/unsloth/medgemma-4b-it-GGUF");
 
     // Sharded models: constructor expands the shard list; resolveShardPaths
     // then fills in absolute paths (requires LlamaModel, kept out of
     // test_common.hpp to avoid pulling in the heavy llama headers there).
     // https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded
-    normalModelSharded_ = MP(
-        "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
-        "SHARDED_MODEL_FIRST_SHARD_PATH",
-        MP::OnMissing::Skip,
-        "https://huggingface.co/jmb95/Qwen3-0.6-UD-IQ1_S-sharded",
-        true /* isSharded */);
+    normalModelSharded_ =
+        MP("Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
+           "SHARDED_MODEL_FIRST_SHARD_PATH",
+           MP::OnMissing::Skip,
+           "https://huggingface.co/jmb95/Qwen3-0.6-UD-IQ1_S-sharded",
+           true /* isSharded */);
     if (normalModelSharded_.found())
       LlamaModel::resolveShardPaths(
           normalModelSharded_.shards, normalModelSharded_.path);
 
     // https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded
-    bitnetModelSharded_ =
-        MP("bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf",
-           nullptr,
-           MP::OnMissing::Skip,
-           "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded",
-           true /* isSharded */);
+    bitnetModelSharded_ = MP(
+        "bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf",
+        nullptr,
+        MP::OnMissing::Skip,
+        "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded",
+        true /* isSharded */);
     if (bitnetModelSharded_.found())
       LlamaModel::resolveShardPaths(
           bitnetModelSharded_.shards, bitnetModelSharded_.path);
@@ -143,7 +146,8 @@ protected:
   }
 
   void parseDiskShards(
-      const std::string& firstShardPath, const GGUFShards& shardsWithPaths,
+      const std::string& firstShardPath,
+      const GGUFShards& shardsWithPaths,
       MetaChecker check) {
     ModelMetaData meta;
     meta.parse(
@@ -170,7 +174,8 @@ protected:
   }
 
   void parseStreamingShards(
-      const std::string& firstShardPath, const GGUFShards& shardsWithPaths,
+      const std::string& firstShardPath,
+      const GGUFShards& shardsWithPaths,
       MetaChecker check) {
     auto streambuf =
         readFileToStreambufBinary(shardsWithPaths.gguf_files.front());
@@ -211,7 +216,8 @@ protected:
   // setWeightsForFile() provides the first shard via lendFirstShard().
   // waitForFulfillCount(1) makes assertions on fulfilledFilenames race-free.
   void parseAsyncLoaderShards(
-      const std::string& firstShardPath, const GGUFShards& shardsWithPaths,
+      const std::string& firstShardPath,
+      const GGUFShards& shardsWithPaths,
       MetaChecker check) {
     GGUFShards shards = GGUFShards::expandGGUFIntoShards(firstShardPath);
     const std::string firstShardFilename = shards.gguf_files.front();
@@ -286,18 +292,20 @@ TEST_F(
     ModelMetadataTest,
     StreamingSingleFile_NormalModel_HasOneBitQuantizationFalse) {
   REQUIRE_MODEL(normalModel_);
-  parseStreamingSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_FALSE(meta.hasOneBitQuantization());
-  });
+  parseStreamingSingleFile(
+      normalModel_.path, [](const ModelMetaData& meta) {
+        EXPECT_FALSE(meta.hasOneBitQuantization());
+      });
 }
 
 TEST_F(
     ModelMetadataTest,
     StreamingSingleFile_BitnetModel_HasOneBitQuantizationTrue) {
   REQUIRE_MODEL(bitnetModel_);
-  parseStreamingSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_TRUE(meta.hasOneBitQuantization());
-  });
+  parseStreamingSingleFile(
+      bitnetModel_.path, [](const ModelMetaData& meta) {
+        EXPECT_TRUE(meta.hasOneBitQuantization());
+      });
 }
 
 // ---- Streaming shards ----
@@ -334,18 +342,20 @@ TEST_F(
     ModelMetadataTest,
     AsyncLoader_SingleFile_NormalModel_MetadataParsedAndShardAvailable) {
   REQUIRE_MODEL(normalModel_);
-  parseAsyncLoaderSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_FALSE(meta.hasOneBitQuantization());
-  });
+  parseAsyncLoaderSingleFile(
+      normalModel_.path, [](const ModelMetaData& meta) {
+        EXPECT_FALSE(meta.hasOneBitQuantization());
+      });
 }
 
 TEST_F(
     ModelMetadataTest,
     AsyncLoader_SingleFile_BitnetModel_MetadataParsedAndShardAvailable) {
   REQUIRE_MODEL(bitnetModel_);
-  parseAsyncLoaderSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
-    EXPECT_TRUE(meta.hasOneBitQuantization());
-  });
+  parseAsyncLoaderSingleFile(
+      bitnetModel_.path, [](const ModelMetaData& meta) {
+        EXPECT_TRUE(meta.hasOneBitQuantization());
+      });
 }
 
 TEST_F(
@@ -355,7 +365,8 @@ TEST_F(
   auto singleFileStreambuf = readFileToStreambufBinary(normalModel_.path);
   ASSERT_NE(singleFileStreambuf, nullptr);
 
-  const std::string filename = fs::path(normalModel_.path).filename().string();
+  const std::string filename =
+      fs::path(normalModel_.path).filename().string();
   GGUFShards emptyShards;
   InitLoader initLoader;
   // No ModelMetaData — lending is skipped entirely.
@@ -434,7 +445,8 @@ TEST_F(ModelMetadataTest, DiskSingleFile_LlamaArch_IsSpecificallyQ4_0) {
   REQUIRE_MODEL(normalModel_);
   parseDiskSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
     EXPECT_TRUE(meta.isU32OneOf(
-        "general.file_type", {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0)}));
+        "general.file_type",
+        {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0)}));
     EXPECT_FALSE(meta.isU32OneOf(
         "general.file_type",
         {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_TQ2_0),
@@ -455,7 +467,8 @@ TEST_F(ModelMetadataTest, DiskSingleFile_Qwen3Arch_IsSpecificallyQ8_0) {
   REQUIRE_MODEL(qwen3Model_);
   parseDiskSingleFile(qwen3Model_.path, [](const ModelMetaData& meta) {
     EXPECT_TRUE(meta.isU32OneOf(
-        "general.file_type", {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q8_0)}));
+        "general.file_type",
+        {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q8_0)}));
     EXPECT_FALSE(meta.isU32OneOf(
         "general.file_type",
         {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0),
@@ -478,7 +491,8 @@ TEST_F(ModelMetadataTest, DiskSingleFile_Gemma3Arch_IsSpecificallyQ4_1) {
   REQUIRE_MODEL(gemma3Model_);
   parseDiskSingleFile(gemma3Model_.path, [](const ModelMetaData& meta) {
     EXPECT_TRUE(meta.isU32OneOf(
-        "general.file_type", {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_1)}));
+        "general.file_type",
+        {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_1)}));
     EXPECT_FALSE(meta.isU32OneOf(
         "general.file_type",
         {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0),
@@ -511,3 +525,4 @@ TEST_F(ModelMetadataTest, DiskSingleFile_BitnetArch_IsSpecificallyTQ2_0) {
          static_cast<uint32_t>(LLAMA_FTYPE_ALL_F32)}));
   });
 }
+
