@@ -20,7 +20,7 @@ const createCompletionTest = (
     | { validation: "regex"; pattern: string }
     | {
         validation: "type";
-        expectedType: "string" | "number" | "array" | "embedding";
+        expectedType: "string" | "number" | "array";
       },
   estimatedDurationMs: number = 10000,
 ): TestDefinition => ({

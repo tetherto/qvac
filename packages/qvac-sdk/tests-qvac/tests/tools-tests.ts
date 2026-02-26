@@ -17,7 +17,7 @@ const createToolsTest = (
   }>,
   expectation: {
     validation: "type";
-    expectedType: "string" | "number" | "array" | "embedding";
+    expectedType: "string" | "number" | "array";
   } = {
     validation: "type",
     expectedType: "string",
