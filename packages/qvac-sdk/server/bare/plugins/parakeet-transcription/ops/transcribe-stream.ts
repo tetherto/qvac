@@ -19,6 +19,7 @@ export async function* transcribe(
     logger.debug("Parakeet Streaming Transcription Update:", output);
 
     const text = (output as { text: string }[])
+      .filter((chunk) => !chunk.text.includes("[No speech detected]"))
       .map((chunk) => chunk.text)
       .join("");
 
