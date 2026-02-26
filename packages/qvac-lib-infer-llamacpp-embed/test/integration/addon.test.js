@@ -77,7 +77,7 @@ createDeviceModelTest('Model inference works correctly', async (t, modelName, mo
   const embeddingDimension = modelConfig.embeddingDimension
 
   console.log(`Creating new GGMLBert instance for ${modelName} on ${device.toUpperCase()}`)
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentence = 'That is a happy person'
   const response = await inference.run(sentence)
@@ -87,7 +87,7 @@ createDeviceModelTest('Model inference works correctly', async (t, modelName, mo
   console.log('Generated embeddings:', embeddings[0][0])
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
@@ -95,7 +95,7 @@ createDeviceModelTest('Model inference works correctly with array input', async 
   const embeddingDimension = modelConfig.embeddingDimension
 
   console.log(`Creating new GGMLBert instance for array input test [${modelName}] on ${device.toUpperCase()}`)
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentences = ['That is a happy person', 'This is a sad person', 'I am feeling neutral']
   const response = await inference.run(sentences)
@@ -121,14 +121,14 @@ createDeviceModelTest('Model inference works correctly with array input', async 
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Model inference works correctly with long string exceeding context size', async (t, modelName, modelConfig, device) => {
   const maxContextSize = modelConfig.maxContextSize
 
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   // Create a string that exceeds maxContextSize tokens
   // "Hello world " is approximately 2-3 tokens, repeating enough times to exceed context size
@@ -183,14 +183,14 @@ createDeviceModelTest('Model inference works correctly with long string exceedin
   await inference.cancel()
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Model inference works correctly with array input where one sequence exceeds context size', async (t, modelName, modelConfig, device) => {
   const maxContextSize = modelConfig.maxContextSize
 
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   // Create an array with 3 sequences where the second sequence exceeds context size
   // "Hello world " is approximately 2-3 tokens, repeating enough times to exceed context size
@@ -251,7 +251,7 @@ createDeviceModelTest('Model inference works correctly with array input where on
   await inference.cancel()
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
@@ -260,7 +260,7 @@ createDeviceModelTest('Model inference works correctly with batching - 5 sequenc
   const maxContextSize = modelConfig.maxContextSize
 
   console.log(`Creating new GGMLBert instance for batching test [${modelName}] on ${device.toUpperCase()}`)
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   // Create 5 sequences of roughly similar length.
   // The goal is to have enough total tokens so that:
@@ -305,12 +305,12 @@ createDeviceModelTest('Model inference works correctly with batching - 5 sequenc
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Embeddings: empty string input', async (t, modelName, modelConfig, device) => {
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentence = ''
   const response = await inference.run(sentence)
@@ -326,14 +326,14 @@ createDeviceModelTest('Embeddings: empty string input', async (t, modelName, mod
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Embeddings: whitespace-only string input', async (t, modelName, modelConfig, device) => {
   const embeddingDimension = modelConfig.embeddingDimension
 
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentence = ' \t  \n  '
   const response = await inference.run(sentence)
@@ -345,14 +345,14 @@ createDeviceModelTest('Embeddings: whitespace-only string input', async (t, mode
   )
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Embeddings: unicode / multilingual input with emojis', async (t, modelName, modelConfig, device) => {
   const embeddingDimension = modelConfig.embeddingDimension
 
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentences = ['Привет, как дела? 😊', '你好，世界 🌏', 'Hola, ¿cómo estás? ❤️', 'Hello, world! 🚀']
   const response = await inference.run(sentences)
@@ -365,14 +365,14 @@ createDeviceModelTest('Embeddings: unicode / multilingual input with emojis', as
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Embeddings: deterministic output for same input', async (t, modelName, modelConfig, device) => {
   const embeddingDimension = modelConfig.embeddingDimension
 
-  const { inference, loader } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
 
   const sentence = 'This sentence should always map to the same embedding.'
 
@@ -422,7 +422,7 @@ createDeviceModelTest('Embeddings: deterministic output for same input', async (
   t.ok(similarity > 0.999, `Same input should produce identical embeddings (cosine similarity: ${similarity.toFixed(6)})`)
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
@@ -434,7 +434,7 @@ createDeviceModelTest(`Stress: inference with large batch size ${STRESS_BATCH_SI
     `(batch_size=${STRESS_BATCH_SIZE})`
   )
 
-  const { inference, loader } = await createEmbeddingsTestInstance(
+  const { inference } = await createEmbeddingsTestInstance(
     t,
     modelName,
     device,
@@ -464,7 +464,7 @@ createDeviceModelTest(`Stress: inference with large batch size ${STRESS_BATCH_SI
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
@@ -476,7 +476,7 @@ createDeviceModelTest(`Stress: inference with many sequences (~${STRESS_NUM_SEQU
     `(num_sequences=${STRESS_NUM_SEQUENCES})`
   )
 
-  const { inference, loader } = await createEmbeddingsTestInstance(
+  const { inference } = await createEmbeddingsTestInstance(
     t,
     modelName,
     device,
@@ -515,14 +515,14 @@ createDeviceModelTest(`Stress: inference with many sequences (~${STRESS_NUM_SEQU
   }
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
 createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than full run', async (t, modelName, modelConfig, device) => {
   console.log(`Creating GGMLBert instance for cancel comparison test [${modelName}] on ${device.toUpperCase()}`)
 
-  const { inference, loader } = await createEmbeddingsTestInstance(
+  const { inference } = await createEmbeddingsTestInstance(
     t,
     modelName,
     device,
@@ -570,7 +570,7 @@ createDeviceModelTest('Cancel: immediate cancel returns fewer embeddings than fu
   )
 
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
 })
 
@@ -580,7 +580,7 @@ const MODEL_NAME_API = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q
 
 async function setupModelApiBehavior (t) {
   await ensureModel(MODEL_NAME_API)
-  const { inference, loader } = await createEmbeddingsTestInstance(
+  const { inference } = await createEmbeddingsTestInstance(
     t,
     MODEL_NAME_API,
     DEVICE_API,
@@ -588,7 +588,7 @@ async function setupModelApiBehavior (t) {
     '1024'
   )
   t.teardown(async () => {
-    await cleanupResources(loader, inference)
+    await cleanupResources(inference)
   })
   return { inference }
 }

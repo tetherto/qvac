@@ -1,85 +1,65 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
+const exclusiveRunQueue = require('@qvac/infer-base/src/exclusiveRunQueue')
 const { BertInterface } = require('./addon')
 
 /** Max ms to wait for the previous job to finish before throwing. */
 const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
+async function streamShardsToAddon (filePaths, addon) {
+  for (const filePath of filePaths) {
+    const filename = path.basename(filePath)
+    const stream = fs.createReadStream(filePath)
+    for await (const chunk of stream) {
+      await addon.loadWeights({ filename, chunk, completed: false })
+    }
+    await addon.loadWeights({ filename, chunk: null, completed: true })
+  }
+}
+
 /**
  * GGML client implementation for BERT GTE model
  */
 class GGMLBert extends BaseInference {
   /**
-   * Creates an instance of GGMLBert.
-   * @constructor
-   * @param {Object} params - arguments for model setup
-   * @param {Object} args arguments for inference setup
-   * @param {Object} config - environment specific inference setup configuration
+   * @param {Object} params
+   * @param {{ model: string[] }} params.files - absolute paths to model file(s)
+   * @param {string} [params.config] - environment specific inference config
+   * @param {Object} [params.logger]
+   * @param {Object} [params.opts]
    */
-  constructor (
-    { opts = {}, loader, logger = null, diskPath = '.', modelName },
-    config = {}
-  ) {
+  constructor ({ files, config = '', logger = null, opts = {} }) {
     super({ logger, opts })
     this._config = config
-    this._diskPath = diskPath
-    this._modelName = modelName
-    // _shards will be null if the modelName is not a sharded file.
-    this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._files = files
+    this._withExclusiveRun = exclusiveRunQueue()
     this._lastJobResult = Promise.resolve()
   }
 
-  async _load (closeLoader = false, reportProgressCallback) {
+  async _load () {
     this.logger.info('Starting model load')
 
-    const configurationParams = {
-      path: path.join(this._diskPath, this._modelName),
-      config: this._config
-    }
+    const modelPath = this._files.model.length > 1
+      ? this._files.model.find(f => f.endsWith('.gguf')) || this._files.model[0]
+      : this._files.model[0]
+
+    const configurationParams = { path: modelPath, config: this._config }
 
     this.logger.info('Creating addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
 
-    if (this._shards !== null) {
-      await this._loadWeights(reportProgressCallback)
-    } else {
-      await this.downloadWeights(reportProgressCallback, { closeLoader })
+    if (this._files.model.length > 1) {
+      await streamShardsToAddon(this._files.model, this.addon)
     }
 
     this.logger.info('Activating addon')
     await this.addon.activate()
 
     this.logger.info('Model load completed successfully')
-  }
-
-  /**
-   * Download the model weight files and return the local path to the primary file.
-   * @param {ProgressReportCallback} [onDownloadProgress] - Callback invoked with bytes downloaded
-   * @param {Object} opts - Options for the download
-   * @param {boolean} opts.closeLoader - Whether to close the loader when done
-   * @returns {Promise<{filePath: string, completed: boolean, error: boolean}[]>} Local file path for the model weights
-   */
-  async _downloadWeights (onDownloadProgress, opts) {
-    return await this.weightsProvider.downloadFiles(
-      [this._modelName],
-      this._diskPath,
-      {
-        closeLoader: opts.closeLoader,
-        onDownloadProgress
-      }
-    )
-  }
-
-  async _loadWeights (reportProgressCallback) {
-    const onChunk = async (chunkedWeightsData) => {
-      this.addon.loadWeights(chunkedWeightsData, this.logger)
-    }
-    await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
   }
 
   /**

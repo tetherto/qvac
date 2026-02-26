@@ -117,7 +117,7 @@ export async function loadModel(params: LoadModelServerParams) {
     modelConfig: modelConfig as Record<string, unknown>,
     modelName,
     artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
-  }) as { model: AnyModel; loader: FilesystemDL };
+  }) as { model: AnyModel; loader?: FilesystemDL };
 
   logger.info(`${modelType}: Loading model ${modelId}...`);
 
@@ -134,6 +134,6 @@ export async function loadModel(params: LoadModelServerParams) {
     config: modelConfig,
     modelType: modelType as CanonicalModelType,
     name: modelName,
-    loader: result.loader,
+    ...(result.loader ? { loader: result.loader } : {}),
   });
 }

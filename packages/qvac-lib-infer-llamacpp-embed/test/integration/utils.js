@@ -5,7 +5,6 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 const GGMLBert = require('../../index.js')
-const FilesystemDL = require('@qvac/dl-filesystem')
 
 /**
  * Downloads a file from a URL to a destination path
@@ -148,15 +147,14 @@ class TestLogger {
  * @param {string} device - Device to use: 'cpu' or 'gpu' (default: 'gpu')
  * @param {string} gpuLayers - Number of GPU layers (default: '999' for GPU, '0' for CPU)
  * @param {string} batchSize - Batch size (default: '1024')
- * @returns {Promise<{inference: GGMLBert, loader: FilesystemDL}>}
+ * @returns {Promise<{inference: GGMLBert}>}
  */
 async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
   const [, modelDir] = await ensureModel(modelName)
-  const diskPath = modelDir
 
-  t.ok(fs.existsSync(path.join(diskPath, modelName)), 'Model file should exist')
+  const modelPath = path.join(modelDir, modelName)
+  t.ok(fs.existsSync(modelPath), 'Model file should exist')
 
-  const loader = new FilesystemDL({ dirPath: diskPath })
   const logger = new TestLogger()
 
   // Force CPU on darwin-x64
@@ -186,11 +184,15 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: Android, setting flash_attn to off')
   }
 
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath }, config)
+  const inference = new GGMLBert({
+    files: { model: [modelPath] },
+    config,
+    logger
+  })
 
   await inference.load()
 
-  return { inference, loader }
+  return { inference }
 }
 
 /**
@@ -242,12 +244,10 @@ function removeErrorHandlers (response) {
 
 /**
  * Cleans up test resources
- * @param {Object} loader - The loader instance
  * @param {Object} inference - The inference instance
  * @returns {Promise<void>}
  */
-async function cleanupResources (loader, inference) {
-  await loader.close()
+async function cleanupResources (inference) {
   await inference.unload()
 }
 

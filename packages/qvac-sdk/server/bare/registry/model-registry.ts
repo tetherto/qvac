@@ -33,7 +33,7 @@ interface LocalOptions {
   config: unknown;
   modelType: CanonicalModelType;
   name?: string | undefined;
-  loader: FilesystemDL;
+  loader?: FilesystemDL;
 }
 
 export interface ModelEntry {
@@ -54,7 +54,7 @@ export function registerModel(
         path: string;
         config: unknown;
         modelType: CanonicalModelType;
-        loader: FilesystemDL;
+        loader?: FilesystemDL;
         name?: string | undefined;
       }
     | { topic: string; providerPublicKey: string; timeout?: number },
@@ -90,8 +90,8 @@ export function registerModel(
         loadedAt: new Date(),
         config: options.config,
         modelType: options.modelType,
-        loader: options.loader,
-        name: options.name,
+        ...(options.loader ? { loader: options.loader } : {}),
+        ...(options.name ? { name: options.name } : {}),
       },
     });
 

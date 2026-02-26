@@ -182,3 +182,20 @@ export async function validateShardedModelCache(
 
   return tensorsExist;
 }
+
+/**
+ * Expand a sharded GGUF base shard filename into all shard filenames + tensors.txt.
+ * Returns null for non-sharded filenames.
+ *
+ * @param baseShardFilename - The first-shard filename (e.g., "model-00001-of-00003.gguf")
+ * @returns Array of filenames (tensors.txt + numbered shards), or null if not sharded
+ */
+export function expandGGUFIntoShards(
+  baseShardFilename: string,
+): string[] | null {
+  const shardInfo = detectShardedModel(baseShardFilename);
+  if (!shardInfo.isSharded || !shardInfo.baseFilename) return null;
+
+  const shardFiles = generateShardFilenames(baseShardFilename);
+  return [`${shardInfo.baseFilename}.tensors.txt`, ...shardFiles];
+}

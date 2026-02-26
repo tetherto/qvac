@@ -1,6 +1,4 @@
-import EmbedLlamacpp, {
-  type Loader as EmbedLoader,
-} from "@qvac/embed-llamacpp";
+import EmbedLlamacpp from "@qvac/embed-llamacpp";
 import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -17,10 +15,9 @@ import {
   createStreamLogger,
   registerAddonLogger,
 } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
+import { parseModelPath, expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
+import path from "bare-path";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): string {
   if (embedConfig.rawConfig) {
@@ -50,24 +47,24 @@ function createEmbeddingsModel(
   embedConfig: EmbedConfig,
 ) {
   const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED);
   registerAddonLogger(modelId, ADDON_NAMESPACES.LLAMACPP_EMBED, logger);
 
   const config = transformEmbedConfig(embedConfig);
 
-  const args = {
-    loader: asLoader<EmbedLoader>(loader),
-    opts: { stats: true },
+  const shards = expandGGUFIntoShards(basePath);
+  const modelFiles = shards
+    ? shards.map((f) => path.join(dirPath, f))
+    : [modelPath];
+
+  const model = new EmbedLlamacpp({
+    files: { model: modelFiles },
+    config,
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    modelPath,
-  };
+    opts: { stats: true },
+  });
 
-  const model = new EmbedLlamacpp(args, config);
-
-  return { model, loader };
+  return { model };
 }
 
 export const embeddingsPlugin = definePlugin({
@@ -78,13 +75,13 @@ export const embeddingsPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
 
-    const { model, loader } = createEmbeddingsModel(
+    const { model } = createEmbeddingsModel(
       params.modelId,
       params.modelPath,
       embedConfig,
     );
 
-    return { model, loader };
+    return { model, loader: null };
   },
 
   handlers: {
