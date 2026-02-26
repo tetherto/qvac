@@ -246,10 +246,16 @@ std::any LlamaModel::process(const std::any& input) {
   const auto& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
-    return std::any(FinetuneTerminalResult{
-        "finetune",
-        finetune(*prompt.finetuningParams),
-    });
+    FinetuneTerminalResult::Stats stats;
+    const std::string status = finetune(*prompt.finetuningParams, &stats);
+    FinetuneTerminalResult terminalResult{"finetune", status, std::nullopt};
+    if (
+        stats.trainLossLast.has_value() || stats.valLossLast.has_value() ||
+        stats.lrLast.has_value() || stats.globalSteps > 0 ||
+        stats.epochsCompleted > 0) {
+      terminalResult.stats = stats;
+    }
+    return std::any(std::move(terminalResult));
   }
 #else
   if (prompt.finetuningParams.has_value()) {
@@ -758,7 +764,8 @@ bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
 // Finetuning implementation
 #ifndef STANDALONE_TEST_BUILD
 std::string LlamaModel::finetune(
-    const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params) {
+    const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
+    FinetuneTerminalResult::Stats* outStats) {
   using namespace llama_finetuning_helpers;
 
   llama_context* ctx = getContext();
@@ -811,14 +818,9 @@ std::string LlamaModel::finetune(
         int64_t{1}, std::gcd(datasetSampleCount, actualMicroBatch));
 
     double validationSplit = 0.05;
-    const std::string evalPath = !params.evalDatasetPath.empty()
-                                     ? params.evalDatasetPath
-                                     : params.evalDatasetDir;
-    const bool hasSeparateEvalDataset =
-        !evalPath.empty() && evalPath != params.trainDatasetDir;
-    if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
-      validationSplit = 0.0;
-    } else if (hasSeparateEvalDataset) {
+    const bool hasSeparateEvalDataset = !params.evalDatasetPath.empty() &&
+                                        params.evalDatasetPath != params.trainDatasetDir;
+    if (hasSeparateEvalDataset) {
       validationSplit = 0.0;
     } else {
       validationSplit = std::clamp(params.validationSplit, 0.0, 1.0);
@@ -993,7 +995,8 @@ std::string LlamaModel::finetune(
           resumingFromPause ? resumeMeta.epoch : 0,
           resumingFromPause,
           evalDatasetPtr.get(),
-          evalDatasetSampleCount);
+          evalDatasetSampleCount,
+          outStats);
     } catch (...) {
       if (checkpointState) {
         checkpointState->pauseWaitDone.store(true);
@@ -1128,10 +1131,8 @@ ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
 
 ggml_opt_dataset_t LlamaModel::prepareEvalDataset(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params) {
-  const std::string path = !params.evalDatasetPath.empty()
-                               ? params.evalDatasetPath
-                               : params.evalDatasetDir;
-  return prepareDatasetFromPath(params, path, "Eval", "eval");
+  return prepareDatasetFromPath(
+      params, params.evalDatasetPath, "Eval", "eval");
 }
 
 void LlamaModel::initializeLoraAdapter(
@@ -1335,7 +1336,7 @@ void LlamaModel::executeTrainingLoop(
     llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
     llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
     uint32_t startEpoch, bool resumingFromPause, ggml_opt_dataset_t evalDataset,
-    int64_t evalDatasetSampleCount) {
+    int64_t evalDatasetSampleCount, FinetuneTerminalResult::Stats* outStats) {
   using namespace llama_finetuning_helpers;
   using OptResultPtr = std::unique_ptr<
       std::remove_pointer_t<ggml_opt_result_t>,
@@ -1420,11 +1421,22 @@ void LlamaModel::executeTrainingLoop(
 
     double lossValue = 0.0;
     ggml_opt_result_loss(trainResult.get(), &lossValue, nullptr);
+    if (outStats != nullptr) {
+      outStats->trainLossLast = lossValue;
+      outStats->lrLast = static_cast<double>(scheduler.lastLr);
+      outStats->epochsCompleted = static_cast<int64_t>(epoch) + 1;
+      outStats->globalSteps = checkpointState != nullptr
+          ? checkpointState->globalStep
+          : (static_cast<int64_t>(epoch) + 1) * trainSplit;
+    }
     std::ostringstream epochMsg;
     epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
     if (hasEval) {
       double valLoss = 0.0;
       ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
+      if (outStats != nullptr) {
+        outStats->valLossLast = valLoss;
+      }
       epochMsg << " | val_loss=" << valLoss;
     }
     epochMsg << " | lr=" << scheduler.lastLr;

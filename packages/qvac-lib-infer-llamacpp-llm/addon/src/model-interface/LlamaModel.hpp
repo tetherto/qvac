@@ -30,8 +30,16 @@
 using namespace qvac_lib_inference_addon_cpp::model;
 
 struct FinetuneTerminalResult {
+  struct Stats {
+    std::optional<double> trainLossLast;
+    std::optional<double> valLossLast;
+    std::optional<double> lrLast;
+    int64_t globalSteps = 0;
+    int64_t epochsCompleted = 0;
+  };
   std::string op;
   std::string status;
+  std::optional<Stats> stats;
 };
 
 class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
@@ -91,7 +99,8 @@ public:
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
   std::string finetune(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
+      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
+      FinetuneTerminalResult::Stats* outStats = nullptr);
   bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
@@ -176,7 +185,8 @@ private:
       llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
       uint32_t startEpoch = 0, bool resumingFromPause = false,
       ggml_opt_dataset_t evalDataset = nullptr,
-      int64_t evalDatasetSampleCount = 0);
+      int64_t evalDatasetSampleCount = 0,
+      FinetuneTerminalResult::Stats* outStats = nullptr);
   void saveLoraAdapter(
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);

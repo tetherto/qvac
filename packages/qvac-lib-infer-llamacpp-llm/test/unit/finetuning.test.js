@@ -352,6 +352,7 @@ test('finetune() resolves with PAUSED when paused', async (t) => {
   const handle = await model.finetune(opts)
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'PAUSED' })
+
 })
 
 test('finetune() rejects handle.await() on runtime error (like inference)', async (t) => {

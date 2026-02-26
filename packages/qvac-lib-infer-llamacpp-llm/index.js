@@ -79,6 +79,7 @@ function normalizeFinetuneParams (opts) {
   }
   const out = { ...opts }
   const type = validation.type
+  const canonicalEvalPath = opts.evalDatasetPath ?? opts.evalDatasetDir
   if (!VALIDATION_TYPES.includes(type)) {
     throw new Error(
       `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
@@ -92,7 +93,7 @@ function normalizeFinetuneParams (opts) {
     out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
     out.useEvalDatasetForValidation = false
   } else {
-    const evalPath = validation.path ?? opts.evalDatasetDir
+    const evalPath = validation.path ?? canonicalEvalPath
     if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
       throw new Error(
         "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
@@ -107,6 +108,7 @@ function normalizeFinetuneParams (opts) {
     out.validationSplit = 0
     out.useEvalDatasetForValidation = true
   }
+  delete out.evalDatasetDir
   delete out.validation
   return out
 }
@@ -219,6 +221,85 @@ class LlmLlamacpp extends BaseInference {
     await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
   }
 
+  _isFinetuneTerminalPayload (data) {
+    return (
+      data &&
+      typeof data === 'object' &&
+      data.op === 'finetune' &&
+      typeof data.status === 'string'
+    )
+  }
+
+  _isSuppressedNoResponseLog (args) {
+    const message = args.map(arg => {
+      if (typeof arg === 'string') return arg
+      if (arg && typeof arg === 'object') {
+        if (arg.message && typeof arg.message === 'string') return arg.message
+        return JSON.stringify(arg)
+      }
+      return String(arg)
+    }).join(' ')
+    return message && message.includes('No response found for job')
+  }
+
+  _createFilteredLogger (sourceLogger) {
+    const filteredLogger = sourceLogger ? Object.create(Object.getPrototypeOf(sourceLogger)) : {}
+    Object.assign(filteredLogger, sourceLogger)
+
+    const originalInfo = sourceLogger && typeof sourceLogger.info === 'function'
+      ? sourceLogger.info.bind(sourceLogger)
+      : null
+    const originalWarn = sourceLogger && typeof sourceLogger.warn === 'function'
+      ? sourceLogger.warn.bind(sourceLogger)
+      : null
+
+    filteredLogger.info = (...args) => {
+      if (this._isSuppressedNoResponseLog(args)) return
+      if (originalInfo) return originalInfo.apply(sourceLogger, args)
+    }
+
+    filteredLogger.warn = (...args) => {
+      if (this._isSuppressedNoResponseLog(args)) return
+      if (originalWarn) return originalWarn.apply(sourceLogger, args)
+    }
+
+    return filteredLogger
+  }
+
+  _updateFinetuneActiveFromCallback (eventType, data) {
+    if (this._isFinetuneTerminalPayload(data)) {
+      this._finetuneActive = false
+      return
+    }
+    if (eventType === 'Error' && this._finetuneActive) {
+      this._finetuneActive = false
+    }
+  }
+
+  _isTrainingProgressOutput (eventType, data) {
+    if (eventType !== 'Output' || typeof data !== 'string') return false
+    return data.includes('data=') && (data.includes('loss=') || data.includes('train:'))
+  }
+
+  _handleAddonOutputEvent (originalOutputCb, originalLoggerRef, instance, eventType, jobId, data, extra) {
+    this._updateFinetuneActiveFromCallback(eventType, data)
+
+    if (eventType === 'LogMsg') {
+      const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
+      originalLoggerRef?.info?.(logMsg)
+      return
+    }
+
+    if (this._isTrainingProgressOutput(eventType, data)) {
+      process.stdout.write(data)
+      return
+    }
+
+    if (originalOutputCb) {
+      return originalOutputCb(instance, eventType, jobId, data, extra)
+    }
+  }
+
   /**
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
@@ -234,83 +315,21 @@ class LlmLlamacpp extends BaseInference {
     const binding = require('./binding')
 
     const originalLogger = this.logger
-    const originalInfo = originalLogger && typeof originalLogger.info === 'function'
-      ? originalLogger.info.bind(originalLogger)
-      : null
-
-    const shouldSuppressMessage = (args) => {
-      const message = args.map(arg => {
-        if (typeof arg === 'string') return arg
-        if (arg && typeof arg === 'object') {
-          if (arg.message && typeof arg.message === 'string') return arg.message
-          return JSON.stringify(arg)
-        }
-        return String(arg)
-      }).join(' ')
-      return message && message.includes('No response found for job')
-    }
-
-    const filteredLogger = originalLogger ? Object.create(Object.getPrototypeOf(originalLogger)) : {}
-    Object.assign(filteredLogger, originalLogger)
-
-    const originalWarn = originalLogger && typeof originalLogger.warn === 'function'
-      ? originalLogger.warn.bind(originalLogger)
-      : null
-
-    filteredLogger.info = (...args) => {
-      if (shouldSuppressMessage(args)) return
-      if (originalInfo) {
-        return originalInfo.apply(originalLogger, args)
-      }
-    }
-
-    filteredLogger.warn = (...args) => {
-      if (shouldSuppressMessage(args)) return
-      if (originalWarn) {
-        return originalWarn.apply(originalLogger, args)
-      }
-    }
-
+    const filteredLogger = this._createFilteredLogger(originalLogger)
     const originalLoggerRef = this.logger
     this.logger = filteredLogger
 
     const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
-      const finetuneStatus = (
-        data &&
-        typeof data === 'object' &&
-        data.op === 'finetune' &&
-        typeof data.status === 'string'
+      return this._handleAddonOutputEvent(
+        originalOutputCb,
+        originalLoggerRef,
+        instance,
+        eventType,
+        jobId,
+        data,
+        extra
       )
-        ? data.status
-        : null
-      if (finetuneStatus && this._finetuneCompletionResolve) {
-        this._finetuneActive = false
-        this._finetuneCompletionResolve(finetuneStatus)
-        this._finetuneCompletionResolve = null
-        return
-      }
-      if (eventType === 'Error' && this._finetuneCompletionResolve) {
-        this._finetuneActive = false
-        this._finetuneCompletionResolve('ERROR')
-        this._finetuneCompletionResolve = null
-      }
-
-      if (eventType === 'LogMsg') {
-        const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
-        originalLoggerRef?.info?.(logMsg)
-        return
-      }
-      if (eventType === 'Output' && typeof data === 'string') {
-        const dataStr = data
-        if (dataStr.includes('data=') && (dataStr.includes('loss=') || dataStr.includes('train:'))) {
-          process.stdout.write(dataStr)
-          return
-        }
-      }
-      if (originalOutputCb) {
-        return originalOutputCb(instance, eventType, jobId, data, extra)
-      }
     }
 
     return new LlamaInterface(
@@ -489,29 +508,28 @@ class LlmLlamacpp extends BaseInference {
       throw new Error(RUN_QUEUE_BUSY_ERROR)
     }
 
-    let resolveCompletion
-    let rejectCompletion
-    const completionPromise = new Promise((resolve, reject) => {
-      resolveCompletion = resolve
-      rejectCompletion = reject
-    })
-    this._finetuneCompletionResolve = resolveCompletion
-
-    const handle = {
-      await: () => completionPromise.then(status => ({ status }))
-    }
-
     return this._withExclusiveRun(async () => {
       this._finetuneActive = true
+      const response = this._createResponse('OnlyOneJob')
+      let accepted
       try {
-        await this.addon.finetune(paramsToSend)
-        return handle
+        accepted = await this.addon.finetune(paramsToSend)
       } catch (err) {
         this._finetuneActive = false
-        this._finetuneCompletionResolve = null
-        rejectCompletion(err)
+        this._deleteJobMapping('OnlyOneJob')
+        response.failed(err)
         throw err
       }
+
+      if (!accepted) {
+        this._finetuneActive = false
+        this._deleteJobMapping('OnlyOneJob')
+        const msg = RUN_BUSY_ERROR_MESSAGE
+        response.failed(new Error(msg))
+        throw new Error(msg)
+      }
+
+      return response
     })
   }
 }
