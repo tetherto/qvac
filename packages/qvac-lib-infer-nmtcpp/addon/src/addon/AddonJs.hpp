@@ -93,6 +93,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
 
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<out_handl::JsStringArrayOutputHandler>());
 
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,

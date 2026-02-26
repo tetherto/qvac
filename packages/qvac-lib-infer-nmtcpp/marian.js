@@ -128,7 +128,7 @@ class TranslationInterface {
    * Adds new input to the processing queue
    * @param {Object} data
    * @param {String} data.type
-   * @param {String} data.input
+   * @param {String | String[]} data.input
    */
   async runJob (data) {
     try {
@@ -179,25 +179,6 @@ class TranslationInterface {
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_DESTROY,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Translates multiple texts in a single batch for better performance.
-   * This bypasses the normal queue-based processing and directly calls
-   * the batch translation API.
-   * @param {string[]} texts - Array of texts to translate
-   * @returns {Promise<string[]>} - Array of translated texts
-   */
-  async processBatch (texts) {
-    try {
-      return binding.processBatch(this._handle, texts)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
         cause: err
       })
