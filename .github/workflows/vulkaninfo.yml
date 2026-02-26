@@ -27,7 +27,7 @@ jobs:
           try {
             $output = nvidia-smi 2>&1
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "nvidia-smi OK — driver already present, skipping install"
+              Write-Host "nvidia-smi OK -- driver already present, skipping install"
               Write-Host $output
               $nvidiaOk = $true
             } else {
@@ -38,27 +38,23 @@ jobs:
           }
 
           if (-not $nvidiaOk) {
-            Write-Host "=== NVIDIA drivers missing — installing ==="
+            Write-Host "=== NVIDIA drivers missing -- installing ==="
 
             $driverUrl   = "https://us.download.nvidia.com/tesla/591.59/591.59-data-center-tesla-desktop-winserver-2022-2025-dch-international.exe"
             $installer   = "$env:TEMP\nvidia_driver.exe"
             $maxAttempts = 3
 
-            # Retry loop for download
             for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
               Write-Host "Download attempt $attempt of $maxAttempts ..."
               try {
                 Invoke-WebRequest -Uri $driverUrl -OutFile $installer -UseBasicParsing
                 $fileSize = (Get-Item $installer).Length
                 Write-Host "Downloaded $fileSize bytes"
-
-                # Sanity check — driver should be at least 400 MB
-                if ($fileSize -lt 400MB) {
-                  Write-Warning "File seems too small ($fileSize bytes) — may be corrupt, retrying ..."
+                if ($fileSize -lt 400000000) {
+                  Write-Warning "File seems too small ($fileSize bytes) -- may be corrupt, retrying ..."
                   Remove-Item $installer -Force
                   continue
                 }
-
                 Write-Host "Download looks good."
                 break
               } catch {
@@ -78,24 +74,18 @@ jobs:
             Write-Host "Installer exit code: $($proc.ExitCode)"
 
             if ($proc.ExitCode -notin @(0, 1)) {
-              # Dump relevant Windows Event Log entries to help diagnose
               Write-Host "=== Windows Event Log (System, last 20 errors) ==="
-              Get-EventLog -LogName System -EntryType Error -Newest 20 |
-                Format-List TimeGenerated, Source, EventID, Message
-
+              Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-List TimeGenerated, Source, EventID, Message
               Write-Error "NVIDIA driver installation failed with exit code $($proc.ExitCode)"
               exit 1
             }
 
-            # Give the driver a moment to fully register
             Write-Host "Waiting 15s for driver to register ..."
             Start-Sleep -Seconds 15
 
-            # Refresh PATH so vulkaninfo is discoverable in this session
-            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
-                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
 
-            Write-Host "Driver installed — verifying ..."
+            Write-Host "Driver installed -- verifying ..."
             nvidia-smi
             if ($LASTEXITCODE -ne 0) {
               Write-Error "nvidia-smi still fails after installation"
@@ -103,28 +93,26 @@ jobs:
             }
             Write-Host "NVIDIA driver installation verified successfully."
           }
-      
-      - name: run nvidia-smi
+
+      - name: GPU detection
         continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== GPU Device List ==="
           nvidia-smi -L
-
           Write-Host ""
           Write-Host "=== nvidia-smi (baseline) ==="
           nvidia-smi
-
           Write-Host ""
           Write-Host "=== Driver Version (baseline) ==="
-          nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1 | ForEach-Object { Write-Host "Driver: $_" }
+          nvidia-smi --query-gpu=driver_version --format=csv,noheader
 
-      - name: run vulkaninfo
+      - name: Vulkan check
         continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== vulkaninfo --summary (baseline) ==="
-          vulkaninfo --summary 2>&1
+          vulkaninfo --summary
 
       - name: Collect diagnostics into files
         continue-on-error: true
@@ -136,24 +124,19 @@ jobs:
           Write-Host "=== Collecting nvidia-smi output ==="
           nvidia-smi | Tee-Object -FilePath "$outDir\nvidia-smi.txt"
 
-          Write-Host ""
-          Write-Host "=== Collecting driver version ==="
-          nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap `
-                     --format=csv | Tee-Object -FilePath "$outDir\gpu-info.csv"
+          Write-Host "=== Collecting GPU info ==="
+          nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv | Tee-Object -FilePath "$outDir\gpu-info.csv"
 
-          Write-Host ""
           Write-Host "=== Collecting vulkaninfo JSON ==="
           vulkaninfo --json 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo.json"
 
-          Write-Host ""
           Write-Host "=== Collecting vulkaninfo summary ==="
           vulkaninfo --summary 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo-summary.txt"
 
-          Write-Host ""
           Write-Host "=== Validating Vulkan API version ==="
           $summary = Get-Content "$outDir\vulkaninfo-summary.txt" -Raw
           if ($summary -match "apiVersion\s*=\s*(\d+\.\d+\.\d+)") {
-            $apiVersion = $matches[1]
+            $apiVersion = $Matches[1]
             Write-Host "Detected Vulkan API version: $apiVersion"
             $major = [int]($apiVersion.Split('.')[0])
             $minor = [int]($apiVersion.Split('.')[1])
@@ -184,13 +167,11 @@ jobs:
             exit 1
           }
 
-          Write-Host ""
           Write-Host "=== Final Gate: Verifying vulkaninfo ==="
           vulkaninfo --summary
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "GATE FAILED: vulkaninfo is not working — Vulkan support is NOT confirmed on this runner"
+            Write-Error "GATE FAILED: vulkaninfo not working -- Vulkan support NOT confirmed"
             exit 1
           }
 
-          Write-Host ""
           Write-Host "GATE PASSED: GPU and Vulkan support confirmed on runner."
