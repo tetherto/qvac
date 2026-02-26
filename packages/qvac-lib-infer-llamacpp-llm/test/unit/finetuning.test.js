@@ -372,6 +372,23 @@ test('finetune() rejects handle.await() on runtime error (like inference)', asyn
   )
 })
 
+test('finetune() rejects handle.await() on runtime error (like inference)', async (t) => {
+  const opts = baseFinetuneOpts({ validation: { type: 'none' } })
+  const model = createModelWithMockAddon(opts)
+  model.addon.finetune.callsFake(() => {
+    setImmediate(() => {
+      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory')
+    })
+    return true
+  })
+
+  const handle = await model.finetune(opts)
+  await t.exception(
+    () => handle.await(),
+    /out of memory/
+  )
+})
+
 test('finetune() returns terminal stats when provided', async (t) => {
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   const model = createModelWithMockAddon(opts)

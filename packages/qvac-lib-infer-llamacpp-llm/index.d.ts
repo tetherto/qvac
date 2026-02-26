@@ -109,7 +109,7 @@ export interface FinetuneStats {
 
 export interface FinetuneResult {
   op: 'finetune'
-  status: 'COMPLETED' | 'PAUSED' | 'ERROR' | string
+  status: 'COMPLETED' | 'PAUSED'
   stats?: FinetuneStats
 }
 

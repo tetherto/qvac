@@ -771,10 +771,8 @@ std::string LlamaModel::finetune(
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
-    std::string errorMsg =
-        "Finetune error: model/context not available. Call activate() first.";
-    QLOG_IF(Priority::ERROR, errorMsg);
-    return "ERROR";
+    throw std::runtime_error(
+        "Finetune error: model/context not available. Call activate() first.");
   }
 
   try {
@@ -1035,7 +1033,7 @@ std::string LlamaModel::finetune(
     }
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
     return status;
-  } catch (const std::exception& ex) {
+  } catch (...) {
     auto* state = getCurrentCheckpointState();
     if (state)
       state->setIdle();
@@ -1043,8 +1041,7 @@ std::string LlamaModel::finetune(
       pausedCheckpointState_->setIdle();
     llama_finetuning_helpers::clearCurrentCheckpointState();
     currentCheckpointState_.store(nullptr, std::memory_order_release);
-    QLOG_IF(Priority::ERROR, std::string{"Finetune error: "} + ex.what());
-    return "ERROR";
+    throw;
   }
 }
 
