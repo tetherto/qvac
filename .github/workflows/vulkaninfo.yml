@@ -18,28 +18,6 @@ jobs:
           Write-Host "Build Number: $($os.BuildNumber)"
           Write-Host "Architecture: $($os.OSArchitecture)"
 
-      - name: Baseline GPU detection
-        continue-on-error: true
-        shell: powershell
-        run: |
-          Write-Host "=== GPU Device List ==="
-          nvidia-smi -L
-
-          Write-Host ""
-          Write-Host "=== nvidia-smi (baseline) ==="
-          nvidia-smi
-
-          Write-Host ""
-          Write-Host "=== Driver Version (baseline) ==="
-          nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1 | ForEach-Object { Write-Host "Driver: $_" }
-
-      - name: Baseline Vulkan check (before any install)
-        continue-on-error: true
-        shell: powershell
-        run: |
-          Write-Host "=== vulkaninfo --summary (baseline) ==="
-          vulkaninfo --summary 2>&1
-
       - name: Check and install NVIDIA drivers if missing
         continue-on-error: true
         shell: powershell
@@ -125,6 +103,28 @@ jobs:
             }
             Write-Host "NVIDIA driver installation verified successfully."
           }
+      
+      - name: run nvidia-smi
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host "=== GPU Device List ==="
+          nvidia-smi -L
+
+          Write-Host ""
+          Write-Host "=== nvidia-smi (baseline) ==="
+          nvidia-smi
+
+          Write-Host ""
+          Write-Host "=== Driver Version (baseline) ==="
+          nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1 | ForEach-Object { Write-Host "Driver: $_" }
+
+      - name: run vulkaninfo
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host "=== vulkaninfo --summary (baseline) ==="
+          vulkaninfo --summary 2>&1
 
       - name: Collect diagnostics into files
         continue-on-error: true
