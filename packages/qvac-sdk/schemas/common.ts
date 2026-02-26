@@ -4,6 +4,7 @@ import {
   completionStreamRequestSchema,
   completionStreamResponseSchema,
 } from "./completion-stream";
+import { finetuneRequestSchema, finetuneResponseSchema } from "./finetune";
 import {
   loadModelRequestSchema,
   loadModelResponseSchema,
@@ -69,6 +70,7 @@ export const requestSchema = z.union([
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
+  finetuneRequestSchema,
   unloadModelRequestSchema,
   transcribeStreamRequestSchema,
   loggingStreamRequestSchema,
@@ -94,6 +96,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
+  finetuneResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
   transcribeStreamResponseSchema,

@@ -1,6 +1,9 @@
 // Public API exports only
 export {
   completion,
+  finetune,
+  pause,
+  resume,
   deleteCache,
   loadModel,
   downloadAsset,
@@ -32,6 +35,7 @@ export {
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
+  type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
@@ -44,6 +48,12 @@ export {
   type ToolCallError,
   type ToolCallEvent,
   type CompletionStats,
+  type FinetuneParams,
+  type FinetuningOptions,
+  type FinetuneStatus,
+  type FinetuneValidation,
+  type PauseFinetuneParams,
+  type ResumeFinetuneParams,
   VERBOSITY,
   type Attachment,
   type CompletionParams,

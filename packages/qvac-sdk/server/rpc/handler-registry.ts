@@ -8,6 +8,7 @@ import { getModelEntry } from "@/server/bare/registry/model-registry";
 import { handleUnloadModel } from "@/server/rpc/handlers/unload-model";
 import { handleTranscribeStream } from "@/server/rpc/handlers/transcribe-stream";
 import { handleEmbed } from "@/server/rpc/handlers/embed";
+import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleTranslate } from "@/server/rpc/handlers/translate";
 import { handleLoggingStream } from "@/server/rpc/handlers/logging-stream";
 import { cancelHandler } from "./handlers/cancelHandler";
@@ -46,6 +47,7 @@ export const registry: Record<string, HandlerEntry> = {
   ping: { type: "reply", handler: handlePing },
   unloadModel: { type: "reply", handler: handleUnloadModel },
   embed: { type: "reply", handler: handleEmbed },
+  finetune: { type: "reply", handler: handleFinetune },
   cancel: { type: "reply", handler: cancelHandler },
   provide: { type: "reply", handler: provideHandler },
   stopProvide: { type: "reply", handler: stopProvideHandler },

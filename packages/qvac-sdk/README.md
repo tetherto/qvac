@@ -130,6 +130,7 @@ try {
 ### AI tasks
 
 - Completion: LLM inference via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
+- Finetuning: LoRA finetuning for `llama.cpp` models (through the LLM add-on).
 - Transcription: speech-to-text (ASR) via [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp).
 - Text embeddings: via `llama.cpp`, for RAG.
 - Translation: between different languages.
@@ -172,6 +173,9 @@ bun run examples/path/to/example.ts
 - `llama.cpp` with tools/function calls: [`examples/llamacpp-native-tools.ts`](examples/llamacpp-native-tools.ts)
 - `llama.cpp` with multimodal inference: [`examples/llamacpp-multimodal.ts`](examples/llamacpp-multimodal.ts)
 - `llama.cpp` with KV cache: [`examples/kv-cache-example.ts`](examples/kv-cache-example.ts)
+- `llama.cpp` finetuning (with optional pause/resume): [`examples/llamacpp-finetune.ts`](examples/llamacpp-finetune.ts)
+  - Finetuning requires loading LLM with `mode: "finetune"`.
+  - Use `pause({ modelId })` and `resume({ modelId })` for explicit control.
 
 ### Transcription
 

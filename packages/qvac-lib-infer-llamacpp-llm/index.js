@@ -218,10 +218,15 @@ class LlmLlamacpp extends BaseInference {
       if (eventType === 'JobEnded' || eventType === 'Error') {
         this._jobInProgress = false
       }
-      if (typeof data === 'string' && (data === 'COMPLETED' || data === 'PAUSED' || data === 'ERROR') && this._finetuneCompletionResolve) {
-        this._finetuneCompletionResolve(data)
-        this._finetuneCompletionResolve = null
-        return
+      if (typeof data === 'string' && (data === 'COMPLETED' || data === 'PAUSED' || data === 'ERROR')) {
+        // Finetune status events can arrive before runtime stats (JobEnded).
+        // Clear busy flag immediately so follow-up finetune()/run() calls do not race.
+        this._jobInProgress = false
+        if (this._finetuneCompletionResolve) {
+          this._finetuneCompletionResolve(data)
+          this._finetuneCompletionResolve = null
+          return
+        }
       }
 
       if (eventType === 'LogMsg') {

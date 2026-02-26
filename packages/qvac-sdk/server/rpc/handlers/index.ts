@@ -3,6 +3,7 @@ import { handleDownloadAsset } from "./download-asset";
 import { handleLoadModel } from "./load-model";
 import { handleUnloadModel } from "./unload-model";
 import { handleEmbed } from "./embed";
+import { handleFinetune } from "./finetune";
 import { handleTranscribeStream } from "./transcribe-stream";
 import { provideHandler } from "./provideHandler";
 import { stopProvideHandler } from "./stopProvideHandler";
@@ -30,6 +31,7 @@ export const handlers = {
   loadModel: handleLoadModel,
   unloadModel: handleUnloadModel,
   embed: handleEmbed,
+  finetune: handleFinetune,
   transcribeStream: handleTranscribeStream,
   provide: provideHandler,
   stopProvide: stopProvideHandler,

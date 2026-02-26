@@ -1,6 +1,7 @@
 export { loadModel } from "./load-model";
 export { downloadAsset } from "./download-asset";
 export { completion } from "./completion-stream";
+export { finetune, pause, resume, type FinetuneHandle } from "./finetune";
 export { deleteCache } from "./delete-cache";
 export { unloadModel } from "./unload-model";
 export { loggingStream } from "./logging-stream";

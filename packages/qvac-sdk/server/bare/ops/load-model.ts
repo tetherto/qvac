@@ -48,6 +48,15 @@ export async function loadModel(params: LoadModelServerParams) {
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType);
+  const llmMode =
+    modelType === ModelType.llamacppCompletion
+      ? (options as { mode?: "inference" | "finetune" }).mode ?? "inference"
+      : undefined;
+
+  const effectiveModelConfig = {
+    ...modelConfig,
+    ...(llmMode === "finetune" ? { flash_attn: "off" } : {}),
+  };
 
   // Check if model is already loaded
   if (isModelLoaded(modelId)) {
@@ -114,7 +123,7 @@ export async function loadModel(params: LoadModelServerParams) {
   const result = plugin.createModel({
     modelId,
     modelPath,
-    modelConfig: modelConfig as Record<string, unknown>,
+    modelConfig: effectiveModelConfig,
     modelName,
     artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
   }) as { model: AnyModel; loader: FilesystemDL };
@@ -131,7 +140,7 @@ export async function loadModel(params: LoadModelServerParams) {
   registerModel(modelId, {
     model: result.model,
     path: modelPath,
-    config: modelConfig,
+    config: effectiveModelConfig,
     modelType: modelType as CanonicalModelType,
     name: modelName,
     loader: result.loader,

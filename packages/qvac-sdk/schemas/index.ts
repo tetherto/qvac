@@ -7,6 +7,7 @@ export * from "./delegate";
 export * from "./delete-cache";
 export * from "./download-asset";
 export * from "./embed";
+export * from "./finetune";
 export * from "./load-model";
 export * from "./reload-config";
 export * from "./logging-stream";

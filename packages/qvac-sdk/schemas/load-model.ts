@@ -43,6 +43,7 @@ const loadModelOptionsBaseSchema = z.union([
   z.object({
     modelSrc: modelSrcInputSchema,
     modelType: llmModelTypeSchema,
+    mode: z.enum(["inference", "finetune"]).optional(),
     modelConfig: llmConfigBaseSchema.strict().optional(),
     seed: z.boolean().optional(),
     projectionModelSrc: modelSrcInputSchema.optional(),
@@ -113,6 +114,7 @@ export const loadModelOptionsToRequestSchema = z.union([
     .object({
       modelSrc: modelSrcInputSchema,
       modelType: llmModelTypeSchema,
+      mode: z.enum(["inference", "finetune"]).optional(),
       modelConfig: llmConfigBaseSchema.strict().optional(),
       seed: z.boolean().optional(),
       projectionModelSrc: modelSrcInputSchema.optional(),
@@ -127,6 +129,7 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}) as LlmConfig,
+      mode: data.mode ?? "inference",
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -333,6 +336,7 @@ const commonModelConfigSchema = z.object({
 // Server applies device defaults, then full schema defaults.
 export const loadLlmModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.llamacppCompletion),
+  mode: z.enum(["inference", "finetune"]).optional(),
   modelConfig: llmConfigBaseSchema,
 });
 
