@@ -96,7 +96,21 @@ export interface DownloadResult {
 }
 
 export interface FinetuneHandle {
-  await(): Promise<{ status: string }>
+  await(): Promise<FinetuneResult>
+}
+
+export interface FinetuneStats {
+  train_loss?: number
+  val_loss?: number
+  learning_rate?: number
+  global_steps: number
+  epochs_completed: number
+}
+
+export interface FinetuneResult {
+  op: 'finetune'
+  status: 'COMPLETED' | 'PAUSED' | 'ERROR' | string
+  stats?: FinetuneStats
 }
 
 export default class LlmLlamacpp extends BaseInference {

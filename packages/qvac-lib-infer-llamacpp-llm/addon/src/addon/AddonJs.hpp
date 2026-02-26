@@ -44,6 +44,42 @@ struct JsFinetuneTerminalOutputHandler
                       this->env_,
                       "status",
                       js::String::create(this->env_, result.status));
+                  if (result.stats.has_value()) {
+                    js::Object stats = js::Object::create(this->env_);
+                    if (result.stats->trainLossLast.has_value()) {
+                      stats.setProperty(
+                          this->env_,
+                          "train_loss",
+                          js::Number::create(
+                              this->env_, *result.stats->trainLossLast));
+                    }
+                    if (result.stats->valLossLast.has_value()) {
+                      stats.setProperty(
+                          this->env_,
+                          "val_loss",
+                          js::Number::create(
+                              this->env_, *result.stats->valLossLast));
+                    }
+                    if (result.stats->lrLast.has_value()) {
+                      stats.setProperty(
+                          this->env_,
+                          "learning_rate",
+                          js::Number::create(this->env_, *result.stats->lrLast));
+                    }
+                    stats.setProperty(
+                        this->env_,
+                        "global_steps",
+                        js::Number::create(
+                            this->env_,
+                            static_cast<double>(result.stats->globalSteps)));
+                    stats.setProperty(
+                        this->env_,
+                        "epochs_completed",
+                        js::Number::create(
+                            this->env_,
+                            static_cast<double>(result.stats->epochsCompleted)));
+                    payload.setProperty(this->env_, "stats", stats);
+                  }
                   return payload;
                 }) {}
 };
@@ -68,13 +104,15 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.trainDatasetDir =
       jsObj.getProperty<js::String>(env, "trainDatasetDir")
           .as<std::string>(env);
-  params.evalDatasetDir =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
-          .value_or("");
-  params.evalDatasetPath =
+  const std::string evalDatasetPath =
       jsObj.getOptionalPropertyAs<js::String, std::string>(
                env, "evalDatasetPath")
           .value_or("");
+  const std::string evalDatasetDirLegacy =
+      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
+          .value_or("");
+  params.evalDatasetPath =
+      !evalDatasetPath.empty() ? evalDatasetPath : evalDatasetDirLegacy;
   params.contextLength =
       jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
           .value_or(0);

@@ -86,7 +86,7 @@ const resumeResult = await resumeHandle.await()
 
 - **Parameters**
   - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Omit to use params from construction or a previous call (e.g. after a pause). When omitted, the backend resumes from a pause checkpoint if one exists in the stored params' `checkpointSaveDir`; otherwise you must provide params. **Resume contract:** call `finetune()` only after you have **awaited** `cancel()`. Once `cancel()` resolves, you are paused (or it was a no-op); no status to check. There is no status API; await the previous command to know something is done.
-- **Returns** — `Promise<FinetuneHandle>`. The handle has `await()` — returns `Promise<{ status: string }>` when training completes or pauses. `status` is `'COMPLETED'` (completed), `'ERROR'` (failure), or `'PAUSED'` (paused). Use only if you need to distinguish e.g. "training finished before we paused" (COMPLETED) from "we paused" (PAUSED); otherwise awaiting `cancel()` is enough.
+- **Returns** — `Promise<FinetuneHandle>`. The handle has `await()` — returns `Promise<{ op: 'finetune', status: string, stats?: object }>` when training completes or pauses. `status` is `'COMPLETED'` (completed), `'ERROR'` (failure), or `'PAUSED'` (paused). `stats` may include terminal metrics such as `train_loss`, `val_loss`, `learning_rate`, `global_steps`, and `epochs_completed`. Use only if you need to distinguish e.g. "training finished before we paused" (COMPLETED) from "we paused" (PAUSED); otherwise awaiting `cancel()` is enough.
 
 **Related example:** [examples/simple-lora-finetune.js](../examples/simple-lora-finetune.js) — Run with: `bare examples/simple-lora-finetune.js`
 

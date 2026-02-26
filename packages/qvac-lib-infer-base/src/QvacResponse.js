@@ -155,6 +155,10 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Marks the response as ended, emits an 'end' event, and resolves the finish promise.
+<<<<<<< HEAD
+=======
+   * Defaults to resolving with accumulated outputs.
+>>>>>>> 71229ab (qvacresponse cahnges added)
    */
   ended (result = this.output) {
     this._status = statuses.ENDED

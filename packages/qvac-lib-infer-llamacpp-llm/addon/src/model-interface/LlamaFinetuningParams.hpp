@@ -10,7 +10,6 @@ struct LlamaFinetuningParams {
   int numberOfEpochs{0};
   double learningRate{0.0};
   std::string trainDatasetDir;
-  std::string evalDatasetDir;
   std::string evalDatasetPath;
   int64_t contextLength{0};
   int64_t microBatchSize{0};
