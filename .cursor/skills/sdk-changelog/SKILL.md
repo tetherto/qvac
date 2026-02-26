@@ -70,6 +70,10 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 - `models.md` - Model changes (if `[mod]` PRs)
 - `CHANGELOG_LLM.md` - Human-readable version (generated separately via Step 4)
 
+Additionally:
+
+- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest)
+
 ## Tag Format
 
 Tags follow the pattern: `<package>-v<x.y.z>`
@@ -103,6 +107,10 @@ Before completing:
 - [ ] Changelog files written to correct version directory
 - [ ] If CHANGELOG_LLM.md requested, follows format guide
 - [ ] NOTICE file updated for the target package
+- [ ] Root CHANGELOG.md rebuilt from all version folders
+- [ ] Versions sorted in descending semver order
+- [ ] No duplicated versions
+- [ ] Root file is deterministic (fully regenerated)
 
 ## References
 
