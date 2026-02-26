@@ -1,10 +1,12 @@
 #pragma once
 
 #include <condition_variable>
+#include <iomanip>
 #include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <string>
 
 #include <llama-cpp.h>
