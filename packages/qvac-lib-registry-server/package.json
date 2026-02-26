@@ -52,7 +52,7 @@
     "lint:fix": "standard --fix"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.864.0",
+    "@aws-sdk/client-s3": "^3.998.0",
     "@huggingface/gguf": "^0.3.3",
     "@huggingface/hub": "^2.4.1",
     "@qvac/registry-schema": "^0.1.1",
@@ -79,6 +79,10 @@
     "readline": "npm:bare-node-readline",
     "ready-resource": "^1.2.0",
     "stream": "npm:bare-node-stream"
+  },
+  "overrides": {
+    "minimatch": ">=3.1.3",
+    "ajv": "6.14.0"
   },
   "devDependencies": {
     "@qvac/error": "^0.1.0",
