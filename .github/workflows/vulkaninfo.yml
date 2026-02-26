@@ -1,13 +1,21 @@
-name: vulkaninfo test
-
 on:
   workflow_dispatch:
 
 jobs:
   run-vulkaninfo:
     name: test-vulkaninfo
-    runs-on: ai-run-windows-gpu
+    runs-on: ai-run-windows2022-gpu
     steps:
+      - name: Check OS version
+        shell: powershell
+        run: |
+          Write-Host "=== OS Version ==="
+          $os = Get-CimInstance Win32_OperatingSystem
+          Write-Host "Caption:      $($os.Caption)"
+          Write-Host "Version:      $($os.Version)"
+          Write-Host "Build Number: $($os.BuildNumber)"
+          Write-Host "Architecture: $($os.OSArchitecture)"
+
       - name: Run nvidia-smi without params
         shell: powershell
         run: |
@@ -19,3 +27,118 @@ jobs:
         run: |
           Write-Host "=== Running vulkaninfo ==="
           vulkaninfo
+
+      - name: Check and install NVIDIA drivers if missing
+        shell: powershell
+        run: |
+          Write-Host "=== Checking NVIDIA Drivers ==="
+          $nvidiaOk = $false
+          try {
+            $output = nvidia-smi 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "nvidia-smi OK"
+              Write-Host $output
+              $nvidiaOk = $true
+            } else {
+              Write-Host "nvidia-smi exited with code $LASTEXITCODE"
+            }
+          } catch {
+            Write-Host "nvidia-smi not found: $_"
+          }
+
+          if (-not $nvidiaOk) {
+            Write-Host "=== NVIDIA drivers missing — installing ==="
+
+            # Download the latest Game Ready Driver for Windows Server 2022 (Data Center)
+            $driverUrl  = "https://us.download.nvidia.com/tesla/537.70/537.70-data-center-tesla-desktop-winserver-2019-2022-dch-international.exe"
+            $installer  = "$env:TEMP\nvidia_driver.exe"
+
+            Write-Host "Downloading driver from $driverUrl ..."
+            Invoke-WebRequest -Uri $driverUrl -OutFile $installer -UseBasicParsing
+
+            Write-Host "Running silent install ..."
+            $proc = Start-Process -FilePath $installer `
+                                  -ArgumentList "-s", "-noreboot", "-noeula" `
+                                  -Wait -PassThru
+            Write-Host "Installer exit code: $($proc.ExitCode)"
+
+            if ($proc.ExitCode -notin @(0, 1)) {
+              Write-Error "NVIDIA driver installation failed with exit code $($proc.ExitCode)"
+              exit 1
+            }
+
+            Write-Host "Driver installed — verifying ..."
+            nvidia-smi
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "nvidia-smi still fails after installation"
+              exit 1
+            }
+            Write-Host "NVIDIA driver installation verified successfully."
+          }
+
+      - name: Check and install Vulkan runtime if missing
+        shell: powershell
+        run: |
+          Write-Host "=== Checking Vulkan / vulkaninfo ==="
+          $vulkanOk = $false
+          try {
+            $output = vulkaninfo 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "vulkaninfo OK"
+              Write-Host $output
+              $vulkanOk = $true
+            } else {
+              Write-Host "vulkaninfo exited with code $LASTEXITCODE"
+              Write-Host $output
+            }
+          } catch {
+            Write-Host "vulkaninfo not found: $_"
+          }
+
+          if (-not $vulkanOk) {
+            Write-Host "=== Vulkan runtime missing — installing via Vulkan SDK ==="
+
+            # Pull the latest SDK version number from LunarG
+            $sdkVersionUrl = "https://vulkan.lunarg.com/sdk/latest/windows.txt"
+            $sdkVersion    = (Invoke-WebRequest -Uri $sdkVersionUrl -UseBasicParsing).Content.Trim()
+            Write-Host "Latest Vulkan SDK version: $sdkVersion"
+
+            $sdkUrl       = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/VulkanSDK-$sdkVersion-Installer.exe"
+            $sdkInstaller = "$env:TEMP\VulkanSDK.exe"
+
+            Write-Host "Downloading Vulkan SDK from $sdkUrl ..."
+            Invoke-WebRequest -Uri $sdkUrl -OutFile $sdkInstaller -UseBasicParsing
+
+            Write-Host "Running silent install ..."
+            $proc = Start-Process -FilePath $sdkInstaller `
+                                  -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" `
+                                  -Wait -PassThru
+            Write-Host "Installer exit code: $($proc.ExitCode)"
+
+            if ($proc.ExitCode -ne 0) {
+              Write-Error "Vulkan SDK installation failed with exit code $($proc.ExitCode)"
+              exit 1
+            }
+
+            # Refresh PATH so vulkaninfo is discoverable in this session
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
+                        [System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+            Write-Host "Vulkan SDK installed — verifying ..."
+            vulkaninfo
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "vulkaninfo still fails after SDK installation"
+              exit 1
+            }
+            Write-Host "Vulkan runtime installation verified successfully."
+          }
+
+      - name: Print GPU and Vulkan summary
+        shell: powershell
+        run: |
+          Write-Host "=== Final GPU Info ==="
+          nvidia-smi
+
+          Write-Host ""
+          Write-Host "=== Final Vulkan Info ==="
+          vulkaninfo --summary
