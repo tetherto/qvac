@@ -10,7 +10,7 @@ on:
       - main
       - release-*
     paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+      - "packages/ocr-onnx/**"
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version=$(jq -r '.version' packages/qvac-lib-inference-addon-onnx-ocr-fasttext/package.json)
+          version=$(jq -r '.version' packages/ocr-onnx/package.json)
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout base repo
@@ -52,7 +52,7 @@ jobs:
         with:
           current_version: ${{ steps.package-version.outputs.version }}
           prev_sha: ${{ github.event.pull_request.base.sha }}
-          workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+          workdir: packages/ocr-onnx
 
       - name: Validate Release Notes on version bump
         if: steps.version.outputs.bumped == 'true'
@@ -63,7 +63,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const version = "${{ steps.package-version.outputs.version }}";
-            const expected = `packages/qvac-lib-inference-addon-onnx-ocr-fasttext/release-notes/v${version}.md`;
+            const expected = `packages/ocr-onnx/release-notes/v${version}.md`;
 
             const files = await github.paginate(
               github.rest.pulls.listFiles,

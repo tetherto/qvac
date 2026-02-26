@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+      - "packages/ocr-onnx/**"
       - ".github/workflows/*ocr*.yml"
 
   workflow_dispatch:
@@ -96,9 +96,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-inference-addon-onnx-ocr-fasttext
-          package-json-path: packages/qvac-lib-inference-addon-onnx-ocr-fasttext/package.json
-          changelog-path: packages/qvac-lib-inference-addon-onnx-ocr-fasttext/CHANGELOG.md
+          package-slug: ocr-onnx
+          package-json-path: packages/ocr-onnx/package.json
+          changelog-path: packages/ocr-onnx/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -107,7 +107,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -120,7 +120,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -133,7 +133,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
@@ -146,7 +146,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       tag: "latest"
@@ -157,12 +157,12 @@ jobs:
     if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/create-github-release-ocr-onnx.yml
     secrets: inherit
     with:
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-inference-addon-onnx-ocr-fasttext"
+      workdir: "packages/ocr-onnx"
 
   prebuild:
     name: Prebuild Gate
@@ -188,7 +188,7 @@ jobs:
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   integration-tests:
-    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
     needs: prebuild
     if: needs.prebuild.outputs.should_run_tests == 'true'
     secrets: inherit
