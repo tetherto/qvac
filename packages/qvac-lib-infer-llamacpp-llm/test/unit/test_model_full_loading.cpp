@@ -1,4 +1,3 @@
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -24,6 +23,8 @@ readFileToStreambufBinary(const std::string& path) {
 class ModelFullLoadingTest : public ::testing::Test {
 protected:
   void SetUp() override {
+    using MP = test_common::TestModelPath;
+
     config_["device"] = test_common::getTestDevice();
     config_["ctx_size"] = "2048";
     config_["gpu_layers"] = test_common::getTestGpuLayers();
@@ -37,13 +38,17 @@ protected:
 #endif
     config_["backendsDir"] = backendDir.string();
 
-    single_model_path_ = test_common::BaseTestModelPath::get();
+    singleModel_ = MP(
+        "Llama-3.2-1B-Instruct-Q4_0.gguf",
+        nullptr,
+        MP::OnMissing::Fail,
+        "");
 
     shardedModel_ = MP(
-        "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
+        "Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf",
         "SHARDED_MODEL_FIRST_SHARD_PATH",
         MP::OnMissing::Skip,
-        "https://huggingface.co/jmb95/Qwen3-0.6-UD-IQ1_S-sharded",
+        "https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded",
         true /* isSharded */);
     if (shardedModel_.found())
       LlamaModel::resolveShardPaths(shardedModel_.shards, shardedModel_.path);
@@ -57,60 +62,52 @@ protected:
   }
 
   std::unordered_map<std::string, std::string> config_;
-  std::string single_model_path_;
-  std::string sharded_model_path_;
-  GGUFShards shards_;
+  test_common::TestModelPath singleModel_;
+  test_common::TestModelPath shardedModel_;
 };
 
 TEST_F(ModelFullLoadingTest, SingleFile_LoadsSuccessfully) {
-  if (!fs::exists(single_model_path_)) {
-    FAIL() << "Test model not found at: " << single_model_path_;
-  }
-  LlamaModel model = loadModel(single_model_path_);
+  REQUIRE_MODEL(singleModel_);
+  LlamaModel model = loadModel(singleModel_.path);
   model.waitForLoadInitialization();
   EXPECT_TRUE(model.isLoaded());
 }
 
 TEST_F(ModelFullLoadingTest, StreamingSingleFile_LoadsSuccessfully) {
-  if (!fs::exists(single_model_path_)) {
-    FAIL() << "Test model not found at: " << single_model_path_;
-  }
-  LlamaModel model = loadModel(single_model_path_);
-  std::string filename = fs::path(single_model_path_).filename().string();
-  auto streambuf = readFileToStreambufBinary(single_model_path_);
-  ASSERT_NE(streambuf, nullptr) << "Failed to open: " << single_model_path_;
+  REQUIRE_MODEL(singleModel_);
+  LlamaModel model = loadModel(singleModel_.path);
+  std::string filename = fs::path(singleModel_.path).filename().string();
+  auto streambuf = readFileToStreambufBinary(singleModel_.path);
+  ASSERT_NE(streambuf, nullptr) << "Failed to open: " << singleModel_.path;
   model.setWeightsForFile(filename, std::move(streambuf));
   model.waitForLoadInitialization();
   EXPECT_TRUE(model.isLoaded());
 }
 
 TEST_F(ModelFullLoadingTest, Sharded_LoadsSuccessfully) {
-  if (!fs::exists(sharded_model_path_)) {
-    GTEST_SKIP() << "Sharded model not found at: " << sharded_model_path_;
-  }
-  LlamaModel model = loadModel(sharded_model_path_);
+  REQUIRE_MODEL(shardedModel_);
+  LlamaModel model = loadModel(shardedModel_.path);
   model.waitForLoadInitialization();
   EXPECT_TRUE(model.isLoaded());
 }
 
 TEST_F(ModelFullLoadingTest, StreamingShards_LoadsSuccessfully) {
-  if (shards_.gguf_files.empty()) {
-    GTEST_SKIP() << "Sharded model not found at: " << sharded_model_path_;
-  }
-  LlamaModel model = loadModel(sharded_model_path_);
-  // Tensors list file first
+  REQUIRE_MODEL(shardedModel_);
+  LlamaModel model = loadModel(shardedModel_.path);
+
   std::string tensorsBasename =
-      fs::path(shards_.tensors_file).filename().string();
-  auto tensorsBuf = readFileToStreambufBinary(shards_.tensors_file);
-  ASSERT_NE(tensorsBuf, nullptr) << "Failed to open: " << shards_.tensors_file;
+      fs::path(shardedModel_.shards.tensors_file).filename().string();
+  auto tensorsBuf =
+      readFileToStreambufBinary(shardedModel_.shards.tensors_file);
+  ASSERT_NE(tensorsBuf, nullptr)
+      << "Failed to open: " << shardedModel_.shards.tensors_file;
   model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf));
 
-  // Then each shard
-  for (const auto& shardPath : shards_.gguf_files) {
+  for (const auto& shardPath : shardedModel_.shards.gguf_files) {
     auto streambuf = readFileToStreambufBinary(shardPath);
     ASSERT_NE(streambuf, nullptr) << "Failed to open shard: " << shardPath;
-    std::string filename = fs::path(shardPath).filename().string();
-    model.setWeightsForFile(filename, std::move(streambuf));
+    model.setWeightsForFile(
+        fs::path(shardPath).filename().string(), std::move(streambuf));
   }
   model.waitForLoadInitialization();
   EXPECT_TRUE(model.isLoaded());

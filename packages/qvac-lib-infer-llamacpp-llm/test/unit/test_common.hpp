@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cstdlib>
 #include <filesystem>
 #include <string>
+
+#include <gtest/gtest.h>
+#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 
 namespace test_common {
 
@@ -66,18 +70,6 @@ struct BaseTestModelPath {
   }
 
   /**
-   * Default first shard path for split models.
-   * Uses Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf under the base dir.
-   * https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded
-   */
-  static std::string getSharded() {
-    fs::path p = path() / "Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf";
-    if (fs::exists(p))
-      return p.string();
-    return "Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf";
-  }
-
-  /**
    * Path for a specific filename under the base. If the file exists, returns
    * its full path; otherwise returns the filename only (for clearer errors).
    */
@@ -102,4 +94,101 @@ struct BaseTestModelPath {
   }
 };
 
+/**
+ * Encapsulates discovery and guard logic for a single optional test model,
+ * covering both single-file and sharded GGUF layouts.
+ *
+ * Construction resolves the path once: it checks @p envVar first, then
+ * looks for @p filename under BaseTestModelPath. When @p isSharded is true
+ * the shard list is also expanded via GGUFShards::expandGGUFIntoShards().
+ * Callers that need absolute shard paths should call
+ * LlamaModel::resolveShardPaths(model.shards, model.path) after construction.
+ *
+ * Use REQUIRE_MODEL() in the test body to skip or fail automatically when
+ * the model is absent.
+ *
+ * Single-file example:
+ *   TestModelPath m("my-model-Q4_0.gguf", "MY_MODEL_PATH",
+ *                   TestModelPath::OnMissing::Skip,
+ *                   "https://huggingface.co/...");
+ *
+ * Sharded example:
+ *   TestModelPath m("my-model-00001-of-00008.gguf", "MY_SHARD_PATH",
+ *                   TestModelPath::OnMissing::Skip, "https://...", true);
+ *   LlamaModel::resolveShardPaths(m.shards, m.path);  // resolve absolute paths
+ */
+struct TestModelPath {
+  enum class OnMissing { Fail, Skip };
+
+  std::string path;      ///< Resolved absolute path to the first (or only) file.
+  std::string filename;  ///< Bare .gguf filename used in diagnostic messages.
+  std::string envVar;    ///< Env-var name shown in the diagnostic (may be "").
+  std::string hfUrl;     ///< HuggingFace URL shown in the diagnostic (may be "").
+  OnMissing onMissing;   ///< Whether to FAIL or GTEST_SKIP when absent.
+  bool isSharded;        ///< True when the model is split across multiple files.
+  GGUFShards shards;     ///< Populated (without absolute paths) when isSharded.
+
+  TestModelPath() : onMissing(OnMissing::Skip), isSharded(false) {}
+
+  TestModelPath(
+      const char* filename,
+      const char* envVar,
+      OnMissing onMissing,
+      const char* hfUrl = "",
+      bool isSharded = false)
+      : filename(filename),
+        envVar(envVar ? envVar : ""),
+        hfUrl(hfUrl),
+        onMissing(onMissing),
+        isSharded(isSharded) {
+    const char* env = envVar ? std::getenv(envVar) : nullptr;
+    if (env && fs::exists(env)) {
+      path = env;
+    } else {
+      std::string p = BaseTestModelPath::get(filename);
+      if (fs::exists(p))
+        path = p;
+    }
+    if (isSharded && !path.empty())
+      shards = GGUFShards::expandGGUFIntoShards(path);
+  }
+
+  /**
+   * Returns true when the model is ready to use.
+   * For sharded models this requires at least one shard to have been
+   * resolved; for single-file models a non-empty path suffices.
+   */
+  [[nodiscard]] bool found() const {
+    return isSharded ? !shards.gguf_files.empty() : !path.empty();
+  }
+
+  [[nodiscard]] std::string missingMessage() const {
+    std::string msg = filename + " not found";
+    if (!envVar.empty())
+      msg += " (" + envVar + " or models/unit-test)";
+    else
+      msg += " in models/unit-test";
+    if (!hfUrl.empty())
+      msg += "; see " + hfUrl;
+    return msg;
+  }
+};
+
 } // namespace test_common
+
+/**
+ * Guard a test against a missing model: emits GTEST_SKIP() or FAIL()
+ * (as configured on the model) when the file was not found.
+ *
+ * Must be called directly from the test function body, not from a helper,
+ * so that GTEST_SKIP / FAIL return from the correct stack frame.
+ */
+#define REQUIRE_MODEL(m)                                                       \
+  do {                                                                         \
+    if (!(m).found()) {                                                        \
+      if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)      \
+        GTEST_SKIP() << (m).missingMessage();                                  \
+      else                                                                     \
+        FAIL() << (m).missingMessage();                                        \
+    }                                                                          \
+  } while (false)
