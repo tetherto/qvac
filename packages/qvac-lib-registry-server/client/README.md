@@ -1,4 +1,4 @@
-# @tetherto/qvac-lib-registry-client
+# @qvac/registry-client
 
 Read-only client library for querying the QVAC Registry. It replicates the registry HyperDB via Hyperswarm and provides APIs for searching and retrieving model information.
 
@@ -13,7 +13,7 @@ Read-only client library for querying the QVAC Registry. It replicates the regis
 ## Installation
 
 ```bash
-npm install @tetherto/qvac-lib-registry-client
+npm install @qvac/registry-client
 ```
 
 Ensure the registry core key is available via environment variables or provided via options.
@@ -24,7 +24,7 @@ Ensure the registry core key is available via environment variables or provided 
 
 ```javascript
 'use strict'
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
+const { QVACRegistryClient } = require('@qvac/registry-client')
 
 async function main () {
   const client = new QVACRegistryClient({
@@ -106,18 +106,45 @@ const fs = require('fs')
 result.artifact.stream.pipe(fs.createWriteStream('./model.ggml'))
 ```
 
+#### Direct Blob Download
+
+- `downloadBlob(blobBinding, options)`: Downloads a blob directly using known blob coordinates, bypassing the metadata core lookup. Useful when `coreKey`, `blockOffset`, `blockLength`, and `byteLength` are already known (e.g., from a previous query or generated model constants).
+  - `blobBinding`: `{ coreKey, blockOffset, blockLength, byteOffset, byteLength }` — `coreKey` accepts Buffer, hex, or z-base-32 strings
+  - `options`:
+    - `timeout`: Download timeout in ms (default: 30000)
+    - `outputFile`: Optional file path to save directly to disk
+    - `onProgress`: Callback `({ downloaded, total, cachedBlocks, totalBlocks }) => void`
+    - `signal`: `AbortSignal` for cancellation
+  - Returns: `{ artifact: { path, totalSize } | { stream, totalSize } }`
+
+This method only waits for the network layer (Corestore + Hyperswarm) — it does not wait for the metadata core to sync, making it faster for known blob coordinates.
+
+```javascript
+const result = await client.downloadBlob({
+  coreKey: 'ey46cahego89xox118uhyryakz47bcs8bbxu97tnnpmuwmgi5wmo',
+  blockOffset: 0,
+  blockLength: 665,
+  byteOffset: 0,
+  byteLength: 43537433
+}, {
+  outputFile: './downloaded/ggml-tiny-q8_0.bin',
+  timeout: 60000
+})
+console.log('Downloaded to:', result.artifact.path)
+```
+
 ## CLI
 
 The package includes a CLI for querying and downloading models from the registry.
 
 ### Install
 
-The package is hosted on GitHub Packages. Configure npm to use the GitHub registry for the `@tetherto` scope, then install globally:
+The package is hosted on npm. Configure npm to use the registry for the `@qvac` scope, then install globally:
 
 ```bash
-echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
-echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT" >> ~/.npmrc
-npm install -g @tetherto/registry-client-mono
+echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
+echo "//registry.npmjs.org/:_authToken=YOUR_NPM_TOKEN" >> ~/.npmrc
+npm install -g @qvac/registry-client
 ```
 
 Verify installation:
@@ -220,7 +247,8 @@ $ qvac-registry list --engine @qvac/transcription-whispercpp --json | jq '.[0].p
 See the `examples/` folder for complete working examples:
 
 - `example.js`: List models, query by engine/name/quantization, find shards
-- `download-model.js`: Download a single model to disk
+- `download-model.js`: Download a single model to disk via metadata lookup
+- `download-blob.js`: Download a blob directly using known blob coordinates
 - `download-all-models.js`: Download all models in the registry
 
 Run examples:
@@ -229,6 +257,7 @@ Run examples:
 cd client
 node examples/example.js
 node examples/download-model.js
+node examples/download-blob.js
 node examples/download-all-models.js
 ```
 
@@ -271,8 +300,8 @@ The client uses custom error codes in the range 19001-20000. All errors extend `
 ### Error Handling Example
 
 ```javascript
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
-const { QvacErrorRegistryClient } = require('@tetherto/qvac-lib-registry-client/utils/error')
+const { QVACRegistryClient } = require('@qvac/registry-client')
+const { QvacErrorRegistryClient } = require('@qvac/registry-client/utils/error')
 
 async function handleErrors () {
   const client = new QVACRegistryClient({

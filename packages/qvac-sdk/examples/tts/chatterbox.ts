@@ -23,9 +23,7 @@ import {
 const [referenceAudioSrc] = process.argv.slice(2);
 
 if (!referenceAudioSrc) {
-  console.error(
-    "Usage: node chatterbox-filesystem.js <referenceAudioSrc>",
-  );
+  console.error("Usage: node chatterbox-filesystem.js <referenceAudioSrc>");
   process.exit(1);
 }
 

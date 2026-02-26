@@ -23,6 +23,7 @@ class QVACRegistryClient extends ReadyResource {
     this.corestore = null
     this.hyperswarm = null
     this._connectionHandler = null
+    this._metadataReady = null
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
@@ -38,11 +39,6 @@ class QVACRegistryClient extends ReadyResource {
   async _open () {
     this.logger.debug('_open called')
 
-    if (!this.registryCoreKey) {
-      this.logger.error('Missing registry core key for read mode')
-      throw new QvacErrorRegistryClient({ code: ERR_CODES.FAILED_TO_CONNECT, adds: 'Missing registry core key. Set QVAC_REGISTRY_CORE_KEY environment variable.' })
-    }
-
     this.logger.debug('Creating corestore for open')
     this.corestore = new Corestore(this.storage)
     await this.corestore.ready()
@@ -56,6 +52,15 @@ class QVACRegistryClient extends ReadyResource {
     }
     this.hyperswarm.on('connection', this._connectionHandler)
 
+    this._metadataReady = this._connectMetadataCore()
+  }
+
+  async _connectMetadataCore () {
+    if (!this.registryCoreKey) {
+      this.logger.error('Missing registry core key for read mode')
+      throw new QvacErrorRegistryClient({ code: ERR_CODES.FAILED_TO_CONNECT, adds: 'Missing registry core key. Set QVAC_REGISTRY_CORE_KEY environment variable.' })
+    }
+
     const viewKey = IdEnc.decode(this.registryCoreKey)
     const viewCore = this.corestore.get({ key: viewKey })
     await viewCore.ready()
@@ -65,19 +70,28 @@ class QVACRegistryClient extends ReadyResource {
       discoveryKey: IdEnc.normalize(viewCore.discoveryKey)
     })
 
+    const foundPeers = viewCore.findingPeers()
     this.hyperswarm.join(viewCore.discoveryKey, { client: true, server: false })
-    await this.hyperswarm.flush()
+    this.hyperswarm.flush().then(() => foundPeers())
 
     this.logger.debug('Waiting for view core sync')
-    await viewCore.update({ wait: true })
+    await viewCore.update()
 
     this.logger.debug('Creating RegistryDatabase from view core')
     this.db = new RegistryDatabase(viewCore, { extension: false })
     await this.db.ready()
 
-    this.logger.debug('QVACRegistryClient ready', {
+    this.logger.debug('QVACRegistryClient metadata ready', {
       length: viewCore.length
     })
+  }
+
+  async _ensureMetadata () {
+    await this.ready()
+    await this._metadataReady
+    if (!this.db) {
+      throw new QvacErrorRegistryClient({ code: ERR_CODES.FAILED_TO_CONNECT, adds: 'Registry database not available.' })
+    }
   }
 
   async getModel (path, source) {
@@ -86,7 +100,7 @@ class QVACRegistryClient extends ReadyResource {
 
     try {
       this.logger.info('Getting model', { path, source })
-      await this.ready()
+      await this._ensureMetadata()
 
       const result = await this.db.getModel(path, source)
       this.logger.debug('getModel result', { result })
@@ -98,7 +112,7 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   async findModels (query = {}, opts = {}) {
-    await this.ready()
+    await this._ensureMetadata()
     const { includeDeprecated = false } = opts
     this.logger.debug('findModels called', { query, includeDeprecated })
 
@@ -112,19 +126,19 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   async findModelsByEngine (query = {}) {
-    await this.ready()
+    await this._ensureMetadata()
     this.logger.debug('findModelsByEngine called', { query })
     return this.db.findModelsByEngine(query).toArray()
   }
 
   async findModelsByName (query = {}) {
-    await this.ready()
+    await this._ensureMetadata()
     this.logger.debug('findModelsByName called', { query })
     return this.db.findModelsByName(query).toArray()
   }
 
   async findModelsByQuantization (query = {}) {
-    await this.ready()
+    await this._ensureMetadata()
     this.logger.debug('findModelsByQuantization called', { query })
     return this.db.findModelsByQuantization(query).toArray()
   }
@@ -140,7 +154,7 @@ class QVACRegistryClient extends ReadyResource {
    * @returns {Promise<Array>} Array of matching models
    */
   async findBy (params = {}) {
-    await this.ready()
+    await this._ensureMetadata()
     this.logger.debug('findBy called', { params })
     return this.db.findBy(params)
   }
@@ -169,9 +183,14 @@ class QVACRegistryClient extends ReadyResource {
   }
 
   async _getBlobsCore (blobsCoreKey) {
-    const keyBuffer = Buffer.isBuffer(blobsCoreKey)
-      ? blobsCoreKey
-      : Buffer.from(blobsCoreKey.data || blobsCoreKey, 'hex')
+    let keyBuffer
+    if (Buffer.isBuffer(blobsCoreKey)) {
+      keyBuffer = blobsCoreKey
+    } else if (typeof blobsCoreKey === 'object' && blobsCoreKey.data) {
+      keyBuffer = Buffer.from(blobsCoreKey.data)
+    } else {
+      keyBuffer = IdEnc.decode(blobsCoreKey)
+    }
 
     this.logger.debug('Creating hyperblobs core', {
       blobCore: IdEnc.normalize(keyBuffer)
@@ -198,7 +217,7 @@ class QVACRegistryClient extends ReadyResource {
 
     try {
       this.logger.info('Downloading model', { path, source })
-      await this.ready()
+      await this._ensureMetadata()
 
       const model = await this.getModel(path, source)
       if (!model) {
@@ -219,10 +238,11 @@ class QVACRegistryClient extends ReadyResource {
         discoveryKey: IdEnc.normalize(core.discoveryKey)
       })
 
+      const foundBlobPeers = core.findingPeers()
       this.hyperswarm.join(core.discoveryKey, { client: true, server: false })
-      await this.hyperswarm.flush()
+      this.hyperswarm.flush().then(() => foundBlobPeers())
 
-      await core.update({ wait: true })
+      await core.update()
       this.logger.debug('Blobs core updated')
 
       const totalSize = model.blobBinding.byteLength
@@ -283,6 +303,107 @@ class QVACRegistryClient extends ReadyResource {
           await core.close()
         } catch (cleanupError) {
           this.logger.warn('Error closing blob core on error', { error: cleanupError.message })
+        }
+      }
+
+      throw error
+    }
+  }
+
+  async downloadBlob (blobBinding, options = {}) {
+    if (!blobBinding || !blobBinding.coreKey) {
+      throw new Error('Invalid blobBinding: coreKey is required')
+    }
+    if (typeof blobBinding.blockOffset !== 'number' ||
+        typeof blobBinding.blockLength !== 'number' ||
+        typeof blobBinding.byteLength !== 'number') {
+      throw new Error('Invalid blobBinding: blockOffset, blockLength, and byteLength are required numbers')
+    }
+
+    if (options && typeof options !== 'object') {
+      throw new Error(`Invalid options: ${typeof options}`)
+    }
+
+    let core, blobs
+
+    try {
+      this.logger.info('Downloading blob directly', {
+        coreKey: typeof blobBinding.coreKey === 'string' ? blobBinding.coreKey.slice(0, 12) + '...' : '(buffer)',
+        blockOffset: blobBinding.blockOffset,
+        blockLength: blobBinding.blockLength,
+        byteLength: blobBinding.byteLength
+      })
+
+      await this.ready()
+
+      const blobsCore = await this._getBlobsCore(blobBinding.coreKey)
+      core = blobsCore.core
+      blobs = blobsCore.blobs
+
+      this.logger.debug('Joining swarm for blobs core (direct)', {
+        discoveryKey: IdEnc.normalize(core.discoveryKey)
+      })
+
+      const foundBlobPeers = core.findingPeers()
+      this.hyperswarm.join(core.discoveryKey, { client: true, server: false })
+      this.hyperswarm.flush().then(() => foundBlobPeers())
+
+      await core.update()
+      this.logger.debug('Blobs core updated (direct)')
+
+      const pointer = {
+        blockOffset: blobBinding.blockOffset,
+        blockLength: blobBinding.blockLength,
+        byteOffset: blobBinding.byteOffset || 0,
+        byteLength: blobBinding.byteLength
+      }
+      const totalSize = blobBinding.byteLength
+
+      let artifact
+      if (options.outputFile) {
+        await this._streamBlobToFile(blobs, core, pointer, options.outputFile, options)
+        artifact = { path: options.outputFile, totalSize }
+
+        if (blobs) await blobs.close()
+        if (core) await core.close()
+      } else {
+        const stream = blobs.createReadStream(pointer, {
+          wait: true,
+          timeout: options.timeout || 30000
+        })
+        artifact = { stream, totalSize }
+
+        const cleanup = async () => {
+          if (blobs) {
+            try { await blobs.close() } catch (e) {
+              this.logger.warn('Error closing blob instance', { error: e.message })
+            }
+          }
+          if (core) {
+            try { await core.close() } catch (e) {
+              this.logger.warn('Error closing blob core', { error: e.message })
+            }
+          }
+          this.logger.debug('Blob resources closed after stream end')
+        }
+
+        stream.on('close', cleanup)
+      }
+
+      this.logger.info('Blob download complete (direct)')
+
+      return { artifact }
+    } catch (error) {
+      this.logger.error('Error downloading blob directly', error)
+
+      if (blobs) {
+        try { await blobs.close() } catch (e) {
+          this.logger.warn('Error closing blob instance on error', { error: e.message })
+        }
+      }
+      if (core) {
+        try { await core.close() } catch (e) {
+          this.logger.warn('Error closing blob core on error', { error: e.message })
         }
       }
 
@@ -367,6 +488,11 @@ class QVACRegistryClient extends ReadyResource {
 
   async _close () {
     this.logger.debug('_close called')
+
+    if (this._metadataReady) {
+      await this._metadataReady.catch(() => {})
+      this._metadataReady = null
+    }
 
     if (this.db) {
       this.logger.debug('Closing database')

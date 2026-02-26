@@ -236,7 +236,7 @@ class TranslationNmtcpp extends BaseInference {
   _createResponseHandlers (jobId) {
     return {
       cancelHandler: () => this.addon.cancel(),
-      pauseHandler: () => this.addon.pause(),
+      pauseHandler: () => Promise.resolve(),
       continueHandler: () => this.addon.activate()
     }
   }
