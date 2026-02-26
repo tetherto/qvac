@@ -364,59 +364,6 @@ function formatPerformanceMetrics (label, metrics) {
     - Full output: "${fullOutput}"`
 }
 
-/**
- * Waits for addon to reach a target status
- * Handles race conditions where status may progress past target
- *
- * Status progression: LOADING → PROCESSING → IDLE
- * If current status is past target (e.g., IDLE when waiting for PROCESSING),
- * resolves immediately to avoid deadlock
- *
- * @param {Object} addon - The addon instance with status() method
- * @param {string} targetStatus - Target status to wait for ('LOADING', 'PROCESSING', or 'IDLE')
- * @param {number} [timeout=300000] - Timeout in milliseconds (default: 5 minutes)
- * @returns {Promise<string>} The reached status
- * @throws {Error} If timeout exceeded or status check fails
- */
-async function waitForStatus (addon, targetStatus, timeout = 300000) {
-  const statusOrder = ['LOADING', 'PROCESSING', 'IDLE']
-
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now()
-
-    const checkStatus = async () => {
-      try {
-        const currentStatus = await addon.status()
-
-        if (currentStatus === targetStatus) {
-          resolve(currentStatus)
-          return
-        }
-
-        // Handle race condition: status progressed past target
-        const targetIdx = statusOrder.indexOf(targetStatus)
-        const currentIdx = statusOrder.indexOf(currentStatus)
-        if (targetIdx >= 0 && currentIdx >= 0 && currentIdx > targetIdx) {
-          console.log(`Note: Status '${currentStatus}' is past target '${targetStatus}' - continuing`)
-          resolve(currentStatus)
-          return
-        }
-
-        if (Date.now() - startTime > timeout) {
-          reject(new Error(`Timeout waiting for status '${targetStatus}'. Current status: '${currentStatus}'`))
-          return
-        }
-
-        setTimeout(checkStatus, 1000)
-      } catch (error) {
-        reject(error)
-      }
-    }
-
-    checkStatus()
-  })
-}
-
 // ============================================================================
 // Module Exports
 // ============================================================================
@@ -432,7 +379,6 @@ module.exports = {
 
   // Utilities
   createLogger,
-  waitForStatus,
   TEST_TIMEOUT,
 
   // Performance metrics
