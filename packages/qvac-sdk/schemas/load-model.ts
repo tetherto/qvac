@@ -189,6 +189,13 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: {
         modelType: data.modelConfig.modelType,
+        maxThreads: data.modelConfig.maxThreads,
+        useGPU: data.modelConfig.useGPU,
+        sampleRate: data.modelConfig.sampleRate,
+        channels: data.modelConfig.channels,
+        captionEnabled: data.modelConfig.captionEnabled,
+        timestampsEnabled: data.modelConfig.timestampsEnabled,
+        seed: data.modelConfig.seed,
         parakeetEncoderDataSrc: data.modelConfig.parakeetEncoderDataSrc
           ? modelInputToSrcSchema.parse(data.modelConfig.parakeetEncoderDataSrc)
           : undefined,
