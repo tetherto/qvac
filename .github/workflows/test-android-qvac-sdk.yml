@@ -295,7 +295,7 @@ jobs:
             --device-pool-arn "${{ matrix.device.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
-            --test type=BUILTIN_FUZZ \
+            --test type=BUILTIN_FUZZ,parameters='{event_count=10000,throttle=1000}' \
             --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
             --query 'run.arn' --output text)
 
@@ -305,6 +305,18 @@ jobs:
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
           echo "Device Farm Console (${{ matrix.device.name }}): https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+
+      - name: Save run ARN
+        run: |
+          mkdir -p run-arns
+          echo "${{ steps.schedule.outputs.run-arn }}" > run-arns/${{ matrix.device.name }}.txt
+
+      - name: Upload run ARN
+        uses: actions/upload-artifact@v6
+        with:
+          name: device-farm-arn-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}
+          path: run-arns/
+          retention-days: 1
 
   run-producer:
     needs: build
@@ -442,6 +454,47 @@ jobs:
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
+
+  cleanup-device-farm:
+    needs: [build, run-producer, device-farm]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Download run ARNs
+        uses: actions/download-artifact@v7
+        with:
+          pattern: device-farm-arn-${{ needs.build.outputs.runId }}-*
+          path: ./run-arns
+          merge-multiple: true
+
+      - name: Stop Device Farm runs
+        run: |
+          echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+
+          for arn_file in run-arns/*.txt; do
+            if [ -f "$arn_file" ]; then
+              RUN_ARN=$(cat "$arn_file")
+              DEVICE_NAME=$(basename "$arn_file" .txt)
+
+              STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+              echo "Device $DEVICE_NAME: status=$STATUS"
+
+              if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
+                echo "Stopping run: $RUN_ARN"
+                aws devicefarm stop-run --arn "$RUN_ARN" || true
+              else
+                echo "Run already finished ($STATUS), skipping"
+              fi
+            fi
+          done
 
   compare-results:
     needs: [build, run-producer]
