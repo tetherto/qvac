@@ -5,6 +5,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 
 namespace test_common {
@@ -120,27 +121,21 @@ struct BaseTestModelPath {
 struct TestModelPath {
   enum class OnMissing { Fail, Skip };
 
-  std::string path;      ///< Resolved absolute path to the first (or only) file.
-  std::string filename;  ///< Bare .gguf filename used in diagnostic messages.
-  std::string envVar;    ///< Env-var name shown in the diagnostic (may be "").
-  std::string hfUrl;     ///< HuggingFace URL shown in the diagnostic (may be "").
-  OnMissing onMissing;   ///< Whether to FAIL or GTEST_SKIP when absent.
-  bool isSharded;        ///< True when the model is split across multiple files.
-  GGUFShards shards;     ///< Populated (without absolute paths) when isSharded.
+  std::string path;     ///< Resolved absolute path to the first (or only) file.
+  std::string filename; ///< Bare .gguf filename used in diagnostic messages.
+  std::string envVar;   ///< Env-var name shown in the diagnostic (may be "").
+  std::string hfUrl;   ///< HuggingFace URL shown in the diagnostic (may be "").
+  OnMissing onMissing; ///< Whether to FAIL or GTEST_SKIP when absent.
+  bool isSharded;      ///< True when the model is split across multiple files.
+  GGUFShards shards;   ///< Populated (without absolute paths) when isSharded.
 
   TestModelPath() : onMissing(OnMissing::Skip), isSharded(false) {}
 
   TestModelPath(
-      const char* filename,
-      const char* envVar,
-      OnMissing onMissing,
-      const char* hfUrl = "",
-      bool isSharded = false)
-      : filename(filename),
-        envVar(envVar ? envVar : ""),
-        hfUrl(hfUrl),
-        onMissing(onMissing),
-        isSharded(isSharded) {
+      const char* filename, const char* envVar, OnMissing onMissing,
+      const char* hfUrl = "", bool isSharded = false)
+      : filename(filename), envVar(envVar ? envVar : ""), hfUrl(hfUrl),
+        onMissing(onMissing), isSharded(isSharded) {
     const char* env = envVar ? std::getenv(envVar) : nullptr;
     if (env && fs::exists(env)) {
       path = env;
