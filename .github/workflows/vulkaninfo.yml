@@ -111,7 +111,7 @@ jobs:
           }
           Write-Host "Latest Vulkan SDK 1.4.x version: $sdkVersion"
 
-          $sdkUrl       = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/VulkanSDK-$sdkVersion-Installer.exe"
+          $sdkUrl       = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/vulkansdk-windows-X64-$sdkVersion.exe"
           $sdkInstaller = "$env:TEMP\VulkanSDK.exe"
           $maxAttempts  = 3
 
