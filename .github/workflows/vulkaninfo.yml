@@ -18,18 +18,21 @@ jobs:
           Write-Host "Architecture: $($os.OSArchitecture)"
 
       - name: Run nvidia-smi without params
+        continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== GPU Info ==="
           nvidia-smi
 
       - name: Run vulkaninfo without params
+        continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== Running vulkaninfo ==="
           vulkaninfo
 
       - name: Check and install NVIDIA drivers if missing
+        continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== Checking NVIDIA Drivers ==="
@@ -78,6 +81,7 @@ jobs:
           }
 
       - name: Check and install Vulkan runtime if missing
+        continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== Checking Vulkan / vulkaninfo ==="
@@ -135,6 +139,7 @@ jobs:
           }
 
       - name: Print GPU and Vulkan summary
+        continue-on-error: true
         shell: powershell
         run: |
           Write-Host "=== Final GPU Info ==="
