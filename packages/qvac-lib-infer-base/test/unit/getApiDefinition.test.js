@@ -1,15 +1,17 @@
 'use strict'
 
 const test = require('brittle')
+const { platform } = require('bare-os')
 const getApiDefinition = require('../../src/getApiDefinition')
 
-test('getApiDefinition - returns a string', t => {
-  const result = getApiDefinition()
-  t.is(typeof result, 'string', 'should return a string')
-})
+const expected = {
+  android: 'vulkan',
+  darwin: 'metal',
+  ios: 'metal',
+  win32: 'vulkan-32',
+  linux: 'vulkan'
+}
 
-test('getApiDefinition - returns a valid API definition', t => {
-  const validApis = ['vulkan', 'metal', 'vulkan-32']
-  const result = getApiDefinition()
-  t.ok(validApis.includes(result), `${result} should be a known API definition`)
+test('getApiDefinition - returns correct API for current platform', t => {
+  t.is(getApiDefinition(), expected[platform()])
 })
