@@ -175,6 +175,27 @@ jobs:
           curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/SmolVLM-500M-Instruct-Q8_0.gguf
           echo "Downloading mmproj-SmolVLM-500M-Instruct-Q8_0.gguf from Hugging Face..."
           curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf" -o models/unit-test/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
+          
+          echo "Downloading Qwen3-0.6B-Q8_0.gguf from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf" -o models/unit-test/Qwen3-0.6B-Q8_0.gguf
+          
+          echo "Downloading Qwen3-0.6B-UD-IQ1_S shards (3 of 3) + tensors file from Hugging Face..."
+          for i in 1 2 3; do
+            shard=$(printf "Qwen3-0.6B-UD-IQ1_S-%05d-of-00003.gguf" $i)
+            curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main/${shard}" -o "models/unit-test/${shard}"
+          done 
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main/Qwen3-0.6B-UD-IQ1_S.tensors.txt" -o models/unit-test/Qwen3-0.6B-UD-IQ1_S.tensors.txt
+
+          echo "Downloading bitnet_b1_58-large-TQ2_0.gguf (unsharded) from Hugging Face..."
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf" -o models/unit-test/bitnet_b1_58-large-TQ2_0.gguf
+
+          echo "Downloading bitnet_b1_58-large-TQ2_0 shards (8 of 8) + tensors file from Hugging Face..."
+          for i in 1 2 3 4 5 6 7 8; do
+            shard=$(printf "bitnet_b1_58-large-TQ2_0-%05d-of-00008.gguf" $i)
+            curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded/resolve/main/${shard}" -o "models/unit-test/${shard}"
+          done
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 "https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded/resolve/main/bitnet_b1_58-large-TQ2_0.tensors.txt" -o models/unit-test/bitnet_b1_58-large-TQ2_0.tensors.txt
+
           echo "Verify downloaded models..."
           ls -lh models/unit-test/
           du -sh models/unit-test/*
