@@ -146,7 +146,7 @@ jobs:
       workdir: packages/qvac-lib-infer-onnx-tts
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write

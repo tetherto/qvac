@@ -236,7 +236,7 @@ class TranslationNmtcpp extends BaseInference {
   _createResponseHandlers (jobId) {
     return {
       cancelHandler: () => this.addon.cancel(),
-      pauseHandler: () => this.addon.pause(),
+      pauseHandler: () => Promise.resolve(),
       continueHandler: () => this.addon.activate()
     }
   }
@@ -369,15 +369,28 @@ class TranslationNmtcpp extends BaseInference {
     }
 
     // Call batch translation
-    const results = await this.addon.processBatch(processedTexts)
+    await this.addon.runJob({ type: 'sequences', input: processedTexts })
 
-    // Post-process results if needed
-    if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
-      return processor.postprocessBatch(results, this._params.dstLang)
-    }
+    const response = new QvacResponse(this._createResponseHandlers())
+    this._saveJobToResponseMapping(JOB_ID, response)
 
-    // Remove language prefix from output for standard models
-    return results.map(text => text.replace(/^>>[a-z]+\s*<<\s*/i, ''))
+    // Wait for batch results
+    return new Promise((resolve, reject) => {
+      response.onFinish(([batchResults]) => {
+        // Post-process results if needed
+        if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
+          resolve(processor.postprocessBatch(batchResults, this._params.dstLang))
+        } else {
+          // Remove language prefix from output for standard models
+          const cleanedResults = batchResults.map(text =>
+            text.replace(/^>>[a-z]+\s*<<\s*/i, '')
+          )
+          resolve(cleanedResults)
+        }
+      }).onError(error => {
+        reject(error)
+      })
+    })
   }
 
   createAddon (configurationParams) {
@@ -402,10 +415,14 @@ class TranslationNmtcpp extends BaseInference {
       mappedEvent = 'Error'
     } else if (typeof data === 'string') {
       mappedEvent = 'Output'
+    } else if (Array.isArray(data)) {
+      // Batch translation result - array of strings
+      mappedEvent = 'Output'
     }
+
     return this._outputCallback(addon, mappedEvent, JOB_ID, data, error)
   }
-  
+
   async _downloadWeights (reportProgressCallback) {
     const models = this._getFilesToDownload()
     if (!models.length) {

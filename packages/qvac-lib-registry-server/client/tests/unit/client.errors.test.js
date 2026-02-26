@@ -66,6 +66,34 @@ test('client error - invalid source parameter', async t => {
   }
 })
 
+test('downloadBlob - rejects missing coreKey', async t => {
+  t.plan(3)
+
+  const QVACRegistryClient = require('../../lib/client')
+  const testClient = Object.create(QVACRegistryClient.prototype)
+
+  try {
+    await testClient.downloadBlob(null)
+    t.fail('Should have thrown')
+  } catch (error) {
+    t.ok(error.message.includes('coreKey is required'), 'Throws for null blobBinding')
+  }
+
+  try {
+    await testClient.downloadBlob({})
+    t.fail('Should have thrown')
+  } catch (error) {
+    t.ok(error.message.includes('coreKey is required'), 'Throws for missing coreKey')
+  }
+
+  try {
+    await testClient.downloadBlob({ coreKey: 'abc', blockOffset: 'not-a-number', blockLength: 0, byteLength: 0 })
+    t.fail('Should have thrown')
+  } catch (error) {
+    t.ok(error.message.includes('required numbers'), 'Throws for non-number offsets')
+  }
+})
+
 test('client error - invalid options parameter', async t => {
   t.plan(1)
 

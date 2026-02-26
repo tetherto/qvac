@@ -27,6 +27,7 @@ class ONNXTTS extends InferBase {
     voiceName,
     speed,
     numInferenceSteps,
+    lazySessionLoading,
     loader, cache, logger, ...args
   }, config = {}) {
     super(args)
@@ -36,6 +37,10 @@ class ONNXTTS extends InferBase {
     this._cache = cache || '.'
     this._config = config
     this._logger = logger
+
+    this._lazySessionLoading = lazySessionLoading != null
+      ? lazySessionLoading
+      : platform() === 'ios'
 
     const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
       (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
@@ -86,7 +91,8 @@ class ONNXTTS extends InferBase {
         conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
         languageModelPath: this._resolvePath(this._languageModelPath),
         language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false
+        useGPU: this._config?.useGPU || false,
+        lazySessionLoading: this._lazySessionLoading
       }
       if (this._referenceAudio != null) {
         ttsParams.referenceAudio = this._referenceAudio
@@ -236,7 +242,8 @@ class ONNXTTS extends InferBase {
         conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
         languageModelPath: this._resolvePath(this._languageModelPath),
         language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false
+        useGPU: this._config?.useGPU || false,
+        lazySessionLoading: this._lazySessionLoading
       }
     }
 

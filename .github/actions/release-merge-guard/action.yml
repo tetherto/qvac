@@ -2,7 +2,8 @@ name: Release Merge Guard
 description: Enforces release branch naming, version bump and changelog update on merge
 inputs:
   github-token:
-    required: true
+    required: false
+    description: Unused — retained for backward compatibility with callers
   base-ref:
     required: true
   base-sha:
