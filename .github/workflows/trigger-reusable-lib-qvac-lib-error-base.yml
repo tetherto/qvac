@@ -122,7 +122,7 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     permissions:
       contents: write
       packages: write

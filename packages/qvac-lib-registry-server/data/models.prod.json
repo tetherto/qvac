@@ -1110,7 +1110,7 @@
   {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q4_0",
     "params": "300M",
     "license": "gemma",
@@ -1124,7 +1124,7 @@
   {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q8_0",
     "params": "300M",
     "license": "gemma",
