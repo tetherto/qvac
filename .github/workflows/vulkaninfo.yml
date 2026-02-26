@@ -6,6 +6,16 @@ jobs:
     name: test-vulkaninfo
     runs-on: ai-run-windows2022-gpu
     steps:
+      - name: Check OS version
+        shell: powershell
+        run: |
+          Write-Host "=== OS Version ==="
+          $os = Get-CimInstance Win32_OperatingSystem
+          Write-Host "Caption:      $($os.Caption)"
+          Write-Host "Version:      $($os.Version)"
+          Write-Host "Build Number: $($os.BuildNumber)"
+          Write-Host "Architecture: $($os.OSArchitecture)"
+
       - name: Run nvidia-smi without params
         shell: powershell
         run: |
@@ -17,16 +27,6 @@ jobs:
         run: |
           Write-Host "=== Running vulkaninfo ==="
           vulkaninfo
-
-      - name: Check OS version
-        shell: powershell
-        run: |
-          Write-Host "=== OS Version ==="
-          $os = Get-CimInstance Win32_OperatingSystem
-          Write-Host "Caption:      $($os.Caption)"
-          Write-Host "Version:      $($os.Version)"
-          Write-Host "Build Number: $($os.BuildNumber)"
-          Write-Host "Architecture: $($os.OSArchitecture)"
 
       - name: Check and install NVIDIA drivers if missing
         shell: powershell
