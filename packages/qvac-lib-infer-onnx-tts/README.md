@@ -185,7 +185,7 @@ const { ONNXTTS } = require('@qvac/tts-onnx')
 
 ### 2. Create a Data Loader
 
-Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
+Data Loaders abstract the way model files are accessed. You can use a [`FileSystemDataLoader`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem) to stream the model file(s) from your local file system.
 
 ```js
 const FilesystemDL = require('@qvac/dl-filesystem')
@@ -576,7 +576,7 @@ npm run coverage:cpp
 
 *   **QVAC Examples Repo:** [https://github.com/tetherto/qvac-examples](https://github.com/tetherto/qvac-examples)
 *   **ONNX Runtime:** [https://onnxruntime.ai/](https://onnxruntime.ai/)
-*   **Base ONNX Addon:** [https://github.com/tetherto/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac-lib-infer-onnx-base)
+*   **Base ONNX Addon:** [https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-base](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-base)
 *   **Chatterbox TTS:** [https://github.com/ResembleAI/chatterbox](https://github.com/ResembleAI/chatterbox)
 *   **Supertonic TTS:** [https://huggingface.co/onnx-community/Supertonic-TTS-ONNX](https://huggingface.co/onnx-community/Supertonic-TTS-ONNX)
 

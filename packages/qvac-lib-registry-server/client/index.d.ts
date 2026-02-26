@@ -1,5 +1,5 @@
 export interface QVACBlobBinding {
-  coreKey: Buffer
+  coreKey: Buffer | string
   blockOffset: number
   blockLength: number
   byteOffset: number
@@ -43,6 +43,17 @@ export interface QVACDownloadOptions {
   outputFile?: string
 }
 
+export interface QVACBlobDownloadOptions {
+  timeout?: number
+  outputFile?: string
+  onProgress?: (progress: { downloaded: number, total: number, cachedBlocks: number, totalBlocks: number }) => void
+  signal?: AbortSignal
+}
+
+export interface QVACBlobDownloadResult {
+  artifact: QVACDownloadedArtifact & { totalSize: number }
+}
+
 export interface QVACRegistryClientOptions {
   storage?: string
   registryCoreKey?: string
@@ -75,6 +86,7 @@ export class QVACRegistryClient {
 
   getModel (path: string, source: string): Promise<QVACModelEntry | null>
   downloadModel (path: string, source: string, options?: QVACDownloadOptions): Promise<QVACDownloadResult>
+  downloadBlob (blobBinding: QVACBlobBinding, options?: QVACBlobDownloadOptions): Promise<QVACBlobDownloadResult>
 
   findBy (params?: FindByParams): Promise<QVACModelEntry[]>
   findModels (query?: QVACModelQuery): Promise<QVACModelEntry[]>

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-02-25
+
+### Fixed
+- Batch run API fix for correct batch translation handling (#549)
+- Replaced inline sanity-checks with shared reusable action for fork PR compatibility (#521)
+- Updated addon-cpp version constraint to match actual 1.x API usage (#520)
+
 ## [0.3.1] - 2026-01-13
 
 ### Added

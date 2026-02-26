@@ -147,7 +147,7 @@ jobs:
       ref: ${{ github.ref }}
 
   prebuild-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
