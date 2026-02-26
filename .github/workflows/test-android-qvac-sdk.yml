@@ -64,7 +64,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ai-run-linux
     timeout-minutes: 30
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
