@@ -94,6 +94,81 @@ jobs:
             Write-Host "NVIDIA driver installation verified successfully."
           }
 
+      - name: Install Vulkan SDK 1.4 (latest 1.4.x from LunarG)
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host "=== Fetching available Vulkan SDK versions ==="
+
+          # Pull the full version list and find the latest 1.4.x
+          $versionsUrl = "https://vulkan.lunarg.com/sdk/versions/windows.json"
+          $versions    = (Invoke-WebRequest -Uri $versionsUrl -UseBasicParsing).Content | ConvertFrom-Json
+          $sdkVersion  = $versions | Where-Object { $_ -match "^1\.4\." } | Select-Object -First 1
+
+          if (-not $sdkVersion) {
+            Write-Error "Could not find a 1.4.x Vulkan SDK version from LunarG"
+            exit 1
+          }
+          Write-Host "Latest Vulkan SDK 1.4.x version: $sdkVersion"
+
+          $sdkUrl       = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/VulkanSDK-$sdkVersion-Installer.exe"
+          $sdkInstaller = "$env:TEMP\VulkanSDK.exe"
+          $maxAttempts  = 3
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Download attempt $attempt of $maxAttempts ..."
+            try {
+              Invoke-WebRequest -Uri $sdkUrl -OutFile $sdkInstaller -UseBasicParsing
+              $fileSize = (Get-Item $sdkInstaller).Length
+              Write-Host "Downloaded $fileSize bytes"
+              if ($fileSize -lt 100000000) {
+                Write-Warning "File seems too small ($fileSize bytes) -- may be corrupt, retrying ..."
+                Remove-Item $sdkInstaller -Force
+                continue
+              }
+              Write-Host "Download looks good."
+              break
+            } catch {
+              Write-Warning "Download failed: $_"
+              if ($attempt -eq $maxAttempts) {
+                Write-Error "All $maxAttempts download attempts failed."
+                exit 1
+              }
+              Start-Sleep -Seconds 10
+            }
+          }
+
+          Write-Host "Running silent install ..."
+          $proc = Start-Process -FilePath $sdkInstaller `
+                                -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" `
+                                -Wait -PassThru
+          Write-Host "Installer exit code: $($proc.ExitCode)"
+
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "Vulkan SDK installation failed with exit code $($proc.ExitCode)"
+            exit 1
+          }
+
+          # Locate vulkaninfo.exe explicitly under the SDK install dir
+          $sdkRoot      = "C:\VulkanSDK\$sdkVersion\Bin\vulkaninfo.exe"
+          $fallbackRoot = Get-ChildItem "C:\VulkanSDK" -Filter "vulkaninfo.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+
+          $vulkaninfoPath = if (Test-Path $sdkRoot) { $sdkRoot } else { $fallbackRoot }
+
+          if (-not $vulkaninfoPath) {
+            Write-Error "vulkaninfo.exe not found after SDK install"
+            exit 1
+          }
+
+          Write-Host "vulkaninfo.exe found at: $vulkaninfoPath"
+
+          # Persist the path for subsequent steps via GITHUB_ENV
+          "VULKANINFO_PATH=$vulkaninfoPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VULKAN_SDK_VERSION=$sdkVersion"  | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Write-Host "Vulkan SDK $sdkVersion installed successfully."
+
+
       - name: GPU detection
         continue-on-error: true
         shell: powershell
@@ -107,19 +182,15 @@ jobs:
           Write-Host "=== Driver Version (baseline) ==="
           nvidia-smi --query-gpu=driver_version --format=csv,noheader
 
-      - name: Vulkan check
-        continue-on-error: true
-        shell: powershell
-        run: |
-          Write-Host "=== vulkaninfo --summary (baseline) ==="
-          vulkaninfo --summary
-
       - name: Collect diagnostics into files
         continue-on-error: true
         shell: powershell
         run: |
           $outDir = "$env:GITHUB_WORKSPACE\gpu-diagnostics"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          Write-Host "SDK version:      $env:VULKAN_SDK_VERSION"
+          Write-Host "vulkaninfo path:  $env:VULKANINFO_PATH"
 
           Write-Host "=== Collecting nvidia-smi output ==="
           nvidia-smi | Tee-Object -FilePath "$outDir\nvidia-smi.txt"
@@ -128,10 +199,10 @@ jobs:
           nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv | Tee-Object -FilePath "$outDir\gpu-info.csv"
 
           Write-Host "=== Collecting vulkaninfo JSON ==="
-          vulkaninfo --json 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo.json"
+          & "$env:VULKANINFO_PATH" --json 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo.json"
 
           Write-Host "=== Collecting vulkaninfo summary ==="
-          vulkaninfo --summary 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo-summary.txt"
+          & "$env:VULKANINFO_PATH" --summary 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo-summary.txt"
 
           Write-Host "=== Validating Vulkan API version ==="
           $summary = Get-Content "$outDir\vulkaninfo-summary.txt" -Raw
@@ -140,10 +211,10 @@ jobs:
             Write-Host "Detected Vulkan API version: $apiVersion"
             $major = [int]($apiVersion.Split('.')[0])
             $minor = [int]($apiVersion.Split('.')[1])
-            if ($major -lt 1 -or ($major -eq 1 -and $minor -lt 3)) {
-              Write-Warning "Vulkan API version $apiVersion is below minimum 1.3"
+            if ($major -lt 1 -or ($major -eq 1 -and $minor -lt 4)) {
+              Write-Warning "Vulkan API version $apiVersion is below minimum 1.4"
             } else {
-              Write-Host "Vulkan API version $apiVersion meets minimum requirement (1.3+)"
+              Write-Host "Vulkan API version $apiVersion meets minimum requirement (1.4+)"
             }
           } else {
             Write-Warning "Could not parse Vulkan API version from vulkaninfo output"
@@ -167,11 +238,11 @@ jobs:
             exit 1
           }
 
-          Write-Host "=== Final Gate: Verifying vulkaninfo ==="
-          vulkaninfo --summary
+          Write-Host "=== Final Gate: Verifying vulkaninfo (SDK 1.4) ==="
+          & "$env:VULKANINFO_PATH" --summary
           if ($LASTEXITCODE -ne 0) {
             Write-Error "GATE FAILED: vulkaninfo not working -- Vulkan support NOT confirmed"
             exit 1
           }
 
-          Write-Host "GATE PASSED: GPU and Vulkan support confirmed on runner."
+          Write-Host "GATE PASSED: GPU and Vulkan $env:VULKAN_SDK_VERSION support confirmed on runner."
