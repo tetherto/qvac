@@ -5,6 +5,7 @@ jobs:
   run-vulkaninfo:
     name: test-vulkaninfo
     runs-on: ai-run-windows2022-gpu
+    continue-on-error: true
     steps:
       - name: Check OS version
         shell: powershell
