@@ -131,7 +131,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `qvac-lib-infer-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `qvac-lib-infer-onnx-tts` | `@qvac/tts-onnx` |
 | `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` |
-| `qvac-lib-inference-addon-onnx-ocr-fasttext` | `@qvac/ocr-onnx` |
+| `ocr-onnx` | `@qvac/ocr-onnx` |
 
 ## Sorting guarantee
 

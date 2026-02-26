@@ -205,7 +205,7 @@ runs:
           qvac-lib-infer-onnx-vad
           qvac-lib-infer-llamacpp-embed
           qvac-lib-infer-onnx-tts
-          qvac-lib-inference-addon-onnx-ocr-fasttext
+          ocr-onnx
         )
 
         if printf '%s\n' "${ALWAYS_PUBLISH_REPOS[@]}" | grep -qx "$REPO_SHORT_NAME"; then

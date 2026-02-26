@@ -29,7 +29,7 @@ const ENGINE_MAP = {
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
-  '@qvac/ocr-onnx': 'qvac-lib-inference-addon-onnx-ocr-fasttext'
+  '@qvac/ocr-onnx': 'ocr-onnx'
 }
 
 // Reverse map: package dir -> array of engines
@@ -86,7 +86,7 @@ const PYTHON_DEP_PATHS = {
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
   ],
-  'qvac-lib-inference-addon-onnx-ocr-fasttext': [
+  'ocr-onnx': [
     'benchmarks/quality_eval/requirements.txt'
   ],
   'qvac-lib-infer-onnx-vad': [
