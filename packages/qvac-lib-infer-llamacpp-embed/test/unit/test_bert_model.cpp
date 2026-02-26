@@ -1,15 +1,24 @@
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
+#include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
 #include "model-interface/BertModel.hpp"
 
 namespace fs = std::filesystem;
+
+inline BertModel*
+getModelFromAddon(qvac_lib_inference_addon_cpp::AddonCpp* addon) {
+  auto& modelInterface = addon->model.get();
+  return dynamic_cast<BertModel*>(&modelInterface);
+}
 
 class BertEmbeddingsTest : public ::testing::Test {};
 
@@ -159,7 +168,7 @@ TEST_F(BertModelTest, IsLoadedBeforeInit) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   EXPECT_FALSE(model.isLoaded());
 }
@@ -169,7 +178,7 @@ TEST_F(BertModelTest, InitializeBackend) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   EXPECT_NO_THROW(model.initializeBackend(test_backends_dir));
 }
@@ -179,7 +188,7 @@ TEST_F(BertModelTest, InitializeBackendWithEmptyDir) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   EXPECT_NO_THROW(model.initializeBackend(""));
 }
@@ -189,7 +198,7 @@ TEST_F(BertModelTest, ResetMethod) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   EXPECT_NO_THROW(model.reset());
 }
@@ -199,7 +208,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -235,7 +244,7 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -268,8 +277,7 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
 
 TEST_F(BertModelTest, ConstructorWithInvalidPath) {
   std::string invalid_path = getInvalidModelPath();
-  std::string config = "-dev\tcpu\n";
-
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   EXPECT_NO_THROW({
     BertModel model(invalid_path, config);
     EXPECT_FALSE(model.isLoaded());
@@ -278,7 +286,7 @@ TEST_F(BertModelTest, ConstructorWithInvalidPath) {
 
 TEST_F(BertModelTest, ConstructorWithEmptyConfig) {
   std::string invalid_path = getInvalidModelPath();
-  std::string config = "";
+  std::unordered_map<std::string, std::string> config;
 
   EXPECT_NO_THROW({
     BertModel model(invalid_path, config);
@@ -291,7 +299,7 @@ TEST_F(BertModelTest, ConstructorWithBackendsDir) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   EXPECT_NO_THROW({
     BertModel model(getValidModelPath(), config, test_backends_dir);
     EXPECT_FALSE(model.isLoaded());
@@ -303,7 +311,7 @@ TEST_F(BertModelTest, ModelLoadsSuccessfully) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -315,8 +323,7 @@ TEST_F(BertModelTest, ModelLoadsSuccessfully) {
 
 TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
   std::string invalid_path = getInvalidModelPath();
-  std::string config = "-dev\tcpu\n";
-
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(invalid_path, config);
   model.initializeBackend(test_backends_dir);
 
@@ -333,7 +340,7 @@ TEST_F(BertModelTest, EncodeHostF32SingleString) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -365,7 +372,7 @@ TEST_F(BertModelTest, EncodeHostF32MultipleStrings) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -404,7 +411,7 @@ TEST_F(BertModelTest, EncodeHostF32EmptyString) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -425,7 +432,7 @@ TEST_F(BertModelTest, EncodeHostF32Sequences) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -450,7 +457,7 @@ TEST_F(BertModelTest, EncodeHostF32SequencesEmpty) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -471,18 +478,30 @@ TEST_F(BertModelTest, ProcessWithStringInput) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
 
-  if (!model.isLoaded()) {
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
   std::string input = "Process this text";
-  BertModel::Input variantInput = input;
-  BertEmbeddings embeddings = model.process(variantInput);
+  instance.addon->runJob(input);
+
+  auto maybeEmbeddings =
+      instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+  ASSERT_TRUE(maybeEmbeddings.has_value())
+      << "Timeout waiting for embeddings output";
+
+  BertEmbeddings embeddings = maybeEmbeddings.value();
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -494,18 +513,30 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
 
-  if (!model.isLoaded()) {
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
   std::vector<std::string> input = {"First", "Second", "Third"};
-  BertModel::Input variantInput = input;
-  BertEmbeddings embeddings = model.process(variantInput);
+  instance.addon->runJob(input);
+
+  auto maybeEmbeddings =
+      instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+  ASSERT_TRUE(maybeEmbeddings.has_value())
+      << "Timeout waiting for embeddings output";
+
+  BertEmbeddings embeddings = maybeEmbeddings.value();
 
   EXPECT_EQ(embeddings.size(), 3);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -515,41 +546,12 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
   }
 }
 
-TEST_F(BertModelTest, ProcessWithCallback) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  std::string config = "-dev\tcpu\n";
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
-
-  if (!model.isLoaded()) {
-    FAIL() << "Model failed to load";
-  }
-
-  std::string input = "Test callback";
-  BertModel::Input variantInput = input;
-  bool callbackCalled = false;
-
-  auto callback = [&callbackCalled](const BertEmbeddings& emb) {
-    callbackCalled = true;
-    EXPECT_EQ(emb.size(), 1);
-    EXPECT_GT(emb.embeddingSize(), 0);
-  };
-
-  BertEmbeddings embeddings = model.process(variantInput, callback);
-  EXPECT_TRUE(callbackCalled);
-  EXPECT_EQ(embeddings.size(), 1);
-}
-
 TEST_F(BertModelTest, ContextOverflowSingleString) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -579,7 +581,7 @@ TEST_F(BertModelTest, ContextOverflowMultipleStrings) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -610,7 +612,7 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -641,7 +643,7 @@ TEST_F(BertModelTest, ProcessWithContextOverflow) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();
@@ -670,19 +672,33 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
-  BertModel model(getValidModelPath(), config);
-  model.initializeBackend(test_backends_dir);
-  model.waitForLoadInitialization();
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  // Use AddonCpp interface
+  auto instance = qvac_lib_inference_addon_embed::createInstance(
+      std::string(getValidModelPath()),
+      std::move(config),
+      std::string(test_backends_dir));
 
-  if (!model.isLoaded()) {
+  instance.addon->activate();
+
+  auto* model = getModelFromAddon(instance.addon.get());
+  if (model && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
-  // Process multiple times to verify model state is maintained
+  // Process multiple times to verify addon state is maintained
   for (int i = 0; i < 3; ++i) {
     std::string prompt = "Test prompt " + std::to_string(i);
-    BertEmbeddings embeddings = model.encodeHostF32(prompt);
+    instance.addon->runJob(prompt);
+
+    auto maybeEmbeddings =
+        instance.outputHandler->tryPop(std::chrono::seconds(30));
+
+    ASSERT_TRUE(maybeEmbeddings.has_value())
+        << "Timeout waiting for embeddings output on job " << i;
+
+    BertEmbeddings embeddings =
+        std::any_cast<BertEmbeddings>(maybeEmbeddings.value());
 
     EXPECT_EQ(embeddings.size(), 1);
     EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -694,7 +710,7 @@ TEST_F(BertModelTest, PreprocessPrompt) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  std::string config = "-dev\tcpu\n";
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
   model.waitForLoadInitialization();

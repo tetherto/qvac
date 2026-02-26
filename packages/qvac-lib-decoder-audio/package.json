@@ -57,6 +57,6 @@
     "bare-process": "^4.2.2",
     "process": "npm:bare-process@^4.2.2"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-decoder-audio/issues",
+  "bugs": "https://github.com/tetherto/qvac/issues",
   "types": "index.d.ts"
 }

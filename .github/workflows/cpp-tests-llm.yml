@@ -49,11 +49,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install llvm-19 on Linux
@@ -132,14 +132,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
 
       - name: Get vcpkg cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.WORKDIR }}/vcpkg/cache
           key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -233,7 +233,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |

@@ -4615,6 +4615,289 @@
     "notes": ""
   },
   {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual conditional decoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "conditional-decoder",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual conditional decoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "conditional-decoder",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual token embeddings (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "embed-tokens",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual token embeddings (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "embed-tokens",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual speech encoder (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "speech-encoder",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual speech encoder (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "speech-encoder",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (fp32, graph)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (fp32, weights)",
+    "quantization": "fp32",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (fp16, graph)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (fp16, weights)",
+    "quantization": "fp16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (q4, graph)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (q4, weights)",
+    "quantization": "q4",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (q4f16, graph)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual language model (q4f16, weights)",
+    "quantization": "q4f16",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json",
+    "engine": "@qvac/tts",
+    "description": "Chatterbox multilingual tokenizer",
+    "quantization": "",
+    "params": "",
+    "license": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "multilingual",
+      "language-model",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",

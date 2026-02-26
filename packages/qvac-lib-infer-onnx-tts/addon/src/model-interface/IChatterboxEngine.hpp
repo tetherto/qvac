@@ -16,6 +16,7 @@ struct ChatterboxConfig {
   std::string embedTokensPath;
   std::string conditionalDecoderPath;
   std::string languageModelPath;
+  bool lazySessionLoading = false;
 };
 
 class IChatterboxEngine {

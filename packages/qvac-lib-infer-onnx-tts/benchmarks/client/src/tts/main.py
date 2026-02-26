@@ -71,16 +71,33 @@ def main():
             torch.cuda.manual_seed_all(seed)
     except ImportError:
         pass  # torch not available, skip
-    
-    # Load dataset with language from model config
-    logger.info(f"Loading dataset: {cfg.dataset.name} (language: {cfg.model.language})")
-    texts = load_dataset_texts(cfg.dataset, language=cfg.model.language)
-    logger.info(f"Loaded {len(texts)} texts for benchmarking")
-    
+
+    is_supertonic = "supertonic" in args.config
+    dataset_spec = None
+    lang_per_result = None
+
+    if is_supertonic:
+        # Supertonic benchmark: one run with both en and es (Harvard sentences from en.json and es.json)
+        logger.info("Loading dataset: harvard for en and es (Supertonic benchmark)")
+        en_texts = load_dataset_texts(cfg.dataset, language="en")
+        es_texts = load_dataset_texts(cfg.dataset, language="es")
+        if cfg.dataset.max_samples > 0:
+            en_texts = en_texts[: cfg.dataset.max_samples]
+            es_texts = es_texts[: cfg.dataset.max_samples]
+        texts = en_texts + es_texts
+        dataset_spec = [("en", en_texts), ("es", es_texts)]
+        lang_per_result = ["en"] * len(en_texts) + ["es"] * len(es_texts)
+        logger.info(f"Loaded {len(en_texts)} en + {len(es_texts)} es = {len(texts)} texts for benchmarking")
+    else:
+        # Single-language (e.g. Chatterbox)
+        logger.info(f"Loading dataset: {cfg.dataset.name} (language: {cfg.model.language})")
+        texts = load_dataset_texts(cfg.dataset, language=cfg.model.language)
+        logger.info(f"Loaded {len(texts)} texts for benchmarking")
+
     if not texts:
         logger.error("No texts loaded, exiting")
         sys.exit(1)
-    
+
     # Show sample texts
     logger.info("\nSample texts:")
     for i, text in enumerate(texts[:3], 1):
@@ -93,11 +110,14 @@ def main():
     # Load Whisper model if round-trip test is enabled
     if cfg.comparison.round_trip_test:
         logger.info("\n" + "=" * 60)
-        logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (language: {cfg.model.language})")
+        whisper_lang = cfg.model.language[:2] if cfg.model.language else "en"
+        if is_supertonic:
+            logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (multi-language: en, es)")
+        else:
+            logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (language: {whisper_lang})")
         logger.info("=" * 60)
         try:
-            whisper_language = cfg.model.language[:2]  # Use first 2 characters (e.g., "en" from "en-us")
-            whisper_language = TTS_TO_WHISPER_LANG.get(whisper_language, whisper_language)  # Map to Whisper-compatible code
+            whisper_language = TTS_TO_WHISPER_LANG.get(whisper_lang, whisper_lang)
             whisper = WhisperTranscriber(model_size=cfg.comparison.whisper_model, language=whisper_language)
             whisper.load()
             logger.info("✅ Whisper model loaded successfully")
@@ -122,7 +142,10 @@ def main():
                 num_runs=cfg.comparison.num_runs  # Number of times to run each text
             )
             
-            addon_runs = addon_client.synthesize_all(texts)
+            if is_supertonic and dataset_spec:
+                addon_runs = addon_client.synthesize_all_multi_language(dataset_spec)
+            else:
+                addon_runs = addon_client.synthesize_all(texts)
             results["addon"] = addon_runs
             
             # Log results for each run
@@ -150,7 +173,8 @@ def main():
                         texts,
                         addon_runs,
                         whisper,
-                        "Addon"
+                        "Addon",
+                        lang_per_result=lang_per_result,
                     )
                     if addon_round_trip:
                         round_trip_results["addon"] = addon_round_trip
@@ -185,7 +209,10 @@ def main():
                 num_runs=cfg.comparison.num_runs  # Number of times to run each text
             )
             
-            python_runs = python_client.synthesize_all(texts)
+            if is_supertonic and dataset_spec:
+                python_runs = python_client.synthesize_all_multi_language(dataset_spec)
+            else:
+                python_runs = python_client.synthesize_all(texts)
             results["python"] = python_runs
             
             # Log results for each run
@@ -213,7 +240,8 @@ def main():
                         texts,
                         python_runs,
                         whisper,
-                        "Python"
+                        "Python",
+                        lang_per_result=lang_per_result,
                     )
                     if python_round_trip:
                         round_trip_results["python"] = python_round_trip

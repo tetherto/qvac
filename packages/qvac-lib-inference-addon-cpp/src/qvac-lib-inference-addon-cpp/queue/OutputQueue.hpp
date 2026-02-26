@@ -56,10 +56,9 @@ public:
   void queueJobEnded() { return queueOutput(model_.runtimeStats()); }
 
   void queueResult(std::any&& output) {
-    QLOG(
-        logger::Priority::DEBUG,
+    QLOG_DEBUG(
         std::string("[OutputQueue] queueResult called with type: ") +
-            output.type().name());
+        output.type().name());
     queueOutput(std::move(output));
   }
 
