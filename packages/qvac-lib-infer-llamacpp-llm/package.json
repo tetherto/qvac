@@ -28,7 +28,8 @@
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
     "test:all": "npm run test && npm run test:cpp",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
-    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
+    "postinstall": "patch-package"
   },
   "standard": {
     "ignore": [
@@ -74,6 +75,7 @@
     "corestore": "^7.4.7",
     "hyperswarm": "^4.14.0",
     "os": "npm:bare-os@^3.6.2",
+    "patch-package": "^8.0.1",
     "process": "npm:bare-node-process",
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
