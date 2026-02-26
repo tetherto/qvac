@@ -140,7 +140,7 @@ jobs:
       publish_target: "gpr"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
