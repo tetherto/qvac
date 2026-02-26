@@ -25,7 +25,7 @@ function formatMessages(messages: ChatMessage[]): string {
 
 export function logCacheStatus(cacheKey: string, isReusing: boolean): void {
   const status = isReusing ? "REUSING" : "CREATING";
-  logger.debug(`[kv-cache] [${cacheKey}] ${status} cache`);
+  logger.info(`[kv-cache] [${cacheKey}] ${status} cache`);
 }
 
 export function logCacheInit(
