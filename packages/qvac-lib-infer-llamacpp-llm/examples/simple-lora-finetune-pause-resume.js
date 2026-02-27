@@ -211,8 +211,8 @@ async function main () {
     console.log('🚀 Starting finetuning...')
     const finetuneHandle = await client.finetune(finetuneOptions)
 
-    console.log('Training for 1 minute 30 seconds to allow several batches to complete...')
-    await sleep(90000)
+    console.log('Training for 20 seconds to allow several batches to complete...')
+    await sleep(20000)
 
     console.log('')
     console.log('⏸️  Pausing finetuning...')

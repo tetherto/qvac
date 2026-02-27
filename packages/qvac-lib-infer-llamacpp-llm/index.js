@@ -71,6 +71,11 @@ const DEFAULT_VALIDATION_FRACTION = 0.05
 
 function normalizeFinetuneParams (opts) {
   const validation = opts.validation
+  if (Object.prototype.hasOwnProperty.call(opts, 'evalDatasetPath')) {
+    throw new Error(
+      "Top-level evalDatasetPath is no longer supported. Use validation.path with validation.type set to 'dataset'."
+    )
+  }
   if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
     throw new Error(
       'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
@@ -79,7 +84,6 @@ function normalizeFinetuneParams (opts) {
   }
   const out = { ...opts }
   const type = validation.type
-  const canonicalEvalPath = opts.evalDatasetPath ?? opts.evalDatasetDir
   if (!VALIDATION_TYPES.includes(type)) {
     throw new Error(
       `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
@@ -88,12 +92,14 @@ function normalizeFinetuneParams (opts) {
   if (type === 'none') {
     out.validationSplit = 0
     out.useEvalDatasetForValidation = false
+    delete out.evalDatasetPath
   } else if (type === 'split') {
     const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
     out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
     out.useEvalDatasetForValidation = false
+    delete out.evalDatasetPath
   } else {
-    const evalPath = validation.path ?? canonicalEvalPath
+    const evalPath = validation.path
     if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
       throw new Error(
         "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
@@ -108,7 +114,6 @@ function normalizeFinetuneParams (opts) {
     out.validationSplit = 0
     out.useEvalDatasetForValidation = true
   }
-  delete out.evalDatasetDir
   delete out.validation
   return out
 }
@@ -350,6 +355,13 @@ class LlmLlamacpp extends BaseInference {
       typeof data.status === 'string'
     ) {
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
+    }
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      data.type === 'finetune_progress'
+    ) {
+      return this._outputCallback(addon, 'FinetuneProgress', 'OnlyOneJob', data, null)
     }
 
     let mappedEvent = event

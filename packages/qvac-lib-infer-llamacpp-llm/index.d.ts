@@ -102,6 +102,8 @@ export interface FinetuneHandle {
 export interface FinetuneStats {
   train_loss?: number
   val_loss?: number
+  train_accuracy?: number
+  val_accuracy?: number
   learning_rate?: number
   global_steps: number
   epochs_completed: number

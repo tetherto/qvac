@@ -550,6 +550,17 @@ void optEpochCallback(
 
   state->globalStep += 1;
 
+  if (state->progressCallback) {
+    FinetuneProgressStats progress;
+    ggml_opt_result_loss(result, &progress.loss, nullptr);
+    ggml_opt_result_accuracy(result, &progress.accuracy, nullptr);
+    progress.globalSteps = state->globalStep;
+    progress.currentEpoch = state->currentEpoch + 1;
+    progress.currentBatch = displayBatch;
+    progress.totalBatches = ibatchMax;
+    state->progressCallback(progress);
+  }
+
   if (!state->finetuningStartedEmitted) {
     state->finetuningStartedEmitted = true;
     state->isIdle.store(false);
