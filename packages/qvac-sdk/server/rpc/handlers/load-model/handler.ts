@@ -37,13 +37,8 @@ export async function handleLoadModel(
   }
 
   // Handle load new model from source
-  const {
-    modelSrc,
-    modelName,
-    seed,
-    projectionModelSrc,
-    vadModelSrc,
-  } = request;
+  const { modelSrc, modelName, seed, projectionModelSrc, vadModelSrc } =
+    request;
   const canonicalModelType = normalizeModelType(request.modelType);
   const srcVocabSrc =
     canonicalModelType === ModelType.nmtcppTranslation
@@ -149,11 +144,17 @@ export async function handleLoadModel(
     }
 
     // Use plugin's resolveConfig hook if available to resolve model sources
-    let resolvedModelConfig = request.modelConfig as Record<string, unknown> | undefined;
+    let resolvedModelConfig = request.modelConfig as
+      | Record<string, unknown>
+      | undefined;
     const plugin = getPlugin(canonicalModelType);
     if (plugin?.resolveConfig && resolvedModelConfig) {
-      const resolve = (src: string) => resolveModelPath(src, progressCallback, seed);
-      resolvedModelConfig = await plugin.resolveConfig(resolvedModelConfig, resolve);
+      const resolve = (src: string) =>
+        resolveModelPath(src, progressCallback, seed);
+      resolvedModelConfig = await plugin.resolveConfig(
+        resolvedModelConfig,
+        resolve,
+      );
     }
 
     // Generate hash-based modelId from modelConfig (includes all sources for TTS)

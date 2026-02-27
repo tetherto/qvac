@@ -9,6 +9,7 @@ test('client api surface', async t => {
   t.ok(typeof QVACRegistryClient === 'function', 'QVACRegistryClient is a constructor')
   t.ok(QVACRegistryClient.prototype.getModel, 'has getModel method')
   t.ok(QVACRegistryClient.prototype.downloadModel, 'has downloadModel method')
+  t.ok(QVACRegistryClient.prototype.downloadBlob, 'has downloadBlob method')
   t.ok(QVACRegistryClient.prototype.findModels, 'has findModels method')
   t.ok(QVACRegistryClient.prototype.findModelsByEngine, 'has findModelsByEngine method')
   t.ok(QVACRegistryClient.prototype.findModelsByName, 'has findModelsByName method')

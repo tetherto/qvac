@@ -13,10 +13,10 @@
         "@qvac/logging": "^0.1.0",
         "@qvac/ocr-onnx": "^0.1.5",
         "@qvac/rag": "^0.4.2",
-        "@qvac/registry-client": "^0.1.6",
+        "@qvac/registry-client": "^0.2.0",
         "@qvac/transcription-whispercpp": "^0.3.17",
-        "@qvac/translation-nmtcpp": "^0.3.6",
-        "@qvac/tts-onnx": "^0.5.0",
+        "@qvac/translation-nmtcpp": "^0.3.9",
+        "@qvac/tts-onnx": "^0.5.4",
         "fast-safe-stringify": "2.1.1",
         "which-runtime": "^1.3.2",
         "zod": "^4.0.17",
@@ -531,7 +531,7 @@
 
     "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
 
-    "@qvac/registry-client": ["@qvac/registry-client@0.1.6", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-process": "^4.2.2", "corestore": "^7.4.5", "fs": "npm:bare-node-fs", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "os": "npm:bare-node-os", "paparam": "^1.10.0", "path": "npm:bare-node-path", "process": "npm:bare-node-process", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-WL5W9Dwz0xLKyUTzrSn3YVJz4XCyQdQk2HQb2NWh+P6IEm3CKLvPB37TqwaMI5LBQNYc1PjVXXbtGvuEAkiM8A=="],
+    "@qvac/registry-client": ["@qvac/registry-client@0.2.0", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/registry-schema": "^0.1.1", "b4a": "^1.6.7", "bare-fs": "^4.5.2", "bare-os": "^3.6.2", "bare-path": "^3.0.0", "bare-process": "^4.2.2", "corestore": "^7.4.5", "hyperblobs": "^2.8.0", "hypercore-id-encoding": "^1.3.0", "hyperdb": "^4.16.1", "hyperswarm": "^4.14.0", "paparam": "^1.10.0", "ready-resource": "^1.0.1" }, "bin": { "qvac-registry": "bin/cli.js" } }, "sha512-ZdcKKIy7wAYbeh7iRNW9Wn2LUZNPPTihvwQN1yCNDx7n835DKqw8xy9396giikkNzXiT3RMf8mnccWldjmHnwg=="],
 
     "@qvac/registry-schema": ["@qvac/registry-schema@0.1.1", "", { "dependencies": { "hyperdb": "^4.16.0", "hyperdispatch": "^1.4.0", "hyperschema": "^1.13.0", "ready-resource": "^1.2.0" } }, "sha512-Mm0zQqc/KTplE2wtdFseSd2995H4RK0hAW63ZDE/9TXfCxuW0medjcpVOXVGFoI+mkTM2cxubcO/eJvJlZih1A=="],
 
@@ -539,9 +539,9 @@
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.3.18", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "@qvac/util-transcription": "^0.1.4", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-RlvcV6NdnZqxuXOgpFC7gXhBAPR2NHMZcvLuPJQR7mF6p6kCKCXV0KauE6JjZxZORK2tSyn8bKFlNZC9Na+MIw=="],
 
-    "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.3.7", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-tPR5aO5bfiWRGWFGkYaiO0wadyb8r6Bh/m9FhY78UBO5DOJgFpqazI83PYC6rthSSGx07CMLCiBp2rlEcjYmeQ=="],
+    "@qvac/translation-nmtcpp": ["@qvac/translation-nmtcpp@0.3.9", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "bare-path": "^3.0.0" } }, "sha512-hN3kaAdQ944OFI/UyupZFmTECdNfZKPMJDWy2joyx2UUi6i2Qv8G6hPPRj7JvCmrR5q9oJlOYN83+k4BQKFGpA=="],
 
-    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.5.1", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-n4w+mf8BiWmQW7vKPkk4Cj4MVXx6eyhe7Et62l7GLbYUWx5oJqNwgxwAWzFcXDVVKyq/f6TWiRlUrSGNENHaJw=="],
+    "@qvac/tts-onnx": ["@qvac/tts-onnx@0.5.4", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0" } }, "sha512-8S4beKOxBVkxM5MaQEYf0a9iL5YtrXdigu5VTX+F00XVGErZ06rOrHuFw+66CwvWCUfNcM1z0/r0KRVv8C1PHw=="],
 
     "@qvac/util-transcription": ["@qvac/util-transcription@0.1.5", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/response": "^0.1.0" } }, "sha512-1dI6JDA4RfCjBKm05NayXua5Cjm3qYnJy/cZChJJwJW/DvxMipJXFNKpvl9O0o8J0Vuz03Fsouvqvwj5vT4YWw=="],
 
@@ -1323,8 +1323,6 @@
 
     "fresh": ["fresh@2.0.0", "", {}, "sha512-Rx/WycZ60HOaqLKAi6cHRKKI7zxWbJ31MhntmtwMoaTeF7XFH9hhBp8vITaMidfljRQ6eYWCKkaTK+ykVJHP2A=="],
 
-    "fs": ["bare-node-fs@1.0.2", "", { "dependencies": { "bare-fs": "*" } }, "sha512-Tas23gfqHmkNQe1VUID6ifMi3oAYHqTuYr8sCq/xcskpTaDChGxZKJnFJzi1/pSnHzgQCLlkX+FpPnqNJTyQgg=="],
-
     "fs-native-extensions": ["fs-native-extensions@1.4.5", "", { "dependencies": { "require-addon": "^1.1.0", "which-runtime": "^1.2.0" } }, "sha512-ekV0T//iDm4AvhOcuPaHpxub4DI7HvY5ucLJVDvi7T2J+NZkQ9S6MuvgP0yeQvoqNUaAGyLjVYb1905BF9bpmg=="],
 
     "fs.realpath": ["fs.realpath@1.0.0", "", {}, "sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw=="],
@@ -1893,8 +1891,6 @@
 
     "ora": ["ora@3.4.0", "", { "dependencies": { "chalk": "^2.4.2", "cli-cursor": "^2.1.0", "cli-spinners": "^2.0.0", "log-symbols": "^2.2.0", "strip-ansi": "^5.2.0", "wcwidth": "^1.0.1" } }, "sha512-eNwHudNbO1folBP3JsZ19v9azXWtQZjICdr3Q0TDPIaeBQ3mXLrh54wM+er0+hSp+dWKf+Z8KM58CYzEyIYxYg=="],
 
-    "os": ["bare-node-os@1.0.1", "", { "dependencies": { "bare-os": "*" } }, "sha512-do2XWmW6QiSxVYLjmycUydQ3+/8JaDKHRv0P3NRFOlbdbVFVU2+0B6u2t5pm+K68grLbkV8lmtD2ZLUVPSeMEg=="],
-
     "own-keys": ["own-keys@1.0.1", "", { "dependencies": { "get-intrinsic": "^1.2.6", "object-keys": "^1.1.1", "safe-push-apply": "^1.0.0" } }, "sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg=="],
 
     "p-limit": ["p-limit@3.1.0", "", { "dependencies": { "yocto-queue": "^0.1.0" } }, "sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ=="],
@@ -1917,7 +1913,7 @@
 
     "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
 
-    "path": ["bare-node-path@1.0.1", "", { "dependencies": { "bare-path": "*" } }, "sha512-44YiNN/ofG1cEOWwdRVbG9ZFyskZKXPJnSUOyUpdeRm+MeSXiY+pSjSa7SZ56C/XpPVxE0OEl/AV8u+3FKsclw=="],
+    "path": ["bare-path@3.0.0", "", { "dependencies": { "bare-os": "^3.0.1" } }, "sha512-tyfW2cQcB5NN8Saijrhqn0Zh7AnFNsnczRcuWODH0eYAXBsJ5gVxAUuNr7tsHSC6IZ77cA0SitzT+s47kot8Mw=="],
 
     "path-exists": ["path-exists@4.0.0", "", {}, "sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w=="],
 
@@ -2581,13 +2577,9 @@
 
     "@qvac/llm-llamacpp/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
 
-    "@qvac/registry-client/process": ["bare-node-process@1.0.1", "", { "dependencies": { "bare-process": "*" } }, "sha512-7PVYyfcXV/YU5UozeyjBKxlma7IwZ2uaFomZuLg2R18RUCR9TkOnEcqh9wirvEh5z8ooSD0n9rV/rVol8VpLhQ=="],
-
     "@qvac/response/bare-events": ["bare-events@2.4.2", "", {}, "sha512-qMKFd2qG/36aA4GwvKq8MxnPgCQAmBWmSyLWsJcbn8v03wvIPQ/hG1Ms8bPzndZxMDoHpxez5VOS+gC9Yi24/Q=="],
 
     "@qvac/transcription-whispercpp/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
-
-    "@qvac/transcription-whispercpp/path": ["bare-path@3.0.0", "", { "dependencies": { "bare-os": "^3.0.1" } }, "sha512-tyfW2cQcB5NN8Saijrhqn0Zh7AnFNsnczRcuWODH0eYAXBsJ5gVxAUuNr7tsHSC6IZ77cA0SitzT+s47kot8Mw=="],
 
     "@qvac/translation-nmtcpp/@qvac/infer-base": ["@qvac/infer-base@0.2.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/logging": "^0.1.0", "bare-events": "2.4.2", "bare-os": "^3.2.0", "bare-path": "^3.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-8D/5PRIy/A+Uhg1ZSoJMu5FSPDHdrMKZoPnAzTZMceikTj+BWwTV//j8pXbRABsjrFbqBegvr/LujirC9I2cRQ=="],
 

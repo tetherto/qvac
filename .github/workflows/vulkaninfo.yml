@@ -1,21 +1,248 @@
-name: vulkaninfo test
-
 on:
   workflow_dispatch:
 
 jobs:
   run-vulkaninfo:
     name: test-vulkaninfo
-    runs-on: ai-run-windows-gpu
+    runs-on: ai-run-windows2025-gpu
+    timeout-minutes: 30
     steps:
-      - name: Run nvidia-smi without params
+      - name: Check OS version
+        continue-on-error: true
         shell: powershell
         run: |
-          Write-Host "=== GPU Info ==="
-          nvidia-smi
+          Write-Host "=== OS Version ==="
+          $os = Get-CimInstance Win32_OperatingSystem
+          Write-Host "Caption:      $($os.Caption)"
+          Write-Host "Version:      $($os.Version)"
+          Write-Host "Build Number: $($os.BuildNumber)"
+          Write-Host "Architecture: $($os.OSArchitecture)"
 
-      - name: Run vulkaninfo without params
+      - name: Check and install NVIDIA drivers if missing
+        continue-on-error: true
         shell: powershell
         run: |
-          Write-Host "=== Running vulkaninfo ==="
-          vulkaninfo
+          Write-Host "=== Checking NVIDIA Drivers ==="
+          $nvidiaOk = $false
+          try {
+            $output = nvidia-smi 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "nvidia-smi OK -- driver already present, skipping install"
+              Write-Host $output
+              $nvidiaOk = $true
+            } else {
+              Write-Host "nvidia-smi exited with code $LASTEXITCODE"
+            }
+          } catch {
+            Write-Host "nvidia-smi not found: $_"
+          }
+
+          if (-not $nvidiaOk) {
+            Write-Host "=== NVIDIA drivers missing -- installing ==="
+
+            $driverUrl   = "https://us.download.nvidia.com/tesla/591.59/591.59-data-center-tesla-desktop-winserver-2022-2025-dch-international.exe"
+            $installer   = "$env:TEMP\nvidia_driver.exe"
+            $maxAttempts = 3
+
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              Write-Host "Download attempt $attempt of $maxAttempts ..."
+              try {
+                Invoke-WebRequest -Uri $driverUrl -OutFile $installer -UseBasicParsing
+                $fileSize = (Get-Item $installer).Length
+                Write-Host "Downloaded $fileSize bytes"
+                if ($fileSize -lt 400000000) {
+                  Write-Warning "File seems too small ($fileSize bytes) -- may be corrupt, retrying ..."
+                  Remove-Item $installer -Force
+                  continue
+                }
+                Write-Host "Download looks good."
+                break
+              } catch {
+                Write-Warning "Download failed: $_"
+                if ($attempt -eq $maxAttempts) {
+                  Write-Error "All $maxAttempts download attempts failed."
+                  exit 1
+                }
+                Start-Sleep -Seconds 10
+              }
+            }
+
+            Write-Host "Running silent install ..."
+            $proc = Start-Process -FilePath $installer `
+                                  -ArgumentList "-s", "-noreboot", "-noeula" `
+                                  -Wait -PassThru
+            Write-Host "Installer exit code: $($proc.ExitCode)"
+
+            if ($proc.ExitCode -notin @(0, 1)) {
+              Write-Host "=== Windows Event Log (System, last 20 errors) ==="
+              Get-EventLog -LogName System -EntryType Error -Newest 20 | Format-List TimeGenerated, Source, EventID, Message
+              Write-Error "NVIDIA driver installation failed with exit code $($proc.ExitCode)"
+              exit 1
+            }
+
+            Write-Host "Waiting 15s for driver to register ..."
+            Start-Sleep -Seconds 15
+
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+            Write-Host "Driver installed -- verifying ..."
+            nvidia-smi
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "nvidia-smi still fails after installation"
+              exit 1
+            }
+            Write-Host "NVIDIA driver installation verified successfully."
+          }
+
+      - name: Install Vulkan SDK 1.4 (latest 1.4.x from LunarG)
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host "=== Fetching available Vulkan SDK versions ==="
+
+          # Pull the full version list and find the latest 1.4.x
+          $versionsUrl = "https://vulkan.lunarg.com/sdk/versions/windows.json"
+          $versions    = (Invoke-WebRequest -Uri $versionsUrl -UseBasicParsing).Content | ConvertFrom-Json
+          $sdkVersion  = $versions | Where-Object { $_ -match "^1\.4\." } | Select-Object -First 1
+
+          if (-not $sdkVersion) {
+            Write-Error "Could not find a 1.4.x Vulkan SDK version from LunarG"
+            exit 1
+          }
+          Write-Host "Latest Vulkan SDK 1.4.x version: $sdkVersion"
+
+          $sdkUrl       = "https://sdk.lunarg.com/sdk/download/$sdkVersion/windows/vulkansdk-windows-X64-$sdkVersion.exe"
+          $sdkInstaller = "$env:TEMP\VulkanSDK.exe"
+          $maxAttempts  = 3
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            Write-Host "Download attempt $attempt of $maxAttempts ..."
+            try {
+              Invoke-WebRequest -Uri $sdkUrl -OutFile $sdkInstaller -UseBasicParsing
+              $fileSize = (Get-Item $sdkInstaller).Length
+              Write-Host "Downloaded $fileSize bytes"
+              if ($fileSize -lt 100000000) {
+                Write-Warning "File seems too small ($fileSize bytes) -- may be corrupt, retrying ..."
+                Remove-Item $sdkInstaller -Force
+                continue
+              }
+              Write-Host "Download looks good."
+              break
+            } catch {
+              Write-Warning "Download failed: $_"
+              if ($attempt -eq $maxAttempts) {
+                Write-Error "All $maxAttempts download attempts failed."
+                exit 1
+              }
+              Start-Sleep -Seconds 10
+            }
+          }
+
+          Write-Host "Running silent install ..."
+          $proc = Start-Process -FilePath $sdkInstaller `
+                                -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" `
+                                -Wait -PassThru
+          Write-Host "Installer exit code: $($proc.ExitCode)"
+
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "Vulkan SDK installation failed with exit code $($proc.ExitCode)"
+            exit 1
+          }
+
+          # Locate vulkaninfo.exe explicitly under the SDK install dir
+          $sdkRoot      = "C:\VulkanSDK\$sdkVersion\Bin\vulkaninfo.exe"
+          $fallbackRoot = Get-ChildItem "C:\VulkanSDK" -Filter "vulkaninfo.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+
+          $vulkaninfoPath = if (Test-Path $sdkRoot) { $sdkRoot } else { $fallbackRoot }
+
+          if (-not $vulkaninfoPath) {
+            Write-Error "vulkaninfo.exe not found after SDK install"
+            exit 1
+          }
+
+          Write-Host "vulkaninfo.exe found at: $vulkaninfoPath"
+
+          # Persist the path for subsequent steps via GITHUB_ENV
+          "VULKANINFO_PATH=$vulkaninfoPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VULKAN_SDK_VERSION=$sdkVersion"  | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Write-Host "Vulkan SDK $sdkVersion installed successfully."
+
+
+      - name: GPU detection
+        continue-on-error: true
+        shell: powershell
+        run: |
+          Write-Host "=== GPU Device List ==="
+          nvidia-smi -L
+          Write-Host ""
+          Write-Host "=== nvidia-smi (baseline) ==="
+          nvidia-smi
+          Write-Host ""
+          Write-Host "=== Driver Version (baseline) ==="
+          nvidia-smi --query-gpu=driver_version --format=csv,noheader
+
+      - name: Collect diagnostics into files
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $outDir = "$env:GITHUB_WORKSPACE\gpu-diagnostics"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          Write-Host "SDK version:      $env:VULKAN_SDK_VERSION"
+          Write-Host "vulkaninfo path:  $env:VULKANINFO_PATH"
+
+          Write-Host "=== Collecting nvidia-smi output ==="
+          nvidia-smi | Tee-Object -FilePath "$outDir\nvidia-smi.txt"
+
+          Write-Host "=== Collecting GPU info ==="
+          nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv | Tee-Object -FilePath "$outDir\gpu-info.csv"
+
+          Write-Host "=== Collecting vulkaninfo JSON ==="
+          & "$env:VULKANINFO_PATH" --json 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo.json"
+
+          Write-Host "=== Collecting vulkaninfo summary ==="
+          & "$env:VULKANINFO_PATH" --summary 2>&1 | Tee-Object -FilePath "$outDir\vulkaninfo-summary.txt"
+
+          Write-Host "=== Validating Vulkan API version ==="
+          $summary = Get-Content "$outDir\vulkaninfo-summary.txt" -Raw
+          if ($summary -match "apiVersion\s*=\s*(\d+\.\d+\.\d+)") {
+            $apiVersion = $Matches[1]
+            Write-Host "Detected Vulkan API version: $apiVersion"
+            $major = [int]($apiVersion.Split('.')[0])
+            $minor = [int]($apiVersion.Split('.')[1])
+            if ($major -lt 1 -or ($major -eq 1 -and $minor -lt 4)) {
+              Write-Warning "Vulkan API version $apiVersion is below minimum 1.4"
+            } else {
+              Write-Host "Vulkan API version $apiVersion meets minimum requirement (1.4+)"
+            }
+          } else {
+            Write-Warning "Could not parse Vulkan API version from vulkaninfo output"
+          }
+
+      - name: Upload GPU diagnostics as artifacts
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-diagnostics-${{ github.run_id }}
+          path: gpu-diagnostics/
+          retention-days: 30
+
+      - name: Final pass/fail gate
+        shell: powershell
+        run: |
+          Write-Host "=== Final Gate: Verifying nvidia-smi ==="
+          nvidia-smi
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "GATE FAILED: nvidia-smi is not working"
+            exit 1
+          }
+
+          Write-Host "=== Final Gate: Verifying vulkaninfo (SDK 1.4) ==="
+          & "$env:VULKANINFO_PATH" --summary
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "GATE FAILED: vulkaninfo not working -- Vulkan support NOT confirmed"
+            exit 1
+          }
+
+          Write-Host "GATE PASSED: GPU and Vulkan $env:VULKAN_SDK_VERSION support confirmed on runner."
