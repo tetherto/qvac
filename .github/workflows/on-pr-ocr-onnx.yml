@@ -13,7 +13,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+      - "packages/ocr-onnx/**"
       - ".github/workflows/*ocr*.yml"
   workflow_dispatch:
   workflow_call:
@@ -41,7 +41,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           filters: |
             pkg:
-              - "packages/qvac-lib-inference-addon-onnx-ocr-fasttext/**"
+              - "packages/ocr-onnx/**"
               - ".github/workflows/*ocr*.yml"
 
   sanity-checks:
@@ -54,8 +54,8 @@ jobs:
     permissions:
       contents: read
     env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-onnx-ocr-fasttext/vcpkg/cache,readwrite"
-      PKG_DIR: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/ocr-onnx
     steps:
       - uses: actions/checkout@v6
         with:
@@ -63,7 +63,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
-            packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+            packages/ocr-onnx
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
@@ -147,7 +147,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-inference-addon-onnx-ocr-fasttext
+      workdir: packages/ocr-onnx
 
   prebuild:
     needs: [sanity-checks, cpp-lint]
@@ -157,7 +157,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
-    uses: ./.github/workflows/prebuilds-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -172,7 +172,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
-    uses: ./.github/workflows/integration-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -186,7 +186,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
       )
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-inference-addon-onnx-ocr-fasttext.yml
+    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
