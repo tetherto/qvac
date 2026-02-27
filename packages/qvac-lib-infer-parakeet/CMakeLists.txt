@@ -8,17 +8,18 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Use custom triplet overrides for Apple platforms
-# Includes -Wno-array-bounds fix for onnxruntime MLAS on x64 macOS
-if(APPLE)
-  set(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-endif()
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(qvac_lib_infer_parakeet
   VERSION 0.1.0
   LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+endif()
 
 # Find dependencies
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp" REQUIRED)
