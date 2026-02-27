@@ -210,6 +210,9 @@ async function main () {
 
     console.log('🚀 Starting finetuning...')
     const finetuneHandle = await client.finetune(finetuneOptions)
+    finetuneHandle.on('stats', stats => {
+      console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+    })
 
     console.log('Training for 20 seconds to allow several batches to complete...')
     await sleep(20000)
@@ -245,6 +248,9 @@ async function main () {
     console.log('')
     console.log('▶️  Resuming finetuning...')
     const resumeHandle = await client.finetune()
+    resumeHandle.on('stats', stats => {
+      console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+    })
     console.log('✅ Finetuning has RESUMED')
 
     await sleep(500)

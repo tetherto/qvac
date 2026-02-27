@@ -229,8 +229,15 @@ async function main () {
       console.log(`⚠️  Could not clear pause checkpoint: ${err.message}\n`)
     }
 
+    const attachProgressLogger = (handle) => {
+      handle.on('stats', stats => {
+        console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+      })
+    }
+
     console.log('🚀 Starting finetuning...')
     let finetuneHandle = await client.finetune(finetuneOptions)
+    attachProgressLogger(finetuneHandle)
 
     async function getPauseStepNumber (checkpointDir) {
       const maxRetries = 10
@@ -310,6 +317,7 @@ async function main () {
         console.log(`   Expected to resume from checkpoint step ${resumeCheckpointStep}`)
       }
       finetuneHandle = await client.finetune()
+      attachProgressLogger(finetuneHandle)
 
       const checkpointAfterResume = await getPauseStepNumber(finetuneOptions.checkpointSaveDir)
       if (checkpointAfterResume !== null) {
