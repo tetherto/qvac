@@ -30,6 +30,7 @@ const ALLOWED_LICENSES = [
   'mpl-2.0',
   'cc-by-4.0',
   'lgpl-2.1',
+  'apache-2.0-with-llvm-exception',
 
   // Model-specific
   'llama3.2',
@@ -60,6 +61,10 @@ const LICENSE_NORMALIZE_MAP = {
   'apache license, version 2.0': 'apache-2.0',
   'apache software license': 'apache-2.0',
   apache: 'apache-2.0',
+
+  // Apache with LLVM exception
+  'apache-2.0 with llvm-exception': 'apache-2.0-with-llvm-exception',
+  'apache 2.0 with llvm exception': 'apache-2.0-with-llvm-exception',
 
   // MIT
   mit: 'mit',
