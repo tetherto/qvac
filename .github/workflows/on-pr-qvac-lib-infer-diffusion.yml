@@ -13,8 +13,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-stable-diffusion-cpp/**"
-      - ".github/workflows/*stable-diffusion-cpp*.yml"
+      - "packages/qvac-lib-infer-diffusion/**"
+      - ".github/workflows/*diffusion*.yml"
   workflow_dispatch:
 
   workflow_call:
@@ -25,7 +25,7 @@ permissions:
   packages: write
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-stable-diffusion-cpp
+  PKG_DIR: packages/qvac-lib-infer-diffusion
 
 jobs:
   sanity-checks:
@@ -39,7 +39,7 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
-          workdir: packages/qvac-lib-infer-stable-diffusion-cpp
+          workdir: packages/qvac-lib-infer-diffusion
 
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
@@ -48,7 +48,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-stable-diffusion-cpp
+      workdir: packages/qvac-lib-infer-diffusion
 
   prebuild:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
@@ -56,7 +56,7 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-stable-diffusion-cpp.yml
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-diffusion.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -67,7 +67,7 @@ jobs:
   run-integration-tests:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     needs: prebuild
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-stable-diffusion-cpp.yml
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-diffusion.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-stable-diffusion-cpp/**"
+      - "packages/qvac-lib-infer-diffusion/**"
   workflow_dispatch:
     inputs:
       version:
@@ -24,13 +24,13 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "@qvac/img-stable-diffusion-cpp @tetherto/img-stable-diffusion-cpp"
+        default: "@qvac/diffusion-cpp @tetherto/diffusion-cpp"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
         default: true
 
-run-name: Delete NPM Versions (img-stable-diffusion-cpp) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
+run-name: Delete NPM Versions (diffusion-cpp) ${{ inputs.version }} ${{ inputs.pr-number }} ${{ inputs.dry-run }}
 
 permissions:
   contents: read

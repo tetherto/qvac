@@ -20,7 +20,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-stable-diffusion-cpp"
+        default: "packages/qvac-lib-infer-diffusion"
 
 permissions:
   contents: write
@@ -86,7 +86,7 @@ jobs:
         if: steps.version.outputs.bumped == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: stable-diffusion-cpp-v${{ steps.version.outputs.current }}
+          tag_name: diffusion-cpp-v${{ steps.version.outputs.current }}
           name: ${{ inputs.release_name }} v${{ steps.version.outputs.current }}
           body_path: ${{ steps.changelog.outputs.release_notes_path }}
         env:

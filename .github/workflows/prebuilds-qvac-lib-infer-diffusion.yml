@@ -15,7 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-stable-diffusion-cpp"
+        default: "packages/qvac-lib-infer-diffusion"
 
   workflow_call:
     inputs:
@@ -41,7 +41,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-stable-diffusion-cpp"
+        default: "packages/qvac-lib-infer-diffusion"
     outputs:
       published_version:
         description: "The version that was published"
@@ -67,7 +67,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-stable-diffusion-cpp' }}/vcpkg/cache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/qvac-lib-infer-diffusion' }}/vcpkg/cache,readwrite
 
     steps:
       - if: ${{ matrix.platform == 'android' }}
@@ -436,7 +436,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const f='${{ env.WORKDIR }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/img-stable-diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
+          node -e "const fs=require('fs');const f='${{ env.WORKDIR }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
           node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('${{ env.WORKDIR }}/package.json','utf8')).name)"
 
       - name: Publish to GitHub Package Registry
@@ -491,7 +491,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/img-stable-diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
           node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
 
       - name: Publish to NPM Package Registry
@@ -501,5 +501,5 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: 'latest'
           workdir: ${{ env.WORKDIR }}
-          repo_name: "stable-diffusion-cpp"
+          repo_name: "diffusion-cpp"
           git-token: ${{ secrets.GITHUB_TOKEN }}

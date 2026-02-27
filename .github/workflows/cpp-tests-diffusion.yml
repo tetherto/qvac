@@ -7,7 +7,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-stable-diffusion-cpp"
+        default: "packages/qvac-lib-infer-diffusion"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-stable-diffusion-cpp"
+        default: "packages/qvac-lib-infer-diffusion"
 
 jobs:
   test-cpp:

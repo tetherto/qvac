@@ -17,7 +17,7 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/img-stable-diffusion-cpp@0.1.0)"
+        description: "NPM package containing prebuilds (e.g. @qvac/diffusion-cpp@0.1.0)"
         type: string
         required: true
 
@@ -31,7 +31,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      WORKDIR: packages/qvac-lib-infer-stable-diffusion-cpp
+      WORKDIR: packages/qvac-lib-infer-diffusion
     permissions:
       contents: read
       packages: read
