@@ -119,28 +119,25 @@ async function downloadFileFromUrl (url, filepath, minSize = 1000) {
 async function downloadChatterboxModels (variant, destPath) {
   console.log(`\n>>> Downloading Chatterbox Models (variant: ${variant})...`)
 
-  // Define file suffixes based on variant
   const suffix = variant === 'fp32' ? '' : `_${variant}`
 
-  // Files to download with their minimum sizes
   const modelFiles = [
-    { name: `speech_encoder${suffix}.onnx`, targetName: 'speech_encoder.onnx', minSize: 1000 },
-    { name: `speech_encoder${suffix}.onnx_data`, targetName: 'speech_encoder.onnx_data', minSize: 100000000 },
-    { name: `embed_tokens${suffix}.onnx`, targetName: 'embed_tokens.onnx', minSize: 1000 },
-    { name: `embed_tokens${suffix}.onnx_data`, targetName: 'embed_tokens.onnx_data', minSize: 10000000 },
-    { name: `conditional_decoder${suffix}.onnx`, targetName: 'conditional_decoder.onnx', minSize: 1000 },
-    { name: `conditional_decoder${suffix}.onnx_data`, targetName: 'conditional_decoder.onnx_data', minSize: 100000000 },
-    { name: `language_model${suffix}.onnx`, targetName: 'language_model.onnx', minSize: 100000 },
-    { name: `language_model${suffix}.onnx_data`, targetName: 'language_model.onnx_data', minSize: 100000000 }
+    { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
+    { name: `speech_encoder${suffix}.onnx_data`, minSize: 100000000 },
+    { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
+    { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 },
+    { name: `conditional_decoder${suffix}.onnx`, minSize: 1000 },
+    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 100000000 },
+    { name: `language_model${suffix}.onnx`, minSize: 100000 },
+    { name: `language_model${suffix}.onnx_data`, minSize: 100000000 }
   ]
 
-  // Adjust minimum sizes for smaller variants
   if (variant === 'fp16') {
-    modelFiles[1].minSize = 50000000 // ~522MB
-    modelFiles[3].minSize = 5000000 // ~116MB
-    modelFiles[5].minSize = 50000000 // ~384MB
-    modelFiles[7].minSize = 50000000 // ~635MB
-  } else if (variant === 'q4' || variant === 'quantized') {
+    modelFiles[1].minSize = 50000000
+    modelFiles[3].minSize = 5000000
+    modelFiles[5].minSize = 50000000
+    modelFiles[7].minSize = 50000000
+  } else if (variant === 'q4' || variant === 'quantized' || variant === 'q4f16') {
     modelFiles[1].minSize = 20000000
     modelFiles[3].minSize = 2000000
     modelFiles[5].minSize = 20000000
@@ -149,10 +146,9 @@ async function downloadChatterboxModels (variant, destPath) {
 
   const results = []
 
-  // Download model files
   for (const file of modelFiles) {
     const url = `${BASE_URL}/${file.name}`
-    const filepath = path.join(destPath, file.targetName)
+    const filepath = path.join(destPath, file.name)
 
     try {
       const result = await downloadFileFromUrl(url, filepath, file.minSize)
@@ -163,7 +159,6 @@ async function downloadChatterboxModels (variant, destPath) {
     }
   }
 
-  // Download tokenizer.json (file is ~3.5MB, set appropriate minSize)
   const tokenizerPath = path.join(destPath, 'tokenizer.json')
   try {
     const tokenizerResult = await downloadFileFromUrl(TOKENIZER_URL, tokenizerPath, 3000000)

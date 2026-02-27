@@ -1,5 +1,5 @@
 import type { ModelProgressUpdate, RegistryDownloadEntry } from "@/schemas";
-import type { QVACModelEntry } from "@qvac/registry-client";
+import type { QVACModelEntry, QVACBlobBinding } from "@qvac/registry-client";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { type Readable, type Writable } from "bare-stream";
@@ -36,6 +36,24 @@ import {
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
+
+const REGISTRY_STREAM_TIMEOUT_MS = 60_000;
+
+function buildBlobBinding(meta: {
+  blobCoreKey: string;
+  blobBlockOffset: number;
+  blobBlockLength: number;
+  blobByteOffset: number;
+  expectedSize: number;
+}): QVACBlobBinding {
+  return {
+    coreKey: meta.blobCoreKey,
+    blockOffset: meta.blobBlockOffset,
+    blockLength: meta.blobBlockLength,
+    byteOffset: meta.blobByteOffset,
+    byteLength: meta.expectedSize,
+  };
+}
 
 /**
  * Validate a cached file against expected size and checksum.
@@ -87,6 +105,8 @@ async function validateCachedFile(
 
 /**
  * Download a single file from the registry to filesystem.
+ * When blobBinding is provided, uses direct blob download (skips metadata sync).
+ * Otherwise falls back to metadata-based downloadModel.
  */
 async function downloadSingleFileFromRegistry(
   registryPath: string,
@@ -98,35 +118,43 @@ async function downloadSingleFileFromRegistry(
   expectedChecksum: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
+  blobBinding?: QVACBlobBinding,
 ): Promise<void> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
   }
 
-  logger.info(`📥 Downloading from registry: ${registryPath}`);
-
   const client = await getRegistryClient();
 
   try {
-    // Download using the registry client
-    const result = await client.downloadModel(registryPath, registrySource, {
-      timeout: 300000, // 5 minute timeout
-    });
+    let readStream: Readable;
 
-    // Check if we got a stream (not a file path)
-    if (!("stream" in result.artifact)) {
-      throw new RegistryDownloadFailedError(
-        `No stream returned for ${registryPath}`,
-      );
+    if (blobBinding) {
+      logger.info(`📥 Downloading blob directly: ${modelFileName}`);
+      const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
+      if (!("stream" in result.artifact)) {
+        throw new RegistryDownloadFailedError(
+          `No stream returned for blob ${modelFileName}`,
+        );
+      }
+      readStream = result.artifact.stream as unknown as Readable;
+    } else {
+      logger.info(`📥 Downloading from registry: ${registryPath}`);
+      const result = await client.downloadModel(registryPath, registrySource, {
+        timeout: REGISTRY_STREAM_TIMEOUT_MS,
+      });
+      if (!("stream" in result.artifact)) {
+        throw new RegistryDownloadFailedError(
+          `No stream returned for ${registryPath}`,
+        );
+      }
+      readStream = result.artifact.stream as unknown as Readable;
     }
 
-    // Ensure directory exists
     const dir = path.dirname(modelPath);
     await fsPromises.mkdir(dir, { recursive: true });
 
-    // Create write stream
     const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
-    const readStream = result.artifact.stream as unknown as Readable;
 
     // Track progress
     let downloadedBytes = 0;
@@ -259,35 +287,59 @@ async function findModelShards(
 
 /**
  * Download sharded model files from registry.
+ * When localShardMetadata is provided, uses pre-computed metadata + blob direct download
+ * instead of querying the registry for shard info.
  */
 async function downloadShardedFilesFromRegistry(
   registryPath: string,
-  _registrySource: string,
+  registrySource: string,
   cacheKey: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
+  localShardMetadata?: RegistryItem["shardMetadata"],
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
   }
 
-  const filename = registryPath.split("/").pop() || registryPath;
-  const shardInfo = detectShardedModel(filename);
-  if (!shardInfo.isSharded || !shardInfo.totalShards) {
-    throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`);
-  }
+  type ShardEntry = { filename: string; size: number; checksum: string; path: string; source: string; blobBinding?: QVACBlobBinding };
+  let shards: ShardEntry[];
 
-  // Find all shards from registry
-  const shards = await findModelShards(registryPath);
+  if (localShardMetadata?.length) {
+    shards = localShardMetadata.map((shard) => ({
+      filename: shard.filename,
+      size: shard.expectedSize,
+      checksum: shard.sha256Checksum,
+      path: registryPath,
+      source: registrySource,
+      blobBinding: buildBlobBinding(shard),
+    }));
+  } else {
+    const filename = registryPath.split("/").pop() || registryPath;
+    const shardInfo = detectShardedModel(filename);
+    if (!shardInfo.isSharded || !shardInfo.totalShards) {
+      throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`);
+    }
 
-  if (shards.length === 0) {
-    throw new ModelNotFoundError(`No shards found for ${registryPath}`);
-  }
+    const remoteShards = await findModelShards(registryPath);
 
-  if (shards.length !== shardInfo.totalShards) {
-    logger.warn(
-      `⚠️ Expected ${shardInfo.totalShards} shards but found ${shards.length}`,
-    );
+    if (remoteShards.length === 0) {
+      throw new ModelNotFoundError(`No shards found for ${registryPath}`);
+    }
+
+    if (remoteShards.length !== shardInfo.totalShards) {
+      logger.warn(
+        `⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`,
+      );
+    }
+
+    shards = remoteShards.map((s) => ({
+      filename: s.path.split("/").pop() || "",
+      size: s.size,
+      checksum: s.checksum,
+      path: s.path,
+      source: s.source,
+    }));
   }
 
   const shardDir = getShardedModelCacheDir(cacheKey);
@@ -297,24 +349,20 @@ async function downloadShardedFilesFromRegistry(
     `📥 Downloading sharded model: ${shards.length} shards to ${shardDir}`,
   );
 
-  // Calculate overall progress
   const overallTotal = shards.reduce((sum, s) => sum + s.size, 0);
   let overallDownloaded = 0;
 
-  // Download each shard
   for (let i = 0; i < shards.length; i++) {
     if (signal?.aborted) {
       throw new DownloadCancelledError();
     }
 
     const shard = shards[i]!;
-    const shardFilename = shard.path.split("/").pop() || `shard-${i}`;
-    const shardPath = getShardPath(cacheKey, shardFilename);
+    const shardPath = getShardPath(cacheKey, shard.filename);
 
-    // Check if shard already exists and is valid
     const cachedPath = await validateCachedFile(
       shardPath,
-      shardFilename,
+      shard.filename,
       shard.size,
       shard.checksum,
     );
@@ -333,7 +381,7 @@ async function downloadShardedFilesFromRegistry(
           shardInfo: {
             currentShard: i + 1,
             totalShards: shards.length,
-            shardName: shardFilename,
+            shardName: shard.filename,
             overallDownloaded,
             overallTotal,
             overallPercentage: calculatePercentage(
@@ -347,10 +395,9 @@ async function downloadShardedFilesFromRegistry(
     }
 
     logger.info(
-      `📥 Downloading shard ${i + 1}/${shards.length}: ${shardFilename}`,
+      `📥 Downloading shard ${i + 1}/${shards.length}: ${shard.filename}`,
     );
 
-    // Create progress callback for this shard
     const shardProgressCallback = progressCallback
       ? (progress: ModelProgressUpdate) => {
           const currentOverall = overallDownloaded + progress.downloaded;
@@ -360,7 +407,7 @@ async function downloadShardedFilesFromRegistry(
             shardInfo: {
               currentShard: i + 1,
               totalShards: shards.length,
-              shardName: shardFilename,
+              shardName: shard.filename,
               overallDownloaded: currentOverall,
               overallTotal,
               overallPercentage: calculatePercentage(
@@ -376,26 +423,24 @@ async function downloadShardedFilesFromRegistry(
       shard.path,
       shard.source,
       shardPath,
-      shardFilename,
+      shard.filename,
       downloadKey,
       shard.size,
       shard.checksum,
       shardProgressCallback,
       signal,
+      shard.blobBinding,
     );
 
     overallDownloaded += shard.size;
     logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`);
   }
 
-  // Extract tensors if needed
-  const firstShardFilename = shards[0]!.path.split("/").pop() || "";
+  const firstShardFilename = shards[0]!.filename;
   await extractTensorsFromShards(shardDir, firstShardFilename);
 
-  // Send final 100% progress
   if (progressCallback) {
     const lastShard = shards[shards.length - 1]!;
-    const lastShardFilename = lastShard.path.split("/").pop() || "";
     progressCallback({
       type: "modelProgress",
       downloaded: overallTotal,
@@ -405,7 +450,7 @@ async function downloadShardedFilesFromRegistry(
       shardInfo: {
         currentShard: shards.length,
         totalShards: shards.length,
-        shardName: lastShardFilename,
+        shardName: lastShard.filename,
         overallDownloaded: overallTotal,
         overallTotal,
         overallPercentage: 100,
@@ -431,6 +476,7 @@ function findOnnxCompanionDataFile(
 /**
  * Download ONNX model with companion data file from registry.
  * Both files are placed in the same directory to satisfy ONNX Runtime requirements.
+ * When blob bindings are provided, uses direct blob download (skips metadata sync).
  */
 async function downloadOnnxWithDataFromRegistry(
   registryPath: string,
@@ -439,6 +485,8 @@ async function downloadOnnxWithDataFromRegistry(
   cacheKey: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
+  mainBlobBinding?: QVACBlobBinding,
+  dataBlobBinding?: QVACBlobBinding,
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError();
@@ -489,7 +537,10 @@ async function downloadOnnxWithDataFromRegistry(
               totalFiles: 2,
               overallDownloaded: currentOverall,
               overallTotal,
-              overallPercentage: calculatePercentage(currentOverall, overallTotal),
+              overallPercentage: calculatePercentage(
+                currentOverall,
+                overallTotal,
+              ),
             },
           });
         }
@@ -505,6 +556,7 @@ async function downloadOnnxWithDataFromRegistry(
       mainChecksum,
       mainProgressCallback,
       signal,
+      mainBlobBinding,
     );
 
     overallDownloaded += mainExpectedSize;
@@ -536,7 +588,10 @@ async function downloadOnnxWithDataFromRegistry(
               totalFiles: 2,
               overallDownloaded: currentOverall,
               overallTotal,
-              overallPercentage: calculatePercentage(currentOverall, overallTotal),
+              overallPercentage: calculatePercentage(
+                currentOverall,
+                overallTotal,
+              ),
             },
           });
         }
@@ -552,6 +607,7 @@ async function downloadOnnxWithDataFromRegistry(
       dataChecksum,
       dataProgressCallback,
       signal,
+      dataBlobBinding,
     );
 
     logger.info(`✅ ONNX data file downloaded: ${dataFilename}`);
@@ -616,10 +672,9 @@ function createManagedDownload(
 /**
  * Download a model from the QVAC Registry.
  *
- * @param registryPath - The registry path (e.g., "hf/repo/blob/hash/model.gguf")
- * @param registrySource - The source identifier (e.g., "hf")
- * @param progressCallback - Optional callback for progress updates
- * @param expectedChecksum - Optional checksum for validation
+ * For known models (present in models.ts), uses direct blob download which
+ * skips the registry metadata sync entirely. Falls back to metadata-based
+ * download for unknown models.
  */
 export async function downloadModelFromRegistry(
   registryPath: string,
@@ -643,8 +698,55 @@ export async function downloadModelFromRegistry(
   const modelMetadata = getModelByPath(registryPath);
 
   if (shardInfo.isSharded) {
-    // Sharded model download
     const cacheKey = generateShortHash(registryPath);
+    const localShardMeta = modelMetadata?.shardMetadata;
+
+    // FS pre-check for known models: if all shards cached, return immediately
+    if (localShardMeta?.length) {
+      let allCached = true;
+      for (const shard of localShardMeta) {
+        const shardPath = getShardPath(cacheKey, shard.filename);
+        const cached = await validateCachedFile(
+          shardPath,
+          shard.filename,
+          shard.expectedSize,
+          shard.sha256Checksum,
+        );
+        if (!cached) {
+          allCached = false;
+          break;
+        }
+      }
+
+      if (allCached) {
+        const firstShardFilename = localShardMeta[0]!.filename;
+        logger.info(`✅ All ${localShardMeta.length} shards cached`);
+
+        if (progressCallback) {
+          const overallTotal = localShardMeta.reduce(
+            (sum, s) => sum + s.expectedSize,
+            0,
+          );
+          progressCallback({
+            type: "modelProgress",
+            downloaded: overallTotal,
+            total: overallTotal,
+            percentage: 100,
+            downloadKey,
+            shardInfo: {
+              currentShard: localShardMeta.length,
+              totalShards: localShardMeta.length,
+              shardName: firstShardFilename,
+              overallDownloaded: overallTotal,
+              overallTotal,
+              overallPercentage: 100,
+            },
+          });
+        }
+
+        return getShardPath(cacheKey, firstShardFilename);
+      }
+    }
 
     return createManagedDownload(
       downloadKey,
@@ -656,6 +758,7 @@ export async function downloadModelFromRegistry(
           cacheKey,
           progressCallback,
           signal,
+          localShardMeta,
         ),
       progressCallback,
     );
@@ -665,6 +768,55 @@ export async function downloadModelFromRegistry(
   const companionDataFile = findOnnxCompanionDataFile(registryPath);
   if (companionDataFile) {
     const cacheKey = generateShortHash(registryPath);
+
+    // FS pre-check: if both files cached, return immediately
+    const mainFilename = registryPath.split("/").pop() || registryPath;
+    const dataFilename = companionDataFile.registryPath.split("/").pop() || "";
+    const mainPath = getOnnxModelPath(cacheKey, mainFilename);
+    const dataPath = getOnnxModelPath(cacheKey, dataFilename);
+
+    const mainCached = await validateCachedFile(
+      mainPath,
+      mainFilename,
+      modelMetadata?.expectedSize || 0,
+      modelMetadata?.sha256Checksum,
+    );
+    const dataCached = await validateCachedFile(
+      dataPath,
+      dataFilename,
+      companionDataFile.expectedSize,
+      companionDataFile.sha256Checksum,
+    );
+
+    if (mainCached && dataCached) {
+      logger.info(`✅ ONNX model and data file both cached`);
+
+      if (progressCallback) {
+        const total = (modelMetadata?.expectedSize || 0) + companionDataFile.expectedSize;
+        progressCallback({
+          type: "modelProgress",
+          downloaded: total,
+          total,
+          percentage: 100,
+          downloadKey,
+          onnxInfo: {
+            currentFile: dataFilename,
+            fileIndex: 2,
+            totalFiles: 2,
+            overallDownloaded: total,
+            overallTotal: total,
+            overallPercentage: 100,
+          },
+        });
+      }
+
+      return mainCached;
+    }
+
+    const mainBlobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+    const dataBlobBinding = companionDataFile.blobCoreKey
+      ? buildBlobBinding(companionDataFile)
+      : undefined;
 
     return createManagedDownload(
       downloadKey,
@@ -677,6 +829,8 @@ export async function downloadModelFromRegistry(
           cacheKey,
           progressCallback,
           signal,
+          mainBlobBinding,
+          dataBlobBinding,
         ),
       progressCallback,
     );
@@ -714,7 +868,8 @@ export async function downloadModelFromRegistry(
     return cachedPath;
   }
 
-  // Download from registry
+  const blobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined;
+
   return createManagedDownload(
     downloadKey,
     registryPath,
@@ -729,6 +884,7 @@ export async function downloadModelFromRegistry(
         checksum,
         progressCallback,
         signal,
+        blobBinding,
       );
 
       return modelPath;

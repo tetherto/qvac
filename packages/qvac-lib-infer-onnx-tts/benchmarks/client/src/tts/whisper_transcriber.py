@@ -47,24 +47,27 @@ class WhisperTranscriber:
         )
         logger.info("Whisper model loaded successfully")
         
-    def transcribe_samples(self, samples: np.ndarray, sample_rate: int) -> str:
+    def transcribe_samples(self, samples: np.ndarray, sample_rate: int, language: Optional[str] = None) -> str:
         """
         Transcribe audio samples
-        
+
         Args:
             samples: Audio samples as int16 numpy array
             sample_rate: Sample rate of audio
-            
+            language: Optional language code for this segment (overrides default)
+
         Returns:
             Transcribed text
         """
         if self.model is None:
             raise RuntimeError("Whisper model not loaded. Call load() first.")
-        
+
+        lang = language if language is not None else self.language
+
         # Create temporary WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
             tmp_path = Path(tmp_file.name)
-            
+
         try:
             # Write WAV file
             with wave.open(str(tmp_path), 'wb') as wav_file:
@@ -72,11 +75,11 @@ class WhisperTranscriber:
                 wav_file.setsampwidth(2)  # 16-bit
                 wav_file.setframerate(sample_rate)
                 wav_file.writeframes(samples.tobytes())
-            
+
             # Transcribe with deterministic settings
             segments, info = self.model.transcribe(
                 str(tmp_path),
-                language=self.language,
+                language=lang,
                 beam_size=1,  # Use 1 for deterministic decoding
                 temperature=self.temperature,
                 vad_filter=False,  # Don't filter silence, we want all audio

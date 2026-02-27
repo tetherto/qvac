@@ -9,6 +9,8 @@ from typing import List, Dict, Optional
 import logging
 
 PythonChatterboxRunner = None
+PythonSupertonicRunner = None
+
 
 def _get_chatterbox_runner_class():
     """Lazily import PythonChatterboxRunner"""
@@ -17,6 +19,15 @@ def _get_chatterbox_runner_class():
         from .chatterbox_runner import PythonChatterboxRunner as _PythonChatterboxRunner
         PythonChatterboxRunner = _PythonChatterboxRunner
     return PythonChatterboxRunner
+
+
+def _get_supertonic_runner_class():
+    """Lazily import PythonSupertonicRunner"""
+    global PythonSupertonicRunner
+    if PythonSupertonicRunner is None:
+        from .supertonic_runner import PythonSupertonicRunner as _PythonSupertonicRunner
+        PythonSupertonicRunner = _PythonSupertonicRunner
+    return PythonSupertonicRunner
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +45,7 @@ app = FastAPI(
 )
 
 chatterbox_runner = None
+supertonic_runner = None
 
 
 class ChatterboxConfig(BaseModel):
@@ -48,6 +60,22 @@ class ChatterboxConfig(BaseModel):
 class ChatterboxRequest(BaseModel):
     texts: List[str]
     config: ChatterboxConfig
+    includeSamples: bool = False
+
+
+class SupertonicConfig(BaseModel):
+    modelDir: Optional[str] = None
+    voiceName: str = "F1"
+    language: str = "en"
+    sampleRate: int = 44100
+    speed: float = 1.0
+    numInferenceSteps: int = 5
+    useGPU: bool = False
+
+
+class SupertonicRequest(BaseModel):
+    texts: List[str]
+    config: SupertonicConfig
     includeSamples: bool = False
 
 
@@ -72,7 +100,8 @@ async def health():
         "implementation": "python-native",
         "endpoints": {
             "/": "Health check",
-            "/synthesize-chatterbox": "POST - Run Chatterbox TTS synthesis"
+            "/synthesize-chatterbox": "POST - Run Chatterbox TTS synthesis",
+            "/synthesize-supertonic": "POST - Run Supertonic TTS synthesis"
         }
     }
 
@@ -133,3 +162,70 @@ async def synthesize_chatterbox(request: ChatterboxRequest):
     except Exception as e:
         logger.error(f"[Chatterbox] Synthesis failed: {e}", exc_info=True)
         raise HTTPException(500, f"Chatterbox synthesis failed: {str(e)}")
+
+
+@app.post("/synthesize-supertonic")
+async def synthesize_supertonic(request: SupertonicRequest):
+    """
+    Synthesize speech from text using Supertonic TTS (ONNX + Transformers).
+
+    Returns metrics including RTF for benchmarking.
+    """
+    global supertonic_runner
+
+    if not supertonic_runner:
+        try:
+            RunnerClass = _get_supertonic_runner_class()
+            supertonic_runner = RunnerClass()
+            logger.info("Supertonic runner initialized")
+        except ImportError as e:
+            logger.error(f"Failed to initialize Supertonic runner: {e}")
+            raise HTTPException(
+                500,
+                f"Supertonic dependencies not installed: {str(e)}. "
+                "Install with: pip install -r requirements-supertonic.txt",
+            )
+
+    try:
+        logger.info(f"[Supertonic] Processing {len(request.texts)} texts")
+
+        model_dir = request.config.modelDir
+        if not model_dir:
+            model_dir = os.path.join(BENCHMARKS_DIR, "shared-data", "models", "supertonic")
+        elif not os.path.isabs(model_dir):
+            model_dir = os.path.join(BENCHMARKS_DIR, model_dir)
+
+        if not supertonic_runner.is_model_loaded():
+            logger.info(f"[Supertonic] Loading model from: {model_dir}")
+            supertonic_runner.load_model(
+                model_dir=model_dir,
+                voice_name=request.config.voiceName,
+                speed=request.config.speed,
+                num_inference_steps=request.config.numInferenceSteps,
+            )
+        else:
+            logger.info("[Supertonic] Using cached model")
+
+        result = supertonic_runner.synthesize_batch(
+            texts=request.texts,
+            include_samples=request.includeSamples,
+        )
+
+        valid_outputs = [o for o in result["outputs"] if o.get("rtf", 0) > 0]
+        if valid_outputs:
+            avg_rtf = sum(o["rtf"] for o in valid_outputs) / len(valid_outputs)
+            logger.info(
+                f"[Supertonic] Completed {len(result['outputs'])} syntheses in "
+                f"{result['time']['totalGenerationMs']:.2f}ms (avg RTF: {avg_rtf:.4f})"
+            )
+        else:
+            logger.warning("[Supertonic] No valid outputs to calculate average RTF")
+
+        return result
+
+    except ImportError as e:
+        logger.error(f"[Supertonic] Import error: {e}")
+        raise HTTPException(500, f"Supertonic not installed: {str(e)}")
+    except Exception as e:
+        logger.error(f"[Supertonic] Synthesis failed: {e}", exc_info=True)
+        raise HTTPException(500, f"Supertonic synthesis failed: {str(e)}")

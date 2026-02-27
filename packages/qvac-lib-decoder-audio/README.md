@@ -255,7 +255,7 @@ Coverage reports are generated in the 'coverage/unit/' directory. Open the corre
 
 ## Resources
 
-* GitHub Repo: [tetherto/qvac-lib-decoder-audio](https://github.com/tetherto/qvac-lib-decoder-audio)
+* GitHub Repo: [tetherto/qvac](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-decoder-audio)
 
 ## License
 

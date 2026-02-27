@@ -357,8 +357,14 @@ async function ensureWhisperModel (targetPath = null) {
 /**
  * Download Chatterbox ONNX models from HuggingFace
  * Models are downloaded from: https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
+ *
+ * English (turbo) repo has all variants for every model.
+ * Multilingual repo only has variants for language_model; the other three
+ * models (speech_encoder, embed_tokens, conditional_decoder) are fp32-only.
+ *
  * @param {Object} options - Download options
- * @param {string} [options.variant='fp32'] - Model variant: 'fp32', 'fp16', 'q4', 'quantized'
+ * @param {string} [options.variant='fp32'] - Model variant: 'fp32', 'fp16', 'q4', 'q4f16', 'quantized'
+ * @param {string} [options.language='en'] - Language: 'en' or 'multilingual'
  * @param {string} [options.targetDir] - Target directory for models
  * @returns {Promise<Object>} Download result with success status and paths
  */
@@ -367,55 +373,58 @@ async function ensureChatterboxModels (options = {}) {
   const language = options.language || 'en'
   const targetDir = options.targetDir || path.join(getBaseDir(), 'models', language === 'en' ? 'chatterbox' : 'chatterbox-multilingual')
 
-  console.log(`\nEnsuring Chatterbox models (variant: ${variant})...`)
+  console.log(`\nEnsuring Chatterbox models (variant: ${variant}, language: ${language})...`)
 
-  // Ensure target directory exists
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true })
   }
 
-  const repositoryName = language === 'en' ? 'ResembleAI/chatterbox-turbo-ONNX' : 'onnx-community/chatterbox-multilingual-ONNX'
+  const isMultilingual = language !== 'en'
+  const repositoryName = isMultilingual ? 'onnx-community/chatterbox-multilingual-ONNX' : 'ResembleAI/chatterbox-turbo-ONNX'
   const baseUrl = `https://huggingface.co/${repositoryName}/resolve/main/onnx`
 
-  // Define file suffixes based on variant
   const suffix = variant === 'fp32' ? '' : `_${variant}`
+  const lmSuffix = suffix
+  const nonLmSuffix = isMultilingual ? '' : suffix
 
-  // Files to download (each model has .onnx and .onnx_data files)
   const modelFilesEng = [
-    { name: `speech_encoder${suffix}.onnx`, minSize: 1000 },
-    { name: `speech_encoder${suffix}.onnx_data`, minSize: 950000000 }, // ~1GB for fp32 (offset ~982MB in .onnx)
-    { name: `embed_tokens${suffix}.onnx`, minSize: 1000 },
-    { name: `embed_tokens${suffix}.onnx_data`, minSize: 10000000 }, // ~233MB for fp32
-    { name: `conditional_decoder${suffix}.onnx`, minSize: 1000 },
-    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 100000000 }, // ~769MB for fp32
-    { name: `language_model${suffix}.onnx`, minSize: 100000 },
-    { name: `language_model${suffix}.onnx_data`, minSize: 100000000 } // ~1.27GB for fp32
+    { name: `speech_encoder${nonLmSuffix}.onnx`, minSize: 1000 },
+    { name: `speech_encoder${nonLmSuffix}.onnx_data`, minSize: 950000000 },
+    { name: `embed_tokens${nonLmSuffix}.onnx`, minSize: 1000 },
+    { name: `embed_tokens${nonLmSuffix}.onnx_data`, minSize: 10000000 },
+    { name: `conditional_decoder${nonLmSuffix}.onnx`, minSize: 1000 },
+    { name: `conditional_decoder${nonLmSuffix}.onnx_data`, minSize: 100000000 },
+    { name: `language_model${lmSuffix}.onnx`, minSize: 100000 },
+    { name: `language_model${lmSuffix}.onnx_data`, minSize: 100000000 }
   ]
 
   const modelFilesMultilingual = [
-    { name: `speech_encoder${suffix}.onnx`, minSize: 1000000 }, // ~1.1MB for fp32
-    { name: `speech_encoder${suffix}.onnx_data`, minSize: 500000000 }, // ~564MB for fp32
-    { name: `embed_tokens${suffix}.onnx`, minSize: 10000 }, // ~13KB for fp32
-    { name: `embed_tokens${suffix}.onnx_data`, minSize: 50000000 }, // ~65MB for fp32
-    { name: `conditional_decoder${suffix}.onnx`, minSize: 5000000 }, // ~6MB for fp32
-    { name: `conditional_decoder${suffix}.onnx_data`, minSize: 400000000 }, // ~509MB for fp32
-    { name: `language_model${suffix}.onnx`, minSize: 150000 }, // ~167KB for fp32
-    { name: `language_model${suffix}.onnx_data`, minSize: 1500000000 } // ~1.94GB for fp32
+    { name: 'speech_encoder.onnx', minSize: 1000000 },
+    { name: 'speech_encoder.onnx_data', minSize: 500000000 },
+    { name: 'embed_tokens.onnx', minSize: 10000 },
+    { name: 'embed_tokens.onnx_data', minSize: 50000000 },
+    { name: 'conditional_decoder.onnx', minSize: 5000000 },
+    { name: 'conditional_decoder.onnx_data', minSize: 400000000 },
+    { name: `language_model${lmSuffix}.onnx`, minSize: 150000 },
+    { name: `language_model${lmSuffix}.onnx_data`, minSize: 1500000000 }
   ]
 
-  const modelFiles = language === 'en' ? modelFilesEng : modelFilesMultilingual
+  const modelFiles = isMultilingual ? modelFilesMultilingual : modelFilesEng
 
-  // Adjust minimum sizes for smaller variants
   if (variant === 'fp16') {
-    modelFiles[1].minSize = 50000000 // ~522MB
-    modelFiles[3].minSize = 5000000 // ~116MB
-    modelFiles[5].minSize = 50000000 // ~384MB
-    modelFiles[7].minSize = 50000000 // ~635MB
-  } else if (variant === 'q4' || variant === 'quantized') {
-    modelFiles[1].minSize = 20000000
-    modelFiles[3].minSize = 2000000
-    modelFiles[5].minSize = 20000000
-    modelFiles[7].minSize = 20000000
+    if (!isMultilingual) {
+      modelFiles[1].minSize = 50000000
+      modelFiles[3].minSize = 5000000
+      modelFiles[5].minSize = 50000000
+    }
+    modelFiles[7].minSize = isMultilingual ? 750000000 : 50000000
+  } else if (variant === 'q4' || variant === 'quantized' || variant === 'q4f16') {
+    if (!isMultilingual) {
+      modelFiles[1].minSize = 20000000
+      modelFiles[3].minSize = 2000000
+      modelFiles[5].minSize = 20000000
+    }
+    modelFiles[7].minSize = isMultilingual ? 400000000 : 20000000
   }
 
   const results = {}
@@ -423,18 +432,15 @@ async function ensureChatterboxModels (options = {}) {
 
   for (const file of modelFiles) {
     const url = `${baseUrl}/${file.name}`
-    // Save with standard names (without variant suffix) for easier usage
-    const targetName = file.name.replace(suffix, '')
-    const targetPath = path.join(targetDir, targetName)
+    const targetPath = path.join(targetDir, file.name)
 
     console.log(`\n Downloading ${file.name}...`)
 
-    // Check if file already exists with sufficient size
     if (fs.existsSync(targetPath)) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= file.minSize) {
-        console.log(` ✓ Using cached: ${targetName} (${stats.size} bytes)`)
-        results[targetName] = { success: true, path: targetPath, cached: true }
+        console.log(` ✓ Using cached: ${file.name} (${stats.size} bytes)`)
+        results[file.name] = { success: true, path: targetPath, cached: true }
         continue
       } else {
         console.log(` Cached file too small (${stats.size} bytes), re-downloading...`)
@@ -442,7 +448,6 @@ async function ensureChatterboxModels (options = {}) {
       }
     }
 
-    // Download the file
     let downloadSuccess = false
 
     if (isMobile) {
@@ -459,7 +464,7 @@ async function ensureChatterboxModels (options = {}) {
           '-L', '-o', targetPath, url,
           '--fail', '--show-error',
           '--connect-timeout', '30',
-          '--max-time', '1800' // 30 minutes for large files
+          '--max-time', '1800'
         ], { stdio: ['inherit', 'inherit', 'pipe'] })
         downloadSuccess = downloadResult.status === 0 && fs.existsSync(targetPath)
         if (!downloadSuccess) {
@@ -473,16 +478,16 @@ async function ensureChatterboxModels (options = {}) {
     if (downloadSuccess) {
       const stats = fs.statSync(targetPath)
       if (stats.size >= file.minSize) {
-        console.log(` ✓ Downloaded: ${targetName} (${stats.size} bytes)`)
-        results[targetName] = { success: true, path: targetPath, cached: false }
+        console.log(` ✓ Downloaded: ${file.name} (${stats.size} bytes)`)
+        results[file.name] = { success: true, path: targetPath, cached: false }
       } else {
         console.log(` Downloaded file too small: ${stats.size} bytes (expected >${file.minSize})`)
         fs.unlinkSync(targetPath)
-        results[targetName] = { success: false, path: targetPath }
+        results[file.name] = { success: false, path: targetPath }
         allSuccess = false
       }
     } else {
-      results[targetName] = { success: false, path: targetPath }
+      results[file.name] = { success: false, path: targetPath }
       allSuccess = false
     }
   }
@@ -538,7 +543,6 @@ async function ensureChatterboxModels (options = {}) {
     }
   }
 
-  // Summary
   console.log('\n' + '='.repeat(50))
   console.log('CHATTERBOX MODEL DOWNLOAD SUMMARY')
   console.log('='.repeat(50))

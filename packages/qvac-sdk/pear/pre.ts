@@ -114,7 +114,7 @@ function detectJsonNewline(raw: string): "\n" | "\r\n" {
 
 function ensureObjectProp(
   obj: Record<string, unknown>,
-  prop: string
+  prop: string,
 ): Record<string, unknown> {
   const existing = obj[prop];
   if (existing === undefined) {
@@ -150,8 +150,8 @@ function normalizePearWorkerPath(value: unknown): string {
   if (/^[A-Za-z]:\//.test(p)) {
     throw new Error(
       `"pearWorker" must be a path inside the app root (got absolute path: ${JSON.stringify(
-        value
-      )})`
+        value,
+      )})`,
     );
   }
   if (p.startsWith("./")) p = p.slice(2);
@@ -161,8 +161,8 @@ function normalizePearWorkerPath(value: unknown): string {
   if (p === "." || p === ".." || p.startsWith("../") || p.includes("/../")) {
     throw new Error(
       `"pearWorker" must be a path inside the app root (got: ${JSON.stringify(
-        value
-      )})`
+        value,
+      )})`,
     );
   }
   return p;
@@ -171,7 +171,10 @@ function normalizePearWorkerPath(value: unknown): string {
 /**
  * Converts an absolute path to a relative ESM import specifier, using POSIX separators.
  */
-function toRelativeImportSpecifier(fromDir: string, targetPath: string): string {
+function toRelativeImportSpecifier(
+  fromDir: string,
+  targetPath: string,
+): string {
   let rel = path.relative(fromDir, targetPath);
   rel = toPosixPath(rel);
   if (!rel.startsWith(".")) rel = `./${rel}`;
@@ -195,7 +198,7 @@ function uniqStrings(values: unknown): string[] {
 /** Ensure array contains required values, returning new array and change flag */
 function ensureArrayIncludes(
   existing: string[],
-  required: string[]
+  required: string[],
 ): { next: string[]; changed: boolean } {
   const next = [...existing];
   const set = new Set(existing);
@@ -218,7 +221,7 @@ function ensureArrayIncludes(
  */
 function persistStageEntrypointsToPackageJson(
   appRoot: string,
-  requiredEntrypoints: string[]
+  requiredEntrypoints: string[],
 ): void {
   const packageJsonPath = path.join(appRoot, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
@@ -271,7 +274,7 @@ function getAppRoot(): string {
   }
   if (url.protocol !== "file:") {
     throw new Error(
-      `Expected Pear.config.applink to be a file:// URL (got: ${applink})`
+      `Expected Pear.config.applink to be a file:// URL (got: ${applink})`,
     );
   }
   pathname = url.pathname;
@@ -323,7 +326,7 @@ async function loadConfig(configPath: string): Promise<QvacConfig> {
 
   if (ext === ".ts") {
     throw new Error(
-      "TypeScript config not supported in Pear pre-hook. Use qvac.config.json or qvac.config.mjs."
+      "TypeScript config not supported in Pear pre-hook. Use qvac.config.json or qvac.config.mjs.",
     );
   }
 
@@ -332,7 +335,7 @@ async function loadConfig(configPath: string): Promise<QvacConfig> {
 
 /** Discover and load qvac config, returning null if not found */
 async function discoverConfig(
-  appRoot: string
+  appRoot: string,
 ): Promise<{ config: QvacConfig | null; configFile: string | null }> {
   const configPath = findConfigFile(appRoot);
 
@@ -353,7 +356,7 @@ function resolvePlugins(config: QvacConfig | null): string[] {
 
 /** Parse SDK builtin plugin specifier to extract export info */
 function parseBuiltinSpecifier(
-  specifier: string
+  specifier: string,
 ): { suffix: string; exportName: string } | null {
   const prefix = `${SDK_NAME}/`;
   const pluginSuffix = "/plugin";
@@ -370,7 +373,10 @@ function parseBuiltinSpecifier(
 }
 
 /** Generate the Pear worker entry file content */
-function generatePearWorkerEntry(plugins: string[], appWorkerPath: string): string {
+function generatePearWorkerEntry(
+  plugins: string[],
+  appWorkerPath: string,
+): string {
   const imports: string[] = [];
   const registrations: string[] = [];
   let varIndex = 0;
@@ -379,7 +385,7 @@ function generatePearWorkerEntry(plugins: string[], appWorkerPath: string): stri
     const builtin = parseBuiltinSpecifier(specifier);
     if (builtin) {
       imports.push(
-        `import { ${builtin.exportName} } from "${SDK_NAME}/${builtin.suffix}/plugin";`
+        `import { ${builtin.exportName} } from "${SDK_NAME}/${builtin.suffix}/plugin";`,
       );
       registrations.push(`registerPlugin(${builtin.exportName});`);
     } else {

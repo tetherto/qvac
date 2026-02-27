@@ -370,6 +370,7 @@ jobs:
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
           AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating IndicTrans model URLs for mobile tests..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

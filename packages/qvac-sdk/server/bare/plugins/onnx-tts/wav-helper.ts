@@ -12,11 +12,7 @@ export function readWavAsFloat32(wavPath: string): ReadWavResult {
   const buf = fs.readFileSync(wavPath) as Buffer;
   if (buf.length < 44) throw new Error("WAV file too small");
 
-  const view = new DataView(
-    buf.buffer,
-    buf.byteOffset,
-    buf.byteLength,
-  );
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
 
   const riff = String.fromCharCode(buf[0]!, buf[1]!, buf[2]!, buf[3]!);
   const wave = String.fromCharCode(buf[8]!, buf[9]!, buf[10]!, buf[11]!);
@@ -37,7 +33,8 @@ export function readWavAsFloat32(wavPath: string): ReadWavResult {
     const chunkSize = view.getUint32(offset + 4, true);
 
     if (chunkId === "fmt ") fmtChunk = { offset: offset + 8, size: chunkSize };
-    else if (chunkId === "data") dataChunk = { offset: offset + 8, size: chunkSize };
+    else if (chunkId === "data")
+      dataChunk = { offset: offset + 8, size: chunkSize };
 
     offset += 8 + chunkSize;
     if (chunkSize % 2 === 1 && offset < buf.length) offset += 1;
@@ -73,9 +70,7 @@ export function readWavAsFloat32(wavPath: string): ReadWavResult {
       numChannels === 1 ? numSamples : Math.floor(numSamples / numChannels);
     samples = new Float32Array(numFrames);
     for (let i = 0; i < numFrames; i++) {
-      const idx =
-        dataOff +
-        (numChannels === 1 ? i * 2 : i * numChannels * 2);
+      const idx = dataOff + (numChannels === 1 ? i * 2 : i * numChannels * 2);
       if (idx + 2 > buf.length) break;
       const s = view.getInt16(idx, true);
       samples[i] = s / 32768;
@@ -87,9 +82,7 @@ export function readWavAsFloat32(wavPath: string): ReadWavResult {
       numChannels === 1 ? numSamples : Math.floor(numSamples / numChannels);
     samples = new Float32Array(numFrames);
     for (let i = 0; i < numFrames; i++) {
-      const idx =
-        dataOff +
-        (numChannels === 1 ? i * 4 : i * numChannels * 4);
+      const idx = dataOff + (numChannels === 1 ? i * 4 : i * numChannels * 4);
       if (idx + 4 > buf.length) break;
       samples[i] = view.getFloat32(idx, true);
     }

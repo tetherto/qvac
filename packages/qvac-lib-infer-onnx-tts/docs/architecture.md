@@ -524,7 +524,7 @@ Use ONNX Runtime as the inference backend with platform-specific execution provi
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac/blob/main/packages/qvac-lib-inference-addon-cpp/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
