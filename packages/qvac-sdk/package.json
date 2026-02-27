@@ -121,7 +121,7 @@
     "@qvac/ocr-onnx": "^0.1.5",
     "@qvac/rag": "^0.4.2",
     "@qvac/transcription-whispercpp": "^0.3.17",
-    "@qvac/translation-nmtcpp": "^0.3.6",
+    "@qvac/translation-nmtcpp": "^0.3.9",
     "@qvac/tts-onnx": "^0.5.4",
     "@qvac/registry-client": "^0.2.0",
     "fast-safe-stringify": "2.1.1",
