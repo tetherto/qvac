@@ -95,6 +95,22 @@ const PYTHON_DEP_PATHS = {
 }
 
 // ---------------------------------------------------------------------------
+// Compiler/runtime libraries detected from vcpkg triplet flags.
+// Key: regex pattern matched against VCPKG_CXX_FLAGS in triplet files.
+// Value: attribution entry added to the C++ deps section.
+// ---------------------------------------------------------------------------
+const TRIPLET_COMPILER_LIBS = [
+  {
+    pattern: /-stdlib=libc\+\+/,
+    entry: {
+      name: 'libc++ (LLVM C++ Standard Library)',
+      license: 'Apache-2.0 WITH LLVM-exception',
+      url: 'https://github.com/llvm/llvm-project'
+    }
+  }
+]
+
+// ---------------------------------------------------------------------------
 // Packages to skip entirely
 // ---------------------------------------------------------------------------
 const SKIP_PACKAGES = new Set(['docs'])
@@ -242,6 +258,7 @@ module.exports = {
   PACKAGE_ENGINES,
   FULL_MODEL_LIST_PACKAGES,
   SKIP_VCPKG_PORTS,
+  TRIPLET_COMPILER_LIBS,
   PYTHON_DEP_PATHS,
   SKIP_PACKAGES,
   NO_JS_PACKAGES,

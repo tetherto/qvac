@@ -454,68 +454,10 @@ jobs:
         if: always()
         shell: bash
         working-directory: ${{ inputs.workdir }}
-        env:
-          GGUF_MODEL: ${{ inputs.gguf_model }}
-          NUM_SAMPLES: ${{ inputs.num_samples }}
-          DATASETS: ${{ inputs.datasets }}
-          DEVICE: ${{ inputs.device }}
-          TEMPERATURE: ${{ inputs.temperature }}
-          CTX_SIZE: ${{ inputs.ctx_size }}
-          GPU_LAYERS: ${{ inputs.gpu_layers }}
-          TOP_P: ${{ inputs.top_p }}
-          TOP_K: ${{ inputs.top_k }}
-          N_PREDICT: ${{ inputs.n_predict }}
-          REPEAT_PENALTY: ${{ inputs.repeat_penalty }}
-          SEED: ${{ inputs.seed }}
-          ADDON_VERSION: ${{ inputs.addon_version }}
-          COMPARE: ${{ inputs.compare_with_transformers }}
-          TRANSFORMERS_MODEL: ${{ inputs.transformers_model }}
-          VERBOSE: ${{ inputs.verbose }}
         run: |
-          echo "=== Benchmark Results Summary ===" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Model:** \`$GGUF_MODEL\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Samples:** $NUM_SAMPLES" >> $GITHUB_STEP_SUMMARY
-          echo "**Datasets:** $DATASETS" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Temperature | $TEMPERATURE |" >> $GITHUB_STEP_SUMMARY
-          echo "| Context Size | $CTX_SIZE |" >> $GITHUB_STEP_SUMMARY
-          echo "| GPU Layers | $GPU_LAYERS |" >> $GITHUB_STEP_SUMMARY
-          echo "| Top-P | $TOP_P |" >> $GITHUB_STEP_SUMMARY
-          echo "| Top-K | $TOP_K |" >> $GITHUB_STEP_SUMMARY
-          echo "| N-Predict | $N_PREDICT |" >> $GITHUB_STEP_SUMMARY
-          echo "| Repeat Penalty | $REPEAT_PENALTY |" >> $GITHUB_STEP_SUMMARY
-          echo "| Seed | $SEED |" >> $GITHUB_STEP_SUMMARY
-          echo "| Device | $DEVICE |" >> $GITHUB_STEP_SUMMARY
-          echo "| Verbose Logging | $VERBOSE |" >> $GITHUB_STEP_SUMMARY
-          if [[ -n "$ADDON_VERSION" ]]; then
-            echo "| Addon Version | @qvac/llm-llamacpp@$ADDON_VERSION |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Addon Version | Built from source |" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "$COMPARE" == "true" ]]; then
-            echo "### Comparison Mode" >> $GITHUB_STEP_SUMMARY
-            echo "Compared against: \`$TRANSFORMERS_MODEL\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ -d "benchmarks/results" ]; then
-            echo "### Results Files" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No result files found" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
-            if [[ -n "$LATEST_MD" ]]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Latest Result" >> $GITHUB_STEP_SUMMARY
-              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
-            fi
+          LATEST_MD=$(ls -t benchmarks/results/*.md 2>/dev/null | head -n 1 || true)
+          if [[ -n "${LATEST_MD:-}" ]]; then
+            cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload benchmark results
