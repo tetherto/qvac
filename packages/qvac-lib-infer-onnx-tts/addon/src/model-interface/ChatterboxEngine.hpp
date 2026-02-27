@@ -23,6 +23,40 @@ public:
 private:
   std::vector<int64_t> tokenize(const std::string &text);
 
+  void sanitizeTokenIds(std::vector<int64_t> &inputIds);
+  TensorData<int64_t> buildInitialPositionIds(const std::vector<int64_t> &inputIds);
+
+  TensorData<float> extractEmbeddings(const std::vector<int64_t> &inputIds,
+                                       const std::vector<int64_t> &positionIds);
+
+  void processSpeechEncoderOutputs(TensorData<float> &inputsEmbs,
+                                    TensorData<int64_t> &promptToken,
+                                    TensorData<float> &speakerEmbeddings,
+                                    TensorData<float> &speakerFeatures,
+                                    TensorData<int64_t> &positionIds,
+                                    TensorData<int64_t> &attentionMask,
+                                    std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  int64_t selectNextToken(const OrtTensor &logitsTensor,
+                           std::vector<int64_t> &generatedTokens);
+
+  void advancePositionIds(TensorData<int64_t> &positionIds, size_t iteration);
+  void cachePastKeyValues(std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
+
+  std::vector<int64_t> generateSpeechTokens(std::vector<int64_t> &inputIds,
+                                             TensorData<int64_t> &positionIds,
+                                             TensorData<float> &speakerEmbeddings,
+                                             TensorData<float> &speakerFeatures);
+
+  std::vector<int64_t> assembleSpeechTokenSequence(const TensorData<int64_t> &promptToken,
+                                                    const std::vector<int64_t> &generatedTokens);
+
+  std::vector<float> synthesizeWaveform(const std::vector<int64_t> &speechTokens,
+                                         const TensorData<float> &speakerEmbeddings,
+                                         const TensorData<float> &speakerFeatures);
+
+  AudioResult convertToAudioResult(const std::vector<float> &wav);
+
   void runEmbedTokensInfer(const std::vector<int64_t> &inputIds, const std::vector<int64_t> &positionIds);
   void runSpeechEncoderInfer();
   void runLanguageModelInfer(

@@ -2,6 +2,8 @@
 #include "FileUtils.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <numeric>
@@ -74,11 +76,114 @@ int64_t getNumElements(const qvac::ttslib::chatterbox::OrtTensor &tensor) {
   return numElements;
 }
 
-template <typename T>
-void copyFromTensor(const qvac::ttslib::chatterbox::OrtTensor &tensor,
-                    T *dest) {
-  std::memcpy(dest, static_cast<T *>(tensor.data),
-              getNumElements(tensor) * sizeof(T));
+float fp16ToFp32(uint16_t h) {
+  uint32_t sign = (h & 0x8000u) << 16u;
+  uint32_t exponent = (h >> 10u) & 0x1Fu;
+  uint32_t mantissa = h & 0x03FFu;
+
+  if (exponent == 0) {
+    if (mantissa == 0) {
+      float f;
+      std::memcpy(&f, &sign, sizeof(f));
+      return f;
+    }
+    exponent = 1;
+    while (!(mantissa & 0x0400u)) {
+      mantissa <<= 1u;
+      exponent--;
+    }
+    mantissa &= 0x03FFu;
+    exponent = exponent + (127 - 15);
+    uint32_t result = sign | (exponent << 23u) | (mantissa << 13u);
+    float f;
+    std::memcpy(&f, &result, sizeof(f));
+    return f;
+  }
+
+  if (exponent == 31) {
+    uint32_t result = sign | 0x7F800000u | (mantissa << 13u);
+    float f;
+    std::memcpy(&f, &result, sizeof(f));
+    return f;
+  }
+
+  exponent = exponent + (127 - 15);
+  uint32_t result = sign | (exponent << 23u) | (mantissa << 13u);
+  float f;
+  std::memcpy(&f, &result, sizeof(f));
+  return f;
+}
+
+uint16_t fp32ToFp16(float f) {
+  uint32_t x;
+  std::memcpy(&x, &f, sizeof(x));
+
+  uint16_t sign = (x >> 16u) & 0x8000u;
+  int32_t exponent = static_cast<int32_t>((x >> 23u) & 0xFFu) - 127 + 15;
+  uint32_t mantissa = x & 0x007FFFFFu;
+
+  if (exponent <= 0) {
+    if (exponent < -10) return sign;
+    mantissa = (mantissa | 0x00800000u) >> (1 - exponent);
+    return sign | static_cast<uint16_t>(mantissa >> 13u);
+  }
+
+  if (exponent == 0xFF - (127 - 15)) {
+    if (mantissa == 0) return sign | 0x7C00u;
+    return sign | 0x7C00u | static_cast<uint16_t>(mantissa >> 13u);
+  }
+
+  if (exponent > 30) return sign | 0x7C00u;
+  return sign | static_cast<uint16_t>(exponent << 10u) | static_cast<uint16_t>(mantissa >> 13u);
+}
+
+bool isFp16(const qvac::ttslib::chatterbox::OrtTensor &tensor) {
+  return tensor.type == qvac::ttslib::chatterbox::OrtElementType::Fp16;
+}
+
+void readTensorToFloatVector(
+    const qvac::ttslib::chatterbox::OrtTensor &tensor,
+    std::vector<float> &dest,
+    typename std::vector<float>::iterator destStart) {
+  const int64_t numElements = getNumElements(tensor);
+  if (isFp16(tensor)) {
+    const auto *src = static_cast<const uint16_t *>(tensor.data);
+    std::vector<float> converted(numElements);
+    for (int64_t i = 0; i < numElements; i++) {
+      converted[i] = fp16ToFp32(src[i]);
+    }
+    dest.insert(destStart, converted.begin(), converted.end());
+  } else {
+    const auto *src = static_cast<const float *>(tensor.data);
+    dest.insert(destStart, src, src + numElements);
+  }
+}
+
+void readTensorToFloatBuffer(
+    const qvac::ttslib::chatterbox::OrtTensor &tensor,
+    float *dest, int64_t offset, int64_t count) {
+  if (isFp16(tensor)) {
+    const auto *src = static_cast<const uint16_t *>(tensor.data) + offset;
+    for (int64_t i = 0; i < count; i++) {
+      dest[i] = fp16ToFp32(src[i]);
+    }
+  } else {
+    const auto *src = static_cast<const float *>(tensor.data) + offset;
+    std::memcpy(dest, src, count * sizeof(float));
+  }
+}
+
+void writeFloatDataToTensor(
+    const qvac::ttslib::chatterbox::OrtTensor &tensor,
+    const float *src, size_t numElements) {
+  if (isFp16(tensor)) {
+    auto *dest = static_cast<uint16_t *>(tensor.data);
+    for (size_t i = 0; i < numElements; i++) {
+      dest[i] = fp32ToFp16(src[i]);
+    }
+  } else {
+    std::memcpy(tensor.data, src, numElements * sizeof(float));
+  }
 }
 
 template <typename T>
@@ -162,106 +267,144 @@ void ChatterboxEngine::unload() {
 
 bool ChatterboxEngine::isLoaded() const { return loaded_; }
 
-AudioResult ChatterboxEngine::synthesize(const std::string &text) {
-  std::vector<int64_t> inputIdsOriginal = tokenize(text);
-  std::vector<int64_t> inputIds = inputIdsOriginal;
+void ChatterboxEngine::sanitizeTokenIds(std::vector<int64_t> &inputIds) {
+  std::replace_if(inputIds.begin(), inputIds.end(),
+    [](int64_t id) {
+      return id > UNSUPPORTED_TOKEN_RANGE.first && id <= UNSUPPORTED_TOKEN_RANGE.second;
+    },
+    UNKNOWN_TOKEN_ID);
+}
 
-  TensorData<int64_t> promptToken;
-  TensorData<float> speakerEmbeddings;
-  TensorData<float> speakerFeatures;
-
+TensorData<int64_t> ChatterboxEngine::buildInitialPositionIds(const std::vector<int64_t> &inputIds) {
   TensorData<int64_t> positionIds;
-  TensorData<int64_t> attentionMask;
-  std::unordered_map<std::string, TensorData<float>> pastKeyValues;
+  positionIds.data.reserve(inputIds.size());
+  for (int i = 0; i < static_cast<int>(inputIds.size()); i++) {
+    positionIds.data.push_back(inputIds[i] >= START_SPEECH_TOKEN ? 0 : i - 1);
+  }
+  positionIds.shape = {1, static_cast<int64_t>(positionIds.data.size())};
+  return positionIds;
+}
 
-  if (!isEnglish_) {
-    // Replace out-of-range token IDs with [UH] token
-    for (int64_t& id : inputIds) {
-      if (id > UNSUPPORTED_TOKEN_RANGE.first && id <= UNSUPPORTED_TOKEN_RANGE.second) {
-        id = UNKNOWN_TOKEN_ID;
-      }
-    }
+TensorData<float> ChatterboxEngine::extractEmbeddings(
+    const std::vector<int64_t> &inputIds,
+    const std::vector<int64_t> &positionIds) {
+  runEmbedTokensInfer(inputIds, positionIds);
+  OrtTensor tensor = embedTokensSession_->getOutput("inputs_embeds");
+  TensorData<float> embeddings;
+  embeddings.shape = tensor.shape;
+  readTensorToFloatVector(tensor, embeddings.data, embeddings.data.begin());
+  return embeddings;
+}
 
-    positionIds.data.reserve(inputIds.size());
-    for (int i = 0; i < static_cast<int>(inputIds.size()); i++) {
-      if (inputIds[i] >= START_SPEECH_TOKEN) {
-        positionIds.data.push_back(0);
-      } else {
-        positionIds.data.push_back(i - 1);
-      }
-    }
-    positionIds.shape = {1, static_cast<int64_t>(positionIds.data.size())};
+void ChatterboxEngine::processSpeechEncoderOutputs(
+    TensorData<float> &inputsEmbs,
+    TensorData<int64_t> &promptToken,
+    TensorData<float> &speakerEmbeddings,
+    TensorData<float> &speakerFeatures,
+    TensorData<int64_t> &positionIds,
+    TensorData<int64_t> &attentionMask,
+    std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
+
+  std::cout << "SpeechEncoderInfer stared ... " << std::endl;
+  runSpeechEncoderInfer();
+  std::cout << "SpeechEncoderInfer finished" << std::endl;
+
+  OrtTensor condEmbTensor = speechEncoderSession_->getOutput("audio_features");
+  OrtTensor promptTokenTensor = speechEncoderSession_->getOutput("audio_tokens");
+  OrtTensor speakerEmbeddingsTensor = speechEncoderSession_->getOutput("speaker_embeddings");
+  OrtTensor speakerFeaturesTensor = speechEncoderSession_->getOutput("speaker_features");
+
+  insertFromOrtTensorToVector(promptTokenTensor, promptToken.data, promptToken.data.begin());
+  readTensorToFloatVector(speakerEmbeddingsTensor, speakerEmbeddings.data, speakerEmbeddings.data.begin());
+  readTensorToFloatVector(speakerFeaturesTensor, speakerFeatures.data, speakerFeatures.data.begin());
+  readTensorToFloatVector(condEmbTensor, inputsEmbs.data, inputsEmbs.data.begin());
+
+  promptToken.shape = promptTokenTensor.shape;
+  speakerEmbeddings.shape = speakerEmbeddingsTensor.shape;
+  speakerFeatures.shape = speakerFeaturesTensor.shape;
+  inputsEmbs.shape[1] += condEmbTensor.shape[1];
+
+  releaseSession(speechEncoderSession_);
+
+  const int64_t seqLen = inputsEmbs.shape[1];
+  attentionMask.data.resize(seqLen, 1);
+  attentionMask.shape = {1, seqLen};
+
+  if (isEnglish_) {
+    positionIds.data.resize(seqLen);
+    positionIds.shape = {1, seqLen};
+    std::iota(positionIds.data.begin(), positionIds.data.end(), 0);
   }
 
-  ensureSession(embedTokensSession_, config_.embedTokensPath);
-  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
-  ensureSession(languageModelSession_, config_.languageModelPath);
+  for (size_t i = keyValueOffset_; i < languageModelSession_->getInputNames().size(); i++) {
+    TensorData<float> pastKeyValue;
+    pastKeyValue.shape = {1, NUM_KV_HEADS, 0, HEAD_DIM};
+    pastKeyValues[languageModelSession_->getInputNames()[i]] = pastKeyValue;
+  }
+}
 
+int64_t ChatterboxEngine::selectNextToken(
+    const OrtTensor &logitsTensor,
+    std::vector<int64_t> &generatedTokens) {
+  std::vector<float> logits;
+  logits.resize(logitsTensor.shape[2]);
+  const int64_t logitsOffset = (logitsTensor.shape[1] - 1) * logitsTensor.shape[2];
+  readTensorToFloatBuffer(logitsTensor, logits.data(), logitsOffset, logitsTensor.shape[2]);
+
+  penalizeRepetitionLogits(logits, generatedTokens);
+  return static_cast<int64_t>(argmax(logits));
+}
+
+void ChatterboxEngine::advancePositionIds(TensorData<int64_t> &positionIds, size_t iteration) {
+  if (isEnglish_) {
+    positionIds.data = {positionIds.data.back() + 1};
+    positionIds.shape[1] = 1;
+  } else {
+    positionIds.data = {static_cast<int64_t>(iteration + 1)};
+    positionIds.shape = {1, 1};
+  }
+}
+
+void ChatterboxEngine::cachePastKeyValues(
+    std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
+  for (size_t i = keyValueOffset_; i < languageModelSession_->getInputNames().size(); i++) {
+    const std::string inputName = languageModelSession_->getInputNames()[i];
+    const std::string outputName = languageModelSession_->getOutputNames()[i - keyValueOffset_ + 1];
+    OrtTensor outputTensor = languageModelSession_->getOutput(outputName);
+
+    const int64_t numElements = getNumElements(outputTensor);
+    pastKeyValues[inputName].shape = outputTensor.shape;
+    pastKeyValues[inputName].data.resize(numElements);
+
+    readTensorToFloatBuffer(outputTensor, pastKeyValues[inputName].data.data(), 0, numElements);
+  }
+}
+
+std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
+    std::vector<int64_t> &inputIds,
+    TensorData<int64_t> &positionIds,
+    TensorData<float> &speakerEmbeddings,
+    TensorData<float> &speakerFeatures) {
+
+  TensorData<int64_t> promptToken;
+  TensorData<int64_t> attentionMask;
+  std::unordered_map<std::string, TensorData<float>> pastKeyValues;
   std::vector<int64_t> generatedTokens{START_SPEECH_TOKEN};
 
-  std::cout << "Sampling ... " << text << std::endl;
   const size_t maxNewTokens = isEnglish_ ? MAX_NEW_TOKENS_ENGLISH : MAX_NEW_TOKENS_MULTILINGUAL;
 
   for (size_t i = 0; i < maxNewTokens; i++) {
-    runEmbedTokensInfer(inputIds, positionIds.data);
-
-    OrtTensor inputsEmbsTensor = embedTokensSession_->getOutput("inputs_embeds");
-    TensorData<float> inputsEmbs;
-    inputsEmbs.shape = inputsEmbsTensor.shape;
-    insertFromOrtTensorToVector(inputsEmbsTensor, inputsEmbs.data, inputsEmbs.data.begin());
+    TensorData<float> inputsEmbs = extractEmbeddings(inputIds, positionIds.data);
 
     if (i == 0) {
-      std::cout << "SpeechEncoderInfer stared ... " << std::endl;
-      runSpeechEncoderInfer();
-      std::cout << "SpeechEncoderInfer finished" << std::endl;
-
-      OrtTensor condEmbTensor = speechEncoderSession_->getOutput("audio_features");
-      OrtTensor promptTokenTensor = speechEncoderSession_->getOutput("audio_tokens");
-      OrtTensor speakerEmbeddingsTensor = speechEncoderSession_->getOutput("speaker_embeddings");
-      OrtTensor speakerFeaturesTensor = speechEncoderSession_->getOutput("speaker_features");
-
-      insertFromOrtTensorToVector(promptTokenTensor, promptToken.data, promptToken.data.begin());
-      insertFromOrtTensorToVector(speakerEmbeddingsTensor, speakerEmbeddings.data, speakerEmbeddings.data.begin());
-      insertFromOrtTensorToVector(speakerFeaturesTensor, speakerFeatures.data, speakerFeatures.data.begin());
-      insertFromOrtTensorToVector(condEmbTensor, inputsEmbs.data, inputsEmbs.data.begin());
-
-      promptToken.shape = promptTokenTensor.shape;
-      speakerEmbeddings.shape = speakerEmbeddingsTensor.shape;
-      speakerFeatures.shape = speakerFeaturesTensor.shape;
-      inputsEmbs.shape[1] += condEmbTensor.shape[1];
-
-      releaseSession(speechEncoderSession_);
-
-      const int64_t seqLen = inputsEmbs.shape[1];
-      attentionMask.data.resize(seqLen, 1);
-      attentionMask.shape = {1, seqLen};
-
-      if (isEnglish_) {
-        positionIds.data.resize(seqLen);
-        positionIds.shape = {1, seqLen};
-        std::iota(positionIds.data.begin(), positionIds.data.end(), 0);
-      }
-
-      for (size_t i = keyValueOffset_; i < languageModelSession_->getInputNames().size(); i++) {
-        TensorData<float> pastKeyValue;
-        pastKeyValue.shape = {1, NUM_KV_HEADS, 0, HEAD_DIM};
-
-        const std::string name = languageModelSession_->getInputNames()[i];
-        pastKeyValues[name] = pastKeyValue;
-      }
+      processSpeechEncoderOutputs(inputsEmbs, promptToken, speakerEmbeddings,
+                                   speakerFeatures, positionIds, attentionMask, pastKeyValues);
     }
 
     runLanguageModelInfer(inputsEmbs, positionIds, attentionMask, pastKeyValues);
 
     OrtTensor logitsTensor = languageModelSession_->getOutput("logits");
-    std::vector<float> logits;
-    logits.resize(logitsTensor.shape[2]);
-    std::memcpy(logits.data(),
-                static_cast<float *>(logitsTensor.data) + (logitsTensor.shape[1] - 1) * logitsTensor.shape[2],
-                sizeof(float) * logitsTensor.shape[2]);
-
-    penalizeRepetitionLogits(logits, generatedTokens);
-    const int64_t nextToken = static_cast<int64_t>(argmax(logits));
+    const int64_t nextToken = selectNextToken(logitsTensor, generatedTokens);
     generatedTokens.push_back(nextToken);
     inputIds = {nextToken};
 
@@ -272,32 +415,19 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
     attentionMask.data.push_back(1);
     attentionMask.shape[1]++;
-
-    if (isEnglish_) {
-      positionIds.data = {positionIds.data.back() + 1};
-      positionIds.shape[1] = 1;
-    } else {
-      positionIds.data = {static_cast<int64_t>(i + 1)};
-      positionIds.shape = {1, 1};
-    }
-
-    for (size_t i = keyValueOffset_; i < languageModelSession_->getInputNames().size(); i++) {
-      const std::string inputName = languageModelSession_->getInputNames()[i];
-      const std::string outputName = languageModelSession_->getOutputNames()[i - keyValueOffset_ + 1];
-      OrtTensor outputTensor = languageModelSession_->getOutput(outputName);
-
-      const size_t numElements = getNumElements(outputTensor);
-      pastKeyValues[inputName].shape = outputTensor.shape;
-      pastKeyValues[inputName].data.resize(numElements);
-
-      std::memcpy(pastKeyValues[inputName].data.data(), outputTensor.data,
-                  numElements * sizeof(float));
-    }
+    advancePositionIds(positionIds, i);
+    cachePastKeyValues(pastKeyValues);
   }
 
   releaseSession(embedTokensSession_);
   releaseSession(languageModelSession_);
 
+  return assembleSpeechTokenSequence(promptToken, generatedTokens);
+}
+
+std::vector<int64_t> ChatterboxEngine::assembleSpeechTokenSequence(
+    const TensorData<int64_t> &promptToken,
+    const std::vector<int64_t> &generatedTokens) {
   std::vector<int64_t> speechTokens(promptToken.data.begin(), promptToken.data.end());
   speechTokens.insert(speechTokens.end(), generatedTokens.begin() + 1, generatedTokens.end() - 1);
 
@@ -306,6 +436,13 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
     speechTokens.insert(speechTokens.end(), silenceTokens.begin(), silenceTokens.end());
   }
 
+  return speechTokens;
+}
+
+std::vector<float> ChatterboxEngine::synthesizeWaveform(
+    const std::vector<int64_t> &speechTokens,
+    const TensorData<float> &speakerEmbeddings,
+    const TensorData<float> &speakerFeatures) {
   ensureSession(conditionalDecoderSession_, config_.conditionalDecoderPath);
 
   std::cout << "ConditionalDecoderInfer started ... " << std::endl;
@@ -314,10 +451,13 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
   OrtTensor wavTensor = conditionalDecoderSession_->getOutput("waveform");
   std::vector<float> wav;
-  insertFromOrtTensorToVector(wavTensor, wav, wav.begin());
+  readTensorToFloatVector(wavTensor, wav, wav.begin());
 
   releaseSession(conditionalDecoderSession_);
+  return wav;
+}
 
+AudioResult ChatterboxEngine::convertToAudioResult(const std::vector<float> &wav) {
   std::cout << "Generated audio size: " << wav.size() / 24000.0 << " seconds" << std::endl;
 
   AudioResult result;
@@ -334,6 +474,31 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
                  });
 
   return result;
+}
+
+AudioResult ChatterboxEngine::synthesize(const std::string &text) {
+  std::vector<int64_t> inputIds = tokenize(text);
+  TensorData<int64_t> positionIds;
+  TensorData<float> speakerEmbeddings;
+  TensorData<float> speakerFeatures;
+
+  if (!isEnglish_) {
+    sanitizeTokenIds(inputIds);
+    positionIds = buildInitialPositionIds(inputIds);
+  }
+
+  ensureSession(embedTokensSession_, config_.embedTokensPath);
+  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
+  ensureSession(languageModelSession_, config_.languageModelPath);
+
+  std::cout << "Sampling ... " << text << std::endl;
+
+  std::vector<int64_t> speechTokens = generateSpeechTokens(
+      inputIds, positionIds, speakerEmbeddings, speakerFeatures);
+
+  std::vector<float> wav = synthesizeWaveform(speechTokens, speakerEmbeddings, speakerFeatures);
+
+  return convertToAudioResult(wav);
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
@@ -372,7 +537,7 @@ void ChatterboxEngine::runEmbedTokensInfer(
     std::memcpy(positionIdsTensor.data, positionIds.data(), positionIds.size() * sizeof(int64_t));
 
     OrtTensor exaggerationTensor = embedTokensSession_->getInput("exaggeration");
-    std::memcpy(exaggerationTensor.data, &EXAGGERATION, sizeof(float));
+    writeFloatDataToTensor(exaggerationTensor, &EXAGGERATION, 1);
   }
 
   embedTokensSession_->run();
@@ -385,8 +550,8 @@ void ChatterboxEngine::runSpeechEncoderInfer() {
   speechEncoderSession_->initInputTensors(inputShapes);
 
   // fill inputs
-  OrtTensor inputIdsTensor = speechEncoderSession_->getInput("audio_values");
-  std::memcpy(inputIdsTensor.data, config_.referenceAudio.data(), config_.referenceAudio.size() * sizeof(float));
+  OrtTensor audioValuesTensor = speechEncoderSession_->getInput("audio_values");
+  writeFloatDataToTensor(audioValuesTensor, config_.referenceAudio.data(), config_.referenceAudio.size());
 
   speechEncoderSession_->run();
 }
@@ -413,7 +578,7 @@ void ChatterboxEngine::runLanguageModelInfer(
 
   // fill inputs
   OrtTensor inputsEmbsTensor = languageModelSession_->getInput("inputs_embeds");
-  std::memcpy(inputsEmbsTensor.data, inputsEmbs.data.data(), inputsEmbs.data.size() * sizeof(float));
+  writeFloatDataToTensor(inputsEmbsTensor, inputsEmbs.data.data(), inputsEmbs.data.size());
 
   OrtTensor attentionMaskTensor = languageModelSession_->getInput("attention_mask");
   std::memcpy(attentionMaskTensor.data, attentionMask.data.data(), attentionMask.data.size() * sizeof(int64_t));
@@ -425,10 +590,8 @@ void ChatterboxEngine::runLanguageModelInfer(
 
   for (size_t i = keyValueOffset_; i < languageModelSession_->getInputNames().size(); i++) {
     OrtTensor pastKeyValueTensor = languageModelSession_->getInput(languageModelSession_->getInputNames()[i]);
-    std::memcpy(
-        pastKeyValueTensor.data,
-        pastKeyValues[languageModelSession_->getInputNames()[i]].data.data(),
-        pastKeyValues[languageModelSession_->getInputNames()[i]].data.size() * sizeof(float));
+    const auto &kvData = pastKeyValues[languageModelSession_->getInputNames()[i]].data;
+    writeFloatDataToTensor(pastKeyValueTensor, kvData.data(), kvData.size());
   }
 
   languageModelSession_->run();
@@ -455,13 +618,11 @@ void ChatterboxEngine::runConditionalDecoderInfer(
 
   OrtTensor speakerEmbeddingsTensor =
       conditionalDecoderSession_->getInput("speaker_embeddings");
-  std::memcpy(speakerEmbeddingsTensor.data, speakerEmbeddings.data.data(),
-              speakerEmbeddings.data.size() * sizeof(float));
+  writeFloatDataToTensor(speakerEmbeddingsTensor, speakerEmbeddings.data.data(), speakerEmbeddings.data.size());
 
   OrtTensor speakerFeaturesTensor =
       conditionalDecoderSession_->getInput("speaker_features");
-  std::memcpy(speakerFeaturesTensor.data, speakerFeatures.data.data(),
-              speakerFeatures.data.size() * sizeof(float));
+  writeFloatDataToTensor(speakerFeaturesTensor, speakerFeatures.data.data(), speakerFeatures.data.size());
 
   conditionalDecoderSession_->run();
 }
