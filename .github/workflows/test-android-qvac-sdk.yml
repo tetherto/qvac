@@ -307,15 +307,17 @@ jobs:
           echo "Device Farm Console (${{ matrix.device.name }}): https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
 
       - name: Save run ARN
+        id: save-arn
         run: |
-          mkdir -p run-arns
-          echo "${{ steps.schedule.outputs.run-arn }}" > run-arns/${{ matrix.device.name }}.txt
+          SAFE_NAME=$(echo "${{ matrix.device.name }}" | tr ' /\\:*?"<>|' '_')
+          echo "${{ steps.schedule.outputs.run-arn }}" > "${SAFE_NAME}.txt"
+          echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload run ARN
         uses: actions/upload-artifact@v6
         with:
-          name: device-farm-arn-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}
-          path: run-arns/
+          name: device-farm-arn-${{ needs.build.outputs.runId }}-${{ steps.save-arn.outputs.safe-name }}
+          path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
   run-producer:
