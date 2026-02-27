@@ -30,6 +30,54 @@ makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   };
 }
 
+inline LlamaModel::ProgressCallback
+makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
+  return [&instance](const llama_finetuning_helpers::FinetuneProgressStats& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s));
+  };
+}
+
+struct JsFinetuneProgressOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::
+          JsBaseOutputHandler<llama_finetuning_helpers::FinetuneProgressStats> {
+  JsFinetuneProgressOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            llama_finetuning_helpers::FinetuneProgressStats>(
+            [this](
+                const llama_finetuning_helpers::FinetuneProgressStats& stats)
+                -> js_value_t* {
+              js::Object payload = js::Object::create(this->env_);
+              payload.setProperty(
+                  this->env_, "type",
+                  js::String::create(this->env_, "finetune_progress"));
+              js::Object statsObj = js::Object::create(this->env_);
+              statsObj.setProperty(
+                  this->env_, "loss",
+                  js::Number::create(this->env_, stats.loss));
+              statsObj.setProperty(
+                  this->env_, "accuracy",
+                  js::Number::create(this->env_, stats.accuracy));
+              statsObj.setProperty(
+                  this->env_, "global_steps",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.globalSteps)));
+              statsObj.setProperty(
+                  this->env_, "current_epoch",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.currentEpoch)));
+              statsObj.setProperty(
+                  this->env_, "current_batch",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.currentBatch)));
+              statsObj.setProperty(
+                  this->env_, "total_batches",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.totalBatches)));
+              payload.setProperty(this->env_, "stats", statsObj);
+              return payload;
+            }) {}
+};
+
 struct JsFinetuneTerminalOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::
           JsBaseOutputHandler<FinetuneTerminalResult> {
@@ -59,6 +107,20 @@ struct JsFinetuneTerminalOutputHandler
                           "val_loss",
                           js::Number::create(
                               this->env_, *result.stats->valLossLast));
+                    }
+                    if (result.stats->trainAccuracyLast.has_value()) {
+                      stats.setProperty(
+                          this->env_,
+                          "train_accuracy",
+                          js::Number::create(
+                              this->env_, *result.stats->trainAccuracyLast));
+                    }
+                    if (result.stats->valAccuracyLast.has_value()) {
+                      stats.setProperty(
+                          this->env_,
+                          "val_accuracy",
+                          js::Number::create(
+                              this->env_, *result.stats->valAccuracyLast));
                     }
                     if (result.stats->lrLast.has_value()) {
                       stats.setProperty(
@@ -108,11 +170,7 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
       jsObj.getOptionalPropertyAs<js::String, std::string>(
                env, "evalDatasetPath")
           .value_or("");
-  const std::string evalDatasetDirLegacy =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "evalDatasetDir")
-          .value_or("");
-  params.evalDatasetPath =
-      !evalDatasetPath.empty() ? evalDatasetPath : evalDatasetDirLegacy;
+  params.evalDatasetPath = evalDatasetPath;
   params.contextLength =
       jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
           .value_or(0);
@@ -194,6 +252,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<JsFinetuneProgressOutputHandler>());
   outHandlers.add(make_shared<JsFinetuneTerminalOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
@@ -307,6 +366,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   LlamaModel::Prompt prompt;
   prompt.finetuningParams = *paramsOpt;
   prompt.outputCallback = makeQueueOutputCallback(instance);
+  prompt.progressCallback = makeQueueProgressCallback(instance);
 
   return instance.runJob(any(std::move(prompt)));
 }

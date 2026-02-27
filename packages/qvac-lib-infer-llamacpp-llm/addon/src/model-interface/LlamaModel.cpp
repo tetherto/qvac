@@ -247,12 +247,14 @@ std::any LlamaModel::process(const std::any& input) {
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats;
-    const std::string status = finetune(*prompt.finetuningParams, &stats);
+    const std::string status =
+        finetune(*prompt.finetuningParams, &stats, prompt.progressCallback);
     FinetuneTerminalResult terminalResult{"finetune", status, std::nullopt};
     if (
         stats.trainLossLast.has_value() || stats.valLossLast.has_value() ||
-        stats.lrLast.has_value() || stats.globalSteps > 0 ||
-        stats.epochsCompleted > 0) {
+        stats.trainAccuracyLast.has_value() ||
+        stats.valAccuracyLast.has_value() || stats.lrLast.has_value() ||
+        stats.globalSteps > 0 || stats.epochsCompleted > 0) {
       terminalResult.stats = stats;
     }
     return std::any(std::move(terminalResult));
@@ -765,7 +767,8 @@ bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
 #ifndef STANDALONE_TEST_BUILD
 std::string LlamaModel::finetune(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-    FinetuneTerminalResult::Stats* outStats) {
+    FinetuneTerminalResult::Stats* outStats,
+    LlamaModel::ProgressCallback progressCallback) {
   using namespace llama_finetuning_helpers;
 
   llama_context* ctx = getContext();
@@ -818,7 +821,7 @@ std::string LlamaModel::finetune(
     double validationSplit = 0.05;
     const bool hasSeparateEvalDataset = !params.evalDatasetPath.empty() &&
                                         params.evalDatasetPath != params.trainDatasetDir;
-    if (hasSeparateEvalDataset) {
+    if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
       validationSplit = 0.0;
     } else {
       validationSplit = std::clamp(params.validationSplit, 0.0, 1.0);
@@ -961,6 +964,7 @@ std::string LlamaModel::finetune(
 
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
+      checkpointState->progressCallback = progressCallback;
       currentCheckpointState_.store(
           checkpointState.get(), std::memory_order_release);
       setCurrentCheckpointState(checkpointState.get());
@@ -1412,28 +1416,40 @@ void LlamaModel::executeTrainingLoop(
       std::cout.flush();
     }
 
-    if (checkpointState && checkpointState->shouldExit.load()) {
-      break;
-    }
-
     double lossValue = 0.0;
     ggml_opt_result_loss(trainResult.get(), &lossValue, nullptr);
+    double trainAccuracyValue = 0.0;
+    ggml_opt_result_accuracy(trainResult.get(), &trainAccuracyValue, nullptr);
     if (outStats != nullptr) {
       outStats->trainLossLast = lossValue;
+      outStats->trainAccuracyLast = trainAccuracyValue;
       outStats->lrLast = static_cast<double>(scheduler.lastLr);
-      outStats->epochsCompleted = static_cast<int64_t>(epoch) + 1;
       outStats->globalSteps = checkpointState != nullptr
           ? checkpointState->globalStep
           : (static_cast<int64_t>(epoch) + 1) * trainSplit;
     }
+    if (checkpointState && checkpointState->shouldExit.load()) {
+      break;
+    }
+
+    double valLoss = 0.0;
+    if (hasEval) {
+      ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
+      double valAccuracyValue = 0.0;
+      ggml_opt_result_accuracy(evalResult.get(), &valAccuracyValue, nullptr);
+      if (outStats != nullptr) {
+        outStats->valLossLast = valLoss;
+        outStats->valAccuracyLast = valAccuracyValue;
+      }
+    }
+
+    if (outStats != nullptr) {
+      outStats->epochsCompleted = static_cast<int64_t>(epoch) + 1;
+    }
+
     std::ostringstream epochMsg;
     epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
     if (hasEval) {
-      double valLoss = 0.0;
-      ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
-      if (outStats != nullptr) {
-        outStats->valLossLast = valLoss;
-      }
       epochMsg << " | val_loss=" << valLoss;
     }
     epochMsg << " | lr=" << scheduler.lastLr;

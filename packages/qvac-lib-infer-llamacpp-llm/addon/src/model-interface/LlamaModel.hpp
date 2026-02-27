@@ -33,6 +33,8 @@ struct FinetuneTerminalResult {
   struct Stats {
     std::optional<double> trainLossLast;
     std::optional<double> valLossLast;
+    std::optional<double> trainAccuracyLast;
+    std::optional<double> valAccuracyLast;
     std::optional<double> lrLast;
     int64_t globalSteps = 0;
     int64_t epochsCompleted = 0;
@@ -71,11 +73,15 @@ public:
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
   void cancel() const final;
 
+  using ProgressCallback =
+      std::function<void(const llama_finetuning_helpers::FinetuneProgressStats&)>;
+
   struct Prompt {
     std::string input;
     bool prefill = false;
     std::optional<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
+    ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
   };
@@ -100,7 +106,8 @@ public:
 
   std::string finetune(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      FinetuneTerminalResult::Stats* outStats = nullptr);
+      FinetuneTerminalResult::Stats* outStats = nullptr,
+      ProgressCallback progressCallback = nullptr);
   bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
