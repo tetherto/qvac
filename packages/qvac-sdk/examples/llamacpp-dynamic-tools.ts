@@ -169,7 +169,7 @@ async function runTest({ kvCache, toolVariants }) {
   try {
     // Load model from provided file path with tools support enabled
     const modelId = await loadModel({
-      modelSrc: QWEN_3_1_7B_INST_Q4,
+      modelSrc: 'dynamic-tools_Qwen3-1.7B-Q4_0.gguf',// QWEN_3_1_7B_INST_Q4,
       modelType: "llm",
       modelConfig: {
         ctx_size: 4096,
