@@ -1,5 +1,7 @@
 #include "ChatterboxEngine.hpp"
 #include "FileUtils.hpp"
+#include "Fp16Utils.hpp"
+#include "OnnxInferSession.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -8,27 +10,24 @@
 #include <iostream>
 #include <numeric>
 
+using qvac::ttslib::fp16::getNumElements;
+using qvac::ttslib::fp16::readTensorToFloatBuffer;
+using qvac::ttslib::fp16::readTensorToFloatVector;
+using qvac::ttslib::fp16::writeFloatDataToTensor;
+
 namespace {
 
-// parameters
 const float REPETITION_PENALTY = 1.2;
 const int MAX_NEW_TOKENS_ENGLISH = 1024;
 const int MAX_NEW_TOKENS_MULTILINGUAL = 256;
 const float EXAGGERATION = 0.5;
 
-// constants
 const std::vector<std::string> SUPPORTED_LANGUAGES = {
-    "en", // English
-    "es", // Spanish
-    "fr", // French
-    "de", // German
-    "it", // Italian
-    "pt", // Portuguese
-    "ru", // Russian
+    "en", "es", "fr", "de", "it", "pt", "ru",
 };
 
 const std::pair<int, int> UNSUPPORTED_TOKEN_RANGE = {2351, 2453};
-const int UNKNOWN_TOKEN_ID = 605; // [UH]
+const int UNKNOWN_TOKEN_ID = 605;
 const int64_t NUM_HIDDEN_LAYERS = 30;
 const int64_t NUM_KV_HEADS = 16;
 const int64_t HEAD_DIM = 64;
@@ -64,128 +63,6 @@ std::string prepareText(const std::string& text, const std::string& language) {
   return "[" + language + "]" + text;
 }
 
-int64_t getNumElements(const qvac::ttslib::chatterbox::OrtTensor &tensor) {
-  if (tensor.shape.empty()) {
-    return 0;
-  }
-
-  int64_t numElements = 1;
-  for (const auto &shape : tensor.shape) {
-    numElements *= shape;
-  }
-  return numElements;
-}
-
-float fp16ToFp32(uint16_t h) {
-  uint32_t sign = (h & 0x8000u) << 16u;
-  uint32_t exponent = (h >> 10u) & 0x1Fu;
-  uint32_t mantissa = h & 0x03FFu;
-
-  if (exponent == 0) {
-    if (mantissa == 0) {
-      float f;
-      std::memcpy(&f, &sign, sizeof(f));
-      return f;
-    }
-    exponent = 1;
-    while (!(mantissa & 0x0400u)) {
-      mantissa <<= 1u;
-      exponent--;
-    }
-    mantissa &= 0x03FFu;
-    exponent = exponent + (127 - 15);
-    uint32_t result = sign | (exponent << 23u) | (mantissa << 13u);
-    float f;
-    std::memcpy(&f, &result, sizeof(f));
-    return f;
-  }
-
-  if (exponent == 31) {
-    uint32_t result = sign | 0x7F800000u | (mantissa << 13u);
-    float f;
-    std::memcpy(&f, &result, sizeof(f));
-    return f;
-  }
-
-  exponent = exponent + (127 - 15);
-  uint32_t result = sign | (exponent << 23u) | (mantissa << 13u);
-  float f;
-  std::memcpy(&f, &result, sizeof(f));
-  return f;
-}
-
-uint16_t fp32ToFp16(float f) {
-  uint32_t x;
-  std::memcpy(&x, &f, sizeof(x));
-
-  uint16_t sign = (x >> 16u) & 0x8000u;
-  int32_t exponent = static_cast<int32_t>((x >> 23u) & 0xFFu) - 127 + 15;
-  uint32_t mantissa = x & 0x007FFFFFu;
-
-  if (exponent <= 0) {
-    if (exponent < -10) return sign;
-    mantissa = (mantissa | 0x00800000u) >> (1 - exponent);
-    return sign | static_cast<uint16_t>(mantissa >> 13u);
-  }
-
-  if (exponent == 0xFF - (127 - 15)) {
-    if (mantissa == 0) return sign | 0x7C00u;
-    return sign | 0x7C00u | static_cast<uint16_t>(mantissa >> 13u);
-  }
-
-  if (exponent > 30) return sign | 0x7C00u;
-  return sign | static_cast<uint16_t>(exponent << 10u) | static_cast<uint16_t>(mantissa >> 13u);
-}
-
-bool isFp16(const qvac::ttslib::chatterbox::OrtTensor &tensor) {
-  return tensor.type == qvac::ttslib::chatterbox::OrtElementType::Fp16;
-}
-
-void readTensorToFloatVector(
-    const qvac::ttslib::chatterbox::OrtTensor &tensor,
-    std::vector<float> &dest,
-    typename std::vector<float>::iterator destStart) {
-  const int64_t numElements = getNumElements(tensor);
-  if (isFp16(tensor)) {
-    const auto *src = static_cast<const uint16_t *>(tensor.data);
-    std::vector<float> converted(numElements);
-    for (int64_t i = 0; i < numElements; i++) {
-      converted[i] = fp16ToFp32(src[i]);
-    }
-    dest.insert(destStart, converted.begin(), converted.end());
-  } else {
-    const auto *src = static_cast<const float *>(tensor.data);
-    dest.insert(destStart, src, src + numElements);
-  }
-}
-
-void readTensorToFloatBuffer(
-    const qvac::ttslib::chatterbox::OrtTensor &tensor,
-    float *dest, int64_t offset, int64_t count) {
-  if (isFp16(tensor)) {
-    const auto *src = static_cast<const uint16_t *>(tensor.data) + offset;
-    for (int64_t i = 0; i < count; i++) {
-      dest[i] = fp16ToFp32(src[i]);
-    }
-  } else {
-    const auto *src = static_cast<const float *>(tensor.data) + offset;
-    std::memcpy(dest, src, count * sizeof(float));
-  }
-}
-
-void writeFloatDataToTensor(
-    const qvac::ttslib::chatterbox::OrtTensor &tensor,
-    const float *src, size_t numElements) {
-  if (isFp16(tensor)) {
-    auto *dest = static_cast<uint16_t *>(tensor.data);
-    for (size_t i = 0; i < numElements; i++) {
-      dest[i] = fp32ToFp16(src[i]);
-    }
-  } else {
-    std::memcpy(tensor.data, src, numElements * sizeof(float));
-  }
-}
-
 template <typename T>
 void insertFromOrtTensorToVector(
     const qvac::ttslib::chatterbox::OrtTensor &tensor, std::vector<T> &dest,
@@ -210,7 +87,21 @@ template <typename T> void printVector(const std::vector<T> &vector) {
 
 namespace qvac::ttslib::chatterbox {
 
-ChatterboxEngine::ChatterboxEngine(const ChatterboxConfig &cfg) { load(cfg); }
+namespace {
+
+ChatterboxEngine::SessionFactory makeDefaultSessionFactory() {
+  return [](const std::string &path) {
+    return std::make_unique<OnnxInferSession>(path);
+  };
+}
+
+} // namespace
+
+ChatterboxEngine::ChatterboxEngine(const ChatterboxConfig &cfg,
+                                  SessionFactory factory) {
+  sessionFactory_ = factory ? std::move(factory) : makeDefaultSessionFactory();
+  load(cfg);
+}
 
 ChatterboxEngine::~ChatterboxEngine() { unload(); }
 
@@ -225,10 +116,10 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   tokenizerHandle_ = tokenizers_new_from_str(blob.data(), blob.length());
 
   if (!lazySessionLoading_) {
-    speechEncoderSession_ = std::make_unique<OnnxInferSession>(cfg.speechEncoderPath);
-    embedTokensSession_ = std::make_unique<OnnxInferSession>(cfg.embedTokensPath);
-    conditionalDecoderSession_ = std::make_unique<OnnxInferSession>(cfg.conditionalDecoderPath);
-    languageModelSession_ = std::make_unique<OnnxInferSession>(cfg.languageModelPath);
+    speechEncoderSession_ = sessionFactory_(cfg.speechEncoderPath);
+    embedTokensSession_ = sessionFactory_(cfg.embedTokensPath);
+    conditionalDecoderSession_ = sessionFactory_(cfg.conditionalDecoderPath);
+    languageModelSession_ = sessionFactory_(cfg.languageModelPath);
   }
 
   isEnglish_ = language_ == "en";
@@ -238,13 +129,16 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   keyValueOffset_ = isEnglish_ ? OFFSET : OFFSET_MULTILINGUAL;
 }
 
-void ChatterboxEngine::ensureSession(std::unique_ptr<OnnxInferSession> &session, const std::string &modelPath) {
+void ChatterboxEngine::ensureSession(
+    std::unique_ptr<IOnnxInferSession> &session,
+    const std::string &modelPath) {
   if (!session) {
-    session = std::make_unique<OnnxInferSession>(modelPath);
+    session = sessionFactory_(modelPath);
   }
 }
 
-void ChatterboxEngine::releaseSession(std::unique_ptr<OnnxInferSession> &session) {
+void ChatterboxEngine::releaseSession(
+    std::unique_ptr<IOnnxInferSession> &session) {
   if (lazySessionLoading_) {
     session.reset();
   }
