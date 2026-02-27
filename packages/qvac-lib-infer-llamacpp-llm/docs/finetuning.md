@@ -139,6 +139,7 @@ await model.cancel()
 ### Validation
 
 You **must** provide a `validation` object. It is required and there is no default.
+Top-level `evalDatasetPath` is not accepted by the JS API.
 
 **Shape:**
 
@@ -155,6 +156,14 @@ validation: {
 | **`'none'`** | No validation. All data is used for training; no `val_loss` is computed. |
 | **`'split'`** | Reserve a fraction of the training data for validation (holdout). Use `fraction` (0–1); default `0.05` (5%). Logs `val_loss` each epoch. |
 | **`'dataset'`** | Use a separate eval file for validation. Set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as train. The eval dataset is loaded and validated after each epoch; logs `val_loss`. |
+
+**Validation contract enforced by `normalizeFinetuneParams`:**
+
+- `validation` must be an object with `type`.
+- `validation.type` must be one of `'none' | 'split' | 'dataset'`.
+- If `validation.type` is `'dataset'`, `validation.path` must be a non-empty string.
+- `validation.path` must differ from `trainDatasetDir`.
+- Passing top-level `evalDatasetPath` throws.
 
 **Examples:**
 
@@ -223,7 +232,7 @@ sequenceDiagram
     participant Queue as outputQueue
 
     User->>LlamaModel: finetune(opts) or finetune() (no args → stored params)
-    LlamaModel->>LlamaModel: _finetuneActive check, store params, normalize opts (validation → validationSplit, useEvalDatasetForValidation)
+    LlamaModel->>LlamaModel: _finetuneActive check, store params, normalize opts (validation object required; dataset requires validation.path; emits validationSplit/useEvalDatasetForValidation/evalDatasetPath)
     LlamaModel->>Addon: finetune(params)
 
     Addon->>Binding: _binding.finetune(handle, params)
@@ -300,7 +309,7 @@ sequenceDiagram
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| JS | `index.js` → `LlmLlamacpp` | Public API: `finetune()`, `cancel()` (unified stop; during finetune pauses and saves checkpoint). Normalizes opts: `validation` object → `validationSplit` and `useEvalDatasetForValidation` before calling addon. Uses `_finetuneActive` and `QvacResponse` (`OnlyOneJob`) for lifecycle; `_addonOutputCallback` maps terminal finetune payloads to `JobEnded`. |
+| JS | `index.js` → `LlmLlamacpp` | Public API: `finetune()`, `cancel()` (unified stop; during finetune pauses and saves checkpoint). Normalizes opts: requires `validation`, rejects top-level `evalDatasetPath`, maps dataset validation to `evalDatasetPath`, and emits `validationSplit` / `useEvalDatasetForValidation` before calling addon. Uses `_finetuneActive` and `QvacResponse` (`OnlyOneJob`) for lifecycle; `_addonOutputCallback` maps terminal finetune payloads to `JobEnded`. |
 | JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `cancel()` → `_binding.cancel(handle)`. |
 | C++ | `binding.cpp` | BARE exports: `finetune`, `cancel` → `qvac_lib_inference_addon_llama::*`. |
 | C++ | `AddonJs.hpp` | Parses JS args, gets `LlamaModel*` via `getLlamaModel(instance)`; `tryGetObject()` for params; builds `Prompt` with `finetuningParams` and `outputCallback`, calls `addonCpp->runJob(any(prompt))` (same path as inference). C++ auto-detects resume via `pauseCheckpointExists(checkpointSaveDir)`. `cancel()`: if `isFinetuneRunning()` then `requestPause()` + `JsAsyncTask::run(waitUntilFinetuningPauseComplete)`, else `cancelJob()`; always returns Promise via `JsAsyncTask::run`. |
@@ -314,7 +323,8 @@ sequenceDiagram
 |-----------|------|
 | `batchSize` | Batch size is controlled by `microBatchSize`. |
 | `warmupRatio` | Warmup steps = `warmupRatio × totalSteps` when `warmupRatioSet: true`. |
-| `validation.path` | When `validation.type` is `'dataset'`, set `validation.path` to the eval dataset file path (must differ from `trainDatasetDir`). Same format as the training file. The JS layer passes this as `evalDatasetPath` to the addon. |
+| `validation.path` | Required when `validation.type` is `'dataset'`; must differ from `trainDatasetDir`. The JS layer forwards this as addon `evalDatasetPath`. |
+| `evalDatasetPath` (top-level JS param) | Not supported in `finetune(opts)` and throws. Use `validation: { type: 'dataset', path: '...' }`. |
 
 ### C++ Backend Overview
 
