@@ -316,6 +316,8 @@ jobs:
           npm install
           echo "✅ Test framework dependencies installed"
 
+      # Model provisioning for mobile: presigned URLs so the app can download detector + all
+      # recognizers at runtime (same set as desktop integration tests).
       - name: Configure AWS credentials for model download
         uses: aws-actions/configure-aws-credentials@v6
         with:
