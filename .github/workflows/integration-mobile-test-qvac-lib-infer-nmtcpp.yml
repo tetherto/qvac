@@ -293,36 +293,78 @@ jobs:
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         run: npm run test:mobile:validate
 
+      - name: Generate Bergamot Model URLs from Firefox CDN
+        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
+        env:
+          BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
+        run: |
+          echo "🔑 Generating Bergamot model URLs from Firefox CDN for mobile tests..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Language pair: $BERGAMOT_LANG_PAIR"
+
+          SRC_LANG="${BERGAMOT_LANG_PAIR:0:2}"
+          DST_LANG="${BERGAMOT_LANG_PAIR:2:2}"
+
+          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
+          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
+
+          echo "Fetching model index from Mozilla Remote Settings..."
+          RECORDS=$(curl -sS "$RECORDS_URL")
+
+          # Extract model and vocab URLs from Firefox CDN
+          URLS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          base = '${ATTACHMENT_BASE}'
+          for r in data.get('data', []):
+              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
+                  att = r.get('attachment', {})
+                  loc = att.get('location', '')
+                  name = r.get('name', '') or att.get('filename', '')
+                  if loc and name:
+                      url = f'{base}/{loc}'
+                      if name.endswith('.bin') or 'model' in name.lower():
+                          print(f'MODEL|{url}')
+                      elif name.endswith('.spm') or 'vocab' in name.lower():
+                          print(f'VOCAB|{url}')
+          ")
+
+          BERGAMOT_MODEL_URL=""
+          BERGAMOT_VOCAB_URL=""
+          while IFS='|' read -r TYPE URL; do
+              if [ "$TYPE" = "MODEL" ] && [ -z "$BERGAMOT_MODEL_URL" ]; then
+                  BERGAMOT_MODEL_URL="$URL"
+              elif [ "$TYPE" = "VOCAB" ] && [ -z "$BERGAMOT_VOCAB_URL" ]; then
+                  BERGAMOT_VOCAB_URL="$URL"
+              fi
+          done <<< "$URLS"
+
+          if [ -n "$BERGAMOT_MODEL_URL" ]; then
+              echo "BERGAMOT_MODEL_URL=${BERGAMOT_MODEL_URL}" >> $GITHUB_ENV
+              echo "✅ Bergamot model URL: ${BERGAMOT_MODEL_URL}"
+          else
+              echo "⚠️  No Bergamot model URL found for ${BERGAMOT_LANG_PAIR}"
+          fi
+
+          if [ -n "$BERGAMOT_VOCAB_URL" ]; then
+              echo "BERGAMOT_VOCAB_URL=${BERGAMOT_VOCAB_URL}" >> $GITHUB_ENV
+              echo "✅ Bergamot vocab URL: ${BERGAMOT_VOCAB_URL}"
+          else
+              echo "⚠️  No Bergamot vocab URL found for ${BERGAMOT_LANG_PAIR}"
+          fi
+
+          echo ""
+          echo "✅ Bergamot model URLs generated from Firefox CDN"
+          echo "   Language pair: $BERGAMOT_LANG_PAIR"
+          echo "   Both Opus and Bergamot backends will be tested"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-
-      - name: Generate Bergamot Model URLs
-        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        run: |
-          echo "🔑 Generating Bergamot model URLs for mobile tests..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Language pair: $BERGAMOT_LANG_PAIR"
-
-          # Make the script executable
-          chmod +x scripts/generate-bergamot-presigned-urls.sh
-
-          # Generate presigned URLs for specified language pair
-          # This will export BERGAMOT_MODEL_URL and BERGAMOT_VOCAB_URL to GITHUB_ENV
-          ./scripts/generate-bergamot-presigned-urls.sh "$BERGAMOT_LANG_PAIR"
-
-          echo ""
-          echo "✅ Bergamot model URLs generated and exported"
-          echo "   Language pair: $BERGAMOT_LANG_PAIR"
-          echo "   Both Opus and Bergamot backends will be tested"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Generate IndicTrans Model URLs
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
