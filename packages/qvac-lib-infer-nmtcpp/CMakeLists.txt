@@ -15,6 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 # Android STL configuration must be set before project()
@@ -24,6 +25,11 @@ endif()
 
 project(qvac-lib-infer-nmtcpp
   LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
