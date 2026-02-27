@@ -11,6 +11,7 @@ on:
         options:
           - tdt
           - ctc
+          - sortformer
       max_samples:
         description: 'Max samples per test (0 = unlimited)'
         required: false
@@ -44,20 +45,28 @@ jobs:
           # Model directory mapping
           model_dirs = {
               "tdt": "parakeet-tdt-0.6b-v3-onnx",
-              "ctc": "parakeet-ctc-0.6b-onnx"
+              "ctc": "parakeet-ctc-0.6b-onnx",
+              "sortformer": "sortformer-4spk-v2-onnx"
           }
 
-          # All test configurations to run in parallel
-          test_configs = [
-              # English LibriSpeech tests
-              {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
-              {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
-              {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
-              # Multi-language FLEURS tests
-              {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-              {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-              {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
-          ]
+          # Sortformer is a diarization model — only run English batch (no WER/CER)
+          if model_type == "sortformer":
+              test_configs = [
+                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                  {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+              ]
+          else:
+              # All test configurations to run in parallel
+              test_configs = [
+                  # English LibriSpeech tests
+                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
+                  {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
+                  {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": True},
+                  # Multi-language FLEURS tests
+                  {"language": "french", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                  {"language": "german", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                  {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+              ]
 
           include = []
           for i, cfg in enumerate(test_configs):
@@ -239,6 +248,9 @@ jobs:
             curl -L -o model.onnx "${REPO_URL}/model.onnx"
             curl -L -o model.onnx_data "${REPO_URL}/model.onnx_data"
             curl -L -o tokenizer.json "${REPO_URL}/tokenizer.json"
+          elif [ "$MODEL_TYPE" = "sortformer" ]; then
+            REPO_URL="https://huggingface.co/tetherto/sortformer-4spk-v2-onnx/resolve/main"
+            curl -L -o sortformer.onnx "${REPO_URL}/sortformer.onnx"
           else
             echo "Model type ${MODEL_TYPE} not supported for auto-download"
             exit 1
@@ -295,6 +307,12 @@ jobs:
           sed -i "/^model:/,/^[^ ]/ s|  use_gpu:.*|  use_gpu: ${USE_GPU}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
+
+          # Sortformer is a diarization model — disable WER/CER metrics
+          if [ "$MODEL_TYPE" = "sortformer" ]; then
+            sed -i "/^wer:/,/^[^ ]/ s|  enabled:.*|  enabled: false|" "$CONFIG_PATH"
+            sed -i "/^cer:/,/^[^ ]/ s|  enabled:.*|  enabled: false|" "$CONFIG_PATH"
+          fi
 
           echo "=== Updated ${CONFIG_FILE} ==="
           cat "$CONFIG_PATH"
