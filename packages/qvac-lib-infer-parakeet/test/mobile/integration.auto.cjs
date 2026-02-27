@@ -130,8 +130,12 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   }
 }
 
-const CTC_HF_BASE = 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx'
-const CTC_MODEL_FILES = ['model.onnx', 'model.onnx_data', 'tokenizer.json']
+const CTC_HF_REPO = 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main'
+const CTC_MODEL_FILES = [
+  { name: 'model.onnx', path: 'onnx/model.onnx' },
+  { name: 'model.onnx_data', path: 'onnx/model.onnx_data' },
+  { name: 'tokenizer.json', path: 'tokenizer.json' }
+]
 
 /**
  * Downloads CTC model from HuggingFace and runs transcription
@@ -150,13 +154,13 @@ async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disab
 
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
-    for (const name of CTC_MODEL_FILES) {
+    for (const { name, path: remotePath } of CTC_MODEL_FILES) {
       const dest = path.join(modelDir, name)
       if (fs.existsSync(dest)) {
         console.log(`[test-ctc] ${name}: cached`)
         continue
       }
-      await downloadFile(`${CTC_HF_BASE}/${name}`, dest, name)
+      await downloadFile(`${CTC_HF_REPO}/${remotePath}`, dest, name)
     }
 
     let result = null
@@ -177,7 +181,7 @@ async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disab
       if (error) console.error('[test-ctc] Error:', error)
     })
 
-    for (const filename of CTC_MODEL_FILES) {
+    for (const { name: filename } of CTC_MODEL_FILES) {
       const filePath = path.join(modelDir, filename)
       if (!fs.existsSync(filePath)) continue
       const chunk = filename.endsWith('_data')
@@ -220,8 +224,8 @@ async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disab
   }
 }
 
-const SF_HF_BASE = 'https://huggingface.co/tetherto/sortformer-4spk-v2-onnx/resolve/main'
-const SF_MODEL_FILES = ['sortformer.onnx']
+const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main'
+const SF_MODEL_FILES = [{ name: 'sortformer.onnx', remote: 'diar_streaming_sortformer_4spk-v2.onnx' }]
 
 /**
  * Downloads Sortformer model from HuggingFace and runs diarization
@@ -240,13 +244,13 @@ async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-
 
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
-    for (const name of SF_MODEL_FILES) {
+    for (const { name, remote } of SF_MODEL_FILES) {
       const dest = path.join(modelDir, name)
       if (fs.existsSync(dest)) {
         console.log(`[test-sf] ${name}: cached`)
         continue
       }
-      await downloadFile(`${SF_HF_BASE}/${name}`, dest, name)
+      await downloadFile(`${SF_HF_BASE}/${remote}`, dest, name)
     }
 
     let result = null
@@ -267,7 +271,7 @@ async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-
       if (error) console.error('[test-sf] Error:', error)
     })
 
-    for (const filename of SF_MODEL_FILES) {
+    for (const { name: filename } of SF_MODEL_FILES) {
       const filePath = path.join(modelDir, filename)
       if (!fs.existsSync(filePath)) continue
       const chunk = new Uint8Array(fs.readFileSync(filePath))
