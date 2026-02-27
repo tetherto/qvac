@@ -129,3 +129,181 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
     return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
   }
 }
+
+const CTC_HF_BASE = 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx'
+const CTC_MODEL_FILES = ['model.onnx', 'model.onnx_data', 'tokenizer.json']
+
+/**
+ * Downloads CTC model from HuggingFace and runs transcription
+ */
+async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+  const startTime = Date.now()
+  const modelDir = path.join(dirPath, 'parakeet-ctc-model')
+
+  console.log('[test-ctc] Starting Parakeet CTC transcription test')
+
+  try {
+    const binding = require('@qvac/transcription-parakeet/binding.js')
+    const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
+    binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
+    console.log('[test-ctc] ✓ Addon loaded')
+
+    if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
+
+    for (const name of CTC_MODEL_FILES) {
+      const dest = path.join(modelDir, name)
+      if (fs.existsSync(dest)) {
+        console.log(`[test-ctc] ${name}: cached`)
+        continue
+      }
+      await downloadFile(`${CTC_HF_BASE}/${name}`, dest, name)
+    }
+
+    let result = null
+    const parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType: 'ctc',
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) result = seg.text
+        }
+      }
+      if (error) console.error('[test-ctc] Error:', error)
+    })
+
+    for (const filename of CTC_MODEL_FILES) {
+      const filePath = path.join(modelDir, filename)
+      if (!fs.existsSync(filePath)) continue
+      const chunk = filename.endsWith('_data')
+        ? new Uint8Array([0])
+        : new Uint8Array(fs.readFileSync(filePath))
+      await parakeet.loadWeights({ filename, chunk, completed: true })
+    }
+    await parakeet.activate()
+    console.log('[test-ctc] ✓ Model loaded')
+
+    const audioPath = getAssetPath('sample.raw')
+    if (!audioPath) throw new Error('sample.raw not found')
+
+    const rawBuffer = fs.readFileSync(audioPath.replace('file://', ''))
+    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+    const audio = new Float32Array(pcm.length)
+    for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
+
+    console.log(`[test-ctc] Transcribing ${(audio.length / 16000).toFixed(1)}s audio...`)
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    for (let i = 0; i < 60 && !result; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+
+    await parakeet.destroyInstance()
+    binding.releaseLogger()
+
+    console.log(`[test-ctc] Result: "${result}"`)
+    console.log(`[test-ctc] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
+
+    return {
+      summary: { total: 1, passed: 1, failed: 0 },
+      result: { fullText: result }
+    }
+  } catch (error) {
+    console.error(`[test-ctc] ❌ FAILED: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  }
+}
+
+const SF_HF_BASE = 'https://huggingface.co/tetherto/sortformer-4spk-v2-onnx/resolve/main'
+const SF_MODEL_FILES = ['sortformer.onnx']
+
+/**
+ * Downloads Sortformer model from HuggingFace and runs diarization
+ */
+async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+  const startTime = Date.now()
+  const modelDir = path.join(dirPath, 'sortformer-model')
+
+  console.log('[test-sf] Starting Sortformer diarization test')
+
+  try {
+    const binding = require('@qvac/transcription-parakeet/binding.js')
+    const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
+    binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
+    console.log('[test-sf] ✓ Addon loaded')
+
+    if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
+
+    for (const name of SF_MODEL_FILES) {
+      const dest = path.join(modelDir, name)
+      if (fs.existsSync(dest)) {
+        console.log(`[test-sf] ${name}: cached`)
+        continue
+      }
+      await downloadFile(`${SF_HF_BASE}/${name}`, dest, name)
+    }
+
+    let result = null
+    const parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType: 'sortformer',
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) result = seg.text
+        }
+      }
+      if (error) console.error('[test-sf] Error:', error)
+    })
+
+    for (const filename of SF_MODEL_FILES) {
+      const filePath = path.join(modelDir, filename)
+      if (!fs.existsSync(filePath)) continue
+      const chunk = new Uint8Array(fs.readFileSync(filePath))
+      await parakeet.loadWeights({ filename, chunk, completed: true })
+    }
+    await parakeet.activate()
+    console.log('[test-sf] ✓ Model loaded')
+
+    const audioPath = getAssetPath('sample.raw')
+    if (!audioPath) throw new Error('sample.raw not found')
+
+    const rawBuffer = fs.readFileSync(audioPath.replace('file://', ''))
+    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+    const audio = new Float32Array(pcm.length)
+    for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
+
+    console.log(`[test-sf] Running diarization on ${(audio.length / 16000).toFixed(1)}s audio...`)
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    for (let i = 0; i < 60 && !result; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+
+    await parakeet.destroyInstance()
+    binding.releaseLogger()
+
+    console.log(`[test-sf] Result: "${result}"`)
+    console.log(`[test-sf] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
+
+    return {
+      summary: { total: 1, passed: 1, failed: 0 },
+      result: { fullText: result }
+    }
+  } catch (error) {
+    console.error(`[test-sf] ❌ FAILED: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  }
+}
