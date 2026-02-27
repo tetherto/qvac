@@ -267,4 +267,3 @@ module.exports = {
   downloadBergamotFromHyperdrive,
   downloadBergamotFromFirefox
 }
-
