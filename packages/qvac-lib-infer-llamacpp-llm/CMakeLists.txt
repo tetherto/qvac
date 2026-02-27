@@ -21,7 +21,7 @@ project(qvac-lib-inference-addon-llama C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
