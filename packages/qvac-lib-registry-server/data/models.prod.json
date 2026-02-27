@@ -5183,6 +5183,7 @@
   {
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 vocabulary",
     "quantization": "",
     "params": "0.6B",
