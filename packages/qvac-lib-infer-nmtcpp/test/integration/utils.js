@@ -202,7 +202,7 @@ async function ensureIndicTransModel () {
  * @throws {Error} If model files not found/available
  */
 async function ensureBergamotModel () {
-  const { ensureBergamotModelFiles } = require('../../lib/bergamot-model-fetcher')
+  const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 
   // Check pre-existing local model first
   const relativeDir = '../../model/bergamot/enit'
