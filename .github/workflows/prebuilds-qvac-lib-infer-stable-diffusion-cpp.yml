@@ -344,7 +344,7 @@ jobs:
       - name: Run bare-make generate
         working-directory: ${{ env.WORKDIR }}
         run: |
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $CFG_OPTS
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
       - name: Run bare-make build
         working-directory: ${{ env.WORKDIR }}
