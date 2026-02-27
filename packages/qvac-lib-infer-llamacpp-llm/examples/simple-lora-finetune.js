@@ -206,6 +206,9 @@ async function runFinetuningTests () {
     }
 
     const handle = await model.finetune(finetuneOptions)
+    handle.on('stats', stats => {
+      console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+    })
     const finetuneResult = await handle.await()
     console.log('Finetune completed:', finetuneResult)
     if (args.opts?.stats) {

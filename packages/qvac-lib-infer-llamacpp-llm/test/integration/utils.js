@@ -324,6 +324,10 @@ function createPauseResumeTestDataset (filePath) {
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
+    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] }
   ]
   const dir = path.dirname(filePath)
@@ -336,11 +340,9 @@ function createPauseResumeTestDataset (filePath) {
 function setupParams (modelDir, overrides = {}) {
   const testId = 'pause-resume'
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
-  const evalDatasetPath = path.join(modelDir, `eval_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
 
   createPauseResumeTestDataset(trainDatasetPath)
-  createPauseResumeTestDataset(evalDatasetPath)
   cleanupCheckpoints(checkpointDir)
 
   return {
