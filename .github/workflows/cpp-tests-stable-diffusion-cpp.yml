@@ -30,11 +30,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
-            platform: linux
+          - os: macos-14
+            platform: darwin
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
-    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -126,9 +127,9 @@ jobs:
       - name: Get vcpkg cache
         uses: actions/cache@v5
         with:
-          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -209,7 +210,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         uses: actions/upload-artifact@v6
         with:
-          name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+          name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             ${{ env.WORKDIR }}/build/test/unit/coverage-html/
             ${{ env.WORKDIR }}/build/test/unit/lcov.info
