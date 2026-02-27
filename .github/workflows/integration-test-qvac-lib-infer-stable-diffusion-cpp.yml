@@ -233,6 +233,7 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          npm run test:integration:generate
           bare test/integration/all.js --exit | Tee-Object test-output.log
         shell: powershell
         env:
