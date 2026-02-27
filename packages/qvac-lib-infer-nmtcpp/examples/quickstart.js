@@ -85,49 +85,59 @@ async function testGGML () {
 async function testBergamot () {
   console.log('\n=== Testing Bergamot Backend ===\n')
 
-  // Use local model path for Bergamot - env var or relative path
+  const {
+    ensureBergamotModelFiles,
+    getBergamotFileNames,
+    getBergamotHyperdriveKey
+  } = require('../lib/bergamot-model-fetcher')
+
+  const srcLang = 'en'
+  const dstLang = 'it'
+
+  // Use local model path if provided, otherwise auto-download
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'
 
-  console.log('Model path:', bergamotPath)
+  // Ensure model files are present (Hyperdrive first, Firefox CDN fallback)
+  const modelDir = await ensureBergamotModelFiles(srcLang, dstLang, bergamotPath)
+  console.log('Model directory:', modelDir)
 
-  // Check if model directory exists
-  if (!fs.existsSync(bergamotPath)) {
-    console.log('Bergamot model directory not found, skipping test')
-    console.log('Set BERGAMOT_MODEL_PATH env var or place model in ./model/bergamot/enit')
-    return
+  const fileNames = getBergamotFileNames(srcLang, dstLang)
+
+  // Decide loader: Hyperdrive key available → use HyperdriveDL, else local files
+  const hdKey = getBergamotHyperdriveKey(srcLang, dstLang)
+  let loader
+
+  if (hdKey) {
+    // Primary: use HyperdriveDL for streaming model data
+    const HyperdriveDL = require('@qvac/dl-hyperdrive')
+    loader = new HyperdriveDL({ key: `hd://${hdKey}` })
+    console.log('Using HyperdriveDL loader')
+  } else {
+    // Fallback: local file loader (files already downloaded from Firefox CDN)
+    loader = {
+      ready: async () => {},
+      close: async () => {},
+      download: async (filename) => fs.readFileSync(path.join(modelDir, filename)),
+      getFileSize: async (filename) => fs.statSync(path.join(modelDir, filename)).size
+    }
+    console.log('Using local file loader (Firefox CDN download)')
   }
 
   console.log('Loading model...')
 
-  // Create a local file loader for Bergamot models that are already on disk
-  const localLoader = {
-    ready: async () => { /* Models already on disk */ },
-    close: async () => { /* No resources to close */ },
-    download: async (filename) => {
-      // Read file from local disk
-      const filePath = path.join(bergamotPath, filename)
-      return fs.readFileSync(filePath)
-    },
-    getFileSize: async (filename) => {
-      const filePath = path.join(bergamotPath, filename)
-      const stats = fs.statSync(filePath)
-      return stats.size
-    }
-  }
-
   // Create the `args` object for Bergamot
   const args = {
-    loader: localLoader,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: bergamotPath,
-    modelName: 'model.enit.intgemm.alphas.bin',
-    logger // Pass the logger
+    loader,
+    params: { mode: 'full', dstLang, srcLang },
+    diskPath: modelDir,
+    modelName: fileNames.modelName,
+    logger
   }
 
-  // Config with explicit vocab paths for Bergamot
+  // Config with vocab paths
   const config = {
-    srcVocabName: 'vocab.enit.spm',
-    dstVocabName: 'vocab.enit.spm',
+    srcVocabName: fileNames.srcVocabName,
+    dstVocabName: fileNames.dstVocabName,
     modelType: TranslationNmtcpp.ModelTypes.Bergamot
   }
 
@@ -156,8 +166,8 @@ async function testBergamot () {
     console.log('Unloading model...')
     await model.unload()
 
-    // Close the local loader
-    await localLoader.close()
+    // Close the loader
+    await loader.close()
     console.log('Done!')
   }
 }

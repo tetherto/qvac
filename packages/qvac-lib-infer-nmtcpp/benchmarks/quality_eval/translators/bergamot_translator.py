@@ -1,10 +1,15 @@
 """
 Bergamot Translator wrapper for evaluation framework
-Uses bergamot-translator Python package with local model management
+Uses bergamot-translator Python package with local model management.
+Auto-downloads Firefox Translations models from Mozilla CDN when not found locally.
 """
 
 import os
 import sys
+import json
+import gzip
+import shutil
+from urllib.request import urlopen, Request
 from tqdm import tqdm
 import toolz
 from pathlib import Path
@@ -19,6 +24,83 @@ except ImportError:
 
 # Firefox translations models directory (can be overridden via env var)
 FIREFOX_MODELS_DIR = os.environ.get("FIREFOX_MODELS_DIR", Path.home() / ".local/share/bergamot/models/firefox")
+
+
+FIREFOX_RECORDS_URL = (
+    "https://firefox.settings.services.mozilla.com/v1/"
+    "buckets/main/collections/translations-models/records"
+)
+FIREFOX_ATTACHMENT_BASE = (
+    "https://firefox-settings-attachments.cdn.mozilla.net"
+)
+
+
+def download_firefox_model(src_lang, trg_lang):
+    """Download Firefox Translations model files from Mozilla CDN.
+
+    Fetches model, vocab and lex files for a language pair from the
+    same Remote Settings CDN that Firefox uses internally.
+
+    Returns:
+        Path to model directory if successful, None otherwise
+    """
+    print(f"[bergamot] Downloading model {src_lang}-{trg_lang} from Firefox CDN...", file=sys.stderr)
+
+    try:
+        req = Request(FIREFOX_RECORDS_URL, headers={"User-Agent": "qvac-eval/1.0"})
+        with urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read())
+        records = body.get("data", [])
+    except Exception as e:
+        print(f"[bergamot] Failed to fetch Firefox model records: {e}", file=sys.stderr)
+        return None
+
+    pair_records = [
+        r for r in records
+        if r.get("fromLang") == src_lang and r.get("toLang") == trg_lang and r.get("attachment")
+    ]
+
+    if not pair_records:
+        print(f"[bergamot] No Firefox model found for {src_lang}-{trg_lang}", file=sys.stderr)
+        return None
+
+    pair_code = f"{src_lang}{trg_lang}"
+    dest_dir = Path(FIREFOX_MODELS_DIR) / "base-memory" / pair_code
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for record in pair_records:
+        att = record.get("attachment", {})
+        location = att.get("location")
+        if not location:
+            continue
+
+        filename = record.get("name") or att.get("filename") or Path(location).name
+        url = f"{FIREFOX_ATTACHMENT_BASE}/{location}"
+        dest_path = dest_dir / filename
+
+        print(f"[bergamot]   Downloading {filename}...", file=sys.stderr)
+        try:
+            req = Request(url, headers={"User-Agent": "qvac-eval/1.0"})
+            with urlopen(req, timeout=120) as resp:
+                data = resp.read()
+            dest_path.write_bytes(data)
+            size_mb = len(data) / 1024 / 1024
+            print(f"[bergamot]   ✓ {filename} ({size_mb:.1f}MB)", file=sys.stderr)
+        except Exception as e:
+            print(f"[bergamot]   ✗ Failed to download {filename}: {e}", file=sys.stderr)
+            return None
+
+    # Verify we got the essential files
+    files = list(dest_dir.iterdir())
+    has_model = any(f.name.endswith(".bin") and "intgemm" in f.name for f in files)
+    has_vocab = any(f.name.endswith(".spm") for f in files)
+
+    if has_model and has_vocab:
+        print(f"[bergamot] Download complete → {dest_dir}", file=sys.stderr)
+        return dest_dir
+    else:
+        print(f"[bergamot] Download incomplete — missing model or vocab files", file=sys.stderr)
+        return None
 
 
 def check_firefox_model(src_lang, trg_lang):
@@ -121,6 +203,13 @@ def translate_direct(texts, src_lang, trg_lang):
     config_path = check_firefox_model(src_lang, trg_lang)
 
     if config_path is None:
+        # Auto-download from Firefox CDN
+        print(f"Model not found locally, attempting Firefox CDN download...", file=sys.stderr)
+        dl_dir = download_firefox_model(src_lang, trg_lang)
+        if dl_dir:
+            config_path = check_firefox_model(src_lang, trg_lang)
+
+    if config_path is None:
         print(f"ERROR: Firefox translations model not found for {src_lang}-{trg_lang}", file=sys.stderr)
         print(f"Checked: {Path(FIREFOX_MODELS_DIR) / 'base-memory' / f'{src_lang}{trg_lang}'}", file=sys.stderr)
         print(f"Checked: {Path(FIREFOX_MODELS_DIR) / 'tiny' / f'{src_lang}{trg_lang}'}", file=sys.stderr)
@@ -181,6 +270,19 @@ def translate_pivot(texts, src_lang, trg_lang):
     # Get config paths for both models (Firefox only)
     config_path_1 = check_firefox_model(src_lang, "en")
     config_path_2 = check_firefox_model("en", trg_lang)
+
+    # Auto-download missing models from Firefox CDN
+    if config_path_1 is None:
+        print(f"Model not found for {src_lang}->en, attempting Firefox CDN download...", file=sys.stderr)
+        dl_dir = download_firefox_model(src_lang, "en")
+        if dl_dir:
+            config_path_1 = check_firefox_model(src_lang, "en")
+
+    if config_path_2 is None:
+        print(f"Model not found for en->{trg_lang}, attempting Firefox CDN download...", file=sys.stderr)
+        dl_dir = download_firefox_model("en", trg_lang)
+        if dl_dir:
+            config_path_2 = check_firefox_model("en", trg_lang)
 
     if config_path_1 is None:
         print(f"ERROR: Firefox model not found for {src_lang}->en", file=sys.stderr)

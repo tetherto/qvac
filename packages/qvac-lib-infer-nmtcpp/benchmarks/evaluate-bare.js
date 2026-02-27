@@ -253,10 +253,22 @@ Examples:
   console.log(`Mode:        ${useBatch ? 'Batch' : 'Sequential'}`)
   console.log('')
 
-  // Check model exists
+  // Check model exists — auto-download Bergamot models if missing
   if (!fs.existsSync(modelPath)) {
-    console.error(`❌ Model path not found: ${modelPath}`)
-    process.exit(1)
+    if (modelType === 'Bergamot') {
+      console.log(`⬇️  Bergamot model not found at ${modelPath}, downloading via Hyperdrive / Firefox CDN...`)
+      try {
+        const { ensureBergamotModelFiles } = require('../lib/bergamot-model-fetcher.js')
+        await ensureBergamotModelFiles(srcLang, tgtLang, modelPath)
+        console.log(`✓ Model downloaded to ${modelPath}`)
+      } catch (dlErr) {
+        console.error(`❌ Auto-download failed: ${dlErr.message}`)
+        process.exit(1)
+      }
+    } else {
+      console.error(`❌ Model path not found: ${modelPath}`)
+      process.exit(1)
+    }
   }
 
   // Load dataset or use samples

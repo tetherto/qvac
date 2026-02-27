@@ -116,14 +116,14 @@ jobs:
           echo "### 🔧 Bergamot Models (qvac_bergamot)"
           echo "🎯 Pairs: ${{ needs.prepare.outputs.bergamot_pairs }}"
           echo ""
-          echo "📍 S3 Model Paths:"
+          echo "📍 Model Source: Firefox Remote Settings CDN"
+          echo "   URL: https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
           IFS=',' read -ra PAIRS <<< "${{ needs.prepare.outputs.bergamot_pairs }}"
           for pair in "${PAIRS[@]}"; do
             pair=$(echo "$pair" | xargs)
             src_lang="${pair%-*}"
             trg_lang="${pair#*-}"
-            pair_code="${src_lang}${trg_lang}"
-            echo "- **$pair**: \`s3://\${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-${pair_code}/\`"
+            echo "- **$pair**: Firefox CDN (fromLang=${src_lang}, toLang=${trg_lang})"
           done
           echo ""
           echo "🔗 View results in the benchmark workflow artifacts"
