@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0]
+
+Release Date: 2026-02-26
+
+### ✨ Features
+
+- Add `downloadBlob(blobBinding, options)` method for direct blob download without metadata core sync — bypasses ~4s swarm discovery when blob coordinates are already known (#556)
+- Split `_open()` into fast network init and background metadata connection for improved startup latency (#556)
+
+### 🔧 Changed
+
+- `_getBlobsCore` now accepts z-base-32 encoded keys via `IdEnc.decode` in addition to hex and Buffer inputs (#556)
+
+## [0.1.8]
+
+Release Date: 2026-02-25
+
+### 🐛 Fixed
+
+- Fix Pear app crash (`MODULE_NOT_FOUND: Cannot find module 'os'`) by replacing npm aliases with `#`-prefixed subpath imports for cross-runtime Bare/Node.js compatibility (#446)
+- Update stale `DEFAULT_REGISTRY_CORE_KEY` to current production registry (#446)
+
 ## [0.1.6]
 
 Release Date: 2026-02-17

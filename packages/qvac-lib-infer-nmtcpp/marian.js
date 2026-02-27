@@ -33,7 +33,7 @@ class TranslationInterface {
       this._loggerInitialized = true
     }
   }
-  
+
   // For BaseInference.
   async destroyInstance () {
     await this.destroy()
@@ -44,26 +44,6 @@ class TranslationInterface {
    */
   async unload () {
     await this.destroy()
-  }
-
-  /**
-   * Moves addon the the LOADING state and loads configuration for the model.
-   * Can only be invoked after unload()
-   * @param {Object} configurationParams - all the required configuration for inference setup
-   */
-  async load (configurationParams) {
-    binding.load(this._handle, configurationParams)
-  }
-
-  /**
-   * Stops the current process execution,
-   * frees memory allocated for configuration and weights,
-   * loads the new configuration,
-   * and moves addon to the LOADING state.
-   * @param {Object} configurationParams - all the required configuration for inference setup
-   */
-  async reload (configurationParams) {
-    binding.reload(this._handle, configurationParams)
   }
 
   /**
@@ -87,14 +67,6 @@ class TranslationInterface {
   }
 
   /**
-   * Unloads weights for the model.
-   * Can only be invoked after instance has loaded weights
-   */
-  async unloadWeights () {
-    binding.unloadWeights(this._handle)
-  }
-
-  /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
   async activate () {
@@ -110,7 +82,7 @@ class TranslationInterface {
   }
 
   /**
-   * Cancel a inference process 
+   * Cancel a inference process
    */
   async cancel () {
     try {
@@ -125,10 +97,11 @@ class TranslationInterface {
   }
 
   /**
-   * Adds new input to the processing queue
+   * Submits a job to the processing pipeline
    * @param {Object} data
-   * @param {String} data.type
-   * @param {String} data.input
+   * @param {String} data.type - 'text' for single input, 'sequences' for batch
+   * @param {String | String[]} data.input
+   * @returns {boolean} true if job was accepted
    */
   async runJob (data) {
     try {
@@ -136,22 +109,6 @@ class TranslationInterface {
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_APPEND,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Addon process status
-   * @returns {String}
-   */
-  async status () {
-    try {
-      return binding.status(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_GET_STATUS,
         adds: err.message,
         cause: err
       })
@@ -179,25 +136,6 @@ class TranslationInterface {
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_DESTROY,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Translates multiple texts in a single batch for better performance.
-   * This bypasses the normal queue-based processing and directly calls
-   * the batch translation API.
-   * @param {string[]} texts - Array of texts to translate
-   * @returns {Promise<string[]>} - Array of translated texts
-   */
-  async processBatch (texts) {
-    try {
-      return binding.processBatch(this._handle, texts)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
         cause: err
       })

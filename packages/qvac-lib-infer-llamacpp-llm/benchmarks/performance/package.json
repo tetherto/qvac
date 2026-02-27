@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/llm-llamacpp-performance",
+  "private": true,
+  "description": "Performance and parameter sweep runners for LLM addon",
+  "scripts": {
+    "prepare:models:addon": "node ./prepare-models.js --target addon",
+    "prepare:models:all": "node ./prepare-models.js --target all",
+    "prepare:prompts": "bare ./prepare-prompts.js",
+    "verify:prompts": "bare ./verify-prompts.js",
+    "run:param-sweep": "node ./run-param-sweep.js",
+    "run:judge": "node ./prepare-models.js --target addon && bare ./run-judge.js"
+  },
+  "dependencies": {
+    "@qvac/dl-filesystem": "latest",
+    "@qvac/llm-llamacpp": "latest",
+    "bare-fs": "latest",
+    "bare-path": "latest",
+    "bare-process": "latest"
+  }
+}

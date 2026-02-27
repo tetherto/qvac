@@ -5,10 +5,11 @@ const logger = require('./utils/logger')
 const ApiError = require('./utils/ApiError')
 const { HTTP_METHODS, ERRORS } = require('./utils/constants')
 const { runChatterboxTTS } = require('./services/runChatterboxTTS')
+const { runSupertonicTTS } = require('./services/runSupertonicTTS')
 const { URL } = require('bare-url')
 const { processJsonRequest, formatZodError } = require('./utils/helper')
 const { ZodError } = require('zod')
-const { ChatterboxRequestSchema } = require('./validation')
+const { ChatterboxRequestSchema, SupertonicRequestSchema } = require('./validation')
 
 /**
  * Handle errors and send appropriate response
@@ -95,7 +96,8 @@ const handleRequest = async (req, res) => {
         version,
         endpoints: {
           '/': 'Health check',
-          '/synthesize-chatterbox': 'POST - Run Chatterbox TTS synthesis'
+          '/synthesize-chatterbox': 'POST - Run Chatterbox TTS synthesis',
+          '/synthesize-supertonic': 'POST - Run Supertonic TTS synthesis'
         }
       }))
     }
@@ -103,6 +105,12 @@ const handleRequest = async (req, res) => {
     if (pathname === '/synthesize-chatterbox' && method === HTTP_METHODS.POST) {
       const validated = ChatterboxRequestSchema.parse(body)
       const result = await runChatterboxTTS(validated)
+      return res.end(JSON.stringify(result))
+    }
+
+    if (pathname === '/synthesize-supertonic' && method === HTTP_METHODS.POST) {
+      const validated = SupertonicRequestSchema.parse(body)
+      const result = await runSupertonicTTS(validated)
       return res.end(JSON.stringify(result))
     }
 

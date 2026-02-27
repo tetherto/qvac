@@ -1,0 +1,237 @@
+name: Benchmark Supertonic (qvac-lib-infer-onnx-tts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      addon_version:
+        description: 'Version of @qvac/tts-onnx to benchmark (e.g., 0.1.0, latest)'
+        required: false
+        type: string
+        default: 'latest'
+      max_samples:
+        description: 'Maximum number of samples per language (0 = unlimited, uses full en+es Harvard)'
+        required: false
+        type: number
+        default: 0
+      round_trip_test:
+        description: 'Enable round-trip quality test (TTS → Whisper → WER/CER)'
+        required: true
+        type: boolean
+        default: true
+      whisper_model:
+        description: 'Whisper model for round-trip test'
+        required: false
+        type: choice
+        default: tiny
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      num_runs:
+        description: 'Number of runs per sample'
+        required: false
+        type: number
+        default: 1
+      use_gpu:
+        description: 'Enable GPU acceleration'
+        required: true
+        type: boolean
+        default: false
+      run_python:
+        description: 'Run Python Native baseline (Supertonic ONNX + Transformers)'
+        required: true
+        type: boolean
+        default: true
+
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/qvac-lib-infer-onnx-tts/**"
+
+jobs:
+  benchmark-supertonic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: macos-14-xlarge
+    timeout-minutes: 180
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+          [ -n "${GIT_PAT:-}" ] && git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/" || true
+          mkdir -p packages/qvac-lib-infer-onnx-tts/benchmarks/server
+          cp .npmrc packages/qvac-lib-infer-onnx-tts/benchmarks/server/.npmrc
+
+      - name: Install system dependencies
+        run: |
+          brew install ffmpeg cmake
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install Bare runtime
+        run: |
+          npm install -g bare-dev
+          npm install -g bare bare-make
+
+      - name: Determine addon version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.addon_version || 'latest' }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update addon version in package.json
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          [ "$VERSION" = "latest" ] && npm pkg set dependencies.@qvac/tts-onnx="latest" || npm pkg set dependencies.@qvac/tts-onnx="$VERSION"
+
+      - name: Update benchmark configuration
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          MAX_SAMPLES="${{ github.event.inputs.max_samples || 0 }}"
+          RUN_PYTHON="${{ github.event.inputs.run_python || 'true' }}"
+          ROUND_TRIP_TEST="${{ github.event.inputs.round_trip_test || 'true' }}"
+          WHISPER_MODEL="${{ github.event.inputs.whisper_model || 'tiny' }}"
+          NUM_RUNS="${{ github.event.inputs.num_runs || 1 }}"
+          USE_GPU="${{ github.event.inputs.use_gpu || 'false' }}"
+          TIMEOUT=600
+          sed -i '' "s|timeout:.*|timeout: ${TIMEOUT}|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  run_python:.*|  run_python: ${RUN_PYTHON}|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  round_trip_test:.*|  round_trip_test: ${ROUND_TRIP_TEST}|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  whisper_model:.*|  whisper_model: \"${WHISPER_MODEL}\"|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^comparison:/,/^[^ ]/ s|  num_runs:.*|  num_runs: ${NUM_RUNS}|" benchmarks/client/config/config-supertonic.yaml
+          sed -i '' "/^model:/,/^[^ ]/ s|  useGPU:.*|  useGPU: ${USE_GPU}|" benchmarks/client/config/config-supertonic.yaml
+          cat benchmarks/client/config/config-supertonic.yaml
+
+      - name: Install benchmark server dependencies
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: npm install
+
+      - name: Download Supertonic models
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: npm run setup:supertonic
+
+      - name: Install Python server dependencies
+        if: github.event.inputs.run_python == 'true'
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements-supertonic.txt
+
+      - name: Install benchmark client dependencies
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+
+      - name: Start Python Native server
+        if: github.event.inputs.run_python == 'true'
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        run: |
+          nohup python main.py > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 10
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            cat server.log
+            exit 1
+          fi
+
+      - name: Start TTS Addon server
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 $(cat server.pid) 2>/dev/null; then
+            cat server.log
+            exit 1
+          fi
+
+      - name: Clean old benchmark results
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: rm -rf benchmarks/results/*.md || true
+
+      - name: Run benchmark
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+        run: |
+          python -u -m src.tts.main --config config/config-supertonic.yaml
+          rm -rf /tmp/hf_cache || true
+
+      - name: Stop servers
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          [ -f benchmarks/python-server/server.pid ] && kill $(cat benchmarks/python-server/server.pid) 2>/dev/null || true
+          [ -f benchmarks/server/server.pid ] && kill $(cat benchmarks/server/server.pid) 2>/dev/null || true
+          rm -f benchmarks/python-server/server.pid benchmarks/server/server.pid
+
+      - name: Display server logs
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          [ -f benchmarks/server/server.log ] && echo "=== Addon Server ===" && cat benchmarks/server/server.log
+          [ -f benchmarks/python-server/server.log ] && echo "=== Python Server ===" && cat benchmarks/python-server/server.log
+
+      - name: Display results summary
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          if [ -f benchmarks/results/supertonic_addon.md ]; then
+            echo "=== Supertonic Addon Results ==="
+            cat benchmarks/results/supertonic_addon.md
+          fi
+
+      - name: Add results to job summary
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        run: |
+          echo "## Supertonic TTS Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Addon Version | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Languages | en + es (Harvard) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python | 3.12 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          [ -f benchmarks/results/supertonic_addon.md ] && cat benchmarks/results/supertonic_addon.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supertonic-benchmark-results-v${{ steps.version.outputs.version }}
+          path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
+          retention-days: 30

@@ -12,6 +12,18 @@ const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isDarwin = platform === 'darwin'
 
+const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'fp32'
+const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
+
+function chatterboxPath (modelDir, baseName, isMultilingual = false) {
+  const suffix = isMultilingual ? '' : VARIANT_SUFFIX
+  return path.join(modelDir, `${baseName}${suffix}.onnx`)
+}
+
+function chatterboxLmPath (modelDir) {
+  return path.join(modelDir, `language_model${VARIANT_SUFFIX}.onnx`)
+}
+
 const DATASET = [
   'The quick brown fox jumps over the lazy dog.',
   'How are you doing today?',
@@ -27,9 +39,8 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'chatterbox')
 
-  // Ensure Chatterbox models are downloaded
   console.log('\n=== Ensuring Chatterbox models ===')
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir })
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
   t.ok(downloadResult.success, 'Chatterbox models should be downloaded')
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox models, skipping test')
@@ -38,20 +49,18 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
 
   const modelParams = {
     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: path.join(modelDir, 'speech_encoder.onnx'),
-    embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
-    conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
-    languageModelPath: path.join(modelDir, 'language_model.onnx'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(modelDir),
     language: 'en'
   }
 
-  // Load model
   console.log('\n=== Loading Chatterbox TTS model ===')
   const model = await loadChatterboxTTS(modelParams)
   t.ok(model, 'Chatterbox TTS model should be loaded')
   t.ok(model.addon, 'Addon should be created')
 
-  // Run synthesis
   console.log('\n=== Running Chatterbox TTS synthesis ===')
   const text = 'Hello world! This is a test of the Chatterbox text to speech system.'
 
@@ -100,9 +109,8 @@ test('Chatterbox TTS: Multiple sentences synthesis with WER verification', { tim
   const modelDir = path.join(baseDir, 'models', 'chatterbox')
   const whisperModelDir = path.join(baseDir, 'models', 'whisper')
 
-  // Ensure Chatterbox models are downloaded
   console.log('\n=== Ensuring Chatterbox models ===')
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir })
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
   t.ok(downloadResult.success, 'Chatterbox models should be downloaded')
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox models, skipping test')
@@ -120,10 +128,10 @@ test('Chatterbox TTS: Multiple sentences synthesis with WER verification', { tim
 
   const modelParams = {
     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: path.join(modelDir, 'speech_encoder.onnx'),
-    embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
-    conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
-    languageModelPath: path.join(modelDir, 'language_model.onnx'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(modelDir),
     language: 'en'
   }
 
@@ -220,7 +228,7 @@ test('Chatterbox TTS: Reload model from English to Spanish', { timeout: 1800000 
   const modelDir = path.join(baseDir, 'models', 'chatterbox')
 
   console.log('\n=== Ensuring Chatterbox models ===')
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir })
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant: CHATTERBOX_VARIANT })
   t.ok(downloadResult.success, 'Chatterbox models should be downloaded')
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox models, skipping test')
@@ -229,10 +237,10 @@ test('Chatterbox TTS: Reload model from English to Spanish', { timeout: 1800000 
 
   const modelParams = {
     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: path.join(modelDir, 'speech_encoder.onnx'),
-    embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
-    conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
-    languageModelPath: path.join(modelDir, 'language_model.onnx'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(modelDir),
     language: 'en'
   }
 
@@ -294,11 +302,16 @@ const MULTILINGUAL_DATASET = {
 }
 
 test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
 
   console.log('\n=== Ensuring Chatterbox multilingual models ===')
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual' })
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
   t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox multilingual models, skipping test')
@@ -307,10 +320,10 @@ test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeo
 
   const modelParams = {
     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: path.join(modelDir, 'speech_encoder.onnx'),
-    embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
-    conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
-    languageModelPath: path.join(modelDir, 'language_model.onnx'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
     language: 'es'
   }
 
@@ -377,6 +390,11 @@ test('Chatterbox Multilingual TTS: Synthesis across multiple languages', { timeo
 })
 
 test('Chatterbox Multilingual TTS: WER verification for Spanish', { timeout: 1800000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
   if (!isDarwin) {
     console.log('WER test skipped (non-darwin)')
     t.pass('WER test skipped (non-darwin)')
@@ -388,7 +406,7 @@ test('Chatterbox Multilingual TTS: WER verification for Spanish', { timeout: 180
   const whisperModelDir = path.join(baseDir, 'models', 'whisper')
 
   console.log('\n=== Ensuring Chatterbox multilingual models ===')
-  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual' })
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
   t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
   if (!downloadResult.success) {
     console.log('Failed to download Chatterbox multilingual models, skipping test')
@@ -401,10 +419,10 @@ test('Chatterbox Multilingual TTS: WER verification for Spanish', { timeout: 180
 
   const modelParams = {
     tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    speechEncoderPath: path.join(modelDir, 'speech_encoder.onnx'),
-    embedTokensPath: path.join(modelDir, 'embed_tokens.onnx'),
-    conditionalDecoderPath: path.join(modelDir, 'conditional_decoder.onnx'),
-    languageModelPath: path.join(modelDir, 'language_model.onnx'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
     language: 'es'
   }
 

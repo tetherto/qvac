@@ -11,6 +11,11 @@ namespace qvac_lib_infer_parakeet {
  */
 struct ParakeetConfig {
   std::string modelPath;                // Path to model directory
+  std::string encoderPath;              // Absolute path to encoder ONNX file
+  std::string encoderDataPath;  // Absolute path to encoder external data file
+  std::string decoderPath;      // Absolute path to decoder ONNX file
+  std::string vocabPath;        // Absolute path to vocabulary file
+  std::string preprocessorPath; // Absolute path to preprocessor ONNX file
   ModelType modelType = ModelType::TDT;
   int maxThreads = 4;                   // Maximum CPU threads to use
   bool useGPU = false;                  // Enable GPU acceleration
@@ -26,9 +31,13 @@ struct ParakeetConfig {
 
   // Comparison for config change detection
   bool operator==(const ParakeetConfig& other) const {
-    return modelPath == other.modelPath && modelType == other.modelType &&
-           maxThreads == other.maxThreads && useGPU == other.useGPU &&
-           sampleRate == other.sampleRate && channels == other.channels &&
+    return modelPath == other.modelPath && encoderPath == other.encoderPath &&
+           encoderDataPath == other.encoderDataPath &&
+           decoderPath == other.decoderPath && vocabPath == other.vocabPath &&
+           preprocessorPath == other.preprocessorPath &&
+           modelType == other.modelType && maxThreads == other.maxThreads &&
+           useGPU == other.useGPU && sampleRate == other.sampleRate &&
+           channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed;
   }

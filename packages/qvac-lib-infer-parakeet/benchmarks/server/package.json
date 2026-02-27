@@ -12,7 +12,7 @@
   ],
   "author": "Tether",
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-parakeet/issues",
+  "bugs": "https://github.com/tetherto/qvac/issues",
   "devDependencies": {
     "standard": "^17.1.2"
   },

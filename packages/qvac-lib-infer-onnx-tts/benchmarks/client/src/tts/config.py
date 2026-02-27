@@ -31,8 +31,8 @@ class DatasetConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
-    """Model configuration for Chatterbox TTS"""
-    modelDir: Optional[str] = Field(None, description="Path to Chatterbox model directory")
+    """Model configuration for Chatterbox or Supertonic TTS"""
+    modelDir: Optional[str] = Field(None, description="Path to model directory")
     tokenizerPath: Optional[str] = Field(None, description="Path to tokenizer (Chatterbox)")
     speechEncoderPath: Optional[str] = Field(None, description="Path to speech encoder ONNX (Chatterbox)")
     embedTokensPath: Optional[str] = Field(None, description="Path to embed tokens ONNX (Chatterbox)")
@@ -40,6 +40,11 @@ class ModelConfig(BaseModel):
     languageModelPath: Optional[str] = Field(None, description="Path to language model ONNX (Chatterbox)")
     referenceAudioPath: Optional[str] = Field(None, description="Path to reference audio WAV file (Chatterbox)")
     variant: str = Field("fp32", description="Model variant (Chatterbox)")
+
+    # Supertonic-specific
+    voiceName: Optional[str] = Field(None, description="Voice name (Supertonic, e.g. F1, M1)")
+    speed: Optional[float] = Field(None, description="Speech speed (Supertonic)")
+    numInferenceSteps: Optional[int] = Field(None, description="Denoising steps (Supertonic)")
 
     language: str = Field("en", description="Language code")
     sampleRate: int = Field(24000, description="Audio sample rate")

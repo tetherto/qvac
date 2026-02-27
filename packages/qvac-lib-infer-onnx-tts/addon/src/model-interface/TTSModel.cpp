@@ -69,6 +69,11 @@ qvac::ttslib::chatterbox::ChatterboxConfig TTSModel::createChatterboxConfig(
   updateConfig("conditionalDecoderPath", config.conditionalDecoderPath);
   updateConfig("languageModelPath", config.languageModelPath);
 
+  auto lazyIt = configMap.find("lazySessionLoading");
+  if (lazyIt != configMap.end()) {
+    config.lazySessionLoading = lazyIt->second == "true";
+  }
+
   std::stringstream ss;
   ss << "Chatterbox config values: language='" << config.language << "'"
      << "' referenceAudio.size()=" << config.referenceAudio.size()

@@ -3,7 +3,7 @@
 **Package:** `@qvac/embed-llamacpp` v0.11.0  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0  
-**Addon-cpp:** ≥1.1.1 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
+**Addon-cpp:** ≥1.1.2 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
 
 ---
 
@@ -71,7 +71,7 @@
 Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-qvac-lib-infer-llamacpp-embed.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.1): C++ addon framework
+- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
 - llama.cpp (≥7248.1.0): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 
@@ -324,7 +324,7 @@ graph TB
 - Native handle lifecycle management
 - Type conversion between JS and native
 
-**Addon surface (addon-cpp ≥1.1.1):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources.
+**Addon surface (addon-cpp ≥1.1.2):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources.
 
 ### C++ Components
 
@@ -695,7 +695,7 @@ Support batch processing natively by accepting both single strings and arrays of
 
 ### Context
 
-With addon-cpp ≥1.1.1, a single inference request is one `runJob({ type, input })` call (full input in one shot). The addon allows only one job at a time. Without coordination, a second `run()` could call `runJob()` while the first job is still processing, which the addon rejects.
+With addon-cpp ≥1.1.2, a single inference request is one `runJob({ type, input })` call (full input in one shot). The addon allows only one job at a time. Without coordination, a second `run()` could call `runJob()` while the first job is still processing, which the addon rejects.
 
 ### Decision
 

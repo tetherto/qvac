@@ -1,0 +1,203 @@
+name: On PR Trigger (OCR)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/ocr-onnx/**"
+      - ".github/workflows/*ocr*.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.filter.outputs.pkg }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg:
+              - "packages/ocr-onnx/**"
+              - ".github/workflows/*ocr*.yml"
+
+  sanity-checks:
+    needs: changes
+    if: |
+      (needs.changes.outputs.pkg == 'true' &&
+       contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/ocr-onnx
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: |
+            packages/ocr-onnx
+          fetch-depth: 0
+
+      - name: Fetch PR head and target branch
+        id: fetch_pr
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+
+      - name: Check PR Status with Target Branch
+        continue-on-error: true
+        id: target_branch_checks
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        run: |
+          TARGET_SHA=${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+          fi
+
+      - name: Verify that yaml files are formatted
+        id: yamlfmt
+        uses: tetherto/qvac-devops/.github/actions/yamlfmt@monorepo_update
+        continue-on-error: true
+
+      - name: Check for disallowed dependencies
+        id: check_dependencies
+        continue-on-error: true
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+          fi
+
+      - name: Run JavaScript tests
+        id: run_js_tests
+        continue-on-error: true
+        uses: tetherto/qvac-devops/.github/actions/run-lint-and-unit-tests@monorepo_update
+        with:
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: ${{ env.PKG_DIR }}
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
+            echo "::error::Step - Lint or unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.yamlfmt.outcome }}" = "failure" ]; then
+            echo "::error::Step - Verify that yaml files are formatted failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check for disallowed dependencies failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check PR Status with Target Branch failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+            echo "::error::Step - Fetch PR head and target branch failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi
+
+  cpp-lint:
+    needs: changes
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/ocr-onnx
+
+  prebuild:
+    needs: [sanity-checks, cpp-lint]
+    if: |
+      (needs.changes.outputs.pkg == 'true') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+      )
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      publish_target: "gpr"
+
+  run-integration-tests:
+    needs: [changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+      )
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+  run-mobile-integration-tests:
+    needs: [changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
+      )
+    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+  merge-guard:
+    needs: [changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+    secrets: inherit

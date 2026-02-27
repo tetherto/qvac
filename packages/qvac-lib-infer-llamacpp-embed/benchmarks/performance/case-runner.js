@@ -93,7 +93,7 @@ function buildCases (modelDef, sweep) {
     sweep.device,
     sweep.batchSize,
     sweep.noMmap,
-    sweep.flashAttn,
+    sweep.flashAttn
   ])
 
   for (const [quantization, device, batchSize, noMmap, flashAttn] of combos) {
@@ -108,7 +108,7 @@ function buildCases (modelDef, sweep) {
           device,
           batchSize,
           noMmap,
-          flashAttn,
+          flashAttn
         },
         inputMode,
         isBaseline: false
@@ -144,7 +144,7 @@ function aggregateRunMetrics (runMetrics) {
   }
 }
 
-async function runCaseWithRepeats ({ addonCtor, modelDir, modelName, runtimeConfig, inputs, repeats, onRepeatComplete, debugEnabled }) {
+async function runCaseWithRepeats ({ AddonCtor, modelDir, modelName, runtimeConfig, inputs, repeats, onRepeatComplete, debugEnabled }) {
   const loader = new FilesystemDL({ dirPath: modelDir })
   const configString = buildConfigString(runtimeConfig, { debugEnabled })
   const addonRuntimeLogger = createAddonRuntimeLogger(debugEnabled)
@@ -159,7 +159,7 @@ async function runCaseWithRepeats ({ addonCtor, modelDir, modelName, runtimeConf
   const cleanupErrors = []
 
   try {
-    model = new addonCtor({
+    model = new AddonCtor({
       modelName,
       loader,
       logger: addonRuntimeLogger,
@@ -273,9 +273,9 @@ function buildCaseResult ({
           : null
       )
     : similarityStats(
-        baselineEmbeddingsByInputMode.get(testCase.inputMode),
-        executionResult.embeddings
-      )
+      baselineEmbeddingsByInputMode.get(testCase.inputMode),
+      executionResult.embeddings
+    )
 
   const hasRepeatErrors = Array.isArray(executionResult.errors) && executionResult.errors.length > 0
   const status = hasRepeatErrors

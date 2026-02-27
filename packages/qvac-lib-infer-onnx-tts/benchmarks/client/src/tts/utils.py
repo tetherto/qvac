@@ -83,6 +83,27 @@ def save_single_result(cfg: Config, results: TTSResults, label: str, round_trip_
             f"- **Samples Tested:** {round_trip_metrics.get('total_tested', len(results.results))}",
             "",
         ])
+
+        # Per-language breakdown
+        per_language = rt.get("per_language", {})
+        per_language_rtf = rt.get("per_language_rtf", {})
+        if per_language:
+            lines.extend([
+                "### Quality Metrics by Language",
+                "",
+                "| Language | Avg WER | Min WER | Max WER | Avg CER | Min CER | Max CER | Avg RTF |",
+                "|----------|---------|---------|---------|---------|---------|---------|---------|",
+            ])
+            for lang in sorted(per_language.keys()):
+                lm = per_language[lang]
+                avg_rtf = per_language_rtf.get(lang, 0.0)
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {lm['avg_wer']:.2%} | {lm['min_wer']:.2%} | {lm['max_wer']:.2%} "
+                    f"| {lm['avg_cer']:.2%} | {lm['min_cer']:.2%} | {lm['max_cer']:.2%} "
+                    f"| {avg_rtf:.4f} |"
+                )
+            lines.append("")
     
     lines.extend([
         "## Performance Metrics",
@@ -118,46 +139,52 @@ def round_trip_single_implementation(
     original_texts: List[str],
     runs: List[TTSResults],
     whisper_transcriber,
-    implementation_name: str
+    implementation_name: str,
+    lang_per_result: Optional[List[str]] = None,
 ) -> Optional[Dict]:
     """
-    Perform round-trip quality test for a single implementation
-    
+    Perform round-trip quality test for a single implementation.
+
     Args:
         original_texts: Original input texts
         runs: List of results from implementation (one per run)
         whisper_transcriber: Loaded WhisperTranscriber instance
         implementation_name: Name of implementation for logging
-        
+        lang_per_result: Optional language code per result (e.g. for multi-language Supertonic)
+
     Returns:
         Dict with WER/CER metrics for each run or None if samples not available
     """
     from jiwer import wer, cer
-    
+
     if not runs or not runs[0].results:
         return None
-    
+
     # Check if samples are available
     if not runs[0].results[0].samples:
         logger.info(f"Audio samples not available for {implementation_name} round-trip test")
         return None
-    
+
     logger.info(f"Running round-trip quality test for {implementation_name} with {len(runs)} run(s)...")
-    
+
     # Process each run
     run_metrics = []
-    
+
     for run_idx, results in enumerate(runs, 1):
         logger.info(f"Processing {implementation_name} run {run_idx}/{len(runs)}...")
-        
+
         wers = []
         cers = []
-        
+        langs = []
+
         for i, (original, result) in enumerate(zip(original_texts, results.results)):
             if result.samples:
-                # Transcribe audio
+                # Transcribe audio (use per-result language when provided, e.g. for en+es)
                 samples = np.array(result.samples, dtype=np.int16)
-                transcription = whisper_transcriber.transcribe_samples(samples, result.sample_rate)
+                lang = lang_per_result[i] if lang_per_result and i < len(lang_per_result) else None
+                transcription = whisper_transcriber.transcribe_samples(
+                    samples, result.sample_rate, language=lang
+                )
                 
                 # Normalize texts for comparison (lowercase, strip)
                 original_norm = original.lower().strip()
@@ -170,12 +197,41 @@ def round_trip_single_implementation(
                     
                     wers.append(wer_val)
                     cers.append(cer_val)
+                    langs.append(lang or "unknown")
                     
                     logger.debug(f"{implementation_name} Run {run_idx}, Sample {i+1}: WER={wer_val:.3f}, CER={cer_val:.3f}")
                 except Exception as e:
                     logger.warning(f"Failed to calculate error rates for {implementation_name} run {run_idx}, sample {i+1}: {e}")
         
         if wers:
+            # Compute per-language WER/CER metrics
+            per_language = {}
+            if lang_per_result:
+                lang_buckets: Dict[str, Dict[str, List[float]]] = {}
+                for lang, w, c in zip(langs, wers, cers):
+                    bucket = lang_buckets.setdefault(lang, {"wers": [], "cers": []})
+                    bucket["wers"].append(w)
+                    bucket["cers"].append(c)
+                for lang, data in lang_buckets.items():
+                    per_language[lang] = {
+                        "avg_wer": np.mean(data["wers"]),
+                        "min_wer": np.min(data["wers"]),
+                        "max_wer": np.max(data["wers"]),
+                        "avg_cer": np.mean(data["cers"]),
+                        "min_cer": np.min(data["cers"]),
+                        "max_cer": np.max(data["cers"]),
+                    }
+
+            # Compute per-language RTF from all results in this run
+            per_language_rtf: Dict[str, float] = {}
+            if lang_per_result:
+                rtf_by_lang: Dict[str, List[float]] = {}
+                for i, result_item in enumerate(results.results):
+                    lang = lang_per_result[i] if i < len(lang_per_result) else "unknown"
+                    rtf_by_lang.setdefault(lang, []).append(result_item.rtf)
+                for lang, rtf_vals in rtf_by_lang.items():
+                    per_language_rtf[lang] = float(np.mean(rtf_vals))
+
             run_metrics.append({
                 "avg_wer": np.mean(wers),
                 "std_wer": np.std(wers),
@@ -185,6 +241,8 @@ def round_trip_single_implementation(
                 "std_cer": np.std(cers),
                 "min_cer": np.min(cers),
                 "max_cer": np.max(cers),
+                "per_language": per_language,
+                "per_language_rtf": per_language_rtf,
             })
     
     if not run_metrics:
@@ -420,6 +478,57 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
             f"| Python Native | {python_rt['avg_cer']:.2%} | {python_rt['min_cer']:.2%} | {python_rt['max_cer']:.2%} |",
             "",
         ])
+
+        # Per-language quality breakdown
+        addon_per_lang = addon_rt.get("per_language", {})
+        python_per_lang = python_rt.get("per_language", {})
+        addon_per_lang_rtf = addon_rt.get("per_language_rtf", {})
+        python_per_lang_rtf = python_rt.get("per_language_rtf", {})
+        all_langs = sorted(set(list(addon_per_lang.keys()) + list(python_per_lang.keys())))
+        if all_langs:
+            lines.extend([
+                "### Quality by Language (Run 1)",
+                "",
+                "**Word Error Rate (WER) by Language:**",
+                "",
+                "| Language | Addon Avg WER | Addon Min WER | Addon Max WER | Python Avg WER | Python Min WER | Python Max WER |",
+                "|----------|---------------|---------------|---------------|----------------|----------------|----------------|",
+            ])
+            for lang in all_langs:
+                a = addon_per_lang.get(lang, {})
+                p = python_per_lang.get(lang, {})
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {a.get('avg_wer', 0):.2%} | {a.get('min_wer', 0):.2%} | {a.get('max_wer', 0):.2%} "
+                    f"| {p.get('avg_wer', 0):.2%} | {p.get('min_wer', 0):.2%} | {p.get('max_wer', 0):.2%} |"
+                )
+            lines.extend([
+                "",
+                "**Character Error Rate (CER) by Language:**",
+                "",
+                "| Language | Addon Avg CER | Addon Min CER | Addon Max CER | Python Avg CER | Python Min CER | Python Max CER |",
+                "|----------|---------------|---------------|---------------|----------------|----------------|----------------|",
+            ])
+            for lang in all_langs:
+                a = addon_per_lang.get(lang, {})
+                p = python_per_lang.get(lang, {})
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {a.get('avg_cer', 0):.2%} | {a.get('min_cer', 0):.2%} | {a.get('max_cer', 0):.2%} "
+                    f"| {p.get('avg_cer', 0):.2%} | {p.get('min_cer', 0):.2%} | {p.get('max_cer', 0):.2%} |"
+                )
+            lines.extend([
+                "",
+                "**RTF by Language:**",
+                "",
+                "| Language | Addon Avg RTF | Python Avg RTF |",
+                "|----------|---------------|----------------|",
+            ])
+            for lang in all_langs:
+                a_rtf = addon_per_lang_rtf.get(lang, 0.0)
+                p_rtf = python_per_lang_rtf.get(lang, 0.0)
+                lines.append(f"| {lang.upper()} | {a_rtf:.4f} | {p_rtf:.4f} |")
+            lines.append("")
         
         # Add interpretation
         addon_wer = addon_rt['avg_wer']

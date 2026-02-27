@@ -11,7 +11,7 @@ name: PR Validation and Staging Sync (Registry-server)
 
 on:
   pull_request_target:
-    branches: [main, release-*]
+    branches: [main, release-*, feature-*, tmp-*]
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "packages/qvac-lib-registry-server/**"
