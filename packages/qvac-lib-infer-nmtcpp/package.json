@@ -90,7 +90,8 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js"
   },
   "types": "index.d.ts",
   "standard": {
