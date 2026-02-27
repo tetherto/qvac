@@ -31,6 +31,22 @@ const CTC_MODEL_FILES = [
 ]
 
 /**
+ * Required model files for EOU model
+ */
+const EOU_MODEL_FILES = [
+  'encoder.onnx',
+  'decoder_joint.onnx',
+  'tokenizer.json'
+]
+
+/**
+ * Required model files for Sortformer model
+ */
+const SORTFORMER_MODEL_FILES = [
+  'sortformer.onnx'
+]
+
+/**
  * Get required model files based on model type
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
  * @returns {string[]} - array of required file names
@@ -39,9 +55,11 @@ function getRequiredModelFiles (modelType) {
   switch (modelType) {
     case 'ctc':
       return CTC_MODEL_FILES
-    case 'tdt':
     case 'eou':
+      return EOU_MODEL_FILES
     case 'sortformer':
+      return SORTFORMER_MODEL_FILES
+    case 'tdt':
     default:
       return TDT_MODEL_FILES
   }

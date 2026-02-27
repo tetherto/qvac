@@ -16,6 +16,31 @@ const TDT_MODEL_FILES = [
 ]
 
 /**
+ * CTC model files to load
+ */
+const CTC_MODEL_FILES = [
+  'model.onnx',
+  'model.onnx_data',
+  'tokenizer.json'
+]
+
+/**
+ * EOU model files to load
+ */
+const EOU_MODEL_FILES = [
+  'encoder.onnx',
+  'decoder_joint.onnx',
+  'tokenizer.json'
+]
+
+/**
+ * Sortformer model files to load
+ */
+const SORTFORMER_MODEL_FILES = [
+  'sortformer.onnx'
+]
+
+/**
  * Setup C++ logger with formatted output
  * @param {Object} binding - The native binding
  */
@@ -186,6 +211,9 @@ function printResults (transcriptions) {
 module.exports = {
   LOG_PRIORITIES,
   TDT_MODEL_FILES,
+  CTC_MODEL_FILES,
+  EOU_MODEL_FILES,
+  SORTFORMER_MODEL_FILES,
   setupLogger,
   readFileAsStream,
   parseWavFile,
