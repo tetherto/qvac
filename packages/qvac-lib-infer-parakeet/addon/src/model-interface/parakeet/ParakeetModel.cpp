@@ -13,8 +13,9 @@
 #endif
 #include <istream>
 #include <iostream>
-#include <iterator>
 #include <sstream>
+#include <nlohmann/json.hpp>
+#include <iterator>
 #include <stdexcept>
 #include <vector>
 
@@ -56,6 +57,8 @@ void ParakeetModel::set_weights_for_file(
     model_weights_[filename] = std::vector<uint8_t>(contents.begin(), contents.end());
     if (filename == "vocab.txt") {
       loadVocabulary(model_weights_[filename]);
+    } else if (filename == "tokenizer.json") {
+      loadTokenizerJson(model_weights_[filename]);
     }
   }
 }
@@ -70,6 +73,8 @@ void ParakeetModel::set_weights_for_file(
   model_weights_[filename] = std::move(data);
   if (filename == "vocab.txt") {
     loadVocabulary(model_weights_[filename]);
+  } else if (filename == "tokenizer.json") {
+    loadTokenizerJson(model_weights_[filename]);
   }
 }
 
@@ -91,6 +96,43 @@ void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
   
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "Loaded vocabulary with " + std::to_string(vocab_.size()) + " tokens");
+}
+
+void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
+  std::string jsonStr(data.begin(), data.end());
+  auto json = nlohmann::json::parse(jsonStr);
+
+  vocab_.clear();
+
+  if (json.contains("model") && json["model"].contains("vocab")) {
+    auto& vocabMap = json["model"]["vocab"];
+    size_t maxIdx = 0;
+    for (auto& [token, idx] : vocabMap.items()) {
+      size_t i = idx.get<size_t>();
+      if (i > maxIdx) maxIdx = i;
+    }
+
+    vocab_.resize(maxIdx + 1);
+    for (auto& [token, idx] : vocabMap.items()) {
+      vocab_[idx.get<size_t>()] = token;
+    }
+  }
+
+  // Include added_tokens (e.g. <pad> at index 1024)
+  if (json.contains("added_tokens")) {
+    for (auto& token : json["added_tokens"]) {
+      size_t id = token["id"].get<size_t>();
+      std::string content = token["content"].get<std::string>();
+      if (id >= vocab_.size()) {
+        vocab_.resize(id + 1);
+      }
+      vocab_[id] = content;
+    }
+  }
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+       "Loaded vocabulary with " + std::to_string(vocab_.size()) +
+           " tokens from tokenizer.json");
 }
 
 void ParakeetModel::load() {
@@ -117,145 +159,228 @@ void ParakeetModel::load() {
                ")");
     }
 
-    const bool useNamedPaths = !cfg_.encoderPath.empty();
-    std::filesystem::path stagingDir;
+    if (cfg_.modelType == ModelType::CTC) {
+      // CTC: single model.onnx (encoder-only architecture)
+      auto modelIt = model_weights_.find("model.onnx");
+      if (modelIt == model_weights_.end()) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+             "CTC model weights not found");
+        throw std::runtime_error("CTC model not loaded");
+      }
 
-    // === Encoder ===
-    if (useNamedPaths) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "Loading encoder from path: " + cfg_.encoderPath);
+           "Loading CTC model session...");
 
-      bool hasExternalData = !cfg_.encoderDataPath.empty() &&
-                             std::filesystem::exists(cfg_.encoderDataPath);
+      std::string modelPath = cfg_.modelPath + "/model.onnx";
+      std::string modelDataPath = cfg_.modelPath + "/model.onnx_data";
+      bool hasExternalData = std::filesystem::exists(modelDataPath);
 
       if (hasExternalData) {
-        // ONNX Runtime resolves external data relative to the model file.
-        // Stage symlinks with canonical names so the .data file is found
-        // alongside the .onnx file in the same directory.
-        stagingDir = std::filesystem::temp_directory_path() /
-                     ("parakeet_enc_" +
-                      std::to_string(reinterpret_cast<uintptr_t>(this)));
-        std::filesystem::create_directories(stagingDir);
-
-        auto encLink = stagingDir / "encoder-model.onnx";
-        auto dataLink = stagingDir / "encoder-model.onnx.data";
-        std::filesystem::create_symlink(cfg_.encoderPath, encLink);
-        std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
-
+        auto originalCwd = std::filesystem::current_path();
+        std::filesystem::current_path(cfg_.modelPath);
         try {
-          encoder_session_ = std::make_unique<Ort::Session>(
-              *ort_env_, encLink.c_str(), session_options);
+#ifdef _WIN32
+          std::wstring wModelPath(modelPath.begin(), modelPath.end());
+          ctc_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, wModelPath.c_str(), session_options);
+#else
+          ctc_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, modelPath.c_str(), session_options);
+#endif
+          std::filesystem::current_path(originalCwd);
         } catch (...) {
-          std::filesystem::remove_all(stagingDir);
+          std::filesystem::current_path(originalCwd);
           throw;
         }
-        std::filesystem::remove_all(stagingDir);
-        stagingDir.clear();
       } else {
-#ifdef _WIN32
-        std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, wPath.c_str(), session_options);
-#else
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, cfg_.encoderPath.c_str(), session_options);
-#endif
+        ctc_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, modelIt->second.data(), modelIt->second.size(),
+            session_options);
       }
-    } else {
-      auto encoderIt = model_weights_.find("encoder-model.onnx");
+    } else if (cfg_.modelType == ModelType::EOU) {
+      // EOU: encoder.onnx + decoder_joint.onnx (cache-aware streaming encoder)
+      std::string encoderFilename = "encoder.onnx";
+      std::string decoderFilename = "decoder_joint.onnx";
+
+      auto encoderIt = model_weights_.find(encoderFilename);
       if (encoderIt == model_weights_.end()) {
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-             "Encoder model weights not found");
-        throw std::runtime_error("Encoder model not loaded");
+             "EOU encoder weights not found");
+        throw std::runtime_error("EOU encoder not loaded");
       }
 
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "Loading encoder session...");
+           "Loading EOU encoder session...");
+      encoder_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
+          session_options);
 
-      std::string encoderPath = cfg_.modelPath + "/encoder-model.onnx";
-      std::string encoderDataPath = cfg_.modelPath + "/encoder-model.onnx.data";
-      bool hasExternalData = std::filesystem::exists(encoderDataPath);
-
-      if (hasExternalData) {
-        // ONNX Runtime resolves external data files relative to the model
-        // file's directory when given an absolute path, so no chdir needed.
-#ifdef _WIN32
-        std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, wEncoderPath.c_str(), session_options);
-#else
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, encoderPath.c_str(), session_options);
-#endif
-      } else {
-        encoder_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
-            session_options);
-      }
-    }
-
-    // === Decoder ===
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "Loading decoder session...");
-    if (useNamedPaths && !cfg_.decoderPath.empty()) {
-#ifdef _WIN32
-      std::wstring wPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
-      decoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, wPath.c_str(), session_options);
-#else
-      decoder_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, cfg_.decoderPath.c_str(), session_options);
-#endif
-    } else {
-      auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
+      auto decoderIt = model_weights_.find(decoderFilename);
       if (decoderIt == model_weights_.end()) {
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-             "Decoder model weights not found");
-        throw std::runtime_error("Decoder model not loaded");
+             "EOU decoder weights not found");
+        throw std::runtime_error("EOU decoder not loaded");
       }
+
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "Loading EOU decoder session...");
       decoder_session_ = std::make_unique<Ort::Session>(
           *ort_env_, decoderIt->second.data(), decoderIt->second.size(),
           session_options);
-    }
+    } else if (cfg_.modelType == ModelType::SORTFORMER) {
+      // Sortformer: single sortformer.onnx model
+      auto modelIt = model_weights_.find("sortformer.onnx");
+      if (modelIt == model_weights_.end()) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+             "Sortformer model weights not found");
+        throw std::runtime_error("Sortformer model not loaded");
+      }
 
-    // === Preprocessor (optional) ===
-    if (useNamedPaths && !cfg_.preprocessorPath.empty()) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "Loading preprocessor session...");
-#ifdef _WIN32
-      std::wstring wPath(cfg_.preprocessorPath.begin(),
-                         cfg_.preprocessorPath.end());
-      preprocessor_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, wPath.c_str(), session_options);
-#else
-      preprocessor_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, cfg_.preprocessorPath.c_str(), session_options);
-#endif
+           "Loading Sortformer session...");
+      sortformer_session_ = std::make_unique<Ort::Session>(
+          *ort_env_, modelIt->second.data(), modelIt->second.size(),
+          session_options);
     } else {
-      auto preprocessorIt = model_weights_.find("preprocessor.onnx");
-      if (preprocessorIt != model_weights_.end()) {
+      // TDT: encoder-model.onnx + decoder_joint-model.onnx
+      const bool useNamedPaths = !cfg_.encoderPath.empty();
+      std::filesystem::path stagingDir;
+
+      // === Encoder ===
+      if (useNamedPaths) {
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Loading encoder from path: " + cfg_.encoderPath);
+
+        bool hasExternalData = !cfg_.encoderDataPath.empty() &&
+                               std::filesystem::exists(cfg_.encoderDataPath);
+
+        if (hasExternalData) {
+          stagingDir = std::filesystem::temp_directory_path() /
+                       ("parakeet_enc_" +
+                        std::to_string(reinterpret_cast<uintptr_t>(this)));
+          std::filesystem::create_directories(stagingDir);
+
+          auto encLink = stagingDir / "encoder-model.onnx";
+          auto dataLink = stagingDir / "encoder-model.onnx.data";
+          std::filesystem::create_symlink(cfg_.encoderPath, encLink);
+          std::filesystem::create_symlink(cfg_.encoderDataPath, dataLink);
+
+          try {
+            encoder_session_ = std::make_unique<Ort::Session>(
+                *ort_env_, encLink.c_str(), session_options);
+          } catch (...) {
+            std::filesystem::remove_all(stagingDir);
+            throw;
+          }
+          std::filesystem::remove_all(stagingDir);
+          stagingDir.clear();
+        } else {
+#ifdef _WIN32
+          std::wstring wPath(cfg_.encoderPath.begin(), cfg_.encoderPath.end());
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, wPath.c_str(), session_options);
+#else
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, cfg_.encoderPath.c_str(), session_options);
+#endif
+        }
+      } else {
+        auto encoderIt = model_weights_.find("encoder-model.onnx");
+        if (encoderIt == model_weights_.end()) {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+               "Encoder model weights not found");
+          throw std::runtime_error("Encoder model not loaded");
+        }
+
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Loading encoder session...");
+
+        std::string encoderPath = cfg_.modelPath + "/encoder-model.onnx";
+        std::string encoderDataPath = cfg_.modelPath + "/encoder-model.onnx.data";
+        bool hasExternalData = std::filesystem::exists(encoderDataPath);
+
+        if (hasExternalData) {
+#ifdef _WIN32
+          std::wstring wEncoderPath(encoderPath.begin(), encoderPath.end());
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, wEncoderPath.c_str(), session_options);
+#else
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, encoderPath.c_str(), session_options);
+#endif
+        } else {
+          encoder_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, encoderIt->second.data(), encoderIt->second.size(),
+              session_options);
+        }
+      }
+
+      // === Decoder ===
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+           "Loading decoder session...");
+      if (useNamedPaths && !cfg_.decoderPath.empty()) {
+#ifdef _WIN32
+        std::wstring wPath(cfg_.decoderPath.begin(), cfg_.decoderPath.end());
+        decoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, wPath.c_str(), session_options);
+#else
+        decoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, cfg_.decoderPath.c_str(), session_options);
+#endif
+      } else {
+        auto decoderIt = model_weights_.find("decoder_joint-model.onnx");
+        if (decoderIt == model_weights_.end()) {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+               "Decoder model weights not found");
+          throw std::runtime_error("Decoder model not loaded");
+        }
+        decoder_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, decoderIt->second.data(), decoderIt->second.size(),
+            session_options);
+      }
+
+      // === Preprocessor (optional) ===
+      if (useNamedPaths && !cfg_.preprocessorPath.empty()) {
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
              "Loading preprocessor session...");
+#ifdef _WIN32
+        std::wstring wPath(cfg_.preprocessorPath.begin(),
+                           cfg_.preprocessorPath.end());
         preprocessor_session_ = std::make_unique<Ort::Session>(
-            *ort_env_, preprocessorIt->second.data(),
-            preprocessorIt->second.size(), session_options);
+            *ort_env_, wPath.c_str(), session_options);
+#else
+        preprocessor_session_ = std::make_unique<Ort::Session>(
+            *ort_env_, cfg_.preprocessorPath.c_str(), session_options);
+#endif
+      } else {
+        auto preprocessorIt = model_weights_.find("preprocessor.onnx");
+        if (preprocessorIt != model_weights_.end()) {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+               "Loading preprocessor session...");
+          preprocessor_session_ = std::make_unique<Ort::Session>(
+              *ort_env_, preprocessorIt->second.data(),
+              preprocessorIt->second.size(), session_options);
+        }
+      }
+
+      // === Vocabulary (load from file if not already loaded via
+      // set_weights_for_file) ===
+      if (useNamedPaths && vocab_.empty() && !cfg_.vocabPath.empty()) {
+        std::ifstream vocabFile(cfg_.vocabPath, std::ios::binary);
+        if (vocabFile.is_open()) {
+          std::vector<uint8_t> vocabData(
+              (std::istreambuf_iterator<char>(vocabFile)),
+              std::istreambuf_iterator<char>());
+          loadVocabulary(vocabData);
+        }
       }
     }
-
-    // === Vocabulary (load from file if not already loaded via
-    // set_weights_for_file) ===
-    if (useNamedPaths && vocab_.empty() && !cfg_.vocabPath.empty()) {
-      std::ifstream vocabFile(cfg_.vocabPath, std::ios::binary);
-      if (vocabFile.is_open()) {
-        std::vector<uint8_t> vocabData(
-            (std::istreambuf_iterator<char>(vocabFile)),
-            std::istreambuf_iterator<char>());
-        loadVocabulary(vocabData);
-      }
-    }
-
-    is_loaded_ = true;
     
+    is_loaded_ = true;
+
+    // Free weight buffers now that ONNX sessions are created
+    model_weights_.clear();
+
     auto loadEnd = std::chrono::high_resolution_clock::now();
     modelLoadMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(loadEnd - loadStart).count();
     
@@ -286,6 +411,8 @@ void ParakeetModel::unload() {
   preprocessor_session_.reset();
   encoder_session_.reset();
   decoder_session_.reset();
+  ctc_session_.reset();
+  sortformer_session_.reset();
   memory_info_.reset();
   is_loaded_ = false;
   is_warmed_up_ = false;
@@ -296,22 +423,16 @@ void ParakeetModel::unload() {
 
 std::tuple<std::vector<float>, int64_t, bool>
 ParakeetModel::computeFeatures(const Input &audio) {
-  // Compute mel-spectrogram features from audio
-  // Uses ONNX preprocessor if available, otherwise falls back to manual
-  // computation
-
   std::vector<float> melFeatures;
   int64_t numFrames = 0;
   bool alreadyTransposed = false;
 
   if (preprocessor_session_) {
-    // ONNX preprocessor produces pre-transposed features
     auto [features, frames] = runPreprocessor(audio);
     melFeatures = std::move(features);
     numFrames = frames;
     alreadyTransposed = true;
   } else {
-    // Manual mel-spectrogram computation (not pre-transposed)
     melFeatures = computeMelSpectrogram(audio);
     numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
     alreadyTransposed = false;
@@ -321,21 +442,25 @@ ParakeetModel::computeFeatures(const Input &audio) {
 }
 
 std::string ParakeetModel::runInferencePipeline(const Input &audio) {
-  // Run the complete STT inference pipeline:
-  //   1. Compute mel-spectrogram features from audio
-  //   2. Run encoder to get acoustic embeddings
-  //   3. Run decoder (greedy search) to get text tokens
-  //
-  // Returns empty string if audio is too short for processing
+  if (cfg_.modelType == ModelType::CTC) {
+    return runCTCInferencePipeline(audio);
+  }
 
-  // Step 1: Compute features
+  if (cfg_.modelType == ModelType::EOU) {
+    return runEOUInferencePipeline(audio);
+  }
+
+  if (cfg_.modelType == ModelType::SORTFORMER) {
+    return runSortformerPipeline(audio);
+  }
+
+  // TDT pipeline: mel-spectrogram -> encoder -> transducer decoder
   auto [melFeatures, numFrames, alreadyTransposed] = computeFeatures(audio);
 
   if (melFeatures.empty() || numFrames <= 0) {
     return "";
   }
 
-  // Step 2: Run encoder
   int64_t encodedLength = 0;
   auto encoderOutput =
       runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
@@ -344,15 +469,39 @@ std::string ParakeetModel::runInferencePipeline(const Input &audio) {
     return "";
   }
 
-  // Step 3: Run decoder (greedy decode)
   return greedyDecode(encoderOutput, encodedLength);
 }
 
+std::string ParakeetModel::runCTCInferencePipeline(const Input &audio) {
+  auto melFeatures = computeMelSpectrogram(audio, CTC_MEL_BINS);
+  int64_t numFrames =
+      static_cast<int64_t>(melFeatures.size() / CTC_MEL_BINS);
+
+  if (melFeatures.empty() || numFrames <= 0) {
+    return "";
+  }
+
+  auto logits = runCTCModel(melFeatures, numFrames);
+  if (logits.empty()) {
+    return "";
+  }
+
+  return ctcGreedyDecode(logits, numFrames);
+}
+
 void ParakeetModel::warmup() {
-  if (!is_loaded_ || !encoder_session_ || !decoder_session_) {
+  if (!is_loaded_) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Cannot warmup - model not loaded");
     return;
+  }
+
+  if (cfg_.modelType == ModelType::CTC) {
+    if (!ctc_session_) return;
+  } else if (cfg_.modelType == ModelType::SORTFORMER) {
+    if (!sortformer_session_) return;
+  } else {
+    if (!encoder_session_ || !decoder_session_) return;
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -360,13 +509,14 @@ void ParakeetModel::warmup() {
 
   auto warmupStart = std::chrono::high_resolution_clock::now();
 
-  // Generate 0.5s of silent audio (8000 samples at 16kHz)
-  // This is enough to run through all model components without producing output
-  constexpr size_t WARMUP_SAMPLES = 8000;
-  std::vector<float> silentAudio(WARMUP_SAMPLES, 0.0f);
+  const size_t warmupSamples =
+      (cfg_.modelType == ModelType::EOU ||
+       cfg_.modelType == ModelType::SORTFORMER)
+          ? 16000
+          : 8000;
+  std::vector<float> silentAudio(warmupSamples, 0.0f);
 
   try {
-    // Run the full inference pipeline to initialize all ONNX Runtime internals
     runInferencePipeline(silentAudio);
 
     auto warmupEnd = std::chrono::high_resolution_clock::now();
@@ -380,8 +530,6 @@ void ParakeetModel::warmup() {
   } catch (const std::exception &e) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          std::string("Warmup inference failed (non-fatal): ") + e.what());
-    // Warmup failure is non-fatal - model can still work, just slower on first
-    // real inference
   }
 }
 
@@ -395,14 +543,13 @@ static float melToHz(float mel) {
   return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
 }
 
-// Build mel filterbank matrix
+// Build mel filterbank matrix (bin-index based, no normalization — used by TDT/CTC)
 static std::vector<std::vector<float>> buildMelFilterbank(
     int numMelBins, int fftSize, float sampleRate,
     float fMin = 0.0f, float fMax = 8000.0f) {
   
   int numFftBins = fftSize / 2 + 1;
   
-  // Compute mel points
   float melMin = hzToMel(fMin);
   float melMax = hzToMel(fMax);
   
@@ -411,14 +558,12 @@ static std::vector<std::vector<float>> buildMelFilterbank(
     melPoints[i] = melMin + (melMax - melMin) * i / (numMelBins + 1);
   }
   
-  // Convert mel points to frequency bins
   std::vector<int> binPoints(numMelBins + 2);
   for (int i = 0; i < numMelBins + 2; ++i) {
     float hz = melToHz(melPoints[i]);
     binPoints[i] = static_cast<int>(std::floor((fftSize + 1) * hz / sampleRate));
   }
   
-  // Build filterbank
   std::vector<std::vector<float>> filterbank(numMelBins, std::vector<float>(numFftBins, 0.0f));
   
   for (int m = 0; m < numMelBins; ++m) {
@@ -426,14 +571,12 @@ static std::vector<std::vector<float>> buildMelFilterbank(
     int center = binPoints[m + 1];
     int right = binPoints[m + 2];
     
-    // Rising slope
     for (int k = left; k < center && k < numFftBins; ++k) {
       if (center != left) {
         filterbank[m][k] = static_cast<float>(k - left) / (center - left);
       }
     }
     
-    // Falling slope
     for (int k = center; k < right && k < numFftBins; ++k) {
       if (right != center) {
         filterbank[m][k] = static_cast<float>(right - k) / (right - center);
@@ -444,103 +587,185 @@ static std::vector<std::vector<float>> buildMelFilterbank(
   return filterbank;
 }
 
-std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio) {
-  const size_t numSamples = audio.size();
-  
+// Hz-based mel filterbank with slaney normalization (matches parakeet-rs / librosa)
+static std::vector<std::vector<float>> buildMelFilterbankSlaney(
+    int numMelBins, int fftSize, float sampleRate,
+    float fMin = 0.0f, float fMax = 8000.0f) {
+
+  int numFftBins = fftSize / 2 + 1;
+
+  float melMin = hzToMel(fMin);
+  float melMax = hzToMel(fMax);
+
+  std::vector<float> hzPoints(numMelBins + 2);
+  for (int i = 0; i < numMelBins + 2; ++i) {
+    float mel = melMin + (melMax - melMin) * i / (numMelBins + 1);
+    hzPoints[i] = melToHz(mel);
+  }
+
+  std::vector<float> fftFreqs(numFftBins);
+  for (int j = 0; j < numFftBins; ++j) {
+    fftFreqs[j] = (sampleRate / static_cast<float>(fftSize)) * j;
+  }
+
+  std::vector<std::vector<float>> filterbank(
+      numMelBins, std::vector<float>(numFftBins, 0.0f));
+
+  for (int i = 0; i < numMelBins; ++i) {
+    float left = hzPoints[i];
+    float center = hzPoints[i + 1];
+    float right = hzPoints[i + 2];
+
+    for (int j = 0; j < numFftBins; ++j) {
+      float freq = fftFreqs[j];
+      if (freq >= left && freq <= center && center > left) {
+        filterbank[i][j] = (freq - left) / (center - left);
+      } else if (freq > center && freq <= right && right > center) {
+        filterbank[i][j] = (right - freq) / (right - center);
+      }
+    }
+
+    // Slaney normalization: enorm = 2 / (hz_right - hz_left)
+    float enorm = 2.0f / (right - left);
+    for (int j = 0; j < numFftBins; ++j) {
+      filterbank[i][j] *= enorm;
+    }
+  }
+
+  return filterbank;
+}
+
+std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio, int numMelBins) {
+  // EOU and Sortformer use NeMo-style mel features:
+  // pre-emphasis, center padding, slaney filterbank, no CMVN
+  const bool isNemoStyle = (cfg_.modelType == ModelType::EOU ||
+                            cfg_.modelType == ModelType::SORTFORMER);
+  const float preEmphCoeff = isNemoStyle ? 0.97f : 0.0f;
+  const float logGuard = isNemoStyle ? 5.960464e-8f : 1e-10f;
+
+  // Apply pre-emphasis if needed (EOU/Sortformer expect it)
+  std::vector<float> processedAudio;
+  const float* audioPtr = audio.data();
+  size_t numSamples = audio.size();
+
+  if (preEmphCoeff > 0.0f && numSamples > 0) {
+    processedAudio.resize(numSamples);
+    processedAudio[0] = audio[0];
+    for (size_t i = 1; i < numSamples; ++i) {
+      processedAudio[i] = audio[i] - preEmphCoeff * audio[i - 1];
+    }
+    audioPtr = processedAudio.data();
+  }
+
   if (numSamples < static_cast<size_t>(WIN_LENGTH)) {
     return {};
   }
-  
-  // NeMo models don't use preemphasis - use audio directly
-  const size_t numFrames = (numSamples - WIN_LENGTH) / HOP_LENGTH + 1;
+
+  // EOU uses center-padded STFT; TDT/CTC use unpadded
+  size_t numFrames;
+  size_t padAmount = 0;
+  std::vector<float> paddedAudio;
+
+  if (isNemoStyle) {
+    padAmount = FFT_SIZE / 2;
+    paddedAudio.resize(padAmount + numSamples + padAmount, 0.0f);
+    std::copy(audioPtr, audioPtr + numSamples,
+              paddedAudio.begin() + padAmount);
+    numFrames = 1 + (paddedAudio.size() - WIN_LENGTH) / HOP_LENGTH;
+  } else {
+    numFrames = (numSamples - WIN_LENGTH) / HOP_LENGTH + 1;
+  }
   
   if (numFrames == 0) {
     return {};
   }
   
-  // Step 2: Precompute Hann window
   std::vector<float> hannWindow(WIN_LENGTH);
   for (int i = 0; i < WIN_LENGTH; ++i) {
     hannWindow[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
   }
   
-  // Step 3: Build mel filterbank (cache this for efficiency in production)
-  // fMax = sample_rate / 2 (Nyquist frequency)
-  static auto melFilterbank = buildMelFilterbank(MEL_BINS, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f);
+  // Cache filterbanks keyed by (numMelBins, isNemoStyle) to avoid rebuilding
+  int cacheKey = isNemoStyle ? -(numMelBins + 1) : numMelBins;
+  static std::map<int, std::vector<std::vector<float>>> filterbanks;
+  if (filterbanks.find(cacheKey) == filterbanks.end()) {
+    if (isNemoStyle) {
+      filterbanks[cacheKey] = buildMelFilterbankSlaney(
+          numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, 8000.0f);
+    } else {
+      filterbanks[cacheKey] = buildMelFilterbank(
+          numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f);
+    }
+  }
+  auto& melFilterbank = filterbanks[cacheKey];
   
-  // Initialize Eigen FFT
   Eigen::FFT<float> fft;
   
-  // Number of FFT bins (positive frequencies only)
   const int numFftBins = FFT_SIZE / 2 + 1;
   
-  // Output mel spectrogram: [numFrames, MEL_BINS]
-  std::vector<float> melSpec(numFrames * MEL_BINS);
+  std::vector<float> melSpec(numFrames * numMelBins);
   
-  // Buffer for windowed frame
   std::vector<float> frame(FFT_SIZE, 0.0f);
   std::vector<std::complex<float>> spectrum(FFT_SIZE);
+
+  const float* stftSource = isNemoStyle ? paddedAudio.data() : audioPtr;
+  size_t stftLen = isNemoStyle ? paddedAudio.size() : numSamples;
   
   for (size_t f = 0; f < numFrames; ++f) {
     size_t startSample = f * HOP_LENGTH;
     
-    // Clear frame buffer
     std::fill(frame.begin(), frame.end(), 0.0f);
     
-    // Apply Hann window to audio (NeMo doesn't use preemphasis)
-    for (int i = 0; i < WIN_LENGTH && (startSample + i) < numSamples; ++i) {
-      frame[i] = audio[startSample + i] * hannWindow[i];
+    for (int i = 0; i < WIN_LENGTH && (startSample + i) < stftLen; ++i) {
+      frame[i] = stftSource[startSample + i] * hannWindow[i];
     }
     
-    // Step 4: Compute FFT (STFT)
     fft.fwd(spectrum, frame);
     
-    // Compute power spectrum (magnitude squared)
     std::vector<float> powerSpec(numFftBins);
     for (int k = 0; k < numFftBins; ++k) {
-      powerSpec[k] = std::norm(spectrum[k]);  // |z|^2
+      powerSpec[k] = std::norm(spectrum[k]);
     }
     
-    // Step 5: Apply mel filterbank
-    for (int m = 0; m < MEL_BINS; ++m) {
+    for (int m = 0; m < numMelBins; ++m) {
       float melEnergy = 0.0f;
       for (int k = 0; k < numFftBins; ++k) {
         melEnergy += melFilterbank[m][k] * powerSpec[k];
       }
-      // Step 6: Apply log compression
-      melSpec[f * MEL_BINS + m] = std::log(std::max(melEnergy, 1e-10f));
+      melSpec[f * numMelBins + m] = std::log(std::max(melEnergy, logGuard));
     }
   }
   
-  // Step 7: Apply per-utterance cepstral mean and variance normalization (CMVN)
-  // Compute mean for each mel bin across all frames
-  std::vector<float> mean(MEL_BINS, 0.0f);
-  std::vector<float> stddev(MEL_BINS, 0.0f);
-  
-  for (size_t f = 0; f < numFrames; ++f) {
-    for (int m = 0; m < MEL_BINS; ++m) {
-      mean[m] += melSpec[f * MEL_BINS + m];
+  // Per-utterance CMVN (skip for NeMo-style — they use raw log-mel)
+  if (!isNemoStyle) {
+    std::vector<float> mean(numMelBins, 0.0f);
+    std::vector<float> stddev(numMelBins, 0.0f);
+
+    for (size_t f = 0; f < numFrames; ++f) {
+      for (int m = 0; m < numMelBins; ++m) {
+        mean[m] += melSpec[f * numMelBins + m];
+      }
     }
-  }
-  for (int m = 0; m < MEL_BINS; ++m) {
-    mean[m] /= static_cast<float>(numFrames);
-  }
-  
-  // Compute stddev
-  for (size_t f = 0; f < numFrames; ++f) {
-    for (int m = 0; m < MEL_BINS; ++m) {
-      float diff = melSpec[f * MEL_BINS + m] - mean[m];
-      stddev[m] += diff * diff;
+    for (int m = 0; m < numMelBins; ++m) {
+      mean[m] /= static_cast<float>(numFrames);
     }
-  }
-  for (int m = 0; m < MEL_BINS; ++m) {
-    stddev[m] = std::sqrt(stddev[m] / static_cast<float>(numFrames) + 1e-10f);
-  }
-  
-  // Normalize: (x - mean) / stddev
-  for (size_t f = 0; f < numFrames; ++f) {
-    for (int m = 0; m < MEL_BINS; ++m) {
-      melSpec[f * MEL_BINS + m] = (melSpec[f * MEL_BINS + m] - mean[m]) / stddev[m];
+
+    for (size_t f = 0; f < numFrames; ++f) {
+      for (int m = 0; m < numMelBins; ++m) {
+        float diff = melSpec[f * numMelBins + m] - mean[m];
+        stddev[m] += diff * diff;
+      }
+    }
+    for (int m = 0; m < numMelBins; ++m) {
+      stddev[m] =
+          std::sqrt(stddev[m] / static_cast<float>(numFrames) + 1e-10f);
+    }
+
+    for (size_t f = 0; f < numFrames; ++f) {
+      for (int m = 0; m < numMelBins; ++m) {
+        melSpec[f * numMelBins + m] =
+            (melSpec[f * numMelBins + m] - mean[m]) / stddev[m];
+      }
     }
   }
   
@@ -560,24 +785,18 @@ std::vector<float> ParakeetModel::runEncoder(
   std::vector<float> encoderInput;
   
   if (alreadyTransposed) {
-    // Features from ONNX preprocessor are already in [batch, bins, frames] format
     encoderInput = melFeatures;
   } else {
-    // Manual mel spectrogram is in [frames, bins] order, transpose to [bins, frames]
     encoderInput.resize(melFeatures.size());
     for (int64_t f = 0; f < numFrames; ++f) {
       for (int b = 0; b < MEL_BINS; ++b) {
-        // Source: [f * MEL_BINS + b]
-        // Dest: [b * numFrames + f]
         encoderInput[b * numFrames + f] = melFeatures[f * MEL_BINS + b];
       }
     }
   }
   
-  // Prepare input tensor: shape [batch=1, mel_bins=128, num_frames]
   std::vector<int64_t> inputShape = {1, MEL_BINS, numFrames};
   
-  // Create input tensor
   Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
       *memory_info_, 
       encoderInput.data(), 
@@ -585,7 +804,6 @@ std::vector<float> ParakeetModel::runEncoder(
       inputShape.data(), 
       inputShape.size());
   
-  // Prepare length tensor: shape [batch=1]
   std::vector<int64_t> lengthData = {numFrames};
   std::vector<int64_t> lengthShape = {1};
   Ort::Value lengthTensor = Ort::Value::CreateTensor<int64_t>(
@@ -595,11 +813,9 @@ std::vector<float> ParakeetModel::runEncoder(
       lengthShape.data(),
       lengthShape.size());
   
-  // Input names
   const char* inputNames[] = {"audio_signal", "length"};
   const char* outputNames[] = {"outputs", "encoded_lengths"};
   
-  // Run inference
   std::vector<Ort::Value> inputTensors;
   inputTensors.push_back(std::move(inputTensor));
   inputTensors.push_back(std::move(lengthTensor));
@@ -609,16 +825,12 @@ std::vector<float> ParakeetModel::runEncoder(
       inputNames, inputTensors.data(), inputTensors.size(),
       outputNames, 2);
   
-  // Get encoder output
   auto& encoderOutput = outputs[0];
   auto outputInfo = encoderOutput.GetTensorTypeAndShapeInfo();
-  auto outputShape = outputInfo.GetShape();
   
-  // Shape is [batch, encoder_dim, time_steps]
   size_t outputSize = outputInfo.GetElementCount();
   const float* outputData = encoderOutput.GetTensorData<float>();
   
-  // Get encoded length
   const int64_t* lengthPtr = outputs[1].GetTensorData<int64_t>();
   encodedLength = lengthPtr[0];
   
@@ -626,14 +838,12 @@ std::vector<float> ParakeetModel::runEncoder(
 }
 
 int64_t ParakeetModel::getLanguageToken(const std::string& langCode) const {
-  // Search vocab for language token like <|es|>, <|en|>, etc.
   std::string langToken = "<|" + langCode + "|>";
   for (size_t i = 0; i < vocab_.size(); ++i) {
     if (vocab_[i] == langToken) {
       return static_cast<int64_t>(i);
     }
   }
-  // Return predict_lang token for auto-detection if language not found
   return PREDICT_LANG;
 }
 
@@ -646,30 +856,20 @@ std::string ParakeetModel::greedyDecode(
   }
   
   const size_t vocabSize = vocab_.size();
-  const int maxTokensPerStep = 10;  // Safety: max tokens from one frame
+  const int maxTokensPerStep = 10;
   
   std::vector<int64_t> decodedTokens;
   
-  // Initialize decoder states (2 LSTM layers, shape: [2, 1, 640])
   std::vector<float> state1(2 * 1 * DECODER_STATE_DIM, 0.0f);
   std::vector<float> state2(2 * 1 * DECODER_STATE_DIM, 0.0f);
   
-  // TDT greedy decoding following sherpa-onnx implementation
-  // The prediction network starts with blank token
   int32_t lastEmittedToken = static_cast<int32_t>(BLANK_TOKEN);
-  
-  // Track tokens emitted from current frame (safety limit)
   int tokensThisFrame = 0;
-  
-  // Time step advancement (skip) - can be 0 meaning stay on same frame
   int skip = 0;
   
   for (int64_t t = 0; t < encodedLength; t += skip) {
-    // Prepare encoder output slice for current time step
-    // Shape: [batch=1, encoder_dim=1024, time=1]
     std::vector<float> encoderSlice(ENCODER_DIM);
     for (int i = 0; i < ENCODER_DIM; ++i) {
-      // encoderOutput shape is [1, 1024, T], we want frame at t
       encoderSlice[i] = encoderOutput[i * encodedLength + t];
     }
     
@@ -681,7 +881,6 @@ std::string ParakeetModel::greedyDecode(
         encoderShape.data(),
         encoderShape.size());
     
-    // Prepare target (last emitted token for prediction network)
     std::vector<int32_t> targetData = {lastEmittedToken};
     std::vector<int64_t> targetShape = {1, 1};
     Ort::Value targetTensor = Ort::Value::CreateTensor<int32_t>(
@@ -691,7 +890,6 @@ std::string ParakeetModel::greedyDecode(
         targetShape.data(),
         targetShape.size());
     
-    // Target length
     std::vector<int32_t> targetLengthData = {1};
     std::vector<int64_t> targetLengthShape = {1};
     Ort::Value targetLengthTensor = Ort::Value::CreateTensor<int32_t>(
@@ -701,7 +899,6 @@ std::string ParakeetModel::greedyDecode(
         targetLengthShape.data(),
         targetLengthShape.size());
     
-    // State tensors
     std::vector<int64_t> stateShape = {2, 1, DECODER_STATE_DIM};
     Ort::Value state1Tensor = Ort::Value::CreateTensor<float>(
         *memory_info_,
@@ -716,7 +913,6 @@ std::string ParakeetModel::greedyDecode(
         stateShape.data(),
         stateShape.size());
     
-    // Input names for decoder
     const char* decoderInputNames[] = {
         "encoder_outputs", "targets", "target_length", 
         "input_states_1", "input_states_2"
@@ -732,23 +928,19 @@ std::string ParakeetModel::greedyDecode(
     decoderInputs.push_back(std::move(state1Tensor));
     decoderInputs.push_back(std::move(state2Tensor));
     
-    // Run decoder/joiner
     auto decoderOutputs = decoder_session_->Run(
         Ort::RunOptions{nullptr},
         decoderInputNames, decoderInputs.data(), decoderInputs.size(),
         decoderOutputNames, 4);
     
-    // Get logits - TDT outputs [vocab_size + num_durations]
     const float* logits = decoderOutputs[0].GetTensorData<float>();
     auto logitsInfo = decoderOutputs[0].GetTensorTypeAndShapeInfo();
     size_t outputSize = logitsInfo.GetShape().back();
     size_t numDurations = outputSize - vocabSize;
     
-    // Split into token logits and duration logits
     const float* tokenLogits = logits;
     const float* durationLogits = logits + vocabSize;
     
-    // Find argmax over vocabulary tokens
     int64_t tokenId = 0;
     float bestScore = tokenLogits[0];
     for (size_t i = 1; i < vocabSize; ++i) {
@@ -758,8 +950,6 @@ std::string ParakeetModel::greedyDecode(
       }
     }
     
-    // Find argmax over duration predictions (skip value)
-    // Duration values are 0, 1, 2, 3, 4 (TDT has 5 duration classes)
     skip = 0;
     if (numDurations > 0) {
       float bestDur = durationLogits[0];
@@ -773,20 +963,16 @@ std::string ParakeetModel::greedyDecode(
       skip = static_cast<int>(bestIdx);
     }
     
-    // Process the predicted token
     if (tokenId != BLANK_TOKEN) {
-      // Non-blank token: update decoder states
       const float* newState1 = decoderOutputs[2].GetTensorData<float>();
       const float* newState2 = decoderOutputs[3].GetTensorData<float>();
       std::copy(newState1, newState1 + state1.size(), state1.begin());
       std::copy(newState2, newState2 + state2.size(), state2.begin());
       
-      // Check for end of sequence
       if (tokenId == EOS_TOKEN) {
         break;
       }
       
-      // Emit token (skip special tokens)
       if (tokenId != NOSPEECH_TOKEN && tokenId != PAD_TOKEN) {
         decodedTokens.push_back(tokenId);
       }
@@ -795,33 +981,27 @@ std::string ParakeetModel::greedyDecode(
       tokensThisFrame++;
     }
     
-    // Advance frame based on skip (duration prediction)
     if (skip > 0) {
       tokensThisFrame = 0;
     }
     
-    // Safety: limit tokens per frame to prevent infinite loops
     if (tokensThisFrame >= maxTokensPerStep) {
       tokensThisFrame = 0;
       skip = 1;
     }
     
-    // If blank with skip=0, force advance to prevent infinite loop
     if (tokenId == BLANK_TOKEN && skip == 0) {
       tokensThisFrame = 0;
       skip = 1;
     }
   }
   
-  // Convert tokens to text
   std::string result;
   for (int64_t token : decodedTokens) {
     if (token >= 0 && static_cast<size_t>(token) < vocab_.size()) {
       std::string piece = vocab_[token];
       
-      // Handle sentencepiece encoding (▁ = space)
       if (!piece.empty()) {
-        // Skip special tokens
         if (piece[0] == '<' && piece.back() == '>') {
           continue;
         }
@@ -838,7 +1018,6 @@ std::string ParakeetModel::greedyDecode(
     }
   }
   
-  // Trim leading/trailing whitespace
   size_t start = result.find_first_not_of(' ');
   size_t end = result.find_last_not_of(' ');
   if (start != std::string::npos && end != std::string::npos) {
@@ -853,7 +1032,6 @@ std::pair<std::vector<float>, int64_t> ParakeetModel::runPreprocessor(const Inpu
     return {{}, 0};
   }
   
-  // Prepare input: waveforms [batch=1, N] and waveforms_lens [batch=1]
   std::vector<int64_t> waveformShape = {1, static_cast<int64_t>(audio.size())};
   std::vector<float> audioData(audio.begin(), audio.end());
   
@@ -885,7 +1063,6 @@ std::pair<std::vector<float>, int64_t> ParakeetModel::runPreprocessor(const Inpu
       inputNames, inputs.data(), inputs.size(),
       outputNames, 2);
   
-  // Get output: features [batch, 128, T] and features_lens [batch]
   auto& featuresTensor = outputs[0];
   auto featuresInfo = featuresTensor.GetTensorTypeAndShapeInfo();
   auto featuresShape = featuresInfo.GetShape();
@@ -893,10 +1070,680 @@ std::pair<std::vector<float>, int64_t> ParakeetModel::runPreprocessor(const Inpu
   const float* featuresData = featuresTensor.GetTensorData<float>();
   size_t featuresSize = featuresInfo.GetElementCount();
   
-  // Use the actual shape for numFrames, not the length output (which can be off by 1)
-  int64_t numFrames = featuresShape[2];  // Shape is [batch, 128, T]
+  int64_t numFrames = featuresShape[2];
   
   return {std::vector<float>(featuresData, featuresData + featuresSize), numFrames};
+}
+
+std::vector<float> ParakeetModel::runCTCModel(
+    const std::vector<float>& melFeatures, int64_t numFrames) {
+  if (!ctc_session_) {
+    throw std::runtime_error("CTC session not initialized");
+  }
+
+  // input_features: [batch=1, seq_len, 80] — already in [frames, bins] order
+  std::vector<int64_t> featShape = {1, numFrames, CTC_MEL_BINS};
+  std::vector<float> featCopy(melFeatures);
+  Ort::Value featTensor = Ort::Value::CreateTensor<float>(
+      *memory_info_, featCopy.data(), featCopy.size(), featShape.data(),
+      featShape.size());
+
+  // attention_mask: [batch=1, seq_len] — all 1s
+  std::vector<int64_t> maskData(numFrames, 1);
+  std::vector<int64_t> maskShape = {1, numFrames};
+  Ort::Value maskTensor = Ort::Value::CreateTensor<int64_t>(
+      *memory_info_, maskData.data(), maskData.size(), maskShape.data(),
+      maskShape.size());
+
+  const char *inputNames[] = {"input_features", "attention_mask"};
+  const char *outputNames[] = {"logits"};
+
+  std::vector<Ort::Value> inputs;
+  inputs.push_back(std::move(featTensor));
+  inputs.push_back(std::move(maskTensor));
+
+  auto outputs = ctc_session_->Run(Ort::RunOptions{nullptr}, inputNames,
+                                   inputs.data(), inputs.size(), outputNames, 1);
+
+  auto &logitsTensor = outputs[0];
+  auto logitsInfo = logitsTensor.GetTensorTypeAndShapeInfo();
+  size_t logitsSize = logitsInfo.GetElementCount();
+  const float *logitsData = logitsTensor.GetTensorData<float>();
+
+  return std::vector<float>(logitsData, logitsData + logitsSize);
+}
+
+std::string ParakeetModel::ctcGreedyDecode(const std::vector<float>& logits,
+                                            int64_t numFrames) {
+  if (vocab_.empty()) {
+    return "[Model not ready]";
+  }
+
+  const size_t vocabSize = vocab_.size();
+
+  const int64_t outputFrames =
+      static_cast<int64_t>(logits.size() / vocabSize);
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "CTC output: " + std::to_string(outputFrames) +
+           " frames (from " + std::to_string(numFrames) + " input frames)");
+
+  std::vector<int64_t> decodedTokens;
+  int64_t prevToken = -1;
+
+  for (int64_t t = 0; t < outputFrames; ++t) {
+    const float *frameLogits = logits.data() + t * vocabSize;
+    int64_t bestToken = 0;
+    float bestScore = frameLogits[0];
+    for (size_t i = 1; i < vocabSize; ++i) {
+      if (frameLogits[i] > bestScore) {
+        bestScore = frameLogits[i];
+        bestToken = static_cast<int64_t>(i);
+      }
+    }
+
+    if (bestToken != CTC_BLANK_TOKEN && bestToken != prevToken) {
+      decodedTokens.push_back(bestToken);
+    }
+    prevToken = bestToken;
+  }
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "CTC decoded: " + std::to_string(decodedTokens.size()) + " tokens");
+
+  std::string result;
+  for (int64_t token : decodedTokens) {
+    if (token >= 0 && static_cast<size_t>(token) < vocab_.size()) {
+      std::string piece = vocab_[token];
+
+      if (!piece.empty()) {
+        if (piece[0] == '<' && piece.back() == '>') {
+          continue;
+        }
+
+        size_t pos = 0;
+        while ((pos = piece.find("\xe2\x96\x81", pos)) != std::string::npos) {
+          piece.replace(pos, 3, " ");
+          pos += 1;
+        }
+        result += piece;
+      }
+    }
+  }
+
+  size_t start = result.find_first_not_of(' ');
+  size_t end = result.find_last_not_of(' ');
+  if (start != std::string::npos && end != std::string::npos) {
+    result = result.substr(start, end - start + 1);
+  }
+
+  return result.empty() ? "[No speech detected]" : result;
+}
+
+void ParakeetModel::resetEOUStreamingState() {
+  const size_t cacheChanSize =
+      EOU_NUM_LAYERS * 1 * EOU_CACHE_LOOKBACK * EOU_ENCODER_DIM;
+  const size_t cacheTimeSize =
+      EOU_NUM_LAYERS * 1 * EOU_ENCODER_DIM * EOU_CACHE_TIME_STEPS;
+
+  eouState_.cacheChan.assign(cacheChanSize, 0.0f);
+  eouState_.cacheTime.assign(cacheTimeSize, 0.0f);
+  eouState_.cacheChanLen = {0};
+  eouState_.stateH.assign(EOU_DECODER_STATE_DIM, 0.0f);
+  eouState_.stateC.assign(EOU_DECODER_STATE_DIM, 0.0f);
+
+  const size_t vocabSize = vocab_.size();
+  eouState_.blankId = static_cast<int64_t>(vocabSize) - 1;
+  eouState_.lastToken = static_cast<int32_t>(eouState_.blankId);
+
+  eouState_.eouId = -1;
+  for (size_t i = 0; i < vocabSize; ++i) {
+    if (vocab_[i] == "<EOU>") {
+      eouState_.eouId = static_cast<int64_t>(i);
+      break;
+    }
+  }
+  if (eouState_.eouId < 0) eouState_.eouId = 1024;
+
+  eouState_.initialized = true;
+}
+
+std::vector<float> ParakeetModel::eouEncodeChunk(
+    const std::vector<float>& melChunk,
+    int64_t chunkFrames,
+    int64_t& outFrames) {
+  if (!encoder_session_) {
+    throw std::runtime_error("EOU encoder session not initialized");
+  }
+
+  std::vector<float> transposed(MEL_BINS * chunkFrames);
+  for (int64_t f = 0; f < chunkFrames; ++f) {
+    for (int b = 0; b < MEL_BINS; ++b) {
+      transposed[b * chunkFrames + f] = melChunk[f * MEL_BINS + b];
+    }
+  }
+
+  std::vector<int64_t> featShape = {1, MEL_BINS, chunkFrames};
+  Ort::Value featTensor = Ort::Value::CreateTensor<float>(
+      *memory_info_, transposed.data(), transposed.size(),
+      featShape.data(), featShape.size());
+
+  std::vector<int64_t> lengthData = {chunkFrames};
+  std::vector<int64_t> lengthShape = {1};
+  Ort::Value lengthTensor = Ort::Value::CreateTensor<int64_t>(
+      *memory_info_, lengthData.data(), lengthData.size(),
+      lengthShape.data(), lengthShape.size());
+
+  std::vector<int64_t> cacheChanShape = {
+      EOU_NUM_LAYERS, 1, EOU_CACHE_LOOKBACK, EOU_ENCODER_DIM};
+  Ort::Value cacheChanTensor = Ort::Value::CreateTensor<float>(
+      *memory_info_, eouState_.cacheChan.data(), eouState_.cacheChan.size(),
+      cacheChanShape.data(), cacheChanShape.size());
+
+  std::vector<int64_t> cacheTimeShape = {
+      EOU_NUM_LAYERS, 1, EOU_ENCODER_DIM, EOU_CACHE_TIME_STEPS};
+  Ort::Value cacheTimeTensor = Ort::Value::CreateTensor<float>(
+      *memory_info_, eouState_.cacheTime.data(), eouState_.cacheTime.size(),
+      cacheTimeShape.data(), cacheTimeShape.size());
+
+  std::vector<int64_t> cacheLenShape = {1};
+  Ort::Value cacheLenTensor = Ort::Value::CreateTensor<int64_t>(
+      *memory_info_, eouState_.cacheChanLen.data(), eouState_.cacheChanLen.size(),
+      cacheLenShape.data(), cacheLenShape.size());
+
+  const char* inputNames[] = {
+      "audio_signal", "length",
+      "cache_last_channel", "cache_last_time", "cache_last_channel_len"};
+  const char* outputNames[] = {
+      "outputs", "encoded_lengths",
+      "new_cache_last_channel", "new_cache_last_time",
+      "new_cache_last_channel_len"};
+
+  std::vector<Ort::Value> inputs;
+  inputs.push_back(std::move(featTensor));
+  inputs.push_back(std::move(lengthTensor));
+  inputs.push_back(std::move(cacheChanTensor));
+  inputs.push_back(std::move(cacheTimeTensor));
+  inputs.push_back(std::move(cacheLenTensor));
+
+  auto outputs = encoder_session_->Run(
+      Ort::RunOptions{nullptr},
+      inputNames, inputs.data(), inputs.size(),
+      outputNames, 5);
+
+  auto& encOut = outputs[0];
+  auto encShape = encOut.GetTensorTypeAndShapeInfo().GetShape();
+  outFrames = encShape.size() >= 3 ? encShape[2] : 0;
+  const float* encData = encOut.GetTensorData<float>();
+
+  std::vector<float> result(outFrames * EOU_ENCODER_DIM);
+  for (int64_t tf = 0; tf < outFrames; ++tf) {
+    for (int d = 0; d < EOU_ENCODER_DIM; ++d) {
+      result[tf * EOU_ENCODER_DIM + d] = encData[d * outFrames + tf];
+    }
+  }
+
+  {
+    const float* ptr = outputs[2].GetTensorData<float>();
+    size_t sz = outputs[2].GetTensorTypeAndShapeInfo().GetElementCount();
+    eouState_.cacheChan.assign(ptr, ptr + sz);
+  }
+  {
+    const float* ptr = outputs[3].GetTensorData<float>();
+    size_t sz = outputs[3].GetTensorTypeAndShapeInfo().GetElementCount();
+    eouState_.cacheTime.assign(ptr, ptr + sz);
+  }
+  {
+    const int64_t* ptr = outputs[4].GetTensorData<int64_t>();
+    size_t sz = outputs[4].GetTensorTypeAndShapeInfo().GetElementCount();
+    eouState_.cacheChanLen.assign(ptr, ptr + sz);
+  }
+
+  return result;
+}
+
+std::string ParakeetModel::eouDecodeChunk(
+    const std::vector<float>& encoderOutput,
+    int64_t encodedFrames,
+    int& eouCount) {
+  eouCount = 0;
+  if (!decoder_session_ || vocab_.empty()) return "";
+
+  const size_t vocabSize = vocab_.size();
+  std::string result;
+  std::string currentSegment;
+
+  for (int64_t t = 0; t < encodedFrames; ++t) {
+    std::vector<float> encoderFrame(
+        encoderOutput.begin() + t * EOU_ENCODER_DIM,
+        encoderOutput.begin() + (t + 1) * EOU_ENCODER_DIM);
+
+    std::vector<int64_t> encFrameShape = {1, EOU_ENCODER_DIM, 1};
+    Ort::Value encTensor = Ort::Value::CreateTensor<float>(
+        *memory_info_, encoderFrame.data(), encoderFrame.size(),
+        encFrameShape.data(), encFrameShape.size());
+
+    int symsThisFrame = 0;
+    while (symsThisFrame < EOU_MAX_SYMBOLS_PER_STEP) {
+      std::vector<int32_t> targetData = {eouState_.lastToken};
+      std::vector<int64_t> targetShape = {1, 1};
+      Ort::Value targetTensor = Ort::Value::CreateTensor<int32_t>(
+          *memory_info_, targetData.data(), targetData.size(),
+          targetShape.data(), targetShape.size());
+
+      std::vector<int32_t> targetLenData = {1};
+      std::vector<int64_t> targetLenShape = {1};
+      Ort::Value targetLenTensor = Ort::Value::CreateTensor<int32_t>(
+          *memory_info_, targetLenData.data(), targetLenData.size(),
+          targetLenShape.data(), targetLenShape.size());
+
+      std::vector<int64_t> stateShape = {1, 1, EOU_DECODER_STATE_DIM};
+      Ort::Value stateHTensor = Ort::Value::CreateTensor<float>(
+          *memory_info_, eouState_.stateH.data(), eouState_.stateH.size(),
+          stateShape.data(), stateShape.size());
+      Ort::Value stateCTensor = Ort::Value::CreateTensor<float>(
+          *memory_info_, eouState_.stateC.data(), eouState_.stateC.size(),
+          stateShape.data(), stateShape.size());
+
+      const char* inputNames[] = {
+          "encoder_outputs", "targets", "target_length",
+          "input_states_1", "input_states_2"};
+      const char* outputNames[] = {
+          "outputs", "prednet_lengths",
+          "output_states_1", "output_states_2"};
+
+      std::vector<Ort::Value> decInputs;
+      decInputs.push_back(std::move(encTensor));
+      decInputs.push_back(std::move(targetTensor));
+      decInputs.push_back(std::move(targetLenTensor));
+      decInputs.push_back(std::move(stateHTensor));
+      decInputs.push_back(std::move(stateCTensor));
+
+      auto decOutputs = decoder_session_->Run(
+          Ort::RunOptions{nullptr},
+          inputNames, decInputs.data(), decInputs.size(),
+          outputNames, 4);
+
+      const float* logits = decOutputs[0].GetTensorData<float>();
+      size_t outputDim = decOutputs[0].GetTensorTypeAndShapeInfo().GetShape().back();
+
+      int32_t bestIdx = 0;
+      float bestVal = logits[0];
+      for (size_t i = 1; i < outputDim; ++i) {
+        if (std::isfinite(logits[i]) && logits[i] > bestVal) {
+          bestVal = logits[i];
+          bestIdx = static_cast<int32_t>(i);
+        }
+      }
+
+      if (bestIdx == static_cast<int32_t>(eouState_.blankId) ||
+          bestIdx == 0 ||
+          bestIdx >= static_cast<int32_t>(vocabSize)) {
+        break;
+      }
+
+      if (bestIdx == static_cast<int32_t>(eouState_.eouId)) {
+        auto trimSeg = [](const std::string& s) -> std::string {
+          size_t a = s.find_first_not_of(' ');
+          size_t b = s.find_last_not_of(' ');
+          return (a != std::string::npos) ? s.substr(a, b - a + 1) : "";
+        };
+        std::string seg = trimSeg(currentSegment);
+        if (!seg.empty()) {
+          if (!result.empty()) result += "\n";
+          result += seg;
+          currentSegment.clear();
+          eouCount++;
+          eouState_.stateH.assign(EOU_DECODER_STATE_DIM, 0.0f);
+          eouState_.stateC.assign(EOU_DECODER_STATE_DIM, 0.0f);
+          eouState_.lastToken = static_cast<int32_t>(eouState_.blankId);
+        }
+        break;
+      }
+
+      const float* newH = decOutputs[2].GetTensorData<float>();
+      const float* newC = decOutputs[3].GetTensorData<float>();
+      std::copy(newH, newH + eouState_.stateH.size(), eouState_.stateH.begin());
+      std::copy(newC, newC + eouState_.stateC.size(), eouState_.stateC.begin());
+      eouState_.lastToken = bestIdx;
+
+      if (static_cast<size_t>(bestIdx) < vocabSize) {
+        std::string piece = vocab_[bestIdx];
+        if (!piece.empty() && !(piece[0] == '<' && piece.back() == '>')) {
+          size_t pos = 0;
+          while ((pos = piece.find("\xe2\x96\x81", pos)) != std::string::npos) {
+            piece.replace(pos, 3, " ");
+            pos += 1;
+          }
+          currentSegment += piece;
+        }
+      }
+
+      symsThisFrame++;
+      encTensor = Ort::Value::CreateTensor<float>(
+          *memory_info_, encoderFrame.data(), encoderFrame.size(),
+          encFrameShape.data(), encFrameShape.size());
+    }
+  }
+
+  {
+    size_t s = currentSegment.find_first_not_of(' ');
+    size_t e = currentSegment.find_last_not_of(' ');
+    if (s != std::string::npos && e != std::string::npos) {
+      std::string seg = currentSegment.substr(s, e - s + 1);
+      if (!seg.empty()) {
+        if (!result.empty()) result += "\n";
+        result += seg;
+      }
+    }
+  }
+
+  return result;
+}
+
+std::string ParakeetModel::runEOUInferencePipeline(const Input& audio) {
+  auto melFeatures = computeMelSpectrogram(audio, MEL_BINS);
+  int64_t numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
+
+  if (melFeatures.empty() || numFrames <= 0) return "";
+
+  if (!eouState_.initialized) resetEOUStreamingState();
+
+  static constexpr int64_t MIN_ENCODER_FRAMES = 10;
+  std::string fullResult;
+  int64_t totalEncoded = 0;
+  int eouCount = 0;
+
+  for (int64_t start = 0; start < numFrames; start += EOU_ENCODER_CHUNK_FRAMES) {
+    int64_t end = std::min(start + static_cast<int64_t>(EOU_ENCODER_CHUNK_FRAMES), numFrames);
+    int64_t chunkLen = end - start;
+
+    if (chunkLen < MIN_ENCODER_FRAMES && start > 0) break;
+
+    std::vector<float> melChunk(
+        melFeatures.begin() + start * MEL_BINS,
+        melFeatures.begin() + end * MEL_BINS);
+
+    int64_t outFrames = 0;
+    auto encoderOutput = eouEncodeChunk(melChunk, chunkLen, outFrames);
+    totalEncoded += outFrames;
+
+    if (outFrames <= 0) continue;
+
+    int chunkEou = 0;
+    std::string chunkText = eouDecodeChunk(encoderOutput, outFrames, chunkEou);
+    eouCount += chunkEou;
+
+    if (!chunkText.empty()) {
+      if (!fullResult.empty() && fullResult.back() != '\n' &&
+          fullResult.back() != ' ') {
+        fullResult += " ";
+      }
+      fullResult += chunkText;
+    }
+  }
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "EOU streaming: " + std::to_string(numFrames) + " mel frames -> " +
+           std::to_string(totalEncoded) + " encoded, " +
+           std::to_string(eouCount) + " utterance boundaries");
+
+  while (!fullResult.empty() &&
+         (fullResult.back() == ' ' || fullResult.back() == '\n')) {
+    fullResult.pop_back();
+  }
+
+  return fullResult.empty() ? "[No speech detected]" : fullResult;
+}
+
+std::string ParakeetModel::runSortformerPipeline(const Input& audio) {
+  auto melFeatures = computeMelSpectrogram(audio, MEL_BINS);
+  int64_t numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
+
+  if (melFeatures.empty() || numFrames <= 0) {
+    return "[No speech detected]";
+  }
+
+  auto rawPreds = runSortformerChunked(melFeatures, numFrames);
+  int64_t totalOutputFrames =
+      static_cast<int64_t>(rawPreds.size() / SF_NUM_SPEAKERS);
+
+  if (totalOutputFrames <= 0) {
+    return "[No speakers detected]";
+  }
+
+  auto smoothed = medianFilter(rawPreds, totalOutputFrames, SF_NUM_SPEAKERS);
+  auto segments = binarizePredictions(smoothed, totalOutputFrames);
+
+  if (segments.empty()) {
+    return "[No speakers detected]";
+  }
+
+  std::string result;
+  for (const auto& seg : segments) {
+    if (!result.empty()) result += "\n";
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "Speaker %d: %.2fs - %.2fs",
+                  seg.speakerId, seg.start, seg.end);
+    result += buf;
+  }
+  return result;
+}
+
+std::vector<float> ParakeetModel::runSortformerChunked(
+    const std::vector<float>& melFeatures, int64_t numFrames) {
+  if (!sortformer_session_) {
+    throw std::runtime_error("Sortformer session not initialized");
+  }
+
+  const int64_t chunkMelFrames =
+      static_cast<int64_t>(SF_CHUNK_LEN) * SF_SUBSAMPLING;
+
+  std::vector<float> spkcache;
+  int64_t cacheFrames = 0;
+  std::vector<float> fifo;
+  int64_t fifoFrames = 0;
+
+  std::vector<float> allPredictions;
+
+  for (int64_t start = 0; start < numFrames; start += chunkMelFrames) {
+    int64_t end = std::min(start + chunkMelFrames, numFrames);
+    int64_t chunkLen = end - start;
+
+    std::vector<float> chunkData(
+        melFeatures.begin() + start * MEL_BINS,
+        melFeatures.begin() + end * MEL_BINS);
+
+    std::vector<int64_t> chunkShape = {1, chunkLen, MEL_BINS};
+    Ort::Value chunkTensor = Ort::Value::CreateTensor<float>(
+        *memory_info_, chunkData.data(), chunkData.size(),
+        chunkShape.data(), chunkShape.size());
+
+    std::vector<int64_t> chunkLenData = {chunkLen};
+    std::vector<int64_t> chunkLenShape = {1};
+    Ort::Value chunkLenTensor = Ort::Value::CreateTensor<int64_t>(
+        *memory_info_, chunkLenData.data(), chunkLenData.size(),
+        chunkLenShape.data(), chunkLenShape.size());
+
+    std::vector<int64_t> cacheShape = {1, cacheFrames, SF_EMB_DIM};
+    Ort::Value cacheTensor = Ort::Value::CreateTensor<float>(
+        *memory_info_, spkcache.data(), spkcache.size(),
+        cacheShape.data(), cacheShape.size());
+
+    std::vector<int64_t> cacheLenData = {cacheFrames};
+    std::vector<int64_t> cacheLenShape = {1};
+    Ort::Value cacheLenTensor = Ort::Value::CreateTensor<int64_t>(
+        *memory_info_, cacheLenData.data(), cacheLenData.size(),
+        cacheLenShape.data(), cacheLenShape.size());
+
+    std::vector<int64_t> fifoShape = {1, fifoFrames, SF_EMB_DIM};
+    Ort::Value fifoTensor = Ort::Value::CreateTensor<float>(
+        *memory_info_, fifo.data(), fifo.size(),
+        fifoShape.data(), fifoShape.size());
+
+    std::vector<int64_t> fifoLenData = {fifoFrames};
+    std::vector<int64_t> fifoLenShape = {1};
+    Ort::Value fifoLenTensor = Ort::Value::CreateTensor<int64_t>(
+        *memory_info_, fifoLenData.data(), fifoLenData.size(),
+        fifoLenShape.data(), fifoLenShape.size());
+
+    const char* inputNames[] = {
+        "chunk", "chunk_lengths",
+        "spkcache", "spkcache_lengths",
+        "fifo", "fifo_lengths"};
+    const char* outputNames[] = {
+        "spkcache_fifo_chunk_preds",
+        "chunk_pre_encode_embs",
+        "chunk_pre_encode_lengths"};
+
+    std::vector<Ort::Value> inputs;
+    inputs.push_back(std::move(chunkTensor));
+    inputs.push_back(std::move(chunkLenTensor));
+    inputs.push_back(std::move(cacheTensor));
+    inputs.push_back(std::move(cacheLenTensor));
+    inputs.push_back(std::move(fifoTensor));
+    inputs.push_back(std::move(fifoLenTensor));
+
+    auto outputs = sortformer_session_->Run(
+        Ort::RunOptions{nullptr},
+        inputNames, inputs.data(), inputs.size(),
+        outputNames, 3);
+
+    auto& predsOut = outputs[0];
+    auto predsInfo = predsOut.GetTensorTypeAndShapeInfo();
+    auto predsShape = predsInfo.GetShape();
+    int64_t totalOut = predsShape[1];
+    const float* predsData = predsOut.GetTensorData<float>();
+
+    auto& embsOut = outputs[1];
+    auto embsInfo = embsOut.GetTensorTypeAndShapeInfo();
+    auto embsShape = embsInfo.GetShape();
+    int64_t embFrames = embsShape[1];
+    const float* embsData = embsOut.GetTensorData<float>();
+
+    int64_t chunkPredStart = totalOut - embFrames;
+    if (chunkPredStart < 0) chunkPredStart = 0;
+    for (int64_t t = chunkPredStart; t < totalOut; ++t) {
+      for (int s = 0; s < SF_NUM_SPEAKERS; ++s) {
+        allPredictions.push_back(predsData[t * SF_NUM_SPEAKERS + s]);
+      }
+    }
+
+    size_t newEmbSize = static_cast<size_t>(embFrames * SF_EMB_DIM);
+    fifo.insert(fifo.end(), embsData, embsData + newEmbSize);
+    fifoFrames += embFrames;
+    if (fifoFrames > SF_FIFO_LEN) {
+      int64_t excess = fifoFrames - SF_FIFO_LEN;
+      fifo.erase(fifo.begin(),
+                 fifo.begin() + excess * SF_EMB_DIM);
+      fifoFrames = SF_FIFO_LEN;
+    }
+
+    spkcache.insert(spkcache.end(), embsData, embsData + newEmbSize);
+    cacheFrames += embFrames;
+    if (cacheFrames > SF_SPKCACHE_LEN) {
+      int64_t excess = cacheFrames - SF_SPKCACHE_LEN;
+      spkcache.erase(spkcache.begin(),
+                     spkcache.begin() + excess * SF_EMB_DIM);
+      cacheFrames = SF_SPKCACHE_LEN;
+    }
+  }
+
+  int64_t totalPredFrames =
+      static_cast<int64_t>(allPredictions.size() / SF_NUM_SPEAKERS);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "Sortformer: " + std::to_string(numFrames) + " mel frames -> " +
+           std::to_string(totalPredFrames) + " prediction frames");
+
+  return allPredictions;
+}
+
+std::vector<float> ParakeetModel::medianFilter(
+    const std::vector<float>& preds, int64_t numFrames, int numSpeakers) {
+  std::vector<float> filtered = preds;
+  int half = diarConfig_.medianWindow / 2;
+
+  for (int spk = 0; spk < numSpeakers; ++spk) {
+    for (int64_t t = 0; t < numFrames; ++t) {
+      int64_t wStart = std::max(int64_t(0), t - half);
+      int64_t wEnd = std::min(numFrames, t + half + 1);
+
+      std::vector<float> window;
+      window.reserve(wEnd - wStart);
+      for (int64_t i = wStart; i < wEnd; ++i) {
+        window.push_back(preds[i * numSpeakers + spk]);
+      }
+
+      std::sort(window.begin(), window.end());
+      filtered[t * numSpeakers + spk] = window[window.size() / 2];
+    }
+  }
+
+  return filtered;
+}
+
+std::vector<SpeakerSegment> ParakeetModel::binarizePredictions(
+    const std::vector<float>& preds, int64_t numFrames) {
+  std::vector<SpeakerSegment> segments;
+
+  for (int spk = 0; spk < SF_NUM_SPEAKERS; ++spk) {
+    bool inSegment = false;
+    int64_t segStart = 0;
+    std::vector<SpeakerSegment> spkSegments;
+
+    for (int64_t t = 0; t < numFrames; ++t) {
+      float p = preds[t * SF_NUM_SPEAKERS + spk];
+
+      if (p >= diarConfig_.onset && !inSegment) {
+        inSegment = true;
+        segStart = t;
+      } else if (p < diarConfig_.offset && inSegment) {
+        inSegment = false;
+        float startTime =
+            segStart * SF_FRAME_DURATION - diarConfig_.padOnset;
+        float endTime = t * SF_FRAME_DURATION + diarConfig_.padOffset;
+        if (startTime < 0.0f) startTime = 0.0f;
+
+        if (endTime - startTime >= diarConfig_.minDurationOn) {
+          spkSegments.push_back({startTime, endTime, spk});
+        }
+      }
+    }
+
+    if (inSegment) {
+      float startTime =
+          segStart * SF_FRAME_DURATION - diarConfig_.padOnset;
+      float endTime =
+          numFrames * SF_FRAME_DURATION + diarConfig_.padOffset;
+      if (startTime < 0.0f) startTime = 0.0f;
+
+      if (endTime - startTime >= diarConfig_.minDurationOn) {
+        spkSegments.push_back({startTime, endTime, spk});
+      }
+    }
+
+    if (spkSegments.size() > 1) {
+      std::vector<SpeakerSegment> merged = {spkSegments[0]};
+      for (size_t i = 1; i < spkSegments.size(); ++i) {
+        float gap = spkSegments[i].start - merged.back().end;
+        if (gap < diarConfig_.minDurationOff) {
+          merged.back().end = spkSegments[i].end;
+        } else {
+          merged.push_back(spkSegments[i]);
+        }
+      }
+      segments.insert(segments.end(), merged.begin(), merged.end());
+    } else {
+      segments.insert(segments.end(), spkSegments.begin(), spkSegments.end());
+    }
+  }
+
+  std::sort(segments.begin(), segments.end(),
+            [](const SpeakerSegment& a, const SpeakerSegment& b) {
+              return a.start < b.start;
+            });
+
+  return segments;
 }
 
 void ParakeetModel::process(const Input& input) {
@@ -920,53 +1767,143 @@ void ParakeetModel::process(const Input& input) {
   std::string text;
   int64_t encodedLength = 0;
   
-  if (is_loaded_ && encoder_session_ && decoder_session_) {
+  bool modelReady = false;
+  if (cfg_.modelType == ModelType::CTC) {
+    modelReady = is_loaded_ && ctc_session_;
+  } else if (cfg_.modelType == ModelType::SORTFORMER) {
+    modelReady = is_loaded_ && sortformer_session_;
+  } else {
+    modelReady = is_loaded_ && encoder_session_ && decoder_session_;
+  }
+
+  if (modelReady) {
     try {
-      std::vector<float> melFeatures;
-      int64_t numFrames = 0;
-      bool alreadyTransposed = false;
-      
-      measureTime(melSpecMs_, [&]() {
-        if (preprocessor_session_) {
-          auto [features, frames] = runPreprocessor(input);
-          melFeatures = std::move(features);
-          numFrames = frames;
-          alreadyTransposed = true;
+      if (cfg_.modelType == ModelType::CTC) {
+        std::vector<float> melFeatures;
+        int64_t numFrames = 0;
+
+        measureTime(melSpecMs_, [&]() {
+          melFeatures = computeMelSpectrogram(input, CTC_MEL_BINS);
+          numFrames =
+              static_cast<int64_t>(melFeatures.size() / CTC_MEL_BINS);
+          totalMelFrames_ += numFrames;
+        });
+
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
+
+        if (!melFeatures.empty() && numFrames > 0) {
+          std::vector<float> logits;
+
+          measureTime(encoderMs_, [&]() {
+            logits = runCTCModel(melFeatures, numFrames);
+          });
+
+          measureTime(decoderMs_, [&]() {
+            text = ctcGreedyDecode(logits, numFrames);
+          });
+
+          size_t wordCount = std::count(text.begin(), text.end(), ' ') +
+                             (text.empty() ? 0 : 1);
+          totalTokens_ += static_cast<int64_t>(wordCount);
+
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+               "Decoded: " + std::to_string(wordCount) +
+                   " tokens, text: " + text);
         } else {
-          melFeatures = computeMelSpectrogram(input);
-          numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
-          alreadyTransposed = false;
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+               "Audio too short for processing");
+          text = "[Audio too short]";
         }
-        totalMelFrames_ += numFrames;
-      });
-      
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
-      
-      if (!melFeatures.empty() && numFrames > 0) {
-        std::vector<float> encoderOutput;
-        
+      } else if (cfg_.modelType == ModelType::EOU) {
         measureTime(encoderMs_, [&]() {
-          encoderOutput = runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
-          totalEncodedFrames_ += encodedLength;
+          text = runEOUInferencePipeline(input);
         });
-        
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-             "Encoder output: " + std::to_string(encodedLength) + " encoded frames");
-        
-        measureTime(decoderMs_, [&]() {
-          text = greedyDecode(encoderOutput, encodedLength);
-        });
-        
-        size_t wordCount = std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
+
+        size_t wordCount = std::count(text.begin(), text.end(), ' ') +
+                           (text.empty() ? 0 : 1);
         totalTokens_ += static_cast<int64_t>(wordCount);
-        
+
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-             "Decoded: " + std::to_string(wordCount) + " tokens, text: " + text);
+             "EOU output: " + text.substr(0, 100) +
+                 (text.size() > 100 ? "..." : ""));
+      } else if (cfg_.modelType == ModelType::SORTFORMER) {
+        std::vector<float> melFeatures;
+        int64_t numFrames = 0;
+
+        measureTime(melSpecMs_, [&]() {
+          melFeatures = computeMelSpectrogram(input, MEL_BINS);
+          numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
+          totalMelFrames_ += numFrames;
+        });
+
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
+
+        if (!melFeatures.empty() && numFrames > 0) {
+          measureTime(encoderMs_, [&]() {
+            text = runSortformerPipeline(input);
+          });
+
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+               "Sortformer output: " + text.substr(0, 80) +
+                   (text.size() > 80 ? "..." : ""));
+        } else {
+          text = "[Audio too short]";
+        }
       } else {
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-             "Audio too short for processing");
-        text = "[Audio too short]";
+        // TDT pipeline
+        std::vector<float> melFeatures;
+        int64_t numFrames = 0;
+        bool alreadyTransposed = false;
+
+        measureTime(melSpecMs_, [&]() {
+          if (preprocessor_session_) {
+            auto [features, frames] = runPreprocessor(input);
+            melFeatures = std::move(features);
+            numFrames = frames;
+            alreadyTransposed = true;
+          } else {
+            melFeatures = computeMelSpectrogram(input);
+            numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
+            alreadyTransposed = false;
+          }
+          totalMelFrames_ += numFrames;
+        });
+
+        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+             "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
+
+        if (!melFeatures.empty() && numFrames > 0) {
+          std::vector<float> encoderOutput;
+
+          measureTime(encoderMs_, [&]() {
+            encoderOutput = runEncoder(melFeatures, numFrames, encodedLength,
+                                       alreadyTransposed);
+            totalEncodedFrames_ += encodedLength;
+          });
+
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+              "Encoder output: " + std::to_string(encodedLength) +
+                  " encoded frames");
+
+          measureTime(decoderMs_, [&]() {
+            text = greedyDecode(encoderOutput, encodedLength);
+          });
+
+          size_t wordCount = std::count(text.begin(), text.end(), ' ') +
+                             (text.empty() ? 0 : 1);
+          totalTokens_ += static_cast<int64_t>(wordCount);
+
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+               "Decoded: " + std::to_string(wordCount) +
+                   " tokens, text: " + text);
+        } else {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+               "Audio too short for processing");
+          text = "[Audio too short]";
+        }
       }
     } catch (const std::exception& e) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,

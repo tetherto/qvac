@@ -816,6 +816,260 @@ TEST_F(ParakeetModelTest, ProcessWithPreprocessorSession) {
   });
 }
 
+// ==================== CTC Model Tests ====================
+
+class CTCModelTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    config.modelPath = "./test_models";
+    config.modelType = ModelType::CTC;
+    config.maxThreads = 2;
+    config.useGPU = false;
+  }
+
+  ParakeetConfig config;
+};
+
+TEST_F(CTCModelTest, ConstructorCreatesCTCModel) {
+  EXPECT_NO_THROW({ ParakeetModel model(config); });
+}
+
+TEST_F(CTCModelTest, GetNameReturnsCTC) {
+  ParakeetModel model(config);
+  EXPECT_EQ(model.getName(), "Parakeet-CTC");
+}
+
+TEST_F(CTCModelTest, LoadTokenizerJsonParsesVocab) {
+  ParakeetModel model(config);
+
+  std::string tokenizerJson = R"({
+    "model": {
+      "type": "BPE",
+      "vocab": {
+        "<unk>": 0,
+        "hello": 1,
+        "world": 2,
+        "test": 3
+      }
+    },
+    "added_tokens": [
+      {"id": 0, "content": "<unk>", "special": true},
+      {"id": 4, "content": "<pad>", "special": true}
+    ]
+  })";
+
+  std::vector<uint8_t> data(tokenizerJson.begin(), tokenizerJson.end());
+  std::span<const uint8_t> dataSpan(data);
+  model.set_weights_for_file("tokenizer.json", dataSpan, true);
+
+  auto vocabPtr = get(VocabTag{});
+  auto& vocab = model.*vocabPtr;
+
+  EXPECT_EQ(vocab.size(), 5);
+  EXPECT_EQ(vocab[0], "<unk>");
+  EXPECT_EQ(vocab[1], "hello");
+  EXPECT_EQ(vocab[2], "world");
+  EXPECT_EQ(vocab[3], "test");
+  EXPECT_EQ(vocab[4], "<pad>");
+}
+
+TEST_F(CTCModelTest, LoadTokenizerJsonViaStreambuf) {
+  ParakeetModel model(config);
+
+  std::string tokenizerJson = R"({
+    "model": { "vocab": { "a": 0, "b": 1 } },
+    "added_tokens": []
+  })";
+
+  std::unique_ptr<std::basic_streambuf<char>> streambuf =
+      std::make_unique<std::stringbuf>(tokenizerJson);
+  model.set_weights_for_file("tokenizer.json", std::move(streambuf));
+
+  auto vocabPtr = get(VocabTag{});
+  auto& vocab = model.*vocabPtr;
+
+  EXPECT_EQ(vocab.size(), 2);
+  EXPECT_EQ(vocab[0], "a");
+  EXPECT_EQ(vocab[1], "b");
+}
+
+TEST_F(CTCModelTest, SetWeightsForCTCModel) {
+  ParakeetModel model(config);
+
+  std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
+  std::span<const uint8_t> weightsSpan(dummyWeights);
+
+  EXPECT_NO_THROW({
+    model.set_weights_for_file("model.onnx", weightsSpan, true);
+  });
+}
+
+TEST_F(CTCModelTest, LoadFailsWithoutCTCModelWeights) {
+  ParakeetModel model(config);
+
+  EXPECT_THROW({ model.load(); }, std::runtime_error);
+}
+
+TEST_F(CTCModelTest, ProcessEmptyAudio) {
+  ParakeetModel model(config);
+
+  std::vector<float> emptyAudio;
+  EXPECT_NO_THROW({ model.process(emptyAudio); });
+}
+
+TEST_F(CTCModelTest, ProcessShortAudio) {
+  ParakeetModel model(config);
+
+  std::vector<float> shortAudio(100, 0.1f);
+  EXPECT_NO_THROW({ model.process(shortAudio); });
+}
+
+TEST_F(CTCModelTest, ProcessDummyAudioWithoutModel) {
+  ParakeetModel model(config);
+
+  std::vector<float> audio(16000, 0.1f);
+  model.process(audio);
+
+  auto stats = model.runtimeStats();
+  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
+    for (const auto& [k, v] : stats) {
+      if (k == key) return v;
+    }
+    return int64_t(0);
+  };
+
+  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
+}
+
+TEST_F(CTCModelTest, WarmupWithoutLoadDoesNotThrow) {
+  ParakeetModel model(config);
+  EXPECT_NO_THROW({ model.warmup(); });
+}
+
+TEST_F(CTCModelTest, LoadWithRealCTCModelIfAvailable) {
+  std::string modelsPath = "./models/parakeet-ctc-0.6b-onnx";
+  if (!std::filesystem::exists(modelsPath + "/model.onnx") ||
+      !std::filesystem::exists(modelsPath + "/tokenizer.json")) {
+    GTEST_SKIP() << "CTC model not available";
+  }
+
+  config.modelPath = modelsPath;
+  ParakeetModel model(config);
+
+  std::ifstream modelFile(modelsPath + "/model.onnx", std::ios::binary);
+  std::vector<uint8_t> modelData((std::istreambuf_iterator<char>(modelFile)),
+                                  std::istreambuf_iterator<char>());
+  model.set_weights_for_file("model.onnx",
+                              std::span<const uint8_t>(modelData), true);
+
+  std::ifstream tokFile(modelsPath + "/tokenizer.json");
+  std::string tokContent((std::istreambuf_iterator<char>(tokFile)),
+                          std::istreambuf_iterator<char>());
+  std::vector<uint8_t> tokData(tokContent.begin(), tokContent.end());
+  model.set_weights_for_file("tokenizer.json",
+                              std::span<const uint8_t>(tokData), true);
+
+  EXPECT_NO_THROW({ model.load(); });
+  EXPECT_TRUE(model.isLoaded());
+}
+
+// ==================== Sortformer Model Tests ====================
+
+class SortformerModelTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    config.modelPath = "./test_models";
+    config.modelType = ModelType::SORTFORMER;
+    config.maxThreads = 2;
+    config.useGPU = false;
+  }
+
+  ParakeetConfig config;
+};
+
+TEST_F(SortformerModelTest, ConstructorCreatesSortformerModel) {
+  EXPECT_NO_THROW({ ParakeetModel model(config); });
+}
+
+TEST_F(SortformerModelTest, GetNameReturnsSortformer) {
+  ParakeetModel model(config);
+  EXPECT_EQ(model.getName(), "Parakeet-Sortformer");
+}
+
+TEST_F(SortformerModelTest, SetWeightsForSortformerModel) {
+  ParakeetModel model(config);
+
+  std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
+  std::span<const uint8_t> weightsSpan(dummyWeights);
+
+  EXPECT_NO_THROW({
+    model.set_weights_for_file("sortformer.onnx", weightsSpan, true);
+  });
+}
+
+TEST_F(SortformerModelTest, LoadFailsWithoutSortformerWeights) {
+  ParakeetModel model(config);
+
+  EXPECT_THROW({ model.load(); }, std::runtime_error);
+}
+
+TEST_F(SortformerModelTest, ProcessEmptyAudio) {
+  ParakeetModel model(config);
+
+  std::vector<float> emptyAudio;
+  EXPECT_NO_THROW({ model.process(emptyAudio); });
+}
+
+TEST_F(SortformerModelTest, ProcessShortAudio) {
+  ParakeetModel model(config);
+
+  std::vector<float> shortAudio(100, 0.1f);
+  EXPECT_NO_THROW({ model.process(shortAudio); });
+}
+
+TEST_F(SortformerModelTest, ProcessDummyAudioWithoutModel) {
+  ParakeetModel model(config);
+
+  std::vector<float> audio(16000, 0.1f);
+  model.process(audio);
+
+  auto stats = model.runtimeStats();
+  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
+    for (const auto& [k, v] : stats) {
+      if (k == key) return v;
+    }
+    return int64_t(0);
+  };
+
+  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
+}
+
+TEST_F(SortformerModelTest, WarmupWithoutLoadDoesNotThrow) {
+  ParakeetModel model(config);
+  EXPECT_NO_THROW({ model.warmup(); });
+}
+
+TEST_F(SortformerModelTest, LoadWithRealSortformerModelIfAvailable) {
+  std::string modelsPath = "./models/sortformer-4spk-v2-onnx";
+  if (!std::filesystem::exists(modelsPath + "/sortformer.onnx")) {
+    GTEST_SKIP() << "Sortformer model not available";
+  }
+
+  config.modelPath = modelsPath;
+  ParakeetModel model(config);
+
+  std::ifstream modelFile(modelsPath + "/sortformer.onnx", std::ios::binary);
+  std::vector<uint8_t> modelData((std::istreambuf_iterator<char>(modelFile)),
+                                  std::istreambuf_iterator<char>());
+  model.set_weights_for_file("sortformer.onnx",
+                              std::span<const uint8_t>(modelData), true);
+
+  EXPECT_NO_THROW({ model.load(); });
+  EXPECT_TRUE(model.isLoaded());
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

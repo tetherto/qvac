@@ -68,6 +68,7 @@ public:
     
     totalMelFrames_ = 0;
     totalEncodedFrames_ = 0;
+    eouState_.initialized = false;
   }
   void endOfStream() { stream_ended_ = true; }
   bool isStreamEnded() const { return stream_ended_; }
@@ -114,7 +115,7 @@ private:
   std::pair<std::vector<float>, int64_t> runPreprocessor(const Input& audio);
   
   // Fallback: manual mel-spectrogram computation
-  std::vector<float> computeMelSpectrogram(const Input& audio);
+  std::vector<float> computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
   
   // Run encoder inference (alreadyTransposed=true for ONNX preprocessor output)
   std::vector<float> runEncoder(const std::vector<float>& melFeatures, 
@@ -122,36 +123,44 @@ private:
                                  int64_t& encodedLength,
                                  bool alreadyTransposed = false);
   
-  // Run greedy transducer decoding
+  // Run greedy transducer decoding (TDT)
   std::string greedyDecode(const std::vector<float>& encoderOutput,
                            int64_t encodedLength);
-  
+
+  // CTC inference pipeline
+  std::string runCTCInferencePipeline(const Input& audio);
+  std::vector<float> runCTCModel(const std::vector<float>& melFeatures,
+                                  int64_t numFrames);
+  std::string ctcGreedyDecode(const std::vector<float>& logits,
+                               int64_t numFrames);
+
+  // EOU inference pipeline (interleaved streaming encoder+decoder)
+  std::string runEOUInferencePipeline(const Input& audio);
+  void resetEOUStreamingState();
+  std::vector<float> eouEncodeChunk(const std::vector<float>& melChunk,
+                                     int64_t chunkFrames,
+                                     int64_t& outFrames);
+  std::string eouDecodeChunk(const std::vector<float>& encoderOutput,
+                              int64_t encodedFrames, int& eouCount);
+
+  // Sortformer speaker diarization pipeline
+  std::string runSortformerPipeline(const Input& audio);
+  std::vector<float> runSortformerChunked(const std::vector<float>& melFeatures,
+                                           int64_t numFrames);
+  std::vector<float> medianFilter(const std::vector<float>& preds,
+                                   int64_t numFrames, int numSpeakers);
+  std::vector<SpeakerSegment> binarizePredictions(const std::vector<float>& preds,
+                                                    int64_t numFrames);
+
   // Load vocabulary from file
   void loadVocabulary(const std::vector<uint8_t>& vocabData);
 
-  /**
-   * @brief Compute mel-spectrogram features from raw audio.
-   *
-   * Uses the ONNX preprocessor if available, otherwise falls back to
-   * manual mel-spectrogram computation. Returns the mel features along
-   * with frame count and a flag indicating if features are pre-transposed.
-   *
-   * @param audio Raw audio samples (16kHz, mono, float normalized to [-1, 1])
-   * @return Tuple of (mel features, frame count, already transposed flag)
-   */
+  // Load vocabulary from tokenizer.json (CTC/EOU models)
+  void loadTokenizerJson(const std::vector<uint8_t>& data);
+
   std::tuple<std::vector<float>, int64_t, bool>
   computeFeatures(const Input &audio);
 
-  /**
-   * @brief Run the complete inference pipeline on audio input.
-   *
-   * Executes the full STT pipeline: mel features -> encoder -> decoder.
-   * Used by both warmup() for model initialization and process() for
-   * actual transcription.
-   *
-   * @param audio Raw audio samples (16kHz, mono, float normalized to [-1, 1])
-   * @return Decoded transcription text (empty string if audio too short)
-   */
   std::string runInferencePipeline(const Input &audio);
 
   ParakeetConfig cfg_;
@@ -164,8 +173,10 @@ private:
   // ONNX Runtime members
   std::unique_ptr<Ort::Env> ort_env_;
   std::unique_ptr<Ort::Session> preprocessor_session_;  // ONNX mel spectrogram
-  std::unique_ptr<Ort::Session> encoder_session_;
-  std::unique_ptr<Ort::Session> decoder_session_;
+  std::unique_ptr<Ort::Session> encoder_session_;        // TDT/EOU encoder
+  std::unique_ptr<Ort::Session> decoder_session_;        // TDT/EOU decoder/joiner
+  std::unique_ptr<Ort::Session> ctc_session_;            // CTC single model
+  std::unique_ptr<Ort::Session> sortformer_session_;    // Sortformer diarization
   std::unique_ptr<Ort::MemoryInfo> memory_info_;
   
   // Model weights storage (before loading)
@@ -186,18 +197,60 @@ private:
   int64_t getLanguageToken(const std::string& langCode) const;
   
   // Mel-spectrogram parameters (parakeet-tdt-0.6b-v3 uses 128 mel bins)
-  static constexpr int MEL_BINS = 128;         // feature_size (model expects 128)
+  static constexpr int MEL_BINS = 128;         // TDT feature_size
+  static constexpr int CTC_MEL_BINS = 80;      // CTC feature_size
   static constexpr int FFT_SIZE = 512;         // n_fft
   static constexpr int HOP_LENGTH = 160;       // hop_length (10ms at 16kHz)
   static constexpr int WIN_LENGTH = 400;       // win_length (25ms at 16kHz)
   static constexpr float SAMPLE_RATE = 16000.0f;
+
+  // CTC-specific constants
+  static constexpr int64_t CTC_BLANK_TOKEN = 1024;  // <pad> token in CTC vocab
   
   // Encoder output dimension
-  static constexpr int ENCODER_DIM = 1024;
+  static constexpr int ENCODER_DIM = 1024;          // TDT encoder dim
   
   // Decoder state dimension
   static constexpr int DECODER_STATE_DIM = 640;
+
+  // EOU-specific constants (FastConformer-RNNT 120M)
+  static constexpr int EOU_ENCODER_DIM = 512;
+  static constexpr int EOU_DECODER_STATE_DIM = 640;
+  static constexpr int EOU_NUM_LAYERS = 17;
+  static constexpr int EOU_CACHE_LOOKBACK = 70;
+  static constexpr int EOU_CACHE_TIME_STEPS = 8;
+  static constexpr int EOU_ENCODER_CHUNK_FRAMES = 25;
+  static constexpr int EOU_MAX_SYMBOLS_PER_STEP = 5;
+
+  // Sortformer constants (streaming speaker diarization)
+  static constexpr int SF_NUM_SPEAKERS = 4;
+  static constexpr int SF_EMB_DIM = 512;
+  static constexpr int SF_CHUNK_LEN = 124;
+  static constexpr int SF_FIFO_LEN = 124;
+  static constexpr int SF_SPKCACHE_LEN = 188;
+  static constexpr int SF_SUBSAMPLING = 8;
+  static constexpr float SF_FRAME_DURATION = 0.08f;
+
+  DiarizationConfig diarConfig_;
+
+  // Persistent EOU streaming state (carried across encoder/decoder chunks)
+  struct EOUStreamState {
+    std::vector<float> cacheChan;
+    std::vector<float> cacheTime;
+    std::vector<int64_t> cacheChanLen;
+    std::vector<float> stateH;
+    std::vector<float> stateC;
+    int32_t lastToken = 0;
+    int64_t eouId = -1;
+    int64_t blankId = -1;
+    bool initialized = false;
+  };
+  EOUStreamState eouState_;
   
+  int melBinsForModel() const {
+    return cfg_.modelType == ModelType::CTC ? CTC_MEL_BINS : MEL_BINS;
+  }
+
   // Track processed audio time
   float processed_time_ = 0.0f;
   
