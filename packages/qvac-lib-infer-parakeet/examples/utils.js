@@ -151,14 +151,47 @@ function validatePaths (paths) {
 }
 
 /**
- * Create a promise that resolves when job ends
+ * Create a promise that resolves when job ends and output is received.
+ *
+ * Handles a race condition where the addon's JobEnded event can fire before
+ * the Output event on fast models. The promise resolves when both conditions
+ * are met, or after a grace period following whichever fires first.
+ *
  * @returns {{ promise: Promise, resolve: Function, transcriptions: Array }}
  */
 function createJobTracker () {
   const transcriptions = []
   let resolveJob = null
+  let hasOutput = false
+  let jobEnded = false
+  let graceTimeout = null
+
   const promise = new Promise(resolve => { resolveJob = resolve })
-  return { promise, resolve: resolveJob, transcriptions }
+
+  const tryResolve = () => {
+    if (hasOutput && jobEnded) {
+      if (graceTimeout) clearTimeout(graceTimeout)
+      resolveJob()
+    }
+  }
+
+  return {
+    promise,
+    resolve: () => resolveJob(),
+    transcriptions,
+    markOutput () {
+      hasOutput = true
+      tryResolve()
+      if (jobEnded && !hasOutput) resolveJob()
+    },
+    markJobEnded () {
+      jobEnded = true
+      tryResolve()
+      if (!hasOutput) {
+        graceTimeout = setTimeout(() => resolveJob(), 5000)
+      }
+    }
+  }
 }
 
 /**
@@ -184,10 +217,15 @@ function createOutputCallback (tracker, options = {}) {
           }
         }
       }
+      if (tracker.markOutput) tracker.markOutput()
     }
 
     if (event === 'JobEnded') {
-      tracker.resolve()
+      if (tracker.markJobEnded) {
+        tracker.markJobEnded()
+      } else {
+        tracker.resolve()
+      }
     }
   }
 }
