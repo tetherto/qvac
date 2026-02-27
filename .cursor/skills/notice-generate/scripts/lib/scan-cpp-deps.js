@@ -4,6 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const {
   SKIP_VCPKG_PORTS,
+  TRIPLET_COMPILER_LIBS,
   QVAC_VCPKG_REGISTRY_REPO,
   MS_VCPKG_REGISTRY_REPO
 } = require('./config')
@@ -250,6 +251,32 @@ async function resolveDep (dep, log) {
 }
 
 // ---------------------------------------------------------------------------
+// Scan vcpkg overlay triplet files for compiler/runtime library flags
+// (e.g. -stdlib=libc++ → attribute libc++)
+// ---------------------------------------------------------------------------
+function detectCompilerLibs (pkgDir, log) {
+  const results = []
+  const seen = new Set()
+
+  const tripletsDir = path.join(pkgDir, 'vcpkg', 'triplets')
+  if (!fs.existsSync(tripletsDir)) return results
+
+  const files = fs.readdirSync(tripletsDir).filter(f => f.endsWith('.cmake'))
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(tripletsDir, file), 'utf8')
+    for (const { pattern, entry } of TRIPLET_COMPILER_LIBS) {
+      if (pattern.test(content) && !seen.has(entry.name)) {
+        seen.add(entry.name)
+        results.push({ ...entry })
+        log.push(`[C++] Detected compiler library "${entry.name}" from triplet ${file}`)
+      }
+    }
+  }
+
+  return results
+}
+
+// ---------------------------------------------------------------------------
 // Scan all C++ dependencies for a package
 // Returns: [{ name, license, url }]
 // ---------------------------------------------------------------------------
@@ -271,6 +298,12 @@ async function scanCppDeps (pkgDir, log) {
     const resolved = await resolveDep(dep, log)
     results.push(resolved)
     process.stderr.write(` ${resolved.license}\n`)
+  }
+
+  const compilerLibs = detectCompilerLibs(pkgDir, log)
+  for (const lib of compilerLibs) {
+    process.stderr.write(`    ${lib.name} (compiler-lib)... ${lib.license}\n`)
+    results.push(lib)
   }
 
   return results.sort(sortByName)
