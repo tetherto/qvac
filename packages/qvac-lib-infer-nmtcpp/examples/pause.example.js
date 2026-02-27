@@ -1,10 +1,11 @@
 'use strict'
 
 /**
- * Pause/Continue Example
+ * Long Text Translation Example
  *
- * This example demonstrates how to pause and resume translation mid-process.
- * Useful for implementing user-controlled interruption of long translations.
+ * This example demonstrates translating a long text passage.
+ * Note: NMT translation is atomic per-sentence in C++, so pause/resume
+ * is not supported. Use cancel() to interrupt a translation.
  *
  * Usage:
  *   bare examples/pause.example.js
@@ -57,12 +58,6 @@ async function main () {
   await model.load()
   try {
     const response = await model.run(text)
-
-    // Pause the translation immediately after starting
-    response.pause().catch(console.log)
-
-    // Resume the translation after 2 seconds
-    setTimeout(() => response.continue().catch(console.log), 2000)
 
     await response
       .onUpdate(data => {

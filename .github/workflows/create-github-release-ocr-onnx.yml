@@ -15,7 +15,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-inference-addon-onnx-ocr-fasttext"
+        default: "packages/ocr-onnx"
 
 permissions:
   contents: write

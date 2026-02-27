@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0]
+
+Release Date: 2026-02-26
+
+### ✨ Features
+
+- Add `downloadBlob(blobBinding, options)` method for direct blob download without metadata core sync — bypasses ~4s swarm discovery when blob coordinates are already known (#556)
+- Split `_open()` into fast network init and background metadata connection for improved startup latency (#556)
+
+### 🔧 Changed
+
+- `_getBlobsCore` now accepts z-base-32 encoded keys via `IdEnc.decode` in addition to hex and Buffer inputs (#556)
+
 ## [0.1.8]
 
 Release Date: 2026-02-25
