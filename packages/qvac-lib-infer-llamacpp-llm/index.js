@@ -392,6 +392,7 @@ class LlmLlamacpp extends BaseInference {
       try {
         await this.cancel()
       } catch (_) {}
+      this._finetuneActive = false
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
         currentJobResponse.failed(new Error('Model was unloaded'))
