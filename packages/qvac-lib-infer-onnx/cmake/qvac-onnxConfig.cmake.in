@@ -1,0 +1,3 @@
+@PACKAGE_INIT@
+include("${CMAKE_CURRENT_LIST_DIR}/qvac-onnxTargets.cmake")
+check_required_components(qvac-onnx)
