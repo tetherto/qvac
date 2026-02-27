@@ -246,18 +246,14 @@ std::any LlamaModel::process(const std::any& input) {
   const auto& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
-    FinetuneTerminalResult::Stats stats;
-    const std::string status =
+    FinetuneTerminalResult::Stats stats{};
+    std::string status =
         finetune(*prompt.finetuningParams, &stats, prompt.progressCallback);
-    FinetuneTerminalResult terminalResult{"finetune", status, std::nullopt};
-    if (
-        stats.trainLossLast.has_value() || stats.valLossLast.has_value() ||
-        stats.trainAccuracyLast.has_value() ||
-        stats.valAccuracyLast.has_value() || stats.lrLast.has_value() ||
-        stats.globalSteps > 0 || stats.epochsCompleted > 0) {
-      terminalResult.stats = stats;
+    FinetuneTerminalResult result{"finetune", std::move(status)};
+    if (stats.globalSteps > 0 || stats.epochsCompleted > 0) {
+      result.stats = stats;
     }
-    return std::any(std::move(terminalResult));
+    return std::any(std::move(result));
   }
 #else
   if (prompt.finetuningParams.has_value()) {
@@ -1362,6 +1358,12 @@ void LlamaModel::executeTrainingLoop(
                                  ? optEpochCallbackWrapper
                                  : ggml_opt_epoch_callback_progress_bar;
 
+  double lastTrainLoss = 0.0;
+  double lastValLoss = 0.0;
+  double lastTrainAccuracy = 0.0;
+  double lastValAccuracy = 0.0;
+  int32_t completedEpochs = static_cast<int32_t>(startEpoch);
+
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
     if (checkpointState && checkpointState->shouldExit.load()) {
       QLOG_IF(Priority::DEBUG, "Training paused");
@@ -1416,41 +1418,23 @@ void LlamaModel::executeTrainingLoop(
       std::cout.flush();
     }
 
-    double lossValue = 0.0;
-    ggml_opt_result_loss(trainResult.get(), &lossValue, nullptr);
-    double trainAccuracyValue = 0.0;
-    ggml_opt_result_accuracy(trainResult.get(), &trainAccuracyValue, nullptr);
-    if (outStats != nullptr) {
-      outStats->trainLossLast = lossValue;
-      outStats->trainAccuracyLast = trainAccuracyValue;
-      outStats->lrLast = static_cast<double>(scheduler.lastLr);
-      outStats->globalSteps = checkpointState != nullptr
-          ? checkpointState->globalStep
-          : (static_cast<int64_t>(epoch) + 1) * trainSplit;
-    }
+    ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, nullptr);
+    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, nullptr);
+
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
     }
 
-    double valLoss = 0.0;
     if (hasEval) {
-      ggml_opt_result_loss(evalResult.get(), &valLoss, nullptr);
-      double valAccuracyValue = 0.0;
-      ggml_opt_result_accuracy(evalResult.get(), &valAccuracyValue, nullptr);
-      if (outStats != nullptr) {
-        outStats->valLossLast = valLoss;
-        outStats->valAccuracyLast = valAccuracyValue;
-      }
+      ggml_opt_result_loss(evalResult.get(), &lastValLoss, nullptr);
+      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, nullptr);
     }
 
-    if (outStats != nullptr) {
-      outStats->epochsCompleted = static_cast<int64_t>(epoch) + 1;
-    }
-
+    completedEpochs = static_cast<int32_t>(epoch + 1);
     std::ostringstream epochMsg;
-    epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lossValue;
+    epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lastTrainLoss;
     if (hasEval) {
-      epochMsg << " | val_loss=" << valLoss;
+      epochMsg << " | val_loss=" << lastValLoss;
     }
     epochMsg << " | lr=" << scheduler.lastLr;
     QLOG_IF(Priority::DEBUG, epochMsg.str());
@@ -1458,6 +1442,17 @@ void LlamaModel::executeTrainingLoop(
     if (hasEval) {
       ggml_opt_result_reset(evalResult.get());
     }
+  }
+
+  if (outStats) {
+    outStats->trainLoss = lastTrainLoss;
+    outStats->valLoss = lastValLoss;
+    outStats->trainAccuracy = lastTrainAccuracy;
+    outStats->valAccuracy = lastValAccuracy;
+    outStats->learningRate = static_cast<double>(scheduler.lastLr);
+    outStats->epochsCompleted = completedEpochs;
+    outStats->globalSteps =
+        checkpointState ? checkpointState->globalStep : 0;
   }
 
   if (checkpointState && checkpointState->shouldExit.load() &&
@@ -1472,7 +1467,7 @@ void LlamaModel::executeTrainingLoop(
   if (outStats != nullptr && startEpoch >= params.numberOfEpochs &&
       checkpointState != nullptr && checkpointState->globalStep > 0) {
     outStats->globalSteps = checkpointState->globalStep;
-    outStats->epochsCompleted = static_cast<int64_t>(params.numberOfEpochs);
+    outStats->epochsCompleted = static_cast<int32_t>(params.numberOfEpochs);
   }
 }
 
