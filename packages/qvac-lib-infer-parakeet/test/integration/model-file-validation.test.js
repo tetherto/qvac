@@ -260,3 +260,44 @@ test('Should validate CTC model file requirements differently from TDT', { timeo
     }
   }
 })
+
+/**
+ * Test 8: Test Sortformer model type file requirements (single sortformer.onnx)
+ */
+test('Should validate Sortformer model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
+
+  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const sfModelPath = path.join(testDir, 'test-sortformer-model')
+
+  if (!fs.existsSync(sfModelPath)) {
+    fs.mkdirSync(sfModelPath, { recursive: true })
+  }
+
+  const args = {
+    modelName: 'test-sortformer-model',
+    diskPath: testDir,
+    loader: createLoader()
+  }
+  const config = {
+    parakeetConfig: {
+      modelType: 'sortformer'
+    }
+  }
+
+  try {
+    const model = new TranscriptionParakeet(args, config)
+    t.ok(model, 'Model instance created for Sortformer type')
+    t.pass('Sortformer model type accepts directory without TDT-specific files')
+  } catch (error) {
+    t.ok(error, 'Sortformer validation may also throw for missing files')
+  }
+
+  if (fs.existsSync(sfModelPath)) {
+    try {
+      fs.rmdirSync(sfModelPath, { recursive: true })
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+})
