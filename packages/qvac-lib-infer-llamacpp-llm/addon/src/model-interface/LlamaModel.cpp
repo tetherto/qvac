@@ -1468,6 +1468,12 @@ void LlamaModel::executeTrainingLoop(
   if (checkpointState && !checkpointState->shouldExit.load()) {
     clearPauseCheckpoint(checkpointState->checkpointDir);
   }
+
+  if (outStats != nullptr && startEpoch >= params.numberOfEpochs &&
+      checkpointState != nullptr && checkpointState->globalStep > 0) {
+    outStats->globalSteps = checkpointState->globalStep;
+    outStats->epochsCompleted = static_cast<int64_t>(params.numberOfEpochs);
+  }
 }
 
 void LlamaModel::saveLoraAdapter(

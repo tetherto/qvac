@@ -337,6 +337,7 @@ test('resume after final-epoch validation pause returns stats', { timeout: PAUSE
     await sleep(20000)
 
     await model.pause()
+
     const pauseResult = await finetuneHandle.await()
     t.comment(`Initial finetune result: ${JSON.stringify(pauseResult)}`)
 

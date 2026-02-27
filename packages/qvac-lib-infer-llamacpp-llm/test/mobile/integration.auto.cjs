@@ -50,6 +50,10 @@ async function runToolCallingTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/tool-calling.test.js', options)
 }
 
+async function runUpdatedFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/updated_finetuning-pause-resume.test.js', options)
+}
+
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/utf8-output.test.js', options)
 }
