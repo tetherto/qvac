@@ -1,0 +1,147 @@
+version: 0.1
+android_test_host: amazon_linux_2
+
+phases:
+  pre_test:
+    commands:
+      # Periodic screenshots every 30s in the background
+      - |-
+        (while true; do
+          TIMESTAMP=$(date +%s)
+          adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/screen-${TIMESTAMP}.png" 2>/dev/null
+          sleep 30
+        done) &
+        echo "Screenshot capture started (every 30s)"
+
+  test:
+    commands:
+      # Stream logcat, track test progress in real-time, detect completion
+      - |-
+        TIMEOUT=${DEVICEFARM_TIMEOUT:-1800}
+        START=$(date +%s)
+        PASSED=0
+        FAILED=0
+        COMPLETED=0
+        EXPECTED="?"
+        RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+
+        touch "$RESULTS_FILE"
+        adb logcat -c
+
+        echo "Monitoring app logcat for test results (timeout: ${TIMEOUT}s)..."
+
+        adb logcat ReactNativeJS:I *:S | while IFS= read -r line; do
+          case "$line" in
+            *"Registration ack"*"tests in queue"*)
+              EXPECTED=$(echo "$line" | grep -oP '\d+(?= tests in queue)')
+              echo "Registered: $EXPECTED tests expected"
+              ;;
+            *"✅"*"ms)"*)
+              PASSED=$((PASSED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[PASS $COMPLETED/$EXPECTED] $line"
+              echo "PASS|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"ms)"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[FAIL $COMPLETED/$EXPECTED] $line"
+              echo "FAIL|$line" >> "$RESULTS_FILE"
+              ;;
+            *"❌"*"failed:"*)
+              FAILED=$((FAILED+1))
+              COMPLETED=$((COMPLETED+1))
+              echo "[ERROR $COMPLETED/$EXPECTED] $line"
+              echo "ERROR|$line" >> "$RESULTS_FILE"
+              ;;
+            *"Consumer shutting down"*)
+              echo ""
+              echo "========================================="
+              echo "COMPLETE: $PASSED passed, $FAILED failed ($COMPLETED/$EXPECTED)"
+              echo "========================================="
+              break
+              ;;
+          esac
+
+          NOW=$(date +%s)
+          if [ $((NOW - START)) -ge $TIMEOUT ]; then
+            echo "TIMEOUT after ${TIMEOUT}s ($PASSED passed, $FAILED failed, $COMPLETED/$EXPECTED completed)"
+            exit 1
+          fi
+        done
+
+  post_test:
+    commands:
+      # Capture full logcat
+      - adb logcat -d ReactNativeJS:I *:S > "$DEVICEFARM_LOG_DIR/app-console.log"
+
+      # Final screenshot
+      - adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/final.png" 2>/dev/null
+
+      # Generate JUnit XML from captured test results
+      - |-
+        python3 << 'PYEOF'
+        import re
+        import xml.etree.ElementTree as ET
+        import os
+
+        log_dir = os.environ.get("DEVICEFARM_LOG_DIR", "/tmp")
+        results_file = os.path.join(log_dir, "test-results.txt")
+        output_file = os.path.join(log_dir, "junitReport.xml")
+
+        suite = ET.Element("testsuite", name="qvac-mobile")
+        passed = 0
+        failed = 0
+
+        if os.path.exists(results_file):
+            with open(results_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    parts = line.split("|", 1)
+                    if len(parts) != 2:
+                        continue
+
+                    status, log_line = parts
+
+                    if status == "PASS":
+                        m = re.search(r"✅\s+(.+?)\s+\((\d+)ms\)", log_line)
+                        if m:
+                            name = m.group(1)
+                            time_s = str(int(m.group(2)) / 1000.0)
+                            ET.SubElement(suite, "testcase", name=name, classname="qvac", time=time_s)
+                            passed += 1
+
+                    elif status == "FAIL":
+                        m = re.search(r"❌\s+(.+?)\s+\((\d+)ms\)", log_line)
+                        if m:
+                            name = m.group(1)
+                            time_s = str(int(m.group(2)) / 1000.0)
+                            tc = ET.SubElement(suite, "testcase", name=name, classname="qvac", time=time_s)
+                            ET.SubElement(tc, "failure", message="Test failed")
+                            failed += 1
+
+                    elif status == "ERROR":
+                        m = re.search(r"❌\s+(.+?)\s+failed:\s+(.*)", log_line)
+                        if m:
+                            name = m.group(1)
+                            error_msg = m.group(2).strip()
+                            tc = ET.SubElement(suite, "testcase", name=name, classname="qvac")
+                            ET.SubElement(tc, "error", message=error_msg)
+                            failed += 1
+
+        suite.set("tests", str(passed + failed))
+        suite.set("failures", str(failed))
+        suite.set("errors", "0")
+
+        tree = ET.ElementTree(suite)
+        ET.indent(tree, space="  ")
+        tree.write(output_file, xml_declaration=True, encoding="UTF-8")
+
+        print(f"JUnit XML: {passed + failed} tests ({passed} passed, {failed} failed) -> {output_file}")
+        PYEOF
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

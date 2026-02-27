@@ -233,6 +233,11 @@ jobs:
       matrix:
         device: ${{ fromJson(inputs.device-pools) }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: ${{ inputs.working-directory }}/device-farm-test-spec.yml
+
       - name: Download APK artifact
         uses: actions/download-artifact@v7
         with:
@@ -283,6 +288,41 @@ jobs:
             sleep 10
           done
 
+      - name: Upload test spec to Device Farm
+        id: upload-spec
+        run: |
+          SPEC_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --name "qvac-test-spec-${{ needs.build.outputs.runId }}.yml" \
+            --type "APPIUM_NODE_TEST_SPEC" \
+            --output json)
+
+          SPEC_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
+          SPEC_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
+
+          echo "spec-arn=$SPEC_ARN" >> $GITHUB_OUTPUT
+
+          curl -T "${{ inputs.working-directory }}/device-farm-test-spec.yml" "$SPEC_URL"
+
+          echo "Waiting for test spec to be processed..."
+          for i in {1..15}; do
+            STATUS=$(aws devicefarm get-upload --arn "$SPEC_ARN" --query "upload.status" --output text)
+            echo "Status (attempt $i/15): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Test spec upload successful"
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "Test spec upload failed"
+              aws devicefarm get-upload --arn "$SPEC_ARN"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
       - name: Schedule Device Farm run
         id: schedule
         run: |
@@ -295,7 +335,7 @@ jobs:
             --device-pool-arn "${{ matrix.device.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
-            --test type=BUILTIN_FUZZ,parameters='{event_count=10000,throttle=1000}' \
+            --test type=APPIUM_NODE,testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
             --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
             --query 'run.arn' --output text)
 
