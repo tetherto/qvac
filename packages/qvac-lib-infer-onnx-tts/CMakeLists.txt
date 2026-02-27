@@ -105,14 +105,18 @@ endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
+
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 if(APPLE)
-  message("VCPKG_OVERLAY_TRIPLETS will be override from this path for Apple vcpkg-override-triplets/triplets")
-  SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-  message("VCPKG_OVERLAY_PORTS will be override from this path for Apple vcpkg-overlay-ports")
   SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 endif()
 
 project(qvac-lib-inference-tts C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
