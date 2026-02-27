@@ -110,6 +110,74 @@ TEST_F(LlamaModelTest, InitializeBackend) {
   EXPECT_NO_THROW(model.initializeBackend());
 }
 
+TEST_F(LlamaModelTest, ReloadLoadsImmediatelyAndInferenceStillWorks) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello before reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Hello after reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadWithoutArgsUsesStoredConstructionArgs) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "First pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Second pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadThrowsForModelBuiltWithInvalidPath) {
+  std::string invalidPath = getInvalidModelPath();
+  std::string projectionPath = test_projection_path;
+  std::unordered_map<std::string, std::string> config = config_files;
+  LlamaModel model(
+      std::move(invalidPath), std::move(projectionPath), std::move(config));
+
+  // Constructor uses delayed init and does not throw immediately.
+  EXPECT_FALSE(model.isLoaded());
+  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
+}
+
 TEST_F(LlamaModelTest, InvalidModelPath) {
   std::string invalid_path = getInvalidModelPath();
   std::unordered_map<std::string, std::string> empty_config;

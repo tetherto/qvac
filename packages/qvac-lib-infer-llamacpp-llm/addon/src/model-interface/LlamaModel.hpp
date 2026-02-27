@@ -58,6 +58,13 @@ public:
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
 
+  struct ConstructionArgs {
+    std::string modelPath;
+    std::string projectionPath;
+    std::unordered_map<std::string, std::string> configFilemap;
+    InitLoader::LOADER_TYPE loaderType = InitLoader::LOADER_TYPE::DELAYED;
+  };
+
   /**
    * The Destructor for llama model.
    * Members are destroyed in reverse order of declaration, ensuring
@@ -103,6 +110,14 @@ public:
    */
   void reset() { resetState(); }
 
+  /// @brief Rebuilds reloadable model state using stored construction args.
+  /// TODO: Caller must ensure model is not in use before calling this method.
+  /// TODO: At JS-addon level thats possible by calling cancel() before
+  /// reloading.
+  /// TODO: on a custom operation
+  /// TODO: Add thread-safety guarantees.
+  void reload();
+
   /**
    * Initialize backend (llama.cpp setup).
    */
@@ -117,7 +132,7 @@ public:
    * Ensure model is initialized
    */
   void waitForLoadInitialization() final {
-    initLoader_.waitForLoadInitialization();
+    state_->initLoader_.waitForLoadInitialization();
   }
 
   /**
@@ -134,6 +149,35 @@ public:
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
 private:
+  struct ReloadableState {
+    ReloadableState(
+        const ConstructionArgs& args, const std::string& loadingContext,
+        ModelMetaData& metadata)
+        : shards_(GGUFShards::expandGGUFIntoShards(args.modelPath)),
+          asyncWeightsLoader_(shards_, initLoader_, loadingContext, &metadata) {
+    }
+
+    GGUFShards shards_;
+    friend class InitLoader;
+    InitLoader initLoader_;
+    AsyncWeightsLoader asyncWeightsLoader_;
+
+    bool isTextLlm_ = false;
+
+    // Backend handle must be declared before llmContext_ to ensure
+    // llmContext_ is destroyed first (members destroyed in reverse order)
+    std::optional<LlamaBackendsHandle> backendsHandle_;
+
+    // Store the appropriate context (TextLlmContext or MtmdLlmContext)
+    // Destroyed before backendsHandle_ to avoid use-after-free
+    std::unique_ptr<LlmContext> llmContext_;
+
+    // configuration values parsed from configFilemap
+    llama_pos configuredNDiscarded_ = 0;
+    std::optional<CacheManager> cacheManager_;
+    bool lastRunWasPrefill_ = false;
+  };
+
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
@@ -192,25 +236,10 @@ private:
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
 
+  void init(ConstructionArgs&& args, std::unique_ptr<ReloadableState>& state);
+
   const std::string loadingContext_;
-  GGUFShards shards_;
-  friend class InitLoader;
-  InitLoader initLoader_;
   ModelMetaData metadata_;
-  AsyncWeightsLoader asyncWeightsLoader_;
-
-  bool isTextLlm_ = false;
-
-  // Backend handle must be declared before llmContext_ to ensure
-  // llmContext_ is destroyed first (members destroyed in reverse order)
-  std::optional<LlamaBackendsHandle> backendsHandle_;
-
-  // Store the appropriate context (TextLlmContext or MtmdLlmContext)
-  // Destroyed before backendsHandle_ to avoid use-after-free
-  std::unique_ptr<LlmContext> llmContext_;
-
-  // configuration values parsed from configFilemap
-  llama_pos configuredNDiscarded_ = 0;
-  std::optional<CacheManager> cacheManager_;
-  bool lastRunWasPrefill_ = false;
+  ConstructionArgs constructionArgs_;
+  std::unique_ptr<ReloadableState> state_;
 };
