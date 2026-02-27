@@ -551,11 +551,16 @@ void optEpochCallback(
   state->globalStep += 1;
 
   if (state->progressCallback) {
+    double loss = 0.0;
+    double accuracy = 0.0;
+    ggml_opt_result_loss(result, &loss, nullptr);
+    ggml_opt_result_accuracy(result, &accuracy, nullptr);
+
     FinetuneProgressStats progress;
-    ggml_opt_result_loss(result, &progress.loss, nullptr);
-    ggml_opt_result_accuracy(result, &progress.accuracy, nullptr);
+    progress.loss = loss;
+    progress.accuracy = accuracy;
     progress.globalSteps = state->globalStep;
-    progress.currentEpoch = state->currentEpoch + 1;
+    progress.currentEpoch = state->currentEpoch;
     progress.currentBatch = displayBatch;
     progress.totalBatches = ibatchMax;
     state->progressCallback(progress);

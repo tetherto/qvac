@@ -93,54 +93,39 @@ struct JsFinetuneTerminalOutputHandler
                       "status",
                       js::String::create(this->env_, result.status));
                   if (result.stats.has_value()) {
-                    js::Object stats = js::Object::create(this->env_);
-                    if (result.stats->trainLossLast.has_value()) {
-                      stats.setProperty(
-                          this->env_,
-                          "train_loss",
-                          js::Number::create(
-                              this->env_, *result.stats->trainLossLast));
-                    }
-                    if (result.stats->valLossLast.has_value()) {
-                      stats.setProperty(
-                          this->env_,
-                          "val_loss",
-                          js::Number::create(
-                              this->env_, *result.stats->valLossLast));
-                    }
-                    if (result.stats->trainAccuracyLast.has_value()) {
-                      stats.setProperty(
-                          this->env_,
-                          "train_accuracy",
-                          js::Number::create(
-                              this->env_, *result.stats->trainAccuracyLast));
-                    }
-                    if (result.stats->valAccuracyLast.has_value()) {
-                      stats.setProperty(
-                          this->env_,
-                          "val_accuracy",
-                          js::Number::create(
-                              this->env_, *result.stats->valAccuracyLast));
-                    }
-                    if (result.stats->lrLast.has_value()) {
-                      stats.setProperty(
-                          this->env_,
-                          "learning_rate",
-                          js::Number::create(this->env_, *result.stats->lrLast));
-                    }
-                    stats.setProperty(
-                        this->env_,
-                        "global_steps",
+                    js::Object statsObj = js::Object::create(this->env_);
+                    statsObj.setProperty(
+                        this->env_, "train_loss",
+                        js::Number::create(
+                            this->env_, result.stats->trainLoss));
+                    statsObj.setProperty(
+                        this->env_, "val_loss",
+                        js::Number::create(
+                            this->env_, result.stats->valLoss));
+                    statsObj.setProperty(
+                        this->env_, "train_accuracy",
+                        js::Number::create(
+                            this->env_, result.stats->trainAccuracy));
+                    statsObj.setProperty(
+                        this->env_, "val_accuracy",
+                        js::Number::create(
+                            this->env_, result.stats->valAccuracy));
+                    statsObj.setProperty(
+                        this->env_, "learning_rate",
+                        js::Number::create(
+                            this->env_, result.stats->learningRate));
+                    statsObj.setProperty(
+                        this->env_, "global_steps",
                         js::Number::create(
                             this->env_,
                             static_cast<double>(result.stats->globalSteps)));
-                    stats.setProperty(
-                        this->env_,
-                        "epochs_completed",
+                    statsObj.setProperty(
+                        this->env_, "epochs_completed",
                         js::Number::create(
                             this->env_,
-                            static_cast<double>(result.stats->epochsCompleted)));
-                    payload.setProperty(this->env_, "stats", stats);
+                            static_cast<double>(
+                                result.stats->epochsCompleted)));
+                    payload.setProperty(this->env_, "stats", statsObj);
                   }
                   return payload;
                 }) {}

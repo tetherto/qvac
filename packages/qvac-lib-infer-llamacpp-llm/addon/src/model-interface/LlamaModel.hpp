@@ -31,14 +31,15 @@ using namespace qvac_lib_inference_addon_cpp::model;
 
 struct FinetuneTerminalResult {
   struct Stats {
-    std::optional<double> trainLossLast;
-    std::optional<double> valLossLast;
-    std::optional<double> trainAccuracyLast;
-    std::optional<double> valAccuracyLast;
-    std::optional<double> lrLast;
+    double trainLoss = 0.0;
+    double valLoss = 0.0;
+    double trainAccuracy = 0.0;
+    double valAccuracy = 0.0;
+    double learningRate = 0.0;
     int64_t globalSteps = 0;
-    int64_t epochsCompleted = 0;
+    int32_t epochsCompleted = 0;
   };
+
   std::string op;
   std::string status;
   std::optional<Stats> stats;
