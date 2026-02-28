@@ -1,9 +1,0 @@
-{
-  global:
-    bare_*;
-    napi_*;
-    /* Export onnx_addon::js::unwrapSession for other addons to use */
-    _ZN10onnx_addon2js13unwrapSession*;
-  local:
-    *;
-};
