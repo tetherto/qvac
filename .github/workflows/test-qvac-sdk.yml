@@ -32,6 +32,10 @@ on:
         description: "Device Farm session timeout (minutes)"
         type: number
         default: 30
+      desktop-platforms:
+        description: "JSON array of runner labels for desktop tests"
+        type: string
+        default: '["ai-run-linux-gpu", "macos-latest-xlarge"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -63,7 +67,7 @@ jobs:
     with:
       project-directory: "packages/qvac-sdk"
       working-directory: "packages/qvac-sdk/tests-qvac"
-      platforms: '["ai-run-linux-gpu", "macos-latest-xlarge"]'
+      platforms: ${{ inputs.desktop-platforms || '["ai-run-linux-gpu", "macos-latest-xlarge"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter || 'model-load-llm,completion-streaming' }}
       test-version: ${{ inputs.test-version || '' }}
