@@ -281,22 +281,12 @@ class LlmLlamacpp extends BaseInference {
     }
   }
 
-  _isTrainingProgressOutput (eventType, data) {
-    if (eventType !== 'Output' || typeof data !== 'string') return false
-    return data.includes('data=') && (data.includes('loss=') || data.includes('train:'))
-  }
-
   _handleAddonOutputEvent (originalOutputCb, originalLoggerRef, instance, eventType, jobId, data, extra) {
     this._updateFinetuneActiveFromCallback(eventType, data)
 
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
       originalLoggerRef?.info?.(logMsg)
-      return
-    }
-
-    if (this._isTrainingProgressOutput(eventType, data)) {
-      process.stdout.write(data)
       return
     }
 
