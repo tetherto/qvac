@@ -5,7 +5,7 @@ import {
   PARAKEET_ENCODER_FP32,
   PARAKEET_ENCODER_DATA_FP32,
   PARAKEET_DECODER_FP32,
-  PARAKEET_VOCAB_FP32,
+  PARAKEET_VOCAB,
   PARAKEET_PREPROCESSOR_FP32,
 } from "@qvac/sdk";
 
@@ -28,7 +28,7 @@ const audioFilePath = args[0];
 const modelSrc = args[1] || PARAKEET_ENCODER_FP32;
 const parakeetEncoderDataSrc = args[2] || PARAKEET_ENCODER_DATA_FP32;
 const parakeetDecoderSrc = args[3] || PARAKEET_DECODER_FP32;
-const parakeetVocabSrc = args[4] || PARAKEET_VOCAB_FP32;
+const parakeetVocabSrc = args[4] || PARAKEET_VOCAB;
 const parakeetPreprocessorSrc = args[5] || PARAKEET_PREPROCESSOR_FP32;
 
 try {
