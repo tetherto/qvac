@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('bare-fs')
 const path = require('bare-path')
 
 const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
@@ -365,12 +366,36 @@ class LlmLlamacpp extends BaseInference {
   }
 
   /**
-   * Cancel the current task (or pause finetuning if finetune is running).
+   * Pause finetuning, saving a checkpoint so training can resume later.
+   */
+  async pause () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  /**
+   * Cancel finetuning and remove the pause checkpoint so the next
+   * finetune() call starts fresh instead of resuming.
    */
   async cancel () {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
+    this._clearPauseCheckpoints()
+  }
+
+  _clearPauseCheckpoints () {
+    const checkpointDir = this._defaultFinetuneParams?.checkpointSaveDir
+    if (!checkpointDir) return
+    try {
+      const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('pause_checkpoint_step_')) {
+          fs.rmSync(path.join(checkpointDir, entry.name), { recursive: true, force: true })
+        }
+      }
+    } catch (_) {}
   }
 
   /**
