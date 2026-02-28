@@ -84,7 +84,7 @@ project(
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -116,6 +116,10 @@ find_package(OpenCV REQUIRED)
 find_package(onnxruntime CONFIG REQUIRED)
 
 add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
