@@ -11,7 +11,7 @@ const createEmbeddingTest = (
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 5000,
   },
 });
@@ -77,7 +77,7 @@ export const embedPythonCode: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 5000,
   },
   skip: codeEmbeddingSkip,
@@ -89,7 +89,7 @@ export const embedJavaScriptCode: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 5000,
   },
   skip: codeEmbeddingSkip,
@@ -101,7 +101,7 @@ export const embedJsonCode: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 5000,
   },
   skip: codeEmbeddingSkip,
@@ -113,7 +113,7 @@ export const embedHtmlCode: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 5000,
   },
   skip: codeEmbeddingSkip,
@@ -132,7 +132,7 @@ export const embedBatch: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 10000,
   },
 };
@@ -145,7 +145,7 @@ export const embedSimilarity: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 10000,
   },
 };
@@ -158,7 +158,7 @@ export const embedSemanticSimilarity: TestDefinition = {
   expectation: { validation: "type", expectedType: "array" },
   metadata: {
     category: "embedding",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 10000,
   },
 };

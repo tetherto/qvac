@@ -1,4 +1,3 @@
-// Embedding executor
 import { embed } from "@qvac/sdk";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -7,41 +6,23 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { embeddingTests } from "../../embedding-tests.js";
-import { ModelManager } from "../model-manager.js";
 
-export class EmbeddingExecutor {
+export class EmbeddingExecutor extends AbstractModelExecutor<
+  typeof embeddingTests
+> {
   pattern = /^embed-/;
 
-  // All embedding tests use generic handler
-  handlers = Object.fromEntries(
-    embeddingTests.map((test) => [test.testId, this.generic]),
-  );
-
-  async execute(
-    testId: string,
-    context: unknown,
-    params: unknown,
-    expectation: unknown,
-  ): Promise<TestResult> {
-    const handler = this.handlers[testId];
-    if (handler) {
-      return await (
-        handler as (
-          params: unknown,
-          expectation: unknown,
-        ) => Promise<TestResult>
-      ).call(this, params, expectation);
-    }
-    return { passed: false, output: `Unknown test: ${testId}` };
-  }
+  protected handlers = Object.fromEntries(
+    embeddingTests.map((test) => [test.testId, this.generic.bind(this)]),
+  ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { text?: string; codeFile?: string; texts?: string[] };
-    const embeddingModelId = await ModelManager.getEmbeddingModel();
+    const embeddingModelId = await this.resources.ensureLoaded("embeddings");
 
     try {
-      // Handle batch embedding
       if (p.texts) {
         const embeddings = [];
         for (const text of p.texts) {
@@ -54,7 +35,6 @@ export class EmbeddingExecutor {
         );
       }
 
-      // Handle code file embedding
       if (p.codeFile) {
         const codePath = path.resolve(
           process.cwd(),
@@ -72,7 +52,6 @@ export class EmbeddingExecutor {
         );
       }
 
-      // Handle text embedding
       const text = p.text || "";
       const embedding = await embed({ modelId: embeddingModelId, text });
       return ValidationHelpers.validate(embedding, expectation as Expectation);

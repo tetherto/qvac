@@ -1,4 +1,3 @@
-// Transcription executor
 import { transcribe } from "@qvac/sdk";
 import * as path from "node:path";
 import {
@@ -6,40 +5,22 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { transcriptionTests } from "../../transcription-tests.js";
-import { ModelManager } from "../model-manager.js";
 
-export class TranscriptionExecutor {
+export class TranscriptionExecutor extends AbstractModelExecutor<
+  typeof transcriptionTests
+> {
   pattern = /^transcription-/;
 
-  // All transcription tests use generic handler
-  handlers = Object.fromEntries(
-    transcriptionTests.map((test) => [test.testId, this.generic]),
-  );
-
-  async execute(
-    testId: string,
-    context: unknown,
-    params: unknown,
-    expectation: unknown,
-  ): Promise<TestResult> {
-    const handler = this.handlers[testId];
-    if (handler) {
-      return await (
-        handler as (
-          params: unknown,
-          expectation: unknown,
-        ) => Promise<TestResult>
-      ).call(this, params, expectation);
-    }
-    return { passed: false, output: `Unknown test: ${testId}` };
-  }
+  protected handlers = Object.fromEntries(
+    transcriptionTests.map((test) => [test.testId, this.generic.bind(this)]),
+  ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as { audioFileName: string; timeout?: number };
-    const whisperModelId = await ModelManager.getWhisperModel();
+    const whisperModelId = await this.resources.ensureLoaded("whisper");
 
-    // Get audio file path (resolve from current working directory up to repo root)
     const audioPath = path.resolve(
       process.cwd(),
       "../shared-test-data/audio",
@@ -59,7 +40,6 @@ export class TranscriptionExecutor {
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      // Some tests expect errors (corrupted files)
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
     }
   }

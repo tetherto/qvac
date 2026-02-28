@@ -12,7 +12,7 @@ export class CacheExecutor {
 
   // All cache tests use generic handler
   handlers = Object.fromEntries(
-    cacheTests.map((test) => [test.testId, this.generic]),
+    cacheTests.map((test) => [test.testId, this.generic.bind(this)]),
   );
 
   async execute(

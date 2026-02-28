@@ -51,7 +51,7 @@ export const errorEmbeddingEmptyInput: TestDefinition = {
   expectation: { validation: "type", expectedType: "string" }, // Should handle or error gracefully
   metadata: {
     category: "error",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 3000,
   },
 };
@@ -78,7 +78,7 @@ export const errorRagUnloadedModel: TestDefinition = {
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "error",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 3000,
   },
 };

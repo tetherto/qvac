@@ -11,7 +11,7 @@ export class ErrorExecutor {
 
   // All error tests use generic handler
   handlers = Object.fromEntries(
-    errorTests.map((test) => [test.testId, this.generic]),
+    errorTests.map((test) => [test.testId, this.generic.bind(this)]),
   );
 
   async execute(

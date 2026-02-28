@@ -76,7 +76,7 @@ export const cacheMultipleModels: TestDefinition = {
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "cache",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 10000,
   },
 };

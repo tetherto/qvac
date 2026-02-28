@@ -17,7 +17,7 @@ const createRagTest = (
   expectation: { validation: "type", expectedType: "string" }, // Returns success message or result object
   metadata: {
     category: "rag",
-    dependency: "embedding",
+    dependency: "embeddings",
     estimatedDurationMs: 10000,
   },
 });

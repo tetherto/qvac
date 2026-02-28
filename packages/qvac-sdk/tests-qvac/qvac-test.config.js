@@ -12,14 +12,14 @@ export default {
     },
 
     // Authentication
-    username: { env: "MQTT_USERNAME" },
-    password: { env: "MQTT_PASSWORD" },
+    // username: { env: "MQTT_USERNAME" },
+    // password: { env: "MQTT_PASSWORD" },
 
     // Disable certificate validation for self-signed certs (testing only)
     rejectUnauthorized: false,
 
     // Optional: TLS certificates
-    caPath: { env: "MQTT_CA_PATH" },
+    // caPath: { env: "MQTT_CA_PATH" },
     // certPath: { env: 'MQTT_CERT_PATH' },
     // keyPath: { env: 'MQTT_KEY_PATH' },
   },
@@ -27,6 +27,9 @@ export default {
   testDir: "./dist/tests",
 
   consumers: {
+    shared: {
+      include: ["./dist/tests/shared/**"],
+    },
     desktop: {
       platforms: ["macos"],
       entry: "./dist/tests/desktop/consumer.js",
