@@ -5,7 +5,7 @@
   "type": "module",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "consumer:desktop:run": "qvac-test run:consumer:desktop"
