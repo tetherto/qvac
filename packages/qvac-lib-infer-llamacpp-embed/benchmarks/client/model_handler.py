@@ -408,6 +408,14 @@ class QvacEmbedHandler:
         except httpx.TimeoutException:
             logger.error(f"Request timed out after {self.timeout} seconds")
             raise
+        except httpx.HTTPStatusError as e:
+            response_text = e.response.text if e.response is not None else ""
+            logger.error(
+                "Server returned HTTP %s. Response: %s",
+                e.response.status_code if e.response is not None else "unknown",
+                response_text[:1000]
+            )
+            raise
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise
@@ -539,7 +547,14 @@ class MTEBModelWrapper(SentenceTransformer):
     _max_seq_length: int = 512
     _vocab_size: int = 30522  # GTE/BERT-family default tokenizer vocab size
     
-    def __init__(self, handler, batch_size: int = 32, embedding_dim: int = 1024, max_seq_length: int = 512):
+    def __init__(
+        self,
+        handler,
+        batch_size: int = 32,
+        embedding_dim: int = 1024,
+        max_seq_length: int = 512,
+        token_batch_budget: int | None = None
+    ):
         """
         Initialize MTEB wrapper.
         
@@ -548,6 +563,9 @@ class MTEBModelWrapper(SentenceTransformer):
             batch_size: Batch size for encoding
             embedding_dim: Embedding dimension (default 1024 for GTE-large)
             max_seq_length: Maximum sequence length for truncation (default 512)
+            token_batch_budget: Optional token budget per request. When set,
+                               batches are split dynamically so the estimated
+                               total tokens stay under this limit.
         """
         # Initialize torch.nn.Module base only (not full SentenceTransformer)
         # Required for MTEB's internal access to PyTorch attributes
@@ -558,6 +576,7 @@ class MTEBModelWrapper(SentenceTransformer):
         self._batch_size = batch_size
         self._embedding_dim = embedding_dim
         self._max_seq_length = max_seq_length
+        self._token_batch_budget = token_batch_budget
         
         # Required by SentenceTransformer interface
         self.model_name_or_path = "thenlper/gte-large"
@@ -611,6 +630,58 @@ class MTEBModelWrapper(SentenceTransformer):
         if len(text) > max_chars:
             return text[:max_chars]
         return text
+
+    def _estimate_tokens(self, text: str) -> int:
+        """
+        Fast token estimate used for HTTP request batching.
+
+        We intentionally overestimate (~3 chars/token) to avoid server-side
+        token-limit overflows that can cause 500 errors in CI.
+        """
+        estimated = max(1, (len(text) + 2) // 3)
+        return min(estimated, self._max_seq_length)
+
+    def _build_dynamic_batches(
+        self,
+        sentences: list[str],
+        max_sentences: int,
+        token_budget: int | None
+    ) -> list[list[str]]:
+        """Build batches constrained by sentence count and optional token budget."""
+        if not sentences:
+            return []
+
+        # Fallback to fixed-size batching when no token budget is provided.
+        if token_budget is None or token_budget <= 0:
+            return [
+                sentences[i:i + max_sentences]
+                for i in range(0, len(sentences), max_sentences)
+            ]
+
+        batches: list[list[str]] = []
+        current_batch: list[str] = []
+        current_tokens = 0
+
+        for sentence in sentences:
+            est_tokens = self._estimate_tokens(sentence)
+
+            would_exceed_sentence_cap = len(current_batch) >= max_sentences
+            would_exceed_token_cap = (
+                current_batch and (current_tokens + est_tokens > token_budget)
+            )
+
+            if would_exceed_sentence_cap or would_exceed_token_cap:
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+
+            current_batch.append(sentence)
+            current_tokens += est_tokens
+
+        if current_batch:
+            batches.append(current_batch)
+
+        return batches
     
     def encode(
         self,
@@ -638,23 +709,29 @@ class MTEBModelWrapper(SentenceTransformer):
         sentences = [self._truncate_text(s) for s in sentences]
         
         effective_batch_size = batch_size if batch_size is not None else self._batch_size
+        batches = self._build_dynamic_batches(
+            sentences=sentences,
+            max_sentences=effective_batch_size,
+            token_budget=self._token_batch_budget
+        )
+
         all_embeddings = []
         total_sentences = len(sentences)
-        total_batches = (total_sentences + effective_batch_size - 1) // effective_batch_size
+        total_batches = len(batches)
         
         # Progress tracking
         start_time = time.time()
         last_progress_time = start_time
         progress_interval = 10  # Print progress every 10 seconds
         
-        for batch_idx, i in enumerate(range(0, len(sentences), effective_batch_size)):
-            batch = sentences[i:i + effective_batch_size]
+        sentences_done = 0
+        for batch_idx, batch in enumerate(batches):
             embeddings = self.handler.embed(batch)
             all_embeddings.append(embeddings)
             
             # Progress feedback (every N seconds or at milestones)
             current_time = time.time()
-            sentences_done = min(i + len(batch), total_sentences)
+            sentences_done += len(batch)
             
             if current_time - last_progress_time >= progress_interval or batch_idx == total_batches - 1:
                 elapsed = current_time - start_time
