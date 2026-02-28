@@ -422,11 +422,12 @@ jobs:
       - name: Display results summary
         if: always()
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
         run: |
-          LATEST_MD=$(ls -t benchmarks/results/*.md 2>/dev/null | head -n 1 || true)
-          if [[ -n "${LATEST_MD:-}" ]]; then
-            cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d "$WORKDIR/benchmarks/results" ]; then
+            LATEST_MD=$(find "$WORKDIR/benchmarks/results" -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
+            if [[ -n "$LATEST_MD" ]]; then
+              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
       - name: Upload benchmark results
