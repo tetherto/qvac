@@ -33,7 +33,7 @@ const handleError = (error, res) => {
 
   res.statusCode = 500
   res.end(JSON.stringify({
-    error: ERRORS.UNEXPECTED_ERROR
+    error: error && error.message ? error.message : ERRORS.UNEXPECTED_ERROR
   }))
 }
 
