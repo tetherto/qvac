@@ -28,7 +28,7 @@ project(qvac-lib-infer-nmtcpp
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -135,6 +135,10 @@ if(USE_BERGAMOT)
 endif()
 
 add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-nmtcpp} PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-infer-nmtcpp}
