@@ -288,6 +288,40 @@ jobs:
             sleep 10
           done
 
+      - name: Create and upload dummy test package
+        id: upload-test-pkg
+        run: |
+          mkdir -p /tmp/dummy-test-pkg
+          echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
+          (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
+
+          PKG_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ inputs.device-farm-project-arn }}" \
+            --name "qvac-test-stub.zip" \
+            --type "APPIUM_NODE_TEST_PACKAGE" \
+            --output json)
+
+          PKG_URL=$(echo $PKG_RESPONSE | jq -r '.upload.url')
+          PKG_ARN=$(echo $PKG_RESPONSE | jq -r '.upload.arn')
+
+          echo "pkg-arn=$PKG_ARN" >> $GITHUB_OUTPUT
+
+          curl -T /tmp/dummy-test-pkg.zip "$PKG_URL"
+
+          for i in {1..15}; do
+            STATUS=$(aws devicefarm get-upload --arn "$PKG_ARN" --query "upload.status" --output text)
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "Test package upload successful"
+              break
+            fi
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "Test package upload failed"
+              aws devicefarm get-upload --arn "$PKG_ARN"
+              exit 1
+            fi
+            sleep 5
+          done
+
       - name: Upload test spec to Device Farm
         id: upload-spec
         run: |
@@ -335,7 +369,7 @@ jobs:
             --device-pool-arn "${{ matrix.device.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
+            --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
             --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
             --query 'run.arn' --output text)
 
