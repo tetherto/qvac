@@ -275,7 +275,7 @@ async function main () {
     await sleep(90000)
 
     console.log('⏸️  Pausing finetuning...')
-    await client.cancel()
+    await client.pause()
     const pauseResult = await finetuneHandle.await()
     console.log('✅ Finetuning is now PAUSED:', pauseResult?.status, '\n')
 
