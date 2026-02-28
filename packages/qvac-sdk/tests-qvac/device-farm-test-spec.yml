@@ -4,6 +4,15 @@ android_test_host: amazon_linux_2
 phases:
   pre_test:
     commands:
+      # Install and launch the app (custom test spec doesn't do this automatically)
+      - |-
+        echo "Installing app..."
+        adb install -r "$DEVICEFARM_APP_PATH"
+        echo "Launching app..."
+        adb shell am start -n io.tether.qvac_test_consumer_mobile/.MainActivity
+        sleep 5
+        echo "App launched"
+
       # Periodic screenshots every 30s in the background
       - |-
         (while true; do
