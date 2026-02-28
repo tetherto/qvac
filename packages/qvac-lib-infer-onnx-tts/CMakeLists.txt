@@ -115,7 +115,7 @@ project(qvac-lib-inference-tts C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -136,6 +136,10 @@ add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
 add_bare_module(qvac-lib-inference-tts EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-tts} PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-inference-tts}
