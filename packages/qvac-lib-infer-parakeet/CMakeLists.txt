@@ -18,7 +18,7 @@ project(qvac_lib_infer_parakeet
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 # Find dependencies
@@ -68,6 +68,10 @@ endif()
 
 # Create the Bare addon module using bare-make's helper
 add_bare_module(qvac_lib_infer_parakeet EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac_lib_infer_parakeet} PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac_lib_infer_parakeet}
