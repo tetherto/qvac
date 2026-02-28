@@ -20,7 +20,7 @@ project(qvac-lib-infer-whispercpp CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -56,6 +56,10 @@ if(ANDROID)
 endif()
 
 add_bare_module(qvac-lib-infer-whispercpp EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-whispercpp} PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-infer-whispercpp}
