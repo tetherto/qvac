@@ -407,6 +407,32 @@ class QvacEmbedHandler:
         except httpx.TimeoutException:
             logger.error(f"Request timed out after {self.timeout} seconds")
             raise
+        except httpx.HTTPStatusError as e:
+            response_text = ""
+            response_json = None
+
+            if e.response is not None:
+                try:
+                    response_text = e.response.text
+                except Exception:
+                    response_text = "<unavailable>"
+
+                try:
+                    response_json = e.response.json()
+                except Exception:
+                    response_json = None
+
+            logger.error(
+                "Server returned HTTP %s for %s. Response text: %s",
+                e.response.status_code if e.response is not None else "unknown",
+                self.url,
+                response_text or "<empty>"
+            )
+
+            if response_json is not None:
+                logger.error("Server JSON error payload: %s", response_json)
+
+            raise
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise
