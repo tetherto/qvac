@@ -221,8 +221,7 @@ def run_single_model_mode(args, server_config, model_display_name):
     model_wrapper = MTEBModelWrapper(
         handler, 
         batch_size=server_config.get_http_batch_size(),
-        max_seq_length=int(server_config.ctx_size),
-        token_batch_budget=int(server_config.batch_size)
+        max_seq_length=int(server_config.ctx_size)
     )
     
     # Determine directory name for results
