@@ -18,28 +18,37 @@ export class TranscriptionExecutor extends AbstractModelExecutor<
   ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { audioFileName: string; timeout?: number };
+    const p = params as { audioFileName: string; timeout?: number; prompt?: string | null };
+    const exp = expectation as Expectation;
     const whisperModelId = await this.resources.ensureLoaded("whisper");
 
     const audioPath = path.resolve(
       process.cwd(),
-      "../shared-test-data/audio",
+      "assets/audio",
       p.audioFileName,
     );
 
     try {
-      const text = await transcribe({
+      const transcribeParams: { modelId: string; audioChunk: string; prompt?: string } = {
         modelId: whisperModelId,
         audioChunk: audioPath,
-      });
+      };
+      if (p.prompt && typeof p.prompt === "string" && p.prompt.trim().length > 0) {
+        transcribeParams.prompt = p.prompt;
+      }
+
+      const text = await transcribe(transcribeParams);
       const trimmedText = text.trim();
 
-      return ValidationHelpers.validate(
-        trimmedText,
-        expectation as Expectation,
-      );
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+      return ValidationHelpers.validate(trimmedText, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
     }
   }
