@@ -9,7 +9,18 @@ import {
   OCR_LATIN_RECOGNIZER_1,
   MARIAN_OPUS_DE_EN_Q4_0,
   BERGAMOT_EN_FR,
+  TTS_TOKENIZER_EN_CHATTERBOX,
+  TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+  TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+  TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+  TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+  TTS_TOKENIZER_SUPERTONIC,
+  TTS_TEXT_ENCODER_SUPERTONIC_FP32,
+  TTS_LATENT_DENOISER_SUPERTONIC_FP32,
+  TTS_VOICE_DECODER_SUPERTONIC_FP32,
+  TTS_VOICE_STYLE_SUPERTONIC,
 } from "@qvac/sdk";
+import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
@@ -26,6 +37,7 @@ import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
+import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { TodoExecutor } from "./executors/todo-executor.js";
 
 const resources = new ResourceManager();
@@ -108,6 +120,39 @@ resources.define("bergamot", {
   },
 });
 
+const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short.wav");
+
+resources.define("tts-chatterbox", {
+  constant: TTS_TOKENIZER_EN_CHATTERBOX,
+  type: "tts",
+  skipPreDownload: true,
+  config: {
+    ttsEngine: "chatterbox",
+    language: "en",
+    ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
+    ttsSpeechEncoderSrc: TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+    ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+    ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+    ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+    referenceAudioSrc: referenceAudioPath,
+  },
+});
+
+resources.define("tts-supertonic", {
+  constant: TTS_TOKENIZER_SUPERTONIC,
+  type: "tts",
+  skipPreDownload: true,
+  config: {
+    ttsEngine: "supertonic",
+    language: "en",
+    ttsTokenizerSrc: TTS_TOKENIZER_SUPERTONIC,
+    ttsTextEncoderSrc: TTS_TEXT_ENCODER_SUPERTONIC_FP32,
+    ttsLatentDenoiserSrc: TTS_LATENT_DENOISER_SUPERTONIC_FP32,
+    ttsVoiceDecoderSrc: TTS_VOICE_DECODER_SUPERTONIC_FP32,
+    ttsVoiceSrc: TTS_VOICE_STYLE_SUPERTONIC,
+  },
+});
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
@@ -124,6 +169,7 @@ export const executor = createExecutor({
     new BergamotExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
+    new TtsExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
   ],
