@@ -24,7 +24,7 @@ import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
-import { ErrorExecutor } from "./executors/error-executor.js";
+import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TodoExecutor } from "./executors/todo-executor.js";
 
 const resources = new ResourceManager();
@@ -116,7 +116,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new TranslationExecutor(resources),
     new ModelInfoExecutor(resources),
-    new ErrorExecutor(),
+    new ErrorExecutor(resources),
     new ToolsExecutor(resources),
     new TodoExecutor(),
     new NmtExecutor(resources),
