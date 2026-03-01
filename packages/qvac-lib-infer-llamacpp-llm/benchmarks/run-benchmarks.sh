@@ -119,6 +119,19 @@ log() {
     fi
 }
 
+print_server_error_context() {
+    local log_file="benchmarks/server/server.log"
+    local lines="${1:-200}"
+
+    if [[ -f "$log_file" ]]; then
+        log "==== Last ${lines} lines of server log ===="
+        tail -n "$lines" "$log_file" || true
+        log "==== End of server log ===="
+    else
+        log "Server log file not found at $log_file"
+    fi
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -470,6 +483,7 @@ run_benchmarks() {
                 log "✅ Addon benchmark completed successfully"
             else
                 log "❌ Addon benchmark failed"
+                print_server_error_context 200
                 return 1
             fi
         else
@@ -477,6 +491,7 @@ run_benchmarks() {
                 log "✅ Addon benchmark completed successfully"
             else
                 log "❌ Addon benchmark failed"
+                print_server_error_context 200
                 return 1
             fi
         fi
@@ -630,6 +645,7 @@ run_single_model_benchmark() {
             return 0
         else
             log "❌ Failed benchmark for $model_id"
+            print_server_error_context 200
             deactivate
             cd ../..
             return 1
@@ -644,6 +660,7 @@ run_single_model_benchmark() {
             return 0
         else
             log "❌ Failed benchmark for $model_id"
+            print_server_error_context 200
             deactivate
             cd ../..
             return 1
@@ -699,9 +716,21 @@ main() {
             log "Running comparative evaluation: $PYTHON_CMD"
             
             if [[ "$VERBOSE" == "true" ]]; then
-                eval $PYTHON_CMD
+                if ! eval $PYTHON_CMD; then
+                    log "❌ Comparative evaluation failed"
+                    print_server_error_context 200
+                    deactivate
+                    cd ../..
+                    return 1
+                fi
             else
-                eval $PYTHON_CMD 2>&1 | grep -E "(Starting|Completed|Error|Results|Accuracy|F1|EM|MMLU|GSM8K|ARC|SQuAD|📊|📈|✅|❌)"
+                if ! eval $PYTHON_CMD 2>&1 | grep -E "(Starting|Completed|Error|Results|Accuracy|F1|EM|MMLU|GSM8K|ARC|SQuAD|📊|📈|✅|❌)"; then
+                    log "❌ Comparative evaluation failed"
+                    print_server_error_context 200
+                    deactivate
+                    cd ../..
+                    return 1
+                fi
             fi
             
             deactivate
