@@ -18,6 +18,7 @@ import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { NmtExecutor } from "../shared/executors/nmt-executor.js";
 import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
+import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
@@ -120,5 +121,6 @@ export const executor = createExecutor({
     new NmtExecutor(resources),
     new BergamotExecutor(resources),
     new ShardedModelExecutor(resources),
+    new HttpEmbeddingExecutor(resources),
   ],
 });
