@@ -12,6 +12,7 @@ import { toolsTests } from "./tools-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { ocrTests } from "./ocr-tests.js";
 import { ttsTests } from "./tts-tests.js";
+import { configReloadTests } from "./config-reload-tests.js";
 import { nmtTests } from "./nmt-tests.js";
 import { bergamotTests } from "./bergamot-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
@@ -216,6 +217,9 @@ export const tests = [
 
   // TTS tests
   ...ttsTests,
+
+  // Config reload tests
+  ...configReloadTests,
 
   // Vision tests (SKIPPED - see vision-tests.ts for details)
   ...visionTests,
