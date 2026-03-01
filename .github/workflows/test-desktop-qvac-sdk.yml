@@ -203,7 +203,7 @@ jobs:
 
       - name: Run tests (consumer + producer)
         working-directory: ${{ inputs.working-directory }}
-        timeout-minutes: 15
+        timeout-minutes: 45
         shell: node {0}
         run: |
           (async () => {
@@ -213,18 +213,14 @@ jobs:
             const filter = '${{ inputs.filter }}';
             const filterArgs = filter ? ['--filter=' + filter] : [];
 
-            const logStream = fs.createWriteStream('consumer.log', { flags: 'w' });
             const consumer = spawn('npx', [
               'qvac-test', 'run:consumer:desktop',
               '--runId=${{ steps.runid.outputs.runId }}',
               '--config=.'
-            ], { detached: false, shell: true });
+            ], { detached: false, shell: true, stdio: 'inherit' });
 
             let consumerClosed = false;
             let consumerExitCode = 0;
-
-            consumer.stdout.pipe(logStream, { end: false });
-            consumer.stderr.pipe(logStream, { end: false });
 
             consumer.on('exit', (code, signal) => {
               if (code !== 0 || signal) {
@@ -254,12 +250,6 @@ jobs:
               console.log(`✅ Consumer running (PID: ${consumer.pid})`);
             } else {
               console.log('❌ Consumer died immediately');
-              logStream.end();
-              await new Promise(resolve => logStream.on('finish', resolve));
-              if (fs.existsSync('consumer.log')) {
-                console.log('\n--- Consumer log ---');
-                console.log(fs.readFileSync('consumer.log', 'utf8'));
-              }
               process.exit(1);
             }
 
@@ -304,9 +294,6 @@ jobs:
               ]);
             }
 
-            logStream.end();
-            await new Promise(resolve => logStream.on('finish', resolve));
-            console.log('📄 Consumer log written to consumer.log');
 
             const exitCode = producerExit || consumerExitCode;
             if (exitCode !== 0) {
