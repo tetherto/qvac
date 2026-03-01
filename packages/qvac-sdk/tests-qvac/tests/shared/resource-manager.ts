@@ -5,6 +5,7 @@ interface ModelDefinition {
   constant: ModelConstant;
   type: string;
   config?: Record<string, unknown>;
+  skipPreDownload?: boolean;
 }
 
 interface TrackedModel {
@@ -32,6 +33,10 @@ export class ResourceManager {
 
     // Sequential — SDK p2p downloads don't handle parallel well
     for (const [dep, def] of entries) {
+      if (def.skipPreDownload) {
+        log?.(`⏭️  ${dep}: skipping pre-download`);
+        continue;
+      }
       log?.(`📥 ${dep}: ${def.constant.name}...`);
       await downloadAsset({ assetSrc: def.constant as never });
       log?.(`✅ ${dep} cached`);

@@ -11,6 +11,7 @@ import { toolsTests } from "./tools-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { nmtTests } from "./nmt-tests.js";
 import { bergamotTests } from "./bergamot-tests.js";
+import { shardedModelTests } from "./sharded-model-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -187,6 +188,9 @@ export const tests = [
 
   // Bergamot tests
   ...bergamotTests,
+
+  // Sharded model tests
+  ...shardedModelTests,
 
   // Cache tests
   ...cacheTests,

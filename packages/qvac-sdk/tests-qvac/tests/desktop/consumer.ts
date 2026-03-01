@@ -2,6 +2,7 @@ import { createExecutor } from "@tetherto/qvac-test-suite";
 import {
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
+  GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
@@ -16,6 +17,7 @@ import { TranslationExecutor } from "../shared/executors/translation-executor.js
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { NmtExecutor } from "../shared/executors/nmt-executor.js";
 import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
+import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
@@ -72,6 +74,12 @@ resources.define("ocr", {
   config: { langList: ["en"] },
 });
 
+resources.define("sharded-embeddings", {
+  constant: GTE_LARGE_335M_FP16_SHARD,
+  type: "embeddings",
+  skipPreDownload: true,
+});
+
 resources.define("nmt", {
   constant: MARIAN_OPUS_DE_EN_Q4_0,
   type: "nmt",
@@ -111,5 +119,6 @@ export const executor = createExecutor({
     new TodoExecutor(),
     new NmtExecutor(resources),
     new BergamotExecutor(resources),
+    new ShardedModelExecutor(resources),
   ],
 });
