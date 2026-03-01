@@ -96,6 +96,19 @@ log() {
     fi
 }
 
+print_server_error_context() {
+    local log_file="benchmarks/server/server.log"
+    local lines="${1:-200}"
+
+    if [[ -f "$log_file" ]]; then
+        log "==== Last ${lines} lines of server log ===="
+        tail -n "$lines" "$log_file" || true
+        log "==== End of server log ===="
+    else
+        log "Server log file not found at $log_file"
+    fi
+}
+
 # Function to check if model has results for today
 has_results_today() {
     local model_spec="$1"
@@ -463,6 +476,7 @@ run_benchmarks() {
         log "Benchmark completed successfully"
     else
         log "Benchmark failed"
+        print_server_error_context 200
         deactivate
         cd ../..
         return 1
