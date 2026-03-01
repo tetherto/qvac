@@ -12,11 +12,11 @@ export default {
     },
 
     // Authentication
-    // username: { env: "MQTT_USERNAME" },
-    // password: { env: "MQTT_PASSWORD" },
+    username: { env: "MQTT_USERNAME" },
+    password: { env: "MQTT_PASSWORD" },
 
     // Disable certificate validation for self-signed certs (testing only)
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
 
     // Optional: TLS certificates
     // caPath: { env: "MQTT_CA_PATH" },
