@@ -15,7 +15,7 @@ on:
           - mobile
           - android
           - ios
-        default: all
+        default: desktop
       filter:
         description: "Test filter (comma-separated categories/prefixes)"
         type: string
