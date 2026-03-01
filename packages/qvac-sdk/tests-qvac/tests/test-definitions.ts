@@ -10,6 +10,7 @@ import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
 import { visionTests } from "./vision-tests.js";
+import { ocrTests } from "./ocr-tests.js";
 import { nmtTests } from "./nmt-tests.js";
 import { bergamotTests } from "./bergamot-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
@@ -208,6 +209,9 @@ export const tests = [
 
   // Tools tests
   ...toolsTests,
+
+  // OCR tests
+  ...ocrTests,
 
   // Vision tests (SKIPPED - see vision-tests.ts for details)
   ...visionTests,

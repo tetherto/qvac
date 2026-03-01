@@ -23,6 +23,7 @@ import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
+import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TodoExecutor } from "./executors/todo-executor.js";
@@ -122,6 +123,7 @@ export const executor = createExecutor({
     new NmtExecutor(resources),
     new BergamotExecutor(resources),
     new ShardedModelExecutor(resources),
+    new OcrExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
   ],
