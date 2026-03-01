@@ -9,6 +9,8 @@ import { cacheTests } from "./cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
 import { visionTests } from "./vision-tests.js";
+import { nmtTests } from "./nmt-tests.js";
+import { bergamotTests } from "./bergamot-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -179,6 +181,12 @@ export const tests = [
 
   // Translation tests
   ...translationTests,
+
+  // NMT tests
+  ...nmtTests,
+
+  // Bergamot tests
+  ...bergamotTests,
 
   // Cache tests
   ...cacheTests,

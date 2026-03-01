@@ -4,7 +4,7 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
+import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { translationTests } from "../../translation-tests.js";
 
 export class TranslationExecutor extends AbstractModelExecutor<

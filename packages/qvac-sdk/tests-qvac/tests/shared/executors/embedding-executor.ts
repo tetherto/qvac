@@ -1,12 +1,10 @@
 import { embed } from "@qvac/sdk";
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
+import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { embeddingTests } from "../../embedding-tests.js";
 
 export class EmbeddingExecutor extends AbstractModelExecutor<
@@ -19,7 +17,7 @@ export class EmbeddingExecutor extends AbstractModelExecutor<
   ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { text?: string; codeFile?: string; texts?: string[] };
+    const p = params as { text?: string; texts?: string[] };
     const embeddingModelId = await this.resources.ensureLoaded("embeddings");
 
     try {
@@ -31,23 +29,6 @@ export class EmbeddingExecutor extends AbstractModelExecutor<
         }
         return ValidationHelpers.validate(
           embeddings,
-          expectation as Expectation,
-        );
-      }
-
-      if (p.codeFile) {
-        const codePath = path.resolve(
-          process.cwd(),
-          "assets/code",
-          p.codeFile,
-        );
-        const code = fs.readFileSync(codePath, "utf-8");
-        const embedding = await embed({
-          modelId: embeddingModelId,
-          text: code,
-        });
-        return ValidationHelpers.validate(
-          embedding,
           expectation as Expectation,
         );
       }

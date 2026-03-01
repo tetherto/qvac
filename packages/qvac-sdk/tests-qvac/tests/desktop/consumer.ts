@@ -6,17 +6,21 @@ import {
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
+  MARIAN_OPUS_DE_EN_Q4_0,
+  BERGAMOT_EN_FR,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
-import { CompletionExecutor } from "./executors/completion-executor.js";
+import { CompletionExecutor } from "../shared/executors/completion-executor.js";
+import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { ToolsExecutor } from "../shared/executors/tools-executor.js";
+import { NmtExecutor } from "../shared/executors/nmt-executor.js";
+import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
+import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
-import { EmbeddingExecutor } from "./executors/embedding-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
-import { TranslationExecutor } from "./executors/translation-executor.js";
 import { CacheExecutor } from "./executors/cache-executor.js";
 import { ErrorExecutor } from "./executors/error-executor.js";
-import { ToolsExecutor } from "./executors/tools-executor.js";
 import { TodoExecutor } from "./executors/todo-executor.js";
 
 const resources = new ResourceManager();
@@ -68,6 +72,31 @@ resources.define("ocr", {
   config: { langList: ["en"] },
 });
 
+resources.define("nmt", {
+  constant: MARIAN_OPUS_DE_EN_Q4_0,
+  type: "nmt",
+  config: {
+    engine: "Opus",
+    from: "de",
+    to: "en",
+    beamsize: 4,
+    lengthpenalty: 1.0,
+    maxlength: 512,
+    temperature: 0.3,
+    norepeatngramsize: 3,
+  },
+});
+
+resources.define("bergamot", {
+  constant: BERGAMOT_EN_FR,
+  type: "nmt",
+  config: {
+    engine: "Bergamot",
+    from: "en",
+    to: "fr",
+  },
+});
+
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
@@ -80,5 +109,7 @@ export const executor = createExecutor({
     new ErrorExecutor(),
     new ToolsExecutor(resources),
     new TodoExecutor(),
+    new NmtExecutor(resources),
+    new BergamotExecutor(resources),
   ],
 });
