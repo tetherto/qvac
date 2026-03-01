@@ -49,6 +49,10 @@ export class ResourceManager {
     this.testCount = n;
   }
 
+  incrementTestCount() {
+    this.testCount++;
+  }
+
   async ensureLoaded(dep: string): Promise<string> {
     const existing = this.models.get(dep);
     if (existing) {
@@ -96,6 +100,7 @@ export class ResourceManager {
   }
 
   async evictStale(threshold: number): Promise<string[]> {
+    console.info(`🧹 Evicting stale models (test count: ${this.testCount}, threshold: ${threshold})`);
     const evicted: string[] = [];
     for (const [dep, entry] of this.models) {
       if (this.testCount - entry.lastUsedAtTest >= threshold) {
@@ -109,6 +114,7 @@ export class ResourceManager {
   async evict(dep: string): Promise<void> {
     const entry = this.models.get(dep);
     if (entry) {
+      console.info(`🧹 Evicting model ${dep} (test count: ${this.testCount}, last used at test: ${entry.lastUsedAtTest})`);
       try {
         await cancel({ operation: "inference", modelId: entry.modelId });
       } catch (error) {

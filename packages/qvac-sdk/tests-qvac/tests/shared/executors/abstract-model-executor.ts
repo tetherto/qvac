@@ -15,6 +15,7 @@ export abstract class AbstractModelExecutor<
     const ctx = (context ?? {}) as Record<string, unknown>;
 
     await this.resources.downloadAllOnce(console.log);
+    this.resources.incrementTestCount();
 
     const dep = ctx.dependency as string | undefined;
     if (!dep || dep === "none") return;
