@@ -67,7 +67,7 @@ jobs:
     with:
       project-directory: "packages/qvac-sdk"
       working-directory: "packages/qvac-sdk/tests-qvac"
-      platforms: ${{ inputs.desktop-platforms || '["ai-run-linux-gpu", "macos-latest-xlarge"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["win11-rtx4000-hetzner", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter || 'model-load-llm,completion-streaming' }}
       test-version: ${{ inputs.test-version || '' }}
