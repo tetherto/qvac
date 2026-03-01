@@ -422,7 +422,6 @@ jobs:
       - name: Display results summary
         if: always()
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
         run: |
           if [ -d "$WORKDIR/benchmarks/results" ]; then
             LATEST_MD=$(find "$WORKDIR/benchmarks/results" -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
