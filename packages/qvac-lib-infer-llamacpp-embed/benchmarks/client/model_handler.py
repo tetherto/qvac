@@ -6,7 +6,6 @@ import numpy as np
 import os
 import time
 import yaml
-from types import SimpleNamespace
 from sentence_transformers import SentenceTransformer
 from huggingface_hub import hf_hub_download, list_repo_files
 
@@ -512,20 +511,6 @@ class MockModelCardData:
         self.tags = ["sentence-transformers", "embedding"]
 
 
-class _TokenizerProxyModule:
-    """Minimal module used to satisfy SentenceTransformer tokenizer access."""
-
-    def __init__(self, vocab_size: int):
-        import torch
-
-        self._module = torch.nn.Module()
-        self._module.tokenizer = SimpleNamespace(vocab=range(vocab_size))
-
-    @property
-    def module(self):
-        return self._module
-
-
 class MTEBModelWrapper(SentenceTransformer):
     """
     Wrapper to make QvacEmbedHandler compatible with MTEB.
@@ -537,7 +522,6 @@ class MTEBModelWrapper(SentenceTransformer):
     # Default embedding dimension (GTE-large = 1024)
     _embedding_dim: int = 1024
     _max_seq_length: int = 512
-    _vocab_size: int = 30522  # GTE/BERT-family default tokenizer vocab size
     
     def __init__(self, handler, batch_size: int = 32, embedding_dim: int = 1024, max_seq_length: int = 512):
         """
@@ -569,11 +553,6 @@ class MTEBModelWrapper(SentenceTransformer):
         
         # Required for MTEB metadata extraction
         self.model_card_data = MockModelCardData(self.model_name_or_path)
-        # Newer MTEB versions estimate embedding parameters via len(model.tokenizer.vocab).
-        # SentenceTransformer resolves `tokenizer` via the first registered module, so we
-        # register a tiny proxy module exposing a vocab with a deterministic length.
-        tokenizer_proxy = _TokenizerProxyModule(self._vocab_size)
-        self.add_module("_mteb_tokenizer_proxy", tokenizer_proxy.module)
     
     @property
     def max_seq_length(self) -> int:
