@@ -37,6 +37,7 @@ import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
@@ -174,6 +175,7 @@ export const executor = createExecutor({
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
     new LoggingExecutor(resources),
+    new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
   ],

@@ -14,6 +14,7 @@ import { ocrTests } from "./ocr-tests.js";
 import { ttsTests } from "./tts-tests.js";
 import { configReloadTests } from "./config-reload-tests.js";
 import { loggingTests } from "./logging-tests.js";
+import { registryTests } from "./registry-tests.js";
 import { nmtTests } from "./nmt-tests.js";
 import { bergamotTests } from "./bergamot-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
@@ -224,6 +225,9 @@ export const tests = [
 
   // Logging tests
   ...loggingTests,
+
+  // Registry tests
+  ...registryTests,
 
   // Vision tests (SKIPPED - see vision-tests.ts for details)
   ...visionTests,
