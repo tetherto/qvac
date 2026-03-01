@@ -19,10 +19,11 @@ import { NmtExecutor } from "../shared/executors/nmt-executor.js";
 import { BergamotExecutor } from "../shared/executors/bergamot-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
+import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
-import { CacheExecutor } from "./executors/cache-executor.js";
+import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "./executors/error-executor.js";
 import { TodoExecutor } from "./executors/todo-executor.js";
 
@@ -114,7 +115,7 @@ export const executor = createExecutor({
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
     new TranslationExecutor(resources),
-    new CacheExecutor(),
+    new ModelInfoExecutor(resources),
     new ErrorExecutor(),
     new ToolsExecutor(resources),
     new TodoExecutor(),
@@ -122,5 +123,6 @@ export const executor = createExecutor({
     new BergamotExecutor(resources),
     new ShardedModelExecutor(resources),
     new HttpEmbeddingExecutor(resources),
+    new KvCacheExecutor(resources),
   ],
 });

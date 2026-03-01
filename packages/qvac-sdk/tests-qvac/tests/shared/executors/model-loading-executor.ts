@@ -34,7 +34,7 @@ const modelLoadTests = [
 export class ModelLoadingExecutor extends AbstractModelExecutor<
   typeof modelLoadTests
 > {
-  pattern = /^model-/;
+  pattern = /^model-(?!info-)/;
   private llmModelId: string | null = null;
 
   protected handlers = {

@@ -5,7 +5,8 @@ import { transcriptionTests } from "./transcription-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
 import { translationTests } from "./translation-tests.js";
-import { cacheTests } from "./cache-tests.js";
+import { modelInfoTests } from "./model-info-tests.js";
+import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
 import { visionTests } from "./vision-tests.js";
@@ -196,8 +197,11 @@ export const tests = [
   // HTTP embedding tests
   ...httpEmbeddingTests,
 
-  // Cache tests
-  ...cacheTests,
+  // Model info tests
+  ...modelInfoTests,
+
+  // KV cache tests
+  ...kvCacheTests,
 
   // Error tests
   ...errorTests,
