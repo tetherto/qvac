@@ -99,6 +99,18 @@ export class ResourceManager {
     return this.models.get(dep)?.modelId ?? null;
   }
 
+  async evictExcept(keep: string[]): Promise<string[]> {
+    const keepSet = new Set(keep);
+    const evicted: string[] = [];
+    for (const dep of this.models.keys()) {
+      if (!keepSet.has(dep)) {
+        await this.evict(dep);
+        evicted.push(dep);
+      }
+    }
+    return evicted;
+  }
+
   async evictStale(threshold: number): Promise<string[]> {
     console.info(`🧹 Evicting stale models (test count: ${this.testCount}, threshold: ${threshold})`);
     const evicted: string[] = [];

@@ -21,6 +21,8 @@ export abstract class AbstractModelExecutor<
     if (!dep || dep === "none") return;
 
     const deps = dep.includes("+") ? dep.split("+") : [dep];
+    await this.resources.evictExcept(deps);
+
     for (const d of deps) {
       await this.resources.ensureLoaded(d);
     }
