@@ -202,8 +202,7 @@ class ComparativeEvaluator:
         addon_wrapper = MTEBModelWrapper(
             self.addon_handler,
             batch_size=self.addon_config.get_http_batch_size(),
-            max_seq_length=int(self.addon_config.ctx_size),
-            token_batch_budget=int(self.addon_config.batch_size)
+            max_seq_length=int(self.addon_config.ctx_size)
         )
         addon_raw_folder = os.path.join(raw_results_base, "addon")
         addon_results = self._run_mteb_evaluation(addon_wrapper, [dataset_name], addon_raw_folder)
@@ -213,8 +212,7 @@ class ComparativeEvaluator:
         transformers_wrapper = MTEBModelWrapper(
             self.transformers_handler,
             batch_size=self.addon_config.get_http_batch_size(),
-            max_seq_length=int(self.addon_config.ctx_size),
-            token_batch_budget=int(self.addon_config.batch_size)
+            max_seq_length=int(self.addon_config.ctx_size)
         )
         transformers_raw_folder = os.path.join(raw_results_base, "transformers")
         transformers_results = self._run_mteb_evaluation(transformers_wrapper, [dataset_name], transformers_raw_folder)
