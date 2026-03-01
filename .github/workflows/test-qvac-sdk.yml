@@ -69,7 +69,7 @@ jobs:
       working-directory: "packages/qvac-sdk/tests-qvac"
       platforms: ${{ inputs.desktop-platforms || '["win11-rtx4000-hetzner", "ai-run-linux-gpu", "macos-latest-xlarge"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
-      filter: ${{ inputs.filter || 'model-load-llm,completion-streaming' }}
+      filter: ${{ inputs.filter }}
       test-version: ${{ inputs.test-version || '' }}
     secrets:
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
@@ -89,7 +89,7 @@ jobs:
       project-directory: "packages/qvac-sdk"
       working-directory: "packages/qvac-sdk/tests-qvac"
       consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
-      filter: ${{ inputs.filter || 'model-load-llm,completion-streaming' }}
+      filter: ${{ inputs.filter }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '30') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
