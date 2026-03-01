@@ -3,12 +3,14 @@ import {
   unloadModel,
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
+  OCR_LATIN_RECOGNIZER_1,
 } from "@qvac/sdk";
 import { ValidationHelpers, type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import {
   modelLoadLlm,
   modelLoadEmbedding,
+  modelLoadOcr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -20,6 +22,7 @@ import {
 const modelLoadTests = [
   modelLoadLlm,
   modelLoadEmbedding,
+  modelLoadOcr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -37,6 +40,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
+    [modelLoadOcr.testId]: this.loadOcr.bind(this),
     [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
     [modelUnload.testId]: this.unload.bind(this),
     [modelLoadConcurrent.testId]: this.loadConcurrent.bind(this),
@@ -68,6 +72,19 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
       modelType: "embeddings",
     });
     this.resources.register("embeddings", modelId);
+    return ValidationHelpers.validate(modelId, expectation);
+  }
+
+  async loadOcr(
+    params: typeof modelLoadOcr.params,
+    expectation: typeof modelLoadOcr.expectation,
+  ): Promise<TestResult> {
+    const modelId = await loadModel({
+      modelSrc: OCR_LATIN_RECOGNIZER_1,
+      modelType: "ocr",
+      modelConfig: { langList: ["en"] },
+    });
+    this.resources.register("ocr", modelId);
     return ValidationHelpers.validate(modelId, expectation);
   }
 
@@ -151,10 +168,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<
     params: typeof modelReloadLlm.params,
     expectation: typeof modelReloadLlm.expectation,
   ): Promise<TestResult> {
-    if (this.llmModelId) {
-      await unloadModel({ modelId: this.llmModelId });
-      this.resources.unregister(this.llmModelId);
-    }
     this.llmModelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: "llm",

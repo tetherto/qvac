@@ -13,7 +13,7 @@ import { visionTests } from "./vision-tests.js";
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
   testId: "model-load-llm",
-  params: { modelType: "llm", modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
+  params: {},
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
@@ -24,12 +24,23 @@ export const modelLoadLlm: TestDefinition = {
 
 export const modelLoadEmbedding: TestDefinition = {
   testId: "model-load-embedding",
-  params: { modelType: "embeddings", modelConstant: "GTE_LARGE_FP16" },
+  params: {},
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
     dependency: "none",
     estimatedDurationMs: 60000,
+  },
+};
+
+export const modelLoadOcr: TestDefinition = {
+  testId: "model-load-ocr",
+  params: {},
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: {
+    category: "model",
+    dependency: "none",
+    estimatedDurationMs: 90000,
   },
 };
 
@@ -76,7 +87,7 @@ export const modelLoadConcurrent: TestDefinition = {
 
 export const modelReloadLlm: TestDefinition = {
   testId: "model-reload-llm",
-  params: { modelType: "llm", modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
+  params: {},
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
@@ -87,7 +98,7 @@ export const modelReloadLlm: TestDefinition = {
 
 export const modelSwitchLlm: TestDefinition = {
   testId: "model-switch-llm",
-  params: { currentModel: "llm", newModelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
+  params: {},
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
@@ -98,7 +109,7 @@ export const modelSwitchLlm: TestDefinition = {
 
 export const modelReloadAfterError: TestDefinition = {
   testId: "model-reload-after-error",
-  params: { modelType: "llm", modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
+  params: {},
   expectation: { validation: "type", expectedType: "string" },
   metadata: {
     category: "model",
@@ -148,6 +159,7 @@ export const tests = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadEmbedding,
+  modelLoadOcr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,

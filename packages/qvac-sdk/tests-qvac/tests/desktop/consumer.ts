@@ -5,6 +5,7 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
+  OCR_LATIN_RECOGNIZER_1,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
@@ -59,6 +60,12 @@ resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("ocr", {
+  constant: OCR_LATIN_RECOGNIZER_1,
+  type: "ocr",
+  config: { langList: ["en"] },
 });
 
 export const executor = createExecutor({
