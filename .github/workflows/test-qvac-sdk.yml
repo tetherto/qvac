@@ -17,9 +17,8 @@ on:
           - ios
         default: desktop
       filter:
-        description: "Test filter (comma-separated categories/prefixes)"
+        description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
         type: string
-        default: "model-load-llm,completion-streaming"
       desktop-consumer-timeout:
         description: "Desktop consumer timeout (seconds)"
         type: number
