@@ -38,7 +38,7 @@ export class EmbeddingExecutor extends AbstractModelExecutor<
       if (p.codeFile) {
         const codePath = path.resolve(
           process.cwd(),
-          "../shared-test-data/code",
+          "assets/code",
           p.codeFile,
         );
         const code = fs.readFileSync(codePath, "utf-8");

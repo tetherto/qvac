@@ -32,7 +32,7 @@ export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
       if (p.documentFile) {
         const docPath = path.resolve(
           process.cwd(),
-          "../shared-test-data/documents",
+          "assets/documents",
           p.documentFile,
         );
         content = fs.readFileSync(docPath, "utf-8");

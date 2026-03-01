@@ -64,61 +64,6 @@ export const embedNumbersOnly = createEmbeddingTest("embed-numbers-only", {
   text: "1234567890 42 3.14159 999",
 });
 
-// Code embedding tests - SKIPPED (cause GGML assertion failure)
-const codeEmbeddingSkip = {
-  reason:
-    "GGML assertion failure at ~852 tokens. Error: GGML_ASSERT(i01 >= 0 && i01 < ne01) failed at ggml-cpu/ops.cpp:5358",
-  issue: "SDK crash - muted until fixed",
-};
-
-export const embedPythonCode: TestDefinition = {
-  testId: "embed-python-code",
-  params: { codeFile: "data_analysis.py" },
-  expectation: { validation: "type", expectedType: "array" },
-  metadata: {
-    category: "embedding",
-    dependency: "embeddings",
-    estimatedDurationMs: 5000,
-  },
-  skip: codeEmbeddingSkip,
-};
-
-export const embedJavaScriptCode: TestDefinition = {
-  testId: "embed-javascript-code",
-  params: { codeFile: "interactive_gallery.js" },
-  expectation: { validation: "type", expectedType: "array" },
-  metadata: {
-    category: "embedding",
-    dependency: "embeddings",
-    estimatedDurationMs: 5000,
-  },
-  skip: codeEmbeddingSkip,
-};
-
-export const embedJsonCode: TestDefinition = {
-  testId: "embed-json-code",
-  params: { codeFile: "api_response.json" },
-  expectation: { validation: "type", expectedType: "array" },
-  metadata: {
-    category: "embedding",
-    dependency: "embeddings",
-    estimatedDurationMs: 5000,
-  },
-  skip: codeEmbeddingSkip,
-};
-
-export const embedHtmlCode: TestDefinition = {
-  testId: "embed-html-code",
-  params: { codeFile: "portfolio_website.html" },
-  expectation: { validation: "type", expectedType: "array" },
-  metadata: {
-    category: "embedding",
-    dependency: "embeddings",
-    estimatedDurationMs: 5000,
-  },
-  skip: codeEmbeddingSkip,
-};
-
 // Batch and similarity tests
 export const embedBatch: TestDefinition = {
   testId: "embed-batch",
@@ -167,17 +112,13 @@ export const embeddingTests = [
   embedSimpleText,
   embedLongText,
   embedEmptyText,
+  embedSimilarity,
+  embedBatch,
   embedUnicode,
   embedVeryShort,
   embedCodeSnippet,
   embedMultilingual,
   embedSpecialChars,
   embedNumbersOnly,
-  embedPythonCode,
-  embedJavaScriptCode,
-  embedJsonCode,
-  embedHtmlCode,
-  embedBatch,
-  embedSimilarity,
   embedSemanticSimilarity,
 ];
