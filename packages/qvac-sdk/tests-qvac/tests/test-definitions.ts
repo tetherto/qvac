@@ -9,7 +9,6 @@ import { modelInfoTests } from "./model-info-tests.js";
 import { kvCacheTests } from "./kv-cache-tests.js";
 import { errorTests } from "./error-tests.js";
 import { toolsTests } from "./tools-tests.js";
-import { visionTests } from "./vision-tests.js";
 import { ocrTests } from "./ocr-tests.js";
 import { ttsTests } from "./tts-tests.js";
 import { configReloadTests } from "./config-reload-tests.js";
@@ -128,41 +127,6 @@ export const modelReloadAfterError: TestDefinition = {
   },
 };
 
-// TODO placeholder tests
-export const todoAddonDiscovery: TestDefinition = {
-  testId: "todo-addon-discovery",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "todo", dependency: "none", estimatedDurationMs: 1000 },
-};
-
-export const todoAddonMetadata: TestDefinition = {
-  testId: "todo-addon-metadata",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "todo", dependency: "none", estimatedDurationMs: 1000 },
-};
-
-export const todoLoadingProgress: TestDefinition = {
-  testId: "todo-loading-progress",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "todo", dependency: "none", estimatedDurationMs: 1000 },
-};
-
-export const todoTypedErrorCodes: TestDefinition = {
-  testId: "todo-typed-error-codes",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "todo", dependency: "none", estimatedDurationMs: 1000 },
-};
-
-export const todoAddonCrashDetection: TestDefinition = {
-  testId: "todo-addon-crash-detection",
-  params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "todo", dependency: "none", estimatedDurationMs: 1000 },
-};
 
 // Export all tests as array
 export const tests = [
@@ -229,17 +193,7 @@ export const tests = [
   // Registry tests
   ...registryTests,
 
-  // Vision tests (SKIPPED - see vision-tests.ts for details)
-  ...visionTests,
-
   // Additional model tests
   modelSwitchLlm,
   modelReloadAfterError,
-
-  // TODO placeholder tests
-  todoAddonDiscovery,
-  todoAddonMetadata,
-  todoLoadingProgress,
-  todoTypedErrorCodes,
-  todoAddonCrashDetection,
 ];

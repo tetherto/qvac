@@ -25,6 +25,7 @@ export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
       chunkOverlap: number;
       chunkStrategy?: string;
     };
+    const exp = expectation as Expectation;
     const embeddingModelId = await this.resources.ensureLoaded("embeddings");
 
     try {
@@ -40,21 +41,30 @@ export class RagExecutor extends AbstractModelExecutor<typeof ragTests> {
         content = p.documentContent || "";
       }
 
+      const uniqueWorkspace = `${p.workspace}-${embeddingModelId.substring(0, 8)}`;
+
       const result = await ragIngest({
         modelId: embeddingModelId,
-        workspace: p.workspace,
-        documents: content,
+        workspace: uniqueWorkspace,
+        documents: [content] as never,
         chunk: true,
         chunkOpts: {
           chunkSize: p.chunkSize,
           chunkOverlap: p.chunkOverlap,
+          ...(p.chunkStrategy ? { chunkStrategy: p.chunkStrategy as "paragraph" | "character" } : {}),
         },
       });
 
+      if (exp.validation === "throws-error") {
+        return { passed: false, output: "Expected error but RAG succeeded" };
+      }
       const resultStr = result.processed.length > 0 ? "success" : "failed";
-      return ValidationHelpers.validate(resultStr, expectation as Expectation);
+      return ValidationHelpers.validate(resultStr, exp);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (exp.validation === "throws-error") {
+        return ValidationHelpers.validate(errorMsg, exp);
+      }
       return { passed: false, output: `RAG failed: ${errorMsg}` };
     }
   }

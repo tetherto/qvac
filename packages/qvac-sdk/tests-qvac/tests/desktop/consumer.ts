@@ -41,7 +41,6 @@ import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
-import { TodoExecutor } from "./executors/todo-executor.js";
 
 const resources = new ResourceManager();
 
@@ -167,7 +166,7 @@ export const executor = createExecutor({
     new ModelInfoExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
-    new TodoExecutor(),
+
     new NmtExecutor(resources),
     new BergamotExecutor(resources),
     new ShardedModelExecutor(resources),
