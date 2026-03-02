@@ -7,10 +7,12 @@ import TranscriptionParakeet, {
 import {
   definePlugin,
   ModelType,
+  parakeetRuntimeConfigSchema,
   type CreateModelParams,
   type PluginModelResult,
   type ResolveModelPath,
 } from "@/schemas";
+import type { z } from "zod";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import { ModelLoadFailedError } from "@/utils/errors-server";
@@ -18,18 +20,11 @@ import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe } from "@/server/bare/plugins/parakeet-transcription/ops/transcribe-stream";
 import { createTranscribeStreamHandler } from "@/server/bare/utils/transcription-handler";
 
-type ParakeetModelConfig = {
-  modelType?: string;
+type ParakeetModelConfig = z.infer<typeof parakeetRuntimeConfigSchema> & {
   encoderDataPath?: string;
   decoderPath?: string;
   vocabPath?: string;
   preprocessorPath?: string;
-  maxThreads?: number;
-  useGPU?: boolean;
-  sampleRate?: number;
-  channels?: number;
-  captionEnabled?: boolean;
-  timestampsEnabled?: boolean;
 };
 
 function createParakeetModel(
