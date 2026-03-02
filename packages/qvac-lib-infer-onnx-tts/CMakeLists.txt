@@ -138,7 +138,7 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 add_bare_module(qvac-lib-inference-tts EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-tts} PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${qvac-lib-inference-tts}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
