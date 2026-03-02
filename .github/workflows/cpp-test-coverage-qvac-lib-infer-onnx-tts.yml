@@ -106,6 +106,14 @@ jobs:
           which llvm-profdata-19 || echo "llvm-profdata-19 not in PATH"
           dpkg -l | grep llvm || echo "No LLVM packages found"
 
+      - name: Setup LLVM coverage tools symlinks
+        if: matrix.platform == 'linux'
+        run: |
+          sudo ln -sf /usr/bin/llvm-profdata-19 /usr/local/bin/llvm-profdata
+          sudo ln -sf /usr/bin/llvm-cov-19 /usr/local/bin/llvm-cov
+          which llvm-cov
+          llvm-profdata --version
+
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:
@@ -156,14 +164,31 @@ jobs:
           npm run coverage:cpp:run
         continue-on-error: true
 
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -f build/addon/test/unit/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.WORKDIR }}/build/addon/test/unit/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
       - name: Generate Coverage Report
         if: ${{ matrix.coverage }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:report
-
-          # 4. Extract percentage
-          COVERAGE=$(grep 'TOTAL' coverage-summary.txt | awk '{print $10}')
+          COVERAGE=$(grep 'TOTAL' build/addon/test/unit/coverage-summary.txt | awk '{print $10}')
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
           echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
 
@@ -179,13 +204,46 @@ jobs:
             ${{ env.WORKDIR }}/build/addon/test/unit/cpp-test-results.xml
           retention-days: 30
 
+      - name: Comment Coverage on PR
+        if: ${{ matrix.coverage && github.event_name == 'pull_request_target' }}
+        uses: actions/github-script@v8
+        env:
+          LINE_COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
+          COVERAGE_SUMMARY_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/build/addon/test/unit/coverage-summary.txt
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.COVERAGE_SUMMARY_PATH;
+            if (path && fs.existsSync(path)) {
+              const coverage = fs.readFileSync(path, 'utf8');
+              const pct = process.env.LINE_COVERAGE_PERCENTAGE || 'N/A';
+              const body = `## C++ Test Coverage Report (TTS)
+
+              **Line coverage:** ${pct}
+
+              <details>
+              <summary>Detailed coverage</summary>
+
+              \`\`\`
+              ${coverage}
+              \`\`\`
+
+              </details>`;
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
       - name: Coverage Summary
         if: ${{ matrix.coverage }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "## 🎯 Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Coverage:** ${{ env.COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f build/addon/test/unit/coverage-summary.txt ]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
