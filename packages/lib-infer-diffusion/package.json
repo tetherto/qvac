@@ -15,7 +15,8 @@
     "lint": "standard --ignore \"addon/**\"",
     "lint:fix": "standard --ignore \"addon/**\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test": "npm run test:integration",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test:integration": "bare test/integration/all.js --exit",
     "test:dts": "tsc -p tsconfig.dts.json"
   },
@@ -25,6 +26,7 @@
     "addon.js",
     "addonLogging.js",
     "addonLogging.d.ts",
+    "lib",
     "prebuilds",
     "index.d.ts",
     "LICENSE",
@@ -43,12 +45,19 @@
     "@qvac/dl-hyperdrive": "^0.1.1",
     "bare-buffer": "^3.4.2",
     "bare-fs": "^4.5.1",
+    "brittle": "^3.17.0",
     "cmake-bare": "1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "os": "npm:bare-os@^3.6.2",
+    "process": "npm:bare-process",
+    "sinon": "^21.0.0",
+    "tty": "npm:bare-node-tty",
+    "util": "npm:bare-utils@^1.5.1",
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.2.2",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"

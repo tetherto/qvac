@@ -12,7 +12,7 @@ const ImgStableDiffusion = require('../index')
 const MODELS_DIR = path.resolve(__dirname, '../models')
 
 const MODEL_NAME = 'flux-2-klein-4b-Q8_0.gguf'
-const LLM_MODEL  = 'Qwen3-4B-Q4_K_M.gguf' // Qwen3 4B text encoder — switch to Q6_K for better quality
+const LLM_MODEL  = 'Qwen3-4B-Q6_K.gguf'
 const VAE_MODEL  = 'flux2-vae.safetensors'
 
 async function main () {
