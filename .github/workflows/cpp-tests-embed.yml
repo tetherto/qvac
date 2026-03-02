@@ -30,7 +30,7 @@ on:
 
 jobs:
   run-cpp-tests:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
     permissions:
       contents: read
@@ -52,6 +52,7 @@ jobs:
           - os: windows-2022
             platform: windows
             arch: x64
+            runner: ai-run-windows11-gpu
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -135,16 +136,6 @@ jobs:
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
           sudo apt update
           sudo apt install -y vulkan-sdk
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Install Vulkan SDK on Windows
-        shell: powershell
-        working-directory:  ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg on macOS

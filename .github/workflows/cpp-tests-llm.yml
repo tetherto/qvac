@@ -37,8 +37,9 @@ jobs:
             arch: arm64
           - os: windows-2022
             platform: windows
+            runner: ai-run-windows11-gpu
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
 
     env:
@@ -78,15 +79,6 @@ jobs:
         run: |
           git config --system core.longpaths true
           choco upgrade llvm
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure vcpkg in windows

@@ -60,7 +60,7 @@ jobs:
           - os: windows-2022
             platform: win32
             arch: x64
-            runner: ai-run-windows-gpu
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
@@ -260,8 +260,6 @@ jobs:
           echo "npm version: $(npm -v)"
           echo "bare version: $(bare -v)"
           echo "bare-make version: $(bare-make --version)"
-          ls -la model/marian/vulkan/en-it/ || true
-          tree model/marian/vulkan/en-it/ || true
           ls -la prebuilds || true
           tree prebuilds || true
         continue-on-error: true
@@ -270,16 +268,6 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Windows - Install Vulkan
-        if: ${{ matrix.platform == 'win32' }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
 
       - name: Run integration test
         working-directory: ${{ env.WORKDIR }}
