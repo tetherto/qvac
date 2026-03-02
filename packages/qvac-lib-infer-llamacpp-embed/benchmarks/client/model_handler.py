@@ -5,6 +5,7 @@ import httpx
 import numpy as np
 import os
 import time
+import json
 import yaml
 from sentence_transformers import SentenceTransformer
 from huggingface_hub import hf_hub_download, list_repo_files
@@ -398,6 +399,8 @@ class QvacEmbedHandler:
             "inputs": sentences,
             "config": model_config
         }
+        input_lengths = [len(s) for s in sentences]
+        payload_size_bytes = len(json.dumps(payload, ensure_ascii=False))
         
         try:
             response = self.client.post(self.url, json=payload, timeout=self.timeout)
@@ -414,6 +417,21 @@ class QvacEmbedHandler:
             
         except httpx.TimeoutException:
             logger.error(f"Request timed out after {self.timeout} seconds")
+            raise
+        except httpx.RemoteProtocolError as e:
+            logger.error(
+                "Server disconnected without response. Batch stats: count=%s min_chars=%s max_chars=%s avg_chars=%.1f payload_bytes=%s",
+                len(sentences),
+                min(input_lengths) if input_lengths else 0,
+                max(input_lengths) if input_lengths else 0,
+                (sum(input_lengths) / len(input_lengths)) if input_lengths else 0.0,
+                payload_size_bytes
+            )
+            try:
+                healthy_after_disconnect = self._check_server_health()
+                logger.error("Server health check after disconnect: %s", healthy_after_disconnect)
+            except Exception:
+                logger.error("Server health check after disconnect failed")
             raise
         except httpx.HTTPStatusError as e:
             response_text = ""
