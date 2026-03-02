@@ -647,10 +647,11 @@ class MTEBModelWrapper(SentenceTransformer):
         self,
         sentences: list[str],
         chars_per_token: float,
-        reserve_tokens: int
+        reserve_tokens: int,
+        per_sentence_max_chars: dict[int, int] | None = None
     ) -> list[str]:
         """Apply fast char-based truncation strategy to a full batch."""
-        return [
+        truncated_batch = [
             self._truncate_text(
                 sentence,
                 chars_per_token=chars_per_token,
@@ -659,48 +660,109 @@ class MTEBModelWrapper(SentenceTransformer):
             for sentence in sentences
         ]
 
+        if per_sentence_max_chars:
+            for idx, max_chars in per_sentence_max_chars.items():
+                if 0 <= idx < len(truncated_batch):
+                    truncated_batch[idx] = truncated_batch[idx][:max_chars]
+
+        return truncated_batch
+
     def _embed_batch_with_retry(self, batch: list[str]) -> np.ndarray:
         """
         Encode a single batch with adaptive truncation retries on context overflow.
         Keeps hot path fast (no tokenizer) and only retries when overflow occurs.
         """
-        retry_strategies = [
-            (2.5, 2),   # current default behavior
-            (2.0, 8),   # slightly stricter
-            (1.6, 16),  # conservative
-            (1.3, 32)   # very conservative fallback
-        ]
+        max_attempts = 8
+        chars_per_token = 2.5
+        reserve_tokens = 2
+        per_sentence_max_chars: dict[int, int] = {}
         last_error = None
 
-        for attempt, (chars_per_token, reserve_tokens) in enumerate(retry_strategies, start=1):
-            truncated_batch = self._truncate_batch(batch, chars_per_token, reserve_tokens)
+        for attempt in range(1, max_attempts + 1):
+            truncated_batch = self._truncate_batch(
+                batch,
+                chars_per_token,
+                reserve_tokens,
+                per_sentence_max_chars=per_sentence_max_chars
+            )
             try:
                 embeddings = self.handler.embed(truncated_batch)
                 if attempt > 1:
-                    logger.warning(
+                    logger.info(
                         "Recovered from context overflow on attempt %s/%s "
-                        "(chars_per_token=%.2f, reserve_tokens=%s)",
+                        "(chars_per_token=%.3f, reserve_tokens=%s, dynamic_overrides=%s)",
                         attempt,
-                        len(retry_strategies),
+                        max_attempts,
                         chars_per_token,
-                        reserve_tokens
+                        reserve_tokens,
+                        len(per_sentence_max_chars)
                     )
                 return embeddings
             except ContextOverflowError as error:
                 last_error = error
-                if attempt < len(retry_strategies):
+                payload = error.payload if isinstance(error.payload, dict) else {}
+                details = payload.get("details", {}) if isinstance(payload, dict) else {}
+
+                sequence_index = details.get("sequenceIndex")
+                sequence_tokens = details.get("sequenceTokens")
+                context_size = details.get("contextSize") or self._max_seq_length
+
+                can_target_sequence = (
+                    isinstance(sequence_index, int) and
+                    0 <= sequence_index < len(truncated_batch)
+                )
+
+                if can_target_sequence:
+                    offending_text = truncated_batch[sequence_index]
+                    offending_length = len(offending_text)
+                    prior_limit = per_sentence_max_chars.get(sequence_index, offending_length)
+
+                    if (
+                        isinstance(sequence_tokens, int) and sequence_tokens > 0 and
+                        isinstance(context_size, int) and context_size > 0
+                    ):
+                        # Keep a small safety margin so the next attempt lands below limit.
+                        target_tokens = max(1, context_size - 8)
+                        shrink_ratio = max(0.10, min(0.98, target_tokens / sequence_tokens))
+                    else:
+                        shrink_ratio = 0.80
+
+                    new_limit = max(32, int(offending_length * shrink_ratio))
+                    # Ensure we make progress if rounding keeps size unchanged.
+                    if new_limit >= prior_limit:
+                        new_limit = max(32, prior_limit - 8)
+
+                    per_sentence_max_chars[sequence_index] = min(prior_limit, new_limit)
+
                     logger.warning(
-                        "Context overflow on batch (attempt %s/%s, chars_per_token=%.2f, reserve_tokens=%s). "
-                        "Retrying with stricter truncation...",
+                        "Context overflow on batch (attempt %s/%s): sequence %s tokens=%s ctx=%s. "
+                        "Applying targeted shrink: chars %s -> %s (ratio=%.3f).",
                         attempt,
-                        len(retry_strategies),
+                        max_attempts,
+                        sequence_index,
+                        sequence_tokens,
+                        context_size,
+                        prior_limit,
+                        per_sentence_max_chars[sequence_index],
+                        shrink_ratio
+                    )
+                else:
+                    # Fallback if server did not provide usable sequence details.
+                    chars_per_token = max(0.6, chars_per_token * 0.85)
+                    reserve_tokens = min(96, reserve_tokens + 8)
+                    logger.warning(
+                        "Context overflow on batch (attempt %s/%s) without usable sequence details. "
+                        "Applying global tightening (chars_per_token=%.3f, reserve_tokens=%s).",
+                        attempt,
+                        max_attempts,
                         chars_per_token,
                         reserve_tokens
                     )
-                else:
+
+                if attempt == max_attempts:
                     logger.error(
                         "Context overflow persisted after %s attempts for this batch.",
-                        len(retry_strategies)
+                        max_attempts
                     )
 
         if last_error is not None:
