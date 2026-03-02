@@ -37,7 +37,7 @@ const MODEL_KEYS = {
   // Portuguese pairs
   'en-pt': '098cc786de52e61b8b543f0e0c2e16e054ff19b9f9aef41ec931191c939f8e12',
   'pt-en': '821af2699a40bbec2f2fce6276f59c714285f13780cacae3f023cb44c6c6cad1',
-  // French pairs (download from S3, no hyperdrive keys yet)
+  // French pairs (use Firefox CDN fallback when Hyperdrive key unavailable)
   'en-fr': '0000000000000000000000000000000000000000000000000000000000000000',
   'fr-en': '0000000000000000000000000000000000000000000000000000000000000000',
   'fr-de': '0000000000000000000000000000000000000000000000000000000000000000',
@@ -478,13 +478,27 @@ async function main () {
     console.error(`[BERGAMOT] Looking for models in: ${modelsDir}`)
 
     // Find Bergamot model files
-    const bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+    let bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
 
     if (!bergamotModel) {
-      console.error(`Error: Bergamot model not found for ${pairKey}`)
-      console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
-      console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
-      process.exit(1)
+      // Auto-download via Hyperdrive (primary) or Firefox CDN (fallback)
+      console.error(`[BERGAMOT] Model not found locally, attempting download...`)
+      try {
+        const { ensureBergamotModelFiles } = require('./lib/bergamot-model-fetcher.js')
+        const pairCode = `${srcLang}${dstLang}`
+        const downloadDir = path.join(modelsDir, 'base-memory', pairCode)
+        await ensureBergamotModelFiles(srcLang, dstLang, downloadDir)
+        bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+      } catch (dlErr) {
+        console.error(`[BERGAMOT] Download failed: ${dlErr.message}`)
+      }
+
+      if (!bergamotModel) {
+        console.error(`Error: Bergamot model not found for ${pairKey}`)
+        console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
+        console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
+        process.exit(1)
+      }
     }
 
     console.error(`[BERGAMOT] Model: ${bergamotModel.modelPath}`)

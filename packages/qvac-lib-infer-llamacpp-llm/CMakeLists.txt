@@ -21,7 +21,7 @@ project(qvac-lib-inference-addon-llama C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++ -Wl,--exclude-libs,ALL)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -52,6 +52,11 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   )
