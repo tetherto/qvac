@@ -23,4 +23,5 @@ export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
   parakeetPreprocessorSrc: modelSrcInputSchema,
 });
 
+export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;
 export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;
