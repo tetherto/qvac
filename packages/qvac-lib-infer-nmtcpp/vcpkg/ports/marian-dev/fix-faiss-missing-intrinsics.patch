@@ -1,0 +1,12 @@
+diff --git a/src/3rd_party/faiss/VectorTransform.cpp b/src/3rd_party/faiss/VectorTransform.cpp
+index a26c2b4..96d53ec 100644
+--- a/src/3rd_party/faiss/VectorTransform.cpp
++++ b/src/3rd_party/faiss/VectorTransform.cpp
+@@ -13,6 +13,7 @@
+ #include <cmath>
+ #include <cstring>
+ #include <memory>
++#include <immintrin.h>
+ 
+ #include <faiss/utils/random.h>
+ #include "common/logging.h"
