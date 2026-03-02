@@ -109,14 +109,18 @@ async function main () {
     opts: { stats: true },
     logger: console,
     modelName: 'Qwen3-1.7B-Q4_0.gguf',
-    diskPath: './models'
+    diskPath: './models',
+    modelConfig: {
+      kvCache: true,
+    }
   }
 
   const config = {
     device: 'gpu',
     gpu_layers: '999',
-    ctx_size: '2048',
-    tools: 'true'
+    ctx_size: '4096',
+    verbosity: '3',
+    tools: 'true',
   }
 
   // 3. Loading model
@@ -228,7 +232,8 @@ async function main () {
 
     ]
 
-    const laptopPrompt = 'Search laptops under $1000 and add 2 items above $500 to a cart. Also, query users table age > 25 limit 50 with metadata.'
+    const laptopPrompt = 'Search laptops under $1000 and then, query users table age > 25 limit 50 with metadata. After if there are any users older than 25, add the cheapest found prev laptop to the cart'
+    // const laptopPrompt = 'Search laptops under $1000 and then - from those returned by the search, need to add 2 items, cheapest but in $500-$1000 range, to a cart. Also, query users table age > 25 limit 50 with metadata.'
 
     const toolsFirstQuery1 = [
       systemMessageAmbiguous,

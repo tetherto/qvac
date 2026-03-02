@@ -68,6 +68,8 @@ std::string getChatTemplateForModel(
 
   // For Qwen3 models, use the fixed template
   if (isQwen3Model(model)) {
+    QLOG_IF(
+        Priority::ERROR, "[ChatTemplateUtils] Using CHANGED Qwen3 template\n");
     return getFixedQwen3Template();
   }
 

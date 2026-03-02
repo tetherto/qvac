@@ -105,7 +105,7 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Addon} The instantiated addon interface
    */
   _createAddon (configurationParams) {
-    this.logger.info(
+    this.logger.error(
       'Creating Llama interface with configuration:',
       configurationParams
     )
