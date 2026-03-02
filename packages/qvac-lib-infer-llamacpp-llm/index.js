@@ -167,10 +167,6 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
-    if (this._hasActiveResponse) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
-    }
-
     return this._withExclusiveRun(async () => {
       if (this._hasActiveResponse) {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
