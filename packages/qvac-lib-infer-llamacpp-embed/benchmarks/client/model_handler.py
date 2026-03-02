@@ -12,6 +12,14 @@ from huggingface_hub import hf_hub_download, list_repo_files
 logger = logging.getLogger(__name__)
 
 
+class ContextOverflowError(RuntimeError):
+    """Raised when addon input exceeds model context window."""
+
+    def __init__(self, message: str, payload: dict | None = None):
+        super().__init__(message)
+        self.payload = payload or {}
+
+
 def parse_dtype_suffix(model_name: str) -> tuple[str, str | None]:
     """
     Parse dtype suffix from model name.
@@ -432,6 +440,18 @@ class QvacEmbedHandler:
             if response_json is not None:
                 logger.error("Server JSON error payload: %s", response_json)
 
+            if isinstance(response_json, dict) and response_json.get("code") == "CONTEXT_OVERFLOW":
+                details = response_json.get("details", {})
+                overflow_message = (
+                    details.get("message")
+                    if isinstance(details, dict)
+                    else response_text
+                )
+                raise ContextOverflowError(
+                    overflow_message or "Input exceeded model context window",
+                    payload=response_json
+                ) from e
+
             raise
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
@@ -594,7 +614,13 @@ class MTEBModelWrapper(SentenceTransformer):
         """Return embedding dimension. Required by MTEB."""
         return self._embedding_dim
     
-    def _truncate_text(self, text: str, max_tokens: int = None) -> str:
+    def _truncate_text(
+        self,
+        text: str,
+        max_tokens: int = None,
+        chars_per_token: float = 2.5,
+        reserve_tokens: int = 2
+    ) -> str:
         """
         Truncate text to fit within the model's context window.
         
@@ -605,17 +631,82 @@ class MTEBModelWrapper(SentenceTransformer):
         if max_tokens is None:
             max_tokens = self._max_seq_length
         
-        # Reserve 2 tokens for [CLS] and [SEP]
-        effective_max = max_tokens - 2
+        # Reserve a small token headroom for model-specific overhead.
+        effective_max = max(1, max_tokens - reserve_tokens)
         
         # Character-based truncation: ~2.5 chars per token handles scientific/medical
         # texts with numbers, punctuation, and short words
         # This avoids tokenizing in Python (addon tokenizes again in C++)
-        max_chars = int(effective_max * 2.5)
+        max_chars = max(32, int(effective_max * chars_per_token))
         
         if len(text) > max_chars:
             return text[:max_chars]
         return text
+
+    def _truncate_batch(
+        self,
+        sentences: list[str],
+        chars_per_token: float,
+        reserve_tokens: int
+    ) -> list[str]:
+        """Apply fast char-based truncation strategy to a full batch."""
+        return [
+            self._truncate_text(
+                sentence,
+                chars_per_token=chars_per_token,
+                reserve_tokens=reserve_tokens
+            )
+            for sentence in sentences
+        ]
+
+    def _embed_batch_with_retry(self, batch: list[str]) -> np.ndarray:
+        """
+        Encode a single batch with adaptive truncation retries on context overflow.
+        Keeps hot path fast (no tokenizer) and only retries when overflow occurs.
+        """
+        retry_strategies = [
+            (2.5, 2),   # current default behavior
+            (2.0, 8),   # slightly stricter
+            (1.6, 16),  # conservative
+            (1.3, 32)   # very conservative fallback
+        ]
+        last_error = None
+
+        for attempt, (chars_per_token, reserve_tokens) in enumerate(retry_strategies, start=1):
+            truncated_batch = self._truncate_batch(batch, chars_per_token, reserve_tokens)
+            try:
+                embeddings = self.handler.embed(truncated_batch)
+                if attempt > 1:
+                    logger.warning(
+                        "Recovered from context overflow on attempt %s/%s "
+                        "(chars_per_token=%.2f, reserve_tokens=%s)",
+                        attempt,
+                        len(retry_strategies),
+                        chars_per_token,
+                        reserve_tokens
+                    )
+                return embeddings
+            except ContextOverflowError as error:
+                last_error = error
+                if attempt < len(retry_strategies):
+                    logger.warning(
+                        "Context overflow on batch (attempt %s/%s, chars_per_token=%.2f, reserve_tokens=%s). "
+                        "Retrying with stricter truncation...",
+                        attempt,
+                        len(retry_strategies),
+                        chars_per_token,
+                        reserve_tokens
+                    )
+                else:
+                    logger.error(
+                        "Context overflow persisted after %s attempts for this batch.",
+                        len(retry_strategies)
+                    )
+
+        if last_error is not None:
+            raise last_error
+
+        raise RuntimeError("Failed to encode batch with adaptive truncation")
     
     def encode(
         self,
@@ -638,10 +729,7 @@ class MTEBModelWrapper(SentenceTransformer):
         
         if isinstance(sentences, str):
             sentences = [sentences]
-        
-        # Truncate sentences to fit within model's context window
-        sentences = [self._truncate_text(s) for s in sentences]
-        
+
         effective_batch_size = batch_size if batch_size is not None else self._batch_size
         all_embeddings = []
         total_sentences = len(sentences)
@@ -654,7 +742,7 @@ class MTEBModelWrapper(SentenceTransformer):
         
         for batch_idx, i in enumerate(range(0, len(sentences), effective_batch_size)):
             batch = sentences[i:i + effective_batch_size]
-            embeddings = self.handler.embed(batch)
+            embeddings = self._embed_batch_with_retry(batch)
             all_embeddings.append(embeddings)
             
             # Progress feedback (every N seconds or at milestones)
