@@ -46,7 +46,7 @@ Finetune and inference use the same job queue (JobRunner): both submit a job via
 1. **Model loading**: Load a base GGUF model (e.g., Qwen3-0.6B-Q8_0.gguf) with `model.load()`.
 2. **Dataset preparation**: Training data is read from JSONL (chat format) or plain text files. Validation uses either a fraction of that data (when `validation.type` is `'split'`), a separate eval file (`'dataset'`), or none (`'none'`).
 3. **LoRA adapter**: A LoRA adapter is initialized and attached to the model. Only the specified modules (e.g., attention, FFN) are trained.
-4. **Training loop**: The optimizer runs for the configured number of epochs. Progress is streamed to stdout (e.g. `data=X/Y loss=...`). When validation is enabled, `val_loss` is logged after each epoch.
+4. **Training loop**: The optimizer runs for the configured number of epochs. Per-iteration progress is emitted as stats events on the finetune handle. When validation is enabled, `val_loss` is computed each epoch.
 5. **Output**: The trained LoRA adapter is saved to `outputParametersDir` (e.g., `./finetuned-model-direct/trained-lora-adapter.gguf`).
 
 ### Training Modes
@@ -77,6 +77,9 @@ Starts or resumes finetuning. If the model is not loaded, it will be loaded firs
 
 ```js
 const handle = await model.finetune(finetuningOptions)
+handle.on('stats', stats => {
+  console.log(`data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+})
 const result = await handle.await()
 
 // After pause: call finetune() with no args to use stored params; backend resumes if checkpoint exists
@@ -85,23 +88,34 @@ const resumeResult = await resumeHandle.await()
 ```
 
 - **Parameters**
-  - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Omit to use params from construction or a previous call (e.g. after a pause). When omitted, the backend resumes from a pause checkpoint if one exists in the stored params' `checkpointSaveDir`; otherwise you must provide params. **Resume contract:** call `finetune()` only after you have **awaited** `cancel()`. Once `cancel()` resolves, you are paused (or it was a no-op); no status to check. There is no status API; await the previous command to know something is done.
+  - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Omit to use params from construction or a previous call (e.g. after a pause). When omitted, the backend resumes from a pause checkpoint if one exists in the stored params' `checkpointSaveDir`; otherwise you must provide params. **Resume contract:** call `finetune()` only after you have **awaited** `pause()`. There is no status API; await the previous command to know something is done.
 - **Returns** — `Promise<FinetuneHandle>`. The handle has `await()` — returns `Promise<{ op: 'finetune', status: 'COMPLETED' | 'PAUSED', stats?: object }>` when training completes or pauses. `stats` may include terminal metrics such as `train_loss`, `val_loss`, `learning_rate`, `global_steps`, and `epochs_completed`. Runtime failures reject `await()` (same failure path as inference) instead of resolving with an error status.
+- **Progress events** — if `opts.stats` is enabled, finetuning emits `stats` events on the handle with per-iteration metrics (`loss`, `accuracy`, `current_batch`, `total_batches`, etc.).
 
 **Related example:** [examples/simple-lora-finetune.js](../examples/simple-lora-finetune.js) — Run with: `bare examples/simple-lora-finetune.js`
 
-### Stopping / pausing: `cancel()`
+### Pause for resume: `pause()`
 
-To stop the current operation: during a run, `cancel()` stops inference; during finetuning, it pauses and saves a checkpoint for later resume. Call `model.cancel()` (or `client.cancel()`). Pause takes effect after the current batch completes.
+Pauses finetuning and keeps pause checkpoints so the next `finetune()` call can resume.
 
-- **Behavior** — Does not throw when nothing is running; always awaitable. Single return type (Promise).
-- **Resolution** — The returned Promise resolves when the C++ backend has finished (pause path: checkpoint saved or save failed; run path: cancel signaled), or immediately if nothing is running.
+- **Behavior** — Calls addon cancel on the finetune path and waits until the pause path completes.
+- **Resolution** — The Promise resolves when the backend pause path has completed.
+
+```js
+await model.pause()
+```
+
+**Returns** — `Promise<void>`. Once resolved, you can call `finetune()` (no args) to resume.
+
+### Stop and start fresh: `cancel()`
+
+Cancels finetuning and removes pause checkpoints from `checkpointSaveDir` so the next `finetune()` starts fresh.
 
 ```js
 await model.cancel()
 ```
 
-**Returns** — `Promise<void>`. Resolves when pause has completed (or immediately if not finetuning). Does not throw when nothing is running. Once resolved, you can call `finetune()` (no args) to resume; no separate pause status to check.
+**Returns** — `Promise<void>`. Calls addon cancel and then removes `pause_checkpoint_step_*` directories (if configured).
 
 **Related example:** [examples/simple-lora-finetune-pause-resume.js](../examples/simple-lora-finetune-pause-resume.js) — Run with: `bare examples/simple-lora-finetune-pause-resume.js`
 
@@ -187,23 +201,24 @@ validation: { type: 'dataset', path: './eval.jsonl' }
 
 ### Atomic Flags and Event-Driven Flow
 
-The finetuning and pause/resume flow uses **wait conditions** and **events** only. There is **no status API**: to know something is completed, **await the previous command** (e.g. `handle.await()`, `cancel()`). No polling or status checks in the binding.
+The finetuning and pause/resume flow uses **wait conditions** and **events** only. There is **no status API**: to know something is completed, **await the previous command** (e.g. `handle.await()`, `pause()`, `cancel()`). No polling or status checks in the binding.
 
 | Flow | Mechanism |
 |------|------------|
 | **Completion** | `handle.await()` resolves on finetune terminal payloads (`status: COMPLETED` or `PAUSED`) and rejects on runtime errors (`Error` event path). |
 | **Training started** | Event `FinetuningStarted` emitted when the first batch is processed. |
-| **Request pause** | Calling `cancel()` during finetuning invokes `requestPause()` (sets `pauseRequested` and `llama_opt_request_stop()`). The binding runs `waitUntilFinetuningPauseComplete()` on a background task, blocking on a condition variable until the JobRunner thread (running the finetune job) signals pause done (checkpoint saved or save failed); the Promise resolves when that wait returns. There is a 5-minute timeout: if the checkpoint save never completes, `cancel()` still resolves after 5 minutes. |
-| **Resume** | When you call `finetune()` (with no args to use stored params), the JS calls `addon.finetune(params)`. The C++ `finetune()` checks for a pause checkpoint in `params.checkpointSaveDir`; if one exists, it calls `clearPauseRequest()` and resumes from that checkpoint. **Contract:** call `finetune()` only after you have **awaited** `cancel()`. No status check in the binding. |
+| **Request pause** | Calling `pause()` during finetuning invokes `requestPause()` (sets `pauseRequested` and `llama_opt_request_stop()`). The binding runs `waitUntilFinetuningPauseComplete()` on a background task, blocking on a condition variable until the JobRunner thread (running the finetune job) signals pause done (checkpoint saved or save failed); the Promise resolves when that wait returns. There is a 5-minute timeout if the checkpoint save never completes. |
+| **Resume** | When you call `finetune()` (with no args to use stored params), the JS calls `addon.finetune(params)`. The C++ `finetune()` checks for a pause checkpoint in `params.checkpointSaveDir`; if one exists, it calls `clearPauseRequest()` and resumes from that checkpoint. **Contract:** call `finetune()` only after you have **awaited** `pause()`. No status check in the binding. |
 
-**Wait conditions in C++:** `pauseDoneCv` / `pauseWaitDone` signal when pause has completed. `waitUntilFinetuningPauseComplete()` uses a 5-minute timeout so the caller is not blocked indefinitely if the JobRunner thread never signals. The C++ decides “resume from checkpoint” solely by checking the filesystem: at the start of `finetune(params, logCallback)` it calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true, it calls `clearPauseRequest()` and then loads the latest `pause_checkpoint_step_*` directory and metadata to resume; otherwise it starts fresh. Atomic flags in `TrainingCheckpointState`: `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `pauseWaitDone`; the pointer `currentCheckpointState_` in `LlamaModel` is also atomic. Together with `pauseDoneMutex` and `pauseDoneCv`, these provide thread-safe coordination between the thread waiting in `waitUntilFinetuningPauseComplete()` (from `cancel()`) and the JobRunner thread running the finetune job (which checks flags, saves the checkpoint, and signals completion).
+**Wait conditions in C++:** `pauseDoneCv` / `pauseWaitDone` signal when pause has completed. `waitUntilFinetuningPauseComplete()` uses a 5-minute timeout so the caller is not blocked indefinitely if the JobRunner thread never signals. The C++ decides “resume from checkpoint” solely by checking the filesystem: at the start of `finetune(params, logCallback)` it calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true, it calls `clearPauseRequest()` and then loads the latest `pause_checkpoint_step_*` directory and metadata to resume; otherwise it starts fresh. Atomic flags in `TrainingCheckpointState`: `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `pauseWaitDone`; the pointer `currentCheckpointState_` in `LlamaModel` is also atomic. Together with `pauseDoneMutex` and `pauseDoneCv`, these provide thread-safe coordination between the thread waiting in `waitUntilFinetuningPauseComplete()` (from `pause()`) and the JobRunner thread running the finetune job (which checks flags, saves the checkpoint, and signals completion).
 
 ### How the JS API Calls the Backend
 
 | API | Backend behavior |
 |-----|------------------|
-| **`finetune(opts?)`** | Normalizes opts (required `validation` object → `validationSplit`, `useEvalDatasetForValidation`), then calls `addon.finetune(params)`. Params come from opts or stored. C++ auto-detects resume when a pause checkpoint exists in `checkpointSaveDir`. Returns a handle; `handle.await()` resolves with terminal payload `status: COMPLETED | PAUSED`, and rejects on runtime errors. Call `finetune()` only after awaiting `cancel()` when resuming. |
-| **`cancel()`** | Unified stop: during finetuning calls C++ `requestPause()` then `waitUntilFinetuningPauseComplete()` on a background task (Promise resolves when pause path is done); otherwise calls `cancelJob()`. Always returns a Promise. Does not throw when nothing is running. |
+| **`finetune(opts?)`** | Normalizes opts (required `validation` object → `validationSplit`, `useEvalDatasetForValidation`), then calls `addon.finetune(params)`. Params come from opts or stored. C++ auto-detects resume when a pause checkpoint exists in `checkpointSaveDir`. Returns a handle; `handle.await()` resolves with terminal payload `status: COMPLETED | PAUSED`, and rejects on runtime errors. |
+| **`pause()`** | During finetuning, calls C++ pause flow (`requestPause()` + `waitUntilFinetuningPauseComplete()`), which writes a pause checkpoint and resolves when the pause path completes. |
+| **`cancel()`** | Calls addon cancel, then removes local `pause_checkpoint_step_*` directories from `checkpointSaveDir` so the next `finetune()` starts fresh. |
 
 ### Fresh run vs resume
 
@@ -212,9 +227,9 @@ The choice between a **fresh run** and **resume from pause** is made in C++ insi
 - **How it’s decided:** After validating params, C++ sets `checkpointDir = params.checkpointSaveDir` (or `"./checkpoints"`) and calls `pauseCheckpointExists(checkpointDir)`. If that returns true, it calls `clearPauseRequest()` and then uses `findLatestPauseCheckpoint()` and `parseCheckpointMetadata()` to set `resumingFromPause` and load resume metadata; the rest of the function branches on `resumingFromPause` (load adapter from checkpoint vs init from params, restore step/epoch, etc.).
 - **Params on resume:** The current `params` (from the call—e.g. from the original run when you call `finetune()` with no args) are used for dataset paths, `numberOfEpochs`, learning rate, scheduler, checkpoint dir, and so on. The checkpoint supplies only the **position** (epoch, globalStep, currentStep) and saved LoRA layout (targetModules, loraRank, loraAlpha); `loraDropout` and `loraInitStd` come from `params`.
 
-### UML: finetune and cancel flow (JS → C++)
+### UML: finetune and pause flow (JS → C++)
 
-The following sequence diagrams show how `finetune()` and `cancel()` (pause path) call from JavaScript into the native addon and back.
+The following sequence diagrams show how `finetune()` and `pause()` call from JavaScript into the native addon and back.
 
 #### finetune() flow
 
@@ -259,7 +274,7 @@ sequenceDiagram
     LlamaModel->>User: handle.await() resolves with { op:'finetune', status:'COMPLETED'|'PAUSED', stats? } (errors reject)
 ```
 
-#### cancel() flow (pause finetune path)
+#### pause() flow
 
 ```mermaid
 sequenceDiagram
@@ -272,7 +287,7 @@ sequenceDiagram
     participant Helpers as LlamaFinetuningHelpers
     participant Queue as outputQueue
 
-    User->>LlamaModel: cancel()
+    User->>LlamaModel: pause()
     LlamaModel->>Addon: addon.cancel()
     Addon->>Binding: _binding.cancel(handle)
     Binding->>AddonJs: qvac_lib_inference_addon_llama::cancel(env, info)
@@ -301,21 +316,21 @@ sequenceDiagram
 
     AddonJs-->>Binding: JsAsyncTask resolves
     Binding-->>Addon: Promise resolves
-    Addon-->>LlamaModel: cancel() resolves
-    LlamaModel-->>User: cancel() resolves
+    Addon-->>LlamaModel: pause() resolves
+    LlamaModel-->>User: pause() resolves
 ```
 
 #### Component overview (JS ↔ C++)
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| JS | `index.js` → `LlmLlamacpp` | Public API: `finetune()`, `cancel()` (unified stop; during finetune pauses and saves checkpoint). Normalizes opts: requires `validation`, rejects top-level `evalDatasetPath`, maps dataset validation to `evalDatasetPath`, and emits `validationSplit` / `useEvalDatasetForValidation` before calling addon. Uses `_finetuneActive` and `QvacResponse` (`OnlyOneJob`) for lifecycle; `_addonOutputCallback` maps terminal finetune payloads to `JobEnded`. |
-| JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `cancel()` → `_binding.cancel(handle)`. |
+| JS | `index.js` → `LlmLlamacpp` | Public API: `finetune()`, `pause()`, `cancel()`. `pause()` requests a resumable stop; `cancel()` stops and removes `pause_checkpoint_step_*` directories for a fresh next run. Normalizes opts: requires `validation`, rejects top-level `evalDatasetPath`, maps dataset validation to `evalDatasetPath`, and emits `validationSplit` / `useEvalDatasetForValidation` before calling addon. Uses `_finetuneActive` and `QvacResponse` (`OnlyOneJob`) for lifecycle; `_addonOutputCallback` maps terminal finetune payloads to `JobEnded`. |
+| JS | `addon.js` → `LlamaInterface` | Thin wrapper: `finetune(params)` → `_binding.finetune(handle, params)`, `cancel()` → `_binding.cancel(handle)` (used by both `pause()` and `cancel()` in JS). |
 | C++ | `binding.cpp` | BARE exports: `finetune`, `cancel` → `qvac_lib_inference_addon_llama::*`. |
 | C++ | `AddonJs.hpp` | Parses JS args, gets `LlamaModel*` via `getLlamaModel(instance)`; `tryGetObject()` for params; builds `Prompt` with `finetuningParams` and `outputCallback`, calls `addonCpp->runJob(any(prompt))` (same path as inference). C++ auto-detects resume via `pauseCheckpointExists(checkpointSaveDir)`. `cancel()`: if `isFinetuneRunning()` then `requestPause()` + `JsAsyncTask::run(waitUntilFinetuningPauseComplete)`, else `cancelJob()`; always returns Promise via `JsAsyncTask::run`. |
 | C++ | `LlamaModel.cpp` | `process(any)` branches on `prompt.finetuningParams`; when set, calls `finetune(params, logCallback)` which runs training and returns `"COMPLETED"`/`"PAUSED"` for terminal success/pause states. At start, checks `pauseCheckpointExists(checkpointSaveDir)` to choose resume vs fresh. Uses `params.validationSplit` and `params.useEvalDatasetForValidation` to split train/eval or load a separate eval dataset; logs `val_loss` each epoch when validation is enabled. `requestPause()`, `waitUntilFinetuningPauseComplete()`, `clearPauseRequest()`. Runtime failures throw and are routed to JS as errors. |
-| C++ | `LlamaFinetuningHelpers.cpp` | Training loop; on pause writes checkpoint and signals `pauseDoneCv`; per-epoch/per-batch progress is sent through log callback output. |
-| C++ → JS | `outputQueue` + `OutputCallBackJs` | Progress logs flow as output strings; terminal finetune completion is delivered as `JobEnded` payload `{ op: 'finetune', status, stats? }`. JS resolves via `QvacResponse.ended(data)` (or rejects on `Error`). |
+| C++ | `LlamaFinetuningHelpers.cpp` | Training loop; on pause writes checkpoint and signals `pauseDoneCv`; per-batch progress is emitted as finetune progress payloads. |
+| C++ → JS | `outputQueue` + `OutputCallBackJs` | Per-iteration progress is delivered as `FinetuneProgress` and mapped to `handle.on('stats', ...)`; terminal finetune completion is delivered as `JobEnded` payload `{ op: 'finetune', status, stats? }`. JS resolves via `QvacResponse.ended(data)` (or rejects on `Error`). |
 
 ### Parameter Notes
 
@@ -344,10 +359,10 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 4. **Optimizer** — `configureOptimizer()` sets up `llama_opt_params` (AdamW, LoRA param filter, LR scheduler). `schedulerOptimizerParams` provides per-step learning rate.
 5. **Training loop** — `executeTrainingLoop()` calls `llama_opt_epoch()` for each epoch (train split, optional eval split or separate eval dataset). When validation is enabled, `val_loss` is computed and logged after each epoch. The per-batch callback is `optEpochCallbackWrapper` → `optEpochCallback()`.
 6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; on first batch, emits `FinetuningStarted` and sets `isFinetuning=true`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json), sets `shouldExit`, `pauseCheckpointSaved`, `isPaused` (and clears `isFinetuning`), and notifies the pause waiter; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
-7. **Cancel (finetune pause path)** — `requestPause()`: if `currentCheckpointState_` (atomic, per instance) is non-null, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
+7. **Pause request path** — `requestPause()`: if `currentCheckpointState_` (atomic, per instance) is non-null, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir` and finetune ends as `COMPLETED`. On pause: terminal status is `PAUSED`. On runtime error: C++ throws; JS receives an `Error` event and `handle.await()` rejects.
 
-**Wait conditions and internal state** — `TrainingCheckpointState` holds atomic flags `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `pauseWaitDone` and the wait condition `pauseDoneCv` / `pauseDoneMutex`. When `cancel()` is called during finetuning, `requestPause()` sets `pauseRequested` and a background task runs `waitUntilFinetuningPauseComplete()`, which blocks on `pauseDoneCv` until the JobRunner thread (running the finetune job) saves the checkpoint and sets `pauseWaitDone`; this gives thread-safe coordination between the two. The binding does not read status (e.g. `isPaused`); resume is driven by calling `finetune()` after awaiting `cancel()`; C++ auto-detects a pause checkpoint in `checkpointSaveDir` and resumes. Multiple model instances work correctly (per-instance state, thread-local callback state).
+**Wait conditions and internal state** — `TrainingCheckpointState` holds atomic flags `pauseRequested`, `shouldExit`, `pauseCheckpointSaved`, `pauseWaitDone` and the wait condition `pauseDoneCv` / `pauseDoneMutex`. When `pause()` is called during finetuning, `requestPause()` sets `pauseRequested` and a background task runs `waitUntilFinetuningPauseComplete()`, which blocks on `pauseDoneCv` until the JobRunner thread (running the finetune job) saves the checkpoint and sets `pauseWaitDone`; this gives thread-safe coordination between the two. The binding does not read status (e.g. `isPaused`); resume is driven by calling `finetune()` after awaiting `pause()`; C++ auto-detects a pause checkpoint in `checkpointSaveDir` and resumes. Multiple model instances work correctly (per-instance state, thread-local callback state). Calling `cancel()` uses the same addon cancel entrypoint, then clears pause checkpoints on the JS side to force a fresh subsequent run.
 
 ---
 
@@ -445,7 +460,7 @@ main().catch(console.error)
 
 ### 2. Pause and Resume
 
-Start finetuning, wait for training to begin (e.g. fixed sleep), call `cancel()` to pause, then resume and wait for completion. `cancel()` does not throw when nothing is running; after `cancel()` resolves you can call `finetune()` (no args); use `handle.await()` only if you need to detect early completion (COMPLETED).
+Start finetuning, wait for training to begin (e.g. fixed sleep), call `pause()`, then resume and wait for completion. After `pause()` resolves you can call `finetune()` (no args).
 
 **Run:** `bare examples/simple-lora-finetune-pause-resume.js`
 
@@ -454,7 +469,7 @@ For multiple pause/resume cycles, see [examples/simple-lora-finetune-multiple-pa
 ```js
 const finetuneHandle = await model.finetune(finetuneOptions)
 await sleep(90000)
-await model.cancel()
+await model.pause()
 const resumeHandle = await model.finetune()
 const result = await resumeHandle.await()
 console.log('Finetune completed:', result)
@@ -535,7 +550,7 @@ fs.writeFileSync(filePath, samples.map(s => JSON.stringify(s)).join('\n'))
 
 - **Final adapter**: `{outputParametersDir}/trained-lora-adapter.gguf` (or the path you specify if it ends in `.gguf`).
 - **Periodic checkpoints**: `{checkpointSaveDir}/checkpoint_step_0000000N/` (when `checkpointSaveSteps > 0`).
-- **Pause checkpoints**: `{checkpointSaveDir}/pause_checkpoint_step_0000000N/` (when you call `cancel()` during finetuning).
+- **Pause checkpoints**: `{checkpointSaveDir}/pause_checkpoint_step_0000000N/` (when you call `pause()` during finetuning).
 
 Each checkpoint directory typically contains:
 - `model.gguf` — LoRA adapter weights
@@ -544,14 +559,14 @@ Each checkpoint directory typically contains:
 
 ### Resume from Pause
 
-Call `finetune()` (no args) to resume. The addon finds the latest `pause_checkpoint_step_*` in `checkpointSaveDir` and continues training from there, reusing the stored finetuning parameters. When resuming mid-epoch, the backend uses the epoch-relative batch index in the callback so progress logging and checkpoint logic stay correct. **Checkpoint lifecycle:** After loading a pause checkpoint to resume, the backend removes that checkpoint directory so the same run does not resume from it again. When training completes successfully (COMPLETED), any remaining pause checkpoint in `checkpointSaveDir` is also cleared. Pause checkpoints remain on disk only while training is paused (after `cancel()` and before the next `finetune()`).
+Call `finetune()` (no args) to resume. The addon finds the latest `pause_checkpoint_step_*` in `checkpointSaveDir` and continues training from there, reusing the stored finetuning parameters. When resuming mid-epoch, the backend uses the epoch-relative batch index in the callback so progress logging and checkpoint logic stay correct. **Checkpoint lifecycle:** After loading a pause checkpoint to resume, the backend removes that checkpoint directory so the same run does not resume from it again. When training completes successfully (COMPLETED), any remaining pause checkpoint in `checkpointSaveDir` is also cleared. Pause checkpoints remain on disk only while training is paused (after `pause()` and before the next `finetune()`), unless `cancel()` is called, which clears them.
 
 ---
 
 ## Requirements and Limitations
 
 - **Flash Attention**: Disabled during finetuning (`flash_attn: 'off'` is enforced when finetuning params are provided).
-- **Exclusive access**: Finetuning and inference cannot run concurrently. Use `cancel()` to pause finetuning if you need to run inference, then `finetune()` to continue.
+- **Exclusive access**: Finetuning and inference cannot run concurrently. Use `pause()` to pause finetuning if you need to run inference, then `finetune()` to continue. Use `cancel()` to stop and clear pause checkpoints for a fresh next run.
 - **Dataset size**: For SFT, ensure enough samples. For causal mode, the text must have more tokens than `contextLength + 1`.
 - **Model format**: Base model must be a supported GGUF (e.g., LLaMA, Qwen architecture).
 - **Platform**: Same platforms as inference (macOS, Linux, Windows, iOS, Android).
