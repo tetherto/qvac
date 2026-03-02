@@ -18,7 +18,7 @@ project(qvac_lib_infer_parakeet
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
+  add_link_options(-stdlib=libc++)
 endif()
 
 # Find dependencies
@@ -197,6 +197,24 @@ if(ORT_LIB_LOCATION)
       DESTINATION "${PREBUILD_DIR}"
       OPTIONAL
     )
+    # Bundle libc++ runtime libs required by onnxruntime's shared library
+    install(CODE "
+      foreach(_lib libc++.so.1 libc++abi.so.1)
+        execute_process(
+          COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=\${_lib}
+          OUTPUT_VARIABLE _lib_path OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(EXISTS \"\${_lib_path}\")
+          get_filename_component(_real_path \"\${_lib_path}\" REALPATH)
+          file(INSTALL \"\${_real_path}\" DESTINATION \"${PREBUILD_DIR}\")
+          get_filename_component(_real_name \"\${_real_path}\" NAME)
+          if(NOT _real_name STREQUAL \"\${_lib}\")
+            file(CREATE_LINK \"\${_real_name}\" \"${PREBUILD_DIR}/\${_lib}\" SYMBOLIC)
+          endif()
+          message(STATUS \"Bundled \${_lib} -> \${_real_path}\")
+        endif()
+      endforeach()
+    ")
   elseif(APPLE)
     # macOS: Install dylib files
     file(GLOB ORT_DYLIBS "${ORT_LIB_DIR}/libonnxruntime*.dylib")
