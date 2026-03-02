@@ -14,7 +14,6 @@ export const parakeetRuntimeConfigSchema = z.object({
   channels: z.number().int().optional(),
   captionEnabled: z.boolean().optional(),
   timestampsEnabled: z.boolean().optional(),
-  seed: z.number().int().optional(),
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({

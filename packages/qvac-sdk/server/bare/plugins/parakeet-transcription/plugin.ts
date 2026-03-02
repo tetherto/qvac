@@ -30,7 +30,6 @@ type ParakeetModelConfig = {
   channels?: number;
   captionEnabled?: boolean;
   timestampsEnabled?: boolean;
-  seed?: number;
 };
 
 function createParakeetModel(
@@ -78,6 +77,12 @@ function createParakeetModel(
     preprocessorPath,
     parakeetConfig: {
       modelType: config.modelType ?? "tdt",
+      maxThreads: config.maxThreads,
+      useGPU: config.useGPU,
+      sampleRate: config.sampleRate,
+      channels: config.channels,
+      captionEnabled: config.captionEnabled,
+      timestampsEnabled: config.timestampsEnabled,
     } as ParakeetConfig,
   };
 
