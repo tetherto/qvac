@@ -44,6 +44,7 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "prebuilds",
+    "patches",
     "index.d.ts",
     "LICENSE",
     "NOTICE"
@@ -75,7 +76,6 @@
     "corestore": "^7.4.7",
     "hyperswarm": "^4.14.0",
     "os": "npm:bare-os@^3.6.2",
-    "patch-package": "^8.0.1",
     "process": "npm:bare-node-process",
     "sinon": "^21.0.0",
     "standard": "^17.0.0",
@@ -87,6 +87,7 @@
     "@qvac/infer-base": "^0.2.2",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
+    "patch-package": "^8.0.1",
     "require-asset": "^1.1.0"
   },
   "engines": {
