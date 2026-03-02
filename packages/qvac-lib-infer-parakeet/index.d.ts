@@ -3,7 +3,7 @@
 import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference';
 import WeightsProvider from '@qvac/infer-base/WeightsProvider/WeightsProvider';
 import type { QvacResponse } from '@qvac/infer-base';
-import type Logger from '@qvac/logging';
+import type { LoggerInterface } from '@qvac/logging';
 
 /**
  * Model type options for Parakeet
@@ -39,7 +39,7 @@ export interface TranscriptionParakeetArgs {
   /** External loader instance (e.g. FilesystemDL, HyperdriveDL) */
   loader: unknown;
   /** Optional structured logger */
-  logger?: Logger;
+  logger?: LoggerInterface;
   /** Name of the model directory */
   modelName: string;
   /** Disk directory where model files are stored */
