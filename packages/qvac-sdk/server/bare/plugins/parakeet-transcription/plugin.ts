@@ -51,12 +51,12 @@ function createParakeetModel(
   const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, "parakeet");
 
-  const args = {
+  const args: TranscriptionParakeetArgs = {
     loader,
     logger,
     modelName: parseModelPath(dirPath).basePath,
     diskPath: dirPath,
-  } as unknown as TranscriptionParakeetArgs;
+  };
 
   const filePaths: Record<string, string> = {
     "encoder-model.onnx": modelPath,

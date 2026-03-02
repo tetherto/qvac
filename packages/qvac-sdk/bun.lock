@@ -14,7 +14,7 @@
         "@qvac/ocr-onnx": "^0.1.5",
         "@qvac/rag": "^0.4.2",
         "@qvac/registry-client": "^0.2.0",
-        "@qvac/transcription-parakeet": "^0.1.8",
+        "@qvac/transcription-parakeet": "^0.1.9",
         "@qvac/transcription-whispercpp": "^0.3.17",
         "@qvac/translation-nmtcpp": "^0.3.9",
         "@qvac/tts-onnx": "^0.5.4",
@@ -538,7 +538,7 @@
 
     "@qvac/response": ["@qvac/response@0.1.2", "", { "dependencies": { "bare-events": "2.4.2" } }, "sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA=="],
 
-    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.8", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-mSuBOaPeyC9pM94vSzlCPoPCP+Bn6InDTEoqrfkJ6MzFLyzlhoCkxzAeOa4MUAkoUsBE8hLPUEJLp88M97Kvng=="],
+    "@qvac/transcription-parakeet": ["@qvac/transcription-parakeet@0.1.9", "", { "dependencies": { "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2" } }, "sha512-BhQ6B0DHrmT049fAWfb+Sj6+rUw8sRlUw5ZQOTI4yRY5931DeKwrpXy4g4qex5AprnVbOYs9UzEKWUH1UjxFsA=="],
 
     "@qvac/transcription-whispercpp": ["@qvac/transcription-whispercpp@0.3.18", "", { "dependencies": { "@qvac/decoder-audio": "^0.3.3", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.2.0", "@qvac/logging": "^0.1.0", "@qvac/util-transcription": "^0.1.4", "bare-channel": "^5.2.2", "bare-ffmpeg": "^1.0.0-32", "bare-node-worker-threads": "^1.0.0", "bare-path": "^3.0.0", "bare-stream": "^2.7.0", "bare-worker": "^4.1.0", "path": "npm:bare-path", "process": "npm:bare-process@^4.2.2", "stream": "npm:bare-node-stream", "worker_threads": "npm:bare-node-worker-threads@^1.0.0" }, "peerDependencies": { "@qvac/dl-hyperdrive": "^0.1.0" } }, "sha512-RlvcV6NdnZqxuXOgpFC7gXhBAPR2NHMZcvLuPJQR7mF6p6kCKCXV0KauE6JjZxZORK2tSyn8bKFlNZC9Na+MIw=="],
 
