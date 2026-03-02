@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.9.2] - 2026-03-02
+- Fix intermittent `run | run` busy-detection failure on fast hardware by replacing the timing-based `_lastJobResult` + 30ms timeout with a `_hasActiveResponse` flag checked inside `_withExclusiveRun`.
+- Override `response.await()` to chain flag cleanup, ensuring the flag clears before the caller's `await` resolves.
+- Make `run | run` concurrency test deterministic with `Promise.race` — gracefully handles the case where the first job finishes before the second `run()` is called.
+
 ## [0.9.1] - 2026-02-23
 - Use patched version of addon-cpp to reduce logging noise.
 
