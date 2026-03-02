@@ -2,11 +2,9 @@
 
 #include <onnxruntime_cxx_api.h>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "Logger.hpp"
 
 namespace onnx_addon {
-
-namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 /**
  * Process-wide singleton for the ONNX Runtime environment.

@@ -1,109 +1,102 @@
-# qvac-lib-infer-onnx
+# @qvac/onnx
 
-Header-only C++ library providing ONNX Runtime session management for QVAC inference addons.
+Bare addon providing ONNX Runtime session management for QVAC inference. Statically links onnxruntime and exposes a session-based JavaScript API. Has no dependency on `qvac-lib-inference-addon-cpp`.
 
-## Overview
+## JS API
 
-This library provides:
+### `createSession(modelPath: string, config?: object) → handle`
 
-- **`IOnnxSession`** - Abstract interface (no ONNX Runtime dependency)
-- **`OnnxConfig`** - Session configuration types (no ONNX Runtime dependency)
-- **`OnnxTensor`** - Tensor data types (no ONNX Runtime dependency)
-- **`OnnxRuntime`** - Singleton ONNX Runtime environment (shared across all sessions)
-- **`OnnxSession`** - Concrete session implementation (requires ONNX Runtime)
-- **`OnnxSessionOptionsBuilder`** - Platform-aware session options builder (XNNPack enabled by default)
-- **`OnnxTypeConversions`** - Conversion between internal and ORT tensor types
+Creates an ONNX Runtime session for the given model file.
 
-## Usage
+**Config fields:**
 
-### vcpkg dependency
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | `string` | `"auto_gpu"` | Execution provider: `"cpu"`, `"auto_gpu"`, `"nnapi"`, `"coreml"`, `"directml"` |
+| `optimization` | `string` | `"extended"` | Graph optimization: `"disable"`, `"basic"`, `"extended"`, `"all"` |
+| `intraOpThreads` | `number` | `0` | Intra-op thread count (0 = auto) |
+| `interOpThreads` | `number` | `0` | Inter-op thread count (0 = auto) |
+| `enableXnnpack` | `boolean` | `true` | Enable XNNPack execution provider |
 
-Add to your `vcpkg.json`:
+### `getInputInfo(handle) → Array<{name, shape, type}>`
+
+Returns input tensor metadata for the session.
+
+### `getOutputInfo(handle) → Array<{name, shape, type}>`
+
+Returns output tensor metadata for the session.
+
+### `run(handle, inputs) → Array<{name, shape, type, data}>`
+
+Runs inference. Each input element: `{name: string, shape: number[], type: string, data: TypedArray}`.
+
+Returns output tensors with `data` as the appropriate TypedArray.
+
+### `destroySession(handle)`
+
+Destroys the session and frees resources.
+
+## Consumer Addon Integration
+
+ONNX-based consumer addons (e.g. OCR, TTS) should depend on **both** `qvac-onnx` and `qvac-lib-inference-addon-cpp`:
+
+- `qvac-onnx` provides the ONNX session management (C++ headers + static onnxruntime)
+- `qvac-lib-inference-addon-cpp` provides JS binding utilities (`JsUtils.hpp`, `JsLogger`, `JsInterface`)
+
+### vcpkg.json
 
 ```json
 {
   "dependencies": [
-    {
-      "name": "qvac-onnx",
-      "version>=": "1.0.0"
-    }
+    "qvac-onnx",
+    "qvac-lib-inference-addon-cpp"
   ]
 }
 ```
 
-Consumer addons should **not** add `onnxruntime` as a direct dependency. The base library transitively provides it with the correct platform-specific features including XNNPack.
-
-### CMake
+### CMakeLists.txt
 
 ```cmake
-find_package(qvac-onnx CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE qvac-onnx::qvac-onnx)
+find_package(onnxruntime CONFIG REQUIRED)
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
+          "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+
+add_bare_module(my-addon EXPORTS)
+
+target_include_directories(my-addon PRIVATE
+    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+)
+target_link_libraries(my-addon PRIVATE
+    onnxruntime::onnxruntime_static
+)
+target_compile_definitions(my-addon PRIVATE JS_LOGGER)
 ```
 
-### C++ API
+Setting `-DJS_LOGGER` routes ONNX session logs (from the header-only `OnnxSession.hpp`) through `qvac-lib-inference-addon-cpp`'s `JsLogger`, so they appear in the JS logging callback. Without `JS_LOGGER`, ONNX logs go to stdout.
+
+### C++ usage in consumer addon
 
 ```cpp
+#include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
+#include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <qvac-onnx/OnnxSession.hpp>
 
-// Create a session
-onnx_addon::SessionConfig config{
-    .provider = onnx_addon::ExecutionProvider::CPU,
-    .optimization = onnx_addon::GraphOptimizationLevel::EXTENDED
-};
+// Use JsUtils for JS bindings, OnnxSession for inference
 onnx_addon::OnnxSession session("model.onnx", config);
-
-// Query model info
-auto inputs = session.getInputInfo();
-auto outputs = session.getOutputInfo();
-
-// Run inference
-onnx_addon::InputTensor input{
-    .name = "input",
-    .shape = {1, 3, 224, 224},
-    .type = onnx_addon::TensorType::FLOAT32,
-    .data = floatDataPtr,
-    .dataSize = totalBytes
-};
 auto results = session.run(input);
 ```
 
-### Interface-only usage (no ORT dependency)
+## Building
 
-Consumers that only need to accept sessions by reference can use the interface headers without pulling in ONNX Runtime:
-
-```cpp
-#include <qvac-onnx/IOnnxSession.hpp>
-
-void process(onnx_addon::IOnnxSession& session) {
-    auto results = session.run(input);
-}
+```bash
+npm run build
 ```
 
-### Singleton runtime
+## Running C++ tests
 
-All `OnnxSession` instances share a single process-wide `Ort::Env` via `OnnxRuntime::instance()`. This is automatic — consumers do not need to manage the environment. Multiple sessions across different addons loaded in the same process will reuse the same ONNX Runtime environment and thread pools.
-
-### XNNPack
-
-XNNPack is enabled by default for optimized CPU inference on all platforms. To disable it:
-
-```cpp
-onnx_addon::SessionConfig config{
-    .enableXnnpack = false
-};
+```bash
+npm run test:cpp
 ```
-
-## Headers
-
-| Header | ORT Required | Description |
-|--------|-------------|-------------|
-| `IOnnxSession.hpp` | No | Abstract session interface |
-| `OnnxConfig.hpp` | No | Configuration types |
-| `OnnxTensor.hpp` | No | Tensor data types |
-| `OnnxRuntime.hpp` | Yes | Singleton ORT environment |
-| `OnnxSession.hpp` | Yes | Concrete session (header-only) |
-| `OnnxSessionOptionsBuilder.hpp` | Yes | Session options builder + XNNPack |
-| `OnnxTypeConversions.hpp` | Yes | Type conversion utilities |
 
 ## Platform Support
 
@@ -114,18 +107,6 @@ onnx_addon::SessionConfig config{
 | Windows | DirectML, XNNPack, CPU |
 | Android | NNAPI, XNNPack, CPU |
 | iOS | CoreML, XNNPack, CPU |
-
-## Building
-
-```bash
-npm run build
-```
-
-### Running tests
-
-```bash
-npm run test:cpp
-```
 
 ## License
 
