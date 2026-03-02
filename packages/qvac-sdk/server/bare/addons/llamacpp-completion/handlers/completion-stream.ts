@@ -29,6 +29,7 @@ import {
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
 import {
+  appendToolsToHistory,
   checkForToolEvents,
   insertToolsIntoHistory,
   setupToolGrammar,
@@ -160,13 +161,17 @@ function prepareMessagesForCache(
     content: string;
     attachments?: { path: string }[] | undefined;
   }[],
+  tools?: Tool[]
 ): ChatHistory[] {
+  const transformedTools = tools ? transformMessages(tools) : [];
   if (cacheExists && history.length > 0) {
     const lastMessage = history[history.length - 1];
     const lastTransformedMessages = transformMessage(lastMessage!);
+
     return [
       { role: "session", content: cachePathToUse },
       ...lastTransformedMessages,
+      ...transformedTools,
     ];
   }
 
@@ -177,13 +182,14 @@ function prepareMessagesForCache(
   return [
     { role: "session", content: cachePathToUse },
     ...transformedHistoryWithoutSystem,
+    ...transformedTools,
   ];
 }
 
 async function* processModelResponse(
   model: AnyModel,
   messagesToSend: ChatHistory[],
-  shouldSaveCache: boolean,
+  shouldSaveCache: boolean, // TODO: start here
   tools?: Tool[],
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
@@ -250,6 +256,10 @@ export async function* completion(
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
+  // TODO: dynamicTools as a "Tool[]" param
+  const dynamicTools = toolsEnabled && (
+    (modelConfig as { dynamicTools?: boolean }).dynamicTools === true
+  );
 
   let historyWithTools: Array<
     | {
@@ -261,7 +271,11 @@ export async function* completion(
   > = history;
 
   if (tools && tools.length > 0 && toolsEnabled) {
-    historyWithTools = insertToolsIntoHistory(history, tools);
+    if (dynamicTools) {
+      historyWithTools = appendToolsToHistory(history, tools)
+    } else {
+      historyWithTools = insertToolsIntoHistory(history, tools);
+    }
     setupToolGrammar(modelConfig as Record<string, unknown>, tools);
   }
 
@@ -291,7 +305,7 @@ export async function* completion(
           cachePathToUse,
           systemPromptToUse,
           kvCache,
-          tools && toolsEnabled ? tools : undefined,
+          (tools && toolsEnabled && !dynamicTools) ? tools : undefined,
         );
         markCacheInitialized(modelId, configHash, kvCache);
         cacheExists = true;
@@ -301,6 +315,7 @@ export async function* completion(
         cachePathToUse,
         cacheExists,
         history,
+        (tools && toolsEnabled && dynamicTools) ? tools : undefined,
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
@@ -338,7 +353,7 @@ export async function* completion(
           cachePathToUse,
           systemPromptToUse,
           "auto",
-          tools && toolsEnabled ? tools : undefined,
+          undefined, //tools && toolsEnabled ? tools : undefined,
         );
         markCacheInitialized(modelId, configHash, currentCacheInfo.cacheKey);
         cacheExists = true;
@@ -348,6 +363,8 @@ export async function* completion(
         cachePathToUse,
         cacheExists,
         history,
+        // (tools && toolsEnabled && dynamicTools) ? tools : undefined,
+        tools,
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 

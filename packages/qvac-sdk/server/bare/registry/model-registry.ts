@@ -81,6 +81,7 @@ export function registerModel(
       `Delegated model registered: ${id} -> topic: ${topic}, provider: ${providerPublicKey}, timeout: ${timeout}ms`,
     );
   } else {
+    // TODO: modelRegistry.set - "config.tools"?
     modelRegistry.set(id, {
       id,
       isDelegated: false,

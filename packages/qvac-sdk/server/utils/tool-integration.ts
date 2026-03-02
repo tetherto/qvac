@@ -27,6 +27,13 @@ export function insertToolsIntoHistory(
   return [...tools, ...history];
 }
 
+export function appendToolsToHistory(
+  history: HistoryMessage[],
+  tools: Tool[],
+): Array<HistoryMessage | Tool> {
+  return [...history, ...tools];
+}
+
 export function setupToolGrammar(
   modelConfig: Record<string, unknown>,
   tools: Tool[],
