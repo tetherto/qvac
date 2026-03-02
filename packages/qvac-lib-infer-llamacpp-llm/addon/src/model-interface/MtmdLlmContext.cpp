@@ -421,6 +421,8 @@ void MtmdLlmContext::setNPast(llama_pos nPast) { this->n_past = nPast; }
 
 llama_pos MtmdLlmContext::getFirstMsgTokens() const { return firstMsgTokens; }
 
+llama_pos MtmdLlmContext::getLastToolTokenCount() const { return 0; }
+
 void MtmdLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
   this->firstMsgTokens = firstMsgTokens;
 }

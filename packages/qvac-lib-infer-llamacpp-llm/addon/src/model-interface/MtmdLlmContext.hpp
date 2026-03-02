@@ -103,6 +103,13 @@ public:
   void setFirstMsgTokens(llama_pos firstMsgTokens) override;
 
   /**
+   * The get last tool token count method. It returns 0 for multimodal context.
+   *
+   * @return - 0 (not applicable for multimodal).
+   */
+  [[nodiscard]] llama_pos getLastToolTokenCount() const override;
+
+  /**
    * The set n_discarded method. It sets the n_discarded.
    *
    * @param nDiscarded - the number of tokens to discard.

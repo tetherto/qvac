@@ -667,7 +667,9 @@ std::unique_ptr<LlmContext> LlamaModel::CreateContext(
     return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
   }
   isTextLlm = true;
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  auto ctx = std::make_unique<TextLlmContext>(params, std::move(llamaInit));
+  ctx->setCalculateToolTokenCount(params.use_jinja);
+  return ctx;
 }
 
 bool LlamaModel::LoadMedia(const LlamaModel::Input& input) {

@@ -177,6 +177,26 @@ bool CacheManager::loadCache() {
           "%s: attempting to load saved session from '%s'\n",
           __func__,
           sessionPath_.c_str()));
+
+  // Remove tool tokens from KV cache before saving
+  llama_pos toolTokenCount = llmContext_->getLastToolTokenCount();
+  if (toolTokenCount > 0) {
+    auto* mem = llama_get_memory(ctx);
+    llama_pos currentPast = llmContext_->getNPast();
+    llama_pos newNPast = currentPast - toolTokenCount;
+
+    if (newNPast > 0) {
+      llama_memory_seq_rm(mem, -1, newNPast, -1);
+      llmContext_->setNPast(newNPast);
+
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "%s: removed %d tool tokens before saving cache\n",
+              __func__,
+              toolTokenCount));
+    }
+  }
   if (!isFileInitialized(sessionPath_)) {
     QLOG_IF(
         Priority::DEBUG,
@@ -243,6 +263,26 @@ void CacheManager::saveCache() {
           "\n%s: saving final output to session file '%s'\n",
           __func__,
           sessionPath_.c_str()));
+
+  // Remove tool tokens from KV cache before saving
+  llama_pos toolTokenCount = llmContext_->getLastToolTokenCount();
+  if (toolTokenCount > 0) {
+    auto* mem = llama_get_memory(ctx);
+    llama_pos currentPast = llmContext_->getNPast();
+    llama_pos newNPast = currentPast - toolTokenCount;
+
+    if (newNPast > 0) {
+      llama_memory_seq_rm(mem, -1, newNPast, -1);
+      llmContext_->setNPast(newNPast);
+
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "%s: removed %d tool tokens before saving cache\n",
+              __func__,
+              toolTokenCount));
+    }
+  }
 
   llama_token sessionTokens[2] = {
       static_cast<llama_token>(llmContext_->getNPast()),

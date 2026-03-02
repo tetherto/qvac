@@ -175,6 +175,14 @@ public:
   virtual llama_pos removeLastNTokens(llama_pos count) = 0;
 
   /**
+   * Get the number of tool tokens from the last user message.
+   * Used for cache management when tools are appended after user messages.
+   *
+   * @return - the number of tool tokens.
+   */
+  [[nodiscard]] virtual llama_pos getLastToolTokenCount() const = 0;
+
+  /**
    * The reset media method. It resets the media.
    *
    */

@@ -13,6 +13,7 @@ add_executable(
   # Implemented tests
   test_llama_model.cpp
   test_cache_management.cpp
+  test_tool_token_cache.cpp
   test_text_llm_context.cpp
   # Backend selection tests
   test_backend_selection.cpp

@@ -228,6 +228,22 @@ void TextLlmContext::tokenizeChat(
         AddonID, toString(EmptyTokenizedInput), errorMsg);
   }
 
+  // Calculate tool token count by tokenizing without tools
+  lastToolTokenCount_ = 0;
+  if (calculateToolTokenCount_ && !tools.empty()) {
+    common_chat_templates_inputs inputsNoTools = inputs;
+    inputsNoTools.tools = {};
+    std::string promptNoTools = getPrompt(tmpls.get(), inputsNoTools);
+    std::vector<llama_token> tokensNoTools =
+        common_tokenize(lctx, promptNoTools, addSpecial, true);
+
+    if (!tokensNoTools.empty() && !inputTokens.empty() &&
+        inputTokens.size() > tokensNoTools.size()) {
+      lastToolTokenCount_ = static_cast<llama_pos>(
+          inputTokens.size() - tokensNoTools.size());
+    }
+  }
+
   // Encode the input if model has encoder
   if (llama_model_has_encoder(model) && n_past == 0 && !isCacheLoaded) {
     int encInputSize = static_cast<int>(inputTokens.size());
@@ -507,6 +523,12 @@ llama_pos TextLlmContext::getNPast() const { return n_past; }
 void TextLlmContext::setNPast(llama_pos nPast) { this->n_past = nPast; }
 
 llama_pos TextLlmContext::getFirstMsgTokens() const { return firstMsgTokens; }
+
+llama_pos TextLlmContext::getLastToolTokenCount() const { return lastToolTokenCount_; }
+
+void TextLlmContext::setCalculateToolTokenCount(bool enabled) {
+  calculateToolTokenCount_ = enabled;
+}
 
 void TextLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
   this->firstMsgTokens = firstMsgTokens;

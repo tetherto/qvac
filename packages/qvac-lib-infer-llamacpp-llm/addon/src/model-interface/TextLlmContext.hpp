@@ -94,6 +94,22 @@ public:
    * @param first_msg_tokens - the first msg tokens.
    */
   void setFirstMsgTokens(llama_pos firstMsgTokens) override;
+
+  /**
+   * The get last tool token count method. It returns the number of tool tokens
+   * from the last user message.
+   *
+   * @return - the number of tool tokens.
+   */
+  [[nodiscard]] llama_pos getLastToolTokenCount() const override;
+
+  /**
+   * The set calculate tool token count method. It enables/disables
+   * tool token count calculation for cache management.
+   *
+   * @param enabled - whether to calculate tool token count.
+   */
+  void setCalculateToolTokenCount(bool enabled);
   /**
    * The set n_discarded method. It sets the n_discarded.
    *
@@ -157,6 +173,8 @@ private:
   llama_pos n_past = 0;           // NOLINT(readability-identifier-naming)
   llama_pos n_discarded = 0;      // NOLINT(readability-identifier-naming)
   llama_pos firstMsgTokens = 0;   // NOLINT(readability-identifier-naming)
+  llama_pos lastToolTokenCount_ = 0;  // NOLINT(readability-identifier-naming)
+  bool calculateToolTokenCount_ = true;  // NOLINT(readability-identifier-naming)
   ThreadPoolPtr threadpool;       // NOLINT(readability-identifier-naming)
   ThreadPoolPtr threadpool_batch; // NOLINT(readability-identifier-naming)
 
