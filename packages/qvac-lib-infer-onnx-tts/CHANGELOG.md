@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.4] - 2026-02-24
 
 ### Added
-- Lazy ONNX session loading to reduce peak memory usage during synthesis, preventing out-of-memory kills on memory-constrained devices
+  - Lazy ONNX session loading to reduce peak memory usage during synthesis, preventing out-of-memory kills on memory-constrained devices
   - Sessions created on demand during `synthesize()` and released when no longer needed
   - Controlled via `lazySessionLoading` option, defaults to `true` on iOS and `false` on other platforms
 
