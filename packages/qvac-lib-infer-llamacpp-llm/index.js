@@ -172,6 +172,10 @@ class LlmLlamacpp extends BaseInference {
     }
 
     return this._withExclusiveRun(async () => {
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
       this.logger.info('Starting inference with prompt:', prompt)
 
       // Separate media messages from text messages
@@ -225,10 +229,9 @@ class LlmLlamacpp extends BaseInference {
       }
 
       this._hasActiveResponse = true
-      response.await().then(
-        () => { this._hasActiveResponse = false },
-        () => { this._hasActiveResponse = false }
-      )
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       this.logger.info('Inference job started successfully')
 
