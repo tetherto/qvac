@@ -36,14 +36,14 @@ Consumer addons should **not** add `onnxruntime` as a direct dependency. The bas
 ### CMake
 
 ```cmake
-find_package(qvac-lib-infer-onnx CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE qvac-lib-infer-onnx::qvac-lib-infer-onnx)
+find_package(qvac-onnx CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE qvac-onnx::qvac-onnx)
 ```
 
 ### C++ API
 
 ```cpp
-#include <qvac-lib-infer-onnx/OnnxSession.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
 
 // Create a session
 onnx_addon::SessionConfig config{
@@ -72,7 +72,7 @@ auto results = session.run(input);
 Consumers that only need to accept sessions by reference can use the interface headers without pulling in ONNX Runtime:
 
 ```cpp
-#include <qvac-lib-infer-onnx/IOnnxSession.hpp>
+#include <qvac-onnx/IOnnxSession.hpp>
 
 void process(onnx_addon::IOnnxSession& session) {
     auto results = session.run(input);
@@ -118,9 +118,13 @@ onnx_addon::SessionConfig config{
 ## Building
 
 ```bash
-cmake --preset default -B build
-cmake --build build
-ctest --test-dir build
+npm run build
+```
+
+### Running tests
+
+```bash
+npm run test:cpp
 ```
 
 ## License
