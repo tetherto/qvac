@@ -199,7 +199,7 @@ if(ORT_LIB_LOCATION)
     )
     # Bundle libc++ runtime libs required by onnxruntime's shared library
     install(CODE "
-      foreach(_lib libc++.so.1 libc++abi.so.1)
+      foreach(_lib libc++.so.1 libc++abi.so.1 libunwind.so.1)
         execute_process(
           COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=\${_lib}
           OUTPUT_VARIABLE _lib_path OUTPUT_STRIP_TRAILING_WHITESPACE
