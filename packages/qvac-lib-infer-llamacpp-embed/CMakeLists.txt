@@ -57,7 +57,7 @@ endif()
 add_bare_module(qvac-lib-infer-llamacpp-embed EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-llamacpp-embed} PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${qvac-lib-infer-llamacpp-embed}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
