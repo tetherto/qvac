@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "packages/qvac-lib-infer-diffusion/**"
+      - "packages/lib-infer-diffusion/**"
 
 permissions:
   pull-requests: read

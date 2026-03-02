@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-diffusion/**"
+      - "packages/lib-infer-diffusion/**"
       - ".github/workflows/*diffusion*.yml"
 
   workflow_dispatch:
@@ -100,9 +100,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-diffusion
-          package-json-path: packages/qvac-lib-infer-diffusion/package.json
-          changelog-path: packages/qvac-lib-infer-diffusion/CHANGELOG.md
+          package-slug: lib-infer-diffusion
+          package-json-path: packages/lib-infer-diffusion/package.json
+          changelog-path: packages/lib-infer-diffusion/CHANGELOG.md
 
   publish-main-gpr:
     needs: publish-logic
@@ -111,12 +111,12 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-diffusion"
+      workdir: "packages/lib-infer-diffusion"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -125,12 +125,12 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-diffusion"
+      workdir: "packages/lib-infer-diffusion"
 
   publish-tmp-gpr:
     needs: publish-logic
@@ -139,12 +139,12 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
       publish_target: "gpr"
-      workdir: "packages/qvac-lib-infer-diffusion"
+      workdir: "packages/lib-infer-diffusion"
 
   publish-release-npm:
     needs: [publish-logic]
@@ -153,22 +153,22 @@ jobs:
       contents: write
       packages: write
       pull-requests: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
     secrets: inherit
     with:
       tag: "latest"
       publish_target: "npm"
-      workdir: "packages/qvac-lib-infer-diffusion"
+      workdir: "packages/lib-infer-diffusion"
 
   publish-release:
     needs: [publish-release-npm]
     if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-diffusion.yml
+    uses: ./.github/workflows/create-github-release-lib-infer-diffusion.yml
     secrets: inherit
     with:
       release_name: "QVAC Stable Diffusion Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-diffusion"
+      workdir: "packages/lib-infer-diffusion"

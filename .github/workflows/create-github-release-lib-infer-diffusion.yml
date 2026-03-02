@@ -20,7 +20,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-diffusion"
+        default: "packages/lib-infer-diffusion"
 
 permissions:
   contents: write

@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-diffusion/**"
+      - "packages/lib-infer-diffusion/**"
   workflow_dispatch:
     inputs:
       version:
