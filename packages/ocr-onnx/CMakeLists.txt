@@ -118,7 +118,7 @@ find_package(onnxruntime CONFIG REQUIRED)
 add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${qvac-lib-inference-addon-onnx-ocr-fasttext}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
