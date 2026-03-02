@@ -137,7 +137,7 @@ endif()
 add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-nmtcpp} PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
