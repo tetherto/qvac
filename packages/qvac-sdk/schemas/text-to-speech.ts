@@ -87,8 +87,12 @@ export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
 export type TtsChatterboxConfig = z.infer<typeof ttsChatterboxConfigSchema>;
 export type TtsSupertonicConfig = z.infer<typeof ttsSupertonicConfigSchema>;
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
-export type TtsChatterboxRequestConfig = z.infer<typeof ttsChatterboxRequestConfigSchema>;
-export type TtsSupertonicRequestConfig = z.infer<typeof ttsSupertonicRequestConfigSchema>;
+export type TtsChatterboxRequestConfig = z.infer<
+  typeof ttsChatterboxRequestConfigSchema
+>;
+export type TtsSupertonicRequestConfig = z.infer<
+  typeof ttsSupertonicRequestConfigSchema
+>;
 export type TtsRequestConfig = z.infer<typeof ttsRequestConfigSchema>;
 export type TtsClientParams = z.infer<typeof ttsClientParamsSchema>;
 export type TtsRequest = z.infer<typeof ttsRequestSchema>;

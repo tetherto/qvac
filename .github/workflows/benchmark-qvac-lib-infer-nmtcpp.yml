@@ -183,13 +183,12 @@ jobs:
           sudo ./llvm.sh 19 all
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -293,7 +292,7 @@ jobs:
           bare-make install
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: |
@@ -320,30 +319,29 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Node.js
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: 20
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
         run: npm install -g bare-runtime
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
-          cache: 'pip'
+          cache: pip
 
       - name: Download build artifact
         if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
@@ -360,7 +358,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: needs.setup.outputs.qvac_needed == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -476,12 +474,11 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
           key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
-          restore-keys: |
-            datasets-
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
+          restore-keys: datasets-
 
       - name: Free up disk space
         run: |
@@ -502,7 +499,7 @@ jobs:
           df -h
 
       - name: Download Firefox translations models for Bergamot (from GitHub)
-        # Only for 'bergamot' translator (not qvac_bergamot which downloads from S3)
+        # Only for 'bergamot' translator (not qvac_bergamot which downloads from Firefox CDN)
         if: contains(format(',{0},', inputs.translators), ',bergamot,')
         run: |
           # Install git-lfs on Linux
@@ -534,44 +531,54 @@ jobs:
           echo "Firefox models installed to ~/.local/share/bergamot/models/firefox/"
         continue-on-error: true
 
-      - name: Download Bergamot models for qvac_bergamot (from S3)
+      - name: Download Bergamot models for qvac_bergamot (from Firefox CDN)
         if: contains(inputs.translators, 'qvac_bergamot')
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
         run: |
-          # Download specific language pair models from S3
+          # Download specific language pair models from Firefox Remote Settings CDN
           pair="${{ matrix.pair }}"
           src_lang="${pair%-*}"
           trg_lang="${pair#*-}"
           pair_code="${src_lang}${trg_lang}"
 
-          echo "Downloading Bergamot model for $pair_code from S3..."
+          echo "Downloading Bergamot model for $pair_code from Firefox CDN..."
 
-          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-${pair_code}"
+          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
+          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
 
-          # Find the latest date folder (sorted alphabetically, last one is latest)
-          latest_date=$(aws s3 ls "${S3_BASE}/" | grep PRE | awk '{print $2}' | tr -d '/' | sort | tail -1)
+          # Set up Firefox models directory
+          DEST_DIR="$HOME/.local/share/bergamot/models/firefox/base-memory/$pair_code"
+          mkdir -p "$DEST_DIR"
 
-          if [ -z "$latest_date" ]; then
-            echo "ERROR: No date folders found for $pair_code"
+          # Fetch model records from Firefox Remote Settings
+          echo "Fetching model index from Mozilla..."
+          RECORDS=$(curl -sS "$RECORDS_URL")
+
+          URLS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for r in data.get('data', []):
+              if r.get('fromLang') == '${src_lang}' and r.get('toLang') == '${trg_lang}':
+                  att = r.get('attachment', {})
+                  loc = att.get('location', '')
+                  name = r.get('name', '') or att.get('filename', '')
+                  if loc and name:
+                      print(f'{name}|{loc}')
+          ")
+
+          if [ -z "$URLS" ]; then
+            echo "WARNING: No Firefox model found for ${src_lang}-${trg_lang}"
+            echo "Check https://github.com/mozilla/firefox-translations-models for supported pairs"
             exit 1
           fi
 
-          echo "Found latest model date: $latest_date"
+          while IFS='|' read -r FILENAME LOCATION; do
+              URL="${ATTACHMENT_BASE}/${LOCATION}"
+              echo "  Downloading ${FILENAME}..."
+              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
+          done <<< "$URLS"
 
-          # Set up Firefox models directory
-          mkdir -p ~/.local/share/bergamot/models/firefox/base-memory/$pair_code
-
-          # Download only the latest date folder from S3
-          aws s3 sync "${S3_BASE}/${latest_date}/" \
-            ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/ \
-            --exclude "metadata.json" \
-            --exclude "config.bergamot.yml"
-
-          echo "Model files:"
-          ls -la ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/
+          echo "✅ Model files downloaded from Firefox CDN:"
+          ls -la "$DEST_DIR"
 
           echo "Bergamot models installed to ~/.local/share/bergamot/models/firefox/"
         continue-on-error: true
@@ -681,7 +688,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
@@ -689,7 +696,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
@@ -705,7 +712,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: all-results
           pattern: results-*
@@ -815,7 +822,7 @@ jobs:
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: consolidated-results-${{ inputs.translators }}
           path: all-results

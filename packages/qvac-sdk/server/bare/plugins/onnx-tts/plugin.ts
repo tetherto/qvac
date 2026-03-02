@@ -128,7 +128,8 @@ async function resolveSupertonicConfig(
   };
   if (language) result.language = language;
   if (ttsSpeed !== undefined) result.ttsSpeed = ttsSpeed;
-  if (ttsNumInferenceSteps !== undefined) result.ttsNumInferenceSteps = ttsNumInferenceSteps;
+  if (ttsNumInferenceSteps !== undefined)
+    result.ttsNumInferenceSteps = ttsNumInferenceSteps;
   return result;
 }
 

@@ -1,0 +1,8 @@
+.idea/
+.vs/
+build/
+
+# Added by qvac-lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

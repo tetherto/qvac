@@ -63,8 +63,8 @@ npm install -g bare-runtime
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/aegioscy/qvac-lib-infer-parakeet.git
-cd qvac-lib-infer-parakeet
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/qvac-lib-infer-parakeet
 ```
 
 ### Build Steps

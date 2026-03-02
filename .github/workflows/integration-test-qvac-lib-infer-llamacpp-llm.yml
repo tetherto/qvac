@@ -72,7 +72,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
 
@@ -85,10 +85,10 @@ jobs:
         shell: powershell
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
           repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
@@ -161,7 +161,7 @@ jobs:
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: ${{ env.WORKDIR }}/prebuilds
           merge-multiple: true
@@ -237,13 +237,6 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Linux - install glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
 
       - name: Windows - Install Vulkan
         if: ${{ matrix.platform == 'win32' }}

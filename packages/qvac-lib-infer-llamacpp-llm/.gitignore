@@ -8,6 +8,7 @@ prebuilds/
 
 test/unit/all.js
 test/integration/all.js
+test/model/
 .npmrc
 package-lock.json
 .cache/
@@ -27,5 +28,8 @@ p2p-models/
 # Added by qvac-lint-cpp
 .clang-format
 benchmarks/results
+benchmarks/performance/results/
+benchmarks/performance/models/
+benchmarks/performance/resolved-models.json
 
 /test_cpp/build/

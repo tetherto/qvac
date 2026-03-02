@@ -21,71 +21,69 @@ on:
       - "packages/qvac-lib-registry-server/client/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PKG_DIR: packages/qvac-lib-registry-server
   NAME_SUFFIX: "-mono"
 
 jobs:
-  release-pr-guard-schema:
-    name: Release PR Guard (Schema)
+  release-merge-guard-schema:
+    name: Release Merge Guard (Schema)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-schema')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-schema
-      package-json-path: packages/qvac-lib-registry-server/shared/package.json
-      changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-schema') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-schema
+          package-json-path: packages/qvac-lib-registry-server/shared/package.json
+          changelog-path: packages/qvac-lib-registry-server/shared/CHANGELOG.md
 
-  release-pr-guard-client:
-    name: Release PR Guard (Client)
+  release-merge-guard-client:
+    name: Release Merge Guard (Client)
     if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-client')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-client
-      package-json-path: packages/qvac-lib-registry-server/client/package.json
-      changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
-
-  release-pr-guard-server:
-    name: Release PR Guard (Server)
-    if: >-
-      github.event_name == 'pull_request_target' &&
-      startsWith(github.head_ref, 'release-qvac-registry-server')
-    permissions:
-      pull-requests: write
-      contents: read
-    uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      package-slug: qvac-registry-server
-      package-json-path: packages/qvac-lib-registry-server/package.json
-      changelog-path: packages/qvac-lib-registry-server/CHANGELOG.md
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-client') &&
+      github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: qvac-registry-client
+          package-json-path: packages/qvac-lib-registry-server/client/package.json
+          changelog-path: packages/qvac-lib-registry-server/client/CHANGELOG.md
 
   detect-changes:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Fetch PR head commits
@@ -138,6 +136,7 @@ jobs:
 
   publish-logic:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -187,6 +186,7 @@ jobs:
   publish-schema-gpr:
     needs: [detect-changes, publish-logic]
     if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.schema_changed == 'true' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
@@ -197,11 +197,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -221,18 +221,21 @@ jobs:
 
   publish-schema-npm:
     needs: [detect-changes, publish-logic]
-    if: needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true'
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -257,7 +260,7 @@ jobs:
     name: Publish Schema (meta)
     needs: [publish-schema-gpr, publish-schema-npm]
     if: |
-      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
       (needs.publish-schema-npm.result == 'success' || needs.publish-schema-npm.result == 'skipped')
     runs-on: ubuntu-latest
@@ -267,26 +270,19 @@ jobs:
   lint-and-test:
     needs: detect-changes
     if: |
-      needs.detect-changes.outputs.client_changed == 'true' &&
-      (
-        github.event_name == 'push' ||
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'pull_request_target' &&
-          contains(github.event.pull_request.labels.*.name, 'verify')
-        )
-      )
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
+      needs.detect-changes.outputs.client_changed == 'true'
     permissions:
       contents: read
       packages: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout PR head
@@ -298,9 +294,9 @@ jobs:
           git checkout --detach ${{ github.event.pull_request.head.sha }}
 
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: 20
 
       - name: Configure npm for package registries
         shell: bash
@@ -341,12 +337,10 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test]
     if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      always() &&
-      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
       (needs.publish-logic.outputs.publish_feature == 'true' ||
        needs.publish-logic.outputs.publish_main == 'true' ||
        needs.publish-logic.outputs.publish_tmp == 'true')
@@ -356,11 +350,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -381,12 +375,10 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
+    needs: [detect-changes, publish-logic, lint-and-test]
     if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify')) &&
       needs.detect-changes.outputs.client_changed == 'true' &&
-      always() &&
-      (needs.publish-schema.result == 'success' || needs.publish-schema.result == 'skipped') &&
-      needs.lint-and-test.result == 'success' &&
       needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -394,11 +386,11 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{  github.event.pull_request.base.repo.full_name || github.repository }}
-          ref: ${{  github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -419,4 +411,3 @@ jobs:
           workdir: ${{ env.PKG_DIR }}/client
           repo_name: "registry-server"
           git-token: ${{ secrets.GITHUB_TOKEN }}
-

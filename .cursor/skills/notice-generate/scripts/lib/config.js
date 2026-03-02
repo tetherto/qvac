@@ -29,7 +29,7 @@ const ENGINE_MAP = {
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
-  '@qvac/ocr-onnx': 'qvac-lib-inference-addon-onnx-ocr-fasttext'
+  '@qvac/ocr-onnx': 'ocr-onnx'
 }
 
 // Reverse map: package dir -> array of engines
@@ -77,24 +77,38 @@ const PYTHON_DEP_PATHS = {
     'benchmarks/client/pyproject.toml'
   ],
   'qvac-lib-infer-onnx-tts': [
-    'benchmarks/python-server/requirements.txt',
-    'benchmarks/python-server/requirements-tts.txt',
+    'benchmarks/python-server/requirements-supertonic.txt',
     'benchmarks/python-server/requirements-chatterbox.txt',
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
   ],
   'qvac-lib-infer-whispercpp': [
     'benchmarks/ci/requirements-conversion.txt',
-    'benchmarks/client/pyproject.toml',
-    'benchmarks/mlc/client/pyproject.toml'
+    'benchmarks/client/pyproject.toml'
   ],
-  'qvac-lib-inference-addon-onnx-ocr-fasttext': [
+  'ocr-onnx': [
     'benchmarks/quality_eval/requirements.txt'
   ],
   'qvac-lib-infer-onnx-vad': [
     'benchmarks/client/pyproject.toml'
   ]
 }
+
+// ---------------------------------------------------------------------------
+// Compiler/runtime libraries detected from vcpkg triplet flags.
+// Key: regex pattern matched against VCPKG_CXX_FLAGS in triplet files.
+// Value: attribution entry added to the C++ deps section.
+// ---------------------------------------------------------------------------
+const TRIPLET_COMPILER_LIBS = [
+  {
+    pattern: /-stdlib=libc\+\+/,
+    entry: {
+      name: 'libc++ (LLVM C++ Standard Library)',
+      license: 'Apache-2.0 WITH LLVM-exception',
+      url: 'https://github.com/llvm/llvm-project'
+    }
+  }
+]
 
 // ---------------------------------------------------------------------------
 // Packages to skip entirely
@@ -244,6 +258,7 @@ module.exports = {
   PACKAGE_ENGINES,
   FULL_MODEL_LIST_PACKAGES,
   SKIP_VCPKG_PORTS,
+  TRIPLET_COMPILER_LIBS,
   PYTHON_DEP_PATHS,
   SKIP_PACKAGES,
   NO_JS_PACKAGES,

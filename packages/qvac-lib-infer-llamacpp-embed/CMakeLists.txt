@@ -7,7 +7,7 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(VK_PROFILING "Force vk performance logging in llama-cpp" OFF)
+option(VK_PROFILING "Force vk performance logging in qvac-fabric" OFF)
 if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
@@ -15,7 +15,14 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
 project(qvac-lib-infer-llamacpp-embed C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -32,7 +39,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(llama CONFIG REQUIRED)
 
 if(WIN32)
@@ -48,29 +55,20 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()  
 
 add_bare_module(qvac-lib-infer-llamacpp-embed EXPORTS ${BACKEND_DL_LIBS})
-set(ADDON_SOURCES
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-)
 
-list(APPEND MODEL_INTERFACE_SOURCES
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-llamacpp-embed}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
+target_sources(
+  ${qvac-lib-infer-llamacpp-embed}
+  PRIVATE
+  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
-)
-
-list(APPEND ADDON_SOURCES
-  ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-infer-llamacpp-embed.cpp
-  ${MODEL_INTERFACE_SOURCES}
-)
-
-target_sources(
-  ${qvac-lib-infer-llamacpp-embed}
-  PRIVATE
-   ${ADDON_SOURCES}
 )
 target_include_directories(
   ${qvac-lib-infer-llamacpp-embed}

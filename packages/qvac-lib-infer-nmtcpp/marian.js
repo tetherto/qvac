@@ -15,8 +15,7 @@ class TranslationInterface {
     this._handle = binding.createInstance(
       this,
       configurationParams,
-      outputCb,
-      transitionCb
+      outputCb
     )
 
     // Set up C++ → JS logger
@@ -35,36 +34,16 @@ class TranslationInterface {
     }
   }
 
-  /**
-   * Stops the current process execution,
-   * frees memory allocated for configuration and weights,
-   * destroys the native instance, and moves addon to the UNLOADED state.
-   */
-  async unload () {
-    binding.unload(this._handle)
-    // Automatically destroy the instance to free native resources
-    // This mirrors the pattern used in other QVAC addons
+  // For BaseInference.
+  async destroyInstance () {
     await this.destroy()
   }
 
   /**
-   * Moves addon the the LOADING state and loads configuration for the model.
-   * Can only be invoked after unload()
-   * @param {Object} configurationParams - all the required configuration for inference setup
+   * Stops addon process and clears resources (including memory).
    */
-  async load (configurationParams) {
-    binding.load(this._handle, configurationParams)
-  }
-
-  /**
-   * Stops the current process execution,
-   * frees memory allocated for configuration and weights,
-   * loads the new configuration,
-   * and moves addon to the LOADING state.
-   * @param {Object} configurationParams - all the required configuration for inference setup
-   */
-  async reload (configurationParams) {
-    binding.reload(this._handle, configurationParams)
+  async unload () {
+    await this.destroy()
   }
 
   /**
@@ -88,14 +67,6 @@ class TranslationInterface {
   }
 
   /**
-   * Unloads weights for the model.
-   * Can only be invoked after instance has loaded weights
-   */
-  async unloadWeights () {
-    binding.unloadWeights(this._handle)
-  }
-
-  /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
   async activate () {
@@ -111,33 +82,11 @@ class TranslationInterface {
   }
 
   /**
-   * Pauses current inference process
+   * Cancel a inference process
    */
-  async pause () {
+  async cancel () {
     try {
-      binding.pause(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_PAUSE,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Pauses current inference process
-   */
-  async stop () {
-    binding.stop(this._handle)
-  }
-
-  /**
-   * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
-   */
-  async cancel (jobId) {
-    try {
-      binding.cancel(this._handle, jobId)
+      await binding.cancel(this._handle)
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_CANCEL,
@@ -148,34 +97,18 @@ class TranslationInterface {
   }
 
   /**
-   * Adds new input to the processing queue
+   * Submits a job to the processing pipeline
    * @param {Object} data
-   * @param {String} data.type
-   * @param {String} data.input
-   * @returns {Number} - job ID
+   * @param {String} data.type - 'text' for single input, 'sequences' for batch
+   * @param {String | String[]} data.input
+   * @returns {boolean} true if job was accepted
    */
-  async append (data) {
+  async runJob (data) {
     try {
-      return binding.append(this._handle, data)
+      return binding.runJob(this._handle, data)
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_APPEND,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Addon process status
-   * @returns {String}
-   */
-  async status () {
-    try {
-      return binding.status(this._handle)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_GET_STATUS,
         adds: err.message,
         cause: err
       })
@@ -203,25 +136,6 @@ class TranslationInterface {
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_DESTROY,
-        adds: err.message,
-        cause: err
-      })
-    }
-  }
-
-  /**
-   * Translates multiple texts in a single batch for better performance.
-   * This bypasses the normal queue-based processing and directly calls
-   * the batch translation API.
-   * @param {string[]} texts - Array of texts to translate
-   * @returns {Promise<string[]>} - Array of translated texts
-   */
-  async processBatch (texts) {
-    try {
-      return binding.processBatch(this._handle, texts)
-    } catch (err) {
-      throw new QvacErrorAddonMarian({
-        code: ERR_CODES.FAILED_TO_APPEND,
         adds: err.message,
         cause: err
       })

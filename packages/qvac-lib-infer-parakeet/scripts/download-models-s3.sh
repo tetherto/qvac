@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# Download Parakeet TDT model from S3:
-#   s3://tether-ai-dev/qvac_models_compiled/parakeet/
+# Download Parakeet TDT model from S3.
 #
 # Usage:
-#   ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> [--model fp32|int8] [--dry-run]
+#   MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> [--model fp32|int8] [--dry-run]
 #
 set -euo pipefail
 
 MODELS_DIR="./models"
-S3_BASE="s3://tether-ai-dev/qvac_models_compiled/parakeet"
+S3_BUCKET="${MODEL_S3_BUCKET:-}"
+S3_BASE=""
 MODEL_VARIANT="int8"  # Default to INT8 (smaller, recommended)
 DRY_RUN=0
 AWS_ACCESS_KEY=""
@@ -32,15 +32,18 @@ Options:
   --models-dir DIR     Models directory to download to (default: ./models).
   -h, --help           Show this help text.
 
+Environment:
+  MODEL_S3_BUCKET        S3 bucket name (required).
+
 Examples:
   # Download INT8 full model (default, recommended)
-  $0 --access-key <KEY> --secret-key <SECRET>
+  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET>
 
   # Download FP32 model (full precision)
-  $0 --access-key <KEY> --secret-key <SECRET> --model fp32
+  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET> --model fp32
 
   # Download INT8 partial model (MatMul-only quantization)
-  $0 --access-key <KEY> --secret-key <SECRET> --model int8-partial
+  MODEL_S3_BUCKET=my-bucket $0 --access-key <KEY> --secret-key <SECRET> --model int8-partial
 
 Notes:
   - INT8 full quantizes Conv+MatMul layers (~73% smaller than FP32).
@@ -84,6 +87,13 @@ if [[ -z "$AWS_SECRET_KEY" ]]; then
   usage
   exit 1
 fi
+
+if [[ -z "$S3_BUCKET" ]]; then
+  echo "ERROR: MODEL_S3_BUCKET environment variable is required." >&2
+  exit 1
+fi
+
+S3_BASE="s3://${S3_BUCKET}/parakeet"
 
 # Determine model paths based on variant
 case "$MODEL_VARIANT" in

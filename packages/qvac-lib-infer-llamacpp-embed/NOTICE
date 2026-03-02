@@ -29,6 +29,8 @@ Third-Party Model Licenses
 
 --- mit (MIT License) ---
 
+  gte-large_fp16-00001-of-00005
+    https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
 
@@ -300,6 +302,6 @@ C++ Dependencies
 
 --- mit (MIT License) ---
 
-  llama-cpp
-    https://github.com/tetherto/qvac-ext-lib-llama.cpp
+  qvac-fabric
+    https://github.com/tetherto/qvac-fabric-llm.cpp
 

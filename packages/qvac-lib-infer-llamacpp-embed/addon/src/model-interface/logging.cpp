@@ -10,51 +10,52 @@ namespace qvac_lib_infer_llamacpp_embed::logging {
 // only ERROR messages will be shown, preventing log spam
 Priority g_verbosityLevel = Priority::ERROR;
 
+namespace {
+Priority verbosityToPriority(int verbosity) {
+  switch (verbosity) {
+  case 0:
+    return Priority::ERROR;
+  case 1:
+    return Priority::WARNING;
+  case 2:
+    return Priority::INFO;
+  case 3:
+  default:
+    return Priority::DEBUG;
+  }
+}
+
+void logInvalidVerbosity(const std::string& value) {
+  QLOG_IF(
+      Priority::ERROR,
+      string_format(
+          "Invalid verbosity value '%s', using default ERROR level",
+          value.c_str()));
+}
+} // namespace
+
 void setVerbosityLevel(
     std::unordered_map<std::string, std::string>& configFilemap) {
   // Parse verbosity level from config and set it globally
   // This must be called before initializeBackend() to ensure llamaLogCallback
   // has the correct verbosity level from the start
-  if (auto it = configFilemap.find("verbosity"); it != configFilemap.end()) {
-    try {
-      int verbosity = std::stoi(it->second);
-      if (verbosity < 0 || verbosity > 3) {
-        QLOG_IF(
-            Priority::ERROR,
-            string_format(
-                "Invalid verbosity value '%s', using default ERROR level",
-                it->second.c_str()));
-        g_verbosityLevel = Priority::ERROR;
-        return;
-      }
-      Priority level;
-      switch (verbosity) {
-      case 0:
-        level = Priority::ERROR;
-        break;
-      case 1:
-        level = Priority::WARNING;
-        break;
-      case 2:
-        level = Priority::INFO;
-        break;
-      case 3:
-      default:
-        level = Priority::DEBUG;
-        break;
-      }
-      g_verbosityLevel = level;
-    } catch (const std::exception& e) {
-      // Use default ERROR level if parsing fails
-      g_verbosityLevel = Priority::ERROR;
-      QLOG_IF(
-          Priority::ERROR,
-          string_format(
-              "Invalid verbosity value '%s', using default ERROR level",
-              it->second.c_str()));
-    }
-    configFilemap.erase(it);
+  auto configIt = configFilemap.find("verbosity");
+  if (configIt == configFilemap.end()) {
+    return;
   }
+  try {
+    int verbosity = std::stoi(configIt->second);
+    if (verbosity < 0 || verbosity > 3) {
+      logInvalidVerbosity(configIt->second);
+      g_verbosityLevel = Priority::ERROR;
+      return;
+    }
+    g_verbosityLevel = verbosityToPriority(verbosity);
+  } catch (const std::exception&) {
+    logInvalidVerbosity(configIt->second);
+    g_verbosityLevel = Priority::ERROR;
+  }
+  configFilemap.erase(configIt);
 }
 
 void llamaLogCallback(ggml_log_level level, const char* text, void* userData) {

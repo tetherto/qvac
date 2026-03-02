@@ -26,6 +26,8 @@ Third-Party Model Licenses
     https://huggingface.co/Helsinki-NLP/opus-mt-en-fr
   ggml-opus-en-it
     https://huggingface.co/Helsinki-NLP/opus-mt-en-it
+  ggml-opus-en-roa
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
   ggml-opus-en-ru
     https://huggingface.co/Helsinki-NLP/opus-mt-en-ru
   ggml-opus-en-zh
@@ -47,6 +49,8 @@ Third-Party Model Licenses
   ggml-opus-mt-en-roa-f16
     https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
   ggml-opus-mt-roa-en-f16
+    https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
+  ggml-opus-roa-en
     https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
 
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
@@ -77,41 +81,41 @@ Third-Party Model Licenses
 
 --- mpl-2.0 (Mozilla Public License 2.0) ---
 
-  lex.50.50.aren.s2t
+  model.aren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
-  lex.50.50.csen.s2t
+  model.csen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
-  lex.50.50.enar.s2t
+  model.enar.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
-  lex.50.50.encs.s2t
+  model.encs.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
-  lex.50.50.enes.s2t
+  model.enes.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
-  lex.50.50.enfr.s2t
+  model.enfr.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
-  lex.50.50.enit.s2t
+  model.enit.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
-  lex.50.50.enja.s2t
+  model.enja.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  lex.50.50.enpt.s2t
+  model.enpt.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
-  lex.50.50.enru.s2t
+  model.enru.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  lex.50.50.enzh.s2t
+  model.enzh.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  lex.50.50.esen.s2t
+  model.esen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
-  lex.50.50.fren.s2t
+  model.fren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
-  lex.50.50.iten.s2t
+  model.iten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
-  lex.50.50.jaen.s2t
+  model.jaen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
-  lex.50.50.pten.s2t
+  model.pten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
-  lex.50.50.ruen.s2t
+  model.ruen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  lex.50.50.zhen.s2t
+  model.zhen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
 
 =========================================================================
@@ -345,10 +349,14 @@ Python Dependencies
 
   datasets
     https://github.com/huggingface/datasets
+  mtdata
+    https://github.com/thammegowda/mtdata
   requests
     https://requests.readthedocs.io
   sacrebleu
     https://github.com/mjpost/sacrebleu
+  sentencepiece
+    https://github.com/google/sentencepiece
   transformers
     https://github.com/huggingface/transformers
   unbabel-comet
@@ -376,25 +384,15 @@ Python Dependencies
   pyyaml
     https://pyyaml.org/
 
+--- mpl-2.0 (Mozilla Public License 2.0) ---
+
+  bergamot
+    https://github.com/browsermt/bergamot-translator/
+
 --- mpl-2.0 AND mit ---
 
   tqdm
     https://tqdm.github.io
-
---- apache-2.0 (Apache License 2.0) ---
-
-  sentencepiece
-    https://github.com/google/sentencepiece
-
---- mit (MIT License) ---
-
-  mtdata
-    https://github.com/thammegowda/mtdata
-
---- mpl-2.0 (Mozilla Public License 2.0) ---
-
-  bergamot
-    https://github.com/browsermt/bergamot-translator
 
 
 =========================================================================
@@ -405,6 +403,8 @@ C++ Dependencies
 
   sentencepiece
     https://github.com/google/sentencepiece
+  ssplit
+    https://github.com/browsermt/ssplit-cpp
 
 --- mit (MIT License) ---
 
@@ -415,9 +415,4 @@ C++ Dependencies
 
   bergamot-translator
     https://github.com/tetherto/qvac-ext-bergamot-translator
-
---- lgpl-2.1 (GNU Lesser General Public License v2.1) ---
-
-  ssplit
-    https://github.com/browsermt/ssplit-cpp
 

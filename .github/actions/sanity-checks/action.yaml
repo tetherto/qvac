@@ -25,12 +25,12 @@ runs:
   using: composite
   steps:
     - name: Checkout PR head and target
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
-        fetch-depth: 0
-        token: ${{ inputs.pat-token }}
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.ref }}
+        token: ${{ inputs.pat-token }}
+        fetch-depth: 0
 
     - name: Fetch PR head and target branch
       shell: bash

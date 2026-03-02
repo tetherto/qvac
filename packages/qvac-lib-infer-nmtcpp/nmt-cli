@@ -37,7 +37,7 @@ const MODEL_KEYS = {
   // Portuguese pairs
   'en-pt': '098cc786de52e61b8b543f0e0c2e16e054ff19b9f9aef41ec931191c939f8e12',
   'pt-en': '821af2699a40bbec2f2fce6276f59c714285f13780cacae3f023cb44c6c6cad1',
-  // French pairs (download from S3, no hyperdrive keys yet)
+  // French pairs (use Firefox CDN fallback when Hyperdrive key unavailable)
   'en-fr': '0000000000000000000000000000000000000000000000000000000000000000',
   'fr-en': '0000000000000000000000000000000000000000000000000000000000000000',
   'fr-de': '0000000000000000000000000000000000000000000000000000000000000000',
@@ -478,13 +478,27 @@ async function main () {
     console.error(`[BERGAMOT] Looking for models in: ${modelsDir}`)
 
     // Find Bergamot model files
-    const bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+    let bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
 
     if (!bergamotModel) {
-      console.error(`Error: Bergamot model not found for ${pairKey}`)
-      console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
-      console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
-      process.exit(1)
+      // Auto-download via Hyperdrive (primary) or Firefox CDN (fallback)
+      console.error(`[BERGAMOT] Model not found locally, attempting download...`)
+      try {
+        const { ensureBergamotModelFiles } = require('./lib/bergamot-model-fetcher.js')
+        const pairCode = `${srcLang}${dstLang}`
+        const downloadDir = path.join(modelsDir, 'base-memory', pairCode)
+        await ensureBergamotModelFiles(srcLang, dstLang, downloadDir)
+        bergamotModel = findBergamotModel(modelsDir, srcLang, dstLang)
+      } catch (dlErr) {
+        console.error(`[BERGAMOT] Download failed: ${dlErr.message}`)
+      }
+
+      if (!bergamotModel) {
+        console.error(`Error: Bergamot model not found for ${pairKey}`)
+        console.error(`Checked: ${path.join(modelsDir, 'base-memory', srcLang + dstLang)}`)
+        console.error(`Checked: ${path.join(modelsDir, 'tiny', srcLang + dstLang)}`)
+        process.exit(1)
+      }
     }
 
     console.error(`[BERGAMOT] Model: ${bergamotModel.modelPath}`)
@@ -499,9 +513,6 @@ async function main () {
       debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
     }
 
-    // Set up event handling for translation jobs
-    const jobResults = new Map()
-
     // Create Bergamot model configuration
     const bergamotConfig = {
       path: bergamotModel.modelPath,
@@ -514,25 +525,27 @@ async function main () {
       modelType: TranslationNmtcpp.ModelTypes.Bergamot
     }
 
+    let pendingJob = null
+
     const addon = new TranslationInterface(
       bergamotConfig,
-      (addon, event, jobId, output, error) => {
-        if (event === 'Output') {
-          if (jobResults.has(jobId)) {
-            jobResults.get(jobId).buffer += output
-          }
-        } else if (event === 'JobEnded') {
-          if (jobResults.has(jobId)) {
-            const job = jobResults.get(jobId)
-            job.resolve(job.buffer.trim())
-            jobResults.delete(jobId)
-          }
-        } else if (event === 'Error') {
-          if (jobResults.has(jobId)) {
-            const job = jobResults.get(jobId)
-            job.reject(new Error(error))
-            jobResults.delete(jobId)
-          }
+      (addon, event, data, error) => {
+        if (!pendingJob) return
+        if (typeof data === 'object' && data !== null && 'TPS' in data) {
+          const result = pendingJob.batchResult || pendingJob.buffer.trim()
+          pendingJob.resolve(result)
+          pendingJob = null
+          return
+        }
+        if (event.includes('Error')) {
+          pendingJob.reject(new Error(error || String(data)))
+          pendingJob = null
+          return
+        }
+        if (typeof data === 'string') {
+          pendingJob.buffer += data
+        } else if (Array.isArray(data)) {
+          pendingJob.batchResult = data
         }
       },
       logger
@@ -545,13 +558,14 @@ async function main () {
       console.error(`[${Date.now()}] Bergamot addon activated in ${Date.now() - activateStart}ms`)
 
       if (options.batch) {
-        // Use batch translation API (faster for multiple texts)
-        // Bergamot handles internal batching via mini-batch config
         const batchStart = Date.now()
         console.error(`[${Date.now()}] Starting batch translation of ${inputLines.length} texts...`)
 
         try {
-          const translations = await addon.processBatch(inputLines)
+          const translations = await new Promise((resolve, reject) => {
+            pendingJob = { buffer: '', batchResult: null, resolve, reject }
+            addon.runJob({ type: 'sequences', input: inputLines })
+          })
 
           for (const translation of translations) {
             console.log(translation)
@@ -559,41 +573,22 @@ async function main () {
           console.error(`[${Date.now()}] Batch translation completed in ${Date.now() - batchStart}ms`)
         } catch (err) {
           console.error(`[${Date.now()}] Batch translation failed: ${err.message}`)
-          // Output empty lines for all inputs on batch failure
           for (let i = 0; i < inputLines.length; i++) {
             console.log('')
           }
         }
       } else {
-        // Translate each line sequentially
         for (let i = 0; i < inputLines.length; i++) {
           const line = inputLines[i]
           const lineStart = Date.now()
           console.error(`[${Date.now()}] Starting Bergamot translation ${i + 1}/${inputLines.length}`)
 
           try {
-            const translationPromise = new Promise(async (resolve, reject) => {
-              const placeholderId = `pending-${i}`
-              jobResults.set(placeholderId, { buffer: '', resolve, reject })
-
-              try {
-                const jobId = await addon.append({ type: 'text', input: line, priority: 60 })
-                console.error(`[${Date.now()}] Got jobId ${jobId}`)
-
-                const placeholder = jobResults.get(placeholderId)
-                jobResults.delete(placeholderId)
-                if (placeholder) {
-                  jobResults.set(jobId, placeholder)
-                }
-
-                await addon.append({ type: 'end of job' })
-              } catch (err) {
-                console.error(`[${Date.now()}] Error in append: ${err.message}`)
-                reject(err)
-              }
+            const translation = await new Promise((resolve, reject) => {
+              pendingJob = { buffer: '', batchResult: null, resolve, reject }
+              addon.runJob({ type: 'text', input: line })
             })
 
-            const translation = await translationPromise
             console.error(`[${Date.now()}] Translation ${i + 1} completed in ${Date.now() - lineStart}ms`)
             console.log(translation)
           } catch (err) {
@@ -604,7 +599,7 @@ async function main () {
       }
 
       console.error(`[${Date.now()}] Destroying Bergamot addon...`)
-      addon.destroy()
+      await addon.destroy()
       console.error(`[${Date.now()}] Done`)
     } catch (err) {
       console.error('Error: Failed to load or run Bergamot translation model')
@@ -621,7 +616,6 @@ async function main () {
   if (localModelPath) {
     // Load from local file using TranslationInterface
 
-    // Logger - output to stderr for debugging
     const logger = {
       error: (msg) => console.error(`[C++ ERROR] ${msg}`),
       warn: (msg) => console.error(`[C++ WARN] ${msg}`),
@@ -629,32 +623,24 @@ async function main () {
       debug: (msg) => console.error(`[C++ DEBUG] ${msg}`)
     }
 
-    // Set up event handling for translation jobs
-    const jobResults = new Map() // jobId -> { buffer, resolve, reject }
+    let pendingJob = null
 
     const addon = new TranslationInterface(
       { path: localModelPath, config, use_gpu: !options.cpu },
-      (addon, event, jobId, output, error) => {
-        // Event handler - process all translation events
-        if (event === 'Output') {
-          // Accumulate output
-          if (jobResults.has(jobId)) {
-            jobResults.get(jobId).buffer += output
-          }
-        } else if (event === 'JobEnded') {
-          // Job completed - resolve the promise
-          if (jobResults.has(jobId)) {
-            const job = jobResults.get(jobId)
-            job.resolve(job.buffer.trim())
-            jobResults.delete(jobId)
-          }
-        } else if (event === 'Error') {
-          // Job error - reject the promise
-          if (jobResults.has(jobId)) {
-            const job = jobResults.get(jobId)
-            job.reject(new Error(error))
-            jobResults.delete(jobId)
-          }
+      (addon, event, data, error) => {
+        if (!pendingJob) return
+        if (typeof data === 'object' && data !== null && 'TPS' in data) {
+          pendingJob.resolve(pendingJob.buffer.trim())
+          pendingJob = null
+          return
+        }
+        if (event.includes('Error')) {
+          pendingJob.reject(new Error(error || String(data)))
+          pendingJob = null
+          return
+        }
+        if (typeof data === 'string') {
+          pendingJob.buffer += data
         }
       },
       logger
@@ -666,11 +652,9 @@ async function main () {
       await addon.activate()
       console.error(`[${Date.now()}] Addon activated in ${Date.now() - activateStart}ms`)
 
-      // Translate each line sequentially to avoid race conditions
       for (let i = 0; i < inputLines.length; i++) {
         let line = inputLines[i]
 
-        // Add language prefix for Portuguese (en-roa model)
         if (srcLang === 'en' && dstLang === 'pt') {
           line = `>>por<< ${line}`
         }
@@ -679,38 +663,11 @@ async function main () {
         console.error(`[${Date.now()}] Starting translation ${i + 1}/${inputLines.length}`)
 
         try {
-          // Create promise for this translation with unique placeholder ID
-          const translationPromise = new Promise(async (resolve, reject) => {
-            // Use unique placeholder ID to avoid race conditions
-            const placeholderId = `pending-${i}`
-            jobResults.set(placeholderId, { buffer: '', resolve, reject })
-
-            // Append text and wait for jobId
-            try {
-              const appendStart = Date.now()
-              const jobId = await addon.append({ type: 'text', input: line, priority: 60 })
-              console.error(`[${Date.now()}] Got jobId ${jobId} in ${Date.now() - appendStart}ms`)
-
-              // Move from placeholder to actual jobId
-              const placeholder = jobResults.get(placeholderId)
-              jobResults.delete(placeholderId)
-              if (placeholder) {
-                jobResults.set(jobId, placeholder)
-              }
-
-              // Now append end-of-job marker
-              const eojStart = Date.now()
-              await addon.append({ type: 'end of job' })
-              console.error(`[${Date.now()}] Sent end-of-job in ${Date.now() - eojStart}ms`)
-            } catch (err) {
-              console.error(`[${Date.now()}] Error in append: ${err.message}`)
-              reject(err)
-            }
+          let translation = await new Promise((resolve, reject) => {
+            pendingJob = { buffer: '', resolve, reject }
+            addon.runJob({ type: 'text', input: line })
           })
 
-          let translation = await translationPromise
-
-          // Strip language prefix from output if present
           if (srcLang === 'en' && dstLang === 'pt') {
             translation = translation.replace(/^>>[a-z]+\s*<<\s*/i, '')
           }
@@ -719,12 +676,12 @@ async function main () {
           console.log(translation)
         } catch (err) {
           console.error(`[${Date.now()}] Translation ${i + 1} failed: ${err.message}`)
-          console.log('') // Output empty line on error
+          console.log('')
         }
       }
 
       console.error(`[${Date.now()}] Destroying addon...`)
-      addon.destroy()
+      await addon.destroy()
       console.error(`[${Date.now()}] Done`)
     } catch (err) {
       console.error('Error: Failed to load or run translation model')

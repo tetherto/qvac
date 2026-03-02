@@ -31,14 +31,8 @@ class DatasetConfig(BaseModel):
 
 
 class ModelConfig(BaseModel):
-    """Model configuration - supports both Piper TTS and Chatterbox"""
-    # Piper TTS fields
-    modelPath: Optional[str] = Field(None, description="Path to ONNX model (Piper)")
-    configPath: Optional[str] = Field(None, description="Path to model config JSON (Piper)")
-    eSpeakDataPath: Optional[str] = Field(None, description="Path to eSpeak-ng data (Piper)")
-    
-    # Chatterbox fields
-    modelDir: Optional[str] = Field(None, description="Path to Chatterbox model directory")
+    """Model configuration for Chatterbox or Supertonic TTS"""
+    modelDir: Optional[str] = Field(None, description="Path to model directory")
     tokenizerPath: Optional[str] = Field(None, description="Path to tokenizer (Chatterbox)")
     speechEncoderPath: Optional[str] = Field(None, description="Path to speech encoder ONNX (Chatterbox)")
     embedTokensPath: Optional[str] = Field(None, description="Path to embed tokens ONNX (Chatterbox)")
@@ -46,16 +40,15 @@ class ModelConfig(BaseModel):
     languageModelPath: Optional[str] = Field(None, description="Path to language model ONNX (Chatterbox)")
     referenceAudioPath: Optional[str] = Field(None, description="Path to reference audio WAV file (Chatterbox)")
     variant: str = Field("fp32", description="Model variant (Chatterbox)")
-    
-    # Common fields
+
+    # Supertonic-specific
+    voiceName: Optional[str] = Field(None, description="Voice name (Supertonic, e.g. F1, M1)")
+    speed: Optional[float] = Field(None, description="Speech speed (Supertonic)")
+    numInferenceSteps: Optional[int] = Field(None, description="Denoising steps (Supertonic)")
+
     language: str = Field("en", description="Language code")
-    sampleRate: int = Field(22050, description="Audio sample rate")
+    sampleRate: int = Field(24000, description="Audio sample rate")
     useGPU: bool = Field(False, description="Enable GPU acceleration for inference")
-    
-    @property
-    def is_chatterbox(self) -> bool:
-        """Check if this is a Chatterbox configuration"""
-        return self.modelDir is not None or self.tokenizerPath is not None
 
 
 class Config(BaseModel):
@@ -65,7 +58,7 @@ class Config(BaseModel):
     model: ModelConfig
 
     @classmethod
-    def from_yaml(cls, path: str = "config/config-tts.yaml") -> "Config":
+    def from_yaml(cls, path: str = "config/config-chatterbox.yaml") -> "Config":
         """Load configuration from YAML file"""
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -73,7 +66,5 @@ class Config(BaseModel):
 
 
 if __name__ == "__main__":
-    # Test config loading
     cfg = Config.from_yaml()
     print(cfg.model_dump_json(indent=2))
-

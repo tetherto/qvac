@@ -1,0 +1,1426 @@
+name: Mobile Integration Tests (OCR)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/ocr-onnx"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      package:
+        description: "Full NPM package spec to test (default: @qvac/ocr-onnx@latest)"
+        type: string
+        required: true
+        default: '@qvac/ocr-onnx@latest'
+
+env:
+  NODE_VERSION: 'lts/*'
+  ADDON_NAME: '@qvac/ocr-onnx'
+  PREBUILD_ARTIFACT_PREFIX: 'onnx-ocr-' # Prefix for prebuild artifacts
+  TEST_FRAMEWORK_REF: 'main' # Branch/tag of qvac-test-addon-mobile framework
+  APP_BUNDLE_ID: 'io.tether.test.qvac' # Bundle ID for the test app (same for all addons)
+  PKG_DIR: packages/ocr-onnx
+
+jobs:
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    continue-on-error: true # Don't block PR merges if tests fail
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-24.04
+            runner: ai-run-linux
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Free up disk space
+        if: matrix.platform == 'Android'
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Python || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /usr/share/swift || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Checkout addon repository (monorepo)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Checkout mobile test framework
+        uses: actions/checkout@v6
+        with:
+          repository: tetherto/qvac-test-addon-mobile
+          ref: ${{ env.TEST_FRAMEWORK_REF }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: test-framework
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure scoped registry for @qvac and @tetherto packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+
+          # Configure addon registry
+          cd addon/${{ inputs.workdir || env.PKG_DIR }}
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Configure test-framework registry (always npmjs for public @qvac deps)
+          cd $GITHUB_WORKSPACE/test-framework
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Configure git for private repos
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Install global dependencies
+        run: |
+          echo "Installing global dependencies..."
+          npm install -g @expo/cli@latest
+
+      - name: Download Android prebuilds (from artifacts)
+        if: matrix.platform == 'Android' && !inputs.package
+        uses: actions/download-artifact@v7
+        with:
+          path: addon/${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download iOS prebuilds (from artifacts)
+        if: matrix.platform == 'iOS' && !inputs.package
+        uses: actions/download-artifact@v7
+        with:
+          path: addon/${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download prebuilds from package
+        if: inputs.package
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          PACKAGE_SPEC="${{ inputs.package }}"
+          echo "📦 Downloading $PACKAGE_SPEC from npm for manual trigger..."
+
+          PACKAGE_NAME="${PACKAGE_SPEC%@*}"
+
+          if ! npm pack "$PACKAGE_SPEC"; then
+            echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
+            echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
+            exit 1
+          fi
+
+          # Extract the tarball (pattern matches any addon name)
+          tar -xzf *.tgz
+
+          # Validate prebuilds directory exists
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          fi
+
+          # Move prebuilds to expected location
+          mv package/prebuilds ./prebuilds
+
+          # Cleanup
+          rm -rf package *.tgz
+
+          echo "✅ Prebuilds downloaded from npm:"
+          ls -la prebuilds/
+
+      - name: Verify and prepare prebuilds
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Checking for prebuilds..."
+          if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+            echo "✅ Prebuilds found from artifacts:"
+            ls -la prebuilds/
+          else
+            echo "⚠️  No prebuilds from artifacts, checking source..."
+            if [ -d "prebuilds" ] && [ "$(ls -A prebuilds)" ]; then
+              echo "✅ Prebuilds found in source:"
+              ls -la prebuilds/
+            else
+              echo "❌ ERROR: No prebuilds found!"
+              echo "   This workflow requires prebuilds to be available."
+              echo "   Either:"
+              echo "   1. Run this workflow after prebuild job completes"
+              echo "   2. Or commit prebuilds to the repository"
+              exit 1
+            fi
+          fi
+
+          # Copy mobile prebuilds if needed
+          if npm run mobile:copy-prebuilds 2>/dev/null; then
+            echo "✅ Mobile prebuilds prepared"
+          else
+            echo "⚠️  mobile:copy-prebuilds script not available or failed"
+          fi
+
+      - name: Remove desktop prebuilds to save disk space
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Removing desktop prebuilds to save disk space (keeping Android + iOS)..."
+          echo "Before cleanup:"
+          du -sh prebuilds/* 2>/dev/null || true
+
+          rm -rf prebuilds/darwin-* prebuilds/win32-* prebuilds/linux-* 2>/dev/null || true
+
+          echo "After cleanup (Android + iOS only):"
+          du -sh prebuilds/* 2>/dev/null || true
+          df -h
+
+      - name: Verify test files exist
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Verifying addon has mobile tests..."
+
+          if [ ! -d "test/mobile" ]; then
+            echo "❌ ERROR: test/mobile directory not found!"
+            echo ""
+            echo "This workflow requires the addon to have mobile tests at:"
+            echo "  test/mobile/"
+            exit 1
+          fi
+
+          CJS_COUNT=$(find test/mobile -name "*.cjs" -type f | wc -l)
+          if [ "$CJS_COUNT" -eq 0 ]; then
+            echo "❌ ERROR: No .cjs test files found in test/mobile!"
+            exit 1
+          fi
+
+          echo "✅ Mobile test files found:"
+          ls -la test/mobile/*.cjs
+
+          if [ -d "test/mobile/testAssets" ]; then
+            echo ""
+            echo "✅ Test assets found:"
+            ls -lah test/mobile/testAssets/
+          else
+            echo ""
+            echo "ℹ️  No testAssets directory (optional)"
+          fi
+
+      - name: Install Ninja build tool
+        if: matrix.platform == 'iOS'
+        run: |
+          echo "📦 Installing Ninja build system..."
+          brew install ninja
+          ninja --version
+          echo "✅ Ninja installed successfully"
+
+      - name: Install addon dependencies
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          echo "Installing addon dependencies..."
+          npm install
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        run: npm run test:mobile:validate
+
+      - name: Pack addon
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Packing addon..."
+          if npm run build:pack 2>/dev/null; then
+            echo "✅ Addon packed using build:pack script"
+          else
+            echo "📦 Using npm pack directly..."
+            mkdir -p dist
+            npm pack --pack-destination dist
+          fi
+
+          PACK_FILE=$(ls dist/*.tgz | head -1)
+          if [ -f "$PACK_FILE" ]; then
+            SIZE=$(du -h "$PACK_FILE" | cut -f1)
+            echo "✅ Pack file created: $PACK_FILE (Size: $SIZE)"
+          else
+            echo "❌ Pack file not found in dist/"
+            exit 1
+          fi
+
+      - name: Setup test framework dependencies
+        working-directory: ./test-framework
+        run: |
+          echo "Setting up mobile test framework..."
+          npm install
+          echo "✅ Test framework dependencies installed"
+
+      # Model provisioning for mobile: presigned URLs so the app can download detector + all
+      # recognizers at runtime (same set as desktop integration tests).
+      - name: Configure AWS credentials for model download
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Generate presigned URLs for OCR models
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          echo "🔑 Generating presigned URLs for OCR models..."
+          chmod +x scripts/generate-ocr-presigned-urls.sh
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}/test/mobile/testAssets"
+          mkdir -p "$OUTPUT_DIR"
+          OUTPUT_DIR="$OUTPUT_DIR" ./scripts/generate-ocr-presigned-urls.sh
+          echo "✅ Presigned URLs generated and saved to testAssets"
+          cat "$OUTPUT_DIR/ocr-model-urls.json"
+
+      - name: Copy test assets to testAssets
+        working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "📷 Copying test assets to testAssets..."
+          ASSETS_DIR="test/mobile/testAssets"
+          mkdir -p "$ASSETS_DIR"
+          # Copy test images needed for mobile tests
+          # Rename files to avoid Android resource merger conflicts (same base name, different extension)
+          cp test/images/basic_test.bmp "$ASSETS_DIR/basic_test_bmp.bmp"
+          cp test/images/basic_test.jpg "$ASSETS_DIR/basic_test_jpg.jpg"
+          cp test/images/basic_test.png "$ASSETS_DIR/basic_test_png.png"
+          cp test/images/unrecognizable_text.bmp "$ASSETS_DIR/unrecognizable_text.bmp"
+          cp test/images/portuguese.bmp "$ASSETS_DIR/portuguese.bmp"
+          echo "✅ Test assets copied"
+          ls -la "$ASSETS_DIR/"
+
+      - name: Build test app with addon
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          echo "Building test app with addon..."
+          echo "This will:"
+          echo "  1. Install the addon package"
+          echo "  2. Extract test code from addon's test/mobile/ directory"
+          echo "  3. Auto-detect and order test files by dependencies"
+          echo "  4. Generate backend.cjs with test functions"
+          echo "  5. Generate e2e tests for each test function"
+          echo "  6. Copy testAssets if available"
+          echo "  7. Bundle the app"
+          echo ""
+
+          ADDON_PATH="${GITHUB_WORKSPACE}/addon/${{ inputs.workdir || env.PKG_DIR }}"
+          npm run build "$ADDON_PATH" "$ADDON_PATH/test/mobile"
+
+          echo ""
+          echo "✅ Test app built successfully"
+
+          if [ ! -f "backend/backend.cjs" ]; then
+            echo "❌ ERROR: backend/backend.cjs was not generated!"
+            exit 1
+          fi
+
+          if [ ! -f "e2e/tests/app.test.js" ]; then
+            echo "❌ ERROR: e2e/tests/app.test.js was not generated!"
+            exit 1
+          fi
+
+          if [ ! -f "backend/app.bundle" ]; then
+            echo "❌ ERROR: backend/app.bundle was not created!"
+            exit 1
+          fi
+
+          echo "✅ All required files generated successfully"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "EXTRACTED TEST FUNCTIONS:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ -f "app/testConfig.js" ]; then
+            cat app/testConfig.js
+          fi
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Display build summary
+        if: always()
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 BUILD SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Platform: ${{ matrix.platform }}"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Package: ${{ inputs.package }}"
+          else
+            echo "Addon: ${{ env.ADDON_NAME }} (from PR artifacts)"
+          fi
+          echo ""
+          echo "Generated Files:"
+          echo "  backend/backend.cjs: $([ -f backend/backend.cjs ] && echo '✅' || echo '❌')"
+          echo "  backend/app.bundle: $([ -f backend/app.bundle ] && echo '✅' || echo '❌')"
+          echo "  app/testConfig.js: $([ -f app/testConfig.js ] && echo '✅' || echo '❌')"
+          echo "  app/assetManifest.js: $([ -f app/assetManifest.js ] && echo '✅' || echo '❌')"
+          echo "  e2e/tests/app.test.js: $([ -f e2e/tests/app.test.js ] && echo '✅' || echo '❌')"
+          echo ""
+          echo "Test Assets:"
+          if [ -d "testAssets" ]; then
+            ASSET_COUNT=$(find testAssets -type f | wc -l)
+            echo "  ✅ $ASSET_COUNT file(s) in testAssets/"
+          else
+            echo "  ℹ️  No testAssets (optional)"
+          fi
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # ---------- Android-specific ----------
+      - name: Set up JDK 17
+        if: matrix.platform == 'Android'
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Setup Android SDK
+        if: matrix.platform == 'Android'
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Android project
+        if: matrix.platform == 'Android'
+        working-directory: ./test-framework
+        run: |
+          echo "Generating Android project with Expo..."
+          npx expo prebuild --platform android --clean
+
+      - name: Build Android APK
+        if: matrix.platform == 'Android'
+        id: build_apk
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          echo "Building Android APK for Device Farm..."
+          export JAVA_HOME=$JAVA_HOME_17_X64
+
+          # Bundle JavaScript
+          echo "Bundling JavaScript code..."
+          npm run bundle
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Bundle failed"
+            exit 1
+          fi
+
+          echo "✅ Bundle completed successfully"
+
+          # Build RELEASE APK (not debug) to ensure JS bundle is included
+          # Debug builds skip bundling by default and try to connect to Metro
+          # Release builds embed the JS bundle in the APK
+          cd android
+          echo "Building APK with Gradle (RELEASE with embedded JS bundle)..."
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            --no-daemon \
+            --no-build-cache \
+            --stacktrace
+          cd ..
+
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | grep "release" | grep -v "unaligned" | head -1)
+
+          if [ -f "$APK_PATH" ]; then
+            APK_ABSOLUTE_PATH="${GITHUB_WORKSPACE}/test-framework/$APK_PATH"
+            SIZE=$(du -h "$APK_PATH" | cut -f1)
+            echo "✅ APK built successfully: $APK_PATH (Size: $SIZE)"
+            echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
+            echo "app_type=ANDROID_APP" >> $GITHUB_OUTPUT
+            echo "app_name=test-app-${{ matrix.platform }}.apk" >> $GITHUB_OUTPUT
+
+            echo "Cleaning up build intermediates..."
+            rm -rf android/app/build/intermediates
+            rm -rf android/.gradle
+            df -h
+          else
+            echo "❌ APK file not found"
+            echo "Searching in android/app/build/outputs/apk:"
+            find android/app/build/outputs/apk -type f 2>/dev/null || echo "Directory not found"
+            exit 1
+          fi
+
+      # ---------- iOS-specific ----------
+      - name: Set up Xcode version
+        if: matrix.platform == 'iOS'
+        shell: bash
+        run: |
+          echo "Available Xcode versions:"
+          ls /Applications | grep Xcode || echo "No Xcode apps found"
+
+          echo ""
+          echo "Current Xcode (before switch):"
+          xcodebuild -version
+
+          if [ -d "/Applications/Xcode_16.1.app" ]; then
+            echo ""
+            echo "✅ Switching to Xcode 16.1..."
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
+            echo ""
+            echo "✅ Switching to Xcode 16.1.0..."
+            sudo xcode-select -s /Applications/Xcode_16.1.0.app
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            echo ""
+            echo "⚠️  Using Xcode 16.2 (16.1 not found)..."
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          else
+            echo ""
+            echo "❌ ERROR: No suitable Xcode version found (need >= 16.1)"
+            exit 1
+          fi
+
+          echo ""
+          echo "Current Xcode (after switch):"
+          xcodebuild -version
+
+          echo ""
+          echo "Available iOS SDKs:"
+          xcodebuild -showsdks | grep -i ios
+
+      - name: Install CocoaPods
+        if: matrix.platform == 'iOS'
+        run: |
+          sudo gem install cocoapods
+          pod --version
+
+      - name: Create Keychain and Import Certificate
+        if: matrix.platform == 'iOS'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin <<< $(security cms -D -i $PP_PATH))
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          echo "Provisioning Profile UUID: $PP_UUID"
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+
+          security find-identity -p codesigning -v
+
+      - name: Verify provisioning profile
+        if: matrix.platform == 'iOS'
+        shell: bash
+        run: |
+          echo "🔍 Verifying provisioning profile..."
+          echo "PP_UUID: $PP_UUID"
+
+          PP_FILE=~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision
+          if [ ! -f "$PP_FILE" ]; then
+            echo "❌ Provisioning profile file not found at: $PP_FILE"
+            ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+            exit 1
+          fi
+
+          echo "📋 Provisioning Profile Details:"
+          security cms -D -i "$PP_FILE" > /tmp/profile.plist
+
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          PROFILE_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+          PROFILE_TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" /tmp/profile.plist 2>/dev/null || echo "Unknown")
+
+          # Detect profile type (Development, Ad Hoc, App Store, Enterprise)
+          HAS_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" /tmp/profile.plist 2>/dev/null && echo "yes" || echo "no")
+          PROVISIONS_ALL=$(/usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" /tmp/profile.plist 2>/dev/null || echo "false")
+          HAS_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:get-task-allow" /tmp/profile.plist 2>/dev/null || echo "false")
+
+          if [[ "$PROVISIONS_ALL" == "true" ]]; then
+            PROFILE_TYPE="Enterprise"
+            EXPORT_METHOD="enterprise"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "true" ]]; then
+            PROFILE_TYPE="Development"
+            EXPORT_METHOD="development"
+          elif [[ "$HAS_DEVICES" == "yes" && "$HAS_GET_TASK_ALLOW" == "false" ]]; then
+            PROFILE_TYPE="Ad Hoc"
+            EXPORT_METHOD="ad-hoc"
+          else
+            PROFILE_TYPE="App Store"
+            EXPORT_METHOD="app-store"
+          fi
+
+          echo "  Name: $PROFILE_NAME"
+          echo "  Type: $PROFILE_TYPE"
+          echo "  Export Method: $EXPORT_METHOD"
+          echo "  Application ID: $PROFILE_BUNDLE_ID"
+          echo "  Team ID: $PROFILE_TEAM_ID"
+          echo "  Expected Bundle ID: ${{ env.APP_BUNDLE_ID }}"
+
+          # Save export method for next step
+          echo "EXPORT_METHOD=$EXPORT_METHOD" >> $GITHUB_ENV
+
+          # Extract just the bundle ID part (remove team prefix)
+          BUNDLE_ID_ONLY=$(echo "$PROFILE_BUNDLE_ID" | sed 's/^[^.]*\.//')
+
+          if [[ "$BUNDLE_ID_ONLY" != "${{ env.APP_BUNDLE_ID }}" ]]; then
+            echo ""
+            echo "❌ ERROR: Provisioning profile bundle ID mismatch!"
+            echo "   Profile has: $BUNDLE_ID_ONLY"
+            echo "   Expected: ${{ env.APP_BUNDLE_ID }}"
+            echo ""
+            echo "The provisioning profile was created for a different bundle identifier."
+            echo "Please create a new provisioning profile for: ${{ env.APP_BUNDLE_ID }}"
+            exit 1
+          fi
+
+          echo "✅ Provisioning profile matches expected bundle ID"
+
+      - name: Generate iOS project
+        if: matrix.platform == 'iOS'
+        working-directory: ./test-framework
+        run: |
+          echo "Generating iOS project with Expo..."
+          npx expo prebuild --platform ios --clean
+
+      - name: Install iOS dependencies
+        if: matrix.platform == 'iOS'
+        working-directory: ./test-framework/ios
+        run: |
+          echo "Installing CocoaPods dependencies..."
+          pod install --repo-update
+
+      - name: Build and Archive iOS App
+        if: matrix.platform == 'iOS'
+        id: build_ios
+        working-directory: ./test-framework
+        shell: bash
+        run: |
+          echo "Building iOS app for Device Farm..."
+
+          # Bundle JavaScript first
+          echo "Bundling JavaScript code..."
+          npm run bundle
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Bundle failed"
+            exit 1
+          fi
+
+          echo "✅ Bundle completed successfully"
+
+          # Get scheme name
+          cd ios
+          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+          echo "Detected scheme: $SCHEME_NAME"
+
+          # Debug: Check bundle identifier in project
+          echo "🔍 Checking project configuration..."
+          BUNDLE_ID=$(xcodebuild -showBuildSettings -workspace $SCHEME_NAME.xcworkspace -scheme "$SCHEME_NAME" -configuration Release -destination "generic/platform=iOS" 2>/dev/null | grep PRODUCT_BUNDLE_IDENTIFIER | head -1 | awk '{print $3}')
+          echo "Bundle Identifier in project: $BUNDLE_ID"
+
+          if [[ "$BUNDLE_ID" != "${{ env.APP_BUNDLE_ID }}" ]]; then
+            echo "⚠️  Warning: Bundle ID mismatch in Xcode project!"
+            echo "   Expected: ${{ env.APP_BUNDLE_ID }}"
+            echo "   Found: $BUNDLE_ID"
+          fi
+
+          # Debug: Check provisioning profile
+          echo "🔍 Provisioning profile UUID: $PP_UUID"
+          security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/$PP_UUID.mobileprovision | grep -A 5 "application-identifier\|Name\|TeamIdentifier" | head -20 || echo "Could not read profile details"
+
+          # Archive for iOS device
+          xcodebuild -workspace $SCHEME_NAME.xcworkspace \
+            -scheme "$SCHEME_NAME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            clean archive
+
+      - name: Export IPA
+        if: matrix.platform == 'iOS'
+        id: export_ipa
+        working-directory: ./test-framework/ios
+        shell: bash
+        run: |
+          SCHEME_NAME=$(xcodebuild -list | grep -A 1 "Schemes:" | grep -v "Schemes:" | head -1 | xargs)
+
+          echo "📦 Using export method: $EXPORT_METHOD"
+
+          EXPORT_OPTS_PATH=$RUNNER_TEMP/ExportOptions.plist
+          cat > $EXPORT_OPTS_PATH << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>$EXPORT_METHOD</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ env.APP_BUNDLE_ID }}</key>
+              <string>$PP_UUID</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+          echo "📋 Export options:"
+          cat $EXPORT_OPTS_PATH
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
+            -exportOptionsPlist $EXPORT_OPTS_PATH \
+            -exportPath $RUNNER_TEMP/build
+
+          IPA_FILE=$(find $RUNNER_TEMP/build -name "*.ipa" | head -1)
+          if [ -f "$IPA_FILE" ]; then
+            echo "✅ IPA exported: $IPA_FILE"
+            echo "apk_path=$IPA_FILE" >> $GITHUB_OUTPUT
+            echo "app_type=IOS_APP" >> $GITHUB_OUTPUT
+            echo "app_name=test-app-${{ matrix.platform }}.ipa" >> $GITHUB_OUTPUT
+          else
+            echo "❌ IPA file not found"
+            exit 1
+          fi
+
+      # ---- everything below here is unchanged logic-wise (Device Farm upload/run/monitor/comment) ----
+      # Kept as-is from your workflow (only paths above needed monorepo porting)
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Upload App to Device Farm
+        id: upload_app
+        run: |
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            APP_PATH="${{ steps.build_apk.outputs.apk_path }}"
+            APP_TYPE="${{ steps.build_apk.outputs.app_type }}"
+            APP_NAME="${{ steps.build_apk.outputs.app_name }}"
+          else
+            APP_PATH="${{ steps.export_ipa.outputs.apk_path }}"
+            APP_TYPE="${{ steps.export_ipa.outputs.app_type }}"
+            APP_NAME="${{ steps.export_ipa.outputs.app_name }}"
+          fi
+
+          echo "📤 Uploading app to AWS Device Farm..."
+          UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+            --name "$APP_NAME" \
+            --type "$APP_TYPE" \
+            --output json)
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Error creating upload in Device Farm"
+            echo "Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
+
+          APP_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
+          APP_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
+          echo "app_upload_arn=$APP_UPLOAD_ARN" >> $GITHUB_OUTPUT
+          echo "App upload ARN: $APP_UPLOAD_ARN"
+
+          echo "Uploading app file: $APP_PATH"
+          curl -T "$APP_PATH" "$APP_UPLOAD_URL"
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Error uploading app file using curl"
+            exit 1
+          fi
+
+          # Wait for processing
+          echo "⏳ Waiting for upload to be processed..."
+          MAX_ATTEMPTS=30
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
+            echo "Status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "✅ App upload successful"
+              break
+            fi
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "❌ Upload failed"
+              aws devicefarm get-upload --arn "$APP_UPLOAD_ARN"
+              exit 1
+            fi
+
+            sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+      - name: Verify test package generation
+        working-directory: ./test-framework/e2e
+        run: |
+          echo "Verifying e2e test package..."
+
+          if [ ! -f "package.json" ]; then
+            echo "❌ ERROR: e2e/package.json not found!"
+            exit 1
+          fi
+
+          if [ ! -f "tests/app.test.js" ]; then
+            echo "❌ ERROR: e2e/tests/app.test.js not found!"
+            exit 1
+          fi
+
+          echo "✅ E2E test files verified"
+          echo ""
+          echo "Test package contents:"
+          ls -la
+          echo ""
+          echo "Test files:"
+          ls -la tests/
+
+      - name: Package and Upload Test Package
+        id: upload_test_package
+        working-directory: ./test-framework
+        run: |
+          echo "📦 Packaging e2e tests..."
+          cd e2e
+
+          # Install dependencies before packing
+          npm install
+
+          # Create tarball
+          npm pack
+
+          # Create zip with test files only (no node_modules - will be installed on Device Farm)
+          ZIP_NAME="e2e-tests-${{ matrix.platform }}.zip"
+          zip -r "$ZIP_NAME" \
+            package.json \
+            tests/ \
+            test/ \
+            *.tgz
+
+          echo "📦 Package contents (excluding node_modules):"
+          unzip -l "$ZIP_NAME" | head -20
+
+          # Verify zip was created
+          if [ ! -f "$ZIP_NAME" ]; then
+            echo "❌ ERROR: Failed to create test package zip"
+            exit 1
+          fi
+
+          SIZE=$(du -h "$ZIP_NAME" | cut -f1)
+          echo "✅ Test package created: $ZIP_NAME (Size: $SIZE)"
+
+          mv "$ZIP_NAME" "$GITHUB_WORKSPACE/"
+
+          # Upload test package to AWS Device Farm
+          echo "📤 Uploading test package to AWS Device Farm..."
+          UPLOAD_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+            --name "$ZIP_NAME" \
+            --type "APPIUM_NODE_TEST_PACKAGE" \
+            --output json)
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Error creating test package upload in Device Farm"
+            echo "Response: $UPLOAD_RESPONSE"
+            exit 1
+          fi
+
+          TEST_UPLOAD_URL=$(echo $UPLOAD_RESPONSE | jq -r '.upload.url')
+          TEST_UPLOAD_ARN=$(echo $UPLOAD_RESPONSE | jq -r '.upload.arn')
+          echo "test_package_upload_arn=$TEST_UPLOAD_ARN" >> $GITHUB_OUTPUT
+          echo "Test package upload ARN: $TEST_UPLOAD_ARN"
+
+          echo "Uploading to: $TEST_UPLOAD_URL"
+          curl -T "$GITHUB_WORKSPACE/$ZIP_NAME" "$TEST_UPLOAD_URL"
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Error uploading test package using curl"
+            exit 1
+          fi
+
+          # Wait for processing
+          echo "⏳ Waiting for test package to be processed..."
+          MAX_ATTEMPTS=30
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            STATUS=$(aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN" --query "upload.status" --output text)
+            echo "Test package status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "✅ Test package upload successful"
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "❌ Test package upload failed"
+              aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN"
+              exit 1
+            fi
+
+            sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "❌ Timeout waiting for test package processing"
+            exit 1
+          fi
+
+      - name: Create and Upload Test Spec
+        id: upload_test_spec
+        run: |
+          echo "📝 Creating test spec for custom environment mode..."
+          echo "Platform: ${{ matrix.platform }}"
+
+          # Create platform-specific test spec using printf for precise control
+          # NOTE: Both platforms use a 'before' hook in the wdio config to click the button
+          # This ensures a single Appium session for reliability (no session handoff issues)
+          # The before hook includes crash detection using queryAppState
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            PLATFORM="Android"
+            AUTOMATION="UiAutomator2"
+            HOST_LINE="android_test_host: amazon_linux_2"
+            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
+            # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
+            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+          else
+            PLATFORM="iOS"
+            AUTOMATION="XCUITest"
+            # iOS 18+ requires macos_sequoia test host (supports iOS 15-26)
+            HOST_LINE="ios_test_host: macos_sequoia"
+            BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
+            # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
+            # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
+            # Increased timeout to 30 minutes (1800000ms) for long-running OCR tests
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+          fi
+
+          # Base64 encode the wdio config to safely embed in YAML
+          # Note: macOS base64 doesn't support -w flag (no line wrapping by default)
+          WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
+
+          # Create test spec YAML using printf to avoid variable expansion issues
+          {
+            printf 'version: 0.1\n'
+            if [ -n "$HOST_LINE" ]; then
+              printf '%s\n' "$HOST_LINE"
+            fi
+            printf '\n'
+            printf 'phases:\n'
+            printf '  install:\n'
+            printf '    commands:\n'
+            printf '      - echo "Setting up Node.js environment..."\n'
+            printf '      - export NVM_DIR=$HOME/.nvm\n'
+            printf '      - . $NVM_DIR/nvm.sh 2>/dev/null || true\n'
+            printf '      - nvm install 18 2>/dev/null || true\n'
+            printf '      - nvm use 18 2>/dev/null || true\n'
+            printf '      - node --version || echo "Using system node"\n'
+            printf '\n'
+            printf '  pre_test:\n'
+            printf '    commands:\n'
+            printf '      - echo "Setting up test environment..."\n'
+            printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
+            printf '      - ls -la\n'
+            printf '      - echo "Installing dependencies (clean install)..."\n'
+            printf '      - rm -rf node_modules package-lock.json 2>/dev/null || true\n'
+            printf '      - npm install --legacy-peer-deps 2>&1\n'
+            printf '      - echo "Verifying wdio installation..."\n'
+            printf '      - ls -la node_modules/.bin/ | grep wdio || echo "wdio not found in .bin"\n'
+            printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
+            printf '      - echo "Creating wdio config for Device Farm..."\n'
+            printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
+            printf '      - cat tests/wdio.config.devicefarm.js\n'
+
+          # iOS-specific WebDriverAgent configuration (only for iOS platform)
+          if [ "${{ matrix.platform }}" == "iOS" ]; then
+            printf '      - echo "🔧 Configuring WebDriverAgent for iOS..."\n'
+            printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
+            printf '      - echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"\n'
+          fi
+
+            printf '      - echo "🚀 Starting Appium server..."\n'
+            printf '      - export APPIUM_BASE_PATH=/wd/hub\n'
+            printf '      - |\n'
+            printf '        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \\\n'
+            printf '          --log-no-colors --relaxed-security --default-capabilities \\\n'
+            printf '          "{\\"appium:deviceName\\": \\"$DEVICEFARM_DEVICE_NAME\\", \\\n'
+            printf '          \\"platformName\\": \\"$DEVICEFARM_DEVICE_PLATFORM_NAME\\", \\\n'
+            printf '          \\"appium:app\\": \\"$DEVICEFARM_APP_PATH\\", \\\n'
+            printf '          \\"appium:udid\\":\\"$DEVICEFARM_DEVICE_UDID\\", \\\n'
+            printf '          \\"appium:platformVersion\\": \\"$DEVICEFARM_DEVICE_OS_VERSION\\", \\\n'
+            printf '          \\"appium:chromedriverExecutableDir\\": \\"$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\\", \\\n'
+            printf '          \\"appium:wdaLocalPort\\": 8100, \\\n'
+            printf '          \\"appium:derivedDataPath\\": \\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\\", \\\n'
+            printf '          \\"appium:usePrebuiltWDA\\": true, \\\n'
+            printf '          \\"appium:automationName\\": \\"%s\\"}" \\\n' "$AUTOMATION"
+            printf '          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &\n'
+            printf '      - echo "⏳ Waiting for Appium to be ready (max 30 seconds)..."\n'
+            printf '      - |\n'
+            printf '        appium_initialization_time=0\n'
+            printf '        until curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status"; do\n'
+            printf '          if [[ $appium_initialization_time -gt 30 ]]; then\n'
+            printf '            echo "❌ Appium did not start within 30 seconds. Exiting..."\n'
+            printf '            cat $DEVICEFARM_LOG_DIR/appium.log\n'
+            printf '            exit 1\n'
+            printf '          fi\n'
+            printf '          appium_initialization_time=$((appium_initialization_time + 1))\n'
+            printf '          echo "Waiting for Appium to start on port 4723 (${appium_initialization_time}s/30s)..."\n'
+            printf '          sleep 1\n'
+            printf '        done\n'
+            printf '      - echo "✅ Appium server is ready!"\n'
+            printf '      - curl -s http://0.0.0.0:4723${APPIUM_BASE_PATH}/status || echo "Status check failed"\n'
+            printf '      - echo "ℹ️  Button click handled via WebDriverIO before hook (single session)"\n'
+            printf '\n'
+            printf '  test:\n'
+            printf '    commands:\n'
+            printf '      - echo "🧪 Running WebDriverIO tests..."\n'
+            printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
+            printf '      - echo "Verifying Appium is still running..."\n'
+            printf '      - ps aux | grep appium | grep -v grep || echo "⚠️  Appium process not found"\n'
+            printf '      - curl -s http://127.0.0.1:4723/wd/hub/status || echo "⚠️  Appium status check failed"\n'
+
+            printf '      - echo "Starting wdio test execution..."\n'
+            printf '      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js\n'
+            printf '\n'
+            printf '  post_test:\n'
+            printf '    commands:\n'
+            printf '      - echo "Test completed"\n'
+
+          # iOS-specific: Output captured device logs
+          if [ "${{ matrix.platform }}" == "iOS" ]; then
+            printf '      - echo ""\n'
+            printf '      - echo "📱 ========== iOS Device Console Logs =========="\n'
+            printf '      - |\n'
+            printf '        if [ -f "$DEVICEFARM_LOG_DIR/device_console.log" ]; then\n'
+            printf '          echo "Device console log found, showing BareKit output:"\n'
+            printf '          grep -i "bare\|console\|model\|ocr\|test\|error" "$DEVICEFARM_LOG_DIR/device_console.log" || echo "No matching logs found"\n'
+            printf '        else\n'
+            printf '          echo "No device_console.log file found"\n'
+            printf '        fi\n'
+            printf '      - echo ""\n'
+            printf '      - echo "📋 Available log files:"\n'
+            printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || echo "Log directory not accessible"\n'
+          fi
+            printf '\n'
+            printf 'artifacts:\n'
+            printf '  - $DEVICEFARM_LOG_DIR\n'
+          } > testspec.yml
+
+          echo "Generated test spec:"
+          echo "===================="
+          cat testspec.yml
+          echo "===================="
+
+          echo "📤 Uploading test spec to Device Farm..."
+          SPEC_RESPONSE=$(aws devicefarm create-upload \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+            --name "testspec.yml" \
+            --type "APPIUM_NODE_TEST_SPEC" \
+            --output json)
+
+          SPEC_UPLOAD_URL=$(echo $SPEC_RESPONSE | jq -r '.upload.url')
+          SPEC_UPLOAD_ARN=$(echo $SPEC_RESPONSE | jq -r '.upload.arn')
+          echo "test_spec_arn=$SPEC_UPLOAD_ARN" >> $GITHUB_OUTPUT
+
+          curl -T testspec.yml "$SPEC_UPLOAD_URL"
+
+          # Wait for processing
+          echo "⏳ Waiting for test spec to be processed..."
+          MAX_ATTEMPTS=20
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
+            echo "Test spec status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              echo "✅ Test spec upload successful"
+              break
+            fi
+
+            if [ "$STATUS" = "FAILED" ]; then
+              echo "❌ Test spec upload failed"
+              aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
+              exit 1
+            fi
+
+            sleep 5
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+      - name: Schedule Device Farm Test Run
+        id: schedule_run
+        run: |
+          if [ "${{ matrix.platform }}" == "Android" ]; then
+            POOL_ARN="${{ secrets.ANDROID_DEVICE_POOL_ARN_OCR_FASTTEXT }}"
+          else
+            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_OCR_FASTTEXT }}"
+          fi
+
+          # Set run name based on trigger
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
+          else
+            RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
+          fi
+
+          echo "🚀 Scheduling Device Farm test run..."
+          echo "Platform: ${{ matrix.platform }}"
+          echo "Device Pool ARN: $POOL_ARN"
+          echo "Run Name: $RUN_NAME"
+
+          RUN_ARN=$(aws devicefarm schedule-run \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}" \
+            --device-pool-arn "$POOL_ARN" \
+            --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
+            --name "$RUN_NAME" \
+            --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
+            --query 'run.arn' --output text)
+
+          echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Test run scheduled: $RUN_ARN"
+
+      - name: Monitor Test Run
+        id: monitor_run
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
+          echo "📊 Monitoring test run: $RUN_ARN"
+          echo ""
+
+          MAX_WAIT_TIME=7200 # 120 minutes
+          ELAPSED=0
+
+          while true; do
+            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
+            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
+
+            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
+
+            if [[ "$STATUS" == "COMPLETED" ]]; then
+              echo ""
+              echo "✅ Test run completed!"
+              break
+            fi
+
+            if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
+              echo ""
+              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              exit 1
+            fi
+
+            sleep 30
+            ELAPSED=$((ELAPSED + 30))
+          done
+
+          # Get detailed results
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
+          RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
+          COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 FINAL TEST RESULTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Result: $RESULT"
+          echo ""
+
+          # Get jobs (devices) and extract actual test names
+          echo "📱 Fetching detailed test results..."
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 YOUR TESTS (excluding Setup/Teardown)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          DEVICE_COUNT=0
+          USER_TEST_COUNT=0
+          USER_PASSED=0
+          USER_FAILED=0
+          FAILED_TEST_DETAILS=()
+
+          # Extract project ID and run ID from RUN_ARN for console links
+          # RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
+          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+          # Process each device/job
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_COUNT=$((DEVICE_COUNT + 1))
+            JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
+            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+
+            # Build console link (no region param needed when region is in subdomain)
+            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+
+            if [ "$JOB_RESULT" = "PASSED" ]; then
+              echo "   ✅ $DEVICE_NAME: PASSED"
+              USER_PASSED=$((USER_PASSED + 1))
+            else
+              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+              USER_FAILED=$((USER_FAILED + 1))
+              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+            fi
+
+            USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            echo ""
+          done
+
+          # Show AWS Device Farm console link for the entire run
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔗 AWS DEVICE FARM LINKS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📊 Full Run Details:"
+          echo "   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo ""
+          echo "💡 Tip: Click the link above, then select a device to view:"
+          echo "   • Video recording of the test"
+          echo "   • Screenshots"
+          echo "   • Device logs"
+          echo "   • Test spec output (shows individual test results)"
+          echo ""
+
+          # Summary
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Devices tested: $DEVICE_COUNT"
+          echo "  ✅ Passed: $USER_PASSED"
+          echo "  ❌ Failed: $USER_FAILED"
+          echo ""
+          echo "📋 What these tests verify:"
+          echo "   The E2E tests run on Device Farm check that your app:"
+          echo "   1. Shows 'INITIALIZED' after startup"
+          echo "   2. Runs all test functions from test/mobile/*.cjs"
+          echo "   3. Reports PASS/FAIL for each test function"
+          echo ""
+          echo "💡 If a test times out but the video shows PASS:"
+          echo "   → The app test passed, but E2E gave up waiting too early"
+          echo "   → Check timeout settings in qvac-test-addon-mobile"
+          echo ""
+          echo "Device Farm Counters (includes Setup/Teardown):"
+          echo "$COUNTERS" | jq '.'
+          echo ""
+
+          if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ FAILED TESTS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            for failed_info in "${FAILED_TEST_DETAILS[@]}"; do
+              echo "$failed_info"
+            done
+            echo ""
+          fi
+
+          # Save for PR comment
+          echo "test_result=$RESULT" >> $GITHUB_OUTPUT
+          echo "test_counters<<EOF" >> $GITHUB_OUTPUT
+          echo "$COUNTERS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Extract test counts
+          TOTAL=$(echo $COUNTERS | jq -r '.total // 0')
+          PASSED=$(echo $COUNTERS | jq -r '.passed // 0')
+          FAILED=$(echo $COUNTERS | jq -r '.failed // 0')
+          SKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')
+
+          echo "test_total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "test_passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "test_failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "test_skipped=$SKIPPED" >> $GITHUB_OUTPUT
+
+          # Also save user test counts
+          echo "user_test_count=$USER_TEST_COUNT" >> $GITHUB_OUTPUT
+          echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
+          echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
+
+          # Determine if tests passed or failed
+          # Red status (exit 1) if:
+          #   1. Device Farm overall result is not PASSED, OR
+          #   2. Any of your tests failed
+          # Green status (exit 0) only if all tests passed
+
+          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+            echo ""
+            echo "❌ Device Farm tests failed"
+            if [[ "$RESULT" != "PASSED" ]]; then
+              echo "   Device Farm result: $RESULT"
+            fi
+            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
+            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All Device Farm tests passed!"
+          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
+          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+
+      - name: Comment PR with results
+        if: always() && github.event.pull_request.number
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const runArn = '${{ steps.schedule_run.outputs.run_arn }}' || 'N/A';
+            const jobStatus = '${{ job.status }}';
+            const testResult = '${{ steps.monitor_run.outputs.test_result }}' || 'UNKNOWN';
+            const platform = '${{ matrix.platform }}';
+            const prNumber = context.payload.pull_request.number;
+
+            const total = '${{ steps.monitor_run.outputs.test_total }}' || '0';
+            const passed = '${{ steps.monitor_run.outputs.test_passed }}' || '0';
+            const failed = '${{ steps.monitor_run.outputs.test_failed }}' || '0';
+            const skipped = '${{ steps.monitor_run.outputs.test_skipped }}' || '0';
+
+            let emoji = jobStatus === 'success' ? '✅' : '❌';
+            let statusText = jobStatus === 'success' ? 'PASSED' : 'FAILED';
+
+            // Extract PROJECT_ID and RUN_ID from ARN
+            // ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
+            let deviceFarmLink = 'https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects';
+            const arnMatch = runArn.match(/:run:([^/]+)\/(.+)$/);
+            if (arnMatch) {
+              const projectId = arnMatch[1];
+              const runId = arnMatch[2];
+              deviceFarmLink = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${projectId}/runs/${runId}`;
+            }
+
+            // Build test summary table
+            const testSummary = `
+            | Metric | Count |
+            |--------|-------|
+            | Total Tests | ${total} |
+            | ✅ Passed | ${passed} |
+            | ❌ Failed | ${failed} |
+            | ⏭️ Skipped | ${skipped} |
+            `;
+
+            const packageInfo = '${{ github.event_name }}' === 'workflow_dispatch'
+              ? '${{ inputs.package }}'
+              : '${{ env.ADDON_NAME }} (from PR)';
+
+            const comment = `
+            ## ${emoji} E2E Mobile Test Results - ${platform}
+
+            **Overall Status**: ${statusText}
+            **Device Farm Result**: ${testResult}
+            **Platform**: ${platform}
+            **Package**: ${packageInfo}
+            **PR**: #${prNumber}
+            **Commit**: ${context.sha.substring(0, 7)}
+
+            ### Test Summary
+            ${testSummary}
+
+            ### Links
+            - 🔗 **Device Farm Run**: [View on AWS Device Farm](${deviceFarmLink})
+            - 🔗 **Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            - 📋 **Run ARN**: \`${runArn}\`
+
+            ---
+            *Automated E2E mobile testing powered by AWS Device Farm*
+            *Tests located in: \`test/mobile/\`*
+            `;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+
+

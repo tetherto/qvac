@@ -26,4 +26,7 @@ benchmarks/client/venv/
 benchmarks/server/server.log
 benchmarks/server/store/
 benchmarks/server/models/
+benchmarks/performance/models/
+benchmarks/performance/resolved-models.json
+benchmarks/performance/results/
 *.log
