@@ -54,7 +54,7 @@ endif()
 add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-addon-llama} PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${qvac-lib-inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
   set(ADDON_SOURCES
