@@ -34,7 +34,9 @@ const processJsonRequest = (req, opts = {}) => {
       received += chunk.length
       if (received > limit) {
         cleanup()
-        req.destroy(new ApiError(413, ERRORS.PAYLOAD_TOO_LARGE))
+        // Reject with 413 but keep connection handling in the caller,
+        // so the server can return a structured HTTP response.
+        reject(new ApiError(413, ERRORS.PAYLOAD_TOO_LARGE))
         return
       }
       buffers.push(chunk)
