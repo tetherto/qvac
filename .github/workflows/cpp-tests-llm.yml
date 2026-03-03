@@ -81,8 +81,11 @@ jobs:
           choco upgrade llvm -y
 
       - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        uses: lukka/run-vcpkg@v11.5 # This action sets up vcpkg and installs dependencies from vcpkg.json
+        name: Clone and bootstrap vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg on macOS
