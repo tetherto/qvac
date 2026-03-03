@@ -43,9 +43,8 @@ static std::string validateBergamotFile(
     return file_type + " path is empty";
   }
 
-  // u8path correctly interprets the string as UTF-8 on all platforms,
-  // avoiding the ANSI code-page corruption that std::filesystem::path(std::string)
-  // causes on Windows for non-ASCII paths (e.g. C:\Users\José\...).
+  // u8path interprets the string as UTF-8, avoiding ANSI
+  // code-page corruption on Windows for non-ASCII paths.
   auto pathObj = std::filesystem::u8path(path);
 
   if (!std::filesystem::exists(pathObj)) {
