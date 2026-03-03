@@ -70,7 +70,7 @@ const CHUNK_SIZE = 96000; // ~3s of 16kHz 16-bit mono
 let buffer = Buffer.alloc(0);
 let processing = false;
 
-ffmpeg.stdout!.on("data", (chunk: Buffer) => {
+ffmpeg.stdout.on("data", (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
 
   if (buffer.length >= CHUNK_SIZE && !processing) {
@@ -99,7 +99,6 @@ async function cleanup() {
   ffmpeg.kill();
   await unloadModel({ modelId });
   console.log("Done.");
-  process.exit(0);
 }
 
 process.on("SIGINT", () => void cleanup());
