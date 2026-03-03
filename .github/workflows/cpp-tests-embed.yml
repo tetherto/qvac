@@ -49,7 +49,7 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: windows-11
             platform: windows
             arch: x64
             runner: ai-run-windows11-gpu
@@ -73,9 +73,8 @@ jobs:
         with:
           node-version: lts/*
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Configure Windows runner
-        shell: pwsh
         run: |
           git config --system core.longpaths true
           choco upgrade llvm -y
@@ -137,9 +136,8 @@ jobs:
           sudo apt update
           sudo apt install -y vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Install Vulkan SDK on Windows
-        shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -163,14 +161,22 @@ jobs:
         shell: bash
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        shell: pwsh
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Install Visual Studio Build Tools (Windows)
+        run: |
+          winget install Microsoft.VisualStudio.BuildTools -e --source winget --disable-interactivity --accept-package-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+        shell: powershell
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Clone and bootstrap vcpkg (Windows)
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Configure CMake generator on Windows
-        shell: pwsh
+        shell: powershell
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
