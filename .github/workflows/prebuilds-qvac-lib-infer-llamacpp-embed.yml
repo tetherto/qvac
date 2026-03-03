@@ -514,4 +514,5 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           repo_name: "llamacpp-embed"
           git-token: ${{ secrets.GITHUB_TOKEN }}
+          create-tag: "false"
           

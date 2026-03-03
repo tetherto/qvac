@@ -5,7 +5,10 @@ node_modules/
 .idea/
 prebuilds/
 addon/gst/.meson
-vcpkg/
+vcpkg/cache/
+vcpkg/ports/
+!vcpkg/triplets/
+!vcpkg/toolchains/
 benchmarks/data/
 
 test/unit/all.js
