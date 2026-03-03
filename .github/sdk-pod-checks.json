@@ -13,8 +13,8 @@
     "path": "packages/rag"
   },
   {
-    "package": "qvac-lib-logging",
-    "path": "packages/qvac-lib-logging"
+    "package": "logging",
+    "path": "packages/logging"
   },
   {
     "package": "qvac-lib-error-base",
