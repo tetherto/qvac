@@ -3,69 +3,6 @@ cmake_minimum_required(VERSION 3.25)
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 
-# Force Apple Clang instead of Homebrew LLVM
-if(APPLE)
-  message(STATUS "enter special apple")
-  # Force Apple Clang from Xcode, not Homebrew
-  execute_process(
-    COMMAND xcrun --find clang
-    OUTPUT_VARIABLE XCODE_CLANG
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  execute_process(
-    COMMAND xcrun --find clang++
-    OUTPUT_VARIABLE XCODE_CLANGXX
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-  set(CMAKE_C_COMPILER   ${XCODE_CLANG}   CACHE FILEPATH "Apple Clang C compiler" FORCE)
-  set(CMAKE_CXX_COMPILER ${XCODE_CLANGXX} CACHE FILEPATH "Apple Clang C++ compiler" FORCE)
-
-  # Device SDK
-  execute_process(
-    COMMAND xcrun --sdk iphoneos --show-sdk-path
-    OUTPUT_VARIABLE IOS_SDK
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  # Simulator SDK
-  execute_process(
-    COMMAND xcrun --sdk iphonesimulator --show-sdk-path
-    OUTPUT_VARIABLE SIM_SDK
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  # macOS SDK
-  execute_process(
-    COMMAND xcrun --sdk macosx --show-sdk-path
-    OUTPUT_VARIABLE MACOS_SDK
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-
-  message(STATUS "Apple target arch: ${APPLE_ARCH}")
-  message(STATUS "macOS SDK path: ${MACOS_SDK}")
-  message(STATUS "iOS SDK path:   ${IOS_SDK}")
-  message(STATUS "Sim SDK path:   ${SIM_SDK}")
-
-  # Choose sysroot depending on CMake hint
-  if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(CMAKE_OSX_SYSROOT ${IOS_SDK})
-    set(CMAKE_SYSTEM_PROCESSOR arm64)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3")
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "iOSSimulator")
-    set(CMAKE_OSX_SYSROOT ${SIM_SDK})
-    set(CMAKE_SYSTEM_PROCESSOR ${APPLE_ARCH})
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3")
-  else() # Darwin/macOS host
-    set(CMAKE_OSX_SYSROOT ${MACOS_SDK})
-    set(CMAKE_SYSTEM_NAME Darwin)
-    set(CMAKE_SYSTEM_PROCESSOR ${APPLE_ARCH})
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3")
-  endif()
-endif()
-
-if(BUILD_TESTING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
 if(ENABLE_XNNPACK)
   list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
 endif()
@@ -73,25 +10,15 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Enable overlay triplets for release-only builds (excludes Windows)
 if(APPLE OR UNIX)
-  message("VCPKG_OVERLAY_TRIPLETS override: vcpkg-override-triplets/triplets")
   SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
 endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx
-  VERSION 1.0.0
-  LANGUAGES C CXX)
+project(qvac-onnx VERSION 1.0.0 LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.valgrind.supp
-               ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
 
 include(CTest)
 
@@ -100,241 +27,157 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Note: We use a linker version script (symbols.map) to hide internal symbols
-# instead of visibility presets, so that bare_* symbols remain exportable.
+# Patch LINK_ONLY out of cmake config files for cmake 4.x compatibility
+foreach(_cmake4_fix_file
+    "${VCPKG_INSTALLED_PATH}/share/onnxruntime/onnxruntimeTargets.cmake"
+    "${VCPKG_INSTALLED_PATH}/share/protobuf/protobuf-targets.cmake")
+  if(EXISTS "${_cmake4_fix_file}")
+    file(READ "${_cmake4_fix_file}" _cmake4_fix_content)
+    if(_cmake4_fix_content MATCHES "LINK_ONLY:")
+      string(REGEX REPLACE "\\\\?\\$<LINK_ONLY:([^>]+)>" "\\1"
+        _cmake4_fix_content "${_cmake4_fix_content}")
+      file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
+    endif()
+  endif()
+endforeach()
 
 find_package(unofficial-pthreadpool CONFIG QUIET)
 find_package(onnxruntime CONFIG REQUIRED)
 
 add_bare_module(qvac-onnx EXPORTS)
 
-target_sources(
-  ${qvac-onnx}
-  PRIVATE
-    addon/binding.cpp
-)
-target_include_directories(
-  ${qvac-onnx}
-  PRIVATE
-    src
-)
-target_link_libraries(
-  ${qvac-onnx}
-  PRIVATE
-    onnxruntime::onnxruntime_static
-)
+target_sources(${qvac-onnx} PRIVATE addon/binding.cpp)
+target_include_directories(${qvac-onnx} PRIVATE src)
+target_link_libraries(${qvac-onnx} PRIVATE onnxruntime::onnxruntime_static)
 
-# Use version script to hide internal symbols (including ONNX runtime)
-# This prevents symbol conflicts when multiple ONNX-based addons are loaded
-# Note: We target the _module shared library, not the object library
+# Version script
 if(UNIX AND NOT APPLE)
-  target_link_options(
-    ${qvac-onnx}_module
-    PRIVATE
-      -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
-  )
+  target_link_options(${qvac-onnx}_module PRIVATE
+    -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
 elseif(APPLE)
-  # macOS uses -exported_symbols_list instead of version script
-  target_link_options(
-    ${qvac-onnx}_module
-    PRIVATE
-      -Wl,-exported_symbol,_bare_get_module_name_v0
-      -Wl,-exported_symbol,_bare_register_module_v0
-  )
+  target_link_options(${qvac-onnx}_module PRIVATE
+    -Wl,-exported_symbol,_bare_get_module_name_v0
+    -Wl,-exported_symbol,_bare_register_module_v0)
 endif()
 
-function(strip_libraries LIB_DIR LIB_NAMES)
-  foreach(LIB_NAME IN LISTS LIB_NAMES)
-    set(LIB_PATH "${LIB_DIR}/${LIB_NAME}")
-
-    execute_process(
-      COMMAND ${LLVM_STRIP} --strip-debug "${LIB_PATH}"
-      ERROR_VARIABLE STRIP_ERROR
-    )
-    message("-- Stripping ${LIB_PATH} errorCode: ${STRIP_ERROR}")
-  endforeach()
-endfunction()
-
-if(ANDROID)
-  find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-onnx} PRIVATE ${Vulkan_LIBRARY} log)
-
-  # Strip vcpkg installed binaries for Android builds
-  find_program(LLVM_STRIP llvm-strip)
-
-  if(NOT LLVM_STRIP)
-    message(WARNING "-- llvm-strip not found. Skipping library stripping for Android build.")
+# Strip .bare module
+if(CMAKE_STRIP AND NOT WIN32)
+  if(APPLE)
+    set(_strip_flags -x)
   else()
-    message("-- llvm-strip found: ${LLVM_STRIP}")
-    set(LIBRARIES_TO_STRIP_IN_LIB_DIR libonnx.a libprotobuf.a libprotoc.a)
-
-    set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}")
-    set(LIBS_DIR_PATH "${VCPKG_INSTALLED_DIR}/lib")
-
-    strip_libraries(${LIBS_DIR_PATH} "${LIBRARIES_TO_STRIP_IN_LIB_DIR}")
+    set(_strip_flags -s)
   endif()
-endif()
-
-if(WIN32)
-  target_compile_options(${qvac-onnx} PRIVATE "/utf-8")
-
-  target_compile_definitions(${qvac-onnx} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
-
-  target_link_libraries(
-    ${qvac-onnx}
-    PRIVATE
-      msvcrt.lib
-  )
+  add_custom_command(
+    TARGET ${qvac-onnx}_module POST_BUILD
+    COMMAND ${CMAKE_STRIP} ${_strip_flags} $<TARGET_FILE:${qvac-onnx}_module>
+    COMMENT "Stripping ${qvac-onnx}_module")
 endif()
 
 # --- Export headers, libs, and cmake config for consumer addons ---
-# Consumer addons install @qvac/onnx via npm and use
-#   find_package(qvac-onnx CONFIG REQUIRED PATHS node_modules/@qvac/onnx/prebuilds)
-# This single dependency provides qvac-onnx headers AND onnxruntime (headers,
-# static libraries, cmake targets) so consumers do not need onnxruntime in
-# their own vcpkg.json.
-
 add_library(qvac-onnx-headers INTERFACE)
 set_target_properties(qvac-onnx-headers PROPERTIES EXPORT_NAME qvac-onnx)
-target_include_directories(qvac-onnx-headers
-  INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    $<INSTALL_INTERFACE:include>
-)
-target_link_libraries(qvac-onnx-headers
-  INTERFACE
-    onnxruntime::onnxruntime_static
-)
+target_include_directories(qvac-onnx-headers INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(qvac-onnx-headers INTERFACE onnxruntime::onnxruntime_static)
 
-# --- qvac-onnx own headers ---
-install(
-  DIRECTORY src/qvac-onnx
-  DESTINATION include
-  FILES_MATCHING PATTERN "*.hpp"
-)
+# --- Installs ---
+install(DIRECTORY src/qvac-onnx DESTINATION include FILES_MATCHING PATTERN "*.hpp")
 
-# --- onnxruntime headers and transitive dependency headers ---
-install(
-  DIRECTORY ${VCPKG_INSTALLED_PATH}/include/
-  DESTINATION include
-  PATTERN "gtest" EXCLUDE
-  PATTERN "gmock" EXCLUDE
-  PATTERN "pybind11" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-)
+install(DIRECTORY ${VCPKG_INSTALLED_PATH}/include/ DESTINATION include
+  PATTERN "gtest" EXCLUDE PATTERN "gmock" EXCLUDE PATTERN "pybind11" EXCLUDE
+  PATTERN "benchmark" EXCLUDE PATTERN "Eigen" EXCLUDE PATTERN "eigen3" EXCLUDE
+  PATTERN "unsupported" EXCLUDE)
 
-# --- onnxruntime static libraries and transitive dependency libraries ---
-install(
-  DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/
-  DESTINATION lib
-  FILES_MATCHING
-    PATTERN "*.a"
-    PATTERN "*.lib"
-    PATTERN "pkgconfig" EXCLUDE
-)
+install(DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/ DESTINATION lib
+  FILES_MATCHING PATTERN "*.a" PATTERN "*.lib"
+  PATTERN "pkgconfig" EXCLUDE PATTERN "libprotoc*" EXCLUDE PATTERN "libbenchmark*" EXCLUDE)
 
-# --- cmake configs for onnxruntime and all transitive dependencies ---
-install(
-  DIRECTORY ${VCPKG_INSTALLED_PATH}/share/
-  DESTINATION share
-  PATTERN "gtest" EXCLUDE
-  PATTERN "pybind11" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "cxxopts" EXCLUDE
-  PATTERN "qvac-lint-cpp" EXCLUDE
-  PATTERN "pkgconfig" EXCLUDE
-  PATTERN "vcpkg-cmake" EXCLUDE
-  PATTERN "vcpkg-cmake-config" EXCLUDE
-  PATTERN "vcpkg-boost" EXCLUDE
-)
+install(CODE [=[
+  if(NOT WIN32)
+    find_program(_strip strip)
+    if(_strip)
+      file(GLOB _libs "${CMAKE_INSTALL_PREFIX}/lib/*.a")
+      foreach(_lib IN LISTS _libs)
+        if(APPLE)
+          execute_process(COMMAND "${_strip}" -x "${_lib}" ERROR_QUIET)
+        else()
+          execute_process(COMMAND "${_strip}" --strip-unneeded "${_lib}" ERROR_QUIET)
+        endif()
+      endforeach()
+    endif()
+  endif()
+]=])
 
-# --- Remove protobuf::protoc target from shipped cmake configs ---
-# The protoc compiler binary (tools/protobuf/protoc-*) is not included in
-# the npm package.  Consumers only need protobuf::libprotobuf-lite.
+install(DIRECTORY ${VCPKG_INSTALLED_PATH}/share/ DESTINATION share
+  PATTERN "gtest" EXCLUDE PATTERN "pybind11" EXCLUDE PATTERN "benchmark" EXCLUDE
+  PATTERN "cxxopts" EXCLUDE PATTERN "qvac-lint-cpp" EXCLUDE PATTERN "pkgconfig" EXCLUDE
+  PATTERN "vcpkg-cmake" EXCLUDE PATTERN "vcpkg-cmake-config" EXCLUDE
+  PATTERN "vcpkg-boost" EXCLUDE PATTERN "vcpkg.spdx.json" EXCLUDE
+  PATTERN "vcpkg_abi_info.txt" EXCLUDE PATTERN "copyright" EXCLUDE)
+
+# Patch shipped protobuf cmake configs
 install(CODE [=[
   set(_dir "${CMAKE_INSTALL_PREFIX}/share/protobuf")
-
-  # --- protobuf-targets.cmake ---
   set(_f "${_dir}/protobuf-targets.cmake")
   if(EXISTS "${_f}")
     file(READ "${_f}" _c)
-    # Remove the add_executable block first (before the space-replace alters it)
     string(REPLACE
       "# Create imported target protobuf::protoc\nadd_executable(protobuf::protoc IMPORTED)\n"
-      ""
-      _c "${_c}")
-    # Remove protoc from the expected-targets foreach list
+      "" _c "${_c}")
+    string(REGEX REPLACE
+      "# Create imported target protobuf::libprotoc\nadd_library\\(protobuf::libprotoc STATIC IMPORTED\\)\n\nset_target_properties\\(protobuf::libprotoc PROPERTIES\n[^)]*\\)\n"
+      "" _c "${_c}")
     string(REPLACE " protobuf::protoc" "" _c "${_c}")
+    string(REPLACE " protobuf::libprotoc" "" _c "${_c}")
     file(WRITE "${_f}" "${_c}")
   endif()
-
-  # --- protobuf-targets-release.cmake ---
   set(_f "${_dir}/protobuf-targets-release.cmake")
   if(EXISTS "${_f}")
     file(READ "${_f}" _c)
     string(REGEX REPLACE
       "# Import target .protobuf::protoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::protoc[^\n]*\nset_target_properties\\(protobuf::protoc[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::protoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::protoc[^\n]*\n"
-      ""
-      _c "${_c}")
+      "" _c "${_c}")
+    string(REGEX REPLACE
+      "# Import target .protobuf::libprotoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::libprotoc[^\n]*\nset_target_properties\\(protobuf::libprotoc[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::libprotoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::libprotoc[^\n]*\n"
+      "" _c "${_c}")
     file(WRITE "${_f}" "${_c}")
   endif()
 ]=])
 
-# --- Remove flatbuffers::flatc target files from shipped cmake configs ---
-# The flatc compiler binary (tools/flatbuffers/flatc) is not included in
-# the npm package.  flatbuffers-config.cmake includes these files with
-# OPTIONAL, so removing them is safe.  BuildFlatBuffers.cmake gracefully
-# falls through when the flatbuffers::flatc target is absent.
+# Patch shipped flatbuffers cmake configs
 install(CODE [=[
   set(_dir "${CMAKE_INSTALL_PREFIX}/share/flatbuffers")
-  file(REMOVE
-    "${_dir}/FlatcTargets.cmake"
-    "${_dir}/FlatcTargets-release.cmake"
-  )
+  file(REMOVE "${_dir}/FlatcTargets.cmake" "${_dir}/FlatcTargets-release.cmake")
 ]=])
 
-# --- Remove onnxruntime::onnxruntime (shared) target from shipped cmake configs ---
-# Only static libraries (onnxruntime_static, etc.) are included in the npm
-# package.  The shared library (libonnxruntime.so*) is not shipped.
+# Patch shipped onnxruntime cmake configs
 install(CODE [=[
   set(_dir "${CMAKE_INSTALL_PREFIX}/share/onnxruntime")
-
-  # --- onnxruntimeTargets.cmake ---
   set(_f "${_dir}/onnxruntimeTargets.cmake")
   if(EXISTS "${_f}")
     file(READ "${_f}" _c)
-    # Remove the add_library block and set_target_properties for the shared target.
-    # The block spans from the comment to the closing parenthesis of set_target_properties.
     string(REGEX REPLACE
       "# Create imported target onnxruntime::onnxruntime\nadd_library\\(onnxruntime::onnxruntime SHARED IMPORTED\\)\n\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n"
-      ""
-      _c "${_c}")
-    # Remove from the expected-targets foreach list
+      "" _c "${_c}")
     string(REPLACE " onnxruntime::onnxruntime " " " _c "${_c}")
     file(WRITE "${_f}" "${_c}")
   endif()
-
-  # --- onnxruntimeTargets-release.cmake ---
   set(_f "${_dir}/onnxruntimeTargets-release.cmake")
   if(EXISTS "${_f}")
     file(READ "${_f}" _c)
     string(REGEX REPLACE
       "# Import target .onnxruntime::onnxruntime. for configuration .[^.]*.\nset_property\\(TARGET onnxruntime::onnxruntime APPEND[^\n]*\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n\nlist\\(APPEND _cmake_import_check_targets onnxruntime::onnxruntime \\)\nlist\\(APPEND _cmake_import_check_files_for_onnxruntime::onnxruntime[^\n]*\n"
-      ""
-      _c "${_c}")
+      "" _c "${_c}")
     file(WRITE "${_f}" "${_c}")
   endif()
 ]=])
 
-# --- Add missing find_dependency(unofficial-pthreadpool) to onnxruntimeConfig ---
-# onnxruntime_static links unofficial::pthreadpool (via XNNPack), but
-# onnxruntimeConfig.cmake doesn't call find_dependency for it.
-# The cmake config IS shipped in prebuilds/share/unofficial-pthreadpool/.
+# Add missing find_dependency to shipped onnxruntimeConfig
 install(CODE [=[
   set(_f "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeConfig.cmake")
   if(EXISTS "${_f}")
     file(READ "${_f}" _c)
-    # Insert find_dependency(unofficial-pthreadpool) before the Targets include
     string(REPLACE
       "include(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
       "find_dependency(unofficial-pthreadpool CONFIG)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
@@ -343,69 +186,83 @@ install(CODE [=[
   endif()
 ]=])
 
-# --- qvac-onnx cmake package config ---
-install(
-  TARGETS qvac-onnx-headers
-  EXPORT qvac-onnxTargets
-)
+# Strip LINK_ONLY from shipped cmake configs for cmake 4.x consumers
+install(CODE [=[
+  foreach(_lo_file
+      "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeTargets.cmake"
+      "${CMAKE_INSTALL_PREFIX}/share/protobuf/protobuf-targets.cmake")
+    if(EXISTS "${_lo_file}")
+      file(READ "${_lo_file}" _c)
+      string(CONCAT _lo_re "\\\\?" "\\$" "<LINK_ONLY:([^>]+)>")
+      string(REGEX REPLACE "${_lo_re}" "\\1" _c "${_c}")
+      file(WRITE "${_lo_file}" "${_c}")
+    endif()
+  endforeach()
+]=])
 
-install(
-  EXPORT qvac-onnxTargets
-  NAMESPACE qvac-onnx::
-  DESTINATION share/qvac-onnx/cmake
-)
+# --- qvac-onnx cmake package config ---
+install(TARGETS qvac-onnx-headers EXPORT qvac-onnxTargets)
+install(EXPORT qvac-onnxTargets NAMESPACE qvac-onnx:: DESTINATION share/qvac-onnx/cmake)
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
   cmake/qvac-onnxConfig.cmake.in
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfig.cmake
-  INSTALL_DESTINATION share/qvac-onnx/cmake
-)
+  INSTALL_DESTINATION share/qvac-onnx/cmake)
 write_basic_package_version_file(
   ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfigVersion.cmake
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion
-)
-install(
-  FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfigVersion.cmake
-  DESTINATION share/qvac-onnx/cmake
-)
+  VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfigVersion.cmake
+  DESTINATION share/qvac-onnx/cmake)
+
+# Android-specific
+function(strip_libraries LIB_DIR LIB_NAMES)
+  foreach(LIB_NAME IN LISTS LIB_NAMES)
+    set(LIB_PATH "${LIB_DIR}/${LIB_NAME}")
+    execute_process(COMMAND ${LLVM_STRIP} --strip-debug "${LIB_PATH}" ERROR_VARIABLE STRIP_ERROR)
+    message("-- Stripping ${LIB_PATH} errorCode: ${STRIP_ERROR}")
+  endforeach()
+endfunction()
+
+if(ANDROID)
+  find_package(Vulkan REQUIRED)
+  target_link_libraries(${qvac-onnx} PRIVATE ${Vulkan_LIBRARY} log)
+  find_program(LLVM_STRIP llvm-strip)
+  if(NOT LLVM_STRIP)
+    message(WARNING "-- llvm-strip not found. Skipping library stripping for Android build.")
+  else()
+    set(LIBRARIES_TO_STRIP_IN_LIB_DIR libonnx.a libprotobuf.a)
+    set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}")
+    strip_libraries("${VCPKG_INSTALLED_DIR}/lib" "${LIBRARIES_TO_STRIP_IN_LIB_DIR}")
+  endif()
+endif()
+
+if(WIN32)
+  target_compile_options(${qvac-onnx} PRIVATE "/utf-8")
+  target_compile_definitions(${qvac-onnx} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
+  target_link_libraries(${qvac-onnx} PRIVATE msvcrt.lib)
+endif()
 
 if(BUILD_TESTING)
-    find_package(GTest CONFIG REQUIRED)
-    include(GoogleTest)
-    enable_testing()
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
 
-    # Unit tests: ORT-free (config, tensor types, interface mock)
-    add_executable(
-        unit_tests
-        tests/tensor_types_test.cpp
-        tests/config_test.cpp
-        tests/interface_test.cpp
-    )
-    target_include_directories(unit_tests PRIVATE src)
-    target_link_libraries(unit_tests PRIVATE GTest::gmock_main)
-    gtest_discover_tests(unit_tests)
+  add_executable(unit_tests
+    tests/tensor_types_test.cpp tests/config_test.cpp tests/interface_test.cpp)
+  target_include_directories(unit_tests PRIVATE src)
+  target_link_libraries(unit_tests PRIVATE GTest::gmock_main)
+  gtest_discover_tests(unit_tests)
 
-    # ORT tests: require ONNX Runtime (runtime singleton, type conversions,
-    # session options, session integration with test model fixtures)
-    add_executable(
-        ort_tests
-        tests/runtime_test.cpp
-        tests/type_conversions_test.cpp
-        tests/session_options_test.cpp
-        tests/session_test.cpp
-        tests/addon_shared_runtime_test.cpp
-    )
-    target_include_directories(ort_tests PRIVATE
-        src
-    )
-    target_compile_definitions(ort_tests PRIVATE
-        TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
-    target_link_libraries(ort_tests PRIVATE
-        GTest::gmock_main
-        onnxruntime::onnxruntime_static)
-    gtest_discover_tests(ort_tests)
+  add_executable(ort_tests
+    tests/runtime_test.cpp tests/type_conversions_test.cpp
+    tests/session_options_test.cpp tests/session_test.cpp
+    tests/addon_shared_runtime_test.cpp)
+  target_include_directories(ort_tests PRIVATE src)
+  target_compile_definitions(ort_tests PRIVATE
+    TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+  target_link_libraries(ort_tests PRIVATE GTest::gmock_main onnxruntime::onnxruntime_static)
+  gtest_discover_tests(ort_tests)
 endif()
