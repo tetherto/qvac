@@ -65,7 +65,7 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          - os: windows-2022
+          - os: windows-11
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
