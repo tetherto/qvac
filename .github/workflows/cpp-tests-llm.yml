@@ -78,7 +78,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm
+          choco upgrade llvm -y
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure vcpkg in windows
