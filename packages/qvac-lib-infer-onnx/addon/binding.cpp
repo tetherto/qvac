@@ -1,6 +1,5 @@
 #include <bare.h>
 
-#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -8,6 +7,8 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <qvac-onnx/OnnxSession.hpp>
@@ -34,7 +35,8 @@ namespace {
 // ---------------------------------------------------------------------------
 
 std::mutex sessionsMtx;
-std::vector<std::unique_ptr<onnx_addon::OnnxSession>> sessions;
+std::unordered_map<uint64_t, std::unique_ptr<onnx_addon::OnnxSession>> sessions;
+uint64_t nextSessionId = 0;
 
 // ---------------------------------------------------------------------------
 // JS helpers (thin wrappers over js.h)
@@ -49,7 +51,7 @@ std::vector<js_value_t*> getArgs(js_env_t* env, js_callback_info_t* info) {
   return args;
 }
 
-js_value_t* jsString(js_env_t* env, const std::string& str) {
+js_value_t* jsString(js_env_t* env, std::string_view str) {
   js_value_t* result = nullptr;
   JSCHECK(js_create_string_utf8(env, reinterpret_cast<const utf8_t*>(str.data()),
                                  str.size(), &result));
@@ -137,18 +139,6 @@ void jsArraySet(js_env_t* env, js_value_t* arr, uint32_t index,
   JSCHECK(js_set_element(env, arr, index, val));
 }
 
-js_value_t* jsExternal(js_env_t* env, void* ptr) {
-  js_value_t* result = nullptr;
-  JSCHECK(js_create_external(env, ptr, nullptr, nullptr, &result));
-  return result;
-}
-
-void* fromJsExternal(js_env_t* env, js_value_t* value) {
-  void* result = nullptr;
-  JSCHECK(js_get_value_external(env, value, &result));
-  return result;
-}
-
 /// Get optional string property from a JS object. Returns empty optional
 /// if the property is undefined/null.
 std::optional<std::string> jsOptString(js_env_t* env, js_value_t* obj,
@@ -206,15 +196,13 @@ js_value_t* jsTypedArray(js_env_t* env, const T* data, size_t count) {
 // ---------------------------------------------------------------------------
 
 onnx_addon::OnnxSession& getSession(js_env_t* env, js_value_t* handle) {
-  auto* ptr = fromJsExternal(env, handle);
+  auto id = static_cast<uint64_t>(fromJsInt64(env, handle));
   std::scoped_lock lock{sessionsMtx};
-  auto found = std::find_if(
-      sessions.begin(), sessions.end(),
-      [ptr](auto& s) { return static_cast<void*>(s.get()) == ptr; });
+  auto found = sessions.find(id);
   if (found == sessions.end()) {
     throw std::invalid_argument("Invalid session handle");
   }
-  return **found;
+  return *found->second;
 }
 
 std::string tensorTypeToString(onnx_addon::TensorType type) {
@@ -229,7 +217,7 @@ std::string tensorTypeToString(onnx_addon::TensorType type) {
   }
 }
 
-onnx_addon::TensorType stringToTensorType(const std::string& str) {
+onnx_addon::TensorType stringToTensorType(std::string_view str) {
   if (str == "float32") return onnx_addon::TensorType::FLOAT32;
   if (str == "float16") return onnx_addon::TensorType::FLOAT16;
   if (str == "int64")   return onnx_addon::TensorType::INT64;
@@ -239,7 +227,7 @@ onnx_addon::TensorType stringToTensorType(const std::string& str) {
   return onnx_addon::TensorType::FLOAT32;
 }
 
-onnx_addon::ExecutionProvider stringToProvider(const std::string& str) {
+onnx_addon::ExecutionProvider stringToProvider(std::string_view str) {
   if (str == "cpu")       return onnx_addon::ExecutionProvider::CPU;
   if (str == "auto_gpu")  return onnx_addon::ExecutionProvider::AUTO_GPU;
   if (str == "nnapi")     return onnx_addon::ExecutionProvider::NNAPI;
@@ -249,7 +237,7 @@ onnx_addon::ExecutionProvider stringToProvider(const std::string& str) {
 }
 
 onnx_addon::GraphOptimizationLevel stringToOptimization(
-    const std::string& str) {
+    std::string_view str) {
   if (str == "disable")  return onnx_addon::GraphOptimizationLevel::DISABLE;
   if (str == "basic")    return onnx_addon::GraphOptimizationLevel::BASIC;
   if (str == "extended") return onnx_addon::GraphOptimizationLevel::EXTENDED;
@@ -335,8 +323,9 @@ auto createSession(js_env_t* env, js_callback_info_t* info)
       std::make_unique<onnx_addon::OnnxSession>(modelPath, config);
 
   std::scoped_lock lock{sessionsMtx};
-  auto& handle = sessions.emplace_back(std::move(session));
-  return jsExternal(env, handle.get());
+  auto id = nextSessionId++;
+  sessions.emplace(id, std::move(session));
+  return jsNumber(env, static_cast<int64_t>(id));
 }
 CATCH
 
@@ -434,15 +423,11 @@ auto destroySession(js_env_t* env, js_callback_info_t* info)
     throw std::invalid_argument("Expected 1 argument: session handle");
   }
 
-  auto* ptr = fromJsExternal(env, args[0]);
+  auto id = static_cast<uint64_t>(fromJsInt64(env, args[0]));
   std::scoped_lock lock{sessionsMtx};
-  auto found = std::find_if(
-      sessions.begin(), sessions.end(),
-      [ptr](auto& s) { return static_cast<void*>(s.get()) == ptr; });
-  if (found == sessions.end()) {
+  if (sessions.erase(id) == 0) {
     throw std::invalid_argument("Invalid session handle");
   }
-  sessions.erase(found);
   return nullptr;
 }
 CATCH

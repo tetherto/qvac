@@ -87,7 +87,11 @@ install(DIRECTORY src/qvac-onnx DESTINATION include FILES_MATCHING PATTERN "*.hp
 install(DIRECTORY ${VCPKG_INSTALLED_PATH}/include/ DESTINATION include
   PATTERN "gtest" EXCLUDE PATTERN "gmock" EXCLUDE PATTERN "pybind11" EXCLUDE
   PATTERN "benchmark" EXCLUDE PATTERN "Eigen" EXCLUDE PATTERN "eigen3" EXCLUDE
-  PATTERN "unsupported" EXCLUDE)
+  PATTERN "unsupported" EXCLUDE PATTERN "signature_of_eigen3_matrix_library" EXCLUDE
+  PATTERN "absl" EXCLUDE PATTERN "google" EXCLUDE PATTERN "nlohmann" EXCLUDE
+  PATTERN "boost" EXCLUDE PATTERN "flatbuffers" EXCLUDE PATTERN "onnx" EXCLUDE
+  PATTERN "cxxopts.hpp" EXCLUDE PATTERN "utf8_range.h" EXCLUDE
+  PATTERN "utf8_validity.h" EXCLUDE PATTERN "experiments-config.h" EXCLUDE)
 
 install(DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/ DESTINATION lib
   FILES_MATCHING PATTERN "*.a" PATTERN "*.lib"
@@ -181,6 +185,19 @@ install(CODE [=[
     string(REPLACE
       "include(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
       "find_dependency(unofficial-pthreadpool CONFIG)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
+      _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+]=])
+
+# Patch shipped Eigen3 cmake configs — remove non-existent include dir
+install(CODE [=[
+  set(_f "${CMAKE_INSTALL_PREFIX}/share/eigen3/Eigen3Targets.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    string(REGEX REPLACE
+      "set_target_properties\\(Eigen3::Eigen PROPERTIES\n  INTERFACE_INCLUDE_DIRECTORIES[^\n]*\n\\)\n"
+      ""
       _c "${_c}")
     file(WRITE "${_f}" "${_c}")
   endif()
