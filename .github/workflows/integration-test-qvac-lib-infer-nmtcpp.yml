@@ -159,10 +159,8 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
-          sudo apt-get dist-upgrade -y
-          sudo apt-get install -y mesa-vulkan-drivers gcc-13 g++-13 libstdc++-13-dev
+          sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6

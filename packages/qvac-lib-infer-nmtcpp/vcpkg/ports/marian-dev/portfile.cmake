@@ -6,6 +6,8 @@ vcpkg_from_github(
   PATCHES
     git_revision.patch
     fix-marian-disable-wx.patch
+    preserve-cxx-flags.patch
+    fix-faiss-missing-intrinsics.patch
 )
 
 set(_BUILD_ARCH_OPT "")
