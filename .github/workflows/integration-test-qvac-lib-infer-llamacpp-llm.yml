@@ -25,7 +25,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
+    timeout-minutes: 480
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -51,7 +51,6 @@ jobs:
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
-            timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -73,7 +72,6 @@ jobs:
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
-            timeout_minutes: 480
 
     steps:
       - name: Setup Node.js
