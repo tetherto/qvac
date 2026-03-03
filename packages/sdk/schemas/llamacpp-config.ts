@@ -63,10 +63,14 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>;
 // Base schema - validates types, all fields optional (for client-side validation)
 export const embedConfigBaseSchema = z.object({
   gpuLayers: z.number().int().optional(),
-  device: z.string().optional(),
+  device: z.enum(["gpu", "cpu"]).optional(),
   batchSize: z.number().int().min(1).optional(),
-  ctxSize: z.number().int().min(1).optional(),
-  flashAttention: z.enum(["on", "off"]).optional(),
+  pooling: z.enum(["none", "mean", "cls", "last", "rank"]).optional(),
+  attention: z.enum(["causal", "non-causal"]).optional(),
+  embdNormalize: z.number().int().optional(),
+  flashAttention: z.enum(["on", "off", "auto"]).optional(),
+  mainGpu: z.union([z.number().int().min(0), z.enum(["integrated", "dedicated"])]).optional(),
+  verbosity: verbositySchema.optional(),
 });
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;
@@ -75,7 +79,7 @@ export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;
 export const EMBED_CONFIG_DEFAULTS = {
   gpuLayers: 99,
   device: "gpu",
-  batchSize: 1024,
+  batchSize: 2048,
 } as const satisfies Partial<EmbedConfigInput>;
 
 // Full schema - validates then applies defaults via transform

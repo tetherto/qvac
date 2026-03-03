@@ -25,17 +25,36 @@ import { embed } from "@/server/bare/ops/embed";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
-    device: (embedConfig.device ?? "gpu") as "gpu" | "cpu",
+    device: embedConfig.device as "gpu" | "cpu",
     gpu_layers: `${embedConfig.gpuLayers}` as `${number}`,
     batch_size: `${embedConfig.batchSize}` as `${number}`,
   };
 
-  if (embedConfig.ctxSize) {
-    config["ctx_size"] = `${embedConfig.ctxSize}`;
-  }
-
   if (embedConfig.flashAttention) {
     config.flash_attn = embedConfig.flashAttention;
+  }
+
+  if (embedConfig.pooling) {
+    config.pooling = embedConfig.pooling;
+  }
+
+  if (embedConfig.attention) {
+    config.attention = embedConfig.attention;
+  }
+
+  if (typeof embedConfig.embdNormalize === "number") {
+    config.embed_normalize = `${embedConfig.embdNormalize}`;
+  }
+
+  if (embedConfig.mainGpu !== undefined) {
+    config["main-gpu"] =
+      typeof embedConfig.mainGpu === "number"
+        ? `${embedConfig.mainGpu}`
+        : embedConfig.mainGpu;
+  }
+
+  if (typeof embedConfig.verbosity === "number") {
+    config.verbosity = `${embedConfig.verbosity}`;
   }
 
   return config;
