@@ -39,21 +39,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect version bump
-        id: version
-        uses: ./.github/actions/detect-version-bump
-        with:
-          current_version: ${{ inputs.published_version }}
-          prev_sha: ${{ inputs.prev_sha }}
-          workdir: ${{ inputs.workdir }}
-
       - name: Verify release notes exist in CHANGELOG
-        if: steps.version.outputs.bumped == 'true'
         id: changelog
         working-directory: ${{ inputs.workdir }}
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.current }}"
+          version="${{ inputs.published_version }}"
           changelog_path="CHANGELOG.md"
           release_notes_path="${RUNNER_TEMP}/release-notes-v${version}.md"
 
@@ -84,11 +75,10 @@ jobs:
           echo "release_notes_path=${release_notes_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Create GitHub Release
-        if: steps.version.outputs.bumped == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.repo_name }}-v${{ steps.version.outputs.current }}
-          name: ${{ inputs.release_name }} v${{ steps.version.outputs.current }}
+          tag_name: ${{ inputs.repo_name }}-v${{ inputs.published_version }}
+          name: ${{ inputs.release_name }} v${{ inputs.published_version }}
           body_path: ${{ steps.changelog.outputs.release_notes_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

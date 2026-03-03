@@ -5,8 +5,8 @@
     "pkg_manager": "bun"
   },
   {
-    "package": "qvac-cli",
-    "path": "packages/qvac-cli"
+    "package": "cli",
+    "path": "packages/cli"
   },
   {
     "package": "qvac-lib-rag",
