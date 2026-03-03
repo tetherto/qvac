@@ -17,8 +17,8 @@
     "path": "packages/logging"
   },
   {
-    "package": "qvac-lib-error-base",
-    "path": "packages/qvac-lib-error-base"
+    "package": "error",
+    "path": "packages/error"
   },
   {
     "package": "docs",
