@@ -35,10 +35,11 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-11
             platform: windows
+            runner: ai-run-windows11-gpu
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
 
     env:
@@ -72,14 +73,14 @@ jobs:
           sudo apt update
           sudo apt install vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Configure Windows runner
         working-directory: ${{ env.WORKDIR }}
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm
+          choco upgrade llvm -y
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Install Vulkan SDK on Windows
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -88,10 +89,19 @@ jobs:
           ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
           echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        working-directory: ${{ env.WORKDIR }}
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Install Visual Studio Build Tools (Windows)
+        run: |
+          # This command ensures the "Desktop development with C++" workload is installed if needed
+          winget install Microsoft.VisualStudio.BuildTools -e --source winget --disable-interactivity --accept-package-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+        shell: powershell
+
+      - if: ${{ matrix.os == 'windows-11' }}
+        name: Clone and bootstrap vcpkg (Windows)
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg on macOS
@@ -110,9 +120,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-11' }}
         name: Configure CMake generator on Windows
-        shell: pwsh
+        shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
@@ -120,13 +130,13 @@ jobs:
 
       # mkdir -p is not portable to pwsh; do per-OS
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-2022' }}
+        if: ${{ matrix.os != 'windows-11' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-2022' }}
-        shell: pwsh
+        if: ${{ matrix.os == 'windows-11' }}
+        shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
           New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null

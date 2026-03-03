@@ -126,13 +126,13 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-base
       repo_name: infer-base
-      create-tag: "false"
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
