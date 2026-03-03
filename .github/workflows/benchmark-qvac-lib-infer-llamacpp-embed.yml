@@ -16,7 +16,7 @@ on:
       datasets:
         description: 'Datasets to benchmark (comma-separated or "all"). Available: SciFact, NFCorpus, ArguAna, SCIDOCS, TRECCOVID, FiQA2018'
         required: false
-        default: "TRECCOVID,FiQA2018"
+        default: "ArguAna,NFCorpus,SciFact,SCIDOCS"
         type: string
       ctx_size:
         description: 'Context window size (default: 512) - Max tokens per input'
