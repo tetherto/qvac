@@ -1,13 +1,12 @@
 name: Approval Check Worker
 
 on:
-  issue_comment:
-    types: [created]
   pull_request_review:
     types: [submitted]
     
 jobs:
-  run-when-command:
+  approved:
+    if: github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,30 +19,18 @@ jobs:
       sha: ${{ steps.pr.outputs.sha }}
 
     steps:
-      - name: Get latest PR head SHA
+      - name: Get Pull Request Number
         id: pr
-        uses: actions/github-script@v8
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const prNumber = context.payload.issue.number;
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber,
-            });
-            core.setOutput('number', String(prNumber));
-            core.setOutput('sha', pr.head.sha);
+        run: |
+          echo "number=$(gh pr view --json number -q .number)" >> $GITHUB_OUTPUT
+          echo "number=$(gh pr view --json number -q .sha)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   check-approvals:
-    needs: run-when-command
-    permissions:
-      contents: write
-      pull-requests: write
-      statuses: write
-      issues: write
-    uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update
-    secrets: inherit
-    with:
-      pr_number: ${{ fromJSON(needs.run-when-command.outputs.number) }}
-      pr_sha: ${{ needs.run-when-command.outputs.sha }}
+    needs: approved
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "number: ${{ needs.approved.outputs.number }}"
+          echo "sha: ${{ needs.approved.outputs.sha }}"
