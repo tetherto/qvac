@@ -27,7 +27,7 @@ async function main () {
   console.log('=== Parakeet EOU (Streaming + End-of-Utterance) ===\n')
 
   setupLogger(binding)
-  const modelPath = path.join(__dirname, '..', 'models', 'parakeet-eou-120m-onnx')
+  const modelPath = path.join(__dirname, '..', 'models', 'parakeet-eou-120m-v1-onnx')
   const audioPath = path.join(__dirname, 'samples', 'sample-16k.wav')
 
   if (!validatePaths({ model: modelPath, audio: audioPath })) {

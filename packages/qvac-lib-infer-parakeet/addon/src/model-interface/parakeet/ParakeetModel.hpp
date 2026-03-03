@@ -27,7 +27,6 @@ public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
-  using InputView = std::span<const ValueType>;
   using Output = std::vector<Transcript>;
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -99,7 +98,6 @@ private:
   void loadVocabulary(const std::vector<uint8_t>& vocabData);
   void loadTokenizerJson(const std::vector<uint8_t>& data);
   [[nodiscard]] int64_t getLanguageToken(const std::string& langCode) const;
-  [[nodiscard]] int melBinsForModel() const;
 
   // ── Feature extraction ─────────────────────────────────────────────────
   std::tuple<std::vector<float>, int64_t, bool> computeFeatures(const Input& audio);
@@ -140,6 +138,8 @@ private:
 
   // ── Sortformer diarization ─────────────────────────────────────────────
   std::string runSortformerPipeline(const Input& audio);
+  std::string runSortformerFromMel(const std::vector<float>& melFeatures,
+                                   int64_t numFrames);
   std::vector<float> runSortformerChunked(const std::vector<float>& melFeatures,
                                           int64_t numFrames);
   std::vector<float> medianFilter(const std::vector<float>& preds,
@@ -175,7 +175,6 @@ private:
   static constexpr int64_t PAD_TOKEN = 2;
   static constexpr int64_t EOS_TOKEN = 3;
   static constexpr int64_t NOSPEECH_TOKEN = 1;
-  static constexpr int64_t START_TRANSCRIPT = 4;
   static constexpr int64_t PREDICT_LANG = 22;
   static constexpr int64_t CTC_BLANK_TOKEN = 1024;
 

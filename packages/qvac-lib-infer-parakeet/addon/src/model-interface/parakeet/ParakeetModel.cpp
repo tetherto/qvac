@@ -4,14 +4,12 @@
 #include <chrono>
 #include <cmath>
 #include <complex>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <istream>
 #include <iterator>
 #include <sstream>
 #include <stdexcept>
-#include <vector>
 
 #include <Eigen/Core>
 #include <nlohmann/json.hpp>
@@ -19,7 +17,6 @@
 
 #include "onnxruntime/onnxruntime_cxx_api.h"
 
-#include "addon/ParakeetErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #ifndef M_PI
@@ -290,10 +287,6 @@ int64_t ParakeetModel::getLanguageToken(const std::string& langCode) const {
     }
   }
   return PREDICT_LANG;
-}
-
-int ParakeetModel::melBinsForModel() const {
-  return cfg_.modelType == ModelType::CTC ? CTC_MEL_BINS : MEL_BINS;
 }
 
 std::string ParakeetModel::getName() const {
@@ -1450,6 +1443,11 @@ std::string ParakeetModel::runSortformerPipeline(const Input& audio) {
     return "[No speech detected]";
   }
 
+  return runSortformerFromMel(melFeatures, numFrames);
+}
+
+std::string ParakeetModel::runSortformerFromMel(
+    const std::vector<float>& melFeatures, int64_t numFrames) {
   auto rawPreds = runSortformerChunked(melFeatures, numFrames);
   int64_t totalOutputFrames =
       static_cast<int64_t>(rawPreds.size() / SF_NUM_SPEAKERS);
@@ -1841,7 +1839,7 @@ std::string ParakeetModel::processSortformer(const Input& input) {
 
   std::string text;
   measureTime(encoderMs_, [&]() {
-    text = runSortformerPipeline(input);
+    text = runSortformerFromMel(melFeatures, numFrames);
   });
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
