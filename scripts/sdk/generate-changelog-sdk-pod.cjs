@@ -9,7 +9,7 @@
  *
  * Usage:
  *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk
- *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-lib-rag --base-commit=abc123 --base-version=0.5.0
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=rag --base-commit=abc123 --base-version=0.5.0
  */
 
 const fs = require("fs");

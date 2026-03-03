@@ -9,8 +9,8 @@
     "path": "packages/cli"
   },
   {
-    "package": "qvac-lib-rag",
-    "path": "packages/qvac-lib-rag"
+    "package": "rag",
+    "path": "packages/rag"
   },
   {
     "package": "qvac-lib-logging",
