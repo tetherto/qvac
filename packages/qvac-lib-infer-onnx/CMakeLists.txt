@@ -248,6 +248,38 @@ install(
   PATTERN "vcpkg-boost" EXCLUDE
 )
 
+# --- Remove protobuf::protoc target from shipped cmake configs ---
+# The protoc compiler binary (tools/protobuf/protoc-*) is not included in
+# the npm package.  Consumers only need protobuf::libprotobuf-lite.
+install(CODE [=[
+  set(_dir "${CMAKE_INSTALL_PREFIX}/share/protobuf")
+
+  # --- protobuf-targets.cmake ---
+  set(_f "${_dir}/protobuf-targets.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    # Remove the add_executable block first (before the space-replace alters it)
+    string(REPLACE
+      "# Create imported target protobuf::protoc\nadd_executable(protobuf::protoc IMPORTED)\n"
+      ""
+      _c "${_c}")
+    # Remove protoc from the expected-targets foreach list
+    string(REPLACE " protobuf::protoc" "" _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+
+  # --- protobuf-targets-release.cmake ---
+  set(_f "${_dir}/protobuf-targets-release.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    string(REGEX REPLACE
+      "# Import target .protobuf::protoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::protoc[^\n]*\nset_target_properties\\(protobuf::protoc[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::protoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::protoc[^\n]*\n"
+      ""
+      _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+]=])
+
 # --- qvac-onnx cmake package config ---
 install(
   TARGETS qvac-onnx-headers
