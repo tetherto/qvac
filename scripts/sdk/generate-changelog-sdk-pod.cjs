@@ -454,8 +454,13 @@ function rebuildRootChangelog(packageName) {
     }
 
     let content = fs.readFileSync(versionFile, "utf8").trim();
-    // Transform "# Changelog vX.Y.Z" to "## vX.Y.Z" for aggregated file
-    content = content.replace(/^# Changelog (v\d+\.\d+\.\d+)/, "## $1");
+    // Transform "# Changelog vX.Y.Z" to "## [X.Y.Z]" for aggregated file
+    content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
+    // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
+    content = content.replace(
+      /\(\.\/([^)]+\.md)\)/g,
+      `(./changelog/${version}/$1)`
+    );
     combined += content + "\n\n";
   }
 
