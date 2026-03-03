@@ -71,7 +71,7 @@
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
 - llama-cpp (≥7248.1.2): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
+- Linux requires Clang/LLVM 19 with libc++
 
 ---
 

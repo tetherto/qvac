@@ -6,6 +6,8 @@ const { platform } = require('bare-os')
 const { OcrFasttextInterface } = require('./ocr-fasttext')
 const languages = require('./supportedLanguages')
 const { QvacErrorAddonOcr, ERR_CODES } = require('./lib/error')
+const binding = require('./binding')
+const addonLogging = require('./addonLogging')
 const addon = require.addon.resolve('.')
 
 /**
@@ -310,5 +312,9 @@ class ONNXOcr extends ONNXBase {
 module.exports = {
   ONNXOcr,
   modelClass: ONNXOcr,
-  modelFile: addon
+  modelFile: addon,
+  QvacErrorAddonOcr,
+  ERR_CODES,
+  binding,
+  addonLogging
 }

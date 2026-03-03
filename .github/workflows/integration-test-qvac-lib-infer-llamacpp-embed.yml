@@ -68,13 +68,6 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Linux glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - name: Windows - enable git long paths
         if: ${{ matrix.platform == 'win32' }}
         shell: powershell

@@ -145,13 +145,6 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        name: Install g++-13 on Ubuntu 22.04
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure windows runner
         shell: powershell
@@ -569,3 +562,4 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           repo_name: "llamacpp-llm"
           git-token: ${{ secrets.GITHUB_TOKEN }}
+          create-tag: "false"

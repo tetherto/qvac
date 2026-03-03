@@ -45,6 +45,10 @@ Third-Party Model Licenses
 
   de-tiny-ggml-model-f16
     https://huggingface.co/primeline/whisper-tiny-german-1224
+  detector_craft
+    https://www.jaided.ai/easyocr/modelhub/
+  dolphin-mixtral-2x7b-dop-Q2_K-00001-of-00005
+    https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
   en-base-ggml-model-f16
     https://huggingface.co/openai/whisper-base
   fr-base-ggml-model-f16
@@ -65,6 +69,8 @@ Third-Party Model Licenses
     https://huggingface.co/Helsinki-NLP/opus-mt-en-fr
   ggml-opus-en-it
     https://huggingface.co/Helsinki-NLP/opus-mt-en-it
+  ggml-opus-en-roa
+    https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
   ggml-opus-en-ru
     https://huggingface.co/Helsinki-NLP/opus-mt-en-ru
   ggml-opus-en-zh
@@ -86,6 +92,8 @@ Third-Party Model Licenses
   ggml-opus-mt-en-roa-f16
     https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
   ggml-opus-mt-roa-en-f16
+    https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
+  ggml-opus-roa-en
     https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
   gpt-oss-20b-GGUF
     https://huggingface.co/unsloth/gpt-oss-20b-GGUF
@@ -109,6 +117,8 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
   Qwen3-1.7B-GGUF
     https://huggingface.co/unsloth/Qwen3-1.7B-GGUF
+  Qwen3-1.7B-Q4_0-00001-of-00005
+    https://huggingface.co/unsloth/Qwen3-1.7B-GGUF
   Qwen3-4B-Q4_0-00001-of-00005
     https://huggingface.co/unsloth/Qwen3-4B-GGUF
   Qwen3-4B-Q4_K_M
@@ -117,12 +127,40 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-8B-GGUF
   Qwen3-VL-2B-Instruct-GGUF
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
+  recognizer_arabic
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_bengali
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_cyrillic
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_devanagari
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_japanese
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_kannada
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_korean
+    https://www.jaided.ai/easyocr/modelhub/
   recognizer_latin
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_tamil
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_telugu
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_thai
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_zh_sim
+    https://www.jaided.ai/easyocr/modelhub/
+  recognizer_zh_tra
     https://www.jaided.ai/easyocr/modelhub/
   ru-base-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-base-rus-8
   ru-tiny-ggml-model-f16
     https://huggingface.co/yaroslav0530/whisper-tiny-ru
+  salamandrata_2b_inst_q4-00001-of-00003
+    https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
+  salamandrata_2b_inst_q8-00001-of-00004
+    https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
   salamandraTA-2B-instruct-GGUF
     https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF
   SmolVLM2-500M-Video-Instruct-GGUF
@@ -130,6 +168,10 @@ Third-Party Model Licenses
 
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
+  decoder_joint-model
+    https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  encoder-model
+    https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
   ggml-opus-en-de
     https://huggingface.co/Helsinki-NLP/opus-mt-en-de
   ggml-opus-en-pt
@@ -138,6 +180,10 @@ Third-Party Model Licenses
     https://huggingface.co/Helsinki-NLP/opus-mt-ru-en
   ggml-opus-zh-en
     https://huggingface.co/Helsinki-NLP/opus-mt-zh-en
+  parakeet-tdt-0.6b-v3-onnx
+    https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  preprocessor
+    https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
 
 --- gemma (Gemma Terms of Use) ---
 
@@ -147,6 +193,10 @@ Third-Party Model Licenses
 --- health-ai-developer-foundations (HAI-DEF Terms of Use) ---
 
   medgemma-4b-it-GGUF
+    https://huggingface.co/unsloth/medgemma-4b-it-GGUF
+  medgemma-4b-it-Q4_1-00001-of-00005
+    https://huggingface.co/unsloth/medgemma-4b-it-GGUF
+  medgemma-4b-it-Q8_0-00001-of-00005
     https://huggingface.co/unsloth/medgemma-4b-it-GGUF
 
 --- llama3.2 (Llama 3.2 Community License) ---
@@ -158,6 +208,8 @@ Third-Party Model Licenses
 
 --- mit (MIT License) ---
 
+  chatterbox-multilingual-ONNX
+    https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX
   chatterbox-turbo-ONNX
     https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
   de-base-ggml-model-f16
@@ -176,11 +228,15 @@ Third-Party Model Licenses
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-1B
   ggml-indictrans2-indic-indic-dist-320M-f16
     https://huggingface.co/ai4bharat/indictrans2-indic-indic-dist-320M
+  gte-large_fp16-00001-of-00005
+    https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   tiny_acft_q8_0
+    https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
+  tiny_en_acft_q8_0
     https://voiceinput.futo.org/VoiceInput/tiny_en_acft_q8_0.bin
   whisper-vad
     https://huggingface.co/ggml-org/whisper-vad
@@ -189,41 +245,41 @@ Third-Party Model Licenses
 
 --- mpl-2.0 (Mozilla Public License 2.0) ---
 
-  lex.50.50.aren.s2t
+  model.aren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
-  lex.50.50.csen.s2t
+  model.csen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
-  lex.50.50.enar.s2t
+  model.enar.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
-  lex.50.50.encs.s2t
+  model.encs.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
-  lex.50.50.enes.s2t
+  model.enes.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
-  lex.50.50.enfr.s2t
+  model.enfr.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
-  lex.50.50.enit.s2t
+  model.enit.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
-  lex.50.50.enja.s2t
+  model.enja.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
-  lex.50.50.enpt.s2t
+  model.enpt.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
-  lex.50.50.enru.s2t
+  model.enru.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  lex.50.50.enzh.s2t
+  model.enzh.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
-  lex.50.50.esen.s2t
+  model.esen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
-  lex.50.50.fren.s2t
+  model.fren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
-  lex.50.50.iten.s2t
+  model.iten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
-  lex.50.50.jaen.s2t
+  model.jaen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
-  lex.50.50.pten.s2t
+  model.pten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
-  lex.50.50.ruen.s2t
+  model.ruen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  lex.50.50.zhen.s2t
+  model.zhen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
 
 --- openrail ---
@@ -268,17 +324,17 @@ JavaScript Dependencies
   @qvac/ocr-onnx@0.1.7
     https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext
   @qvac/rag@0.4.2
-  @qvac/registry-client@0.1.5
+  @qvac/registry-client@0.2.0
   @qvac/registry-schema@0.1.1
   @qvac/response@0.1.2
   @qvac/transcription-whispercpp@0.3.18
     https://github.com/tetherto/qvac-lib-infer-whispercpp
-  @qvac/translation-nmtcpp@0.3.7
+  @qvac/translation-nmtcpp@0.3.9
     https://github.com/tetherto/qvac-lib-infer-nmtcpp
-  @qvac/tts-onnx@0.2.13
+  @qvac/tts-onnx@0.5.4
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.7.4
+  b4a@1.7.5
     https://github.com/holepunchto/b4a
   bare-abort-controller@1.0.0
     https://github.com/holepunchto/bare-abort-controller
@@ -288,7 +344,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.2.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.4.3
+  bare-buffer@3.4.4
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
@@ -336,10 +392,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.2.0
     https://github.com/holepunchto/bare-net
-  bare-node-fs@1.0.2
-    https://github.com/holepunchto/bare-node
-  bare-node-os@1.0.1
-    https://github.com/holepunchto/bare-node
   bare-node-stream@1.0.0
     https://github.com/holepunchto/bare-node
   bare-node-worker-threads@1.0.0
@@ -362,13 +414,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-semver
   bare-signals@4.2.0
     https://github.com/holepunchto/bare-signals
-  bare-stream@2.7.0
+  bare-stream@2.8.0
     https://github.com/holepunchto/bare-stream
   bare-structured-clone@1.5.2
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@5.2.2
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.2.4
+  bare-tcp@2.2.7
     https://github.com/holepunchto/bare-tcp
   bare-thread@1.1.6
     https://github.com/holepunchto/bare-thread
@@ -386,7 +438,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.18.0
+  compact-encoding@2.19.0
     https://github.com/compact-encoding/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
@@ -407,9 +459,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdb
   hyperdispatch@1.4.4
     https://github.com/holepunchto/hyperdispatch
-  hyperdrive@13.2.1
+  hyperdrive@13.3.0
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.19.1
+  hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
   index-encoder@3.4.0
     https://github.com/holepunchto/index-encoder
@@ -450,7 +502,7 @@ JavaScript Dependencies
 
 --- isc (ISC License) ---
 
-  @qvac/util-transcription@0.1.4
+  @qvac/util-transcription@0.1.5
     https://github.com/tetherto/qvac-util-transcription
   bits-to-bytes@1.3.0
     https://github.com/holepunchto/bits-to-bytes
@@ -481,7 +533,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.1
+  dht-rpc@6.26.2
     https://github.com/mafintosh/dht-rpc
   events@3.3.0
     https://github.com/Gozala/events
@@ -497,7 +549,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.24.0
+  hypercore@11.26.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
@@ -553,6 +605,8 @@ JavaScript Dependencies
     https://github.com/mafintosh/streamx
   tar-stream@3.1.7
     https://github.com/mafintosh/tar-stream
+  teex@1.0.1
+    https://github.com/mafintosh/teex
   test-tmp@1.4.0
     https://github.com/mafintosh/test-tmp
   time-ordered-set@2.0.1

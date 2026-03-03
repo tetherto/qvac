@@ -192,20 +192,22 @@ async function ensureIndicTransModel () {
 
 /**
  * Ensures Bergamot model is available
- * Uses BERGAMOT_MODEL_PATH env var or downloads from S3 on mobile
  *
- * Desktop: Expects model at ../../model/bergamot/enit/
- *          with .intgemm model file and .spm vocab file
- * Mobile: Downloads from presigned S3 URLs configured in bergamot-urls.json
+ * Download priority:
+ *   1. Check local path (../../model/bergamot/enit/)
+ *   2. Download from Hyperdrive (if key available for the pair)
+ *   3. Fallback: download directly from Firefox Remote Settings CDN
  *
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
  */
 async function ensureBergamotModel () {
+  const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+
+  // Check pre-existing local model first
   const relativeDir = '../../model/bergamot/enit'
   const modelDir = path.resolve(__dirname, relativeDir)
 
-  // Desktop: Check if model directory exists with required files
   if (fs.existsSync(modelDir)) {
     const files = fs.readdirSync(modelDir)
     const hasIntgemm = files.some(f => f.includes('.intgemm'))
@@ -216,34 +218,11 @@ async function ensureBergamotModel () {
     }
   }
 
-  // Desktop without model: Error (should be pre-downloaded)
-  if (!isMobile) {
-    throw new Error(`Bergamot model not found at ${modelDir}. Please download it first.`)
-  }
+  // Not found locally — download via Hyperdrive (primary) or Firefox CDN (fallback)
+  const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
+  const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
 
-  // Mobile: Download from presigned S3 URLs
-  const configFilename = 'bergamot-urls.json'
-  const urlConfig = loadConfigFromAssets(configFilename)
-
-  if (!urlConfig || !urlConfig.modelUrl || !urlConfig.vocabUrl) {
-    throw new Error('Bergamot model URLs config not found - cannot download models on mobile')
-  }
-
-  const writableRoot = global.testDir || '/tmp'
-  const modelsDir = path.join(writableRoot, 'translation-models', 'bergamot', 'enit')
-  fs.mkdirSync(modelsDir, { recursive: true })
-
-  // Download model file
-  const modelFilename = 'model.intgemm.bin'
-  const modelPath = path.join(modelsDir, modelFilename)
-  await downloadFile(urlConfig.modelUrl, modelPath)
-
-  // Download vocab file
-  const vocabFilename = 'vocab.spm'
-  const vocabPath = path.join(modelsDir, vocabFilename)
-  await downloadFile(urlConfig.vocabUrl, vocabPath)
-
-  return modelsDir
+  return ensureBergamotModelFiles('en', 'it', destDir)
 }
 
 // ============================================================================
