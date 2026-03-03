@@ -1,0 +1,39 @@
+Rename ggml backend shared libraries to libqvac-diffusion-ggml-* so they
+do not conflict with any system-installed ggml libraries on Android.
+
+Two changes are required to keep the runtime loader in sync with the
+renamed files:
+
+  1. ggml/src/CMakeLists.txt — set OUTPUT_NAME on each MODULE backend
+     target so the file on disk is libqvac-diffusion-ggml-<backend>.so
+     instead of libggml-<backend>.so.
+
+  2. ggml/src/ggml-backend-reg.cpp — update backend_filename_prefix()
+     so ggml_backend_load_best() searches for the renamed prefix.
+
+--- a/ggml/src/CMakeLists.txt
++++ b/ggml/src/CMakeLists.txt
+@@ -248,6 +248,10 @@ function(ggml_add_backend_library backend)
+     if (GGML_BACKEND_DL)
+         add_library(${backend} MODULE ${ARGN})
+         # write the shared library to the output directory
++        # Rename to avoid conflicts with any system-installed ggml libs.
++        # The backend target is already prefixed "ggml-" (e.g. ggml-cuda),
++        # so OUTPUT_NAME "qvac-diffusion-ggml-cuda" produces libqvac-diffusion-ggml-cuda.so.
++        set_target_properties(${backend} PROPERTIES OUTPUT_NAME "qvac-diffusion-${backend}")
+         set_target_properties(${backend} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+         target_compile_definitions(${backend} PRIVATE GGML_BACKEND_DL)
+         add_dependencies(ggml ${backend})
+
+--- a/ggml/src/ggml-backend-reg.cpp
++++ b/ggml/src/ggml-backend-reg.cpp
+@@ -438,9 +438,9 @@ static ggml_backend_reg_t ggml_backend_load_best(const char * name, bool silent
+ static fs::path backend_filename_prefix() {
+ #ifdef _WIN32
+-    return fs::u8path("ggml-");
++    return fs::u8path("qvac-diffusion-ggml-");
+ #else
+-    return fs::u8path("libggml-");
++    return fs::u8path("libqvac-diffusion-ggml-");
+ #endif
+ }

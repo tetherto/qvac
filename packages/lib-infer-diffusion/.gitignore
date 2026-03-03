@@ -1,0 +1,24 @@
+.vs/
+build/
+dist/
+models/
+store/
+node_modules/
+prebuilds/
+
+.npmrc
+package-lock.json
+.cache/
+.idea/
+**/store/
+.DS_Store
+logs/
+*.gguf
+*.safetensors
+*.ckpt
+*.log
+.clang-tidy
+# Added by qvac-lint-cpp
+.clang-format
+output/
+*.deb

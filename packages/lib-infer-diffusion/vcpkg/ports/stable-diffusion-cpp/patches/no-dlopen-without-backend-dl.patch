@@ -1,0 +1,30 @@
+Guard ggml_backend_load_all_from_path behind GGML_BACKEND_DL.
+
+When GGML_BACKEND_DL=OFF (Linux, macOS, Windows) the backends are
+statically linked and there are no .so files to dlopen. Without this
+guard ggml still walks the executable directory and system paths looking
+for libggml-*.so / libqvac-diffusion-ggml-*.so files, which is both
+wasteful and risks loading an incompatible system-installed library.
+
+ggml-base already receives a PUBLIC compile definition GGML_BACKEND_DL
+when the cmake option is ON (ggml/src/CMakeLists.txt line 217), so the
+preprocessor symbol is available in ggml-backend-reg.cpp without any
+additional cmake change.
+
+--- a/ggml/src/ggml-backend-reg.cpp
++++ b/ggml/src/ggml-backend-reg.cpp
+@@ -539,6 +539,7 @@ void ggml_backend_load_all() {
+ 
+ void ggml_backend_load_all_from_path(const char * dir_path) {
++#ifdef GGML_BACKEND_DL
+ #ifdef NDEBUG
+     bool silent = true;
+ #else
+@@ -558,4 +559,7 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
+     if (backend_path) {
+         ggml_backend_load(backend_path);
+     }
++#else
++    (void)dir_path;
++#endif // GGML_BACKEND_DL
+ }
