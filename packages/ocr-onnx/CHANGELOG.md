@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.1.8] - 2026-02-20
+## [0.1.8] - 2026-02-20
 
 ### Added
 
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced hardcoded S3 bucket references with repository secrets in CI workflows and scripts.
 - Updated registry key handling and switched to subpath imports for Bare compatibility.
 
-# [0.1.6] - 2026-02-09
+## [0.1.6] - 2026-02-09
 
 ### Changed
 
@@ -36,13 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved Portuguese OCR accuracy (minor punctuation corrections in test expected outputs).
 
-# [0.1.2] - 2026-01-16
+## [0.1.2] - 2026-01-16
 
 ### Changed
 
 - Increased detector MAX_IMAGE_SIZE from 512 to 2560 for better text detection accuracy on high-resolution images.
 
-# [0.1.0] - 2026-01-13
+## [0.1.0] - 2026-01-13
 
 ### Added
 
