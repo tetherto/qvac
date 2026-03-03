@@ -28,18 +28,32 @@ docs/
 └── package.json
 ```
 
+## Quick start (fresh clone)
+
+After cloning, the baseline docs pages (Overview, Health, Workbench, Contributors) are committed and will render immediately. The SDK API reference pages are **generated** and not committed. To get them:
+
+```bash
+cd docs/website
+npm install
+cp .env.example .env          # then set SDK_PATH to your qvac-sdk location
+bun run scripts/generate-api-docs.ts 0.7.0
+npm run dev
+```
+
+Without running the generation step, `/docs` will load but SDK API links will 404.
+
 ## Commands
 
 - **Development**: `npm run dev` → http://localhost:3000
 - **Build**: `npm run build`
-- **Docs generation** (when SDK is available): `npm run docs:generate-api -- <version>`
+- **Generate API docs**: `bun run scripts/generate-api-docs.ts <version>` (requires `SDK_PATH` in `.env`)
 - **Update versions list**: `npm run docs:update-versions`
 
 ## API doc generation (SDK path)
 
 The generator reads the **qvac-sdk** package (TypeScript entry and JSDoc). Set **`SDK_PATH`** in a `.env` file (copy from `.env.example` and set your path). Bun loads `.env` automatically when running the scripts. The SDK folder must contain `index.ts` and `tsconfig.json`.
 
-**Generated API docs** (`content/docs/sdk/api/latest/` and `content/docs/sdk/api/v*/`) are in `.gitignore`; generate them locally with `npm run docs:generate-api -- <version>` or in CI.
+**Generated API docs** (`content/docs/sdk/api/latest/`, `content/docs/sdk/api/v*/`, `content/docs/sdk/api/.latest-backup/`) are in `.gitignore`; generate them locally with `bun run scripts/generate-api-docs.ts <version>` or in CI. Baseline content (index, overview, health, workbench, contributors) is committed.
 
 ## CI: Generate API docs (Phase 3)
 
