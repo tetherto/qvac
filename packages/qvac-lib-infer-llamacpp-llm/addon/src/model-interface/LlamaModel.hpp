@@ -13,6 +13,7 @@
 #include "CacheManager.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
+#include "ModelMetadata.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -184,6 +185,7 @@ private:
   GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
+  ModelMetaData metadata_;
   AsyncWeightsLoader asyncWeightsLoader_;
 
   bool isTextLlm_ = false;
