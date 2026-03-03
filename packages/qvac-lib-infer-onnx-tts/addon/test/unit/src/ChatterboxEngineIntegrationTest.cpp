@@ -82,7 +82,7 @@ static std::string getChatterboxModelDir() {
 
 static int runEnsureChatterboxModels(const std::string &packageRoot) {
   std::ostringstream cmd;
-  cmd << "cd \"" << packageRoot << "\" && npm run ensure-chatterbox-models";
+  cmd << "cd \"" << packageRoot << "\" && npm run models:ensure";
   return std::system(cmd.str().c_str());
 }
 
@@ -100,7 +100,7 @@ TEST(ChatterboxEngineIntegrationTest, synthesizeProducesAudioWhenModelsAvailable
 
   if (!chatterboxModelDirReady(fs::path(modelDir))) {
     int ret = runEnsureChatterboxModels(root.string());
-    ASSERT_EQ(0, ret) << "Failed to download Chatterbox models (npm run ensure-chatterbox-models)";
+    ASSERT_EQ(0, ret) << "Failed to download Chatterbox models (npm run models:ensure)";
   }
 
   ASSERT_TRUE(chatterboxModelDirReady(fs::path(modelDir)))
