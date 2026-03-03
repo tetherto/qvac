@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+
+# Make the shipped onnxruntime and its transitive dependencies (abseil,
+# protobuf, re2, eigen, …) discoverable by prepending our install prefix
+# to CMAKE_PREFIX_PATH.  This lets the onnxruntime cmake config's own
+# find_dependency() calls resolve against the libraries we ship.
+list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
+
+include(CMakeFindDependencyMacro)
+find_dependency(onnxruntime CONFIG)
+
+include("${CMAKE_CURRENT_LIST_DIR}/qvac-onnxTargets.cmake")
+check_required_components(qvac-onnx)

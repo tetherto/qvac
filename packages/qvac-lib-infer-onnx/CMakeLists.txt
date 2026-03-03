@@ -187,6 +187,97 @@ if(WIN32)
   )
 endif()
 
+# --- Export headers, libs, and cmake config for consumer addons ---
+# Consumer addons install @qvac/onnx via npm and use
+#   find_package(qvac-onnx CONFIG REQUIRED PATHS node_modules/@qvac/onnx/prebuilds)
+# This single dependency provides qvac-onnx headers AND onnxruntime (headers,
+# static libraries, cmake targets) so consumers do not need onnxruntime in
+# their own vcpkg.json.
+
+add_library(qvac-onnx-headers INTERFACE)
+set_target_properties(qvac-onnx-headers PROPERTIES EXPORT_NAME qvac-onnx)
+target_include_directories(qvac-onnx-headers
+  INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(qvac-onnx-headers
+  INTERFACE
+    onnxruntime::onnxruntime_static
+)
+
+# --- qvac-onnx own headers ---
+install(
+  DIRECTORY src/qvac-onnx
+  DESTINATION include
+  FILES_MATCHING PATTERN "*.hpp"
+)
+
+# --- onnxruntime headers and transitive dependency headers ---
+install(
+  DIRECTORY ${VCPKG_INSTALLED_PATH}/include/
+  DESTINATION include
+  PATTERN "gtest" EXCLUDE
+  PATTERN "gmock" EXCLUDE
+  PATTERN "pybind11" EXCLUDE
+  PATTERN "benchmark" EXCLUDE
+)
+
+# --- onnxruntime static libraries and transitive dependency libraries ---
+install(
+  DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/
+  DESTINATION lib
+  FILES_MATCHING
+    PATTERN "*.a"
+    PATTERN "*.lib"
+    PATTERN "pkgconfig" EXCLUDE
+)
+
+# --- cmake configs for onnxruntime and all transitive dependencies ---
+install(
+  DIRECTORY ${VCPKG_INSTALLED_PATH}/share/
+  DESTINATION share
+  PATTERN "gtest" EXCLUDE
+  PATTERN "pybind11" EXCLUDE
+  PATTERN "benchmark" EXCLUDE
+  PATTERN "cxxopts" EXCLUDE
+  PATTERN "qvac-lint-cpp" EXCLUDE
+  PATTERN "pkgconfig" EXCLUDE
+  PATTERN "vcpkg-cmake" EXCLUDE
+  PATTERN "vcpkg-cmake-config" EXCLUDE
+  PATTERN "vcpkg-boost" EXCLUDE
+)
+
+# --- qvac-onnx cmake package config ---
+install(
+  TARGETS qvac-onnx-headers
+  EXPORT qvac-onnxTargets
+)
+
+install(
+  EXPORT qvac-onnxTargets
+  NAMESPACE qvac-onnx::
+  DESTINATION share/qvac-onnx/cmake
+)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+  cmake/qvac-onnxConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfig.cmake
+  INSTALL_DESTINATION share/qvac-onnx/cmake
+)
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+install(
+  FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/qvac-onnxConfigVersion.cmake
+  DESTINATION share/qvac-onnx/cmake
+)
+
 if(BUILD_TESTING)
     find_package(GTest CONFIG REQUIRED)
     include(GoogleTest)

@@ -38,50 +38,39 @@ Destroys the session and frees resources.
 
 ## Consumer Addon Integration
 
-ONNX-based consumer addons (e.g. OCR, TTS) should depend on **both** `qvac-onnx` and `qvac-lib-inference-addon-cpp`:
+ONNX-based consumer addons (e.g. OCR, TTS) get `@qvac/onnx` via **npm**. This single dependency provides the qvac-onnx C++ headers, the ONNX Runtime headers, static libraries, and cmake targets. Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`. See [INTEGRATION.md](./INTEGRATION.md) for the full step-by-step guide.
 
-- `qvac-onnx` provides the ONNX session management (C++ headers + static onnxruntime)
-- `qvac-lib-inference-addon-cpp` provides JS binding utilities (`JsUtils.hpp`, `JsLogger`, `JsInterface`)
-
-### vcpkg.json
+### package.json
 
 ```json
 {
-  "dependencies": [
-    "qvac-onnx",
-    "qvac-lib-inference-addon-cpp"
-  ]
+  "dependencies": {
+    "@qvac/onnx": "^0.9.0"
+  }
 }
 ```
 
 ### CMakeLists.txt
 
 ```cmake
-find_package(onnxruntime CONFIG REQUIRED)
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
-          "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_package(qvac-onnx CONFIG REQUIRED
+    PATHS node_modules/@qvac/onnx/prebuilds)
 
 add_bare_module(my-addon EXPORTS)
 
-target_include_directories(my-addon PRIVATE
-    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-)
 target_link_libraries(my-addon PRIVATE
-    onnxruntime::onnxruntime_static
+    qvac-onnx::qvac-onnx
 )
 target_compile_definitions(my-addon PRIVATE JS_LOGGER)
 ```
 
-Setting `-DJS_LOGGER` routes ONNX session logs (from the header-only `OnnxSession.hpp`) through `qvac-lib-inference-addon-cpp`'s `JsLogger`, so they appear in the JS logging callback. Without `JS_LOGGER`, ONNX logs go to stdout.
+Linking `qvac-onnx::qvac-onnx` transitively provides the onnxruntime headers and static library. Setting `-DJS_LOGGER` routes ONNX session logs through `qvac-lib-inference-addon-cpp`'s `JsLogger`. Without it, logs go to stdout.
 
 ### C++ usage in consumer addon
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <qvac-onnx/OnnxSession.hpp>
 
-// Use JsUtils for JS bindings, OnnxSession for inference
 onnx_addon::OnnxSession session("model.onnx", config);
 auto results = session.run(input);
 ```
