@@ -25,6 +25,7 @@ function getAudioDevice(): string {
     case "linux":
       return "default";
     case "win32":
+      // Change as per your system
       return "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}";
     default:
       throw new Error(`Unsupported platform: ${platform()}`);
