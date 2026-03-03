@@ -132,6 +132,22 @@ jobs:
     with:
       workdir: packages/qvac-lib-infer-base
       repo_name: infer-base
+      create-tag: "false"
+
+  # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [publish-release-npm]
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.npm_published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "infer-base"
+      release_name: "QVAC Infer Base Lib"
+      published_version: ${{ needs.publish-release-npm.outputs.npm_published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-infer-base"
 
   publish-feature-gpr:
     needs: publish-logic
