@@ -280,6 +280,69 @@ install(CODE [=[
   endif()
 ]=])
 
+# --- Remove flatbuffers::flatc target files from shipped cmake configs ---
+# The flatc compiler binary (tools/flatbuffers/flatc) is not included in
+# the npm package.  flatbuffers-config.cmake includes these files with
+# OPTIONAL, so removing them is safe.  BuildFlatBuffers.cmake gracefully
+# falls through when the flatbuffers::flatc target is absent.
+install(CODE [=[
+  set(_dir "${CMAKE_INSTALL_PREFIX}/share/flatbuffers")
+  file(REMOVE
+    "${_dir}/FlatcTargets.cmake"
+    "${_dir}/FlatcTargets-release.cmake"
+  )
+]=])
+
+# --- Remove onnxruntime::onnxruntime (shared) target from shipped cmake configs ---
+# Only static libraries (onnxruntime_static, etc.) are included in the npm
+# package.  The shared library (libonnxruntime.so*) is not shipped.
+install(CODE [=[
+  set(_dir "${CMAKE_INSTALL_PREFIX}/share/onnxruntime")
+
+  # --- onnxruntimeTargets.cmake ---
+  set(_f "${_dir}/onnxruntimeTargets.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    # Remove the add_library block and set_target_properties for the shared target.
+    # The block spans from the comment to the closing parenthesis of set_target_properties.
+    string(REGEX REPLACE
+      "# Create imported target onnxruntime::onnxruntime\nadd_library\\(onnxruntime::onnxruntime SHARED IMPORTED\\)\n\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n"
+      ""
+      _c "${_c}")
+    # Remove from the expected-targets foreach list
+    string(REPLACE " onnxruntime::onnxruntime " " " _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+
+  # --- onnxruntimeTargets-release.cmake ---
+  set(_f "${_dir}/onnxruntimeTargets-release.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    string(REGEX REPLACE
+      "# Import target .onnxruntime::onnxruntime. for configuration .[^.]*.\nset_property\\(TARGET onnxruntime::onnxruntime APPEND[^\n]*\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n\nlist\\(APPEND _cmake_import_check_targets onnxruntime::onnxruntime \\)\nlist\\(APPEND _cmake_import_check_files_for_onnxruntime::onnxruntime[^\n]*\n"
+      ""
+      _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+]=])
+
+# --- Add missing find_dependency(unofficial-pthreadpool) to onnxruntimeConfig ---
+# onnxruntime_static links unofficial::pthreadpool (via XNNPack), but
+# onnxruntimeConfig.cmake doesn't call find_dependency for it.
+# The cmake config IS shipped in prebuilds/share/unofficial-pthreadpool/.
+install(CODE [=[
+  set(_f "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeConfig.cmake")
+  if(EXISTS "${_f}")
+    file(READ "${_f}" _c)
+    # Insert find_dependency(unofficial-pthreadpool) before the Targets include
+    string(REPLACE
+      "include(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
+      "find_dependency(unofficial-pthreadpool CONFIG)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
+      _c "${_c}")
+    file(WRITE "${_f}" "${_c}")
+  endif()
+]=])
+
 # --- qvac-onnx cmake package config ---
 install(
   TARGETS qvac-onnx-headers
