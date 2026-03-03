@@ -386,9 +386,10 @@ void ParakeetModel::load() {
 }
 
 void ParakeetModel::reload() {
-  if (model_weights_.empty() && !is_loaded_) {
-    throw errors::makeStatus(errors::Code::ModelNotReady,
-                             "Cannot reload: weights were freed after initial load");
+  if (model_weights_.empty()) {
+    throw errors::makeStatus(
+        errors::Code::ModelNotReady,
+        "Cannot reload: model weights were freed after initial load");
   }
   unload();
   load();
@@ -726,6 +727,82 @@ ParakeetModel::runPreprocessor(const Input& audio) {
           numFrames};
 }
 
+void ParakeetModel::stftMelEnergies(
+    const float* source, size_t sourceLen, size_t numFrames,
+    int numMelBins, float logGuard,
+    const std::vector<std::vector<float>>& melFilterbank,
+    std::vector<float>& melSpec) {
+  static const std::vector<float> hannWindow = []() {
+    std::vector<float> w(WIN_LENGTH);
+    for (int i = 0; i < WIN_LENGTH; ++i) {
+      w[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
+    }
+    return w;
+  }();
+
+  static thread_local Eigen::FFT<float> fft;
+  const int numFftBins = FFT_SIZE / 2 + 1;
+  std::vector<float> frame(FFT_SIZE, 0.0f);
+  std::vector<std::complex<float>> spectrum(FFT_SIZE);
+  std::vector<float> powerSpec(numFftBins);
+
+  for (size_t f = 0; f < numFrames; ++f) {
+    size_t startSample = f * HOP_LENGTH;
+    std::fill(frame.begin(), frame.end(), 0.0f);
+
+    for (int i = 0; i < WIN_LENGTH && (startSample + i) < sourceLen; ++i) {
+      frame[i] = source[startSample + i] * hannWindow[i];
+    }
+
+    fft.fwd(spectrum, frame);
+
+    for (int k = 0; k < numFftBins; ++k) {
+      powerSpec[k] = std::norm(spectrum[k]);
+    }
+
+    for (int m = 0; m < numMelBins; ++m) {
+      float melEnergy = 0.0f;
+      for (int k = 0; k < numFftBins; ++k) {
+        melEnergy += melFilterbank[m][k] * powerSpec[k];
+      }
+      melSpec[f * numMelBins + m] = std::log(std::max(melEnergy, logGuard));
+    }
+  }
+}
+
+void ParakeetModel::applyCMVN(std::vector<float>& melSpec,
+                               size_t numFrames, int numMelBins) {
+  std::vector<float> mean(numMelBins, 0.0f);
+  std::vector<float> stddev(numMelBins, 0.0f);
+
+  for (size_t f = 0; f < numFrames; ++f) {
+    for (int m = 0; m < numMelBins; ++m) {
+      mean[m] += melSpec[f * numMelBins + m];
+    }
+  }
+  for (int m = 0; m < numMelBins; ++m) {
+    mean[m] /= static_cast<float>(numFrames);
+  }
+
+  for (size_t f = 0; f < numFrames; ++f) {
+    for (int m = 0; m < numMelBins; ++m) {
+      float diff = melSpec[f * numMelBins + m] - mean[m];
+      stddev[m] += diff * diff;
+    }
+  }
+  for (int m = 0; m < numMelBins; ++m) {
+    stddev[m] =
+        std::sqrt(stddev[m] / static_cast<float>(numFrames) + 1e-10f);
+  }
+
+  for (size_t f = 0; f < numFrames; ++f) {
+    for (int m = 0; m < numMelBins; ++m) {
+      melSpec[f * numMelBins + m] =
+          (melSpec[f * numMelBins + m] - mean[m]) / stddev[m];
+    }
+  }
+}
+
 std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
                                                         int numMelBins) {
   const bool isNemoStyle = (cfg_.modelType == ModelType::EOU ||
@@ -768,14 +845,6 @@ std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
     return {};
   }
 
-  static const std::vector<float> hannWindow = []() {
-    std::vector<float> w(WIN_LENGTH);
-    for (int i = 0; i < WIN_LENGTH; ++i) {
-      w[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
-    }
-    return w;
-  }();
-
   FilterbankKey fbKey{numMelBins, isNemoStyle};
   auto [it, inserted] = filterbanks_.try_emplace(fbKey);
   if (inserted) {
@@ -783,71 +852,16 @@ std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
         ? buildMelFilterbank(numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, 8000.0f, true)
         : buildMelFilterbank(numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f, false);
   }
-  auto& melFilterbank = it->second;
-
-  static thread_local Eigen::FFT<float> fft;
-  const int numFftBins = FFT_SIZE / 2 + 1;
-  std::vector<float> melSpec(numFrames * numMelBins);
-  std::vector<float> frame(FFT_SIZE, 0.0f);
-  std::vector<std::complex<float>> spectrum(FFT_SIZE);
-  std::vector<float> powerSpec(numFftBins);
 
   const float* stftSource = isNemoStyle ? paddedAudio.data() : audioPtr;
   size_t stftLen = isNemoStyle ? paddedAudio.size() : numSamples;
 
-  for (size_t f = 0; f < numFrames; ++f) {
-    size_t startSample = f * HOP_LENGTH;
-    std::fill(frame.begin(), frame.end(), 0.0f);
-
-    for (int i = 0; i < WIN_LENGTH && (startSample + i) < stftLen; ++i) {
-      frame[i] = stftSource[startSample + i] * hannWindow[i];
-    }
-
-    fft.fwd(spectrum, frame);
-
-    for (int k = 0; k < numFftBins; ++k) {
-      powerSpec[k] = std::norm(spectrum[k]);
-    }
-
-    for (int m = 0; m < numMelBins; ++m) {
-      float melEnergy = 0.0f;
-      for (int k = 0; k < numFftBins; ++k) {
-        melEnergy += melFilterbank[m][k] * powerSpec[k];
-      }
-      melSpec[f * numMelBins + m] = std::log(std::max(melEnergy, logGuard));
-    }
-  }
+  std::vector<float> melSpec(numFrames * numMelBins);
+  stftMelEnergies(stftSource, stftLen, numFrames, numMelBins,
+                  logGuard, it->second, melSpec);
 
   if (!isNemoStyle) {
-    std::vector<float> mean(numMelBins, 0.0f);
-    std::vector<float> stddev(numMelBins, 0.0f);
-
-    for (size_t f = 0; f < numFrames; ++f) {
-      for (int m = 0; m < numMelBins; ++m) {
-        mean[m] += melSpec[f * numMelBins + m];
-      }
-    }
-    for (int m = 0; m < numMelBins; ++m) {
-      mean[m] /= static_cast<float>(numFrames);
-    }
-
-    for (size_t f = 0; f < numFrames; ++f) {
-      for (int m = 0; m < numMelBins; ++m) {
-        float diff = melSpec[f * numMelBins + m] - mean[m];
-        stddev[m] += diff * diff;
-      }
-    }
-    for (int m = 0; m < numMelBins; ++m) {
-      stddev[m] =
-          std::sqrt(stddev[m] / static_cast<float>(numFrames) + 1e-10f);
-    }
-
-    for (size_t f = 0; f < numFrames; ++f) {
-      for (int m = 0; m < numMelBins; ++m) {
-        melSpec[f * numMelBins + m] =
-            (melSpec[f * numMelBins + m] - mean[m]) / stddev[m];
-      }
-    }
+    applyCMVN(melSpec, numFrames, numMelBins);
   }
 
   return melSpec;
@@ -1052,9 +1066,10 @@ std::vector<float> ParakeetModel::runCTCModel(
   }
 
   std::vector<int64_t> featShape = {1, numFrames, CTC_MEL_BINS};
-  std::vector<float> featCopy(melFeatures);
+  // ONNX Runtime reads from this buffer but its API takes non-const pointer.
+  auto* featData = const_cast<float*>(melFeatures.data());
   Ort::Value featTensor = Ort::Value::CreateTensor<float>(
-      *memory_info_, featCopy.data(), featCopy.size(), featShape.data(),
+      *memory_info_, featData, melFeatures.size(), featShape.data(),
       featShape.size());
 
   std::vector<int64_t> maskData(numFrames, 1);
@@ -1872,12 +1887,7 @@ void ParakeetModel::process(const Input& input) {
 
   if (modelReady) {
     try {
-      switch (cfg_.modelType) {
-        case ModelType::CTC:        text = processCTC(input);        break;
-        case ModelType::EOU:        text = processEOU(input);        break;
-        case ModelType::SORTFORMER: text = processSortformer(input); break;
-        default:                    text = processTDT(input);        break;
-      }
+      text = runInferencePipeline(input);
     } catch (const std::exception& e) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
            std::string("Inference error: ") + e.what());

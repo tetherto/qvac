@@ -103,6 +103,12 @@ private:
   // ── Feature extraction ─────────────────────────────────────────────────
   std::pair<std::vector<float>, int64_t> runPreprocessor(const Input& audio);
   std::vector<float> computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
+  void stftMelEnergies(const float* source, size_t sourceLen,
+                       size_t numFrames, int numMelBins, float logGuard,
+                       const std::vector<std::vector<float>>& melFilterbank,
+                       std::vector<float>& melSpec);
+  static void applyCMVN(std::vector<float>& melSpec,
+                         size_t numFrames, int numMelBins);
 
   // ── Per-model-type pipelines ───────────────────────────────────────────
   std::string runInferencePipeline(const Input& audio);
