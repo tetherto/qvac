@@ -84,7 +84,7 @@ jobs:
         name: Install Visual Studio Build Tools (Windows)
         run: |
           # This command ensures the "Desktop development with C++" workload is installed if needed
-          winget install Microsoft.VisualStudio.BuildTools --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+          winget install Microsoft.VisualStudio.BuildTools -e --source winget --disable-interactivity --accept-package-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
         shell: powershell
 
       - if: ${{ matrix.os == 'windows-11' }}
