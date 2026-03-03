@@ -11,7 +11,7 @@ on:
       - "packages/qvac-sdk/**"
       - "packages/cli/**"
       - "packages/rag/**"
-      - "packages/qvac-lib-logging/**"
+      - "packages/logging/**"
       - "packages/qvac-lib-error-base/**"
       - "packages/docs/**"
     branches:

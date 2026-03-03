@@ -11,7 +11,7 @@ The following packages belong to the SDK pod:
 - `packages/cli`
 - `packages/docs`
 - `packages/rag`
-- `packages/qvac-lib-logging`
+- `packages/logging`
 - `packages/qvac-lib-error-base`
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
@@ -26,7 +26,7 @@ globs:
   - packages/cli/**
   - packages/docs/**
   - packages/rag/**
-  - packages/qvac-lib-logging/**
+  - packages/logging/**
   - packages/qvac-lib-error-base/**
 ```
 

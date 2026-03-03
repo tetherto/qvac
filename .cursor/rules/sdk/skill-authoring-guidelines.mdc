@@ -98,7 +98,7 @@ The description is critical for skill discovery.
 description:
   Generate PR descriptions for SDK pod packages following template and
   format rules. Use when creating PRs for qvac-sdk, docs, rag,
-  qvac-lib-logging, or qvac-lib-error-base.
+  logging, or qvac-lib-error-base.
 ```
 
 ## SKILL.md Body Structure
@@ -117,7 +117,7 @@ Brief one-line description.
 - packages/qvac-sdk
 - packages/docs
 - packages/rag
-- packages/qvac-lib-logging
+- packages/logging
 - packages/qvac-lib-error-base
 
 **Use when:**

@@ -1,6 +1,6 @@
-# qvac-lib-logging
+# logging
 
-`qvac-lib-logging` wraps any logger you supply and normalizes the interface.
+`logging` wraps any logger you supply and normalizes the interface.
 
 ## Installation
 
