@@ -104,7 +104,7 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure CMake generator on Windows
-        shell: pwsh
+        shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
@@ -118,7 +118,7 @@ jobs:
 
       - name: Create vcpkg cache location (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
-        shell: pwsh
+        shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
           New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
