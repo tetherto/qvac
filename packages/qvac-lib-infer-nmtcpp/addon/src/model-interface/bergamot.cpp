@@ -7,10 +7,6 @@
 #include <filesystem>
 #include <fstream>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 #include "translator/service.h"
 #include "translator/response.h"
 #include "translator/response_options.h"
@@ -36,23 +32,6 @@ static const char* cpuTypeToString(intgemm::CPUType type) {
 }
 #endif
 
-// Helper to build a std::filesystem::path from a UTF-8 encoded std::string.
-// On Windows, std::filesystem::path(std::string) uses the ANSI code page,
-// which silently corrupts paths containing characters outside that code page
-// (e.g. C:\Users\José\...).  We convert via MultiByteToWideChar to avoid this.
-static std::filesystem::path fsPathFromUtf8(const std::string& utf8) {
-#ifdef _WIN32
-  if (utf8.empty()) return {};
-  int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
-  if (wlen > 0) {
-    std::wstring wide(static_cast<size_t>(wlen - 1), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &wide[0], wlen);
-    return std::filesystem::path(wide);
-  }
-#endif
-  return std::filesystem::path(utf8);
-}
-
 // Helper function to validate file paths and extensions
 // Returns empty string on success, error message on failure
 static std::string validateBergamotFile(
@@ -64,7 +43,10 @@ static std::string validateBergamotFile(
     return file_type + " path is empty";
   }
 
-  auto pathObj = fsPathFromUtf8(path);
+  // u8path correctly interprets the string as UTF-8 on all platforms,
+  // avoiding the ANSI code-page corruption that std::filesystem::path(std::string)
+  // causes on Windows for non-ASCII paths (e.g. C:\Users\José\...).
+  auto pathObj = std::filesystem::u8path(path);
 
   if (!std::filesystem::exists(pathObj)) {
     return file_type + " file not found: " + path;
