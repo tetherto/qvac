@@ -10,7 +10,7 @@ The following packages belong to the SDK pod:
 - `packages/qvac-sdk`
 - `packages/cli`
 - `packages/docs`
-- `packages/qvac-lib-rag`
+- `packages/rag`
 - `packages/qvac-lib-logging`
 - `packages/qvac-lib-error-base`
 
@@ -25,7 +25,7 @@ globs:
   - packages/qvac-sdk/**
   - packages/cli/**
   - packages/docs/**
-  - packages/qvac-lib-rag/**
+  - packages/rag/**
   - packages/qvac-lib-logging/**
   - packages/qvac-lib-error-base/**
 ```

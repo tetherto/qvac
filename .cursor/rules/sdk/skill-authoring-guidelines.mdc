@@ -97,7 +97,7 @@ The description is critical for skill discovery.
 ```yaml
 description:
   Generate PR descriptions for SDK pod packages following template and
-  format rules. Use when creating PRs for qvac-sdk, docs, qvac-lib-rag,
+  format rules. Use when creating PRs for qvac-sdk, docs, rag,
   qvac-lib-logging, or qvac-lib-error-base.
 ```
 
@@ -116,7 +116,7 @@ Brief one-line description.
 
 - packages/qvac-sdk
 - packages/docs
-- packages/qvac-lib-rag
+- packages/rag
 - packages/qvac-lib-logging
 - packages/qvac-lib-error-base
 
