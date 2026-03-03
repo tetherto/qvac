@@ -8,8 +8,6 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
-/** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
@@ -39,7 +37,7 @@ class LlmLlamacpp extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._lastJobResult = Promise.resolve()
+    this._hasActiveResponse = false
   }
 
   /**
@@ -158,6 +156,7 @@ class LlmLlamacpp extends BaseInference {
         currentJobResponse.failed(new Error('Model was unloaded'))
         this._deleteJobMapping('OnlyOneJob')
       }
+      this._hasActiveResponse = false
       await super.unload()
     })
   }
@@ -168,8 +167,13 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
-    this.logger.info('Starting inference with prompt:', prompt)
     return this._withExclusiveRun(async () => {
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      this.logger.info('Starting inference with prompt:', prompt)
+
       // Separate media messages from text messages
       const textMessages = []
       const mediaItems = []
@@ -196,27 +200,6 @@ class LlmLlamacpp extends BaseInference {
       // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
 
-      // Make sure all events from previous one are done and will not
-      // affect our new job. addon-cpp C++ guarantees every accepted job will
-      // end with output or exception after finishing processing.
-      // - If timeout is hit, exception should surface to avoid infinite await.
-      // - It is expected that we briefly wait for the previous job to settle
-      //   before throwing a busy error.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
-        }, PREVIOUS_JOB_WAIT_MS)
-        this._lastJobResult
-          // If last job finished.
-          .then(() => { clearTimeout(timer); resolve() })
-          // If last job threw, it still finished and no more events will be generated.
-          .catch(() => { clearTimeout(timer); resolve() })
-      })
-
-      // At this point, previous job is not using 'OnlyOneJob'
-      // slot anymore, so we can safely overwrite it with new response.
-      // We need to create response before running the job,
-      // any events right after successful runJob are not lost.
       const response = this._createResponse('OnlyOneJob')
 
       // addon-cpp C++ guarantees no events will be generated
@@ -241,8 +224,10 @@ class LlmLlamacpp extends BaseInference {
         throw new Error(msg)
       }
 
-      // Store the finish promise so the next run can wait on it.
-      this._lastJobResult = response.await()
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       this.logger.info('Inference job started successfully')
 

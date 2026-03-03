@@ -1,0 +1,505 @@
+name: Prebuilds (Stable Diffusion)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with ('latest' by default)"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/lib-infer-diffusion"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      tag:
+        description: "Tag to publish"
+        type: string
+        required: false
+        default: "dev"
+      publish_target:
+        description: "Where to publish: 'npm', 'gpr' or 'both'"
+        type: string
+        required: false
+        default: ""
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/lib-infer-diffusion"
+    outputs:
+      published_version:
+        description: "The version that was published"
+        value: ${{ jobs.publish-npm.outputs.published_version || jobs.publish-gpr.outputs.published_version }}
+
+env:
+  WORKDIR: ${{ inputs.workdir }}
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/${{ inputs.workdir || 'packages/lib-infer-diffusion' }}/vcpkg/cache,readwrite
+
+    steps:
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+      - name: print env
+        run: printenv
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Echo workflow inputs
+        shell: bash
+        run: |
+          echo "Workflow inputs:"
+          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Workdir: ${{ env.WORKDIR }}"
+          echo "Matrix platform: ${{ matrix.platform }}"
+          echo "Matrix arch: ${{ matrix.arch }}"
+          echo "Matrix tags: ${{ matrix.tags }}"
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Install llvm-19
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        shell: powershell
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        run: npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        name: Rename win sdk folder to disable it
+        shell: powershell
+        run: |
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ matrix.os == 'macos-14' || matrix.os == 'macos-15-intel' }}
+        name: Install vcpkg in macos
+        shell: bash
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        shell: powershell
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator in windows
+        shell: powershell
+        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+        shell: powershell
+        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        shell: powershell
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        shell: powershell
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Update apt sources
+        run: sudo apt-get update
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Install ccache on Linux
+        run: sudo apt-get install -y ccache
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
+        name: Get ccache cache
+        uses: actions/cache@v5
+        with:
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ~/.cache/ccache-arm
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install required packages linux
+        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Install vulkan in linux
+        run: |
+          sudo apt install -y xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir -p vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - if: ${{ (matrix.platform == 'linux' && matrix.arch == 'x64') || (matrix.platform == 'android') }}
+        name: Setup vulkan sdk path in linux x64
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
+        name: Setup vulkan sdk path in linux arm64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          VULKAN_SDK=~/vulkan/aarch64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+          cd ~/vulkan
+
+          SDK_VERSION=$(grep -o 'sdk/[0-9]*\.[0-9]*' README.txt | head -1 | sed 's|sdk/||')
+          S3_BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
+          S3_KEY="vulkan-sdk-cache/linux-arm64-${SDK_VERSION}.tar.gz"
+
+          echo "Vulkan SDK version: ${SDK_VERSION}"
+
+          if aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" /tmp/vulkan-arm64-cache.tar.gz 2>/dev/null; then
+            echo "Found cached Vulkan SDK, extracting..."
+            tar xzf /tmp/vulkan-arm64-cache.tar.gz -C ~/vulkan
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          else
+            echo "No cache found, building Vulkan SDK for ARM64..."
+            ./vulkansdk --maxjobs
+
+            echo "Uploading compiled SDK to S3..."
+            tar czf /tmp/vulkan-arm64-cache.tar.gz aarch64
+            aws s3 cp /tmp/vulkan-arm64-cache.tar.gz "s3://${S3_BUCKET}/${S3_KEY}"
+            rm /tmp/vulkan-arm64-cache.tar.gz
+          fi
+
+      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+        name: Export rest of vulkan sdk variables in linux
+        run: |
+          echo "PATH=$VULKAN_SDK/bin:$PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$VULKAN_SDK/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          echo "VK_ADD_LAYER_PATH=$VULKAN_SDK/share/vulkan/explicit_layer.d" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$VULKAN_SDK/share/pkgconfig:$VULKAN_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install Vulkan SDK (Windows)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"
+
+          $url = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+          $out = "$env:RUNNER_TEMP\vulkan-sdk.exe"
+
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          Write-Host "Downloading Vulkan SDK from $url to $out"
+          Start-BitsTransfer -Source $url -Destination $out
+
+          Write-Host "Installing Vulkan SDK..."
+          & $out --root "C:\VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.WORKDIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Get vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache@v5
+        with:
+          key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.WORKDIR), format('{0}/vcpkg-configuration.json', env.WORKDIR), format('{0}/vcpkg/ports/**', env.WORKDIR)) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: ${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Run bare-make generate
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+
+      - name: Run bare-make build
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make build
+
+      - name: Run bare-make install
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make install
+
+      - name: Smoke check (tmp-*) package name & prebuilds listing
+        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "package.json name (post-build): $(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).name)")"
+          echo "prebuilds directory:"
+          ls -la prebuilds || true
+          find prebuilds -maxdepth 1 -type d -print || true
+
+      - name: Strip debug symbols
+        if: ${{ matrix.platform != 'win32' }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [[ "${{ matrix.platform }}" == "android" ]]; then
+            find prebuilds -name "*.bare" -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
+          elif [[ "${{ matrix.platform }}" == "darwin" || "${{ matrix.platform }}" == "ios" ]]; then
+            find prebuilds -name "*.bare" -exec strip -S {} \;
+          else
+            find prebuilds -name "*.bare" -exec strip --strip-debug {} \;
+          fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sd-cpp-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: prebuild
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: prebuilds
+          path: prebuilds
+
+  publish-gpr:
+    needs: [prebuild, merge]
+    if: ${{ inputs.publish_target == 'gpr'
+          || inputs.publish_target == 'both'
+          || (
+              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+              && (inputs.publish_target == '' || inputs.publish_target == null)
+              && (
+                github.ref_name == 'main'
+                || startsWith(github.ref_name, 'feature-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (
+                      inputs.ref == 'refs/heads/main'
+                      || startsWith(inputs.ref, 'refs/heads/feature-')
+                      || startsWith(inputs.ref, 'refs/heads/tmp-')
+                   ))
+              )
+            ) }}
+    continue-on-error: true
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
+
+      - name: Scope package as @tetherto for GPR
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const f='${{ env.WORKDIR }}/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
+          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('${{ env.WORKDIR }}/package.json','utf8')).name)"
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || 'dev' }}
+          workdir:  ${{ env.WORKDIR }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    needs: [prebuild, merge]
+    if: ${{ inputs.publish_target == 'npm'
+          || inputs.publish_target == 'both'
+          || (
+              (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'push')
+              && (inputs.publish_target == '' || inputs.publish_target == null)
+              && (
+                startsWith(github.ref_name, 'release-')
+                || (inputs.ref != '' && startsWith(inputs.ref, 'refs/heads/release-'))
+              )
+            ) }}
+    continue-on-error: false
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Download prebuild artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: prebuilds
+          path: ${{ env.WORKDIR }}/prebuilds
+
+      - name: Scope package as @qvac for npm
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const want='@qvac/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+          node -e "console.log('Effective package name (publish-npm):', JSON.parse(require('fs').readFileSync('package.json','utf8')).name)"
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: 'latest'
+          workdir: ${{ env.WORKDIR }}
+          repo_name: "diffusion-cpp"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
