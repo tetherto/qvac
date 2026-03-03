@@ -61,9 +61,9 @@ struct TranscriptionResult {
  * Speaker segment from diarization (Sortformer)
  */
 struct SpeakerSegment {
-  float start;
-  float end;
-  int speakerId;
+  float start = 0.0f;
+  float end = 0.0f;
+  int speakerId = -1;
 };
 
 /**

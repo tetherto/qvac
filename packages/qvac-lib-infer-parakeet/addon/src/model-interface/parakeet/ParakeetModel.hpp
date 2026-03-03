@@ -27,6 +27,7 @@ public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
+  using InputView = std::span<const ValueType>;
   using Output = std::vector<Transcript>;
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -42,7 +43,7 @@ public:
   void load();
   void unload();
   void unloadWeights() { unload(); }
-  void reload() { unload(); load(); }
+  void reload();
   void reset();
   void warmup();
 
@@ -100,7 +101,6 @@ private:
   [[nodiscard]] int64_t getLanguageToken(const std::string& langCode) const;
 
   // ── Feature extraction ─────────────────────────────────────────────────
-  std::tuple<std::vector<float>, int64_t, bool> computeFeatures(const Input& audio);
   std::pair<std::vector<float>, int64_t> runPreprocessor(const Input& audio);
   std::vector<float> computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
 
@@ -120,14 +120,12 @@ private:
                            int64_t encodedLength);
 
   // ── CTC ────────────────────────────────────────────────────────────────
-  std::string runCTCInferencePipeline(const Input& audio);
   std::vector<float> runCTCModel(const std::vector<float>& melFeatures,
                                  int64_t numFrames);
   std::string ctcGreedyDecode(const std::vector<float>& logits,
                               int64_t numFrames);
 
   // ── EOU streaming ──────────────────────────────────────────────────────
-  std::string runEOUInferencePipeline(const Input& audio);
   void resetEOUStreamingState();
   std::vector<float> eouEncodeChunk(const std::vector<float>& melChunk,
                                     int64_t chunkFrames,
@@ -137,7 +135,6 @@ private:
                              int& eouCount);
 
   // ── Sortformer diarization ─────────────────────────────────────────────
-  std::string runSortformerPipeline(const Input& audio);
   std::string runSortformerFromMel(const std::vector<float>& melFeatures,
                                    int64_t numFrames);
   std::vector<float> runSortformerChunked(const std::vector<float>& melFeatures,
@@ -177,7 +174,18 @@ private:
   static constexpr int64_t NOSPEECH_TOKEN = 1;
   static constexpr int64_t PREDICT_LANG = 22;
   static constexpr int64_t CTC_BLANK_TOKEN = 1024;
+  // Coincidentally same value as CTC_BLANK_TOKEN but semantically distinct:
+  // CTC blank = "no emission this frame", EOU fallback = default <EOU> id
+  // when the tokenizer doesn't contain the <EOU> special token.
   static constexpr int64_t EOU_FALLBACK_TOKEN = 1024;
+
+  // ── Error return strings (non-exception feedback to callers) ───────────
+  static constexpr const char* ERR_NO_SPEECH    = "[No speech detected]";
+  static constexpr const char* ERR_AUDIO_SHORT  = "[Audio too short]";
+  static constexpr const char* ERR_MODEL_READY  = "[Model not ready]";
+  static constexpr const char* ERR_MODEL_LOADED = "[Model not loaded]";
+  static constexpr const char* ERR_INFERENCE    = "[Inference error]";
+  static constexpr const char* ERR_NO_SPEAKERS  = "[No speakers detected]";
 
   // ── Audio / mel constants ──────────────────────────────────────────────
   static constexpr int MEL_BINS = 128;
@@ -199,6 +207,7 @@ private:
   static constexpr int EOU_CACHE_TIME_STEPS = 8;
   static constexpr int EOU_ENCODER_CHUNK_FRAMES = 25;
   static constexpr int EOU_MAX_SYMBOLS_PER_STEP = 5;
+  static constexpr int64_t EOU_MIN_ENCODER_FRAMES = 10;
 
   // ── Sortformer ─────────────────────────────────────────────────────────
   static constexpr int SF_NUM_SPEAKERS = 4;

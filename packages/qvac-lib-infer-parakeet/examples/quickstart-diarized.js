@@ -66,6 +66,9 @@ function parseSpeakerSegments (diarizationText) {
   return segments
 }
 
+// Approximate: words are distributed proportionally to segment duration because
+// word-level timestamps are not available from the transcription model. Attribution
+// near segment boundaries may be imprecise.
 function assignWordsToSpeakers (transcription, speakerSegments) {
   if (speakerSegments.length === 0 || !transcription) {
     return [{ speaker: 0, text: transcription || '[No speech detected]' }]

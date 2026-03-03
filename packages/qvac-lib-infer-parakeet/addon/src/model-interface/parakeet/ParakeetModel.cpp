@@ -4,7 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <complex>
-#include <deque>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <istream>
@@ -47,52 +47,12 @@ float melToHz(float mel) {
   return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
 }
 
+// Unified mel filterbank builder.
+// slaney=false: bin-index triangles, no normalization (HTK-style for TDT/CTC)
+// slaney=true:  Hz-based triangles with Slaney normalization (librosa-style for EOU/Sortformer)
 std::vector<std::vector<float>> buildMelFilterbank(
     int numMelBins, int fftSize, float sampleRate,
-    float fMin = 0.0f, float fMax = 8000.0f) {
-  int numFftBins = fftSize / 2 + 1;
-  float melMin = hzToMel(fMin);
-  float melMax = hzToMel(fMax);
-
-  std::vector<float> melPoints(numMelBins + 2);
-  for (int i = 0; i < numMelBins + 2; ++i) {
-    melPoints[i] = melMin + (melMax - melMin) * i / (numMelBins + 1);
-  }
-
-  std::vector<int> binPoints(numMelBins + 2);
-  for (int i = 0; i < numMelBins + 2; ++i) {
-    float hz = melToHz(melPoints[i]);
-    binPoints[i] =
-        static_cast<int>(std::floor((fftSize + 1) * hz / sampleRate));
-  }
-
-  std::vector<std::vector<float>> filterbank(
-      numMelBins, std::vector<float>(numFftBins, 0.0f));
-
-  for (int m = 0; m < numMelBins; ++m) {
-    int left = binPoints[m];
-    int center = binPoints[m + 1];
-    int right = binPoints[m + 2];
-
-    for (int k = left; k < center && k < numFftBins; ++k) {
-      if (center != left) {
-        filterbank[m][k] = static_cast<float>(k - left) / (center - left);
-      }
-    }
-    for (int k = center; k < right && k < numFftBins; ++k) {
-      if (right != center) {
-        filterbank[m][k] = static_cast<float>(right - k) / (right - center);
-      }
-    }
-  }
-
-  return filterbank;
-}
-
-// Slaney-normalized Hz-based mel filterbank (matches librosa / parakeet-rs)
-std::vector<std::vector<float>> buildMelFilterbankSlaney(
-    int numMelBins, int fftSize, float sampleRate,
-    float fMin = 0.0f, float fMax = 8000.0f) {
+    float fMin, float fMax, bool slaney = false) {
   int numFftBins = fftSize / 2 + 1;
   float melMin = hzToMel(fMin);
   float melMax = hzToMel(fMax);
@@ -103,31 +63,56 @@ std::vector<std::vector<float>> buildMelFilterbankSlaney(
     hzPoints[i] = melToHz(mel);
   }
 
-  std::vector<float> fftFreqs(numFftBins);
-  for (int j = 0; j < numFftBins; ++j) {
-    fftFreqs[j] = (sampleRate / static_cast<float>(fftSize)) * j;
-  }
-
   std::vector<std::vector<float>> filterbank(
       numMelBins, std::vector<float>(numFftBins, 0.0f));
 
-  for (int i = 0; i < numMelBins; ++i) {
-    float left = hzPoints[i];
-    float center = hzPoints[i + 1];
-    float right = hzPoints[i + 2];
-
+  if (slaney) {
+    std::vector<float> fftFreqs(numFftBins);
     for (int j = 0; j < numFftBins; ++j) {
-      float freq = fftFreqs[j];
-      if (freq >= left && freq <= center && center > left) {
-        filterbank[i][j] = (freq - left) / (center - left);
-      } else if (freq > center && freq <= right && right > center) {
-        filterbank[i][j] = (right - freq) / (right - center);
-      }
+      fftFreqs[j] = (sampleRate / static_cast<float>(fftSize)) * j;
     }
 
-    float enorm = 2.0f / (right - left);
-    for (int j = 0; j < numFftBins; ++j) {
-      filterbank[i][j] *= enorm;
+    for (int i = 0; i < numMelBins; ++i) {
+      float left = hzPoints[i];
+      float center = hzPoints[i + 1];
+      float right = hzPoints[i + 2];
+
+      for (int j = 0; j < numFftBins; ++j) {
+        float freq = fftFreqs[j];
+        if (freq >= left && freq <= center && center > left) {
+          filterbank[i][j] = (freq - left) / (center - left);
+        } else if (freq > center && freq <= right && right > center) {
+          filterbank[i][j] = (right - freq) / (right - center);
+        }
+      }
+
+      float enorm = 2.0f / (right - left);
+      for (int j = 0; j < numFftBins; ++j) {
+        filterbank[i][j] *= enorm;
+      }
+    }
+  } else {
+    std::vector<int> binPoints(numMelBins + 2);
+    for (int i = 0; i < numMelBins + 2; ++i) {
+      binPoints[i] =
+          static_cast<int>(std::floor((fftSize + 1) * hzPoints[i] / sampleRate));
+    }
+
+    for (int m = 0; m < numMelBins; ++m) {
+      int left = binPoints[m];
+      int center = binPoints[m + 1];
+      int right = binPoints[m + 2];
+
+      for (int k = left; k < center && k < numFftBins; ++k) {
+        if (center != left) {
+          filterbank[m][k] = static_cast<float>(k - left) / (center - left);
+        }
+      }
+      for (int k = center; k < right && k < numFftBins; ++k) {
+        if (right != center) {
+          filterbank[m][k] = static_cast<float>(right - k) / (right - center);
+        }
+      }
     }
   }
 
@@ -232,7 +217,14 @@ void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
 
 void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
   std::string jsonStr(data.begin(), data.end());
-  auto json = nlohmann::json::parse(jsonStr);
+  nlohmann::json json;
+  try {
+    json = nlohmann::json::parse(jsonStr);
+  } catch (const nlohmann::json::parse_error& e) {
+    throw errors::makeStatus(errors::Code::VocabularyEmpty,
+                             std::string("Failed to parse tokenizer.json: ") +
+                                 e.what());
+  }
 
   vocab_.clear();
 
@@ -282,6 +274,7 @@ std::string ParakeetModel::tokensToString(
   return trimWhitespace(result);
 }
 
+// TDT-only: resolves a language code (e.g. "en") to the vocab token id.
 int64_t ParakeetModel::getLanguageToken(const std::string& langCode) const {
   std::string langToken = "<|" + langCode + "|>";
   for (size_t i = 0; i < vocab_.size(); ++i) {
@@ -324,6 +317,12 @@ void ParakeetModel::reset() {
 
   totalMelFrames_ = 0;
   totalEncodedFrames_ = 0;
+
+  eouState_.cacheChan.clear();
+  eouState_.cacheTime.clear();
+  eouState_.cacheChanLen.clear();
+  eouState_.stateH.clear();
+  eouState_.stateC.clear();
   eouState_.initialized = false;
 }
 
@@ -384,6 +383,15 @@ void ParakeetModel::load() {
          std::string("ONNX Runtime error: ") + e.what());
     throw;
   }
+}
+
+void ParakeetModel::reload() {
+  if (model_weights_.empty() && !is_loaded_) {
+    throw errors::makeStatus(errors::Code::ModelNotReady,
+                             "Cannot reload: weights were freed after initial load");
+  }
+  unload();
+  load();
 }
 
 void ParakeetModel::unload() {
@@ -675,18 +683,6 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
 //  Feature extraction
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::tuple<std::vector<float>, int64_t, bool>
-ParakeetModel::computeFeatures(const Input& audio) {
-  if (preprocessor_session_) {
-    auto [features, frames] = runPreprocessor(audio);
-    return {std::move(features), frames, true};
-  }
-
-  auto melFeatures = computeMelSpectrogram(audio);
-  int64_t numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
-  return {std::move(melFeatures), numFrames, false};
-}
-
 std::pair<std::vector<float>, int64_t>
 ParakeetModel::runPreprocessor(const Input& audio) {
   if (!preprocessor_session_ || audio.empty()) {
@@ -772,29 +768,29 @@ std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
     return {};
   }
 
-  std::vector<float> hannWindow(WIN_LENGTH);
-  for (int i = 0; i < WIN_LENGTH; ++i) {
-    hannWindow[i] =
-        0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
-  }
+  static const std::vector<float> hannWindow = []() {
+    std::vector<float> w(WIN_LENGTH);
+    for (int i = 0; i < WIN_LENGTH; ++i) {
+      w[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
+    }
+    return w;
+  }();
 
   FilterbankKey fbKey{numMelBins, isNemoStyle};
-  if (filterbanks_.find(fbKey) == filterbanks_.end()) {
-    if (isNemoStyle) {
-      filterbanks_[fbKey] = buildMelFilterbankSlaney(
-          numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, 8000.0f);
-    } else {
-      filterbanks_[fbKey] = buildMelFilterbank(
-          numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f);
-    }
+  auto [it, inserted] = filterbanks_.try_emplace(fbKey);
+  if (inserted) {
+    it->second = isNemoStyle
+        ? buildMelFilterbank(numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, 8000.0f, true)
+        : buildMelFilterbank(numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f, false);
   }
-  auto& melFilterbank = filterbanks_[fbKey];
+  auto& melFilterbank = it->second;
 
-  Eigen::FFT<float> fft;
+  static thread_local Eigen::FFT<float> fft;
   const int numFftBins = FFT_SIZE / 2 + 1;
   std::vector<float> melSpec(numFrames * numMelBins);
   std::vector<float> frame(FFT_SIZE, 0.0f);
   std::vector<std::complex<float>> spectrum(FFT_SIZE);
+  std::vector<float> powerSpec(numFftBins);
 
   const float* stftSource = isNemoStyle ? paddedAudio.data() : audioPtr;
   size_t stftLen = isNemoStyle ? paddedAudio.size() : numSamples;
@@ -809,7 +805,6 @@ std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
 
     fft.fwd(spectrum, frame);
 
-    std::vector<float> powerSpec(numFftBins);
     for (int k = 0; k < numFftBins; ++k) {
       powerSpec[k] = std::norm(spectrum[k]);
     }
@@ -917,7 +912,7 @@ std::vector<float> ParakeetModel::runEncoder(
 std::string ParakeetModel::greedyDecode(
     const std::vector<float>& encoderOutput, int64_t encodedLength) {
   if (!decoder_session_ || vocab_.empty()) {
-    return "[Model not ready]";
+    return ERR_MODEL_READY;
   }
 
   const size_t vocabSize = vocab_.size();
@@ -1042,25 +1037,12 @@ std::string ParakeetModel::greedyDecode(
   }
 
   std::string result = tokensToString(decodedTokens);
-  return result.empty() ? "[No speech detected]" : result;
+  return result.empty() ? ERR_NO_SPEECH : result;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  CTC pipeline
 // ═════════════════════════════════════════════════════════════════════════════
-
-std::string ParakeetModel::runCTCInferencePipeline(const Input& audio) {
-  auto melFeatures = computeMelSpectrogram(audio, CTC_MEL_BINS);
-  int64_t numFrames =
-      static_cast<int64_t>(melFeatures.size() / CTC_MEL_BINS);
-
-  if (melFeatures.empty() || numFrames <= 0) return "";
-
-  auto logits = runCTCModel(melFeatures, numFrames);
-  if (logits.empty()) return "";
-
-  return ctcGreedyDecode(logits, numFrames);
-}
 
 std::vector<float> ParakeetModel::runCTCModel(
     const std::vector<float>& melFeatures, int64_t numFrames) {
@@ -1102,7 +1084,7 @@ std::vector<float> ParakeetModel::runCTCModel(
 
 std::string ParakeetModel::ctcGreedyDecode(const std::vector<float>& logits,
                                            int64_t numFrames) {
-  if (vocab_.empty()) return "[Model not ready]";
+  if (vocab_.empty()) return ERR_MODEL_READY;
 
   const size_t vocabSize = vocab_.size();
   const int64_t outputFrames =
@@ -1136,7 +1118,7 @@ std::string ParakeetModel::ctcGreedyDecode(const std::vector<float>& logits,
        "CTC decoded: " + std::to_string(decodedTokens.size()) + " tokens");
 
   std::string result = tokensToString(decodedTokens);
-  return result.empty() ? "[No speech detected]" : result;
+  return result.empty() ? ERR_NO_SPEECH : result;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1396,76 +1378,9 @@ std::string ParakeetModel::eouDecodeChunk(
   return result;
 }
 
-std::string ParakeetModel::runEOUInferencePipeline(const Input& audio) {
-  auto melFeatures = computeMelSpectrogram(audio, MEL_BINS);
-  int64_t numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
-
-  if (melFeatures.empty() || numFrames <= 0) return "";
-  if (!eouState_.initialized) resetEOUStreamingState();
-
-  static constexpr int64_t MIN_ENCODER_FRAMES = 10;
-  std::string fullResult;
-  int64_t totalEncoded = 0;
-  int eouCount = 0;
-
-  for (int64_t start = 0; start < numFrames;
-       start += EOU_ENCODER_CHUNK_FRAMES) {
-    int64_t end = std::min(
-        start + static_cast<int64_t>(EOU_ENCODER_CHUNK_FRAMES), numFrames);
-    int64_t chunkLen = end - start;
-
-    if (chunkLen < MIN_ENCODER_FRAMES && start > 0) break;
-
-    std::vector<float> melChunk(melFeatures.begin() + start * MEL_BINS,
-                                melFeatures.begin() + end * MEL_BINS);
-
-    int64_t outFrames = 0;
-    auto encoderOutput = eouEncodeChunk(melChunk, chunkLen, outFrames);
-    totalEncoded += outFrames;
-
-    if (outFrames <= 0) continue;
-
-    int chunkEou = 0;
-    std::string chunkText =
-        eouDecodeChunk(encoderOutput, outFrames, chunkEou);
-    eouCount += chunkEou;
-
-    if (!chunkText.empty()) {
-      if (!fullResult.empty() && fullResult.back() != '\n' &&
-          fullResult.back() != ' ') {
-        fullResult += " ";
-      }
-      fullResult += chunkText;
-    }
-  }
-
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "EOU streaming: " + std::to_string(numFrames) + " mel frames -> " +
-           std::to_string(totalEncoded) + " encoded, " +
-           std::to_string(eouCount) + " utterance boundaries");
-
-  while (!fullResult.empty() &&
-         (fullResult.back() == ' ' || fullResult.back() == '\n')) {
-    fullResult.pop_back();
-  }
-
-  return fullResult.empty() ? "[No speech detected]" : fullResult;
-}
-
 // ═════════════════════════════════════════════════════════════════════════════
 //  Sortformer diarization pipeline
 // ═════════════════════════════════════════════════════════════════════════════
-
-std::string ParakeetModel::runSortformerPipeline(const Input& audio) {
-  auto melFeatures = computeMelSpectrogram(audio, MEL_BINS);
-  int64_t numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
-
-  if (melFeatures.empty() || numFrames <= 0) {
-    return "[No speech detected]";
-  }
-
-  return runSortformerFromMel(melFeatures, numFrames);
-}
 
 std::string ParakeetModel::runSortformerFromMel(
     const std::vector<float>& melFeatures, int64_t numFrames) {
@@ -1474,7 +1389,7 @@ std::string ParakeetModel::runSortformerFromMel(
       static_cast<int64_t>(rawPreds.size() / SF_NUM_SPEAKERS);
 
   if (totalOutputFrames <= 0) {
-    return "[No speakers detected]";
+    return ERR_NO_SPEAKERS;
   }
 
   auto smoothed =
@@ -1482,7 +1397,7 @@ std::string ParakeetModel::runSortformerFromMel(
   auto segments = binarizePredictions(smoothed, totalOutputFrames);
 
   if (segments.empty()) {
-    return "[No speakers detected]";
+    return ERR_NO_SPEAKERS;
   }
 
   std::string result;
@@ -1506,9 +1421,11 @@ std::vector<float> ParakeetModel::runSortformerChunked(
   const int64_t chunkMelFrames =
       static_cast<int64_t>(SF_CHUNK_LEN) * SF_SUBSAMPLING;
 
-  std::deque<float> spkcache;
+  std::vector<float> spkcache;
+  spkcache.reserve(static_cast<size_t>(SF_SPKCACHE_LEN) * SF_EMB_DIM);
   int64_t cacheFrames = 0;
-  std::deque<float> fifo;
+  std::vector<float> fifo;
+  fifo.reserve(static_cast<size_t>(SF_FIFO_LEN) * SF_EMB_DIM);
   int64_t fifoFrames = 0;
   std::vector<float> allPredictions;
 
@@ -1530,10 +1447,9 @@ std::vector<float> ParakeetModel::runSortformerChunked(
         *memory_info_, chunkLenData.data(), chunkLenData.size(),
         chunkLenShape.data(), chunkLenShape.size());
 
-    std::vector<float> cacheContiguous(spkcache.begin(), spkcache.end());
     std::vector<int64_t> cacheShape = {1, cacheFrames, SF_EMB_DIM};
     Ort::Value cacheTensor = Ort::Value::CreateTensor<float>(
-        *memory_info_, cacheContiguous.data(), cacheContiguous.size(),
+        *memory_info_, spkcache.data(), spkcache.size(),
         cacheShape.data(), cacheShape.size());
 
     std::vector<int64_t> cacheLenData = {cacheFrames};
@@ -1542,10 +1458,9 @@ std::vector<float> ParakeetModel::runSortformerChunked(
         *memory_info_, cacheLenData.data(), cacheLenData.size(),
         cacheLenShape.data(), cacheLenShape.size());
 
-    std::vector<float> fifoContiguous(fifo.begin(), fifo.end());
     std::vector<int64_t> fifoShape = {1, fifoFrames, SF_EMB_DIM};
     Ort::Value fifoTensor = Ort::Value::CreateTensor<float>(
-        *memory_info_, fifoContiguous.data(), fifoContiguous.size(),
+        *memory_info_, fifo.data(), fifo.size(),
         fifoShape.data(), fifoShape.size());
 
     std::vector<int64_t> fifoLenData = {fifoFrames};
@@ -1719,21 +1634,11 @@ std::vector<SpeakerSegment> ParakeetModel::binarizePredictions(
 
 std::string ParakeetModel::runInferencePipeline(const Input& audio) {
   switch (cfg_.modelType) {
-    case ModelType::CTC:        return runCTCInferencePipeline(audio);
-    case ModelType::EOU:        return runEOUInferencePipeline(audio);
-    case ModelType::SORTFORMER: return runSortformerPipeline(audio);
-    default:                    break;
+    case ModelType::CTC:        return processCTC(audio);
+    case ModelType::EOU:        return processEOU(audio);
+    case ModelType::SORTFORMER: return processSortformer(audio);
+    default:                    return processTDT(audio);
   }
-
-  auto [melFeatures, numFrames, alreadyTransposed] = computeFeatures(audio);
-  if (melFeatures.empty() || numFrames <= 0) return "";
-
-  int64_t encodedLength = 0;
-  auto encoderOutput =
-      runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
-  if (encoderOutput.empty() || encodedLength <= 0) return "";
-
-  return greedyDecode(encoderOutput, encodedLength);
 }
 
 std::string ParakeetModel::processTDT(const Input& input) {
@@ -1760,7 +1665,7 @@ std::string ParakeetModel::processTDT(const Input& input) {
   if (melFeatures.empty() || numFrames <= 0) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Audio too short for processing");
-    return "[Audio too short]";
+    return ERR_AUDIO_SHORT;
   }
 
   int64_t encodedLength = 0;
@@ -1807,7 +1712,7 @@ std::string ParakeetModel::processCTC(const Input& input) {
   if (melFeatures.empty() || numFrames <= 0) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Audio too short for processing");
-    return "[Audio too short]";
+    return ERR_AUDIO_SHORT;
   }
 
   std::vector<float> logits;
@@ -1840,10 +1745,9 @@ std::string ParakeetModel::processEOU(const Input& input) {
     totalMelFrames_ += numFrames;
   });
 
-  if (melFeatures.empty() || numFrames <= 0) return "[Audio too short]";
+  if (melFeatures.empty() || numFrames <= 0) return ERR_AUDIO_SHORT;
   if (!eouState_.initialized) resetEOUStreamingState();
 
-  static constexpr int64_t MIN_ENCODER_FRAMES = 10;
   std::string fullResult;
   int64_t totalEncoded = 0;
   int eouCount = 0;
@@ -1854,7 +1758,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
         start + static_cast<int64_t>(EOU_ENCODER_CHUNK_FRAMES), numFrames);
     int64_t chunkLen = end - start;
 
-    if (chunkLen < MIN_ENCODER_FRAMES && start > 0) break;
+    if (chunkLen < EOU_MIN_ENCODER_FRAMES && start > 0) break;
 
     std::vector<float> melChunk(melFeatures.begin() + start * MEL_BINS,
                                 melFeatures.begin() + end * MEL_BINS);
@@ -1895,7 +1799,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
     fullResult.pop_back();
   }
 
-  std::string text = fullResult.empty() ? "[No speech detected]" : fullResult;
+  std::string text = fullResult.empty() ? ERR_NO_SPEECH : fullResult;
 
   size_t wordCount =
       std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
@@ -1922,7 +1826,7 @@ std::string ParakeetModel::processSortformer(const Input& input) {
        "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
 
   if (melFeatures.empty() || numFrames <= 0) {
-    return "[Audio too short]";
+    return ERR_AUDIO_SHORT;
   }
 
   std::string text;
@@ -1977,12 +1881,12 @@ void ParakeetModel::process(const Input& input) {
     } catch (const std::exception& e) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
            std::string("Inference error: ") + e.what());
-      text = "[Inference error]";
+      text = ERR_INFERENCE;
     }
   } else {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Cannot process: model not loaded");
-    text = "[Model not loaded]";
+    text = ERR_MODEL_LOADED;
   }
 
   auto processEnd = std::chrono::high_resolution_clock::now();

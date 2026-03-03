@@ -5,6 +5,10 @@ const path = require('bare-path')
 
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
 
+// Grace period (ms) after JobEnded fires to wait for a late Output event.
+// Increase on slow devices where inference may lag behind the event loop.
+const JOB_TRACKER_GRACE_MS = 5000
+
 /**
  * TDT model files to load (order matters)
  */
@@ -187,7 +191,7 @@ function createJobTracker () {
       jobEnded = true
       tryResolve()
       if (!hasOutput) {
-        graceTimeout = setTimeout(() => resolveJob(), 5000)
+        graceTimeout = setTimeout(() => resolveJob(), JOB_TRACKER_GRACE_MS)
       }
     }
   }

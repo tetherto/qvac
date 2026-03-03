@@ -81,8 +81,12 @@ case $choice in
       "cgus/diar_streaming_sortformer_4spk-v2-onnx" \
       "diar_streaming_sortformer_4spk-v2.onnx"
     # Rename to expected filename
+    if [ ! -f "$MODELS_DIR/sortformer-4spk-v2-onnx/diar_streaming_sortformer_4spk-v2.onnx" ]; then
+      echo "ERROR: Sortformer download failed — source file not found"
+      exit 1
+    fi
     mv "$MODELS_DIR/sortformer-4spk-v2-onnx/diar_streaming_sortformer_4spk-v2.onnx" \
-       "$MODELS_DIR/sortformer-4spk-v2-onnx/sortformer.onnx"
+       "$MODELS_DIR/sortformer-4spk-v2-onnx/sortformer.onnx" || exit 1
     ;;
   5)
     download_model "parakeet-tdt-0.6b-v3-onnx" \
@@ -116,8 +120,12 @@ case $choice in
     download_model "sortformer-4spk-v2-onnx" \
       "cgus/diar_streaming_sortformer_4spk-v2-onnx" \
       "diar_streaming_sortformer_4spk-v2.onnx"
+    if [ ! -f "$MODELS_DIR/sortformer-4spk-v2-onnx/diar_streaming_sortformer_4spk-v2.onnx" ]; then
+      echo "ERROR: Sortformer download failed — source file not found"
+      exit 1
+    fi
     mv "$MODELS_DIR/sortformer-4spk-v2-onnx/diar_streaming_sortformer_4spk-v2.onnx" \
-       "$MODELS_DIR/sortformer-4spk-v2-onnx/sortformer.onnx"
+       "$MODELS_DIR/sortformer-4spk-v2-onnx/sortformer.onnx" || exit 1
     ;;
   *)
     echo "Invalid choice"
