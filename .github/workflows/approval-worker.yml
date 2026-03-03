@@ -8,7 +8,6 @@ on:
     
 jobs:
   run-when-command:
-    if: github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,7 +37,6 @@ jobs:
 
   check-approvals:
     needs: run-when-command
-    if: ${{ always() && needs.run-when-command.result == 'success' }}
     permissions:
       contents: write
       pull-requests: write
