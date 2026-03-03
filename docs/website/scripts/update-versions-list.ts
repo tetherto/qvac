@@ -10,7 +10,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 
-async function updateVersionsList(_newVersion?: string) {
+async function updateVersionsList(newVersion?: string) {
   console.log(`📋 Updating versions list...`);
 
   const versionsFile = path.join(process.cwd(), "src", "lib", "versions.ts");
@@ -44,6 +44,17 @@ async function updateVersionsList(_newVersion?: string) {
     });
 
   console.log(`✓ Found ${versions.length} versions:`, versions.join(", ") || "(none)");
+
+  if (newVersion) {
+    const normalized = newVersion.startsWith("v") ? newVersion : `v${newVersion}`;
+    if (!versions.includes(normalized)) {
+      throw new Error(
+        `Version ${normalized} was not found in ${apiDir}. ` +
+        `Did docs:generate-api run successfully for this version?`
+      );
+    }
+    console.log(`✓ Confirmed ${normalized} is present`);
+  }
 
   if (versions.length === 0) {
     throw new Error(
