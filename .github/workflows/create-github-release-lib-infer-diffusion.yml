@@ -1,4 +1,4 @@
-name: Create GitHub Release (LLM)
+name: Create GitHub Release (Stable Diffusion)
 
 on:
   workflow_call:
@@ -11,11 +11,16 @@ on:
         description: "Previous commit SHA for version comparison"
         required: false
         type: string
+      release_name:
+        description: "Human-readable release name"
+        required: false
+        type: string
+        default: "QVAC Stable Diffusion Addon"
       workdir:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/lib-infer-diffusion"
 
 permissions:
   contents: write
@@ -81,8 +86,8 @@ jobs:
         if: steps.version.outputs.bumped == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: llamacpp-llm-v${{ steps.version.outputs.current }}
-          name: QVAC LLM Addon v${{ steps.version.outputs.current }}
+          tag_name: diffusion-cpp-v${{ steps.version.outputs.current }}
+          name: ${{ inputs.release_name }} v${{ steps.version.outputs.current }}
           body_path: ${{ steps.changelog.outputs.release_notes_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
