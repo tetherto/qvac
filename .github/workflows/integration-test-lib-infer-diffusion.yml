@@ -1,0 +1,240 @@
+name: Integration Tests (Stable Diffusion)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/diffusion-cpp@0.1.0)"
+        type: string
+        required: true
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 360
+    continue-on-error: true
+    runs-on: ${{ matrix.runner }}
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      WORKDIR: packages/lib-infer-diffusion
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+            runner: macos-14
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        run: |
+          git config --system core.longpaths true
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+        shell: powershell
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+        shell: bash
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
+          echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
+          echo "Writing .npmrc for dual registry install…"
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+
+          echo "=== Verifying .npmrc creation ==="
+          Get-Content .npmrc
+          echo "=================================="
+
+          if ($env:GIT_PAT) {
+            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "git@github.com:"
+          } else {
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          }
+        shell: powershell
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make bare-runtime bare-https brittle
+
+      - name: Download prebuilds (from artifacts)
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@v7
+        with:
+          path: ${{ env.WORKDIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          PACKAGE="${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+
+          if ! npm pack $PACKAGE; then
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          fi
+
+          tar -xzf *.tgz
+
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          fi
+
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+
+          echo "Prebuilds downloaded from npm successfully"
+          ls -la prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $PACKAGE = "${{ inputs.prebuild_package }}"
+
+          echo "Downloading $PACKAGE from npm..."
+
+          npm pack $PACKAGE
+          if ($LASTEXITCODE -ne 0) {
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          }
+
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) {
+            echo "ERROR: Could not find downloaded tarball"
+            exit 1
+          }
+
+          echo "Extracting $TARBALL..."
+          tar -xzf $TARBALL
+
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          }
+
+          Move-Item package/prebuilds ./prebuilds
+
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+          echo "Prebuilds downloaded from npm successfully"
+          Get-ChildItem prebuilds/
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Windows - Install Vulkan
+        if: ${{ matrix.platform == 'win32' }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+        shell: powershell
+        timeout-minutes: 40
+
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run test:integration 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
+        shell: bash
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run test:integration:generate
+          bare test/integration/all.js --exit | Tee-Object test-output.log
+        shell: powershell
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
