@@ -20,7 +20,7 @@
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
     "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-unit-test",
-    "ensure-chatterbox-models": "brittle-bare scripts/ensure-chatterbox-models.js",
+    "models:ensure": "brittle-bare scripts/ensure-models.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build",
     "coverage:cpp:run": "cd build/addon/test/unit && LLVM_PROFILE_FILE=default.profraw ./qvac-lib-inference-tts-unit-test --gtest_output=xml:cpp-test-results.xml",

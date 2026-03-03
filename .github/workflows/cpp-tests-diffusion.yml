@@ -1,0 +1,233 @@
+name: CPP Tests (Stable Diffusion)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/lib-infer-diffusion"
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/lib-infer-diffusion"
+
+jobs:
+  test-cpp:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+
+    runs-on: ${{ matrix.os }}
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/${{ inputs.workdir }}/vcpkg/cache,readwrite"
+      GIT_TERMINAL_PROMPT: "0"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install llvm-19 on Linux
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Install Vulkan SDK on Linux
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt update
+          sudo apt install vulkan-sdk
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure Windows runner
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Install Vulkan SDK on Windows
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
+          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        working-directory: ${{ env.WORKDIR }}
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'macos-14' }}
+        name: Install vcpkg on macOS
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+          echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Configure vcpkg in linux
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure CMake generator on Windows
+        shell: pwsh
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+          echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+
+      - name: Create vcpkg cache location (non-Windows)
+        if: ${{ matrix.os != 'windows-2022' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Create vcpkg cache location (Windows)
+        if: ${{ matrix.os == 'windows-2022' }}
+        shell: pwsh
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          New-Item -ItemType Directory -Force -Path "vcpkg/cache" | Out-Null
+
+      - name: Get vcpkg cache
+        uses: actions/cache@v5
+        with:
+          key: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
+          NPMRC
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Build C++ tests with coverage
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run coverage:cpp:build
+
+      - name: Build C++ tests
+        if: ${{ matrix.os != 'ubuntu-24.04' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:build
+
+      - name: Run C++ tests
+        id: cpp-tests
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+        run: |
+          EXE="build/test/unit/addon-test"
+          if [ -f "build/test/unit/addon-test.exe" ]; then
+            EXE="build/test/unit/addon-test.exe"
+          fi
+
+          if [ ! -f "$EXE" ]; then
+            echo "ERROR: Test executable not found at $EXE"
+            ls -lah build/test/unit || true
+            exit 1
+          fi
+
+          (cd build/test/unit/ && "./$(basename "$EXE")" --gtest_output=xml:cpp-test-results.xml)
+
+          if [ -f build/test/unit/cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
+            if [ "$test_count" -eq 0 ]; then
+              echo "ERROR: No tests were executed! Test count: $test_count"
+              exit 1
+            fi
+            echo "Successfully executed $test_count test(s)"
+          else
+            echo "ERROR: Test results file not generated"
+            exit 1
+          fi
+
+      - name: Generate Coverage Report
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' build/test/unit/coverage-summary.txt | awk '{print $10}' || echo "0.0")
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+
+      - name: Archive Coverage Results
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.WORKDIR }}/build/test/unit/coverage-html/
+            ${{ env.WORKDIR }}/build/test/unit/lcov.info
+            ${{ env.WORKDIR }}/build/test/unit/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Coverage Summary
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "## C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/test/unit/coverage-summary.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

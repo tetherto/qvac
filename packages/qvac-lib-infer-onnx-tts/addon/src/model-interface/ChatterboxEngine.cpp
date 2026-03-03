@@ -2,13 +2,16 @@
 #include "FileUtils.hpp"
 #include "Fp16Utils.hpp"
 #include "OnnxInferSession.hpp"
+#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <numeric>
+#include <sstream>
+
+using namespace qvac_lib_inference_addon_cpp::logger;
 
 using qvac::ttslib::fp16::getNumElements;
 using qvac::ttslib::fp16::readTensorToFloatBuffer;
@@ -77,10 +80,11 @@ template <typename T> size_t argmax(const std::vector<T> &vector) {
 }
 
 template <typename T> void printVector(const std::vector<T> &vector) {
+  std::ostringstream ss;
   for (auto el : vector) {
-    std::cout << el << " ";
+    ss << el << " ";
   }
-  std::cout << std::endl;
+  QLOG(Priority::DEBUG, ss.str());
 }
 
 } // namespace
@@ -124,7 +128,7 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
 
   isEnglish_ = language_ == "en";
   loaded_ = true;
-  std::cout << "Language: " << language_ << std::endl;
+  QLOG(Priority::INFO, "Language: " + language_);
 
   keyValueOffset_ = isEnglish_ ? OFFSET : OFFSET_MULTILINGUAL;
 }
@@ -199,9 +203,9 @@ void ChatterboxEngine::processSpeechEncoderOutputs(
     TensorData<int64_t> &attentionMask,
     std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
 
-  std::cout << "SpeechEncoderInfer stared ... " << std::endl;
+  QLOG(Priority::INFO, "SpeechEncoderInfer started ...");
   runSpeechEncoderInfer();
-  std::cout << "SpeechEncoderInfer finished" << std::endl;
+  QLOG(Priority::INFO, "SpeechEncoderInfer finished");
 
   OrtTensor condEmbTensor = speechEncoderSession_->getOutput("audio_features");
   OrtTensor promptTokenTensor = speechEncoderSession_->getOutput("audio_tokens");
@@ -303,7 +307,7 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
     inputIds = {nextToken};
 
     if (nextToken == STOP_SPEECH_TOKEN) {
-      std::cout << "STOP_SPEECH_TOKEN reached: stopping generation" << std::endl;
+      QLOG(Priority::INFO, "STOP_SPEECH_TOKEN reached: stopping generation");
       break;
     }
 
@@ -339,9 +343,9 @@ std::vector<float> ChatterboxEngine::synthesizeWaveform(
     const TensorData<float> &speakerFeatures) {
   ensureSession(conditionalDecoderSession_, config_.conditionalDecoderPath);
 
-  std::cout << "ConditionalDecoderInfer started ... " << std::endl;
+  QLOG(Priority::INFO, "ConditionalDecoderInfer started ...");
   runConditionalDecoderInfer(speechTokens, speakerEmbeddings, speakerFeatures);
-  std::cout << "ConditionalDecoderInfer finished" << std::endl;
+  QLOG(Priority::INFO, "ConditionalDecoderInfer finished");
 
   OrtTensor wavTensor = conditionalDecoderSession_->getOutput("waveform");
   std::vector<float> wav;
@@ -352,7 +356,9 @@ std::vector<float> ChatterboxEngine::synthesizeWaveform(
 }
 
 AudioResult ChatterboxEngine::convertToAudioResult(const std::vector<float> &wav) {
-  std::cout << "Generated audio size: " << wav.size() / 24000.0 << " seconds" << std::endl;
+  std::ostringstream ss;
+  ss << "Generated audio size: " << wav.size() / 24000.0 << " seconds";
+  QLOG(Priority::INFO, ss.str());
 
   AudioResult result;
   result.sampleRate = SAMPLE_RATE;
@@ -385,7 +391,7 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
   ensureSession(speechEncoderSession_, config_.speechEncoderPath);
   ensureSession(languageModelSession_, config_.languageModelPath);
 
-  std::cout << "Sampling ... " << text << std::endl;
+  QLOG(Priority::INFO, "Sampling ... " + text);
 
   std::vector<int64_t> speechTokens = generateSpeechTokens(
       inputIds, positionIds, speakerEmbeddings, speakerFeatures);
@@ -397,7 +403,7 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
   const std::string preparedText = prepareText(text, language_);
-  std::cout << "tokenizing text: " << preparedText << std::endl;
+  QLOG(Priority::INFO, "tokenizing text: " + preparedText);
   
   TokenizerEncodeResult result;
   tokenizers_encode(tokenizerHandle_, preparedText.data(), preparedText.length(), 1, &result);

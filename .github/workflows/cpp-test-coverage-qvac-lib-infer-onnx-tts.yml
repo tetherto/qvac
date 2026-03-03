@@ -78,7 +78,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           lfs: true
           fetch-depth: 0
 
@@ -90,9 +90,6 @@ jobs:
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'linux'
         run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
@@ -203,39 +200,6 @@ jobs:
             ${{ env.WORKDIR }}/build/addon/test/unit/coverage-summary.txt
             ${{ env.WORKDIR }}/build/addon/test/unit/cpp-test-results.xml
           retention-days: 30
-
-      - name: Comment Coverage on PR
-        if: ${{ matrix.coverage && github.event_name == 'pull_request_target' }}
-        uses: actions/github-script@v8
-        env:
-          LINE_COVERAGE_PERCENTAGE: ${{ env.LINE_COVERAGE_PERCENTAGE }}
-          COVERAGE_SUMMARY_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/build/addon/test/unit/coverage-summary.txt
-        with:
-          script: |
-            const fs = require('fs');
-            const path = process.env.COVERAGE_SUMMARY_PATH;
-            if (path && fs.existsSync(path)) {
-              const coverage = fs.readFileSync(path, 'utf8');
-              const pct = process.env.LINE_COVERAGE_PERCENTAGE || 'N/A';
-              const body = `## C++ Test Coverage Report (TTS)
-
-              **Line coverage:** ${pct}
-
-              <details>
-              <summary>Detailed coverage</summary>
-
-              \`\`\`
-              ${coverage}
-              \`\`\`
-
-              </details>`;
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            }
 
       - name: Coverage Summary
         if: ${{ matrix.coverage }}
