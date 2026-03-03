@@ -5,7 +5,7 @@ globs:
   - packages/docs/**
   - packages/rag/**
   - packages/logging/**
-  - packages/qvac-lib-error-base/**
+  - packages/error/**
 alwaysApply: false
 ---
 

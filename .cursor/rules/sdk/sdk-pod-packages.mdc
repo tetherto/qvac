@@ -12,7 +12,7 @@ The following packages belong to the SDK pod:
 - `packages/docs`
 - `packages/rag`
 - `packages/logging`
-- `packages/qvac-lib-error-base`
+- `packages/error`
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
 
@@ -27,7 +27,7 @@ globs:
   - packages/docs/**
   - packages/rag/**
   - packages/logging/**
-  - packages/qvac-lib-error-base/**
+  - packages/error/**
 ```
 
 ## Skill Naming Convention

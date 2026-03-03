@@ -12,7 +12,7 @@ on:
       - "packages/cli/**"
       - "packages/rag/**"
       - "packages/logging/**"
-      - "packages/qvac-lib-error-base/**"
+      - "packages/error/**"
       - "packages/docs/**"
     branches:
       - main
