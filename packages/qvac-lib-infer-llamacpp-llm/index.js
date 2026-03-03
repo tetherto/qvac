@@ -9,59 +9,6 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
-const PREVIOUS_JOB_WAIT_MS = 30
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
-const RUN_QUEUE_BUSY_ERROR =
-  'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
-
-const VALIDATION_TYPES = ['none', 'split', 'dataset']
-const DEFAULT_VALIDATION_FRACTION = 0.05
-
-function normalizeFinetuneParams (opts) {
-  const validation = opts.validation
-  if (validation == null || typeof validation !== 'object' || !('type' in validation)) {
-    throw new Error(
-      'Finetuning options must include validation: { type: \'none\' | \'split\' | \'dataset\'[, fraction?: number][, path?: string] }. ' +
-      'Example: validation: { type: \'split\', fraction: 0.05 }, validation: { type: \'dataset\', path: \'./eval.jsonl\' }, or validation: { type: \'none\' }.'
-    )
-  }
-  const out = { ...opts }
-  const type = validation.type
-  if (!VALIDATION_TYPES.includes(type)) {
-    throw new Error(
-      `validation.type must be one of ${VALIDATION_TYPES.join(', ')}; got: ${type}`
-    )
-  }
-  if (type === 'none') {
-    out.validationSplit = 0
-    out.useEvalDatasetForValidation = false
-  } else if (type === 'split') {
-    const fraction = validation.fraction ?? DEFAULT_VALIDATION_FRACTION
-    out.validationSplit = Math.max(0, Math.min(1, Number(fraction)))
-    out.useEvalDatasetForValidation = false
-  } else {
-    const evalPath = validation.path ?? opts.evalDatasetDir
-    if (!evalPath || typeof evalPath !== 'string' || evalPath.trim() === '') {
-      throw new Error(
-        "validation.type is 'dataset' but no path is provided. Set validation.path to the eval dataset file path (e.g. validation: { type: 'dataset', path: './eval.jsonl' })."
-      )
-    }
-    if (evalPath === opts.trainDatasetDir) {
-      throw new Error(
-        "validation.type is 'dataset' but validation.path is the same as trainDatasetDir. Provide a separate eval dataset path."
-      )
-    }
-    out.evalDatasetPath = evalPath
-    out.validationSplit = 0
-    out.useEvalDatasetForValidation = true
-  }
-  delete out.validation
-  return out
-}
-const RUN_QUEUE_BUSY_ERROR =
-  'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
-/** Max ms to wait for the previous inference job to settle before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
@@ -146,6 +93,7 @@ class LlmLlamacpp extends BaseInference {
     this._projectionModel = projectionModel
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
+    this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
     this._jobInProgress = false
     this._defaultFinetuneParams = finetuningParams ?? null
@@ -220,15 +168,6 @@ class LlmLlamacpp extends BaseInference {
     await this.weightsProvider.streamFiles(this._shards, onChunk, reportProgressCallback)
   }
 
-  _isFinetuneTerminalPayload (data) {
-    return (
-      data &&
-      typeof data === 'object' &&
-      data.op === 'finetune' &&
-      typeof data.status === 'string'
-    )
-  }
-
   _isSuppressedNoResponseLog (args) {
     const message = args.map(arg => {
       if (typeof arg === 'string') return arg
@@ -265,18 +204,10 @@ class LlmLlamacpp extends BaseInference {
     return filteredLogger
   }
 
-  _updateFinetuneActiveFromCallback (eventType, data) {
-    if (this._isFinetuneTerminalPayload(data)) {
-      this._finetuneActive = false
-      return
-    }
-    if (eventType === 'Error' && this._finetuneActive) {
-      this._finetuneActive = false
-    }
-  }
-
   _handleAddonOutputEvent (originalOutputCb, originalLoggerRef, instance, eventType, jobId, data, extra) {
-    this._updateFinetuneActiveFromCallback(eventType, data)
+    if (eventType === 'JobEnded' || eventType === 'Error') {
+      this._hasActiveResponse = false
+    }
 
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : (data?.message || JSON.stringify(data))
@@ -400,7 +331,6 @@ class LlmLlamacpp extends BaseInference {
       try {
         await this.cancel()
       } catch (_) {}
-      this._finetuneActive = false
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
         currentJobResponse.failed(new Error('Model was unloaded'))
@@ -432,6 +362,7 @@ class LlmLlamacpp extends BaseInference {
             message.type === 'media' &&
             message.content instanceof Uint8Array) {
           mediaItems.push(message.content)
+          // Keep the message as a placeholder marker (with empty content) for tokenization
           textMessages.push({ ...message, content: '' })
         } else {
           textMessages.push(message)
@@ -440,10 +371,12 @@ class LlmLlamacpp extends BaseInference {
 
       const promptMessages = []
 
+      // Send media first (in order) if present
       for (const mediaData of mediaItems) {
         promptMessages.push({ type: 'media', content: mediaData })
       }
 
+      // Send text messages
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
 
       const response = this._createResponse('OnlyOneJob')
@@ -459,10 +392,10 @@ class LlmLlamacpp extends BaseInference {
       this._jobInProgress = true
       try {
         accepted = await this.addon.runJob(promptMessages)
-      } catch (err) {
+      } catch (error) {
         this._deleteJobMapping('OnlyOneJob')
-        response.failed(err)
-        throw err
+        response.failed(error)
+        throw error
       }
 
       this._hasActiveResponse = true
@@ -497,30 +430,32 @@ class LlmLlamacpp extends BaseInference {
     this.logger?.info?.('finetune() called')
     this.logger?.info?.('Finetuning parameters:', params)
 
-    if (this._finetuneActive) {
-      throw new Error(RUN_QUEUE_BUSY_ERROR)
-    }
-
     return this._withExclusiveRun(async () => {
-      this._finetuneActive = true
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
       const response = this._createResponse('OnlyOneJob')
       let accepted
       try {
         accepted = await this.addon.finetune(paramsToSend)
       } catch (err) {
-        this._finetuneActive = false
         this._deleteJobMapping('OnlyOneJob')
         response.failed(err)
         throw err
       }
 
       if (!accepted) {
-        this._finetuneActive = false
         this._deleteJobMapping('OnlyOneJob')
         const msg = RUN_BUSY_ERROR_MESSAGE
         response.failed(new Error(msg))
         throw new Error(msg)
       }
+
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       return response
     })
