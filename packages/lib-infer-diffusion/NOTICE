@@ -1,0 +1,14 @@
+QVAC Stable Diffusion Addon
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes software developed at Tether (https://tether.to).
+
+This product uses code from the following open source projects:
+
+- stable-diffusion.cpp (https://github.com/leejet/stable-diffusion.cpp)
+  Licensed under the MIT License
+  Copyright (c) 2023-2024 leejet
+
+- ggml (https://github.com/ggml-org/ggml)
+  Licensed under the MIT License
+  Copyright (c) 2023-2024 The ggml authors
