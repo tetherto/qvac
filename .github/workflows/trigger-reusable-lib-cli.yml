@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-cli)
+name: General CI/CD (cli)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -16,7 +16,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-cli/**"
+      - "packages/cli/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -47,9 +47,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-cli
-          package-json-path: packages/qvac-cli/package.json
-          changelog-path: packages/qvac-cli/CHANGELOG.md
+          package-slug: cli
+          package-json-path: packages/cli/package.json
+          changelog-path: packages/cli/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -121,7 +121,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-cli
+          workdir: packages/cli
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -133,8 +133,8 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
-      workdir: packages/qvac-cli
-      repo_name: "qvac-cli"
+      workdir: packages/cli
+      repo_name: "cli"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -158,7 +158,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-cli
+          workdir: packages/cli
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -183,5 +183,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-cli
+          workdir: packages/cli
           name-suffix: "-mono"
