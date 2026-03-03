@@ -57,6 +57,7 @@ class HttpDL extends BaseDL {
 
       const req = https.request(url, { method, agent: false }, (response) => {
         if ([301, 302, 307, 308].includes(response.statusCode)) {
+          response.resume()
           let loc = response.headers.location
           if (loc && loc.startsWith('/')) {
             const parsed = new URL(url)
@@ -67,11 +68,13 @@ class HttpDL extends BaseDL {
         }
 
         if (response.statusCode !== 200) {
+          response.resume()
           reject(new Error(`HTTP ${response.statusCode} ${method} ${url}`))
           return
         }
 
         if (method === 'HEAD') {
+          response.resume()
           resolve(parseInt(response.headers['content-length'] || '0', 10))
         } else {
           resolve(response)

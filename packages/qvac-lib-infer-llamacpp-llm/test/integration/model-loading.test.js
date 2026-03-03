@@ -171,11 +171,16 @@ test('network loader can run inference end-to-end with sharded model', { timeout
     }
   }
 
-  await addon.load(true, onProgress)
-  const response = await addon.run(BASE_PROMPT)
-  const output = await collectResponse(response)
-  t.ok(output.length > 0, 'network-loaded sharded model should generate output')
-  t.ok(progressMade > 0, 'network-loaded sharded model should make progress')
+  try {
+    await addon.load(true, onProgress)
+    const response = await addon.run(BASE_PROMPT)
+    const output = await collectResponse(response)
+    t.ok(output.length > 0, 'network-loaded sharded model should generate output')
+    t.ok(progressMade > 0, 'network-loaded sharded model should make progress')
+  } finally {
+    await addon.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
 })
 
 // Keep event loop alive briefly to let pending async operations complete
