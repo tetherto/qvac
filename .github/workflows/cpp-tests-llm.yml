@@ -82,8 +82,7 @@ jobs:
 
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Configure vcpkg in windows
-        working-directory: ${{ env.WORKDIR }}
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+        uses: lukka/run-vcpkg@v11.5 # This action sets up vcpkg and installs dependencies from vcpkg.json
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg on macOS
