@@ -66,7 +66,7 @@ function parseSpeakerSegments (diarizationText) {
   return segments
 }
 
-function assignWordsToSpeakers (transcription, speakerSegments, audioDuration) {
+function assignWordsToSpeakers (transcription, speakerSegments) {
   if (speakerSegments.length === 0 || !transcription) {
     return [{ speaker: 0, text: transcription || '[No speech detected]' }]
   }
@@ -147,7 +147,7 @@ async function main () {
 
   console.log('3. Combining results...\n')
   const speakerSegments = parseSpeakerSegments(diarization)
-  const attributed = assignWordsToSpeakers(transcription, speakerSegments, audioDuration)
+  const attributed = assignWordsToSpeakers(transcription, speakerSegments)
 
   console.log('=== DIARIZED TRANSCRIPTION ===')
   console.log('='.repeat(60))

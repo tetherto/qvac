@@ -182,7 +182,6 @@ function createJobTracker () {
     markOutput () {
       hasOutput = true
       tryResolve()
-      if (jobEnded && !hasOutput) resolveJob()
     },
     markJobEnded () {
       jobEnded = true

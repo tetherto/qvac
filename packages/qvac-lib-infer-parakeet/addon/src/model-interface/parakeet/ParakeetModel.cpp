@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <istream>
@@ -17,6 +18,7 @@
 
 #include "onnxruntime/onnxruntime_cxx_api.h"
 
+#include "addon/ParakeetErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #ifndef M_PI
@@ -250,6 +252,7 @@ void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
 
   if (json.contains("added_tokens")) {
     for (auto& token : json["added_tokens"]) {
+      if (!token.contains("id") || !token.contains("content")) continue;
       size_t id = token["id"].get<size_t>();
       std::string content = token["content"].get<std::string>();
       if (id >= vocab_.size()) {
@@ -450,7 +453,8 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   if (modelIt == model_weights_.end()) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
          "CTC model weights not found");
-    throw std::runtime_error("CTC model not loaded");
+    throw errors::makeStatus(errors::Code::CTCModelNotLoaded,
+                             "CTC model weights not found");
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -461,22 +465,26 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   bool hasExternalData = std::filesystem::exists(modelDataPath);
 
   if (hasExternalData) {
-    auto originalCwd = std::filesystem::current_path();
-    std::filesystem::current_path(cfg_.modelPath);
+    auto stagingDir = std::filesystem::temp_directory_path() /
+                      ("parakeet_ctc_" +
+                       std::to_string(reinterpret_cast<uintptr_t>(this)));
+    std::filesystem::create_directories(stagingDir);
+
+    auto modelLink = stagingDir / "model.onnx";
+    auto dataLink = stagingDir / "model.onnx_data";
+    std::filesystem::create_symlink(
+        std::filesystem::absolute(modelPath), modelLink);
+    std::filesystem::create_symlink(
+        std::filesystem::absolute(modelDataPath), dataLink);
+
     try {
-#ifdef _WIN32
-      std::wstring wModelPath(modelPath.begin(), modelPath.end());
       ctc_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, wModelPath.c_str(), session_options);
-#else
-      ctc_session_ = std::make_unique<Ort::Session>(
-          *ort_env_, modelPath.c_str(), session_options);
-#endif
-      std::filesystem::current_path(originalCwd);
+          *ort_env_, modelLink.c_str(), session_options);
     } catch (...) {
-      std::filesystem::current_path(originalCwd);
+      std::filesystem::remove_all(stagingDir);
       throw;
     }
+    std::filesystem::remove_all(stagingDir);
   } else {
     ctc_session_ = std::make_unique<Ort::Session>(
         *ort_env_, modelIt->second.data(), modelIt->second.size(),
@@ -489,7 +497,8 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
   if (encoderIt == model_weights_.end()) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
          "EOU encoder weights not found");
-    throw std::runtime_error("EOU encoder not loaded");
+    throw errors::makeStatus(errors::Code::EOUEncoderNotLoaded,
+                             "EOU encoder weights not found");
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -502,7 +511,8 @@ void ParakeetModel::loadEOUSessions(Ort::SessionOptions& session_options) {
   if (decoderIt == model_weights_.end()) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
          "EOU decoder weights not found");
-    throw std::runtime_error("EOU decoder not loaded");
+    throw errors::makeStatus(errors::Code::EOUDecoderNotLoaded,
+                             "EOU decoder weights not found");
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -518,7 +528,8 @@ void ParakeetModel::loadSortformerSessions(
   if (modelIt == model_weights_.end()) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
          "Sortformer model weights not found");
-    throw std::runtime_error("Sortformer model not loaded");
+    throw errors::makeStatus(errors::Code::SortformerNotLoaded,
+                             "Sortformer model weights not found");
   }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -574,7 +585,8 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
     if (encoderIt == model_weights_.end()) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
            "Encoder model weights not found");
-      throw std::runtime_error("Encoder model not loaded");
+      throw errors::makeStatus(errors::Code::EncoderNotLoaded,
+                               "Encoder model weights not found");
     }
 
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -617,7 +629,8 @@ void ParakeetModel::loadTDTSessions(Ort::SessionOptions& session_options) {
     if (decoderIt == model_weights_.end()) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
            "Decoder model weights not found");
-      throw std::runtime_error("Decoder model not loaded");
+      throw errors::makeStatus(errors::Code::DecoderNotLoaded,
+                               "Decoder model weights not found");
     }
     decoder_session_ = std::make_unique<Ort::Session>(
         *ort_env_, decoderIt->second.data(), decoderIt->second.size(),
@@ -765,17 +778,17 @@ std::vector<float> ParakeetModel::computeMelSpectrogram(const Input& audio,
         0.5f * (1.0f - std::cos(2.0f * M_PI * i / (WIN_LENGTH - 1)));
   }
 
-  int cacheKey = isNemoStyle ? -(numMelBins + 1) : numMelBins;
-  if (filterbanks_.find(cacheKey) == filterbanks_.end()) {
+  FilterbankKey fbKey{numMelBins, isNemoStyle};
+  if (filterbanks_.find(fbKey) == filterbanks_.end()) {
     if (isNemoStyle) {
-      filterbanks_[cacheKey] = buildMelFilterbankSlaney(
+      filterbanks_[fbKey] = buildMelFilterbankSlaney(
           numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, 8000.0f);
     } else {
-      filterbanks_[cacheKey] = buildMelFilterbank(
+      filterbanks_[fbKey] = buildMelFilterbank(
           numMelBins, FFT_SIZE, SAMPLE_RATE, 0.0f, SAMPLE_RATE / 2.0f);
     }
   }
-  auto& melFilterbank = filterbanks_[cacheKey];
+  auto& melFilterbank = filterbanks_[fbKey];
 
   Eigen::FFT<float> fft;
   const int numFftBins = FFT_SIZE / 2 + 1;
@@ -853,7 +866,8 @@ std::vector<float> ParakeetModel::runEncoder(
     const std::vector<float>& melFeatures, int64_t numFrames,
     int64_t& encodedLength, bool alreadyTransposed) {
   if (!encoder_session_) {
-    throw std::runtime_error("Encoder session not initialized");
+    throw errors::makeStatus(errors::Code::EncoderNotLoaded,
+                             "Encoder session not initialized");
   }
 
   std::vector<float> encoderInput;
@@ -1051,7 +1065,8 @@ std::string ParakeetModel::runCTCInferencePipeline(const Input& audio) {
 std::vector<float> ParakeetModel::runCTCModel(
     const std::vector<float>& melFeatures, int64_t numFrames) {
   if (!ctc_session_) {
-    throw std::runtime_error("CTC session not initialized");
+    throw errors::makeStatus(errors::Code::CTCModelNotLoaded,
+                             "CTC session not initialized");
   }
 
   std::vector<int64_t> featShape = {1, numFrames, CTC_MEL_BINS};
@@ -1151,7 +1166,12 @@ void ParakeetModel::resetEOUStreamingState() {
       break;
     }
   }
-  if (eouState_.eouId < 0) eouState_.eouId = 1024;
+  if (eouState_.eouId < 0) {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+         "Vocabulary does not contain <EOU> token; falling back to id " +
+             std::to_string(EOU_FALLBACK_TOKEN));
+    eouState_.eouId = EOU_FALLBACK_TOKEN;
+  }
 
   eouState_.initialized = true;
 }
@@ -1160,7 +1180,8 @@ std::vector<float> ParakeetModel::eouEncodeChunk(
     const std::vector<float>& melChunk, int64_t chunkFrames,
     int64_t& outFrames) {
   if (!encoder_session_) {
-    throw std::runtime_error("EOU encoder session not initialized");
+    throw errors::makeStatus(errors::Code::EOUEncoderNotLoaded,
+                             "EOU encoder session not initialized");
   }
 
   std::vector<float> transposed(MEL_BINS * chunkFrames);
@@ -1478,15 +1499,16 @@ std::string ParakeetModel::runSortformerFromMel(
 std::vector<float> ParakeetModel::runSortformerChunked(
     const std::vector<float>& melFeatures, int64_t numFrames) {
   if (!sortformer_session_) {
-    throw std::runtime_error("Sortformer session not initialized");
+    throw errors::makeStatus(errors::Code::SortformerNotLoaded,
+                             "Sortformer session not initialized");
   }
 
   const int64_t chunkMelFrames =
       static_cast<int64_t>(SF_CHUNK_LEN) * SF_SUBSAMPLING;
 
-  std::vector<float> spkcache;
+  std::deque<float> spkcache;
   int64_t cacheFrames = 0;
-  std::vector<float> fifo;
+  std::deque<float> fifo;
   int64_t fifoFrames = 0;
   std::vector<float> allPredictions;
 
@@ -1508,10 +1530,11 @@ std::vector<float> ParakeetModel::runSortformerChunked(
         *memory_info_, chunkLenData.data(), chunkLenData.size(),
         chunkLenShape.data(), chunkLenShape.size());
 
+    std::vector<float> cacheContiguous(spkcache.begin(), spkcache.end());
     std::vector<int64_t> cacheShape = {1, cacheFrames, SF_EMB_DIM};
     Ort::Value cacheTensor = Ort::Value::CreateTensor<float>(
-        *memory_info_, spkcache.data(), spkcache.size(), cacheShape.data(),
-        cacheShape.size());
+        *memory_info_, cacheContiguous.data(), cacheContiguous.size(),
+        cacheShape.data(), cacheShape.size());
 
     std::vector<int64_t> cacheLenData = {cacheFrames};
     std::vector<int64_t> cacheLenShape = {1};
@@ -1519,10 +1542,11 @@ std::vector<float> ParakeetModel::runSortformerChunked(
         *memory_info_, cacheLenData.data(), cacheLenData.size(),
         cacheLenShape.data(), cacheLenShape.size());
 
+    std::vector<float> fifoContiguous(fifo.begin(), fifo.end());
     std::vector<int64_t> fifoShape = {1, fifoFrames, SF_EMB_DIM};
     Ort::Value fifoTensor = Ort::Value::CreateTensor<float>(
-        *memory_info_, fifo.data(), fifo.size(), fifoShape.data(),
-        fifoShape.size());
+        *memory_info_, fifoContiguous.data(), fifoContiguous.size(),
+        fifoShape.data(), fifoShape.size());
 
     std::vector<int64_t> fifoLenData = {fifoFrames};
     std::vector<int64_t> fifoLenShape = {1};
@@ -1601,20 +1625,23 @@ std::vector<float> ParakeetModel::medianFilter(
     int numSpeakers) const {
   std::vector<float> filtered = preds;
   int half = diarConfig_.medianWindow / 2;
+  std::vector<float> window(diarConfig_.medianWindow);
 
   for (int spk = 0; spk < numSpeakers; ++spk) {
     for (int64_t t = 0; t < numFrames; ++t) {
       int64_t wStart = std::max(int64_t(0), t - half);
       int64_t wEnd = std::min(numFrames, t + half + 1);
+      size_t wLen = static_cast<size_t>(wEnd - wStart);
 
-      std::vector<float> window;
-      window.reserve(wEnd - wStart);
       for (int64_t i = wStart; i < wEnd; ++i) {
-        window.push_back(preds[i * numSpeakers + spk]);
+        window[static_cast<size_t>(i - wStart)] =
+            preds[i * numSpeakers + spk];
       }
 
-      std::sort(window.begin(), window.end());
-      filtered[t * numSpeakers + spk] = window[window.size() / 2];
+      auto mid = window.begin() + static_cast<ptrdiff_t>(wLen / 2);
+      std::nth_element(window.begin(), mid,
+                       window.begin() + static_cast<ptrdiff_t>(wLen));
+      filtered[t * numSpeakers + spk] = *mid;
     }
   }
 
@@ -1804,10 +1831,71 @@ std::string ParakeetModel::processCTC(const Input& input) {
 }
 
 std::string ParakeetModel::processEOU(const Input& input) {
-  std::string text;
-  measureTime(encoderMs_, [&]() {
-    text = runEOUInferencePipeline(input);
+  std::vector<float> melFeatures;
+  int64_t numFrames = 0;
+
+  measureTime(melSpecMs_, [&]() {
+    melFeatures = computeMelSpectrogram(input, MEL_BINS);
+    numFrames = static_cast<int64_t>(melFeatures.size() / MEL_BINS);
+    totalMelFrames_ += numFrames;
   });
+
+  if (melFeatures.empty() || numFrames <= 0) return "[Audio too short]";
+  if (!eouState_.initialized) resetEOUStreamingState();
+
+  static constexpr int64_t MIN_ENCODER_FRAMES = 10;
+  std::string fullResult;
+  int64_t totalEncoded = 0;
+  int eouCount = 0;
+
+  for (int64_t start = 0; start < numFrames;
+       start += EOU_ENCODER_CHUNK_FRAMES) {
+    int64_t end = std::min(
+        start + static_cast<int64_t>(EOU_ENCODER_CHUNK_FRAMES), numFrames);
+    int64_t chunkLen = end - start;
+
+    if (chunkLen < MIN_ENCODER_FRAMES && start > 0) break;
+
+    std::vector<float> melChunk(melFeatures.begin() + start * MEL_BINS,
+                                melFeatures.begin() + end * MEL_BINS);
+
+    int64_t outFrames = 0;
+    std::vector<float> encoderOutput;
+    measureTime(encoderMs_, [&]() {
+      encoderOutput = eouEncodeChunk(melChunk, chunkLen, outFrames);
+    });
+    totalEncoded += outFrames;
+    totalEncodedFrames_ += outFrames;
+
+    if (outFrames <= 0) continue;
+
+    int chunkEou = 0;
+    std::string chunkText;
+    measureTime(decoderMs_, [&]() {
+      chunkText = eouDecodeChunk(encoderOutput, outFrames, chunkEou);
+    });
+    eouCount += chunkEou;
+
+    if (!chunkText.empty()) {
+      if (!fullResult.empty() && fullResult.back() != '\n' &&
+          fullResult.back() != ' ') {
+        fullResult += " ";
+      }
+      fullResult += chunkText;
+    }
+  }
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "EOU streaming: " + std::to_string(numFrames) + " mel frames -> " +
+           std::to_string(totalEncoded) + " encoded, " +
+           std::to_string(eouCount) + " utterance boundaries");
+
+  while (!fullResult.empty() &&
+         (fullResult.back() == ' ' || fullResult.back() == '\n')) {
+    fullResult.pop_back();
+  }
+
+  std::string text = fullResult.empty() ? "[No speech detected]" : fullResult;
 
   size_t wordCount =
       std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);

@@ -177,6 +177,7 @@ private:
   static constexpr int64_t NOSPEECH_TOKEN = 1;
   static constexpr int64_t PREDICT_LANG = 22;
   static constexpr int64_t CTC_BLANK_TOKEN = 1024;
+  static constexpr int64_t EOU_FALLBACK_TOKEN = 1024;
 
   // ── Audio / mel constants ──────────────────────────────────────────────
   static constexpr int MEL_BINS = 128;
@@ -225,8 +226,15 @@ private:
 
   float processed_time_ = 0.0f;
 
-  // ── Mel filterbank cache (per-instance, thread-safe) ───────────────────
-  std::map<int, std::vector<std::vector<float>>> filterbanks_;
+  // ── Mel filterbank cache (per-instance, NOT thread-safe) ───────────────
+  struct FilterbankKey {
+    int melBins;
+    bool slaney;
+    bool operator<(const FilterbankKey& o) const {
+      return std::tie(melBins, slaney) < std::tie(o.melBins, o.slaney);
+    }
+  };
+  std::map<FilterbankKey, std::vector<std::vector<float>>> filterbanks_;
 
   // ── Runtime stats ──────────────────────────────────────────────────────
   int64_t totalSamples_ = 0;
