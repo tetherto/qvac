@@ -9,7 +9,6 @@ const { LlamaInterface } = require('./addon')
 
 const noop = () => { }
 
-<<<<<<< HEAD
 const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 const RUN_QUEUE_BUSY_ERROR =
@@ -59,13 +58,11 @@ function normalizeFinetuneParams (opts) {
   delete out.validation
   return out
 }
-=======
 const RUN_QUEUE_BUSY_ERROR =
   'A finetune or run is already set or being processed. Wait for it to complete or pause before calling run() or finetune() again.'
 /** Max ms to wait for the previous inference job to settle before throwing. */
 const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
->>>>>>> 7c63242 (index.js restored before conlict)
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']
 const DEFAULT_VALIDATION_FRACTION = 0.05
@@ -149,12 +146,8 @@ class LlmLlamacpp extends BaseInference {
     this._projectionModel = projectionModel
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-<<<<<<< HEAD
     this._hasActiveResponse = false
     this._jobInProgress = false
-=======
-    this._finetuneActive = false
->>>>>>> 7c63242 (index.js restored before conlict)
     this._defaultFinetuneParams = finetuningParams ?? null
     this._lastJobResult = Promise.resolve()
   }
@@ -424,19 +417,12 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<QvacResponse>} A QvacResponse representing the inference job
    */
   async _runInternal (prompt) {
-<<<<<<< HEAD
     return this._withExclusiveRun(async () => {
       if (this._hasActiveResponse) {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
       this.logger.info('Starting inference with prompt:', prompt)
-=======
-    if (this._finetuneActive) {
-      throw new Error(RUN_QUEUE_BUSY_ERROR)
-    }
-    this.logger.info('Starting inference with prompt:', prompt)
->>>>>>> 7c63242 (index.js restored before conlict)
     return this._withExclusiveRun(async () => {
       const textMessages = []
       const mediaItems = []
@@ -459,17 +445,6 @@ class LlmLlamacpp extends BaseInference {
       }
 
       promptMessages.push({ type: 'text', input: JSON.stringify(textMessages) })
-<<<<<<< HEAD
-=======
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
-        }, PREVIOUS_JOB_WAIT_MS)
-        this._lastJobResult
-          .then(() => { clearTimeout(timer); resolve() })
-          .catch(() => { clearTimeout(timer); resolve() })
-      })
->>>>>>> 7c63242 (index.js restored before conlict)
 
       const response = this._createResponse('OnlyOneJob')
 
@@ -489,22 +464,12 @@ class LlmLlamacpp extends BaseInference {
         response.failed(err)
         throw err
       }
-<<<<<<< HEAD
 
       this._hasActiveResponse = true
       const finalized = response.await().finally(() => { this._hasActiveResponse = false })
       finalized.catch(() => {})
       response.await = () => finalized
       const response = this._createResponse('job')
-=======
-      if (!accepted) {
-        this._deleteJobMapping('OnlyOneJob')
-        const msg = RUN_BUSY_ERROR_MESSAGE
-        response.failed(new Error(msg))
-        throw new Error(msg)
-      }
-      this._lastJobResult = response.await()
->>>>>>> 7c63242 (index.js restored before conlict)
 
       this.logger.info('Inference job started successfully')
 
