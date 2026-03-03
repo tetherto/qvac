@@ -2,11 +2,12 @@
 
 const test = require('brittle')
 const FilesystemDL = require('@qvac/dl-filesystem')
+const os = require('bare-os')
 
 const ImgStableDiffusion = require('../../index.js')
 const { ensureModel } = require('./utils')
 
-const MODEL_URL = process.env.SD_TEST_MODEL_URL
+const MODEL_URL = os.env().SD_TEST_MODEL_URL
 
 test('model loading - load and unload', { timeout: 600_000, skip: !MODEL_URL }, async t => {
   const modelName = MODEL_URL.split('/').pop()
