@@ -312,13 +312,13 @@ JavaScript Dependencies
   @qvac/dl-base@0.2.0
   @qvac/dl-filesystem@0.2.0
   @qvac/dl-hyperdrive@0.2.0
-  @qvac/embed-llamacpp@0.10.7
+  @qvac/embed-llamacpp@0.11.1
     https://github.com/tetherto/qvac-lib-infer-llamacpp-embed
   @qvac/error@0.1.1
   @qvac/infer-base@0.1.1
   @qvac/infer-base@0.2.2
   @qvac/langdetect-text@0.1.1
-  @qvac/llm-llamacpp@0.8.9
+  @qvac/llm-llamacpp@0.9.1
     https://github.com/tetherto/qvac-lib-infer-llamacpp-llm
   @qvac/logging@0.1.0
   @qvac/ocr-onnx@0.1.7

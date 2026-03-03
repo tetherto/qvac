@@ -10,14 +10,10 @@ import type BaseInference from "@qvac/infer-base";
 
 const logger = getServerLogger();
 
-interface AddonInterface {
-  cancel(jobId?: string): Promise<void>;
-}
-
 // BaseInference provides: load, run (returns QvacResponse), unload, destroy, pause, unpause, stop, status
 export type AnyModel = Omit<BaseInference, "addon"> & {
   reload?(config: unknown): Promise<void>;
-  addon?: AddonInterface;
+  cancel?(): Promise<void>;
 };
 
 interface DelegateOptions {

@@ -67,10 +67,6 @@ export const embedConfigBaseSchema = z.object({
   batchSize: z.number().int().min(1).optional(),
   ctxSize: z.number().int().min(1).optional(),
   flashAttention: z.enum(["on", "off"]).optional(),
-  // Raw CLI override (advanced, takes precedence if set)
-  // Format: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024"
-  // See: https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main?tab=readme-ov-file#4-create-config
-  rawConfig: z.string().optional(),
 });
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;
