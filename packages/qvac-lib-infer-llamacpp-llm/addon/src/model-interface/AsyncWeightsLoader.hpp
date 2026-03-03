@@ -10,10 +10,12 @@
 #include <common/common.h>
 #include <llama-cpp.h>
 
+#include "ModelMetadata.hpp"
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 #include "qvac-lib-inference-addon-cpp/InitLoader.hpp"
+#include "utils/BorrowablePtr.hpp"
 
 /// @brief Encapsulates async/streaming weights loading for sharded and
 /// single-GGUF models. Owns the streaming state and the buffered file map,
@@ -21,13 +23,15 @@
 class AsyncWeightsLoader {
 public:
   using Buf = std::basic_streambuf<char>;
+  using SharedBuffer = BorrowablePtr<Buf>;
 
   /// @param modelMetadata Optional. When provided, the first shard received
   /// via setWeightsForFile is lent to modelMetadata so that metadata parsing
   /// can proceed before the shard is handed to the weights engine.
   AsyncWeightsLoader(
       const GGUFShards& shards, InitLoader& initLoader,
-      const std::string& loadingContext);
+      const std::string& loadingContext,
+      ModelMetaData* modelMetadata = nullptr);
 
   virtual ~AsyncWeightsLoader() = default;
   AsyncWeightsLoader(const AsyncWeightsLoader&) = delete;
@@ -76,8 +80,14 @@ protected:
   }
 
 private:
+  /// @brief Waits for the first-shard async worker (if started) and rethrows
+  /// any exception raised in that worker.
+  void joinFirstShardWorker();
+
   [[nodiscard]] bool
   isFirstShard(const std::filesystem::path& filenamePath) const;
+  [[nodiscard]] bool
+  shouldLendFirstShard(const std::filesystem::path& filenamePath) const;
   [[nodiscard]] bool
   isLastShard(const std::filesystem::path& filenamePath) const;
 
@@ -98,7 +108,9 @@ private:
   const GGUFShards& shards_;
   InitLoader& initLoader_;
   const std::string& loadingContext_;
+  ModelMetaData* modelMetadata_ = nullptr;
 
   bool isStreaming_ = false;
-  std::map<std::string, std::unique_ptr<Buf>> streamedFiles_;
+  std::map<std::string, SharedBuffer> streamedFiles_;
+  std::future<void> firstShardWorker_;
 };
