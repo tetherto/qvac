@@ -13,13 +13,15 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test:unit": "bare test/unit/ocr.test.js",
+    "test:unit": "brittle-bare test/unit/*.test.js",
     "test:example": "bare examples/example.fs.js",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test": "npm run test:unit && npm run test:integration",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "download-models": "node scripts/download-ocr-models.js",
+    "download-models:all": "node scripts/download-ocr-models.js all",
     "test:dts": "tsc -p tsconfig.dts.json"
   },
   "files": [
