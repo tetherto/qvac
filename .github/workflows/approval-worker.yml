@@ -3,12 +3,12 @@ name: Approval Check Worker
 on:
   issue_comment:
     types: [created]
+  pull_request_review:
+    types: [submitted]
     
 jobs:
   run-when-command:
-    if: >
-      github.event.issue.pull_request != null &&
-      (contains(github.event.comment.body, '/review') || contains(github.event.comment.body, 'review'))
+    if: github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     permissions:
       contents: read
