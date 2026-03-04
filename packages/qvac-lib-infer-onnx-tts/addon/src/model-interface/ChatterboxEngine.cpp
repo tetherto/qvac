@@ -1,4 +1,5 @@
 #include "ChatterboxEngine.hpp"
+#include "ChatterboxLanguageMode.hpp"
 #include "FileUtils.hpp"
 
 #include <algorithm>
@@ -53,13 +54,6 @@ void penalizeRepetitionLogits(std::vector<float> &logits,
       logits[id] /= REPETITION_PENALTY;
     }
   }
-}
-
-std::string prepareText(const std::string& text, const std::string& language) {
-  if (language == "en") {
-    return text;
-  }
-  return "[" + language + "]" + text;
 }
 
 int64_t getNumElements(const qvac::ttslib::chatterbox::OrtTensor &tensor) {
@@ -127,6 +121,13 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   }
 
   isEnglish_ = language_ == "en";
+  if (!isEnglish_ && embedTokensSession_ != nullptr &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    std::cout << "[Chatterbox] Requested language '" << language_
+              << "' but model appears monolingual. Falling back to English mode."
+              << std::endl;
+    isEnglish_ = true;
+  }
   loaded_ = true;
   std::cout << "Language: " << language_ << std::endl;
 
@@ -163,6 +164,17 @@ void ChatterboxEngine::unload() {
 bool ChatterboxEngine::isLoaded() const { return loaded_; }
 
 AudioResult ChatterboxEngine::synthesize(const std::string &text) {
+  // Lazy session mode may defer model creation until first inference.
+  ensureSession(embedTokensSession_, config_.embedTokensPath);
+  if (!isEnglish_ &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    std::cout << "[Chatterbox] Runtime fallback: multilingual inputs are unavailable. "
+                 "Using English mode."
+              << std::endl;
+    isEnglish_ = true;
+    keyValueOffset_ = OFFSET;
+  }
+
   std::vector<int64_t> inputIdsOriginal = tokenize(text);
   std::vector<int64_t> inputIds = inputIdsOriginal;
 
@@ -337,7 +349,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  const std::string preparedText = prepareText(text, language_);
+  const std::string preparedText =
+      lang_mode::prepareTextForTokenization(text, language_, isEnglish_);
   std::cout << "tokenizing text: " << preparedText << std::endl;
   
   TokenizerEncodeResult result;
