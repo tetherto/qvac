@@ -95,7 +95,7 @@ function parseWavFile (wavPath) {
       }
       return samples
     }
-    pos += 8 + chunkSize
+    pos += 8 + chunkSize + (chunkSize % 2)
   }
   throw new Error('No data chunk found in WAV file')
 }

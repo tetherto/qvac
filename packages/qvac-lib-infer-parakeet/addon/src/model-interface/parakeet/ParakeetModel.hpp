@@ -33,7 +33,7 @@ public:
   struct MelFilter {
     int startBin;
     int endBin;
-    std::vector<float> weights;  // non-zero weights for [startBin, endBin)
+    std::vector<float> weights;
   };
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -49,7 +49,7 @@ public:
   void load();
   void unload();
   void unloadWeights() { unload(); }
-  void reload();  // No-op; satisfies ModelInterface contract
+  void reload();
   void reset();
   void warmup();
 
@@ -72,7 +72,7 @@ public:
 
   // ── Weight loading ─────────────────────────────────────────────────────
   void set_weights_for_file(const std::string& filename,
-                            const std::span<const uint8_t>& contents,
+                            std::span<const uint8_t> contents,
                             bool completed);
 
   void set_weights_for_file(const std::string& filename,
@@ -101,6 +101,7 @@ private:
   void loadTDTSessions(Ort::SessionOptions& options);
 
   // ── Shared utilities ───────────────────────────────────────────────────
+  void dispatchWeightFile(const std::string& filename);
   std::string tokensToString(const std::vector<int64_t>& tokens) const;
   void loadVocabulary(const std::vector<uint8_t>& vocabData);
   void loadTokenizerJson(const std::vector<uint8_t>& data);
@@ -186,16 +187,13 @@ private:
   static constexpr int64_t NOSPEECH_TOKEN = 1;
   static constexpr int64_t PREDICT_LANG = 22;
   static constexpr int64_t CTC_BLANK_TOKEN = 1024;
-  // Coincidentally same value as CTC_BLANK_TOKEN but semantically distinct:
-  // CTC blank = "no emission this frame", EOU fallback = default <EOU> id
-  // when the tokenizer doesn't contain the <EOU> special token.
   static constexpr int64_t EOU_FALLBACK_TOKEN = 1024;
 
   // ── Error return strings (non-exception feedback to callers) ───────────
   static constexpr const char* ERR_NO_SPEECH    = "[No speech detected]";
   static constexpr const char* ERR_AUDIO_SHORT  = "[Audio too short]";
-  static constexpr const char* ERR_MODEL_READY  = "[Model not ready]";
-  static constexpr const char* ERR_MODEL_LOADED = "[Model not loaded]";
+  static constexpr const char* ERR_MODEL_NOT_READY  = "[Model not ready]";
+  static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
   static constexpr const char* ERR_INFERENCE    = "[Inference error]";
   static constexpr const char* ERR_NO_SPEAKERS  = "[No speakers detected]";
 
@@ -209,13 +207,13 @@ private:
 
   // ── Encoder / decoder dimensions ───────────────────────────────────────
   static constexpr int ENCODER_DIM = 1024;
-  static constexpr int DECODER_STATE_DIM = 640;       // TDT RNNT decoder
+  static constexpr int DECODER_STATE_DIM = 640;
   static constexpr int TDT_DECODER_LSTM_LAYERS = 2;
   static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
   static constexpr int EOU_ENCODER_DIM = 512;
-  static constexpr int EOU_DECODER_STATE_DIM = 640;   // Same value as TDT, different architecture
+  static constexpr int EOU_DECODER_STATE_DIM = 640;
   static constexpr int EOU_NUM_LAYERS = 17;
   static constexpr int EOU_CACHE_LOOKBACK = 70;
   static constexpr int EOU_CACHE_TIME_STEPS = 8;
@@ -240,7 +238,7 @@ private:
     std::vector<int64_t> cacheChanLen;
     std::vector<float> stateH;
     std::vector<float> stateC;
-    int32_t lastToken = -1;  // -1 = uninitialized; set to blankId by resetEOUStreamingState()
+    int32_t lastToken = -1;
     int64_t eouId = -1;
     int64_t blankId = -1;
     bool initialized = false;
@@ -249,7 +247,7 @@ private:
 
   float processed_time_ = 0.0f;
 
-  // ── Mel filterbank cache (per-instance, NOT thread-safe) ───────────────
+  // ── Mel filterbank cache ────────────────────────────────────────────────
   struct FilterbankKey {
     int melBins;
     bool slaney;

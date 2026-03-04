@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <complex>
 #include <cstdio>
 #include <filesystem>
@@ -59,12 +60,8 @@ float melToHz(float mel) {
   return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
 }
 
-// Unified mel filterbank builder.
 using MelFilter = ParakeetModel::MelFilter;
 
-// slaney=false: bin-index triangles, no normalization (HTK-style for TDT/CTC)
-// slaney=true:  Hz-based triangles with Slaney normalization (librosa-style for EOU/Sortformer)
-// Returns sparse filters: each MelFilter stores only the non-zero weight range.
 std::vector<MelFilter> buildMelFilterbank(
     int numMelBins, int fftSize, float sampleRate,
     float fMin, float fMax, bool slaney = false) {
@@ -168,6 +165,15 @@ bool isSpecialToken(const std::string& piece) {
   return piece.size() >= 2 && piece.front() == '<' && piece.back() == '>';
 }
 
+size_t countWords(const std::string& text) {
+  if (text.empty()) return 0;
+  size_t count = 1;
+  for (char c : text) {
+    if (c == ' ' || c == '\n') count++;
+  }
+  return count;
+}
+
 }  // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -183,28 +189,29 @@ ParakeetModel::~ParakeetModel() {
   unload();
 }
 
-// No-op: ONNX Runtime environment is initialized in the constructor.
-// Satisfies the ModelInterface contract.
 void ParakeetModel::initializeBackend() {}
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Weight loading
 // ═════════════════════════════════════════════════════════════════════════════
 
-void ParakeetModel::set_weights_for_file(
-    const std::string& filename,
-    const std::span<const uint8_t>& contents,
-    bool completed) {
-  if (!completed) return;
-
-  model_weights_[filename] =
-      std::vector<uint8_t>(contents.begin(), contents.end());
-
+void ParakeetModel::dispatchWeightFile(const std::string& filename) {
   if (filename == "vocab.txt") {
     loadVocabulary(model_weights_[filename]);
   } else if (filename == "tokenizer.json") {
     loadTokenizerJson(model_weights_[filename]);
   }
+}
+
+void ParakeetModel::set_weights_for_file(
+    const std::string& filename,
+    std::span<const uint8_t> contents,
+    bool completed) {
+  if (!completed) return;
+
+  model_weights_[filename] =
+      std::vector<uint8_t>(contents.begin(), contents.end());
+  dispatchWeightFile(filename);
 }
 
 void ParakeetModel::set_weights_for_file(
@@ -215,12 +222,7 @@ void ParakeetModel::set_weights_for_file(
                             std::istreambuf_iterator<char>());
 
   model_weights_[filename] = std::move(data);
-
-  if (filename == "vocab.txt") {
-    loadVocabulary(model_weights_[filename]);
-  } else if (filename == "tokenizer.json") {
-    loadTokenizerJson(model_weights_[filename]);
-  }
+  dispatchWeightFile(filename);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -301,8 +303,6 @@ std::string ParakeetModel::tokensToString(
   return trimWhitespace(result);
 }
 
-// TDT-only: resolves a language code (e.g. "en") to the vocab token id.
-// Currently exercised only by unit tests; retained for future multi-language support.
 int64_t ParakeetModel::getLanguageToken(const std::string& langCode) const {
   std::string langToken = "<|" + langCode + "|>";
   for (size_t i = 0; i < vocab_.size(); ++i) {
@@ -413,11 +413,6 @@ void ParakeetModel::load() {
   }
 }
 
-// No-op: the Parakeet custom process() loop does not route the Reload signal
-// to model_.reload(). Reload is handled entirely by the JS layer
-// (addon.reload → _loadModelWeights → activate), and the custom Activate
-// handler calls load() when isLoaded() is false.  Exists solely to satisfy
-// the ModelInterface / ModelApiTest contract.
 void ParakeetModel::reload() {}
 
 void ParakeetModel::unload() {
@@ -746,6 +741,13 @@ ParakeetModel::runPreprocessor(const Input& audio) {
   auto featuresInfo = featuresTensor.GetTensorTypeAndShapeInfo();
   auto featuresShape = featuresInfo.GetShape();
 
+  if (featuresShape.size() < 3) {
+    throw errors::makeStatus(errors::Code::InferenceFailed,
+                             "Preprocessor returned tensor with " +
+                                 std::to_string(featuresShape.size()) +
+                                 " dims, expected >= 3");
+  }
+
   const float* featuresData = featuresTensor.GetTensorData<float>();
   size_t featuresSize = featuresInfo.GetElementCount();
   int64_t numFrames = featuresShape[2];
@@ -907,21 +909,26 @@ std::vector<float> ParakeetModel::runEncoder(
                              "Encoder session not initialized");
   }
 
-  std::vector<float> encoderInput;
+  std::vector<float> transposedBuf;
+  const float* encoderData;
+  size_t encoderSize;
   if (alreadyTransposed) {
-    encoderInput = melFeatures;
+    encoderData = melFeatures.data();
+    encoderSize = melFeatures.size();
   } else {
-    encoderInput.resize(melFeatures.size());
+    transposedBuf.resize(melFeatures.size());
     for (int64_t f = 0; f < numFrames; ++f) {
       for (int b = 0; b < MEL_BINS; ++b) {
-        encoderInput[b * numFrames + f] = melFeatures[f * MEL_BINS + b];
+        transposedBuf[b * numFrames + f] = melFeatures[f * MEL_BINS + b];
       }
     }
+    encoderData = transposedBuf.data();
+    encoderSize = transposedBuf.size();
   }
 
   std::vector<int64_t> inputShape = {1, MEL_BINS, numFrames};
   Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      *memory_info_, encoderInput.data(), encoderInput.size(),
+      *memory_info_, const_cast<float*>(encoderData), encoderSize,
       inputShape.data(), inputShape.size());
 
   std::vector<int64_t> lengthData = {numFrames};
@@ -954,7 +961,7 @@ std::vector<float> ParakeetModel::runEncoder(
 std::string ParakeetModel::greedyDecode(
     const std::vector<float>& encoderOutput, int64_t encodedLength) {
   if (!decoder_session_ || vocab_.empty()) {
-    return ERR_MODEL_READY;
+    return ERR_MODEL_NOT_READY;
   }
 
   const size_t vocabSize = vocab_.size();
@@ -967,9 +974,9 @@ std::string ParakeetModel::greedyDecode(
   int32_t lastEmittedToken = static_cast<int32_t>(BLANK_TOKEN);
   int tokensThisFrame = 0;
   int skip = 0;
+  std::vector<float> encoderSlice(ENCODER_DIM);
 
   for (int64_t t = 0; t < encodedLength; t += skip) {
-    std::vector<float> encoderSlice(ENCODER_DIM);
     for (int i = 0; i < ENCODER_DIM; ++i) {
       encoderSlice[i] = encoderOutput[i * encodedLength + t];
     }
@@ -1028,7 +1035,7 @@ std::string ParakeetModel::greedyDecode(
     int64_t tokenId = 0;
     float bestScore = tokenLogits[0];
     for (size_t i = 1; i < vocabSize; ++i) {
-      if (tokenLogits[i] > bestScore) {
+      if (std::isfinite(tokenLogits[i]) && tokenLogits[i] > bestScore) {
         bestScore = tokenLogits[i];
         tokenId = static_cast<int64_t>(i);
       }
@@ -1039,7 +1046,7 @@ std::string ParakeetModel::greedyDecode(
       float bestDur = durationLogits[0];
       size_t bestIdx = 0;
       for (size_t i = 1; i < numDurations; ++i) {
-        if (durationLogits[i] > bestDur) {
+        if (std::isfinite(durationLogits[i]) && durationLogits[i] > bestDur) {
           bestDur = durationLogits[i];
           bestIdx = i;
         }
@@ -1123,7 +1130,7 @@ std::vector<float> ParakeetModel::runCTCModel(
 
 std::string ParakeetModel::ctcGreedyDecode(const std::vector<float>& logits,
                                            int64_t numFrames) {
-  if (vocab_.empty()) return ERR_MODEL_READY;
+  if (vocab_.empty()) return ERR_MODEL_NOT_READY;
 
   const size_t vocabSize = vocab_.size();
   const int64_t outputFrames =
@@ -1141,7 +1148,7 @@ std::string ParakeetModel::ctcGreedyDecode(const std::vector<float>& logits,
     int64_t bestToken = 0;
     float bestScore = frameLogits[0];
     for (size_t i = 1; i < vocabSize; ++i) {
-      if (frameLogits[i] > bestScore) {
+      if (std::isfinite(frameLogits[i]) && frameLogits[i] > bestScore) {
         bestScore = frameLogits[i];
         bestToken = static_cast<int64_t>(i);
       }
@@ -1301,11 +1308,12 @@ std::string ParakeetModel::eouDecodeChunk(
   const size_t vocabSize = vocab_.size();
   std::string result;
   std::string currentSegment;
+  std::vector<float> encoderFrame(EOU_ENCODER_DIM);
 
   for (int64_t t = 0; t < encodedFrames; ++t) {
-    std::vector<float> encoderFrame(
-        encoderOutput.begin() + t * EOU_ENCODER_DIM,
-        encoderOutput.begin() + (t + 1) * EOU_ENCODER_DIM);
+    std::copy(encoderOutput.begin() + t * EOU_ENCODER_DIM,
+              encoderOutput.begin() + (t + 1) * EOU_ENCODER_DIM,
+              encoderFrame.begin());
 
     std::vector<int64_t> encFrameShape = {1, EOU_ENCODER_DIM, 1};
     Ort::Value encTensor = Ort::Value::CreateTensor<float>(
@@ -1365,7 +1373,6 @@ std::string ParakeetModel::eouDecodeChunk(
       }
 
       if (bestIdx == static_cast<int32_t>(eouState_.blankId) ||
-          bestIdx < 0 ||
           bestIdx >= static_cast<int32_t>(vocabSize) ||
           isSpecialToken(vocab_[bestIdx])) {
         break;
@@ -1394,12 +1401,10 @@ std::string ParakeetModel::eouDecodeChunk(
                 eouState_.stateC.begin());
       eouState_.lastToken = bestIdx;
 
-      if (static_cast<size_t>(bestIdx) < vocabSize) {
-        std::string piece = vocab_[bestIdx];
-        if (!piece.empty() && !isSpecialToken(piece)) {
-          replaceSentencepieceSpace(piece);
-          currentSegment += piece;
-        }
+      std::string piece = vocab_[bestIdx];
+      if (!piece.empty() && !isSpecialToken(piece)) {
+        replaceSentencepieceSpace(piece);
+        currentSegment += piece;
       }
 
       symsThisFrame++;
@@ -1549,8 +1554,6 @@ std::vector<float> ParakeetModel::runSortformerChunked(
       }
     }
 
-    // Front-erase is O(n) but the buffers are small (~250KB fifo, ~375KB
-    // spkcache) and dwarfed by the ONNX inference cost per chunk.
     size_t newEmbSize = static_cast<size_t>(embFrames * SF_EMB_DIM);
     fifo.insert(fifo.end(), embsData, embsData + newEmbSize);
     fifoFrames += embFrames;
@@ -1584,9 +1587,6 @@ std::vector<float> ParakeetModel::medianFilter(
     int numSpeakers) const {
   std::vector<float> filtered = preds;
   int half = diarConfig_.medianWindow / 2;
-  // Pre-allocated to full window size. At boundaries wLen < medianWindow,
-  // so window[wLen:] holds stale data — safe because nth_element only
-  // operates on the [0, wLen) range.
   std::vector<float> window(diarConfig_.medianWindow);
 
   for (int spk = 0; spk < numSpeakers; ++spk) {
@@ -1733,12 +1733,12 @@ std::string ParakeetModel::processTDT(const Input& input) {
     text = greedyDecode(encoderOutput, encodedLength);
   });
 
-  size_t wordCount =
-      std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
-  totalTokens_ += static_cast<int64_t>(wordCount);
+  if (!text.empty() && text.front() != '[') {
+    totalTokens_ += static_cast<int64_t>(countWords(text));
+  }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Decoded: " + std::to_string(wordCount) + " tokens, text: " + text);
+       "TDT decoded: " + text);
 
   return text;
 }
@@ -1772,12 +1772,12 @@ std::string ParakeetModel::processCTC(const Input& input) {
     text = ctcGreedyDecode(logits, numFrames);
   });
 
-  size_t wordCount =
-      std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
-  totalTokens_ += static_cast<int64_t>(wordCount);
+  if (!text.empty() && text.front() != '[') {
+    totalTokens_ += static_cast<int64_t>(countWords(text));
+  }
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Decoded: " + std::to_string(wordCount) + " tokens, text: " + text);
+       "CTC decoded: " + text);
 
   return text;
 }
@@ -1842,15 +1842,7 @@ std::string ParakeetModel::processEOU(const Input& input) {
            std::to_string(eouCount) + " utterance boundaries");
 
   std::string text = trimWhitespace(fullResult);
-
-  size_t wordCount = 0;
-  if (!text.empty()) {
-    wordCount = 1;
-    for (char c : text) {
-      if (c == ' ' || c == '\n') wordCount++;
-    }
-  }
-  totalTokens_ += static_cast<int64_t>(wordCount);
+  totalTokens_ += static_cast<int64_t>(countWords(text));
 
   if (text.empty()) text = ERR_NO_SPEECH;
 
@@ -1879,8 +1871,6 @@ std::string ParakeetModel::processSortformer(const Input& input) {
   }
 
   std::string text;
-  // encoderMs_ includes ONNX inference + medianFilter + binarization + string
-  // formatting since Sortformer has no separate decoder pass.
   measureTime(encoderMs_, [&]() {
     text = runSortformerFromMel(melFeatures, numFrames);
   });
@@ -1932,7 +1922,7 @@ void ParakeetModel::process(const Input& input) {
   } else {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Cannot process: model not loaded");
-    text = ERR_MODEL_LOADED;
+    text = ERR_MODEL_NOT_LOADED;
   }
 
   auto processEnd = std::chrono::high_resolution_clock::now();
@@ -1985,10 +1975,12 @@ std::vector<float> ParakeetModel::preprocessAudioData(
       result.push_back(static_cast<float>(sample) / 32768.0f);
     }
   } else if (audioFormat == "f32le") {
-    result.reserve(audioData.size() / 4);
-    const float* floatData =
-        reinterpret_cast<const float*>(audioData.data());
-    result.assign(floatData, floatData + (audioData.size() / 4));
+    size_t numSamples = audioData.size() / sizeof(float);
+    result.resize(numSamples);
+    std::memcpy(result.data(), audioData.data(), numSamples * sizeof(float));
+  } else {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+         "Unknown audio format: " + audioFormat);
   }
 
   return result;

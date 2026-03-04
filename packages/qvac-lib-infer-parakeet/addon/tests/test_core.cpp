@@ -273,7 +273,6 @@ TEST_F(ParakeetModelTest, ReloadIsNoOp) {
   ParakeetModel model(config);
   
   EXPECT_NO_THROW({ model.reload(); });
-  // reload() is a no-op — model stays in its current state
   EXPECT_FALSE(model.isLoaded());
 }
 
