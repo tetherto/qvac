@@ -81,7 +81,7 @@ public:
   struct Prompt {
     std::string input;
     bool prefill = false;
-    std::optional<std::vector<uint8_t>> media;
+    std::vector<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
     ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
