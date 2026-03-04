@@ -13,6 +13,7 @@
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/TranslationModel.hpp"
+#include "model-interface/PivotTranslationModel.hpp"
 
 namespace {
 using namespace qvac_lib_inference_addon_cpp;
@@ -36,6 +37,7 @@ getConfigMap(
   js::Array configKeysArray(env, configKeys);
   uint32_t configKeysSz = configKeysArray.size(env);
 
+  bool hasPivotModel = false;
   while (configKeysSz > 0) {
     configKeysSz--;
     js_value_t* key;
@@ -43,11 +45,16 @@ getConfigMap(
     auto value = config.getProperty(env, key);
 
     std::string keyString = js::String::fromValue(key).as<std::string>(env);
+
     std::transform(
         keyString.begin(),
         keyString.end(),
         keyString.begin(),
         [](unsigned char c) { return std::tolower(c); });
+    if (keyString == "pivotmodel"){
+      hasPivotModel = true;
+      continue;
+    }
     if (js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
         js::is<js::BigInt>(env, value)) {
       auto jsNumber = js::Number{env, value};
@@ -78,18 +85,42 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
 
   auto configurationParamsJs = args.getJsObject(1, "config");
-  auto config = getConfigMap(env, configurationParamsJs, "config");
+  auto modelConfig = getConfigMap(env, configurationParamsJs, "config");
+
+  auto modelConfigJs = configurationParamsJs.getProperty<js::Object>(env, "config");
+  auto pivotModelConfigJs = modelConfigJs.getOptionalProperty<js::Object>(env, "pivotModel");
+  
+  std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
 
   auto modelPathJs =
       configurationParamsJs.getOptionalProperty<js::String>(env, "path");
+
   std::string modelPath =
       modelPathJs ? modelPathJs.value().as<std::string>(env) : "";
-  auto model =
-      std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
-          modelPath);
+  // Checking for pivot translation
+  if (pivotModelConfigJs.has_value())
+  {
+    auto secondModelPathJs = pivotModelConfigJs->getOptionalProperty<js::String>(env, "path");
+    std::string secondModelPath = secondModelPathJs ? secondModelPathJs.value().as<std::string>(env) : "";
 
-  model->setConfig(config);
-  model->load();
+    auto pivotModelConfig = getConfigMap(env, pivotModelConfigJs.value(), "config");
+
+    auto pivotTranslationModel = std::make_unique<PivotTranslationModel>(modelPath, modelConfig, secondModelPath, pivotModelConfig);
+    model = std::move(pivotTranslationModel);
+  }
+  else
+  {
+    auto translationModel =
+        std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
+            modelPath);
+
+    translationModel->setConfig(modelConfig);
+    translationModel->load();
+
+    model = std::move(translationModel);
+  }
+
+
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
 
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
@@ -115,6 +146,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
+
 
   std::any anyInput;
   if (type == "text") {

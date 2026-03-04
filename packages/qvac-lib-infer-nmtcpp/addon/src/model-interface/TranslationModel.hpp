@@ -1,6 +1,5 @@
 #pragma once
 
-#include <condition_variable>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -55,6 +54,8 @@ public:
 
   void saveLoadParams(const std::string& modelPath);
 
+  std::vector<std::string> processBatch(const std::vector<std::string>& texts);
+
 public: // overrides
   std::string getName() const override;
 
@@ -71,8 +72,6 @@ private:
   std::string indictransPreProcess(const std::string& text);
 
   void updateConfig();
-
-  std::vector<std::string> processBatch(const std::vector<std::string>& texts);
 
   std::string processString(const std::string& input);
 
