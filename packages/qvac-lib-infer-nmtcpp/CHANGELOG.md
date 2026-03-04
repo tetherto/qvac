@@ -5,25 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.9] - 2026-02-25
+## [0.3.9]
+2026-02-25
 
 ### Fixed
 - Batch run API fix for correct batch translation handling (#549)
 - Replaced inline sanity-checks with shared reusable action for fork PR compatibility (#521)
 - Updated addon-cpp version constraint to match actual 1.x API usage (#520)
 
-## [0.3.1] - 2026-01-13
+## [0.3.1]
+2026-01-13
 
 ### Added
 - TypeScript type declarations for `addonLogging` subpath export
 
-## [0.3.0] - 2025-01-08
+## [0.3.0]
+2025-01-08
+
 ### Added
 - TypeScript type declarations (`index.d.ts`) - migrated from `@qvac/sdk` and aligned with runtime API
 - CI job for type declaration validation (`ts-checks`)
 - `test:dts` script for type checking
 
-## [0.2.1] - 2026-01-03
+## [0.2.1]
+2026-01-03
 
 ### Added
 - Batch Support in Bergamot Wrapper (#429) - Add batch translation API for improved performance
@@ -44,12 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Freeze vcpkg version on macOS (#432) - Improve build reproducibility
 - Add core team to CODEOWNERS (#447, #427)
 
-## [0.2.0] - 2025-12-20
+## [0.2.0]
+2025-12-20
 
 ### Added
 - Bergamot NMT backend with multi-platform build support (#422)
 
-## [0.1.10] - 2025-11-27
+## [0.1.10]
+2025-11-27
 
 ### Added
 - 16 KB page size support for Android 15+ compatibility (Google Play requirement)
@@ -61,12 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Vulkan SDK repository from jammy to noble for Ubuntu 24.04 compatibility
 - Added NDK environment configuration for Android builds (ANDROID_NDK_LATEST_HOME)
 
-## [0.1.8] - 2025-11-24
+## [0.1.8]
+2025-11-24
 
 ### Changed
 - update cmake-bare version for better react-native-bare-kit compatability.
-  
-## [0.1.7] - 2025-11-21
+
+## [0.1.7]
+2025-11-21
 
 ### Added
 - Support for multilingual models with language prefix tokens (e.g., en-roa for Portuguese translation)
@@ -77,7 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - C++ linting errors (clang-tidy) - added NOLINT markers for FFI code compatibility
 - C++ test workflow now fails if no tests are generated or executed (prevents false positive passes)
 
-## [0.1.6] - 2025-11-18
+## [0.1.6]
+2025-11-18
 
 ### Fixed
 - Android addon loading by disabling Vulkan to avoid libvulkan.so dependency issues
@@ -87,7 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Vulkan configuration in whisper-cpp overlay to disable GGML_VULKAN on Android
 - Set useGpu to false by default for CPU-only mode (GPU can still be enabled via config)
 
-## [0.1.5] - 2025-11-15
+## [0.1.5]
+2025-11-15
 
 ### Added
 - Android ARM64 build support with Vulkan GPU acceleration
@@ -106,7 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GLIBCXX version mismatch in integration tests by installing libstdc++-13-dev
 - Variable shadowing in nmt.cpp (g_optimal_threads)
 
-## [0.1.4] - 2025-01-10
+## [0.1.4]
+2025-01-10
 
 ### Added
 - Portuguese model support
@@ -119,23 +131,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Various NMT core fixes and stability improvements
-
----
-
-## How to Update This Changelog
-
-When releasing a new version:
-
-1. Move items from `[Unreleased]` to a new version section
-2. Add the version number and date: `## [X.Y.Z] - YYYY-MM-DD`
-3. Keep the `[Unreleased]` section at the top for ongoing changes
-4. Group changes by category: Added, Changed, Deprecated, Removed, Fixed, Security
-
-### Categories
-
-- **Added** for new features
-- **Changed** for changes in existing functionality
-- **Deprecated** for soon-to-be removed features
-- **Removed** for now removed features
-- **Fixed** for any bug fixes
-- **Security** in case of vulnerabilities

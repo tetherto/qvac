@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2] - 2026-03-03
+
+### Fixed
+
+- **Deterministic busy detection:** Replaced the timing-based `_lastJobResult` + 30ms timeout with a synchronous `_hasActiveResponse` boolean flag. On fast hardware (iPhone Metal GPU), short jobs could complete in under 30ms, causing the timeout-based race to be won by the resolved promise instead of the busy guard — allowing a second `run()` through. The flag is now checked synchronously inside `_withExclusiveRun` before any `await`, and cleared via a chained `response.await()` promise so ordering is structurally explicit.
+- **Concurrency test made deterministic:** The `run | run` concurrency test now uses `Promise.race` to handle the case where the first job finishes before the second `run()` is rejected, preventing flaky failures on fast hardware.
+
 ## [0.9.1] - 2026-02-23
 - Use patched version of addon-cpp to reduce logging noise.
 

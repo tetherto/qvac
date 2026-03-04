@@ -1,0 +1,93 @@
+name: Create GitHub Release (Stable Diffusion)
+
+on:
+  workflow_call:
+    inputs:
+      published_version:
+        description: "Version published in prebuild workflow"
+        required: false
+        type: string
+      prev_sha:
+        description: "Previous commit SHA for version comparison"
+        required: false
+        type: string
+      release_name:
+        description: "Human-readable release name"
+        required: false
+        type: string
+        default: "QVAC Stable Diffusion Addon"
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/lib-infer-diffusion"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    if: inputs.published_version != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect version bump
+        id: version
+        uses: ./.github/actions/detect-version-bump
+        with:
+          current_version: ${{ inputs.published_version }}
+          prev_sha: ${{ inputs.prev_sha }}
+          workdir: ${{ inputs.workdir }}
+
+      - name: Verify release notes exist in CHANGELOG
+        if: steps.version.outputs.bumped == 'true'
+        id: changelog
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.current }}"
+          changelog_path="CHANGELOG.md"
+          release_notes_path="${RUNNER_TEMP}/release-notes-v${version}.md"
+
+          if [ ! -s "${changelog_path}" ]; then
+            echo "Missing or empty changelog: ${changelog_path}"
+            exit 1
+          fi
+
+          start_line=$(awk -v version="${version}" '$0 ~ "^## \\[" version "\\]" { print NR; exit }' "${changelog_path}")
+          if [ -z "${start_line}" ]; then
+            echo "Could not find changelog heading for version ${version} in ${changelog_path}"
+            exit 1
+          fi
+
+          end_line=$(awk -v start="${start_line}" 'NR > start && /^## \[/ { print NR - 1; found=1; exit } END { if (!found) print NR }' "${changelog_path}")
+          if [ -z "${end_line}" ] || [ "${end_line}" -lt "${start_line}" ]; then
+            echo "Invalid changelog section bounds for version ${version}"
+            exit 1
+          fi
+
+          sed -n "$((start_line + 1)),$((end_line))p" "${changelog_path}" > "${release_notes_path}"
+
+          if ! awk 'BEGIN { has_content=0 } /[^[:space:]]/ { has_content=1 } END { exit has_content ? 0 : 1 }' "${release_notes_path}"; then
+            echo "Changelog section for version ${version} is empty"
+            exit 1
+          fi
+
+          echo "release_notes_path=${release_notes_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.bumped == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: diffusion-cpp-v${{ steps.version.outputs.current }}
+          name: ${{ inputs.release_name }} v${{ steps.version.outputs.current }}
+          body_path: ${{ steps.changelog.outputs.release_notes_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

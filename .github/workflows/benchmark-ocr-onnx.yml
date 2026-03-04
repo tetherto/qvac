@@ -63,12 +63,6 @@ jobs:
     name: Build QVAC addon
 
     steps:
-      - name: Update C++ tools
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -237,7 +231,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers g++-13
+          sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
