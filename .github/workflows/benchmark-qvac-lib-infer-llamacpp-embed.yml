@@ -424,9 +424,9 @@ jobs:
         shell: bash
         run: |
           if [ -d "$WORKDIR/benchmarks/results" ]; then
-            LATEST_MD=$(find "$WORKDIR/benchmarks/results" -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
+            LATEST_MD=$(find "$WORKDIR/benchmarks/results" -type f -name "*.md" -exec ls -t {} + 2>/dev/null | head -n 1)
             if [[ -n "$LATEST_MD" ]]; then
-              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
+              cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 

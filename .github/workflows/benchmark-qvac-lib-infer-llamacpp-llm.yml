@@ -66,7 +66,7 @@ on:
       transformers_model:
         description: 'HuggingFace transformers model for comparison (should match GGUF model architecture)'
         required: false
-        default: "Qwen/Qwen3-1.7B-Base"
+        default: "Qwen/Qwen3-1.7B"
         type: string
       device:
         description: 'Device type for inference'
@@ -148,7 +148,7 @@ on:
         type: boolean
       transformers_model:
         required: false
-        default: "Qwen/Qwen3-1.7B-Base"
+        default: "Qwen/Qwen3-1.7B"
         type: string
       device:
         required: false
@@ -456,9 +456,9 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           if [ -d "benchmarks/results" ]; then
-            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
+            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -exec ls -t {} + 2>/dev/null | head -n 1)
             if [[ -n "$LATEST_MD" ]]; then
-              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
+              cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 
