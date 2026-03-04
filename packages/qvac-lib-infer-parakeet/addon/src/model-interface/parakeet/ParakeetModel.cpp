@@ -167,9 +167,15 @@ bool isSpecialToken(const std::string& piece) {
 
 size_t countWords(const std::string& text) {
   if (text.empty()) return 0;
-  size_t count = 1;
+  size_t count = 0;
+  bool inWord = false;
   for (char c : text) {
-    if (c == ' ' || c == '\n') count++;
+    if (c == ' ' || c == '\n') {
+      inWord = false;
+    } else if (!inWord) {
+      inWord = true;
+      count++;
+    }
   }
   return count;
 }
@@ -1180,8 +1186,11 @@ void ParakeetModel::resetEOUStreamingState() {
   eouState_.cacheChan.assign(cacheChanSize, 0.0f);
   eouState_.cacheTime.assign(cacheTimeSize, 0.0f);
   eouState_.cacheChanLen = {0};
-  eouState_.stateH.assign(EOU_DECODER_STATE_DIM, 0.0f);
-  eouState_.stateC.assign(EOU_DECODER_STATE_DIM, 0.0f);
+
+  const size_t decoderStateSize =
+      EOU_DECODER_LSTM_LAYERS * 1 * EOU_DECODER_STATE_DIM;
+  eouState_.stateH.assign(decoderStateSize, 0.0f);
+  eouState_.stateC.assign(decoderStateSize, 0.0f);
 
   const size_t vocabSize = vocab_.size();
   eouState_.blankId = static_cast<int64_t>(vocabSize) - 1;
@@ -1385,8 +1394,10 @@ std::string ParakeetModel::eouDecodeChunk(
           result += seg;
           currentSegment.clear();
           eouCount++;
-          eouState_.stateH.assign(EOU_DECODER_STATE_DIM, 0.0f);
-          eouState_.stateC.assign(EOU_DECODER_STATE_DIM, 0.0f);
+          eouState_.stateH.assign(
+              EOU_DECODER_LSTM_LAYERS * 1 * EOU_DECODER_STATE_DIM, 0.0f);
+          eouState_.stateC.assign(
+              EOU_DECODER_LSTM_LAYERS * 1 * EOU_DECODER_STATE_DIM, 0.0f);
           eouState_.lastToken =
               static_cast<int32_t>(eouState_.blankId);
         }
@@ -1733,7 +1744,7 @@ std::string ParakeetModel::processTDT(const Input& input) {
     text = greedyDecode(encoderOutput, encodedLength);
   });
 
-  if (!text.empty() && text.front() != '[') {
+  if (!isSentinel(text)) {
     totalTokens_ += static_cast<int64_t>(countWords(text));
   }
 
@@ -1772,7 +1783,7 @@ std::string ParakeetModel::processCTC(const Input& input) {
     text = ctcGreedyDecode(logits, numFrames);
   });
 
-  if (!text.empty() && text.front() != '[') {
+  if (!isSentinel(text)) {
     totalTokens_ += static_cast<int64_t>(countWords(text));
   }
 

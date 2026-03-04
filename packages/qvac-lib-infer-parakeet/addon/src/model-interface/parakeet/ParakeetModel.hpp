@@ -197,6 +197,12 @@ private:
   static constexpr const char* ERR_INFERENCE    = "[Inference error]";
   static constexpr const char* ERR_NO_SPEAKERS  = "[No speakers detected]";
 
+  static bool isSentinel(const std::string& text) {
+    return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||
+           text == ERR_MODEL_NOT_READY || text == ERR_MODEL_NOT_LOADED ||
+           text == ERR_INFERENCE || text == ERR_NO_SPEAKERS;
+  }
+
   // ── Audio / mel constants ──────────────────────────────────────────────
   static constexpr int MEL_BINS = 128;
   static constexpr int CTC_MEL_BINS = 80;
