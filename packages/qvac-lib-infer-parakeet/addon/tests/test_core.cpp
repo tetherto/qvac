@@ -4,11 +4,21 @@
 
 #include <gtest/gtest.h>
 #include <memory>
+#include <variant>
 #include <vector>
 #include <filesystem>
 #include <fstream>
 
 using namespace qvac_lib_infer_parakeet;
+
+std::variant<double, int64_t> findStat(
+    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
+    const std::string& key) {
+  for (const auto& [k, v] : stats) {
+    if (k == key) return v;
+  }
+  return int64_t(0);
+}
 
 struct VocabTag {
   using type = std::vector<std::string> ParakeetModel::*;
@@ -159,19 +169,12 @@ TEST_F(ParakeetModelTest, RuntimeStatsInitializedToZero) {
   
   EXPECT_FALSE(stats.empty());
   
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
-  
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTokens")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTranscriptions")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalWallMs")), 0);
-  EXPECT_EQ(std::get<double>(findStat("realTimeFactor")), 0.0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTokens")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalWallMs")), 0);
+  EXPECT_EQ(std::get<double>(findStat(stats, "realTimeFactor")), 0.0);
 }
 
 TEST_F(ParakeetModelTest, RuntimeStatsUpdatedAfterProcess) {
@@ -182,17 +185,10 @@ TEST_F(ParakeetModelTest, RuntimeStatsUpdatedAfterProcess) {
   
   auto stats = model.runtimeStats();
   
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
-  
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTranscriptions")), 1);
-  EXPECT_EQ(std::get<int64_t>(findStat("audioDurationMs")), 1000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "audioDurationMs")), 1000);
 }
 
 TEST_F(ParakeetModelTest, RuntimeStatsResetToZero) {
@@ -207,16 +203,9 @@ TEST_F(ParakeetModelTest, RuntimeStatsResetToZero) {
   model.reset();
   auto statsAfter = model.runtimeStats();
   
-  auto findStat = [&statsAfter](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : statsAfter) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
-  
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalWallMs")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "totalSamples")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "processCalls")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "totalWallMs")), 0);
 }
 
 TEST_F(ParakeetModelTest, PreprocessAudioDataS16LE) {
@@ -308,16 +297,9 @@ TEST_F(ParakeetModelTest, MultipleProcessCallsAccumulateStats) {
   
   auto stats = model.runtimeStats();
   
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
-  
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 24000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 2);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTranscriptions")), 2);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 24000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 2);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 2);
 }
 
 TEST_F(ParakeetModelTest, SetOnSegmentCallback) {
@@ -698,16 +680,9 @@ TEST_F(ParakeetModelTest, ProcessWithLoadedModelAndRealAudio) {
   
   auto stats = model.runtimeStats();
   
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
-  
-  EXPECT_GT(std::get<int64_t>(findStat("melSpecMs")), 0);
-  EXPECT_GT(std::get<int64_t>(findStat("encoderMs")), 0);
-  EXPECT_GT(std::get<int64_t>(findStat("decoderMs")), 0);
+  EXPECT_GT(std::get<int64_t>(findStat(stats, "melSpecMs")), 0);
+  EXPECT_GT(std::get<int64_t>(findStat(stats, "encoderMs")), 0);
+  EXPECT_GT(std::get<int64_t>(findStat(stats, "decoderMs")), 0);
 }
 
 TEST_F(ParakeetModelTest, GetLanguageTokenFindsValidLanguage) {
@@ -931,15 +906,9 @@ TEST_F(CTCModelTest, ProcessDummyAudioWithoutModel) {
   model.process(audio);
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
 }
 
 TEST_F(CTCModelTest, WarmupWithoutLoadDoesNotThrow) {
@@ -1056,15 +1025,9 @@ TEST_F(EOUModelTest, ProcessDummyAudioWithoutModel) {
   model.process(audio);
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
 }
 
 TEST_F(EOUModelTest, WarmupWithoutLoadDoesNotThrow) {
@@ -1080,16 +1043,10 @@ TEST_F(EOUModelTest, ResetClearsEOUStreamingState) {
   model.reset();
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 0);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTokens")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 0);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTokens")), 0);
 }
 
 TEST_F(EOUModelTest, LoadTokenizerJsonForEOU) {
@@ -1130,16 +1087,10 @@ TEST_F(EOUModelTest, MultipleProcessCallsAccumulateStats) {
   model.process(audio2);
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 24000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 2);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTranscriptions")), 2);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 24000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 2);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 2);
 }
 
 TEST_F(EOUModelTest, ProcessWithCallbackReturnsOutput) {
@@ -1226,16 +1177,10 @@ TEST_F(EOUModelTest, ProcessWithLoadedModelIfAvailable) {
   EXPECT_NO_THROW({ model.process(testAudio); });
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
-  EXPECT_EQ(std::get<int64_t>(findStat("totalTranscriptions")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 1);
 }
 
 // ==================== Sortformer Model Tests ====================
@@ -1299,15 +1244,9 @@ TEST_F(SortformerModelTest, ProcessDummyAudioWithoutModel) {
   model.process(audio);
 
   auto stats = model.runtimeStats();
-  auto findStat = [&stats](const std::string& key) -> std::variant<double, int64_t> {
-    for (const auto& [k, v] : stats) {
-      if (k == key) return v;
-    }
-    return int64_t(0);
-  };
 
-  EXPECT_EQ(std::get<int64_t>(findStat("totalSamples")), 16000);
-  EXPECT_EQ(std::get<int64_t>(findStat("processCalls")), 1);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
+  EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
 }
 
 TEST_F(SortformerModelTest, WarmupWithoutLoadDoesNotThrow) {

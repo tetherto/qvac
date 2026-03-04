@@ -35,6 +35,9 @@ download_model() {
 rename_sortformer() {
   local src="$MODELS_DIR/sortformer-4spk-v2-onnx/diar_streaming_sortformer_4spk-v2.onnx"
   local dst="$MODELS_DIR/sortformer-4spk-v2-onnx/sortformer.onnx"
+  if [ -f "$dst" ]; then
+    return 0
+  fi
   if [ ! -f "$src" ]; then
     echo "ERROR: Sortformer download failed — source file not found"
     exit 1

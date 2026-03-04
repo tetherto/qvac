@@ -938,11 +938,11 @@ std::vector<float> ParakeetModel::runEncoder(
     encoderSize = melFeatures.size();
   } else {
     transposedBuf.resize(melFeatures.size());
-    for (int64_t f = 0; f < numFrames; ++f) {
-      for (int b = 0; b < MEL_BINS; ++b) {
-        transposedBuf[b * numFrames + f] = melFeatures[f * MEL_BINS + b];
-      }
-    }
+    Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+        src(melFeatures.data(), numFrames, MEL_BINS);
+    Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+        dst(transposedBuf.data(), MEL_BINS, numFrames);
+    dst.noalias() = src.transpose();
     encoderData = transposedBuf.data();
     encoderSize = transposedBuf.size();
   }
