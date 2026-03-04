@@ -18,6 +18,8 @@ add_executable(
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
+  test_model_metadata.cpp
+  test_model_full_loading.cpp
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
@@ -25,9 +27,12 @@ add_executable(
   test_qwen_template.cpp
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
+  test_borrow_tracked_shared_buffer.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
