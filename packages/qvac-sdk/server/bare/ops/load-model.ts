@@ -71,9 +71,12 @@ export async function loadModel(params: LoadModelServerParams) {
         `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`,
       );
     }
-  } else if (modelType !== ModelType.onnxTts) {
+  } else if (
+    modelType !== ModelType.onnxTts &&
+    modelType !== ModelType.parakeetTranscription
+  ) {
     // For non-sharded models, validate single file exists
-    // Skip for TTS - it uses multiple paths from modelConfig (resolved by plugin.resolveConfig)
+    // Skip for TTS and Parakeet - they use multiple paths from modelConfig
     try {
       const modelDir = path.dirname(modelPath);
       const modelFile = path.basename(modelPath);
@@ -104,7 +107,7 @@ export async function loadModel(params: LoadModelServerParams) {
   }
 
   // Build artifacts map for plugin
-  // Note: TTS paths are in modelConfig (resolved by plugin.resolveConfig), not artifacts
+  // Note: TTS and Parakeet paths are in modelConfig (resolved by plugin.resolveConfig), not artifacts
   const artifacts: Record<string, string> = {};
   if (projectionModelPath)
     artifacts["projectionModelPath"] = projectionModelPath;

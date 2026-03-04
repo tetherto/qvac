@@ -10,6 +10,7 @@ const modelRegistryEntryAddonSchema = z.enum([
   "vad",
   "tts",
   "ocr",
+  "parakeet",
   "other",
 ]);
 
@@ -25,6 +26,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
   ModelType.onnxOcr,
+  ModelType.parakeetTranscription,
   "onnx-vad",
 ]);
 

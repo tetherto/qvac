@@ -9,7 +9,7 @@
     "./vcpkg-overlays/ruy",
     "./vcpkg-overlays/intgemm/",
     "./vcpkg-overlays/simd-utils/",
-    "./vcpkg-overlays/marian-dev/",
+    "./vcpkg/ports/marian-dev/",
     "./vcpkg-overlays/ssplit",
     "./vcpkg-overlays/bergamot-translator/"
   ],
