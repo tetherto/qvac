@@ -10,7 +10,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext: public LlmContext {
+class TextLlmContext : public LlmContext {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
@@ -30,8 +30,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded)
+      override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -73,14 +73,11 @@ public:
   llama_model* getModel() override { return model_; }
 
   /**
-<<<<<<< HEAD
-=======
    * Access the mutable common parameters associated with this context.
    */
   common_params& getParams() override { return params_; }
 
   /**
->>>>>>> c0aaf1e (feat: add finetuning workspace changes)
    * The get n_past method. It returns the n_past.
    *
    * @return - the n_past.
