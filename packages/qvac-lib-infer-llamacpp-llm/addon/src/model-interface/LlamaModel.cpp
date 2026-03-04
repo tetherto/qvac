@@ -169,10 +169,7 @@ void LlamaModel::init(
 }
 
 void LlamaModel::initializeBackend(const std::string& backendsDir) {
-  if (!backendsHandle_.has_value()) {
-    llama_log_set(llamaLogCallback, nullptr);
-    backendsHandle_.emplace(backendsDir);
-  }
+  backendsHandle_ = LlamaBackendsHandle(backendsDir);
 }
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
@@ -290,8 +287,8 @@ LlamaModel::resolveChatAndTools(const std::string& input) {
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
-  if (prompt.media.has_value()) {
-    loadMedia(*prompt.media);
+  for (const auto& media : prompt.media) {
+    loadMedia(media);
   }
 
   if (prompt.prefill) {
