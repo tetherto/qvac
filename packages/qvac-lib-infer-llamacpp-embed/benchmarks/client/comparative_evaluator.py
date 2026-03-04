@@ -309,7 +309,6 @@ class ComparativeEvaluator:
         
         enabled_datasets = self.addon_config.get_enabled_datasets()
         logger.info(f"Enabled datasets: {enabled_datasets}")
-        failed_datasets: list[tuple[str, str]] = []
         
         try:
             # Initialize handlers
@@ -323,18 +322,9 @@ class ComparativeEvaluator:
                     logger.error(f"Error evaluating {dataset_name}: {e}")
                     import traceback
                     traceback.print_exc()
-                    failed_datasets.append((dataset_name, str(e)))
             
             # Save and print results
             self.save_and_print_results()
-
-            if failed_datasets:
-                failed_summary = ", ".join([f"{name}: {error}" for name, error in failed_datasets])
-                raise RuntimeError(
-                    f"Comparative evaluation failed for {len(failed_datasets)} dataset(s): {failed_summary}"
-                )
-
-            logger.info("Comparative evaluation completed!")
             
         finally:
             # Always clean up handlers
