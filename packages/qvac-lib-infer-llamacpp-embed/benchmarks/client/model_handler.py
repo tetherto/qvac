@@ -399,6 +399,8 @@ class QvacEmbedHandler:
             "inputs": sentences,
             "config": model_config
         }
+        input_lengths = [len(s) for s in sentences]
+        payload_size_bytes = len(json.dumps(payload, ensure_ascii=False))
         
         try:
             response = self.client.post(self.url, json=payload, timeout=self.timeout)
