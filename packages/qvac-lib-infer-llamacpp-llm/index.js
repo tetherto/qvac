@@ -95,8 +95,6 @@ class LlmLlamacpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
-    this._defaultFinetuneParams = finetuningParams ?? null
-    this._lastJobResult = Promise.resolve()
   }
 
   /**
