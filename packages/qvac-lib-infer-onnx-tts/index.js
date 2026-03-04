@@ -9,6 +9,8 @@ const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvide
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
+const ONLY_ONE_JOB_ID = 'OnlyOneJob'
+const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 class ONNXTTS extends InferBase {
   constructor ({
@@ -37,6 +39,7 @@ class ONNXTTS extends InferBase {
     this._cache = cache || '.'
     this._config = config
     this._logger = logger
+    this._hasActiveResponse = false
 
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
@@ -99,7 +102,7 @@ class ONNXTTS extends InferBase {
       }
     }
 
-    this.addon = this._createAddon(ttsParams, this._outputCallback.bind(this), this._logger)
+    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
     await this.addon.activate()
   }
 
@@ -137,12 +140,11 @@ class ONNXTTS extends InferBase {
    * Instantiate the native addon with the given parameters.
    * @param {Object} configurationParams - Configuration parameters for the addon
    * @param {Function} outputCb - Callback for inference events
-   * @param {Object} logger - Logger instance
    * @returns {TTSInterface} The instantiated addon interface
    */
-  _createAddon (configurationParams, outputCb, logger) {
+  _createAddon (configurationParams, outputCb) {
     const binding = require('./binding')
-    return new TTSInterface(binding, configurationParams, outputCb, logger)
+    return new TTSInterface(binding, configurationParams, outputCb)
   }
 
   _resolvePath (filePath) {
@@ -192,20 +194,83 @@ class ONNXTTS extends InferBase {
   }
 
   async unload () {
-    if (this.addon) {
-      return this.addon.destroyInstance()
-    }
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was unloaded')
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.state.configLoaded = false
+      this.state.weightsLoaded = false
+    })
   }
 
   async _runInternal (input) {
-    const jobId = await this.addon.append({
-      type: input.type || 'text',
-      input: input.input
+    return this._withExclusiveRun(async () => {
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      const response = this._createResponse(ONLY_ONE_JOB_ID)
+      let accepted
+      try {
+        accepted = await this.addon.runJob({
+          type: input.type || 'text',
+          input: input.input
+        })
+      } catch (error) {
+        this._deleteJobMapping(ONLY_ONE_JOB_ID)
+        response.failed(error)
+        throw error
+      }
+
+      if (!accepted) {
+        this._deleteJobMapping(ONLY_ONE_JOB_ID)
+        response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
+      return response
     })
-    const response = this._createResponse(jobId)
-    this._saveJobToResponseMapping(jobId, response)
-    await this.addon.append({ type: 'end of job' })
-    return response
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    if (typeof error === 'string' && error.length > 0) {
+      return this._outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+    }
+
+    if (data && typeof data === 'object' && data.outputArray) {
+      return this._outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+    }
+
+    if (
+      data &&
+      typeof data === 'object' &&
+      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+    ) {
+      return this._outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+    }
+
+    return this._outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+  }
+
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  _failAndClearActiveResponse (reason) {
+    const currentJobResponse = this._jobToResponse.get(ONLY_ONE_JOB_ID)
+    if (currentJobResponse) {
+      currentJobResponse.failed(new Error(reason))
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+    }
+    this._hasActiveResponse = false
   }
 
   /**
@@ -217,38 +282,49 @@ class ONNXTTS extends InferBase {
    * @param {Function} [newConfig.reportProgressCallback] - Hook for download progress updates
    */
   async reload (newConfig = {}) {
-    this.logger.debug('Reloading addon with new configuration', newConfig)
+    return await this._withExclusiveRun(async () => {
+      this.logger.debug('Reloading addon with new configuration', newConfig)
 
-    if (newConfig.language !== undefined) {
-      this._config.language = newConfig.language
-    }
-    if (newConfig.useGPU !== undefined) {
-      this._config.useGPU = newConfig.useGPU
-    }
-
-    // Download new weights if model changed and we have a loader
-    if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
-      await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
-    }
-
-    let ttsParams
-    if (this._engineType === ENGINE_SUPERTONIC) {
-      ttsParams = this._getSupertonicTtsParams()
-    } else {
-      ttsParams = {
-        tokenizerPath: this._resolvePath(this._tokenizerPath),
-        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-        embedTokensPath: this._resolvePath(this._embedTokensPath),
-        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-        languageModelPath: this._resolvePath(this._languageModelPath),
-        language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
-        lazySessionLoading: this._lazySessionLoading
+      if (newConfig.language !== undefined) {
+        this._config.language = newConfig.language
       }
-    }
+      if (newConfig.useGPU !== undefined) {
+        this._config.useGPU = newConfig.useGPU
+      }
 
-    await this.addon.reload(ttsParams)
-    await this.addon.activate()
+      // Download new weights if model changed and we have a loader
+      if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
+        await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
+      }
+
+      let ttsParams
+      if (this._engineType === ENGINE_SUPERTONIC) {
+        ttsParams = this._getSupertonicTtsParams()
+      } else {
+        ttsParams = {
+          tokenizerPath: this._resolvePath(this._tokenizerPath),
+          speechEncoderPath: this._resolvePath(this._speechEncoderPath),
+          embedTokensPath: this._resolvePath(this._embedTokensPath),
+          conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
+          languageModelPath: this._resolvePath(this._languageModelPath),
+          language: this._config?.language || 'en',
+          useGPU: this._config?.useGPU || false,
+          lazySessionLoading: this._lazySessionLoading
+        }
+        if (this._referenceAudio != null) {
+          ttsParams.referenceAudio = this._referenceAudio
+        }
+      }
+
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was reloaded')
+
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
+      await this.addon.activate()
+    })
   }
 
   static inferenceManagerConfig = {

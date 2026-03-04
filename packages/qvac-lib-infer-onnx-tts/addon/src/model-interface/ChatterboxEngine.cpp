@@ -1,4 +1,5 @@
 #include "ChatterboxEngine.hpp"
+#include "ChatterboxLanguageMode.hpp"
 #include "FileUtils.hpp"
 #include "Fp16Utils.hpp"
 #include "OnnxInferSession.hpp"
@@ -59,12 +60,6 @@ void penalizeRepetitionLogits(std::vector<float> &logits,
   }
 }
 
-std::string prepareText(const std::string &text, const std::string &language) {
-  if (language == "en") {
-    return text;
-  }
-  return "[" + language + "]" + text;
-}
 
 template <typename T>
 void insertFromOrtTensorToVector(
@@ -127,6 +122,13 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   }
 
   isEnglish_ = language_ == "en";
+  if (!isEnglish_ && embedTokensSession_ != nullptr &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    std::cout << "[Chatterbox] Requested language '" << language_
+              << "' but model appears monolingual. Falling back to English mode."
+              << std::endl;
+    isEnglish_ = true;
+  }
   loaded_ = true;
   QLOG(Priority::INFO, "Language: " + language_);
 
@@ -422,7 +424,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  const std::string preparedText = prepareText(text, language_);
+  const std::string preparedText =
+      lang_mode::prepareTextForTokenization(text, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
 
   TokenizerEncodeResult result;
