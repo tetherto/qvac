@@ -95,7 +95,6 @@ class LlmLlamacpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
-    this._jobInProgress = false
     this._defaultFinetuneParams = finetuningParams ?? null
     this._lastJobResult = Promise.resolve()
   }
@@ -353,7 +352,8 @@ class LlmLlamacpp extends BaseInference {
       }
 
       this.logger.info('Starting inference with prompt:', prompt)
-    return this._withExclusiveRun(async () => {
+
+      // Separate media messages from text messages
       const textMessages = []
       const mediaItems = []
 
@@ -389,7 +389,6 @@ class LlmLlamacpp extends BaseInference {
       // If any unexpected exception is thrown (e.g. in the C++ code)
       // it will unwind here and the job will not be accepted.
       let accepted
-      this._jobInProgress = true
       try {
         accepted = await this.addon.runJob(promptMessages)
       } catch (error) {
@@ -397,12 +396,17 @@ class LlmLlamacpp extends BaseInference {
         response.failed(error)
         throw error
       }
+      if (!accepted) {
+        this._deleteJobMapping('OnlyOneJob')
+        const msg = RUN_BUSY_ERROR_MESSAGE
+        response.failed(new Error(msg))
+        throw new Error(msg)
+      }
 
       this._hasActiveResponse = true
       const finalized = response.await().finally(() => { this._hasActiveResponse = false })
       finalized.catch(() => {})
       response.await = () => finalized
-      const response = this._createResponse('job')
 
       this.logger.info('Inference job started successfully')
 
