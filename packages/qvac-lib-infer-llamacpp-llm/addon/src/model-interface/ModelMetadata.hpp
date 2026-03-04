@@ -49,6 +49,10 @@ public:
   [[nodiscard]] bool
   isU32OneOf(const char* key, std::initializer_list<uint32_t> values) const;
 
+  /// @brief Returns the string value at @p key, or nullopt if
+  /// absent/uninitialized or not a string type.
+  [[nodiscard]] std::optional<std::string> tryGetString(const char* key) const;
+
   [[nodiscard]] bool hasOneBitQuantization() const;
 
   // Code below for streaming support
