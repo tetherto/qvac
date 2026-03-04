@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -17,10 +18,11 @@
 
 namespace qvac_lib_inference_addon_whisper {
 
-struct CallbackUserData {
-  WhisperModel::OutputCallback* callback;
-  WhisperModel* whisper;
-};
+static bool shouldAbortWhisper(void* userData) {
+  const auto* cancelRequested = static_cast<const std::atomic_bool*>(userData);
+  return cancelRequested != nullptr &&
+         cancelRequested->load(std::memory_order_relaxed);
+}
 
 WhisperModel::WhisperModel(const WhisperConfig& config) : cfg_(config) {}
 
@@ -131,7 +133,7 @@ void WhisperModel::endOfStream() {
   stream_ended_ = true;
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() {
+qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
   // Keep keys stable because integration tooling reads these.
@@ -170,13 +172,16 @@ qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() {
 static void onNewSegment(
     whisper_context* ctx, whisper_state* state, int n_new, void* user_data) {
 
-  auto* ud = static_cast<CallbackUserData*>(user_data);
-  if (!ud || !ud->callback || !(*ud->callback)) {
+  auto* whisper = static_cast<WhisperModel*>(user_data);
+  if (!whisper || state == nullptr) {
     return;
   }
 
   int n_segments = whisper_full_n_segments_from_state(state);
-  int start = n_segments - n_new;
+  if (n_new <= 0 || n_segments <= 0) {
+    return;
+  }
+  int start = std::max(0, n_segments - n_new);
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -184,7 +189,8 @@ static void onNewSegment(
 
   for (int i = start; i < n_segments; i++) {
     Transcript transcript;
-    transcript.text = whisper_full_get_segment_text_from_state(state, i);
+    const char* text = whisper_full_get_segment_text_from_state(state, i);
+    transcript.text = text != nullptr ? text : "";
     transcript.start = whisper_full_get_segment_t0_from_state(state, i) * 0.01f;
     transcript.end = whisper_full_get_segment_t1_from_state(state, i) * 0.01f;
     transcript.id = i;
@@ -195,17 +201,17 @@ static void onNewSegment(
             std::to_string(transcript.start) + "s - " +
             std::to_string(transcript.end) + "s] " + transcript.text);
 
-    if (ud->whisper->isCaptionModeEnabled()) {
-      ud->whisper->formatCaptionOutput(transcript);
+    if (whisper->isCaptionModeEnabled()) {
+      whisper->formatCaptionOutput(transcript);
     }
 
-    (*ud->callback)(transcript);
+    whisper->emitSegment(transcript);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    ud->whisper->addTranscription(transcript);
+    whisper->addTranscription(transcript);
 
     // Stats: count tokens/segments as they are emitted
     const int n_tokens = whisper_full_n_tokens_from_state(state, i);
-    ud->whisper->recordSegmentStats(n_tokens);
+    whisper->recordSegmentStats(n_tokens);
   }
 }
 
@@ -243,6 +249,17 @@ void WhisperModel::warmup() {
 
 void WhisperModel::process(const Input& input) {
 
+  if (ctx_ == nullptr) {
+    load();
+  }
+  if (ctx_ == nullptr) {
+    throw std::runtime_error("Whisper context is not initialized");
+  }
+
+  if (cancelRequested_.load(std::memory_order_relaxed)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Processing audio input with " + std::to_string(input.size()) +
@@ -270,9 +287,10 @@ void WhisperModel::process(const Input& input) {
         std::string("error in full handler: ") + std::string(e.what()));
   }
 
-  CallbackUserData ud{&on_segment_, this};
   params.new_segment_callback = onNewSegment;
-  params.new_segment_callback_user_data = &ud;
+  params.new_segment_callback_user_data = this;
+  params.abort_callback = shouldAbortWhisper;
+  params.abort_callback_user_data = &cancelRequested_;
 
   int result = whisper_full(
       ctx_.get(), params, input.data(), static_cast<int>(input.size()));
@@ -293,6 +311,9 @@ void WhisperModel::process(const Input& input) {
   }
 
   if (result != 0) {
+    if (cancelRequested_.load(std::memory_order_relaxed)) {
+      throw std::runtime_error("Job cancelled");
+    }
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "whisper_full_with_state failed with code: " + std::to_string(result));
@@ -304,6 +325,44 @@ void WhisperModel::process(const Input& input) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "Audio processing completed");
+}
+
+std::any WhisperModel::process(const std::any& input) {
+  AnyInput modelInput;
+  if (const auto* anyInput = std::any_cast<AnyInput>(&input)) {
+    modelInput = *anyInput;
+  } else if (const auto* inputVector = std::any_cast<Input>(&input)) {
+    modelInput.input = *inputVector;
+  } else {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Invalid input type for WhisperModel::process: ") +
+            input.type().name());
+  }
+
+  const auto previousOutputCallback = on_segment_;
+  const bool shouldOverrideCallback =
+      static_cast<bool>(modelInput.outputCallback);
+  if (shouldOverrideCallback) {
+    on_segment_ = modelInput.outputCallback;
+  }
+
+  reset();
+  cancelRequested_.store(false, std::memory_order_relaxed);
+  try {
+    process(modelInput.input);
+  } catch (...) {
+    if (shouldOverrideCallback) {
+      on_segment_ = previousOutputCallback;
+    }
+    throw;
+  }
+
+  if (shouldOverrideCallback) {
+    on_segment_ = previousOutputCallback;
+  }
+
+  return output_;
 }
 
 // Overload with callback for ModelInterface compatibility
@@ -329,6 +388,10 @@ WhisperModel::Output WhisperModel::process(
 void WhisperModel::saveLoadParams(const WhisperConfig& config) {
   // Call setConfig to ensure proper config handling
   setConfig(config);
+}
+
+void WhisperModel::cancel() const {
+  cancelRequested_.store(true, std::memory_order_relaxed);
 }
 
 bool WhisperModel::configContextIsChanged(
