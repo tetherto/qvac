@@ -28,3 +28,19 @@ TEST(OnnxRuntimeTest, EnvIsNotNull) {
                        "CPUExecutionProvider"),
              providers.end());
 }
+
+TEST(OnnxRuntimeTest, GetAvailableProviders) {
+  auto providers = oa::OnnxRuntime::getAvailableProviders();
+  EXPECT_FALSE(providers.empty());
+  EXPECT_NE(std::find(providers.begin(), providers.end(),
+                       "CPUExecutionProvider"),
+             providers.end());
+}
+
+TEST(OnnxRuntimeTest, ConfigureThrowsAfterInit) {
+  // Ensure the singleton is initialized first
+  (void)oa::OnnxRuntime::instance();
+  // Now configure() must throw since the environment is already created
+  oa::EnvironmentConfig cfg;
+  EXPECT_THROW(oa::OnnxRuntime::configure(cfg), std::runtime_error);
+}

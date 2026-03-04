@@ -150,9 +150,9 @@ jobs:
       workdir: packages/ocr-onnx
 
   prebuild:
-    needs: [sanity-checks, cpp-lint]
+    needs: [changes]
     if: |
-      (needs.changes.outputs.pkg == 'true') &&
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
       (
         github.event_name == 'workflow_dispatch' ||
         contains(format(' {0} ', join(github.event.pull_request.labels.*.name, ' ')), ' verify ')
