@@ -96,34 +96,6 @@ log() {
     fi
 }
 
-print_server_error_context() {
-    local log_file="benchmarks/server/server.log"
-    local lines="${1:-200}"
-
-    if [[ -f "$log_file" ]]; then
-        log "==== Last ${lines} lines of server log ===="
-        tail -n "$lines" "$log_file" || true
-        log "==== End of server log ===="
-    else
-        log "Server log file not found at $log_file"
-    fi
-}
-
-report_server_process_state() {
-    if [[ -n "${SERVER_PID:-}" ]]; then
-        if kill -0 "$SERVER_PID" 2>/dev/null; then
-            log "Server process is still running (PID: $SERVER_PID)"
-        else
-            # wait may fail if process already reaped; keep non-fatal.
-            wait "$SERVER_PID" 2>/dev/null
-            local exit_code=$?
-            log "Server process is not running (PID: $SERVER_PID, last wait exit code: $exit_code)"
-        fi
-    else
-        log "Server PID is not set"
-    fi
-}
-
 # Function to check if model has results for today
 has_results_today() {
     local model_spec="$1"
@@ -491,8 +463,6 @@ run_benchmarks() {
         log "Benchmark completed successfully"
     else
         log "Benchmark failed"
-        report_server_process_state
-        print_server_error_context 200
         deactivate
         cd ../..
         return 1

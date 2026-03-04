@@ -418,21 +418,6 @@ class QvacEmbedHandler:
         except httpx.TimeoutException:
             logger.error(f"Request timed out after {self.timeout} seconds")
             raise
-        except httpx.RemoteProtocolError as e:
-            logger.error(
-                "Server disconnected without response. Batch stats: count=%s min_chars=%s max_chars=%s avg_chars=%.1f payload_bytes=%s",
-                len(sentences),
-                min(input_lengths) if input_lengths else 0,
-                max(input_lengths) if input_lengths else 0,
-                (sum(input_lengths) / len(input_lengths)) if input_lengths else 0.0,
-                payload_size_bytes
-            )
-            try:
-                healthy_after_disconnect = self._check_server_health()
-                logger.error("Server health check after disconnect: %s", healthy_after_disconnect)
-            except Exception:
-                logger.error("Server health check after disconnect failed")
-            raise
         except httpx.HTTPStatusError as e:
             response_text = ""
             response_json = None
@@ -650,12 +635,12 @@ class MTEBModelWrapper(SentenceTransformer):
             max_tokens = self._max_seq_length
         
         # Reserve a small token headroom for model-specific overhead.
-        effective_max = max(1, max_tokens - reserve_tokens)
+        effective_max = max_tokens - reserve_tokens
         
         # Character-based truncation: ~2.5 chars per token handles scientific/medical
         # texts with numbers, punctuation, and short words
         # This avoids tokenizing in Python (addon tokenizes again in C++)
-        max_chars = max(32, int(effective_max * chars_per_token))
+        max_chars = int(effective_max * chars_per_token)
         
         if len(text) > max_chars:
             return text[:max_chars]
