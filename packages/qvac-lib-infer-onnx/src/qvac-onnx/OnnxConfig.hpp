@@ -19,6 +19,24 @@ enum class GraphOptimizationLevel {
   ALL
 };
 
+enum class LoggingLevel {
+  VERBOSE,
+  INFO,
+  WARNING,
+  ERROR,
+  FATAL
+};
+
+enum class ExecutionMode {
+  SEQUENTIAL,
+  PARALLEL
+};
+
+struct EnvironmentConfig {
+  LoggingLevel loggingLevel = LoggingLevel::WARNING;
+  std::string loggingId = "qvac-onnx";
+};
+
 struct SessionConfig {
   ExecutionProvider provider = ExecutionProvider::AUTO_GPU;
   GraphOptimizationLevel optimization = GraphOptimizationLevel::EXTENDED;
@@ -27,6 +45,7 @@ struct SessionConfig {
   bool enableMemoryPattern = true;
   bool enableCpuMemArena = true;
   bool enableXnnpack = true;  // XNNPack EP for optimized CPU inference
+  ExecutionMode executionMode = ExecutionMode::SEQUENTIAL;
 };
 
 }  // namespace onnx_addon
