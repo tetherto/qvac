@@ -9,20 +9,6 @@ const { modelManager } = require('./services/modelManager')
 const { URL } = require('bare-url')
 const { processJsonRequest: parseJson, formatZodError } = require('./utils/helper')
 const { ZodError } = require('zod')
-const process = require('bare-process')
-
-const parseMb = (value, fallback) => {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-const JSON_BODY_LIMIT_MB = parseMb(process.env.BENCHMARK_SERVER_MAX_BODY_MB, 32)
-const JSON_BODY_LIMIT_BYTES = Math.floor(JSON_BODY_LIMIT_MB * 1024 * 1024)
-const JSON_BODY_TIMEOUT_MS = Math.floor(parseMb(process.env.BENCHMARK_SERVER_BODY_TIMEOUT_SEC, 1200) * 1000)
-
-logger.info(
-  `JSON request parser configured with limit=${JSON_BODY_LIMIT_MB}MB timeout=${JSON_BODY_TIMEOUT_MS}ms`
-)
 
 /**
  * Detect context overflow errors from addon/runtime message
@@ -137,17 +123,7 @@ const handleRequest = async (req, res) => {
 
   if (method === HTTP_METHODS.POST) {
     try {
-      const contentLength = Number(req.headers['content-length'])
-      if (Number.isFinite(contentLength) && contentLength > JSON_BODY_LIMIT_BYTES) {
-        logger.warn(
-          `[${requestId}] Declared request content-length ${contentLength} exceeds limit ${JSON_BODY_LIMIT_BYTES} bytes`
-        )
-      }
-
-      body = await parseJson(req, {
-        limit: JSON_BODY_LIMIT_BYTES,
-        timeoutMs: JSON_BODY_TIMEOUT_MS
-      })
+      body = await parseJson(req)
       logger.info(`[${requestId}] Parsed request body`)
     } catch (error) {
       logger.error(`[${requestId}] Error parsing request body: ${error}`)

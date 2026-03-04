@@ -84,7 +84,7 @@ on:
         type: string
       datasets:
         required: false
-        default: "TRECCOVID,FiQA2018"
+        default: "ArguAna,NFCorpus,SciFact,SCIDOCS"
         type: string
       ctx_size:
         required: false
