@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <qvac-onnx/OnnxRuntime.hpp>
 #include <qvac-onnx/OnnxSession.hpp>
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
@@ -245,6 +246,20 @@ onnx_addon::GraphOptimizationLevel stringToOptimization(
   return onnx_addon::GraphOptimizationLevel::EXTENDED;
 }
 
+onnx_addon::LoggingLevel stringToLoggingLevel(std::string_view str) {
+  if (str == "verbose") return onnx_addon::LoggingLevel::VERBOSE;
+  if (str == "info")    return onnx_addon::LoggingLevel::INFO;
+  if (str == "warning") return onnx_addon::LoggingLevel::WARNING;
+  if (str == "error")   return onnx_addon::LoggingLevel::ERROR;
+  if (str == "fatal")   return onnx_addon::LoggingLevel::FATAL;
+  return onnx_addon::LoggingLevel::WARNING;
+}
+
+onnx_addon::ExecutionMode stringToExecutionMode(std::string_view str) {
+  if (str == "parallel") return onnx_addon::ExecutionMode::PARALLEL;
+  return onnx_addon::ExecutionMode::SEQUENTIAL;
+}
+
 js_value_t* buildTensorInfoArray(
     js_env_t* env, const std::vector<onnx_addon::TensorInfo>& infos) {
   auto* arr = jsArray(env, infos.size());
@@ -288,6 +303,39 @@ js_value_t* buildOutputTypedArray(js_env_t* env,
 // Exported functions
 // ---------------------------------------------------------------------------
 
+auto configureEnvironment(js_env_t* env, js_callback_info_t* info)
+    -> js_value_t* try {
+  auto args = getArgs(env, info);
+  onnx_addon::EnvironmentConfig cfg{};
+
+  if (!args.empty() && jsIsObject(env, args[0]) &&
+      !jsIsUndefinedOrNull(env, args[0])) {
+    auto* configObj = args[0];
+
+    auto level = jsOptString(env, configObj, "loggingLevel");
+    if (level) cfg.loggingLevel = stringToLoggingLevel(*level);
+
+    auto id = jsOptString(env, configObj, "loggingId");
+    if (id) cfg.loggingId = *id;
+  }
+
+  onnx_addon::OnnxRuntime::configure(cfg);
+  return nullptr;
+}
+CATCH
+
+auto getAvailableProviders(js_env_t* env, js_callback_info_t* info)
+    -> js_value_t* try {
+  (void)info;
+  auto providers = onnx_addon::OnnxRuntime::getAvailableProviders();
+  auto* arr = jsArray(env, providers.size());
+  for (uint32_t i = 0; i < providers.size(); ++i) {
+    jsArraySet(env, arr, i, jsString(env, providers[i]));
+  }
+  return arr;
+}
+CATCH
+
 auto createSession(js_env_t* env, js_callback_info_t* info)
     -> js_value_t* try {
   auto args = getArgs(env, info);
@@ -317,6 +365,15 @@ auto createSession(js_env_t* env, js_callback_info_t* info)
 
     auto xnnpack = jsOptBool(env, configObj, "enableXnnpack");
     if (xnnpack) config.enableXnnpack = *xnnpack;
+
+    auto memPattern = jsOptBool(env, configObj, "enableMemoryPattern");
+    if (memPattern) config.enableMemoryPattern = *memPattern;
+
+    auto cpuMemArena = jsOptBool(env, configObj, "enableCpuMemArena");
+    if (cpuMemArena) config.enableCpuMemArena = *cpuMemArena;
+
+    auto execMode = jsOptString(env, configObj, "executionMode");
+    if (execMode) config.executionMode = stringToExecutionMode(*execMode);
   }
 
   auto session =
@@ -447,6 +504,8 @@ js_value_t* qvacOnnxExports(js_env_t* env, js_value_t* exports) {
     }                                                                 \
   }
 
+  V("configureEnvironment", configureEnvironment)
+  V("getAvailableProviders", getAvailableProviders)
   V("createSession", createSession)
   V("getInputInfo", getInputInfo)
   V("getOutputInfo", getOutputInfo)

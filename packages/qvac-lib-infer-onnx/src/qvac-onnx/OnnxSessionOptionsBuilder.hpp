@@ -57,6 +57,20 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
       break;
   }
 
+  // Execution mode
+  sessionOptions.SetExecutionMode(
+      config.executionMode == ExecutionMode::PARALLEL
+          ? ::ExecutionMode::ORT_PARALLEL
+          : ::ExecutionMode::ORT_SEQUENTIAL);
+
+  // Memory options
+  if (!config.enableMemoryPattern) {
+    sessionOptions.DisableMemPattern();
+  }
+  if (!config.enableCpuMemArena) {
+    sessionOptions.DisableCpuMemArena();
+  }
+
   // CPU-only mode
   if (config.provider == ExecutionProvider::CPU) {
     QLOG(logger::Priority::DEBUG, "[OnnxSession] Building session options with CPU provider");

@@ -79,3 +79,44 @@ TEST(SessionOptionsTest, AllProvidersDoNotThrow) {
     EXPECT_NO_THROW(oa::buildSessionOptions(config));
   }
 }
+
+TEST(SessionOptionsTest, ExecutionModeSequential) {
+  oa::SessionConfig config{
+      .provider = oa::ExecutionProvider::CPU,
+      .executionMode = oa::ExecutionMode::SEQUENTIAL};
+  EXPECT_NO_THROW(oa::buildSessionOptions(config));
+}
+
+TEST(SessionOptionsTest, ExecutionModeParallel) {
+  oa::SessionConfig config{
+      .provider = oa::ExecutionProvider::CPU,
+      .executionMode = oa::ExecutionMode::PARALLEL};
+  EXPECT_NO_THROW(oa::buildSessionOptions(config));
+}
+
+TEST(SessionOptionsTest, DisableMemoryPattern) {
+  oa::SessionConfig config{
+      .provider = oa::ExecutionProvider::CPU,
+      .enableMemoryPattern = false};
+  EXPECT_NO_THROW(oa::buildSessionOptions(config));
+}
+
+TEST(SessionOptionsTest, DisableCpuMemArena) {
+  oa::SessionConfig config{
+      .provider = oa::ExecutionProvider::CPU,
+      .enableCpuMemArena = false};
+  EXPECT_NO_THROW(oa::buildSessionOptions(config));
+}
+
+TEST(SessionOptionsTest, AllConfigFieldsCombined) {
+  oa::SessionConfig config{
+      .provider = oa::ExecutionProvider::CPU,
+      .optimization = oa::GraphOptimizationLevel::ALL,
+      .intraOpThreads = 2,
+      .interOpThreads = 1,
+      .enableMemoryPattern = false,
+      .enableCpuMemArena = false,
+      .enableXnnpack = false,
+      .executionMode = oa::ExecutionMode::PARALLEL};
+  EXPECT_NO_THROW(oa::buildSessionOptions(config));
+}

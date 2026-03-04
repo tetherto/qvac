@@ -6,10 +6,10 @@ This guide covers all steps needed for an ONNX-based consumer addon (e.g. `ocr-o
 
 `@qvac/onnx` is distributed as an **npm package** (bare addon). It ships everything a consumer addon needs to build against ONNX Runtime:
 
-- **qvac-onnx C++ headers** (`prebuilds/include/qvac-onnx/`) — header-only `OnnxSession`, config types, tensor types
+- **qvac-onnx C++ headers** (`prebuilds/include/qvac-onnx/`) — header-only `OnnxSession`, `OnnxRuntime`, config types, tensor types
 - **ONNX Runtime headers and static libraries** (`prebuilds/include/onnxruntime/`, `prebuilds/lib/`) — plus all transitive dependencies (abseil, protobuf, re2, eigen, etc.)
 - **CMake config** (`prebuilds/share/`) — `find_package(qvac-onnx)` exposes the `qvac-onnx::qvac-onnx` imported target which transitively provides `onnxruntime::onnxruntime_static`
-- **JS API** — `createSession`, `run`, `destroySession`, etc. (see [README.md](./README.md))
+- **JS API** — `configureEnvironment`, `getAvailableProviders`, `createSession`, `run`, `destroySession`, etc. (see [README.md](./README.md))
 
 Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`. The ONNX Runtime comes bundled with `@qvac/onnx`.
 
@@ -22,7 +22,7 @@ Add `@qvac/onnx` to the consumer's `package.json`:
 ```json
 {
   "dependencies": {
-    "@qvac/onnx": "^0.9.0"
+    "@qvac/onnx": "^0.10.0"
   },
   "devDependencies": {
     "cmake-bare": "^1.5.0",
@@ -207,8 +207,32 @@ All headers live under the `qvac-onnx/` include prefix:
 ```cpp
 #include <qvac-onnx/OnnxSession.hpp>   // Concrete session (header-only, pulls in ORT)
 #include <qvac-onnx/IOnnxSession.hpp>   // Abstract interface (ORT-free)
-#include <qvac-onnx/OnnxConfig.hpp>     // SessionConfig, ExecutionProvider, GraphOptimizationLevel
+#include <qvac-onnx/OnnxRuntime.hpp>    // Environment singleton, configure(), getAvailableProviders()
+#include <qvac-onnx/OnnxConfig.hpp>     // SessionConfig, EnvironmentConfig, enums
 #include <qvac-onnx/OnnxTensor.hpp>     // TensorInfo, InputTensor, OutputTensor, TensorType
+```
+
+### Configure the environment (optional)
+
+The environment is process-wide. Call `configure()` before any session is created to customize logging:
+
+```cpp
+#include <qvac-onnx/OnnxRuntime.hpp>
+
+onnx_addon::EnvironmentConfig envCfg;
+envCfg.loggingLevel = onnx_addon::LoggingLevel::INFO;
+envCfg.loggingId    = "my-addon";
+
+onnx_addon::OnnxRuntime::configure(envCfg);  // throws if instance() already called
+```
+
+If `configure()` is never called, defaults are used (`WARNING` level, `"qvac-onnx"` id).
+
+### Query available execution providers
+
+```cpp
+auto providers = onnx_addon::OnnxRuntime::getAvailableProviders();
+// e.g. {"CPUExecutionProvider", "XnnpackExecutionProvider"}
 ```
 
 ### Create and run a session
@@ -217,11 +241,16 @@ All headers live under the `qvac-onnx/` include prefix:
 #include <qvac-onnx/OnnxSession.hpp>
 #include <qvac-onnx/OnnxConfig.hpp>
 
-// Configure
+// Configure session
 onnx_addon::SessionConfig config;
-config.provider = onnx_addon::ExecutionProvider::AUTO_GPU;
-config.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-config.enableXnnpack = true;
+config.provider          = onnx_addon::ExecutionProvider::AUTO_GPU;
+config.optimization      = onnx_addon::GraphOptimizationLevel::EXTENDED;
+config.intraOpThreads    = 4;
+config.interOpThreads    = 2;
+config.enableMemoryPattern = true;
+config.enableCpuMemArena   = true;
+config.enableXnnpack       = true;
+config.executionMode       = onnx_addon::ExecutionMode::SEQUENTIAL;
 
 // Create session
 onnx_addon::OnnxSession session("path/to/model.onnx", config);
@@ -285,10 +314,26 @@ If the consumer addon needs to call the `@qvac/onnx` JS API directly (rather tha
 ```js
 const onnx = require('@qvac/onnx')
 
+// Optional: configure environment before first session
+onnx.configureEnvironment({
+  loggingLevel: 'info',   // 'verbose' | 'info' | 'warning' | 'error' | 'fatal'
+  loggingId: 'my-addon'
+})
+
+// Query available execution providers
+const providers = onnx.getAvailableProviders()
+// e.g. ['CPUExecutionProvider', 'XnnpackExecutionProvider']
+
+// Create session
 const handle = onnx.createSession('/path/to/model.onnx', {
   provider: 'auto_gpu',
   optimization: 'extended',
-  enableXnnpack: true
+  intraOpThreads: 4,
+  interOpThreads: 2,
+  enableXnnpack: true,
+  enableMemoryPattern: true,
+  enableCpuMemArena: true,
+  executionMode: 'sequential'
 })
 
 const inputInfo = onnx.getInputInfo(handle)
@@ -314,6 +359,30 @@ onnx.destroySession(handle)
 npm install        # Resolves @qvac/onnx + devDependencies (cmake-bare, cmake-vcpkg)
 npm run build      # bare-make generate && bare-make build && bare-make install
 ```
+
+---
+
+## Thread pool configuration
+
+ONNX Runtime uses two thread pools per session:
+
+| Setting | What it controls | Default |
+|---------|-----------------|---------|
+| `intraOpThreads` | Parallelism **within** a single operator (e.g. matrix multiply) | `0` (all cores) |
+| `interOpThreads` | Parallelism **between** independent operators in the graph | `0` (all cores) |
+| `executionMode` | Whether independent operators run in parallel or sequentially | `"sequential"` |
+
+- **Sequential mode** (default): Operators run one at a time. Only intra-op parallelism is used. This is the safest default and recommended for most workloads.
+- **Parallel mode**: Independent operators can run concurrently. Requires `interOpThreads > 1` to be effective. Useful for models with many independent branches.
+
+### Memory options
+
+| Setting | What it controls | Default |
+|---------|-----------------|---------|
+| `enableMemoryPattern` | Reuse memory allocations based on execution patterns | `true` |
+| `enableCpuMemArena` | Use a memory arena for CPU allocations to reduce malloc overhead | `true` |
+
+DirectML on Windows automatically disables memory patterns and forces sequential mode — this is handled internally by the session options builder.
 
 ---
 
