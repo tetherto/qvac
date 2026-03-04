@@ -313,7 +313,7 @@ class ONNXOcr extends ONNXBase {
 
   static getModelKey (params) {
     // Prevents loading same model multiple times
-    const mode = params.pipelineMode || 'easyocr'
+    const mode = (params && params.pipelineMode) || 'easyocr'
     return `onnx-ocr-fasttext-${mode}`
   }
 }
