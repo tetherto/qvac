@@ -1,4 +1,23 @@
 # Changelog
+## [0.10.0] - 2026-03-02
+
+### Added
+
+#### Model metadata querying via LlamaModel
+
+`LlamaModel` now exposes `ModelMetaData`, which parses GGUF key-values at init time (before weights are fully loaded) and makes them available for early decisions such as quantization detection and backend selection. Queries are available through `tryGetU32()`, `isU32OneOf()`, and `hasOneBitQuantization()`.
+
+#### ModelMetaData streaming synchronization
+
+For streaming model loads, `ModelMetaData` coordinates with `AsyncWeightsLoader` to borrow the first shard buffer. The synchronization state is encapsulated in a public nested class `ModelMetaData::FirstFileFromGgufStreamState` with `waitForRelease()` and `provide()` methods, protected by a mutex and condition variable. Both the consumer and producer waits are bounded by configurable timeouts.
+
+### Fixed
+
+#### GGUF streambuf reader fails to align data section (Fabric 1.1.3 upgrade)
+
+Fixed a bug in the GGUF buffer reader (`gguf_bytes_buffer_reader::align`) where `pubseekoff` was called without specifying a direction (`std::ios_base::in`). The default `which` parameter is `ios_base::in | ios_base::out`, and per the C++ spec, `std::stringbuf::seekoff` with `way=cur` and both directions set always returns `-1` — regardless of the streambuf's open mode. This caused `"gguf_init_from_reader_impl: failed to align data section"` when loading model metadata from an in-memory stream (e.g. during streaming model loads), while the disk-backed `FILE*` path was unaffected because `fseek` has no direction concept.
+
+The fix passes `std::ios_base::in` explicitly to `pubseekoff` in the llamacpp tether layer. This low-level alignment fix stems from the upgrade to Fabric 1.1.3.
 
 ## [0.9.2] - 2026-03-03
 
