@@ -915,8 +915,8 @@ std::string LlamaModel::finetune(
     std::unique_ptr<llama_adapter_lora, decltype(&llama_adapter_lora_free)>
         adapterPtr(adapter, llama_adapter_lora_free);
 
-    pausedCheckpointState_.reset();
-    currentCheckpointState_.store(nullptr, std::memory_order_release);
+    clearPausedCheckpointStateShared();
+    clearCurrentCheckpointStateShared();
 
     auto checkpointState = initializeCheckpointing(
         params, adapterPtr.get(), &schedulerState);
@@ -961,8 +961,7 @@ std::string LlamaModel::finetune(
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       checkpointState->progressCallback = progressCallback;
-      currentCheckpointState_.store(
-          checkpointState.get(), std::memory_order_release);
+      setCurrentCheckpointStateShared(checkpointState);
       setCurrentCheckpointState(checkpointState.get());
     }
 
@@ -1016,11 +1015,11 @@ std::string LlamaModel::finetune(
       checkpointState->pauseDoneCv.notify_all();
       clearCurrentCheckpointState();
       if (wasPaused) {
-        pausedCheckpointState_ = std::move(checkpointState);
+        setPausedCheckpointStateShared(checkpointState);
       } else {
-        currentCheckpointState_.store(nullptr, std::memory_order_release);
-        pausedCheckpointState_.reset();
+        clearPausedCheckpointStateShared();
       }
+      clearCurrentCheckpointStateShared();
     }
 
     if (!wasPaused) {
@@ -1034,13 +1033,18 @@ std::string LlamaModel::finetune(
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
     return status;
   } catch (...) {
-    auto* state = getCurrentCheckpointState();
-    if (state)
+    auto state = getCurrentCheckpointStateShared();
+    if (state) {
       state->setIdle();
-    if (pausedCheckpointState_)
-      pausedCheckpointState_->setIdle();
+      state->pauseWaitDone.store(true);
+      state->pauseDoneCv.notify_all();
+    }
+    auto pausedState = getPausedCheckpointStateShared();
+    if (pausedState) {
+      pausedState->setIdle();
+    }
     llama_finetuning_helpers::clearCurrentCheckpointState();
-    currentCheckpointState_.store(nullptr, std::memory_order_release);
+    clearCurrentCheckpointStateShared();
     throw;
   }
 }
@@ -1198,7 +1202,7 @@ llama_finetuning_helpers::LoraLrSchedulerState LlamaModel::createLrScheduler(
   return schedulerState;
 }
 
-std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
 LlamaModel::initializeCheckpointing(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
     llama_adapter_lora* adapter,
@@ -1213,7 +1217,7 @@ LlamaModel::initializeCheckpointing(
     return nullptr;
   }
 
-  auto checkpointState = std::make_unique<TrainingCheckpointState>();
+  auto checkpointState = std::make_shared<TrainingCheckpointState>();
   checkpointState->ctx = ctx;
   checkpointState->model = mdl;
   checkpointState->adapter = adapter;
@@ -1487,19 +1491,48 @@ void LlamaModel::saveLoraAdapter(
   }
 }
 
-llama_finetuning_helpers::TrainingCheckpointState*
-LlamaModel::getCurrentCheckpointState() const {
-  return currentCheckpointState_.load(std::memory_order_acquire);
+std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+LlamaModel::getCurrentCheckpointStateShared() const {
+  std::scoped_lock lock(checkpointStateMutex_);
+  return currentCheckpointState_;
+}
+
+void LlamaModel::setCurrentCheckpointStateShared(
+    std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state) {
+  std::scoped_lock lock(checkpointStateMutex_);
+  currentCheckpointState_ = std::move(state);
+}
+
+void LlamaModel::clearCurrentCheckpointStateShared() {
+  std::scoped_lock lock(checkpointStateMutex_);
+  currentCheckpointState_.reset();
+}
+
+std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+LlamaModel::getPausedCheckpointStateShared() const {
+  std::scoped_lock lock(checkpointStateMutex_);
+  return pausedCheckpointState_;
+}
+
+void LlamaModel::setPausedCheckpointStateShared(
+    std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state) {
+  std::scoped_lock lock(checkpointStateMutex_);
+  pausedCheckpointState_ = std::move(state);
+}
+
+void LlamaModel::clearPausedCheckpointStateShared() {
+  std::scoped_lock lock(checkpointStateMutex_);
+  pausedCheckpointState_.reset();
 }
 
 bool LlamaModel::isFinetuneRunning() const {
-  auto* state = getCurrentCheckpointState();
+  auto state = getCurrentCheckpointStateShared();
   return state != nullptr &&
          state->isFinetuning.load(std::memory_order_acquire);
 }
 
 bool LlamaModel::requestPause() {
-  auto* state = getCurrentCheckpointState();
+  auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
     return false;
   }
@@ -1512,19 +1545,19 @@ bool LlamaModel::requestPause() {
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
-  auto* state = getCurrentCheckpointState();
+  auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
     return;
   }
   constexpr auto timeout = std::chrono::minutes(5);
   std::unique_lock lock(state->pauseDoneMutex);
   state->pauseDoneCv.wait_for(
-      lock, timeout, [state] { return state->pauseWaitDone.load(); });
+      lock, timeout, [&state] { return state->pauseWaitDone.load(); });
 }
 
 void LlamaModel::clearPauseRequest() {
-  pausedCheckpointState_.reset();
-  currentCheckpointState_.store(nullptr, std::memory_order_release);
+  clearPausedCheckpointStateShared();
+  clearCurrentCheckpointStateShared();
 
   llama_context* ctx = getContext();
   if (ctx != nullptr) {

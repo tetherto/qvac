@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -112,8 +113,6 @@ public:
   bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
-  llama_finetuning_helpers::TrainingCheckpointState* getCurrentCheckpointState()
-      const;
 
   /** Block until the training thread has completed the finetuning pause path.
    */
@@ -175,7 +174,7 @@ private:
   llama_finetuning_helpers::LoraLrSchedulerState createLrScheduler(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       int64_t totalSteps);
-  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
   initializeCheckpointing(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
       llama_adapter_lora* adapter,
@@ -199,9 +198,21 @@ private:
       llama_adapter_lora* adapter,
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
 
-  std::atomic<llama_finetuning_helpers::TrainingCheckpointState*>
-      currentCheckpointState_{nullptr};
-  std::unique_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  getCurrentCheckpointStateShared() const;
+  void setCurrentCheckpointStateShared(
+      std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
+  void clearCurrentCheckpointStateShared();
+  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+  getPausedCheckpointStateShared() const;
+  void setPausedCheckpointStateShared(
+      std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
+  void clearPausedCheckpointStateShared();
+
+  mutable std::mutex checkpointStateMutex_;
+  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
+      currentCheckpointState_;
+  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       pausedCheckpointState_;
   bool optimizerInitialized_ = false;
 };
