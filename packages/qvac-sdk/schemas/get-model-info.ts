@@ -42,6 +42,7 @@ export const modelInfoSchema = z.object({
   addon: z.enum([
     "llm",
     "whisper",
+    "parakeet",
     "embeddings",
     "nmt",
     "vad",

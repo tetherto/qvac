@@ -12,6 +12,7 @@ export const ModelType = {
   llamacppEmbedding: "llamacpp-embedding",
   nmtcppTranslation: "nmtcpp-translation",
   onnxTts: "onnx-tts",
+  parakeetTranscription: "parakeet-transcription",
   onnxOcr: "onnx-ocr",
 } as const;
 
@@ -21,6 +22,7 @@ const AliasKeys = {
   whisper: "whisper",
   embeddings: "embeddings",
   nmt: "nmt",
+  parakeet: "parakeet",
   tts: "tts",
   ocr: "ocr",
 } as const;
@@ -35,6 +37,7 @@ export const ModelTypeAliases = {
   [AliasKeys.whisper]: ModelType.whispercppTranscription,
   [AliasKeys.embeddings]: ModelType.llamacppEmbedding,
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
+  [AliasKeys.parakeet]: ModelType.parakeetTranscription,
   [AliasKeys.tts]: ModelType.onnxTts,
   [AliasKeys.ocr]: ModelType.onnxOcr,
 } as const;
@@ -152,6 +155,18 @@ export const whisperModelTypeSchema = modelTypeInputSchema
     'Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
   );
 export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>;
+
+/**
+ * Parakeet/Transcription model type schema.
+ * - Alias: `"parakeet"` → resolves to `"parakeet-transcription"`
+ * - Canonical: `"parakeet-transcription"`
+ */
+export const parakeetModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.parakeet, ModelType.parakeetTranscription])
+  .describe(
+    'Parakeet model type: "parakeet" (alias) or "parakeet-transcription" (canonical)',
+  );
+export type ParakeetModelTypeInput = z.infer<typeof parakeetModelTypeSchema>;
 
 /**
  * Embeddings model type schema.

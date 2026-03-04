@@ -25,7 +25,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: 480
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -34,6 +34,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: packages/qvac-lib-infer-llamacpp-llm
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -45,6 +46,7 @@ jobs:
             platform: linux
             arch: x64
             runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -57,6 +59,7 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+            no_gpu: 'true'
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
