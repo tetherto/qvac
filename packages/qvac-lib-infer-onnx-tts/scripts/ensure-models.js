@@ -6,9 +6,10 @@ const { ensureChatterboxModels, ensureSupertonicModels } = require('../test/util
 const baseDir = '.'
 const modelsDir = path.join(baseDir, 'models')
 
-const variant = process.env.CHATTERBOX_VARIANT || 'fp32'
-const language = process.env.CHATTERBOX_LANGUAGE || 'en'
-const ensureAll = process.env.TTS_ENSURES === 'all'
+const env = typeof process !== 'undefined' && process.env ? process.env : {}
+const variant = env.CHATTERBOX_VARIANT || 'fp32'
+const language = env.CHATTERBOX_LANGUAGE || 'en'
+const ensureAll = env.TTS_ENSURES === 'all'
 
 async function run () {
   const errors = []
