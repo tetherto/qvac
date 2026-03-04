@@ -4,19 +4,14 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
+#include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
 class LlamaLazyInitializeBackendTest : public ::testing::Test {
 protected:
   std::string getTestBackendsDir() {
-    fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-    backendDir = fs::path(TEST_BINARY_DIR);
-#else
-    backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-    return backendDir.string();
+    return test_common::getTestBackendsDir().string();
   }
 };
 
