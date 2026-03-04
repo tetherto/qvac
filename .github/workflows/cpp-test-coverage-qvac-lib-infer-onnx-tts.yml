@@ -154,6 +154,10 @@ jobs:
         run: |
           npm run coverage:cpp:build
 
+      - name: Ensure TTS models for integration tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run models:ensure
+
       - name: Run C++ Unit Tests
         id: cpp_tests
         working-directory: ${{ env.WORKDIR }}
