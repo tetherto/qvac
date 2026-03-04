@@ -238,8 +238,9 @@ TEST(LlamaFinetuningHelpers, PauseCheckpointExists_WhenEmpty) {
 // Regression: savePauseCheckpoint writes epoch = currentEpoch + 1 when paused
 // during validation.  On resume with numberOfEpochs=1 the training loop is
 // skipped entirely, so executeTrainingLoop must still populate terminal stats.
-TEST(LlamaFinetuningHelpers,
-     ParseCheckpointMetadata_PauseDuringValidationIncrementsEpoch) {
+TEST(
+    LlamaFinetuningHelpers,
+    ParseCheckpointMetadata_PauseDuringValidationIncrementsEpoch) {
   fs::path tmpDir = fs::temp_directory_path() /
                     ("finetune_test_pause_meta_" + uniqueTestId());
   fs::create_directories(tmpDir);
@@ -253,24 +254,24 @@ TEST(LlamaFinetuningHelpers,
 
   // Validation-phase pause: epoch is incremented to currentEpoch + 1.
   {
-    auto path = writeMeta("val_pause.json",
+    auto path = writeMeta(
+        "val_pause.json",
         "epoch=1\nlora_rank=8\nlora_alpha=16.000000\n"
         "target_modules=15\nglobal_step=5\ncurrent_step=5\n");
     llama_finetuning_helpers::CheckpointMetadata meta{};
-    ASSERT_TRUE(
-        llama_finetuning_helpers::parseCheckpointMetadata(path, meta));
+    ASSERT_TRUE(llama_finetuning_helpers::parseCheckpointMetadata(path, meta));
     EXPECT_EQ(meta.epoch, 1);
     EXPECT_EQ(meta.globalStep, 5);
   }
 
   // Training-phase pause: epoch stays at currentEpoch.
   {
-    auto path = writeMeta("train_pause.json",
+    auto path = writeMeta(
+        "train_pause.json",
         "epoch=0\nlora_rank=8\nlora_alpha=16.000000\n"
         "target_modules=15\nglobal_step=3\ncurrent_step=3\n");
     llama_finetuning_helpers::CheckpointMetadata meta{};
-    ASSERT_TRUE(
-        llama_finetuning_helpers::parseCheckpointMetadata(path, meta));
+    ASSERT_TRUE(llama_finetuning_helpers::parseCheckpointMetadata(path, meta));
     EXPECT_EQ(meta.epoch, 0);
     EXPECT_EQ(meta.globalStep, 3);
   }

@@ -15,8 +15,8 @@
 
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
-#include "LlamaFinetuningParams.hpp"
 #include "LlamaFinetuningHelpers.hpp"
+#include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
@@ -75,8 +75,8 @@ public:
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
   void cancel() const final;
 
-  using ProgressCallback =
-      std::function<void(const llama_finetuning_helpers::FinetuneProgressStats&)>;
+  using ProgressCallback = std::function<void(
+      const llama_finetuning_helpers::FinetuneProgressStats&)>;
 
   struct Prompt {
     std::string input;
