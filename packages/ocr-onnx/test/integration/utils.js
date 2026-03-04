@@ -7,6 +7,18 @@ const os = require('bare-os')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
+// DocTR model download URLs from OnnxTR GitHub releases
+const DOCTR_MODEL_URLS = {
+  'db_resnet50.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/db_resnet50-69ba0015.onnx',
+  'parseq.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/parseq-00b40714.onnx',
+  'db_mobilenet_v3_large.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.2.0/db_mobilenet_v3_large-4987e7bd.onnx',
+  'crnn_mobilenet_v3_small.onnx': 'https://github.com/felixdittrich92/OnnxTR/releases/download/v0.0.1/crnn_mobilenet_v3_small-bded4d49.onnx'
+}
+
+const DOCTR_MODELS_DIR = isMobile
+  ? path.join(global.testDir || '/tmp', 'doctr-models')
+  : path.resolve('.', 'test/models/doctr')
+
 // Mapping from original filename to renamed filename for mobile
 // Files are renamed to avoid Android resource merger conflicts (same base name, different extension)
 const mobileAssetMapping = {
@@ -54,6 +66,109 @@ async function downloadFile (url, destPath) {
   const buffer = await response.arrayBuffer()
   fs.writeFileSync(destPath, Buffer.from(buffer))
   console.log(`   Downloaded: ${path.basename(destPath)}`)
+}
+
+/**
+ * Loads the DocTR model URL config from testAssets on mobile.
+ * Returns null if not available (falls back to direct GitHub downloads).
+ * @returns {Object|null}
+ */
+function loadDoctrUrlConfig () {
+  if (global.assetPaths) {
+    const configPath = global.assetPaths['../../testAssets/doctr-model-urls.json']
+    if (configPath) {
+      try {
+        const configData = fs.readFileSync(configPath.replace('file://', ''), 'utf8')
+        return JSON.parse(configData)
+      } catch (e) {
+        console.log(`   Failed to load doctr config from assetPaths: ${e.message}`)
+      }
+    }
+  }
+
+  const fallbackPaths = [
+    '../../testAssets/doctr-model-urls.json',
+    '../testAssets/doctr-model-urls.json',
+    'testAssets/doctr-model-urls.json'
+  ]
+  for (const fallbackPath of fallbackPaths) {
+    if (fs.existsSync(fallbackPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
+      } catch (e) {
+        console.log(`   Failed to parse ${fallbackPath}: ${e.message}`)
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Downloads a single DocTR model if not already cached.
+ * On mobile uses presigned S3 URLs from doctr-model-urls.json; falls back to GitHub releases.
+ * Retries up to 3 times on transient errors (e.g. GitHub Releases HTTP 500).
+ * @param {string} filename - Model filename (e.g., 'db_resnet50.onnx')
+ * @param {Object|null} urlConfig - Presigned URL config loaded from testAssets (mobile only)
+ */
+async function downloadDoctrModel (filename, urlConfig = null) {
+  const destPath = path.join(DOCTR_MODELS_DIR, filename)
+  if (fs.existsSync(destPath)) return
+
+  // Prefer presigned S3 URL on mobile; fall back to public GitHub release URL
+  const url = (urlConfig && urlConfig[filename]) || DOCTR_MODEL_URLS[filename]
+  if (!url) throw new Error(`No download URL for DocTR model: ${filename}`)
+
+  const source = (urlConfig && urlConfig[filename]) ? 'S3 presigned URL' : 'GitHub releases'
+  console.log(`Downloading ${filename} from ${source}...`)
+
+  const fetch = require('bare-fetch')
+  const maxAttempts = 3
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`HTTP ${response.status} downloading ${filename}`)
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`Downloaded ${filename} (${Math.round(buffer.byteLength / 1024 / 1024)}MB)`)
+      return
+    } catch (e) {
+      lastError = e
+      if (attempt < maxAttempts) {
+        const delayMs = attempt * 5000
+        console.log(`   Attempt ${attempt} failed: ${e.message}. Retrying in ${delayMs / 1000}s...`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+    }
+  }
+  throw lastError
+}
+
+/**
+ * Ensures all requested DocTR models are available.
+ * On mobile downloads from presigned S3 URLs (doctr-model-urls.json in testAssets);
+ * on desktop downloads from OnnxTR GitHub releases if not already present.
+ * @param {string[]} [models] - Model filenames to ensure. Defaults to all 4 models.
+ * @returns {Promise<Object>} Map of model name (without extension) to full path
+ */
+async function ensureDoctrModels (models) {
+  if (!models) models = Object.keys(DOCTR_MODEL_URLS)
+  fs.mkdirSync(DOCTR_MODELS_DIR, { recursive: true })
+
+  const urlConfig = isMobile ? loadDoctrUrlConfig() : null
+  if (isMobile && !urlConfig) {
+    console.log('Warning: doctr-model-urls.json not found on mobile; falling back to GitHub downloads')
+  }
+
+  for (const filename of models) {
+    await downloadDoctrModel(filename, urlConfig)
+  }
+  const paths = {}
+  for (const filename of models) {
+    const key = filename.replace('.onnx', '')
+    paths[key] = path.join(DOCTR_MODELS_DIR, filename)
+  }
+  return paths
 }
 
 /**
@@ -167,10 +282,93 @@ function formatOCRPerformanceMetrics (label, stats, outputTexts = []) {
     - Detected texts: ${JSON.stringify(outputTexts)}`
 }
 
+/**
+ * Safely unloads an OCR instance with a timeout to prevent hangs.
+ * ONNX Runtime cleanup can sometimes hang on certain platforms,
+ * so we race unload() against a timeout and move on if it stalls.
+ *
+ * @param {Object} onnxOcr - The ONNXOcr instance to unload
+ * @param {number} [timeoutMs=10000] - Max time to wait for unload
+ * @returns {Promise<void>}
+ */
+async function safeUnload (onnxOcr, timeoutMs = 10000) {
+  try {
+    let timeoutId
+    const unloadPromise = onnxOcr.unload()
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        console.log('Warning: unload() did not complete within ' + timeoutMs + 'ms, continuing...')
+        resolve()
+      }, timeoutMs)
+    })
+    await Promise.race([unloadPromise, timeoutPromise])
+    clearTimeout(timeoutId)
+  } catch (e) {
+    console.log('unload() error: ' + e.message)
+  }
+}
+
+/**
+ * Helper to run a single DocTR OCR pass and return results
+ * @param {Object} t - brittle test handle
+ * @param {Object} params - OCR params (pathDetector, pathRecognizer, etc.)
+ * @param {string} imagePath - Path to the image file
+ * @returns {Promise<{results: Array, stats: Object}>}
+ */
+async function runDoctrOCR (t, params, imagePath) {
+  const { ONNXOcr } = require('../..')
+
+  const onnxOcr = new ONNXOcr({
+    params: {
+      langList: ['en'],
+      useGPU: false,
+      pipelineMode: 'doctr',
+      ...params
+    },
+    opts: { stats: true }
+  })
+
+  await onnxOcr.load()
+  console.log('[runDoctrOCR] loaded, starting run...')
+
+  try {
+    const response = await onnxOcr.run({
+      path: imagePath,
+      options: { paragraph: false }
+    })
+    console.log('[runDoctrOCR] run() returned, awaiting results...')
+
+    let results = []
+
+    await response
+      .onUpdate(output => {
+        t.ok(Array.isArray(output), 'output should be an array')
+        console.log('[runDoctrOCR] onUpdate: got ' + output.length + ' items')
+        results = output.map(o => ({ text: o[1], confidence: o[2], bbox: o[0] }))
+        console.log('[runDoctrOCR] onUpdate: mapped ' + results.length + ' results')
+      })
+      .onError(error => {
+        t.fail('unexpected error: ' + JSON.stringify(error))
+      })
+      .await()
+
+    console.log('[runDoctrOCR] await() completed, returning results')
+    return { results, stats: response.stats || {} }
+  } finally {
+    await safeUnload(onnxOcr)
+    // Allow ONNX Runtime to fully clean up async operations before next test
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+}
+
 module.exports = {
   isMobile,
   platform,
   getImagePath,
   ensureModelPath,
-  formatOCRPerformanceMetrics
+  ensureDoctrModels,
+  DOCTR_MODELS_DIR,
+  formatOCRPerformanceMetrics,
+  safeUnload,
+  runDoctrOCR
 }

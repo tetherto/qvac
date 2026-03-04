@@ -1,13 +1,14 @@
 #include "Steps.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <thread>
+#include <vector>
 
-#include <onnxruntime/onnxruntime_session_options_config_keys.h>
+#include <opencv2/opencv.hpp>
 
 #include "AndroidLog.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
@@ -20,7 +21,7 @@ namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
 std::string InferredText::toString() const {
   std::stringstream stringStream;
-  stringStream << "Inferred text: '" << text << "', confidence: " << confidenceScore << ", bouding box: [";
+  stringStream << "Inferred text: '" << text << "', confidence: " << confidenceScore << ", bounding box: [";
   for (size_t i = 0; i < boxCoordinates.size(); ++i) {
     stringStream << "(" << boxCoordinates.at(i).x << ", " << boxCoordinates.at(i).y << ")";
     if (i != boxCoordinates.size() - 1) {
@@ -56,7 +57,6 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
   ALOG_DEBUG(providersMsg.str());
 
   if (!useGPU) {
-    bool useDefaultThreadSettings = true;
     std::string cpuMsg = "[ORT] CPU-only mode configured. ";
 
     try {
@@ -64,42 +64,25 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
           std::find(
               providers.begin(), providers.end(), "XnnpackExecutionProvider") !=
           providers.end();
+
+#if !(defined(_WIN32) || defined(_WIN64))
       if (xnnpackAvailable) {
-        // Order must be: spinning -> intra -> inter -> AppendEP.
-        // Also see:
-        // https://onnxruntime.ai/docs/execution-providers/Xnnpack-ExecutionProvider.html
-        int availableThreads =
-            std::max(1, static_cast<int>(std::thread::hardware_concurrency()));
-
-        sessionOptions.SetExecutionMode(ExecutionMode::ORT_PARALLEL);
-        sessionOptions.AddConfigEntry(
-            kOrtSessionOptionsConfigAllowIntraOpSpinning, "1");
-        sessionOptions.AddConfigEntry(
-            kOrtSessionOptionsConfigAllowInterOpSpinning, "1");
-        sessionOptions.SetIntraOpNumThreads(availableThreads);
-        sessionOptions.SetInterOpNumThreads(availableThreads);
-
-#ifdef __ANDROID__
-        // Cap threads on Android: avoid thermal throttling and big.LITTLE
-        // contention.
-        availableThreads = std::min(availableThreads, 4);
-#endif
-        sessionOptions.AppendExecutionProvider(
-            "XNNPACK",
-            {{"intra_op_num_threads", std::to_string(availableThreads)}});
-
+        // Pass empty options so XNNPACK inherits ORT's thread pool rather than
+        // creating its own pthreadpool.  Without this, XNNPACK's pool is not
+        // tied to the session lifetime and can cause hangs on destruction.
+        // See: https://onnxruntime.ai/docs/execution-providers/Xnnpack-ExecutionProvider.html
+        sessionOptions.AppendExecutionProvider("XNNPACK", {});
         cpuMsg.append("XNNPack EP appended.");
-        useDefaultThreadSettings = false;
       } else {
         cpuMsg.append("XNNPack EP not available.");
       }
+#else
+      (void)xnnpackAvailable;
+      // XNNPACK causes session-destruction crashes on Windows; use the CPU EP only.
+      cpuMsg.append("XNNPack EP skipped on Windows; using CPU EP.");
+#endif
     } catch (const std::exception& e) {
       cpuMsg.append("Failed to append XNNPack: " + std::string(e.what()));
-    }
-
-    if (useDefaultThreadSettings) {
-      sessionOptions.SetIntraOpNumThreads(0); // 0 = use all available cores
-      sessionOptions.SetInterOpNumThreads(0);
     }
 
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, cpuMsg);
@@ -166,6 +149,56 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
 #endif
 
   return sessionOptions;
+}
+
+Ort::Env& getSharedOrtEnv() {
+  static Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "OnnxOcr");
+  return env;
+}
+
+#if defined(_WIN32) || defined(_WIN64)
+namespace {
+// Raw owning pointers that are intentionally never deleted.
+// ~Ort::Session() on Windows corrupts global ORT state after the first call,
+// causing SIGSEGV on all subsequent session destructions (ORT bug).
+// By moving sessions here and never calling delete, we bypass the broken
+// destructor.  The OS reclaims all memory when the process exits.
+std::vector<Ort::Session*> windowsLeakedSessions; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+} // namespace
+
+void deferWindowsSessionLeak(Ort::Session session) {
+  // Heap-allocate via move-construction so the OrtSession* handle transfers
+  // to the new object.  The raw pointer is stored but never freed, preventing
+  // ~Ort::Session() from running and avoiding the Windows crash.
+  windowsLeakedSessions.push_back(new Ort::Session(std::move(session))); // NOLINT(cppcoreguidelines-owning-memory)
+}
+#endif
+
+cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect) {
+  cv::Point2f topLeft = rect[0];
+  cv::Point2f topRight = rect[1];
+  cv::Point2f bottomRight = rect[2];
+  cv::Point2f bottomLeft = rect[3];
+
+  const auto widthA = static_cast<float>(std::sqrt(std::pow(bottomRight.x - bottomLeft.x, 2) + std::pow(bottomRight.y - bottomLeft.y, 2)));
+  const auto widthB = static_cast<float>(std::sqrt(std::pow(topRight.x - topLeft.x, 2) + std::pow(topRight.y - topLeft.y, 2)));
+  const int maxWidth = std::max(static_cast<int>(widthA), static_cast<int>(widthB));
+
+  const auto heightA = static_cast<float>(std::sqrt(std::pow(topRight.x - bottomRight.x, 2) + std::pow(topRight.y - bottomRight.y, 2)));
+  const auto heightB = static_cast<float>(std::sqrt(std::pow(topLeft.x - bottomLeft.x, 2) + std::pow(topLeft.y - bottomLeft.y, 2)));
+  const int maxHeight = std::max(static_cast<int>(heightA), static_cast<int>(heightB));
+
+  if (maxWidth <= 0 || maxHeight <= 0) {
+    return cv::Mat();
+  }
+
+  std::array<cv::Point2f, 4> destination = {
+      {cv::Point2f(0.0F, 0.0F), cv::Point2f(static_cast<float>(maxWidth - 1), 0.0F), cv::Point2f(static_cast<float>(maxWidth - 1), static_cast<float>(maxHeight - 1)), cv::Point2f(0.0F, static_cast<float>(maxHeight - 1))}};
+
+  cv::Mat perspectiveTransform = cv::getPerspectiveTransform(rect.data(), destination.data());
+  cv::Mat warpedImg;
+  cv::warpPerspective(image, warpedImg, perspectiveTransform, cv::Size(maxWidth, maxHeight));
+  return warpedImg;
 }
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

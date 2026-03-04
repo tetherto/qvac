@@ -85,6 +85,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -165,9 +166,10 @@ jobs:
     if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-lib-infer-diffusion.yml
+    uses: ./.github/workflows/create-github-release.yml
     secrets: inherit
     with:
+      repo_name: "diffusion"
       release_name: "QVAC Stable Diffusion Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

@@ -6,9 +6,10 @@
 
 This library provides Optical Character Recognition (OCR) capabilities for QVAC runtime applications, leveraging the ONNX Runtime for efficient inference.
 
-The OCR process uses two models:
-*   **Detector:** Locates text regions within an image.
-*   **Recognizer:** Extracts text strings from the detected regions. Recognizer models are language-specific.
+The library supports two OCR pipelines:
+
+*   **EasyOCR pipeline** (default): Uses CRAFT detector + language-specific recognizers.
+*   **DocTR pipeline**: Uses DBNet detector + CRNN/PARSeq recognizer, matching the [OnnxTR](https://github.com/felixdittrich92/OnnxTR) Python library.
 
 ## Table of Contents
 
@@ -19,6 +20,7 @@ The OCR process uses two models:
 *   [Output Format](#output-format)
 *   [Glossary](#glossary)
 *   [Supported Languages](#supported-languages)
+*   [DocTR Pipeline](#doctr-pipeline)
 *   [Contributing](#contributing)
 *   [License](#license)
 *   [Support](#support)
@@ -134,58 +136,89 @@ The `examples/` folder contains several examples to help you get started:
 
 ## Usage
 
-The library provides a straightforward workflow for image-based text recognition:
+The library provides a straightforward workflow for image-based text recognition. The pipeline is selected via the `pipelineMode` parameter: `'easyocr'` (default) or `'doctr'`.
 
 ### 1. Configure Parameters
 
-Define the arguments for the OCR instance, including paths to the ONNX models and the list of languages to recognize.
+#### EasyOCR Mode (default)
 
 ```javascript
 const args = {
   params: {
-    // Required parameters
-    langList: ['en'],                              // Language codes (ISO 639-1)
+    // Required
+    langList: ['en'],                        // Language codes for recognizer selection
     pathDetector: './models/ocr/detector_craft.onnx',
     pathRecognizer: './models/ocr/recognizer_latin.onnx',
     // Or use prefix: pathRecognizerPrefix: './models/ocr/recognizer_',
 
-    // Optional parameters
-    useGPU: true,                    // Enable GPU acceleration (default: true)
-    timeout: 120,                    // Inference timeout in seconds (default: 120)
+    // Shared optional
+    useGPU: true,                            // Enable GPU/NPU acceleration (falls back to CPU)
+    timeout: 120,                            // Max inference time in seconds
 
-    // Performance tuning (optional)
-    magRatio: 1.5,                   // Detection magnification ratio (default: 1.5)
-    defaultRotationAngles: [90, 270], // Rotation angles to try (default: [90, 270])
-    contrastRetry: false,            // Retry low-confidence with contrast adjustment (default: false)
-    lowConfidenceThreshold: 0.4,     // Threshold for contrast retry (default: 0.4)
-    recognizerBatchSize: 32          // Batch size for recognizer inference (default: 32)
+    // EasyOCR-specific optional
+    magRatio: 1.5,                           // Detection magnification ratio (1.0–2.0)
+    defaultRotationAngles: [90, 270],        // Rotation angles to try (use [] to disable)
+    contrastRetry: false,                    // Re-process low-confidence regions with adjusted contrast
+    lowConfidenceThreshold: 0.4,             // Confidence threshold below which contrast retry triggers
+    recognizerBatchSize: 32                  // Text regions per batch (lower = less memory on mobile)
   },
   opts: {
-    stats: true                      // Enable performance statistics logging
+    stats: true                              // Enable performance statistics
   }
 }
 ```
 
-#### Required Parameters
+#### DocTR Mode
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `langList` | `string[]` | List of language codes (ISO 639-1). The first supported language determines the recognizer model. See [Supported Languages](#supported-languages). |
-| `pathDetector` | `string` | Path to the detector ONNX model file. |
-| `pathRecognizer` | `string` | Path to the recognizer ONNX model file. **Required if `pathRecognizerPrefix` is not provided.** |
-| `pathRecognizerPrefix` | `string` | Prefix path for recognizer model. The library appends the language suffix automatically (e.g., `recognizer_latin.onnx`). **Required if `pathRecognizer` is not provided.** |
+```javascript
+const args = {
+  params: {
+    pipelineMode: 'doctr',                   // Select DocTR pipeline
+    langList: ['en'],                        // Language codes (defaults to ['en'] for DocTR)
+    pathDetector: './models/doctr/db_mobilenet_v3_large.onnx',
+    pathRecognizer: './models/doctr/crnn_mobilenet_v3_small.onnx',
 
-#### Optional Parameters
+    // Shared optional
+    useGPU: false,                           // Enable GPU/NPU acceleration (falls back to CPU)
+
+    // DocTR-specific optional
+    straightenPages: false,                  // Apply perspective transform to straighten text regions
+    decodingMethod: 'greedy'                 // 'greedy' (all models) or 'attention' (PARSeq only)
+  },
+  opts: {
+    stats: true                              // Enable performance statistics
+  }
+}
+```
+
+#### Shared Parameters (both pipelines)
+
+| Parameter | Type | Default | Required | Description |
+|-----------|------|---------|----------|-------------|
+| `pipelineMode` | `string` | `'easyocr'` | No | Pipeline to use: `'easyocr'` or `'doctr'`. |
+| `langList` | `string[]` | — | Yes (EasyOCR), optional for DocTR | Language codes (ISO 639-1). In EasyOCR mode, determines the recognizer model. In DocTR mode, defaults to `['en']`. |
+| `pathDetector` | `string` | — | Yes | Path to the detector ONNX model (CRAFT for EasyOCR, DBNet for DocTR). |
+| `pathRecognizer` | `string` | — | Yes | Path to the recognizer ONNX model. **In EasyOCR mode**, can be omitted if `pathRecognizerPrefix` is provided. |
+| `pathRecognizerPrefix` | `string` | — | No | EasyOCR only. Prefix path for recognizer model; the library appends the language suffix (e.g., `recognizer_latin.onnx`). |
+| `useGPU` | `boolean` | `true` | No | Enable GPU/NPU/TPU acceleration. Falls back to CPU if unavailable. |
+| `timeout` | `number` | `120` | No | Maximum inference time in seconds. |
+
+#### EasyOCR-Specific Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `useGPU` | `boolean` | `true` | Enable GPU/NPU/TPU acceleration. Falls back to CPU if unavailable. |
-| `timeout` | `number` | `120` | Maximum inference time in seconds. Increase for complex images or slower devices. |
 | `magRatio` | `number` | `1.5` | Detection magnification ratio (1.0-2.0). Higher values improve detection of small text but increase processing time. |
-| `defaultRotationAngles` | `number[]` | `[90, 270]` | Rotation angles to try for text detection. Use `[]` to disable rotation variants. |
-| `contrastRetry` | `boolean` | `false` | Re-process low-confidence regions with adjusted contrast. Improves accuracy but increases memory usage. |
-| `lowConfidenceThreshold` | `number` | `0.4` | Confidence threshold (0-1) below which contrast retry is triggered (when `contrastRetry` is enabled). |
-| `recognizerBatchSize` | `number` | `32` | Number of text regions processed per batch. Lower values reduce memory usage on mobile devices. |
+| `defaultRotationAngles` | `number[]` | `[90, 270]` | Rotation angles to try for text detection. Use `[]` to disable rotation. |
+| `contrastRetry` | `boolean` | `false` | Re-process low-confidence regions with adjusted contrast. |
+| `lowConfidenceThreshold` | `number` | `0.4` | Confidence threshold (0-1) below which contrast retry is triggered. |
+| `recognizerBatchSize` | `number` | `32` | Number of text regions processed per batch. Lower values reduce memory on mobile. |
+
+#### DocTR-Specific Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `straightenPages` | `boolean` | `false` | Apply perspective transform to straighten detected text regions before recognition. |
+| `decodingMethod` | `string` | `'greedy'` | Decoding method: `'greedy'` (all models) or `'attention'` (PARSeq only). |
 
 ### 2. Create Model Instance
 
@@ -355,6 +388,31 @@ Language support is determined by the recognizer model used. Each recognizer mod
 | `recognizer_kannada.onnx` | kn |
 
 See `supportedLanguages.js` for the complete language definitions.
+
+## DocTR Pipeline
+
+The DocTR pipeline (`pipelineMode: 'doctr'`) provides an alternative OCR engine based on the [OnnxTR](https://github.com/felixdittrich92/OnnxTR) project. It uses DBNet for text detection and CRNN or PARSeq for text recognition.
+
+### DocTR Models
+
+| Model | Type | Description |
+|-------|------|-------------|
+| `db_resnet50.onnx` | Detector | DBNet with ResNet50 backbone (higher accuracy) |
+| `db_mobilenet_v3_large.onnx` | Detector | DBNet with MobileNetV3 backbone (faster, mobile-friendly) |
+| `parseq.onnx` | Recognizer | PARSeq attention-based recognizer (supports `attention` decoding) |
+| `crnn_mobilenet_v3_small.onnx` | Recognizer | CRNN with MobileNetV3 backbone (faster, mobile-friendly, `greedy` decoding only) |
+
+### EasyOCR vs DocTR
+
+| Feature | EasyOCR | DocTR |
+|---------|---------|-------|
+| `pipelineMode` | `'easyocr'` (default) | `'doctr'` |
+| Detector | CRAFT | DBNet (ResNet50 / MobileNetV3) |
+| Recognizer | Language-specific CRNN models | PARSeq or CRNN (single model) |
+| Language support | 50+ languages via separate models | French vocab (126 chars) |
+| Mobile | Supported | Supported (MobileNet models recommended) |
+| Perspective correction | N/A | `straightenPages` option |
+| Image resizing | Auto-resize to 1200px | Full resolution (no resize) |
 
 ## Contributing
 
