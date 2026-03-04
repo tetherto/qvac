@@ -69,7 +69,7 @@ async function main () {
       dstLang: 'it' // Final target language
     },
     diskPath: './models/es-en',
-    modelName: 'model.es-en.intgemm.alphas.bin',
+    modelName: 'model.esen.intgemm.alphas.bin',
     logger // Pass logger to enable/disable C++ logs
   }
 
@@ -83,7 +83,7 @@ async function main () {
     // Pivot model configuration (English → Italian)
     bergamotPivotModel: {
       loader: pivotLoader,
-      modelName: 'model.en-it.intgemm.alphas.bin',
+      modelName: 'model.enit.intgemm.alphas.bin',
       diskPath: './models/en-it',
       srcVocabName: 'vocab.enit.spm',
       dstVocabName: 'vocab.enit.spm', // Shared vocab for en-it
