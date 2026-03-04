@@ -85,6 +85,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&

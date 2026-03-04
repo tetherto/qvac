@@ -13,6 +13,8 @@
 
 #include "StepBoundingBox.hpp"
 #include "StepDetectionInference.hpp"
+#include "StepDoctrDetection.hpp"
+#include "StepDoctrRecognition.hpp"  // DecodingMethod
 #include "StepRecognizeText.hpp"
 #include "Steps.hpp"
 
@@ -35,16 +37,24 @@ constexpr float DEFAULT_LOW_CONF_THRESHOLD = 0.4F;
 // Default batch size for recognizer inference (tuned for mobile memory constraints)
 constexpr int DEFAULT_RECOGNIZER_BATCH_SIZE = 32;
 
+enum class PipelineMode {
+  EASYOCR, // CRAFT detection + CTC recognition (existing)
+  DOCTR    // DBNet detection + PARSeq recognition
+};
+
 /**
  * Configuration parameters for OCR pipeline
  * These are set at instance creation and apply to all images
  */
 struct PipelineConfig {
-  float magRatio{DEFAULT_MAG_RATIO};                        // Detection magnification ratio (1.0-2.0)
-  std::vector<int> defaultRotationAngles{90, 270};          // Default rotation angles to try
+  PipelineMode mode{PipelineMode::EASYOCR};                 // Pipeline mode selection
+  float magRatio{DEFAULT_MAG_RATIO};                        // Detection magnification ratio (1.0-2.0) - EASYOCR only
+  std::vector<int> defaultRotationAngles{90, 270};          // Default rotation angles to try - EASYOCR only
   bool contrastRetry{false};                                // Retry low-confidence with contrast adjustment (disabled by default for mobile memory)
   float lowConfidenceThreshold{DEFAULT_LOW_CONF_THRESHOLD}; // Threshold for contrast retry
   int recognizerBatchSize{DEFAULT_RECOGNIZER_BATCH_SIZE};   // Batch size for recognizer inference
+  DecodingMethod decodingMethod{DecodingMethod::CTC};       // Recognition decoding: CTC for CRNN, ATTENTION for PARSeq
+  bool straightenPages{false};                              // Detect and correct page rotation before detection
 };
 
 struct PipelineInput {
@@ -117,12 +127,26 @@ public:
 private:
   PipelineConfig config_;
 
-  // Sequential pipeline steps (no threading)
+  // EasyOCR pipeline steps (constructed when mode == EASYOCR)
   std::unique_ptr<StepDetectionInference> stepDetection_;
   std::unique_ptr<StepBoundingBox> stepBoundingBox_;
   std::unique_ptr<StepRecognizeText> stepRecognition_;
 
+  // DocTR pipeline steps (constructed when mode == DOCTR)
+  std::unique_ptr<StepDoctrDetection> stepDoctrDetection_;
+  std::unique_ptr<StepDoctrRecognition> stepDoctrRecognition_;
+
   int timeout_;
+
+  Output processEasyOCR(const cv::Mat& image, Input& input, float initialResizeRatio);
+  Output processDocTR(const cv::Mat& image, Input& input, float initialResizeRatio);
+
+  // Estimate page orientation from detection probability map (for straightenPages)
+  // Returns rotation angle rounded to nearest 90° increment (0, 90, 180, 270)
+  float estimatePageOrientation(const cv::Mat& probMap, int paddedW, int paddedH, int padLeft, int padTop);
+
+  // Rotate an image by a multiple of 90 degrees
+  static cv::Mat rotateImage(const cv::Mat& image, float angleDeg);
 
   mutable std::mutex processingTimeMtx_;
   mutable std::stack<double> processingTime_;
