@@ -352,24 +352,6 @@ test('finetune() resolves with PAUSED when paused', async (t) => {
   const handle = await model.finetune(opts)
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'PAUSED' })
-
-})
-
-test('finetune() rejects handle.await() on runtime error (like inference)', async (t) => {
-  const opts = baseFinetuneOpts({ validation: { type: 'none' } })
-  const model = createModelWithMockAddon(opts)
-  model.addon.finetune.callsFake(() => {
-    setImmediate(() => {
-      model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory')
-    })
-    return true
-  })
-
-  const handle = await model.finetune(opts)
-  await t.exception(
-    () => handle.await(),
-    /out of memory/
-  )
 })
 
 test('finetune() rejects handle.await() on runtime error (like inference)', async (t) => {
