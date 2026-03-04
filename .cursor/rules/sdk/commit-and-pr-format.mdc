@@ -3,9 +3,9 @@ description: Commit message and PR title format requirements
 globs:
   - packages/qvac-sdk/**
   - packages/docs/**
-  - packages/qvac-lib-rag/**
-  - packages/qvac-lib-logging/**
-  - packages/qvac-lib-error-base/**
+  - packages/rag/**
+  - packages/logging/**
+  - packages/error/**
 alwaysApply: false
 ---
 

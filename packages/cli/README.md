@@ -16,7 +16,7 @@ A command-line interface for the QVAC ecosystem. QVAC CLI provides tooling for b
 Install globally:
 
 ```bash
-npm i -g @qvac/qvac-cli
+npm i -g @qvac/cli
 ```
 
 Once installed, use the `qvac` command:
@@ -28,7 +28,7 @@ qvac <command>
 Or run directly via npx:
 
 ```bash
-npx @qvac/qvac-cli <command>
+npx @qvac/cli <command>
 ```
 
 ## Command Reference
@@ -144,7 +144,7 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
 **Run locally:**
 
 ```bash
-# From the qvac-cli package directory
+# From the cli package directory
 node ./src/index.js bundle sdk
 
 # Or link globally for testing

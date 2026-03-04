@@ -63,9 +63,6 @@ jobs:
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'linux'
         run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all

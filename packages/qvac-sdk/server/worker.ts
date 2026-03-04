@@ -9,6 +9,7 @@ import {
   llmPlugin,
   embeddingsPlugin,
   whisperPlugin,
+  parakeetPlugin,
   nmtPlugin,
   ttsPlugin,
   ocrPlugin,
@@ -24,6 +25,7 @@ logger.info("🐻 Hello from Bare");
 registerPlugin(llmPlugin);
 registerPlugin(embeddingsPlugin);
 registerPlugin(whisperPlugin);
+registerPlugin(parakeetPlugin);
 registerPlugin(nmtPlugin);
 registerPlugin(ttsPlugin);
 registerPlugin(ocrPlugin);

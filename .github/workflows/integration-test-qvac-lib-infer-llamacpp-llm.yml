@@ -25,7 +25,7 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 360
+    timeout-minutes: 480
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
@@ -34,6 +34,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       WORKDIR: packages/qvac-lib-infer-llamacpp-llm
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -45,6 +46,7 @@ jobs:
             platform: linux
             arch: x64
             runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: ubuntu-24.04
             platform: linux
             arch: x64
@@ -57,6 +59,7 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+            no_gpu: 'true'
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
@@ -65,10 +68,10 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          - os: windows-2022
+          - os: windows-11
             platform: win32
             arch: x64
-            runner: ai-run-windows-gpu
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
@@ -237,16 +240,6 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Windows - Install Vulkan
-        if: ${{ matrix.platform == 'win32' }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}

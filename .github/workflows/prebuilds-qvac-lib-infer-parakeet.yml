@@ -206,13 +206,6 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - name: Linux - ubuntu-22 - install glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

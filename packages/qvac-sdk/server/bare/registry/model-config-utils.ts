@@ -8,12 +8,14 @@ import {
 } from "@/schemas";
 import { llmConfigSchema, embedConfigSchema } from "@/schemas/llamacpp-config";
 import { whisperConfigSchema } from "@/schemas/whispercpp-config";
+import { parakeetRuntimeConfigSchema } from "@/schemas/parakeet-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
@@ -25,6 +27,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
+  [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.onnxOcr]: ocrConfigSchema,
 };
 
