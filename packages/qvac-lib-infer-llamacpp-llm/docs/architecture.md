@@ -292,7 +292,7 @@ graph TB
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, ModelMetaData, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
-|de4795ae-3b83-4c60-914c-290f0cbe27c3 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
+| 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
 
