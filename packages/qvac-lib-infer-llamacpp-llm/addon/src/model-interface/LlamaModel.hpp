@@ -58,6 +58,17 @@ public:
   static void
   resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
 
+  /// @brief Apply specific parameter defaults based on model metadata
+  /// and detected Adreno GPU version by inserting entries into configFilemap.
+  /// Must be called before commonParamsParse so inserted entries are processed.
+  ///
+  /// @param configFilemap The user-supplied config map (will be written to).
+  /// @param metadata Model metadata (architecture, quantization info).
+  /// @param adrenoVersion Detected Adreno GPU version, if any.
+  static void tuneConfigMap(
+      std::unordered_map<std::string, std::string>& configFilemap,
+      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion);
+
   /**
    * The Constructor for llama model.
    * @param modelPath - path to the model file.
@@ -130,7 +141,14 @@ private:
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
-      common_params& params);
+      common_params& params, std::optional<int>& outAdrenoVersion);
+
+  /**
+   * The Format prompt method. It formats the prompt json to chat messages.
+   *
+   * @param input - input prompt.
+   * @return formatted chat messages and tools.
+   */
   std::pair<std::vector<common_chat_msg>, std::vector<common_chat_tool>>
   formatPrompt(const std::string& input);
   void resetState(bool resetStats = true);

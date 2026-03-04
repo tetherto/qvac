@@ -3,16 +3,36 @@
 #include <algorithm>
 #include <cctype>
 #include <optional>
+#include <regex>
 #include <variant>
 #include <vector>
 
+#include <common/log.h>
 #include <ggml-backend.h>
 
 #include "common/common.h"
+#include "model-interface/ModelMetadata.hpp"
 
 using namespace backend_selection;
 
 namespace {
+std::optional<int> parseAdrenoVersion(const std::string& gpuDescription) {
+  static const std::regex adrenoRegex(R"(dreno.*?(\d+))");
+  std::smatch matches;
+  if (std::regex_search(gpuDescription, matches, adrenoRegex) &&
+      matches.size() > 1) {
+    try {
+      return std::stoi(matches[1].str());
+    } catch (const std::exception& e) {
+      LOG_WRN(
+          "parseAdrenoVersion: failed to parse version from '%s': %s\n",
+          gpuDescription.c_str(),
+          e.what());
+    }
+  }
+  return std::nullopt;
+}
+
 struct DeviceDescription {
   std::string gpuDescription;
   std::string gpuBackend;
@@ -62,7 +82,8 @@ struct DeviceDescription {
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_reg_t reg,
+    std::vector<std::string>& openClBackends,
+    std::optional<int>& maxAdrenoVersion, const ggml_backend_reg_t reg,
     const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
@@ -77,7 +98,15 @@ void emplaceIfValidDevice(
     const bool isOpenCl =
         devDescr.gpuBackend.find("opencl") != std::string::npos;
     const bool isAdreno =
-        devDescr.gpuDescription.find("adreno") != std::string::npos;
+        devDescr.gpuDescription.find("dreno") != std::string::npos;
+    if (isAdreno) {
+      auto version = parseAdrenoVersion(devDescr.gpuDescription);
+      if (version.has_value() && (!maxAdrenoVersion.has_value() ||
+                                  version.value() > maxAdrenoVersion.value())) {
+        maxAdrenoVersion = version;
+      }
+    }
+
     if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
@@ -114,7 +143,8 @@ void tryEmplaceDevice(
     std::optional<MainGpuType> mainGpuType,
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends) {
+    std::vector<std::string>& openClBackends,
+    std::optional<int>& maxAdrenoVersion) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -129,6 +159,7 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
+        maxAdrenoVersion,
         reg,
         devDescr,
         backendTypeEnum);
@@ -196,11 +227,13 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu) {
+    const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
+    std::optional<int>* outAdrenoVersion) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
+  std::optional<int> maxAdrenoVersion;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -208,7 +241,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     if (mainGpu.has_value()) {
       const MainGpu& mainGpuValue = mainGpu.value();
       if (std::holds_alternative<int>(mainGpuValue)) {
-        // Direct device index specified
         const int deviceIndex = std::get<int>(mainGpuValue);
         const size_t deviceCount = bckI.ggml_backend_dev_count();
         if (deviceIndex >= 0 &&
@@ -219,7 +251,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               std::nullopt,
               gpuBackends,
               igpuBackends,
-              openClBackends);
+              openClBackends,
+              maxAdrenoVersion);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -235,12 +268,50 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count();
          ++i) {
       ::tryEmplaceDevice(
-          bckI, i, gpuType, gpuBackends, igpuBackends, openClBackends);
+          bckI,
+          i,
+          gpuType,
+          gpuBackends,
+          igpuBackends,
+          openClBackends,
+          maxAdrenoVersion);
     }
   }
 
-  // check if Adreno GPU is present and force OpenCL backend, otherwise let
-  // llama.cpp choose Vulkan GPU backend
+  const bool isBitnetOneBitAdreno =
+      !mainGpu.has_value() && // No explicit selection
+      metadata != nullptr && metadata->hasOneBitQuantization() &&
+      metadata->tryGetString("general.architecture") == "bitnet" &&
+      maxAdrenoVersion.has_value();
+
+  constexpr int kAdrenoVulkanThreshold = 800;
+  if (isBitnetOneBitAdreno &&
+      maxAdrenoVersion.value() < kAdrenoVulkanThreshold) {
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_INFO,
+        "BitNet TQ on Adreno <800: only CPU supported",
+        nullptr);
+    openClBackends.clear();
+    gpuBackends.clear();
+    igpuBackends.clear();
+  } else if (
+      isBitnetOneBitAdreno &&
+      maxAdrenoVersion.value() >= kAdrenoVulkanThreshold) {
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_INFO,
+        "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
+        nullptr);
+    openClBackends.clear();
+  }
+
+  if (outAdrenoVersion != nullptr) {
+    *outAdrenoVersion = maxAdrenoVersion;
+  }
+
+  // Normally, check if Adreno GPU is present and force OpenCL backend,
+  // otherwise let llama.cpp choose Vulkan GPU backend. There are some
+  // exceptions such as BitNet models which do not currently support OpenCl,
+  // cl backends should have been cleared at this point for those cases.
   if (!openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
@@ -263,7 +334,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
+    std::optional<int>* outAdrenoVersion) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -273,5 +345,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       llamaLogcallback};
-  return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
+  return backend_selection::chooseBackend(
+      preferredBackendType, bckI, metadata, mainGpu, outAdrenoVersion);
 }

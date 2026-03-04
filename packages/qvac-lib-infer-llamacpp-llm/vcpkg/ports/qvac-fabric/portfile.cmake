@@ -1,8 +1,7 @@
-vcpkg_from_github(
+vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac-fabric-llm.cpp
-  REF 467c228e593153fe9ff04cc1523be0f3c9986a58
-  SHA512 473ac5ec38088dafce33c51b1e54430f586987511d383cdccf1774c3161dff8d455f820151e00b0a34716ad715711b0506c88da4c4946bf47ab6c481b843f9a2
+  URL https://github.com/jesusmb1995/llama.cpp
+  REF 7772eedb40a6099d64d44e92dbd62821046211a3
 )
 
 vcpkg_check_features(
