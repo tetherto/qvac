@@ -347,7 +347,6 @@ function setupParams (modelDir, overrides = {}) {
 
   return {
     trainDatasetDir: trainDatasetPath,
-    evalDatasetPath,
     outputParametersDir: path.resolve(modelDir, 'finetune-output'),
     numberOfEpochs: 1,
     learningRate: 1e-5,
