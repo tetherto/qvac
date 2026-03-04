@@ -183,6 +183,8 @@ ParakeetModel::~ParakeetModel() {
   unload();
 }
 
+// No-op: ONNX Runtime environment is initialized in the constructor.
+// Satisfies the ModelInterface contract.
 void ParakeetModel::initializeBackend() {}
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -300,6 +302,7 @@ std::string ParakeetModel::tokensToString(
 }
 
 // TDT-only: resolves a language code (e.g. "en") to the vocab token id.
+// Currently exercised only by unit tests; retained for future multi-language support.
 int64_t ParakeetModel::getLanguageToken(const std::string& langCode) const {
   std::string langToken = "<|" + langCode + "|>";
   for (size_t i = 0; i < vocab_.size(); ++i) {
@@ -1203,11 +1206,11 @@ std::vector<float> ParakeetModel::eouEncodeChunk(
   }
 
   std::vector<float> transposed(MEL_BINS * chunkFrames);
-  for (int64_t f = 0; f < chunkFrames; ++f) {
-    for (int b = 0; b < MEL_BINS; ++b) {
-      transposed[b * chunkFrames + f] = melChunk[f * MEL_BINS + b];
-    }
-  }
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      melSrc(melChunk.data(), chunkFrames, MEL_BINS);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      melDst(transposed.data(), MEL_BINS, chunkFrames);
+  melDst.noalias() = melSrc.transpose();
 
   std::vector<int64_t> featShape = {1, MEL_BINS, chunkFrames};
   Ort::Value featTensor = Ort::Value::CreateTensor<float>(
@@ -1264,11 +1267,11 @@ std::vector<float> ParakeetModel::eouEncodeChunk(
   const float* encData = encOut.GetTensorData<float>();
 
   std::vector<float> result(outFrames * EOU_ENCODER_DIM);
-  for (int64_t tf = 0; tf < outFrames; ++tf) {
-    for (int d = 0; d < EOU_ENCODER_DIM; ++d) {
-      result[tf * EOU_ENCODER_DIM + d] = encData[d * outFrames + tf];
-    }
-  }
+  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      encSrc(encData, EOU_ENCODER_DIM, outFrames);
+  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+      encDst(result.data(), outFrames, EOU_ENCODER_DIM);
+  encDst.noalias() = encSrc.transpose();
 
   {
     const float* ptr = outputs[2].GetTensorData<float>();
@@ -1839,11 +1842,17 @@ std::string ParakeetModel::processEOU(const Input& input) {
            std::to_string(eouCount) + " utterance boundaries");
 
   std::string text = trimWhitespace(fullResult);
-  if (text.empty()) text = ERR_NO_SPEECH;
 
-  size_t wordCount =
-      std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
+  size_t wordCount = 0;
+  if (!text.empty()) {
+    wordCount = 1;
+    for (char c : text) {
+      if (c == ' ' || c == '\n') wordCount++;
+    }
+  }
   totalTokens_ += static_cast<int64_t>(wordCount);
+
+  if (text.empty()) text = ERR_NO_SPEECH;
 
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "EOU output: " + text.substr(0, 100) +
