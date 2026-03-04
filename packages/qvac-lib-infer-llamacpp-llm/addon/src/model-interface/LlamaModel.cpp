@@ -596,39 +596,12 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    bool disableOpenCl = false;
-#ifdef __ANDROID__
-    if (auto it = configFilemap.find("disable_opencl");
-        it != configFilemap.end()) {
-      disableOpenCl = (it->second == "true");
-      configFilemap.erase(it);
-    }
-
-    if (preferredBackend == BackendType::GPU && !disableOpenCl &&
-        isBitnetModel()) {
-      const auto adrenoGen = detectAdrenoGeneration();
-      if (adrenoGen == AdrenoGeneration::Adreno800) {
-        disableOpenCl = true;
-      } else if (
-          adrenoGen == AdrenoGeneration::Adreno700 ||
-          adrenoGen == AdrenoGeneration::Adreno600) {
-        deviceIt->second = "cpu";
-      }
-    }
-    configFilemap["ubatch_size"] = "128";
-#endif
-
-    if (isBitnetModel()) {
-      configFilemap["flash_attn"] = "off";
-    }
-
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackendTypeFromString(deviceIt->second),
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
-        &outAdrenoVersion,
-        disableOpenCl);
+        &outAdrenoVersion);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
