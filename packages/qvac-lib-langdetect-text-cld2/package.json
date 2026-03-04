@@ -27,11 +27,10 @@
     "nyc": "17.1.0",
     "standard": "17.1.2"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-langdetect-text-cld2/issues",
+  "bugs": "https://github.com/tetherto/qvac/issues",
   "files": [
-    "src",
+    "index.js",
     "index.d.ts",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ]
 }
