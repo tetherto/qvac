@@ -868,6 +868,21 @@ TEST_F(CTCModelTest, LoadTokenizerJsonViaStreambuf) {
   EXPECT_EQ(vocab[1], "b");
 }
 
+TEST_F(CTCModelTest, LoadTokenizerJsonThrowsOnEmptyVocab) {
+  ParakeetModel model(config);
+
+  std::string tokenizerJson = R"({
+    "some_other_format": { "tokens": ["a", "b"] }
+  })";
+
+  std::vector<uint8_t> data(tokenizerJson.begin(), tokenizerJson.end());
+  std::span<const uint8_t> dataSpan(data);
+
+  EXPECT_THROW({
+    model.set_weights_for_file("tokenizer.json", dataSpan, true);
+  }, std::runtime_error);
+}
+
 TEST_F(CTCModelTest, SetWeightsForCTCModel) {
   ParakeetModel model(config);
 

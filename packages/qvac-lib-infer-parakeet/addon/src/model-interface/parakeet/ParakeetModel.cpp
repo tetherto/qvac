@@ -303,6 +303,11 @@ void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
     }
   }
 
+  if (vocab_.empty()) {
+    throw errors::makeStatus(errors::Code::VocabularyEmpty,
+                             "tokenizer.json parsed but vocabulary is empty");
+  }
+
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "Loaded vocabulary with " + std::to_string(vocab_.size()) +
            " tokens from tokenizer.json");
