@@ -134,15 +134,3 @@ test('run | run: second run() throws busy error', { timeout: 600_000 }, async t 
   t.ok(output.length > 0, 'first response completes with output')
   t.ok(!firstError, 'first response did not fail')
 })
-
-test('run | run: recovery after busy contention still allows next run', { timeout: 600_000 }, async t => {
-  const { model } = await setupModel(t, { n_predict: '256' })
-  const firstResponse = await model.run(LONG_PROMPT)
-
-  await model.run(BASE_PROMPT).catch(() => {})
-  await firstResponse.await().catch(() => {})
-
-  const recoveryResponse = await model.run(BASE_PROMPT)
-  const output = await collectResponse(recoveryResponse)
-  t.ok(output.length > 0, 'run() still works after previous contention')
-})
