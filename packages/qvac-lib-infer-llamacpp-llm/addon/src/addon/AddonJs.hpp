@@ -38,39 +38,45 @@ makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
 }
 
 struct JsFinetuneProgressOutputHandler
-    : qvac_lib_inference_addon_cpp::out_handl::
-          JsBaseOutputHandler<llama_finetuning_helpers::FinetuneProgressStats> {
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          llama_finetuning_helpers::FinetuneProgressStats> {
   JsFinetuneProgressOutputHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             llama_finetuning_helpers::FinetuneProgressStats>(
-            [this](
-                const llama_finetuning_helpers::FinetuneProgressStats& stats)
+            [this](const llama_finetuning_helpers::FinetuneProgressStats& stats)
                 -> js_value_t* {
               js::Object payload = js::Object::create(this->env_);
               payload.setProperty(
-                  this->env_, "type",
+                  this->env_,
+                  "type",
                   js::String::create(this->env_, "finetune_progress"));
               js::Object statsObj = js::Object::create(this->env_);
               statsObj.setProperty(
-                  this->env_, "loss",
+                  this->env_,
+                  "loss",
                   js::Number::create(this->env_, stats.loss));
               statsObj.setProperty(
-                  this->env_, "accuracy",
+                  this->env_,
+                  "accuracy",
                   js::Number::create(this->env_, stats.accuracy));
               statsObj.setProperty(
-                  this->env_, "global_steps",
+                  this->env_,
+                  "global_steps",
                   js::Number::create(
                       this->env_, static_cast<double>(stats.globalSteps)));
               statsObj.setProperty(
-                  this->env_, "current_epoch",
+                  this->env_,
+                  "current_epoch",
                   js::Number::create(
                       this->env_, static_cast<double>(stats.currentEpoch)));
               statsObj.setProperty(
-                  this->env_, "current_batch",
+                  this->env_,
+                  "current_batch",
                   js::Number::create(
                       this->env_, static_cast<double>(stats.currentBatch)));
               statsObj.setProperty(
-                  this->env_, "total_batches",
+                  this->env_,
+                  "total_batches",
                   js::Number::create(
                       this->env_, static_cast<double>(stats.totalBatches)));
               payload.setProperty(this->env_, "stats", statsObj);
@@ -79,56 +85,58 @@ struct JsFinetuneProgressOutputHandler
 };
 
 struct JsFinetuneTerminalOutputHandler
-    : qvac_lib_inference_addon_cpp::out_handl::
-          JsBaseOutputHandler<FinetuneTerminalResult> {
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          FinetuneTerminalResult> {
   JsFinetuneTerminalOutputHandler()
-      : qvac_lib_inference_addon_cpp::out_handl::
-            JsBaseOutputHandler<FinetuneTerminalResult>(
-                [this](const FinetuneTerminalResult& result) -> js_value_t* {
-                  js::Object payload = js::Object::create(this->env_);
-                  payload.setProperty(
-                      this->env_, "op", js::String::create(this->env_, result.op));
-                  payload.setProperty(
-                      this->env_,
-                      "status",
-                      js::String::create(this->env_, result.status));
-                  if (result.stats.has_value()) {
-                    js::Object statsObj = js::Object::create(this->env_);
-                    statsObj.setProperty(
-                        this->env_, "train_loss",
-                        js::Number::create(
-                            this->env_, result.stats->trainLoss));
-                    statsObj.setProperty(
-                        this->env_, "val_loss",
-                        js::Number::create(
-                            this->env_, result.stats->valLoss));
-                    statsObj.setProperty(
-                        this->env_, "train_accuracy",
-                        js::Number::create(
-                            this->env_, result.stats->trainAccuracy));
-                    statsObj.setProperty(
-                        this->env_, "val_accuracy",
-                        js::Number::create(
-                            this->env_, result.stats->valAccuracy));
-                    statsObj.setProperty(
-                        this->env_, "learning_rate",
-                        js::Number::create(
-                            this->env_, result.stats->learningRate));
-                    statsObj.setProperty(
-                        this->env_, "global_steps",
-                        js::Number::create(
-                            this->env_,
-                            static_cast<double>(result.stats->globalSteps)));
-                    statsObj.setProperty(
-                        this->env_, "epochs_completed",
-                        js::Number::create(
-                            this->env_,
-                            static_cast<double>(
-                                result.stats->epochsCompleted)));
-                    payload.setProperty(this->env_, "stats", statsObj);
-                  }
-                  return payload;
-                }) {}
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            FinetuneTerminalResult>(
+            [this](const FinetuneTerminalResult& result) -> js_value_t* {
+              js::Object payload = js::Object::create(this->env_);
+              payload.setProperty(
+                  this->env_, "op", js::String::create(this->env_, result.op));
+              payload.setProperty(
+                  this->env_,
+                  "status",
+                  js::String::create(this->env_, result.status));
+              if (result.stats.has_value()) {
+                js::Object statsObj = js::Object::create(this->env_);
+                statsObj.setProperty(
+                    this->env_,
+                    "train_loss",
+                    js::Number::create(this->env_, result.stats->trainLoss));
+                statsObj.setProperty(
+                    this->env_,
+                    "val_loss",
+                    js::Number::create(this->env_, result.stats->valLoss));
+                statsObj.setProperty(
+                    this->env_,
+                    "train_accuracy",
+                    js::Number::create(
+                        this->env_, result.stats->trainAccuracy));
+                statsObj.setProperty(
+                    this->env_,
+                    "val_accuracy",
+                    js::Number::create(this->env_, result.stats->valAccuracy));
+                statsObj.setProperty(
+                    this->env_,
+                    "learning_rate",
+                    js::Number::create(this->env_, result.stats->learningRate));
+                statsObj.setProperty(
+                    this->env_,
+                    "global_steps",
+                    js::Number::create(
+                        this->env_,
+                        static_cast<double>(result.stats->globalSteps)));
+                statsObj.setProperty(
+                    this->env_,
+                    "epochs_completed",
+                    js::Number::create(
+                        this->env_,
+                        static_cast<double>(result.stats->epochsCompleted)));
+                payload.setProperty(this->env_, "stats", statsObj);
+              }
+              return payload;
+            }) {}
 };
 
 <<<<<<< HEAD
@@ -142,18 +150,16 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.outputParametersDir =
       jsObj.getProperty<js::String>(env, "outputParametersDir")
           .as<std::string>(env);
-  params.numberOfEpochs =
-      static_cast<int>(
-          jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(
-              env));
+  params.numberOfEpochs = static_cast<int>(
+      jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(env));
   params.learningRate =
       jsObj.getProperty<js::Number>(env, "learningRate").as<double>(env);
-  params.trainDatasetDir =
-      jsObj.getProperty<js::String>(env, "trainDatasetDir")
-          .as<std::string>(env);
+  params.trainDatasetDir = jsObj.getProperty<js::String>(env, "trainDatasetDir")
+                               .as<std::string>(env);
   const std::string evalDatasetPath =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(
-               env, "evalDatasetPath")
+      jsObj
+          .getOptionalPropertyAs<js::String, std::string>(
+              env, "evalDatasetPath")
           .value_or("");
   params.evalDatasetPath = evalDatasetPath;
   params.contextLength =
@@ -166,8 +172,9 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
       jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
           .value_or(false);
   params.checkpointSaveDir =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(
-               env, "checkpointSaveDir")
+      jsObj
+          .getOptionalPropertyAs<js::String, std::string>(
+              env, "checkpointSaveDir")
           .value_or("");
   params.loraModules =
       jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
@@ -184,14 +191,14 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.loraInitStd =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
           .value_or(0.01);
-  params.chatTemplatePath =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(
-               env, "chatTemplatePath")
-          .value_or("");
-  params.checkpointSaveSteps =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(
-               env, "checkpointSaveSteps")
-          .value_or(0);
+  params.chatTemplatePath = jsObj
+                                .getOptionalPropertyAs<js::String, std::string>(
+                                    env, "chatTemplatePath")
+                                .value_or("");
+  params.checkpointSaveSteps = jsObj
+                                   .getOptionalPropertyAs<js::Number, int64_t>(
+                                       env, "checkpointSaveSteps")
+                                   .value_or(0);
   params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
                      .value_or(0.0);
   params.lrScheduler =
@@ -219,8 +226,9 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
           .value_or(0.05);
   params.useEvalDatasetForValidation =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(
-               env, "useEvalDatasetForValidation")
+      jsObj
+          .getOptionalPropertyAs<js::Boolean, bool>(
+              env, "useEvalDatasetForValidation")
           .value_or(false);
   return params;
 }
@@ -344,8 +352,7 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
       });
   if (!paramsOpt.has_value()) {
     throw StatusError(
-        general_error::InvalidArgument,
-        "Finetuning parameters not provided");
+        general_error::InvalidArgument, "Finetuning parameters not provided");
   }
 
   LlamaModel::Prompt prompt;

@@ -815,8 +815,9 @@ std::string LlamaModel::finetune(
         int64_t{1}, std::gcd(datasetSampleCount, actualMicroBatch));
 
     double validationSplit = 0.05;
-    const bool hasSeparateEvalDataset = !params.evalDatasetPath.empty() &&
-                                        params.evalDatasetPath != params.trainDatasetDir;
+    const bool hasSeparateEvalDataset =
+        !params.evalDatasetPath.empty() &&
+        params.evalDatasetPath != params.trainDatasetDir;
     if (params.useEvalDatasetForValidation && hasSeparateEvalDataset) {
       validationSplit = 0.0;
     } else {
@@ -918,8 +919,8 @@ std::string LlamaModel::finetune(
     clearPausedCheckpointStateShared();
     clearCurrentCheckpointStateShared();
 
-    auto checkpointState = initializeCheckpointing(
-        params, adapterPtr.get(), &schedulerState);
+    auto checkpointState =
+        initializeCheckpointing(params, adapterPtr.get(), &schedulerState);
 
     if (checkpointState) {
       if (resumingFromPause) {
@@ -1132,8 +1133,7 @@ ggml_opt_dataset_t LlamaModel::prepareTrainingDataset(
 
 ggml_opt_dataset_t LlamaModel::prepareEvalDataset(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params) {
-  return prepareDatasetFromPath(
-      params, params.evalDatasetPath, "Eval", "eval");
+  return prepareDatasetFromPath(params, params.evalDatasetPath, "Eval", "eval");
 }
 
 void LlamaModel::initializeLoraAdapter(
@@ -1241,13 +1241,14 @@ LlamaModel::initializeCheckpointing(
   if (dirErr) {
     throw std::runtime_error(
         "Checkpoint directory creation failed: directory='" +
-        checkpointState->checkpointDir.string() + "' error=" +
-        dirErr.message());
+        checkpointState->checkpointDir.string() +
+        "' error=" + dirErr.message());
   }
 
   if (periodicCheckpointingEnabled) {
     std::ostringstream msg;
-    msg << "Checkpointing enabled | dir=" << checkpointState->checkpointDir.string()
+    msg << "Checkpointing enabled | dir="
+        << checkpointState->checkpointDir.string()
         << " | interval=" << checkpointState->checkpointInterval;
     QLOG_IF(Priority::DEBUG, msg.str());
   } else {
@@ -1276,8 +1277,8 @@ void LlamaModel::configureOptimizer(
 
   llama_opt_params optParams{};
   optParams.n_ctx_train = params.contextLength > 0
-      ? static_cast<uint32_t>(params.contextLength)
-      : 0;
+                              ? static_cast<uint32_t>(params.contextLength)
+                              : 0;
   optParams.param_filter = llama_opt_param_filter_lora;
   optParams.param_filter_ud = adapter;
   optParams.get_opt_pars = schedulerOptimizerParams;
@@ -1321,7 +1322,8 @@ void LlamaModel::configureOptimizer(
     std::ostringstream optimizerMsg;
     optimizerMsg << "Optimizer config | n_ctx_train=" << optParams.n_ctx_train
                  << " | model_ctx=" << llama_n_ctx(ctx)
-                 << " | assistant_loss_only=" << (optParams.assistant_loss_only ? "true" : "false");
+                 << " | assistant_loss_only="
+                 << (optParams.assistant_loss_only ? "true" : "false");
     QLOG_IF(Priority::DEBUG, optimizerMsg.str());
   }
 
@@ -1436,7 +1438,8 @@ void LlamaModel::executeTrainingLoop(
 
     completedEpochs = static_cast<int32_t>(epoch + 1);
     std::ostringstream epochMsg;
-    epochMsg << "Epoch " << (epoch + 1) << " completed | loss=" << lastTrainLoss;
+    epochMsg << "Epoch " << (epoch + 1)
+             << " completed | loss=" << lastTrainLoss;
     if (hasEval) {
       epochMsg << " | val_loss=" << lastValLoss;
     }
@@ -1455,8 +1458,7 @@ void LlamaModel::executeTrainingLoop(
     outStats->valAccuracy = lastValAccuracy;
     outStats->learningRate = static_cast<double>(scheduler.lastLr);
     outStats->epochsCompleted = completedEpochs;
-    outStats->globalSteps =
-        checkpointState ? checkpointState->globalStep : 0;
+    outStats->globalSteps = checkpointState ? checkpointState->globalStep : 0;
   }
 
   if (checkpointState && checkpointState->shouldExit.load() &&
