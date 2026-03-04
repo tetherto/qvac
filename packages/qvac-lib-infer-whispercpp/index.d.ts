@@ -1,4 +1,5 @@
 import BaseInference, { Loader, QvacResponse } from "@qvac/infer-base";
+import type { LoggerInterface } from "@qvac/logging";
 import { Readable } from "stream";
 
 declare interface VadParams {
@@ -20,7 +21,7 @@ declare interface WhisperConfig {
 
 declare interface TranscriptionWhispercppArgs {
   loader: Loader;
-  logger?: any;
+  logger?: LoggerInterface;
   modelName: string;
   vadModelName?: string;
   diskPath?: string;

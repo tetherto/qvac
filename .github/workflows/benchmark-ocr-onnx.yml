@@ -1,0 +1,487 @@
+name: Benchmark (OCR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      backends:
+        description: 'Comma-separated OCR backends (easyocr,qvac)'
+        required: false
+        default: 'easyocr,qvac'
+        type: string
+      tasks:
+        description: 'Tasks to run (fullpage,spotting or both)'
+        required: false
+        default: 'fullpage,spotting'
+        type: string
+      limit:
+        description: 'Limit samples per task (0 = all)'
+        required: false
+        default: '0'
+        type: string
+      skip_existing:
+        description: 'Skip already processed samples'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PKG_DIR: packages/ocr-onnx
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      qvac_needed: ${{ steps.check-qvac.outputs.needed }}
+      easyocr_needed: ${{ steps.check-easyocr.outputs.needed }}
+    steps:
+      - name: Check if QVAC is needed
+        id: check-qvac
+        shell: bash
+        run: |
+          if [[ "${{ inputs.backends }}" == *"qvac"* ]]; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if EasyOCR is needed
+        id: check-easyocr
+        shell: bash
+        run: |
+          if [[ "${{ inputs.backends }}" == *"easyocr"* ]]; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: setup
+    if: needs.setup.outputs.qvac_needed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    name: Build QVAC addon
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Install global dependencies
+        run: npm install -g bare-make bare-runtime
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          qvac_registry="https://registry.npmjs.org/"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Configure vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v5
+        with:
+          key: vcpkg-linux-x64-${{ hashFiles('packages/ocr-onnx/**/vcpkg.json', 'packages/ocr-onnx/**/CMakeLists.txt') }}
+          path: |
+            ${{ env.VCPKG_ROOT }}/installed
+            ${{ env.VCPKG_ROOT }}/packages
+            ~/.cache/vcpkg
+          restore-keys: vcpkg-linux-x64-
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          key: ccache-linux-x64-${{ github.sha }}
+          path: ~/.ccache
+          restore-keys: ccache-linux-x64-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake wget build-essential \
+            ccache \
+            mesa-vulkan-drivers
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          ccache -z
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v5
+        with:
+          key: npm-${{ hashFiles('packages/ocr-onnx/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: npm-
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Build addon
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        run: |
+          bare-make generate --platform linux --arch x64
+          bare-make build -j $(nproc)
+          bare-make install
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: qvac-addon-build
+          path: |
+            ${{ env.PKG_DIR }}/prebuilds/
+            ${{ env.PKG_DIR }}/node_modules/
+          retention-days: 1
+
+  evaluate:
+    needs: [setup, build]
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    name: Text Spotting Benchmark
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        if: needs.setup.outputs.qvac_needed == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Install bare-runtime
+        if: needs.setup.outputs.qvac_needed == 'true'
+        run: npm install -g bare-runtime
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Download build artifact
+        if: needs.setup.outputs.qvac_needed == 'true' && needs.build.result == 'success'
+        uses: actions/download-artifact@v7
+        with:
+          name: qvac-addon-build
+          path: ${{ env.PKG_DIR }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        if: needs.setup.outputs.qvac_needed == 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          qvac_registry="https://registry.npmjs.org/"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=${qvac_registry}
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+
+      - name: Install npm dependencies (for QVAC)
+        if: needs.setup.outputs.qvac_needed == 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download QVAC OCR models
+        if: needs.setup.outputs.qvac_needed == 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p models/ocr/rec_dyn
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive --exclude "*" \
+            --include "detector_craft.onnx" \
+            --include "recognizer_latin.onnx"
+          echo "Downloaded QVAC OCR models:"
+          ls -la models/ocr/
+
+      - name: Download OCRBench_v2 dataset
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p benchmarks/quality_eval/data
+          echo "Downloading OCRBench_v2 dataset from S3..."
+          aws s3 sync s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
+          echo "Dataset downloaded:"
+          ls -la benchmarks/quality_eval/data/OCRBench_v2/ | head -20
+
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo apt-get clean
+
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Install Python dependencies
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Full-page OCR benchmark (HierText)
+        if: contains(inputs.tasks, 'fullpage')
+        timeout-minutes: 90
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          skip_flag=""
+          if [ "${{ inputs.skip_existing }}" = "true" ]; then
+            skip_flag="--skip-existing"
+          else
+            skip_flag="--no-skip-existing"
+          fi
+
+          limit_arg=""
+          if [ "${{ inputs.limit }}" != "0" ]; then
+            limit_arg="--limit ${{ inputs.limit }}"
+          fi
+
+          python evaluate.py \
+            --dataset-path "data/OCRBench_v2" \
+            --backends "${{ inputs.backends }}" \
+            --task-types "full-page OCR en" \
+            --dataset-filter "HierText" \
+            --results-dir "results/full-page-ocr" \
+            --qvac-addon-path "$(pwd)/../.." \
+            $skip_flag \
+            $limit_arg
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Run Text Spotting benchmark (IC15)
+        if: contains(inputs.tasks, 'spotting')
+        timeout-minutes: 90
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          skip_flag=""
+          if [ "${{ inputs.skip_existing }}" = "true" ]; then
+            skip_flag="--skip-existing"
+          else
+            skip_flag="--no-skip-existing"
+          fi
+
+          limit_arg=""
+          if [ "${{ inputs.limit }}" != "0" ]; then
+            limit_arg="--limit ${{ inputs.limit }}"
+          fi
+
+          python evaluate.py \
+            --dataset-path "data/OCRBench_v2" \
+            --backends "${{ inputs.backends }}" \
+            --task-types "text spotting en" \
+            --dataset-filter "IC15" \
+            --results-dir "results/text-spotting" \
+            --qvac-addon-path "$(pwd)/../.." \
+            $skip_flag \
+            $limit_arg
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ocr-benchmark-results
+          # Upload contents so summarize job sees results/full-page-ocr/... directly
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/*
+          retention-days: 30
+
+      - name: Upload evaluation logs
+        uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: ocr-benchmark-logs
+          path: |
+            ${{ env.PKG_DIR }}/benchmarks/quality_eval/*.log
+          retention-days: 7
+
+  summarize:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: ocr-benchmark-results
+          path: results
+
+      - name: Skip summary if results are missing
+        if: ${{ !hashFiles('results/**') }}
+        run: |
+          echo "No ocr-benchmark-results artifact found; skipping summary."
+          exit 0
+
+      - name: Generate results summary
+        run: |
+          python3 << 'PYTHON_SCRIPT' >> $GITHUB_STEP_SUMMARY
+          import json
+          from pathlib import Path
+
+          def load_aggregate(results_dir, backend, task_type):
+              task_dir = task_type.replace(" ", "_")
+              path = Path(results_dir) / backend / task_dir / "aggregate.json"
+              if path.exists():
+                  with open(path) as f:
+                      return json.load(f)
+              return None
+
+          def pick_winner(qvac_val, easyocr_val, lower_is_better=True):
+              if qvac_val is None or easyocr_val is None:
+                  return "N/A", "N/A", "-"
+              if lower_is_better:
+                  qvac_wins = qvac_val < easyocr_val
+              else:
+                  qvac_wins = qvac_val > easyocr_val
+              qvac_str = f"**{qvac_val:.4f}**" if qvac_wins else f"{qvac_val:.4f}"
+              easyocr_str = f"**{easyocr_val:.4f}**" if not qvac_wins else f"{easyocr_val:.4f}"
+              winner = "QVAC" if qvac_wins else "EasyOCR"
+              return qvac_str, easyocr_str, winner
+
+          print("# OCR Benchmark Results\n")
+          print("**Configuration:**")
+          print("- Backends: `${{ inputs.backends }}`")
+          print("- Tasks: `${{ inputs.tasks }}`")
+          print("- Sample Limit: `${{ inputs.limit }}`\n")
+
+          print("## Full-page OCR (HierText)\n")
+          qvac_fp = load_aggregate("results/full-page-ocr", "qvac", "full-page OCR en")
+          easyocr_fp = load_aggregate("results/full-page-ocr", "easyocr", "full-page OCR en")
+
+          if qvac_fp and easyocr_fp:
+              print("| Metric | QVAC | EasyOCR | Winner |")
+              print("|--------|------|---------|--------|")
+              for label, key, lower_is_better in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
+                  qvac_val = qvac_fp["metrics"].get(key, {}).get("mean")
+                  easyocr_val = easyocr_fp["metrics"].get(key, {}).get("mean")
+                  q, e, w = pick_winner(qvac_val, easyocr_val, lower_is_better)
+                  print(f"| {label} | {q} | {e} | {w} |")
+
+              qvac_speed = qvac_fp["speed"]["mean_time_per_image"]
+              easyocr_speed = easyocr_fp["speed"]["mean_time_per_image"]
+              speedup = easyocr_speed / qvac_speed if qvac_speed > 0 else 0
+              q_speed = f"**{qvac_speed:.1f}s**" if qvac_speed < easyocr_speed else f"{qvac_speed:.1f}s"
+              e_speed = f"**{easyocr_speed:.1f}s**" if easyocr_speed < qvac_speed else f"{easyocr_speed:.1f}s"
+              winner = f"QVAC ({speedup:.1f}x)" if qvac_speed < easyocr_speed else f"EasyOCR ({1/speedup:.1f}x)"
+              print(f"| Speed | {q_speed}/img | {e_speed}/img | {winner} |")
+              print(f"\n*Samples: {qvac_fp['total_samples']}*\n")
+          elif qvac_fp or easyocr_fp:
+              data = qvac_fp or easyocr_fp
+              backend = "QVAC" if qvac_fp else "EasyOCR"
+              print(f"*Only {backend} results available*")
+              print(f"- CER: {data['metrics'].get('cer', {}).get('mean', 'N/A'):.4f}")
+              print(f"- WER: {data['metrics'].get('wer', {}).get('mean', 'N/A'):.4f}")
+              print(f"- ANLS: {data['metrics'].get('anls', {}).get('mean', 'N/A'):.4f}\n")
+          else:
+              print("*No results available*\n")
+
+          print("## Text Spotting (IC15)\n")
+          qvac_ts = load_aggregate("results/text-spotting", "qvac", "text spotting en")
+          easyocr_ts = load_aggregate("results/text-spotting", "easyocr", "text spotting en")
+
+          if qvac_ts and easyocr_ts:
+              print("| Metric | QVAC | EasyOCR | Winner |")
+              print("|--------|------|---------|--------|")
+              for label, key, lower_is_better in [
+                  ("E2E F1 ↑", "e2e_f1", False),
+                  ("E2E Precision ↑", "e2e_precision", False),
+                  ("E2E Recall ↑", "e2e_recall", False),
+                  ("Detection F1 ↑", "det_f1", False),
+                  ("Avg CER ↓", "avg_cer", True),
+                  ("Avg ANLS ↑", "avg_anls", False),
+              ]:
+                  qvac_val = qvac_ts["metrics"].get(key, {}).get("mean")
+                  easyocr_val = easyocr_ts["metrics"].get(key, {}).get("mean")
+                  q, e, w = pick_winner(qvac_val, easyocr_val, lower_is_better)
+                  print(f"| {label} | {q} | {e} | {w} |")
+
+              qvac_speed = qvac_ts["speed"]["mean_time_per_image"]
+              easyocr_speed = easyocr_ts["speed"]["mean_time_per_image"]
+              speedup = easyocr_speed / qvac_speed if qvac_speed > 0 else 0
+              q_speed = f"**{qvac_speed:.1f}s**" if qvac_speed < easyocr_speed else f"{qvac_speed:.1f}s"
+              e_speed = f"**{easyocr_speed:.1f}s**" if easyocr_speed < qvac_speed else f"{easyocr_speed:.1f}s"
+              winner = f"QVAC ({speedup:.1f}x)" if qvac_speed < easyocr_speed else f"EasyOCR ({1/speedup:.1f}x)"
+              print(f"| Speed | {q_speed}/img | {e_speed}/img | {winner} |")
+              print(f"\n*Samples: {qvac_ts['total_samples']}*\n")
+          elif qvac_ts or easyocr_ts:
+              data = qvac_ts or easyocr_ts
+              backend = "QVAC" if qvac_ts else "EasyOCR"
+              print(f"*Only {backend} results available*")
+              print(f"- E2E F1: {data['metrics'].get('e2e_f1', {}).get('mean', 'N/A'):.4f}")
+              print(f"- Detection F1: {data['metrics'].get('det_f1', {}).get('mean', 'N/A'):.4f}")
+              print(f"- Avg CER: {data['metrics'].get('avg_cer', {}).get('mean', 'N/A'):.4f}\n")
+          else:
+              print("*No results available*\n")
+          PYTHON_SCRIPT
+
+      - name: Upload consolidated results
+        uses: actions/upload-artifact@v6
+        with:
+          name: ocr-benchmark-consolidated
+          path: results
+          retention-days: 90

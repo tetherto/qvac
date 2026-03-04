@@ -17,7 +17,32 @@
    ```
 
 2. Run validation: `npm run validate:models`
-3. Submit PR
+3. Submit PR targeting `main`
+
+### Source URL Formats
+
+- HuggingFace: `https://huggingface.co/<org>/<repo>/resolve/<commit>/<path>`
+- S3: `s3:///<key>` (bucket name is resolved from `QVAC_S3_BUCKET` environment variable)
+
+Pin to specific commit/version. Avoid `main` or `latest`.
+
+The S3 bucket name is **not** stored in `models.prod.json`. Set `QVAC_S3_BUCKET` in your `.env` file.
+The server resolves the bucket at runtime when downloading artifacts.
+
+### Registry Sync Process
+
+After the PR is created:
+
+1. Add the **"staging"** label to the PR. This triggers the `sync-staging` pipeline that applies changes to the staging registry.
+2. Wait for the `sync-staging` pipeline to pass. **Do not merge the PR if the pipeline fails** — fix the issue first.
+3. Once the pipeline passes and the PR is approved, merge to `main`.
+
+How sync works:
+
+- The sync process compares the full `models.prod.json` against the current database state and applies **all** differences — not just changes from the current PR. If a previous PR was merged without triggering a sync, its changes will be included in the next sync run.
+- If a PR is merged without the "staging" label (i.e., without triggering a sync), the changes are not lost. They will be applied the next time a sync is triggered by another PR.
+
+**Important**: For now, notify **@yuri.samarin** directly when submitting changes to `models.prod.json` so he can assist with the sync process.
 
 ## Deprecating a Model
 
@@ -52,16 +77,6 @@ The sync script will clear all deprecation fields (`deprecatedAt`, `replacedBy`,
 If you remove an entry from `models.prod.json`, the sync script will auto-deprecate it in the database with reason "Removed from configuration". The model data is preserved.
 
 **For permanent deletion**: Create a ticket with the reason for deletion. Manual intervention required.
-
-## Source URL Formats
-
-- HuggingFace: `https://huggingface.co/<org>/<repo>/resolve/<commit>/<path>`
-- S3: `s3:///<key>` (bucket name is resolved from `QVAC_S3_BUCKET` environment variable)
-
-Pin to specific commit/version. Avoid `main` or `latest`.
-
-The S3 bucket name is **not** stored in `models.prod.json`. Set `QVAC_S3_BUCKET` in your `.env` file.
-The server resolves the bucket at runtime when downloading artifacts.
 
 ## Field Reference
 

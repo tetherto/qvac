@@ -1110,7 +1110,7 @@
   {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q4_0",
     "params": "300M",
     "license": "gemma",
@@ -1124,7 +1124,7 @@
   {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q8_0",
     "params": "300M",
     "license": "gemma",
@@ -5184,7 +5184,7 @@
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
     "description": "Parakeet TDT 0.6B v3 vocabulary",
-    "quantization": "fp32",
+    "quantization": "",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [
@@ -5246,8 +5246,8 @@
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 vocabulary INT8",
-    "quantization": "int8",
+    "description": "Parakeet TDT 0.6B v3 vocabulary",
+    "quantization": "",
     "params": "0.6B",
     "license": "CC-BY-4.0",
     "tags": [

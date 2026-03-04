@@ -58,20 +58,20 @@ class QvacResponse extends EventEmitter {
 
   /**
    * Registers a callback for when the response finishes.
-   * If a callback is provided, it is invoked with the final output array.
-   * @param {Function} [callback] - Optional callback invoked with the final outputs.
+   * If a callback is provided, it is invoked with the terminal result.
+   * @param {Function} [callback] - Optional callback invoked with the terminal result.
    * @returns {QvacResponse} The current instance for chaining.
    */
   onFinish (callback) {
     if (callback) {
-      this.once('end', () => callback(this.output))
+      this.once('end', (result) => callback(result))
     }
     return this
   }
 
   /**
-   * Returns a promise that resolves with the final outputs when the response finishes.
-   * @returns {Promise<any[]>} A promise that resolves with the final outputs or rejects if an error occurs.
+   * Returns a promise that resolves with the terminal result when the response finishes.
+   * @returns {Promise<any>} A promise that resolves with the terminal result or rejects if an error occurs.
    */
   await () {
     return this._finishPromise
@@ -154,12 +154,12 @@ class QvacResponse extends EventEmitter {
   }
 
   /**
-   * Marks the response as ended, emits an 'end' event, and resolves the finish promise with the outputs.
+   * Marks the response as ended, emits an 'end' event, and resolves the finish promise.
    */
-  ended () {
+  ended (result = this.output) {
     this._status = statuses.ENDED
-    this.emit('end')
-    this._resolveFinish(this.output)
+    this.emit('end', result)
+    this._resolveFinish(result)
   }
 
   /**

@@ -50,7 +50,7 @@ function getModel(name) { ... }
 
 ## Error Handling
 
-Use custom error classes from `@tetherto/qvac-lib-error-base` when available (in client).
+Use custom error classes from `@qvac/error` when available (in client).
 
 ## Resource Management
 

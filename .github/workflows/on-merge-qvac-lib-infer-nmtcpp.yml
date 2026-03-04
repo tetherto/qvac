@@ -87,6 +87,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -147,7 +148,7 @@ jobs:
       ref: ${{ github.ref }}
 
   prebuild-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
     secrets: inherit

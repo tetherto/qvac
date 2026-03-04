@@ -1,0 +1,99 @@
+name: On PR Trigger (Stable Diffusion)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/lib-infer-diffusion/**"
+      - ".github/workflows/*diffusion*.yml"
+  workflow_dispatch:
+
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+env:
+  PKG_DIR: packages/lib-infer-diffusion
+
+jobs:
+  sanity-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Sanity checks
+        uses: tetherto/qvac-devops/.github/actions/sanity-checks@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          workdir: packages/lib-infer-diffusion
+
+  cpp-lint:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/lib-infer-diffusion
+
+  prebuild:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      publish_target: "gpr"
+      tag: pr-${{ github.event.pull_request.number }}
+
+  run-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-test-lib-infer-diffusion.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: prebuild
+    uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  merge-guard:
+    needs:
+      [
+        run-integration-tests,
+        run-mobile-integration-tests,
+        sanity-checks,
+        prebuild,
+        cpp-lint,
+      ]
+    if: always()
+    uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success'}}
+    secrets: inherit

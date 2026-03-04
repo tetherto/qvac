@@ -9,7 +9,7 @@
  *
  * Usage:
  *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk
- *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-lib-rag --base-commit=abc123 --base-version=0.5.0
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=rag --base-commit=abc123 --base-version=0.5.0
  */
 
 const fs = require("fs");
@@ -393,10 +393,102 @@ function processSDKPRs(rawPRs) {
 }
 
 /**
+ * Compare two semver strings (descending)
+ * Example: 0.6.1 > 0.6.0 > 0.5.0
+ */
+function compareSemverDesc(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na > nb) return -1;
+    if (na < nb) return 1;
+  }
+  return 0;
+}
+
+/**
+ * Rebuild root CHANGELOG.md from all version folders
+ */
+function rebuildRootChangelog(packageName) {
+  const repoRoot = getRepoRoot();
+  const pkgDir = path.join(repoRoot, "packages", packageName);
+  const changelogRoot = path.join(pkgDir, "changelog");
+
+  if (!fs.existsSync(changelogRoot)) {
+    console.warn("⚠️ No changelog directory found.");
+    return;
+  }
+
+  const versions = fs
+    .readdirSync(changelogRoot)
+    .filter((entry) => {
+      const fullPath = path.join(changelogRoot, entry);
+      return fs.statSync(fullPath).isDirectory();
+    })
+    // Only allow x.y.z format
+    .filter((v) => /^\d+\.\d+\.\d+$/.test(v))
+    .sort(compareSemverDesc);
+
+  if (versions.length === 0) {
+    console.warn("⚠️ No version folders found.");
+    return;
+  }
+
+  let combined = "";
+
+  for (const version of versions) {
+    const versionFile = path.join(
+      changelogRoot,
+      version,
+      "CHANGELOG.md"
+    );
+
+    if (!fs.existsSync(versionFile)) {
+      console.warn(
+        `⚠️ Skipping ${version} (missing CHANGELOG.md)`
+      );
+      continue;
+    }
+
+    let content = fs.readFileSync(versionFile, "utf8").trim();
+    // Transform "# Changelog vX.Y.Z" to "## [X.Y.Z]" for aggregated file
+    content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
+    // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
+    content = content.replace(
+      /\(\.\/([^)]+\.md)\)/g,
+      `(./changelog/${version}/$1)`
+    );
+    combined += content + "\n\n";
+  }
+
+  const rootFile = path.join(pkgDir, "CHANGELOG.md");
+  const header = "# Changelog\n\n";
+
+  fs.writeFileSync(rootFile, header + combined.trim() + "\n");
+
+  console.log(
+    `📚 Rebuilt root CHANGELOG.md with ${versions.length} versions`
+  );
+}
+
+/**
  * Main function
  */
 async function main() {
   const params = parseArgs(process.argv.slice(2));
+
+  if ("update-root-changelog" in params) {
+    if (!params.package) {
+      console.error("--package is required with --update-root-changelog");
+      process.exit(1);
+    }
+
+    rebuildRootChangelog(params.package);
+    process.exit(0);
+  }
 
   if (!params.package) {
     console.error("Usage:");
@@ -410,6 +502,7 @@ async function main() {
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );
     console.error("  --base-version   Version label for base commit");
+    console.error("  --update-root-changelog  Update root CHANGELOG.md");
     process.exit(1);
   }
 
@@ -445,6 +538,7 @@ async function main() {
     // Generate SDK-specific changelog files
     console.log("📝 Generating changelog files...");
     generateChangelogFiles(packageName, data.version, validPRs);
+    rebuildRootChangelog(packageName);
 
     console.log("\n🎉 Changelog generation complete!");
     console.log(`\nGenerated files in: packages/${packageName}/changelog/${data.version}/`);

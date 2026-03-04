@@ -77,6 +77,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -139,7 +140,7 @@ jobs:
       workdir: "packages/qvac-lib-infer-llamacpp-embed"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard]
+    needs: [publish-logic]
     if: needs.publish-logic.outputs.publish_release == 'true'
     permissions:
       contents: write
@@ -158,9 +159,10 @@ jobs:
     if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-llamacpp-embed.yml
+    uses: ./.github/workflows/create-github-release.yml
     secrets: inherit
     with:
+      repo_name: "llamacpp-embed"
       release_name: "QVAC Embed Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}

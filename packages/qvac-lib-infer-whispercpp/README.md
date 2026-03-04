@@ -37,7 +37,7 @@ This library simplifies running inference with the Whisper transcription model w
 - qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
 - qvac-fabric-whisper.cpp (latest): Inference engine
 - Bare Runtime (≥1.24.2): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
+- Linux requires Clang/LLVM 19 with libc++
 
 ## Installation
 
@@ -199,8 +199,8 @@ sudo yum install vulkan-tools vulkan-devel vulkan-validation-layers-devel spirv-
 #### Clone and Setup
 
 ```bash
-git clone https://github.com/tetherto/qvac-lib-infer-whispercpp.git
-cd qvac-lib-infer-whispercpp
+git clone https://github.com/tetherto/qvac.git
+cd qvac/packages/qvac-lib-infer-whispercpp
 
 # Initialize submodules (required for native dependencies)
 git submodule update --init --recursive
@@ -252,7 +252,7 @@ The library provides a straightforward workflow for audio transcription:
 
 Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
 
-- [Filesystem Data Loader](https://github.com/tetherto/qvac-lib-dl-filesystem)
+- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem)
 
 First, select and instantiate a data loader that provides access to model files:
 

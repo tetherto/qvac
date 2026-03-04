@@ -20,6 +20,7 @@ export * from "./translate";
 export * from "./translation-config";
 export * from "./llamacpp-config";
 export * from "./whispercpp-config";
+export * from "./parakeet-config";
 export * from "./text-to-speech";
 export * from "./error";
 export * from "./rag";

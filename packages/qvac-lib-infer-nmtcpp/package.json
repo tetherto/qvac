@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -90,7 +90,8 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js"
   },
   "types": "index.d.ts",
   "standard": {

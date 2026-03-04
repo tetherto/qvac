@@ -1,0 +1,592 @@
+name: "Prebuilds (OCR)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish with ('latest' by default)"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        # monorepo default
+        default: "tetherto/qvac"
+      tar-run-id:
+        type: string
+        required: false
+        default: "on-onnx-ocr"
+      tag:
+        description: "Tag to publish"
+        type: string
+        required: false
+        default: "dev"
+      publish_target:
+        description: "Target registry to publish to (npm or gpr)"
+        type: string
+        required: false
+        default: ""
+    outputs:
+      published_version:
+        description: "Version that was published"
+        value: ${{ jobs.publish-gpr.outputs.published_version || jobs.publish-npm.outputs.published_version }}
+      publish_target:
+        description: "Target registry to publish to (npm or gpr)"
+        value: ${{ inputs.publish_target }}
+
+env:
+  PKG_DIR: packages/ocr-onnx
+  
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            variant: ubuntu
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            variant: ubuntu
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+            variant: ubuntu
+            flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
+          - os: macos-15
+            platform: ios
+            arch: arm64
+            flags: -D BUILD_TESTING=OFF
+          - os: macos-15
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator -D BUILD_TESTING=OFF
+          - os: macos-15
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator -D BUILD_TESTING=OFF
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      # monorepo: keep cache under the package dir to avoid cross-package collisions
+      PKG_DIR: packages/ocr-onnx
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
+      VCPKG_BUILD_TYPE: release
+
+    steps:
+      - if: ${{ matrix.platform == 'android' }}
+        name: Select NDK
+        run: |
+          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+
+      - if: ${{ matrix.variant == 'ubuntu' }}
+        name: Maximize build space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Echo workflow inputs
+        shell: bash
+        run: |
+          echo "Workflow inputs:"
+          echo "Tag: ${{ inputs.tag || github.event.inputs.tag }}"
+          echo "Ref: ${{ inputs.ref || github.ref }}"
+          echo "Repository: ${{ inputs.repository || github.repository }}"
+          echo "Matrix platform: ${{ matrix.platform }}"
+          echo "Matrix arch: ${{ matrix.arch }}"
+          echo "Matrix tags: ${{ matrix.tags }}"
+
+      - if: ${{ matrix.variant == 'ubuntu' }}
+        name: Update c++ tools
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - if: ${{ matrix.variant == 'ubuntu' }}
+        name: Install ccache on Linux
+        run: sudo apt-get install -y ccache
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Install ccache on macOS
+        run: brew install ccache
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          ccache -z
+
+      - if: ${{ matrix.os != 'windows-2022' }}
+        name: Restore ccache cache
+        id: cache-ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure windows runner
+        run: |
+          git config --system core.longpaths true
+          choco upgrade llvm -y --no-progress
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Install and configure ccache on Windows
+        shell: pwsh
+        run: |
+          # Download ccache directly from GitHub releases
+          $ccacheVersion = "4.10.2"
+          $ccacheUrl = "https://github.com/ccache/ccache/releases/download/v$ccacheVersion/ccache-$ccacheVersion-windows-x86_64.zip"
+          $ccacheZip = "$env:TEMP\ccache.zip"
+          $ccacheDir = "C:\ccache"
+
+          Invoke-WebRequest -Uri $ccacheUrl -OutFile $ccacheZip
+          Expand-Archive -Path $ccacheZip -DestinationPath $env:TEMP -Force
+          New-Item -ItemType Directory -Path $ccacheDir -Force | Out-Null
+          Move-Item -Path "$env:TEMP\ccache-$ccacheVersion-windows-x86_64\*" -Destination $ccacheDir -Force
+
+          # Add to PATH for subsequent steps
+          echo "C:\ccache" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # Configure ccache
+          & "C:\ccache\ccache.exe" --set-config=max_size=2G
+          & "C:\ccache\ccache.exe" --set-config=compression=true
+          & "C:\ccache\ccache.exe" -z
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Restore ccache cache (Windows)
+        id: cache-ccache-win
+        uses: actions/cache/restore@v5
+        with:
+          path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install global dependencies
+        run: npm install -g bare-runtime bare-make
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        name: Rename win sdk folder to disable it
+        run: |
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
+          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Remove Homebrew LLVM
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+           chmod +x ./ci/remove-brew-llvm.sh
+           ./ci/remove-brew-llvm.sh
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Install vcpkg in macos
+        run: |
+          cd ..
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
+          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT=$(pwd)
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Select Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Verify UIKit Frameworks
+        run: |
+          SDK_OS=$(xcrun --sdk iphoneos --show-sdk-path)
+          SDK_SIM=$(xcrun --sdk iphonesimulator --show-sdk-path)
+
+          echo "Device SDK: $SDK_OS"
+          ls $SDK_OS/System/Library/Frameworks | grep UIKit || echo "UIKit.framework missing in device SDK!"
+
+          echo "Simulator SDK: $SDK_SIM"
+          ls $SDK_SIM/System/Library/Frameworks | grep UIKit || echo "UIKit.framework missing in simulator SDK!"
+
+      - if: ${{ matrix.variant == 'ubuntu' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure vcpkg in windows
+        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' }}
+        name: Configure cmake generator in windows
+        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
+      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.variant == 'ubuntu' }}
+        name: Update apt sources
+        run: sudo apt-get update
+
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Install required packages linux
+        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
+        name: Install tooling for cross compilation - ubuntu arm64
+        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/ocr-onnx/vcpkg.json', 'packages/ocr-onnx/vcpkg-configuration.json', 'packages/ocr-onnx/vcpkg/ports/**', 'packages/ocr-onnx/vcpkg/triplets/**') }}
+          restore-keys: |
+            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
+            vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Generate
+        working-directory: ${{ env.PKG_DIR }}
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Run bare-make build
+        working-directory: ${{ env.PKG_DIR }}
+        run: bare-make build
+
+      - name: Run bare-make install
+        working-directory: ${{ env.PKG_DIR }}
+        run: bare-make install
+
+      - name: Strip debug symbols
+        if: ${{ matrix.platform != 'win32' }}
+        shell: bash
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          if [[ "${{ matrix.platform }}" == "android" ]]; then
+            find prebuilds -name "*.bare" -exec $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip {} \;
+          else
+            find prebuilds -name "*.bare" -exec strip {} \;
+          fi
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - if: ${{ matrix.os != 'windows-2022' && steps.cache-ccache.outputs.cache-hit != 'true' }}
+        name: Save ccache cache
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ github.sha }}
+
+      - if: ${{ matrix.os == 'windows-2022' && steps.cache-ccache-win.outputs.cache-hit != 'true' }}
+        name: Save ccache cache (Windows)
+        uses: actions/cache/save@v5
+        with:
+          path: ~\AppData\Local\ccache
+          key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/ocr-onnx/vcpkg.json', 'packages/ocr-onnx/vcpkg-configuration.json', 'packages/ocr-onnx/vcpkg/ports/**', 'packages/ocr-onnx/vcpkg/triplets/**') }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: onnx-ocr-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: prebuild
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Replicate android artifacts
+        run: |
+          mkdir -p prebuilds/android-arm prebuilds/android-ia32 prebuilds/android-x64
+          cp -rv prebuilds/android-arm64/* prebuilds/android-arm/
+          cp -rv prebuilds/android-arm64/* prebuilds/android-x64/
+          cp -rv prebuilds/android-arm64/* prebuilds/android-ia32/
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: prebuilds
+          path: prebuilds
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region us-east-1
+
+      - name: Download onnx model files
+        run: |
+          mkdir -p models/ocr
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-12-16/recognizer_latin.onnx models/ocr/recognizer_latin.onnx
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
+
+      - name: Upload models artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: models
+          path: models
+
+  publish-logic:
+    runs-on: ubuntu-24.04
+    outputs:
+      publish_gpr: ${{ steps.logic.outputs.publish_gpr }}
+      publish_npm: ${{ steps.logic.outputs.publish_npm }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        shell: bash
+        env:
+          INPUT_PUBLISH_TARGET: ${{ inputs.publish_target }}
+          EVENT_PUBLISH_TARGET: ${{ github.event.inputs.publish_target }}
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          ref_name="${GITHUB_REF_NAME}"
+          event_name="${GITHUB_EVENT_NAME}"
+          publish_target="${INPUT_PUBLISH_TARGET}"
+          event_publish_target="${EVENT_PUBLISH_TARGET}"
+
+          publish_gpr="false"
+          publish_npm="false"
+
+          if [ "$publish_target" = "gpr" ] || [ "$event_publish_target" = "gpr" ]; then
+            publish_gpr="true"
+          fi
+
+          if [ "$publish_target" = "npm" ] || [ "$event_publish_target" = "npm" ]; then
+            publish_npm="true"
+          fi
+
+          if [ "$publish_gpr" = "false" ] && [ "$publish_npm" = "false" ]; then
+            if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
+              if [ "$ref_name" = "main" ] || [[ "$ref_name" == feature-* ]] || [[ "$ref_name" == tmp-* ]]; then
+                publish_gpr="true"
+              elif [[ "$ref_name" == release-* ]]; then
+                publish_npm="true"
+              fi
+            fi
+          fi
+
+          if [[ "$ref_name" == release-* ]]; then
+            publish_gpr="false"
+          fi
+
+          if [ "$publish_npm" = "true" ] && { [ "$event_name" = "pull_request" ] || [ "$event_name" = "pull_request_target" ]; }; then
+            publish_npm="false"
+          fi
+
+          if [ "$publish_gpr" = "true" ] && [ "$publish_npm" = "true" ]; then
+            echo "ERROR: Both GPR and NPM publishing enabled — invalid GitFlow state"
+            exit 1
+          fi
+
+          gpr_tag="${INPUT_TAG:-${EVENT_TAG:-}}"
+          if [ -z "$gpr_tag" ]; then
+            if [ "$ref_name" = "main" ]; then
+              gpr_tag="dev"
+            elif [[ "$ref_name" == feature-* ]]; then
+              gpr_tag="feature"
+            elif [[ "$ref_name" == tmp-* ]]; then
+              gpr_tag="temp"
+            else
+              gpr_tag="dev"
+            fi
+          fi
+
+          echo "publish_gpr=$publish_gpr" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=$publish_npm" >> "$GITHUB_OUTPUT"
+          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+
+  publish-gpr:
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_gpr == 'true' }}
+    continue-on-error: true
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download prebuild artifacts into package dir
+        uses: actions/download-artifact@v7
+        with:
+          name: prebuilds
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ env.PKG_DIR }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    needs: [prebuild, merge, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_npm == 'true' }}
+    continue-on-error: false
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download prebuild artifacts into package dir
+        uses: actions/download-artifact@v7
+        with:
+          name: prebuilds
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm@monorepo_update
+        with:
+          secret-token: ${{ secrets.NPM_TOKEN }}
+          tag: "latest"
+          workdir: ${{ env.PKG_DIR }}
+          repo_name: "onnx-ocr"
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
+
+  create-github-release:
+    needs: [publish-npm]
+    if: needs.publish-npm.outputs.published_version != '' && startsWith(github.ref_name, 'release-')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release-ocr-onnx.yml
+    secrets: inherit
+    with:
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: packages/ocr-onnx

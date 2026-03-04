@@ -6,6 +6,10 @@ import {
   type EmbedConfig,
 } from "./llamacpp-config";
 import { whisperConfigSchema } from "./whispercpp-config";
+import {
+  parakeetConfigSchema,
+  parakeetModelTypeEnumSchema,
+} from "./parakeet-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import {
@@ -23,6 +27,7 @@ import {
 import {
   llmModelTypeSchema,
   whisperModelTypeSchema,
+  parakeetModelTypeSchema,
   embeddingsModelTypeSchema,
   nmtModelTypeSchema,
   ttsModelTypeSchema,
@@ -55,6 +60,13 @@ const loadModelOptionsBaseSchema = z.union([
     modelConfig: whisperConfigSchema.partial().strict().optional(),
     seed: z.boolean().optional(),
     vadModelSrc: modelSrcInputSchema.optional(),
+    delegate: delegateSchema,
+  }),
+  z.object({
+    modelSrc: modelSrcInputSchema,
+    modelType: parakeetModelTypeSchema,
+    modelConfig: parakeetConfigSchema,
+    seed: z.boolean().optional(),
     delegate: delegateSchema,
   }),
   z.object({
@@ -163,6 +175,46 @@ export const loadModelOptionsToRequestSchema = z.union([
   z
     .object({
       modelSrc: modelSrcInputSchema,
+      modelType: parakeetModelTypeSchema,
+      modelConfig: parakeetConfigSchema,
+      seed: z.boolean().optional(),
+      delegate: delegateSchema,
+      onProgress: z.unknown().optional(),
+      withProgress: z.boolean().optional(),
+    })
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.parakeetTranscription,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: {
+        modelType: data.modelConfig.modelType,
+        maxThreads: data.modelConfig.maxThreads,
+        useGPU: data.modelConfig.useGPU,
+        sampleRate: data.modelConfig.sampleRate,
+        channels: data.modelConfig.channels,
+        captionEnabled: data.modelConfig.captionEnabled,
+        timestampsEnabled: data.modelConfig.timestampsEnabled,
+        parakeetEncoderDataSrc: data.modelConfig.parakeetEncoderDataSrc
+          ? modelInputToSrcSchema.parse(data.modelConfig.parakeetEncoderDataSrc)
+          : undefined,
+        parakeetDecoderSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetDecoderSrc,
+        ),
+        parakeetVocabSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetVocabSrc,
+        ),
+        parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
+          data.modelConfig.parakeetPreprocessorSrc,
+        ),
+      },
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+    })),
+  z
+    .object({
+      modelSrc: modelSrcInputSchema,
       modelType: embeddingsModelTypeSchema,
       modelConfig: embedConfigBaseSchema.strict().optional(),
       seed: z.boolean().optional(),
@@ -229,14 +281,24 @@ export const loadModelOptionsToRequestSchema = z.union([
           modelConfig: {
             ttsEngine: "chatterbox" as const,
             language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsSpeechEncoderSrc),
-            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsEmbedTokensSrc),
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTokenizerSrc,
+            ),
+            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsSpeechEncoderSrc,
+            ),
+            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsEmbedTokensSrc,
+            ),
             ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
               data.modelConfig.ttsConditionalDecoderSrc,
             ),
-            ttsLanguageModelSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsLanguageModelSrc),
-            referenceAudioSrc: modelInputToSrcSchema.parse(data.modelConfig.referenceAudioSrc),
+            ttsLanguageModelSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsLanguageModelSrc,
+            ),
+            referenceAudioSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.referenceAudioSrc,
+            ),
           },
           seed: data.seed ?? false,
           withProgress: data.withProgress ?? !!data.onProgress,
@@ -251,13 +313,21 @@ export const loadModelOptionsToRequestSchema = z.union([
           modelConfig: {
             ttsEngine: "supertonic" as const,
             language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTokenizerSrc),
-            ttsTextEncoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsTextEncoderSrc),
+            ttsTokenizerSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTokenizerSrc,
+            ),
+            ttsTextEncoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsTextEncoderSrc,
+            ),
             ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
               data.modelConfig.ttsLatentDenoiserSrc,
             ),
-            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceDecoderSrc),
-            ttsVoiceSrc: modelInputToSrcSchema.parse(data.modelConfig.ttsVoiceSrc),
+            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsVoiceDecoderSrc,
+            ),
+            ttsVoiceSrc: modelInputToSrcSchema.parse(
+              data.modelConfig.ttsVoiceSrc,
+            ),
             ttsSpeed: data.modelConfig.ttsSpeed,
             ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
           },
@@ -341,6 +411,13 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
   modelConfig: whisperConfigSchema, // whisper has no defaults
 });
 
+export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
+  modelType: z.literal(ModelType.parakeetTranscription),
+  modelConfig: z
+    .object({ modelType: parakeetModelTypeEnumSchema })
+    .passthrough(),
+});
+
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.llamacppEmbedding),
   modelConfig: embedConfigBaseSchema,
@@ -353,15 +430,17 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
   dstVocabSrc: z.string().optional(),
 });
 
-export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsChatterboxRequestConfigSchema,
-});
+export const loadTtsChatterboxModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsChatterboxRequestConfigSchema,
+  });
 
-export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsSupertonicRequestConfigSchema,
-});
+export const loadTtsSupertonicModelRequestSchema =
+  commonModelConfigSchema.extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsSupertonicRequestConfigSchema,
+  });
 
 export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
   modelType: z.literal(ModelType.onnxTts),
@@ -387,6 +466,7 @@ export const loadModelSrcRequestSchema = z
   .union([
     loadLlmModelRequestSchema,
     loadWhisperModelRequestSchema,
+    loadParakeetModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,

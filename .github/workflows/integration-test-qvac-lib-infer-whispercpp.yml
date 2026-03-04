@@ -198,13 +198,6 @@ jobs:
           # Add whisper.cpp dependencies for integration tests
           sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
 
-      - name: Linux - install glibcxx
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - name: macOS - install whisper dependencies
         if: matrix.platform == 'darwin'
         shell: bash

@@ -3,6 +3,7 @@ import { logLevelSchema } from "./logging-stream";
 import { ModelType } from "./model-types";
 import { llmConfigBaseSchema, embedConfigBaseSchema } from "./llamacpp-config";
 import { whisperConfigSchema } from "./whispercpp-config";
+import { parakeetConfigSchema } from "./parakeet-config";
 import { ocrConfigSchema } from "./ocr";
 import { runtimeContextSchema } from "./runtime-context";
 
@@ -12,6 +13,7 @@ const AliasKeys = {
   whisper: "whisper",
   embeddings: "embeddings",
   nmt: "nmt",
+  parakeet: "parakeet",
   tts: "tts",
   ocr: "ocr",
 } as const;
@@ -46,6 +48,9 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.whispercppTranscription]: whisperConfigSchema
       .partial()
       .optional(),
+    [ModelType.parakeetTranscription]: parakeetConfigSchema
+      .partial()
+      .optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxTts]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
@@ -53,6 +58,7 @@ export const deviceConfigDefaultsSchema = z
     [AliasKeys.llm]: llmConfigBaseSchema.optional(),
     [AliasKeys.embeddings]: embedConfigBaseSchema.optional(),
     [AliasKeys.whisper]: whisperConfigSchema.partial().optional(),
+    [AliasKeys.parakeet]: parakeetConfigSchema.partial().optional(),
     [AliasKeys.nmt]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.tts]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.ocr]: ocrConfigSchema.partial().optional(),

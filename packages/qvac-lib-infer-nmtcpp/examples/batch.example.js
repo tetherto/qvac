@@ -47,7 +47,12 @@ const textsToTranslate = [
   'How are you today?',
   'Machine translation has revolutionized communication.',
   'The weather is beautiful.',
-  'Thank you for your help.'
+  'Thank you for your help.',
+  'Hello world Again!',
+  'How are you today Again?',
+  'Machine translation has revolutionized communication again.',
+  'The weather is beautiful again.',
+  'Thank you for your help again.'
 ]
 
 async function testBatchTranslation () {

@@ -315,12 +315,21 @@ class BaseInference {
         }
       }
       response.updateOutput(data)
+    } else if (event === 'FinetuneProgress') {
+      if (this.opts?.stats) {
+        response.updateStats(data.stats)
+      }
     } else if (event === 'JobEnded') {
       this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
-      if (this.opts?.stats) {
+      const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
+      if (this.opts?.stats && !isFinetuneTerminal) {
         response.updateStats(data)
       }
-      response.ended()
+      if (isFinetuneTerminal) {
+        response.ended(data)
+      } else {
+        response.ended()
+      }
       this._deleteJobMapping(jobId)
     } else {
       this.logger.debug(`Received event for job ${jobId}: ${event}`)

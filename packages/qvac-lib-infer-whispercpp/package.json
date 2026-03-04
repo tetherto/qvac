@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
@@ -51,7 +51,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-infer-whispercpp.git"
+    "url": "git+https://github.com/tetherto/qvac.git"
   },
   "author": "Tether",
   "keywords": [
@@ -61,8 +61,8 @@
     "qvac"
   ],
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-whispercpp/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-infer-whispercpp#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac#readme",
   "devDependencies": {
     "@qvac/dl-base": "^0.1.0",
     "@qvac/dl-filesystem": "^0.1.0",

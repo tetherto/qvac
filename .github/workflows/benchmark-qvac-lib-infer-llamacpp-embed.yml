@@ -212,9 +212,9 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.10
+          python-version: '3.14'
           cache: pip
-          cache-dependency-path: benchmarks/client/requirements.txt
+          cache-dependency-path: ${{ env.WORKDIR }}/benchmarks/client/requirements.txt
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
@@ -341,14 +341,14 @@ jobs:
           echo "=== Build complete ==="
 
       - name: Setup benchmark server environment
-        working-directory: benchmarks/server
+        working-directory: ${{ env.WORKDIR }}/benchmarks/server
         run: |
           echo "Installing server dependencies..."
-          cp ../../.npmrc .npmrc
+          cp "$GITHUB_WORKSPACE/.npmrc" .npmrc
           npm install
 
       - name: Setup Python virtual environment
-        working-directory: benchmarks/client
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
         run: |
           echo "Creating Python virtual environment..."
           python3 -m venv venv
@@ -363,6 +363,7 @@ jobs:
 
       - name: Run benchmarks
         shell: bash
+        working-directory: ${{ env.WORKDIR }}
         env:
           GGUF_MODEL: ${{ inputs.gguf_model }}
           NUM_SAMPLES: ${{ inputs.num_samples }}
@@ -421,58 +422,11 @@ jobs:
       - name: Display results summary
         if: always()
         shell: bash
-        env:
-          GGUF_MODEL: ${{ inputs.gguf_model }}
-          NUM_SAMPLES: ${{ inputs.num_samples }}
-          DATASETS: ${{ inputs.datasets }}
-          DEVICE: ${{ inputs.device }}
-          CTX_SIZE: ${{ inputs.ctx_size }}
-          BATCH_SIZE: ${{ inputs.batch_size }}
-          GPU_LAYERS: ${{ inputs.gpu_layers }}
-          ADDON_VERSION: ${{ inputs.addon_version }}
-          COMPARE: ${{ inputs.compare_with_transformers }}
-          TRANSFORMERS_MODEL: ${{ inputs.transformers_model }}
-          VERBOSE: ${{ inputs.verbose }}
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "=== Benchmark Results Summary ===" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Model:** \`$GGUF_MODEL\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Samples:** $NUM_SAMPLES" >> $GITHUB_STEP_SUMMARY
-          echo "**Datasets:** $DATASETS" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Context Size | $CTX_SIZE |" >> $GITHUB_STEP_SUMMARY
-          echo "| Batch Size | $BATCH_SIZE tokens |" >> $GITHUB_STEP_SUMMARY
-          echo "| GPU Layers | $GPU_LAYERS |" >> $GITHUB_STEP_SUMMARY
-          echo "| Device | $DEVICE |" >> $GITHUB_STEP_SUMMARY
-          echo "| Verbose Logging | $VERBOSE |" >> $GITHUB_STEP_SUMMARY
-          if [[ -n "$ADDON_VERSION" ]]; then
-            echo "| Addon Version | @qvac/embed-llamacpp@$ADDON_VERSION |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Addon Version | Built from source |" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [[ "$COMPARE" == "true" ]]; then
-            echo "### Comparison Mode" >> $GITHUB_STEP_SUMMARY
-            echo "Compared against: \`$TRANSFORMERS_MODEL\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ -d "benchmarks/results" ]; then
-            echo "### Results Files" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No result files found" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-
-            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -mtime -1 2>/dev/null | head -1)
-            if [[ -n "$LATEST_MD" ]]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Latest Result" >> $GITHUB_STEP_SUMMARY
-              cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
-            fi
+          LATEST_MD=$(ls -t benchmarks/results/*.md 2>/dev/null | head -n 1 || true)
+          if [[ -n "${LATEST_MD:-}" ]]; then
+            cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload benchmark results
@@ -481,8 +435,8 @@ jobs:
         with:
           name: benchmark-results-${{ github.run_number }}
           path: |
-            benchmarks/results/
-            benchmarks/client/logs/
+            ${{ env.WORKDIR }}/benchmarks/results/
+            ${{ env.WORKDIR }}/benchmarks/client/logs/
           retention-days: 90
 
       - name: Upload server logs
@@ -491,6 +445,6 @@ jobs:
         with:
           name: server-logs-${{ github.run_number }}
           path: |
-            benchmarks/server/server.log
-            logs/
+            ${{ env.WORKDIR }}/benchmarks/server/server.log
+            ${{ env.WORKDIR }}/logs/
           retention-days: 90
