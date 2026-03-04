@@ -79,9 +79,9 @@ test('VAD mode processes audio with voice activity detection', async (t) => {
 
   if (outputEvents.length > 0) {
     t.ok(outputEvents[0].output, 'Should have transcription output')
-    t.is(typeof outputEvents[0].output, 'string', 'Output should be string')
-    t.ok(outputEvents[0].output.includes('Mock transcription') ||
-      outputEvents[0].output.includes('Silent audio detected'),
+    t.is(typeof outputEvents[0].output, 'object', 'Output should be transcript object')
+    t.ok(outputEvents[0].output.text.includes('Mock transcription') ||
+      outputEvents[0].output.text.includes('Silent audio detected'),
     'Should contain mock transcription or silence detection text')
   }
 
@@ -114,20 +114,15 @@ test('VAD handles invalid audio input gracefully', async (t) => {
 
   await model.load()
 
-  // Test with null input - should generate an error event
-  await model.addon.append({ type: 'audio', input: null })
-
-  // Test with undefined input - should generate an error event
-  await model.addon.append({ type: 'audio', input: undefined })
-
-  // Test with malformed input - should generate an error event
-  await model.addon.append({ type: 'audio', input: 'invalid' })
-
-  await wait()
-
-  // Check that error events were generated for invalid inputs
-  const errorEvents = events.filter(e => e.event === 'Error')
-  t.ok(errorEvents.length > 0, 'Should generate error events for invalid inputs')
+  // Test invalid append payloads - wrapper should reject these immediately.
+  for (const invalidInput of [null, undefined, 'invalid']) {
+    try {
+      await model.addon.append({ type: 'audio', input: invalidInput })
+      t.fail('Expected append to reject invalid input')
+    } catch (error) {
+      t.ok(error, 'Invalid input should throw')
+    }
+  }
 
   // Verify that the addon is still functional after errors
   const validAudio = new Uint8Array([1, 2, 3, 4, 5])
