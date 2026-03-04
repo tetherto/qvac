@@ -9,9 +9,11 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
+#include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
+#include "ModelMetadata.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -28,6 +30,11 @@ public:
   LlamaModel& operator=(const LlamaModel&) = delete;
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
+
+  /// @brief Resolves shard basenames in-place to absolute paths relative to
+  /// the parent directory of @p modelPath.
+  static void
+  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
 
   /**
    * The Constructor for llama model.
@@ -175,14 +182,13 @@ private:
       std::unordered_map<std::string, std::string>&& configFilemap);
 
   const std::string loadingContext_;
-  const GGUFShards shards_;
+  GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
+  ModelMetaData metadata_;
+  AsyncWeightsLoader asyncWeightsLoader_;
 
   bool isTextLlm_ = false;
-  bool isStreaming_ = false;
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
-      singleGgufStreamedFiles_;
 
   // Backend handle must be declared before llmContext_ to ensure
   // llmContext_ is destroyed first (members destroyed in reverse order)
