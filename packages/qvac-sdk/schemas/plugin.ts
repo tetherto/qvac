@@ -220,6 +220,13 @@ export const PLUGIN_WHISPER =
   "@qvac/sdk/whispercpp-transcription/plugin" as const;
 
 /**
+ * Speech-to-text transcription plugin (Parakeet ONNX).
+ * Provides: audio transcription using NVIDIA Parakeet models.
+ */
+export const PLUGIN_PARAKEET =
+  "@qvac/sdk/parakeet-transcription/plugin" as const;
+
+/**
  * Neural machine translation plugin (nmt.cpp).
  * Provides: text translation between languages.
  */
@@ -250,6 +257,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
+  PLUGIN_PARAKEET,
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
