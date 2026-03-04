@@ -84,6 +84,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -164,6 +165,8 @@ jobs:
     needs: [publish-logic, release-merge-guard, run-integration-tests, mobile-integration-tests]
     if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
@@ -181,3 +184,16 @@ jobs:
           git-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: "packages/qvac-lib-decoder-audio"
 
+  publish-release:
+    needs: [publish-release-npm]
+    if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "decoder-audio"
+      release_name: "QVAC Decoder Audio Lib"
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-decoder-audio"

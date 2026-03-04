@@ -823,60 +823,25 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
           repo_name: "nmtcpp"
           git-token: ${{ secrets.GITHUB_TOKEN }}
-          
-
-  check-version-change:
-    needs: [publish-npm]
-    if: needs.publish-npm.result == 'success'
-    runs-on: ubuntu-24.04
-    outputs:
-      version_changed: ${{ steps.check.outputs.changed }}
-      new_version: ${{ steps.check.outputs.version }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-
-      - name: Check if package.json version changed
-        id: check
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-
-          git checkout HEAD~1 -- package.json 2>/dev/null || true
-          PREVIOUS_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "")
-          git checkout HEAD -- package.json
-
-          echo "Previous version: $PREVIOUS_VERSION"
-          echo "Current version: $CURRENT_VERSION"
-
-          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ] && [ -n "$PREVIOUS_VERSION" ]; then
-            echo "✅ Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "⏭️  Version unchanged"
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "version=" >> $GITHUB_OUTPUT
-          fi
 
   create-github-release:
-    needs: [check-version-change]
-    if: needs.check-version-change.outputs.version_changed == 'true' && startsWith(github.ref_name, 'release-')
+    needs: [publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/create-github-release.yml
     secrets: inherit
     with:
-      published_version: ${{ needs.check-version-change.outputs.new_version }}
+      repo_name: "nmtcpp"
+      release_name: "QVAC Infer NMTCPP Lib"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: packages/qvac-lib-infer-nmtcpp
+      workdir: "packages/qvac-lib-infer-nmtcpp"
 
   run-automated-benchmarks:
-    needs: [check-version-change]
-    if: needs.check-version-change.outputs.version_changed == 'true'
+    needs: [publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     uses: ./.github/workflows/on-publish-benchmark-qvac-lib-infer-nmtcpp.yml
     secrets: inherit
     with:
-      version: ${{ needs.check-version-change.outputs.new_version }}
+      version: ${{ needs.publish-npm.outputs.published_version }}
