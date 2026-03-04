@@ -5,8 +5,8 @@
 #include <cmath>
 #include <cstring>
 #include <complex>
-#include <cstdio>
 #include <filesystem>
+#include <iomanip>
 #include <fstream>
 #include <istream>
 #include <iterator>
@@ -31,7 +31,7 @@ namespace qvac_lib_infer_parakeet {
 namespace {
 
 // ONNX Runtime's CreateTensor API requires a non-const pointer but only reads
-// the data for input tensors. This helper encapsulates the const_cast so
+// the data for input tensors. These helpers encapsulate the const_cast so
 // call sites don't need the red-flag cast inline.
 template <typename T>
 Ort::Value createInputTensor(Ort::MemoryInfo& info,
@@ -40,6 +40,21 @@ Ort::Value createInputTensor(Ort::MemoryInfo& info,
   return Ort::Value::CreateTensor<T>(
       info, const_cast<T*>(data.data()), data.size(),
       shape.data(), shape.size());
+}
+
+template <typename T>
+Ort::Value createInputTensor(Ort::MemoryInfo& info,
+                             const T* data, size_t size,
+                             const std::vector<int64_t>& shape) {
+  return Ort::Value::CreateTensor<T>(
+      info, const_cast<T*>(data), size,
+      shape.data(), shape.size());
+}
+
+std::string formatSeconds(float seconds) {
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(2) << seconds << 's';
+  return oss.str();
 }
 
 template <typename Func>
@@ -933,9 +948,8 @@ std::vector<float> ParakeetModel::runEncoder(
   }
 
   std::vector<int64_t> inputShape = {1, MEL_BINS, numFrames};
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      *memory_info_, const_cast<float*>(encoderData), encoderSize,
-      inputShape.data(), inputShape.size());
+  Ort::Value inputTensor =
+      createInputTensor(*memory_info_, encoderData, encoderSize, inputShape);
 
   std::vector<int64_t> lengthData = {numFrames};
   std::vector<int64_t> lengthShape = {1};
@@ -1461,10 +1475,8 @@ std::string ParakeetModel::runSortformerFromMel(
   std::string result;
   for (const auto& seg : segments) {
     if (!result.empty()) result += "\n";
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "Speaker %d: %.2fs - %.2fs",
-                  seg.speakerId, seg.start, seg.end);
-    result += buf;
+    result += "Speaker " + std::to_string(seg.speakerId) + ": " +
+              formatSeconds(seg.start) + " - " + formatSeconds(seg.end);
   }
   return result;
 }
