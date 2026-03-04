@@ -1,6 +1,6 @@
 # QVAC SDK Architecture
 
-Author(s): [Yuri Samarin](mailto:yuri.samarin@tether.io)
+Author(s): [Yuri Samarin](https://github.com/yuranich) — QVAC Team
 
 Last Update: Mar 4, 2026
 
