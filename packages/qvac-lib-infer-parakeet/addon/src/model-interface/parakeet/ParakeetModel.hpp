@@ -30,6 +30,12 @@ public:
   using InputView = std::span<const ValueType>;
   using Output = std::vector<Transcript>;
 
+  struct MelFilter {
+    int startBin;
+    int endBin;
+    std::vector<float> weights;  // non-zero weights for [startBin, endBin)
+  };
+
   explicit ParakeetModel(const ParakeetConfig& config);
   ~ParakeetModel();
 
@@ -105,7 +111,7 @@ private:
   std::vector<float> computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
   void stftMelEnergies(const float* source, size_t sourceLen,
                        size_t numFrames, int numMelBins, float logGuard,
-                       const std::vector<std::vector<float>>& melFilterbank,
+                       const std::vector<MelFilter>& melFilterbank,
                        std::vector<float>& melSpec);
   static void applyCMVN(std::vector<float>& melSpec,
                          size_t numFrames, int numMelBins);
@@ -203,13 +209,13 @@ private:
 
   // ── Encoder / decoder dimensions ───────────────────────────────────────
   static constexpr int ENCODER_DIM = 1024;
-  static constexpr int DECODER_STATE_DIM = 640;
+  static constexpr int DECODER_STATE_DIM = 640;       // TDT RNNT decoder
   static constexpr int TDT_DECODER_LSTM_LAYERS = 2;
   static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
   static constexpr int EOU_ENCODER_DIM = 512;
-  static constexpr int EOU_DECODER_STATE_DIM = 640;
+  static constexpr int EOU_DECODER_STATE_DIM = 640;   // Same value as TDT, different architecture
   static constexpr int EOU_NUM_LAYERS = 17;
   static constexpr int EOU_CACHE_LOOKBACK = 70;
   static constexpr int EOU_CACHE_TIME_STEPS = 8;
@@ -234,7 +240,7 @@ private:
     std::vector<int64_t> cacheChanLen;
     std::vector<float> stateH;
     std::vector<float> stateC;
-    int32_t lastToken = 0;
+    int32_t lastToken = -1;  // -1 = uninitialized; set to blankId by resetEOUStreamingState()
     int64_t eouId = -1;
     int64_t blankId = -1;
     bool initialized = false;
@@ -251,7 +257,7 @@ private:
       return std::tie(melBins, slaney) < std::tie(o.melBins, o.slaney);
     }
   };
-  std::map<FilterbankKey, std::vector<std::vector<float>>> filterbanks_;
+  std::map<FilterbankKey, std::vector<MelFilter>> filterbanks_;
 
   // ── Runtime stats ──────────────────────────────────────────────────────
   int64_t totalSamples_ = 0;

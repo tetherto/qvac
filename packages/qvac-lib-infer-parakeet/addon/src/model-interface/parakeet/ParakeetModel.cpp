@@ -60,9 +60,12 @@ float melToHz(float mel) {
 }
 
 // Unified mel filterbank builder.
+using MelFilter = ParakeetModel::MelFilter;
+
 // slaney=false: bin-index triangles, no normalization (HTK-style for TDT/CTC)
 // slaney=true:  Hz-based triangles with Slaney normalization (librosa-style for EOU/Sortformer)
-std::vector<std::vector<float>> buildMelFilterbank(
+// Returns sparse filters: each MelFilter stores only the non-zero weight range.
+std::vector<MelFilter> buildMelFilterbank(
     int numMelBins, int fftSize, float sampleRate,
     float fMin, float fMax, bool slaney = false) {
   int numFftBins = fftSize / 2 + 1;
@@ -75,8 +78,7 @@ std::vector<std::vector<float>> buildMelFilterbank(
     hzPoints[i] = melToHz(mel);
   }
 
-  std::vector<std::vector<float>> filterbank(
-      numMelBins, std::vector<float>(numFftBins, 0.0f));
+  std::vector<MelFilter> filterbank(numMelBins);
 
   if (slaney) {
     std::vector<float> fftFreqs(numFftBins);
@@ -89,19 +91,27 @@ std::vector<std::vector<float>> buildMelFilterbank(
       float center = hzPoints[i + 1];
       float right = hzPoints[i + 2];
 
+      std::vector<float> dense(numFftBins, 0.0f);
       for (int j = 0; j < numFftBins; ++j) {
         float freq = fftFreqs[j];
         if (freq >= left && freq <= center && center > left) {
-          filterbank[i][j] = (freq - left) / (center - left);
+          dense[j] = (freq - left) / (center - left);
         } else if (freq > center && freq <= right && right > center) {
-          filterbank[i][j] = (right - freq) / (right - center);
+          dense[j] = (right - freq) / (right - center);
         }
       }
 
       float enorm = (right > left) ? 2.0f / (right - left) : 0.0f;
+      int start = numFftBins, end = 0;
       for (int j = 0; j < numFftBins; ++j) {
-        filterbank[i][j] *= enorm;
+        dense[j] *= enorm;
+        if (dense[j] != 0.0f) {
+          if (j < start) start = j;
+          end = j + 1;
+        }
       }
+      if (start >= end) { start = 0; end = 0; }
+      filterbank[i] = {start, end, {dense.begin() + start, dense.begin() + end}};
     }
   } else {
     std::vector<int> binPoints(numMelBins + 2);
@@ -115,16 +125,22 @@ std::vector<std::vector<float>> buildMelFilterbank(
       int center = binPoints[m + 1];
       int right = binPoints[m + 2];
 
+      int start = std::min(left, numFftBins);
+      int end = std::min(right, numFftBins);
+      if (start >= end) { filterbank[m] = {0, 0, {}}; continue; }
+
+      std::vector<float> weights(end - start, 0.0f);
       for (int k = left; k < center && k < numFftBins; ++k) {
         if (center != left) {
-          filterbank[m][k] = static_cast<float>(k - left) / (center - left);
+          weights[k - start] = static_cast<float>(k - left) / (center - left);
         }
       }
       for (int k = center; k < right && k < numFftBins; ++k) {
         if (right != center) {
-          filterbank[m][k] = static_cast<float>(right - k) / (right - center);
+          weights[k - start] = static_cast<float>(right - k) / (right - center);
         }
       }
+      filterbank[m] = {start, end, std::move(weights)};
     }
   }
 
@@ -132,8 +148,9 @@ std::vector<std::vector<float>> buildMelFilterbank(
 }
 
 std::string trimWhitespace(const std::string& s) {
-  size_t start = s.find_first_not_of(' ');
-  size_t end = s.find_last_not_of(' ');
+  static constexpr const char* kWs = " \t\n\r";
+  size_t start = s.find_first_not_of(kWs);
+  size_t end = s.find_last_not_of(kWs);
   if (start == std::string::npos) return "";
   return s.substr(start, end - start + 1);
 }
@@ -242,15 +259,10 @@ void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
 
   if (json.contains("model") && json["model"].contains("vocab")) {
     auto& vocabMap = json["model"]["vocab"];
-    size_t maxIdx = 0;
     for (auto& [token, idx] : vocabMap.items()) {
       size_t i = idx.get<size_t>();
-      if (i > maxIdx) maxIdx = i;
-    }
-
-    vocab_.resize(maxIdx + 1);
-    for (auto& [token, idx] : vocabMap.items()) {
-      vocab_[idx.get<size_t>()] = token;
+      if (i >= vocab_.size()) vocab_.resize(i + 1);
+      vocab_[i] = token;
     }
   }
 
@@ -461,6 +473,8 @@ void ParakeetModel::warmup() {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          std::string("Warmup inference failed (non-fatal): ") + e.what());
   }
+
+  reset();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -740,7 +754,7 @@ ParakeetModel::runPreprocessor(const Input& audio) {
 void ParakeetModel::stftMelEnergies(
     const float* source, size_t sourceLen, size_t numFrames,
     int numMelBins, float logGuard,
-    const std::vector<std::vector<float>>& melFilterbank,
+    const std::vector<MelFilter>& melFilterbank,
     std::vector<float>& melSpec) {
   static const std::vector<float> hannWindow = []() {
     std::vector<float> w(WIN_LENGTH);
@@ -771,9 +785,10 @@ void ParakeetModel::stftMelEnergies(
     }
 
     for (int m = 0; m < numMelBins; ++m) {
+      const auto& filt = melFilterbank[m];
       float melEnergy = 0.0f;
-      for (int k = 0; k < numFftBins; ++k) {
-        melEnergy += melFilterbank[m][k] * powerSpec[k];
+      for (int k = filt.startBin; k < filt.endBin; ++k) {
+        melEnergy += filt.weights[k - filt.startBin] * powerSpec[k];
       }
       melSpec[f * numMelBins + m] = std::log(std::max(melEnergy, logGuard));
     }
@@ -1385,9 +1400,11 @@ std::string ParakeetModel::eouDecodeChunk(
       }
 
       symsThisFrame++;
-      encTensor = Ort::Value::CreateTensor<float>(
-          *memory_info_, encoderFrame.data(), encoderFrame.size(),
-          encFrameShape.data(), encFrameShape.size());
+      if (symsThisFrame < EOU_MAX_SYMBOLS_PER_STEP) {
+        encTensor = Ort::Value::CreateTensor<float>(
+            *memory_info_, encoderFrame.data(), encoderFrame.size(),
+            encFrameShape.data(), encFrameShape.size());
+      }
     }
   }
 
@@ -1821,12 +1838,8 @@ std::string ParakeetModel::processEOU(const Input& input) {
            std::to_string(totalEncoded) + " encoded, " +
            std::to_string(eouCount) + " utterance boundaries");
 
-  while (!fullResult.empty() &&
-         (fullResult.back() == ' ' || fullResult.back() == '\n')) {
-    fullResult.pop_back();
-  }
-
-  std::string text = fullResult.empty() ? ERR_NO_SPEECH : fullResult;
+  std::string text = trimWhitespace(fullResult);
+  if (text.empty()) text = ERR_NO_SPEECH;
 
   size_t wordCount =
       std::count(text.begin(), text.end(), ' ') + (text.empty() ? 0 : 1);
@@ -1857,6 +1870,8 @@ std::string ParakeetModel::processSortformer(const Input& input) {
   }
 
   std::string text;
+  // encoderMs_ includes ONNX inference + medianFilter + binarization + string
+  // formatting since Sortformer has no separate decoder pass.
   measureTime(encoderMs_, [&]() {
     text = runSortformerFromMel(melFeatures, numFrames);
   });
