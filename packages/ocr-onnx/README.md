@@ -146,24 +146,24 @@ The library provides a straightforward workflow for image-based text recognition
 const args = {
   params: {
     // Required
-    langList: ['en'],
+    langList: ['en'],                        // Language codes for recognizer selection
     pathDetector: './models/ocr/detector_craft.onnx',
     pathRecognizer: './models/ocr/recognizer_latin.onnx',
     // Or use prefix: pathRecognizerPrefix: './models/ocr/recognizer_',
 
     // Shared optional
-    useGPU: true,
-    timeout: 120,
+    useGPU: true,                            // Enable GPU/NPU acceleration (falls back to CPU)
+    timeout: 120,                            // Max inference time in seconds
 
     // EasyOCR-specific optional
-    magRatio: 1.5,
-    defaultRotationAngles: [90, 270],
-    contrastRetry: false,
-    lowConfidenceThreshold: 0.4,
-    recognizerBatchSize: 32
+    magRatio: 1.5,                           // Detection magnification ratio (1.0–2.0)
+    defaultRotationAngles: [90, 270],        // Rotation angles to try (use [] to disable)
+    contrastRetry: false,                    // Re-process low-confidence regions with adjusted contrast
+    lowConfidenceThreshold: 0.4,             // Confidence threshold below which contrast retry triggers
+    recognizerBatchSize: 32                  // Text regions per batch (lower = less memory on mobile)
   },
   opts: {
-    stats: true
+    stats: true                              // Enable performance statistics
   }
 }
 ```
@@ -173,20 +173,20 @@ const args = {
 ```javascript
 const args = {
   params: {
-    pipelineMode: 'doctr',
-    langList: ['en'],
+    pipelineMode: 'doctr',                   // Select DocTR pipeline
+    langList: ['en'],                        // Language codes (defaults to ['en'] for DocTR)
     pathDetector: './models/doctr/db_mobilenet_v3_large.onnx',
     pathRecognizer: './models/doctr/crnn_mobilenet_v3_small.onnx',
 
     // Shared optional
-    useGPU: false,
+    useGPU: false,                           // Enable GPU/NPU acceleration (falls back to CPU)
 
     // DocTR-specific optional
-    straightenPages: false,
-    decodingMethod: 'greedy'
+    straightenPages: false,                  // Apply perspective transform to straighten text regions
+    decodingMethod: 'greedy'                 // 'greedy' (all models) or 'attention' (PARSeq only)
   },
   opts: {
-    stats: true
+    stats: true                              // Enable performance statistics
   }
 }
 ```
