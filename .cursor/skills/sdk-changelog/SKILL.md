@@ -82,7 +82,7 @@ Examples:
 
 - `qvac-sdk-v1.0.0`
 - `docs-v0.1.0`
-- `qvac-lib-rag-v2.0.0`
+- `rag-v2.0.0`
 
 ### Step 5: Update NOTICE file for the target package
 

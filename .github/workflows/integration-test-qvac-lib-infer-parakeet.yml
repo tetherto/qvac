@@ -147,13 +147,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgomp1
 
-      - name: Linux - ubuntu-22 - install glibcxx
-        if: ${{ startsWith(matrix.os, 'ubuntu-22') || contains(matrix.os, 'ubuntu-22') }}
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - name: Run integration test
         shell: bash
         working-directory: ${{ inputs.workdir }}

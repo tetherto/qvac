@@ -1,4 +1,4 @@
-name: General CI/CD (Qvac-lib-logging)
+name: General CI/CD (cli)
 # This workflow is used to call the reusable workflows in the qvac-devops repository
 # https://github.com/tetherto/qvac-devops/blob/production-workflows-tag/.github/workflows/public-reusable.yml
 
@@ -16,7 +16,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-logging/**"
+      - "packages/cli/**"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -47,9 +47,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-logging
-          package-json-path: packages/qvac-lib-logging/package.json
-          changelog-path: packages/qvac-lib-logging/CHANGELOG.md
+          package-slug: cli
+          package-json-path: packages/cli/package.json
+          changelog-path: packages/cli/CHANGELOG.md
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -111,6 +111,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Rewrite SDK scope for GPR
+        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
+
       - name: Publish to GitHub Packages (dev)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
@@ -118,7 +121,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-logging
+          workdir: packages/cli
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -130,8 +133,8 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
-      workdir: packages/qvac-lib-logging
-      repo_name: logging
+      workdir: packages/cli
+      repo_name: "cli"
 
   publish-feature-gpr:
     needs: publish-logic
@@ -145,6 +148,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Rewrite SDK scope for GPR
+        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
+
       - name: Publish to GitHub Packages (feature)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
@@ -152,7 +158,7 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-logging
+          workdir: packages/cli
           name-suffix: "-mono"
 
   publish-tmp-gpr:
@@ -167,6 +173,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Rewrite SDK scope for GPR
+        uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
+
       - name: Publish to GitHub Packages (tmp)
         uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@monorepo_update
         with:
@@ -174,5 +183,5 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-logging
+          workdir: packages/cli
           name-suffix: "-mono"

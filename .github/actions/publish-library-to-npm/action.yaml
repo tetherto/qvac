@@ -29,7 +29,7 @@ inputs:
   create-tag:
     description: "Set to 'true' to create a git tag after successful npm release"
     required: false
-    default: "true"
+    default: "false"
 
   repo_name:
     description: "repo suffix name appended to created git tag"

@@ -5,20 +5,20 @@
     "pkg_manager": "bun"
   },
   {
-    "package": "qvac-cli",
-    "path": "packages/qvac-cli"
+    "package": "cli",
+    "path": "packages/cli"
   },
   {
-    "package": "qvac-lib-rag",
-    "path": "packages/qvac-lib-rag"
+    "package": "rag",
+    "path": "packages/rag"
   },
   {
-    "package": "qvac-lib-logging",
-    "path": "packages/qvac-lib-logging"
+    "package": "logging",
+    "path": "packages/logging"
   },
   {
-    "package": "qvac-lib-error-base",
-    "path": "packages/qvac-lib-error-base"
+    "package": "error",
+    "path": "packages/error"
   },
   {
     "package": "docs",
