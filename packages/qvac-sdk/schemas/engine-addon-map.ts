@@ -17,6 +17,7 @@ export const ENGINE_TO_ADDON: Record<
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
+  [ModelType.parakeetTranscription]: "parakeet",
   "onnx-vad": "vad",
 };
 
@@ -32,6 +33,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   "@qvac/tts-onnx": ModelType.onnxTts,
   "@qvac/tts": ModelType.onnxTts,
   "@qvac/ocr-onnx": ModelType.onnxOcr,
+  "@qvac/transcription-parakeet": ModelType.parakeetTranscription,
   // Tag-style names (used by some older registry entries)
   generation: ModelType.llamacppCompletion,
   transcription: ModelType.whispercppTranscription,
