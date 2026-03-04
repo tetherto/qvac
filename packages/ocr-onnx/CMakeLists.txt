@@ -5,7 +5,7 @@ option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
- message(STATUS "enter special apple")
+ message(STATUS "Configuring for Apple platform")
   # Force Apple Clang from Xcode, not Homebrew
   execute_process(
     COMMAND xcrun --find clang
@@ -73,18 +73,19 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Enable overlay triplets for release-only builds (excludes Windows)
-if(APPLE OR UNIX)
-  message("VCPKG_OVERLAY_TRIPLETS override: vcpkg-override-triplets/triplets")
-  SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-endif()
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(
   qvac-lib-inference-addon-onnx-ocr-fasttext
-  VERSION 0.1.14
+  VERSION 0.2.0
   LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -116,6 +117,10 @@ find_package(onnxruntime CONFIG REQUIRED)
 
 add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-addon-onnx-ocr-fasttext}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
 target_sources(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
   PRIVATE
@@ -126,6 +131,8 @@ target_sources(
     addon/pipeline/StepDetectionInference.cpp
     addon/pipeline/StepBoundingBox.cpp
     addon/pipeline/StepRecognizeText.cpp
+    addon/pipeline/StepDoctrDetection.cpp
+    addon/pipeline/StepDoctrRecognition.cpp
 )
 target_include_directories(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
@@ -225,6 +232,8 @@ if(BUILD_TESTING)
         addon/pipeline/StepDetectionInference.cpp
         addon/pipeline/StepBoundingBox.cpp
         addon/pipeline/StepRecognizeText.cpp
+        addon/pipeline/StepDoctrDetection.cpp
+        addon/pipeline/StepDoctrRecognition.cpp
     )
 
     target_include_directories(

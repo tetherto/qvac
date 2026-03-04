@@ -5,12 +5,15 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
+const HttpDL = require('./http-loader')
 const os = require('bare-os')
+const path = require('bare-path')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isLinuxX64 = platform === 'linux' && arch === 'x64'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
@@ -119,6 +122,63 @@ test('model unload is clean and idempotent', { timeout: 600_000 }, async t => {
       if (err) t.fail('unload should be idempotent', err)
     })
   } finally {
+    await loader.close().catch(() => {})
+  }
+})
+
+const SHARDED_MODEL = {
+  name: 'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
+  baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main/'
+}
+
+// This test can take longer to download and execute. To avoid blowing up testing time on all
+// platforms, just use Linux for now. C++ tests already have faster coverage for each type
+// of load.
+test('network loader can run inference end-to-end with sharded model', { timeout: 4 * 60 * 1000, skip: !isLinuxX64 }, async t => {
+  const modelDir = path.resolve(__dirname, '../model')
+
+  const loader = new HttpDL({ baseUrl: SHARDED_MODEL.baseUrl })
+  const config = {
+    gpu_layers: '999',
+    ctx_size: '1024',
+    device: useCpu ? 'cpu' : 'gpu',
+    n_predict: '32',
+    verbosity: '2'
+  }
+
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName: SHARDED_MODEL.name,
+    diskPath: modelDir,
+    logger: console,
+    opts: { stats: true }
+  }, config)
+
+  let progressMade = 0
+  let lastLogTime = 0
+  const LOG_INTERVAL_MS = 3000
+  const onProgress = (data) => {
+    if (typeof data !== 'object' || data === null) return
+    const now = Date.now()
+    const shard = data.currentFile.replace(/^.*\//, '')
+    progressMade = Math.max(progressMade, data.overallProgress)
+    if (data.action === 'loadingFile' && now - lastLogTime >= LOG_INTERVAL_MS) {
+      console.log(`\r  Loading ${shard}: ${data.currentFileProgress}%  (overall ${data.overallProgress}%)   `)
+      lastLogTime = now
+    } else if (data.action === 'completeFile') {
+      console.log(`\r  Loaded  ${shard}: 100.00% (overall ${data.overallProgress}%) [${data.filesProcessed}/${data.totalFiles}]\n`)
+      lastLogTime = now
+    }
+  }
+
+  try {
+    await addon.load(true, onProgress)
+    const response = await addon.run(BASE_PROMPT)
+    const output = await collectResponse(response)
+    t.ok(output.length > 0, 'network-loaded sharded model should generate output')
+    t.ok(progressMade > 0, 'network-loaded sharded model should make progress')
+  } finally {
+    await addon.unload().catch(() => {})
     await loader.close().catch(() => {})
   }
 })

@@ -30,6 +30,9 @@ function createOCRModel(
     langList: ocrConfig.langList || ["en"],
     useGPU: ocrConfig.useGPU ?? true,
     ...(ocrConfig.timeout !== undefined && { timeout: ocrConfig.timeout }),
+    ...(ocrConfig.pipelineMode !== undefined && {
+      pipelineMode: ocrConfig.pipelineMode,
+    }),
     ...(ocrConfig.magRatio !== undefined && { magRatio: ocrConfig.magRatio }),
     ...(ocrConfig.defaultRotationAngles !== undefined && {
       defaultRotationAngles: ocrConfig.defaultRotationAngles,
@@ -42,6 +45,12 @@ function createOCRModel(
     }),
     ...(ocrConfig.recognizerBatchSize !== undefined && {
       recognizerBatchSize: ocrConfig.recognizerBatchSize,
+    }),
+    ...(ocrConfig.decodingMethod !== undefined && {
+      decodingMethod: ocrConfig.decodingMethod,
+    }),
+    ...(ocrConfig.straightenPages !== undefined && {
+      straightenPages: ocrConfig.straightenPages,
     }),
   };
 

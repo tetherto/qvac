@@ -5,19 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.4] - 2026-02-24
+## [0.5.4]
 
 ### Added
 - Lazy ONNX session loading to reduce peak memory usage during synthesis, preventing out-of-memory kills on memory-constrained devices
   - Sessions created on demand during `synthesize()` and released when no longer needed
   - Controlled via `lazySessionLoading` option, defaults to `true` on iOS and `false` on other platforms
 
-## [0.5.3] - 2026-02-20
+## [0.5.3]
 
 ### Added
 - Multilingual support to the Chatterbox TTS engine, enabling speech synthesis in Spanish, French, Italian, German, Portuguese, and other languages
 
-## [0.5.2] - 2026-02-19
+## [0.5.2]
 
 ### Added
 - Test for automatic engine-type detection
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy Piper engine references from the test suite
 - eSpeak-specific JSDoc from `tts.js`
 
-## [0.5.1] - 2026-02-18
+## [0.5.1]
 
 ### Changed
 - README now covers both Chatterbox and Supertonic TTS engines with full usage guides, API references, and comparison
@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy Piper and eSpeak-ng references from the benchmark suite
 - `@qvac/dl-hyperdrive` dependency
 
-## [0.5.0] - 2026-02-16
+## [0.5.0]
 
 ### Added
 - Supertonic TTS engine with automatic engine detection based on configuration
@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows support for Supertonic
 - Example script `examples/example-supertonic-tts.js`
 
-## [0.4.0] - 2026-02-13
+## [0.4.0]
 
 ### Changed
 - Addon now exclusively uses the Chatterbox engine
@@ -58,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Piper TTS engine and all associated dependencies (`PiperTTSArgs`, `ENGINE_PIPER`, `TashkeelDiacritizer`, Piper vcpkg dependencies)
 - Piper-specific examples and model downloads from CI workflows
 
-## [0.3.0] - 2026-02-13
+## [0.3.0]
 
 ### Added
 - Chatterbox TTS engine with voice cloning from reference audio
@@ -77,13 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows-specific build issues
 - Reference audio handling in integration tests
 
-## [0.2.12] - 2026-02-01
+## [0.2.12]
 
 ### Changed
 - Linux x64 build environment switched from Ubuntu 24.04 to Ubuntu 22.04 for oldest LTS compatibility
 - Integration tests now run on both Ubuntu 22.04 and 24.04
 
-## [0.2.11] - 2026-02-01
+## [0.2.11]
 
 ### Changed
 - Debug symbols stripped from prebuilt binaries on Linux and macOS, reducing binary size
@@ -92,12 +92,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Unnecessary Android artifact replication step from workflow
 
-## [0.2.10] - 2026-01-13
+## [0.2.10]
 
 ### Added
 - TypeScript type declarations for `addonLogging` subpath export
 
-## [0.2.9] - 2026-01-06
+## [0.2.9]
 
 ### Added
 - Mobile device farm integration testing for AWS Device Farm (#118)
@@ -119,7 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Freeze vcpkg version on macOS for build reproducibility (#113)
 - Updated CODEOWNERS with ai-runtime-merge team (#99)
 
-## [0.2.8] - 2025-12-03
+## [0.2.8]
 
 ### Added
 - Addon logging JS interface export (#93)
