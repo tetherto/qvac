@@ -148,7 +148,7 @@ test('Model validation happens in constructor', { timeout: 60000 }, async (t) =>
 
   // Ensure the path doesn't exist
   if (fs.existsSync(invalidPath)) {
-    fs.rmdirSync(invalidPath, { recursive: true })
+    fs.rmSync(invalidPath, { recursive: true })
   }
 
   const args = {
@@ -254,7 +254,7 @@ test('Should validate CTC model file requirements differently from TDT', { timeo
   // Cleanup
   if (fs.existsSync(ctcModelPath)) {
     try {
-      fs.rmdirSync(ctcModelPath, { recursive: true })
+      fs.rmSync(ctcModelPath, { recursive: true })
     } catch (e) {
       // Ignore cleanup errors
     }
@@ -295,7 +295,7 @@ test('Should validate Sortformer model file requirements differently from TDT', 
 
   if (fs.existsSync(sfModelPath)) {
     try {
-      fs.rmdirSync(sfModelPath, { recursive: true })
+      fs.rmSync(sfModelPath, { recursive: true })
     } catch (e) {
       // Ignore cleanup errors
     }

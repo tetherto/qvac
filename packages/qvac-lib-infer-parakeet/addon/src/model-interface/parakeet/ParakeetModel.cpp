@@ -29,6 +29,18 @@ namespace qvac_lib_infer_parakeet {
 
 namespace {
 
+// ONNX Runtime's CreateTensor API requires a non-const pointer but only reads
+// the data for input tensors. This helper encapsulates the const_cast so
+// call sites don't need the red-flag cast inline.
+template <typename T>
+Ort::Value createInputTensor(Ort::MemoryInfo& info,
+                             const std::vector<T>& data,
+                             const std::vector<int64_t>& shape) {
+  return Ort::Value::CreateTensor<T>(
+      info, const_cast<T*>(data.data()), data.size(),
+      shape.data(), shape.size());
+}
+
 template <typename Func>
 void measureTime(int64_t& accumulator, Func&& operation) {
   auto start = std::chrono::high_resolution_clock::now();
@@ -86,7 +98,7 @@ std::vector<std::vector<float>> buildMelFilterbank(
         }
       }
 
-      float enorm = 2.0f / (right - left);
+      float enorm = (right > left) ? 2.0f / (right - left) : 0.0f;
       for (int j = 0; j < numFftBins; ++j) {
         filterbank[i][j] *= enorm;
       }
@@ -265,11 +277,12 @@ std::string ParakeetModel::tokensToString(
   for (int64_t token : tokens) {
     if (token < 0 || static_cast<size_t>(token) >= vocab_.size()) continue;
 
-    std::string piece = vocab_[token];
+    const std::string& piece = vocab_[token];
     if (piece.empty() || isSpecialToken(piece)) continue;
 
-    replaceSentencepieceSpace(piece);
-    result += piece;
+    std::string decoded = piece;
+    replaceSentencepieceSpace(decoded);
+    result += decoded;
   }
   return trimWhitespace(result);
 }
@@ -385,15 +398,12 @@ void ParakeetModel::load() {
   }
 }
 
-void ParakeetModel::reload() {
-  if (model_weights_.empty()) {
-    throw errors::makeStatus(
-        errors::Code::ModelNotReady,
-        "Cannot reload: model weights were freed after initial load");
-  }
-  unload();
-  load();
-}
+// No-op: the Parakeet custom process() loop does not route the Reload signal
+// to model_.reload(). Reload is handled entirely by the JS layer
+// (addon.reload → _loadModelWeights → activate), and the custom Activate
+// handler calls load() when isLoaded() is false.  Exists solely to satisfy
+// the ModelInterface / ModelApiTest contract.
+void ParakeetModel::reload() {}
 
 void ParakeetModel::unload() {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -933,8 +943,8 @@ std::string ParakeetModel::greedyDecode(
   const int maxTokensPerStep = 10;
 
   std::vector<int64_t> decodedTokens;
-  std::vector<float> state1(2 * 1 * DECODER_STATE_DIM, 0.0f);
-  std::vector<float> state2(2 * 1 * DECODER_STATE_DIM, 0.0f);
+  std::vector<float> state1(TDT_DECODER_LSTM_LAYERS * 1 * DECODER_STATE_DIM, 0.0f);
+  std::vector<float> state2(TDT_DECODER_LSTM_LAYERS * 1 * DECODER_STATE_DIM, 0.0f);
 
   int32_t lastEmittedToken = static_cast<int32_t>(BLANK_TOKEN);
   int tokensThisFrame = 0;
@@ -963,7 +973,7 @@ std::string ParakeetModel::greedyDecode(
         *memory_info_, targetLengthData.data(), targetLengthData.size(),
         targetLengthShape.data(), targetLengthShape.size());
 
-    std::vector<int64_t> stateShape = {2, 1, DECODER_STATE_DIM};
+    std::vector<int64_t> stateShape = {TDT_DECODER_LSTM_LAYERS, 1, DECODER_STATE_DIM};
     Ort::Value state1Tensor = Ort::Value::CreateTensor<float>(
         *memory_info_, state1.data(), state1.size(), stateShape.data(),
         stateShape.size());
@@ -1066,11 +1076,7 @@ std::vector<float> ParakeetModel::runCTCModel(
   }
 
   std::vector<int64_t> featShape = {1, numFrames, CTC_MEL_BINS};
-  // ONNX Runtime reads from this buffer but its API takes non-const pointer.
-  auto* featData = const_cast<float*>(melFeatures.data());
-  Ort::Value featTensor = Ort::Value::CreateTensor<float>(
-      *memory_info_, featData, melFeatures.size(), featShape.data(),
-      featShape.size());
+  Ort::Value featTensor = createInputTensor(*memory_info_, melFeatures, featShape);
 
   std::vector<int64_t> maskData(numFrames, 1);
   std::vector<int64_t> maskShape = {1, numFrames};
@@ -1302,7 +1308,7 @@ std::string ParakeetModel::eouDecodeChunk(
           *memory_info_, targetLenData.data(), targetLenData.size(),
           targetLenShape.data(), targetLenShape.size());
 
-      std::vector<int64_t> stateShape = {1, 1, EOU_DECODER_STATE_DIM};
+      std::vector<int64_t> stateShape = {EOU_DECODER_LSTM_LAYERS, 1, EOU_DECODER_STATE_DIM};
       Ort::Value stateHTensor = Ort::Value::CreateTensor<float>(
           *memory_info_, eouState_.stateH.data(), eouState_.stateH.size(),
           stateShape.data(), stateShape.size());
@@ -1341,8 +1347,9 @@ std::string ParakeetModel::eouDecodeChunk(
       }
 
       if (bestIdx == static_cast<int32_t>(eouState_.blankId) ||
-          bestIdx == 0 ||
-          bestIdx >= static_cast<int32_t>(vocabSize)) {
+          bestIdx < 0 ||
+          bestIdx >= static_cast<int32_t>(vocabSize) ||
+          isSpecialToken(vocab_[bestIdx])) {
         break;
       }
 
@@ -1522,6 +1529,8 @@ std::vector<float> ParakeetModel::runSortformerChunked(
       }
     }
 
+    // Front-erase is O(n) but the buffers are small (~250KB fifo, ~375KB
+    // spkcache) and dwarfed by the ONNX inference cost per chunk.
     size_t newEmbSize = static_cast<size_t>(embFrames * SF_EMB_DIM);
     fifo.insert(fifo.end(), embsData, embsData + newEmbSize);
     fifoFrames += embFrames;
@@ -1555,6 +1564,9 @@ std::vector<float> ParakeetModel::medianFilter(
     int numSpeakers) const {
   std::vector<float> filtered = preds;
   int half = diarConfig_.medianWindow / 2;
+  // Pre-allocated to full window size. At boundaries wLen < medianWindow,
+  // so window[wLen:] holds stale data — safe because nth_element only
+  // operates on the [0, wLen) range.
   std::vector<float> window(diarConfig_.medianWindow);
 
   for (int spk = 0; spk < numSpeakers; ++spk) {

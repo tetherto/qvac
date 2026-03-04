@@ -77,6 +77,7 @@ case $choice in
       "realtime_eou_120m-v1-onnx/tokenizer.json"
     ;;
   4)
+    # Canonical source: cgus/diar_streaming_sortformer_4spk-v2-onnx on HuggingFace
     download_model "sortformer-4spk-v2-onnx" \
       "cgus/diar_streaming_sortformer_4spk-v2-onnx" \
       "diar_streaming_sortformer_4spk-v2.onnx"

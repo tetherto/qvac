@@ -43,7 +43,7 @@ public:
   void load();
   void unload();
   void unloadWeights() { unload(); }
-  void reload();
+  void reload();  // No-op; satisfies ModelInterface contract
   void reset();
   void warmup();
 
@@ -204,6 +204,8 @@ private:
   // ── Encoder / decoder dimensions ───────────────────────────────────────
   static constexpr int ENCODER_DIM = 1024;
   static constexpr int DECODER_STATE_DIM = 640;
+  static constexpr int TDT_DECODER_LSTM_LAYERS = 2;
+  static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
   static constexpr int EOU_ENCODER_DIM = 512;

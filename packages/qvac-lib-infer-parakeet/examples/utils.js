@@ -220,15 +220,11 @@ function createOutputCallback (tracker, options = {}) {
           }
         }
       }
-      if (tracker.markOutput) tracker.markOutput()
+      tracker.markOutput()
     }
 
     if (event === 'JobEnded') {
-      if (tracker.markJobEnded) {
-        tracker.markJobEnded()
-      } else {
-        tracker.resolve()
-      }
+      tracker.markJobEnded()
     }
   }
 }

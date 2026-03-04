@@ -50,7 +50,7 @@ function cleanupTestDir (dirPath) {
         const filePath = path.join(dirPath, file)
         fs.unlinkSync(filePath)
       }
-      fs.rmdirSync(dirPath)
+      fs.rmSync(dirPath)
     } catch (e) {
       // Ignore cleanup errors
     }
