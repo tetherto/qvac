@@ -1,6 +1,6 @@
 {
   "name": "@qvac/onnx",
-  "version": "0.10.0",
+  "version": "0.11.5",
   "description": "Bare addon for ONNX Runtime session management",
   "addon": true,
   "engines": {
@@ -19,7 +19,9 @@
   },
   "files": [
     "binding.js",
-    "prebuilds",
+    "prebuilds/*/*.bare",
+    "prebuilds/include",
+    "prebuilds/share/qvac-onnx",
     "LICENSE",
     "NOTICE"
   ],

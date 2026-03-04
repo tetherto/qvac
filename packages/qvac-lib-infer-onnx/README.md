@@ -1,6 +1,6 @@
 # @qvac/onnx
 
-Bare addon providing ONNX Runtime session management for QVAC inference addons. Statically links ONNX Runtime 1.22.0 and exposes both a C++ header-only library and a JavaScript API. Has no dependency on `qvac-lib-inference-addon-cpp`.
+Bare addon providing ONNX Runtime session management for QVAC inference addons. Links ONNX Runtime 1.22.0 (via vcpkg) and exposes both a C++ header-only library and a JavaScript API. On desktop platforms, `@qvac/onnx.bare` is the single shared library containing ORT — consumer addons dynamically link against it so ORT is loaded exactly once per process. On mobile (Android/iOS), consumer addons statically link ORT via the bundled static libraries. Has no dependency on `qvac-lib-inference-addon-cpp`.
 
 ## Architecture
 
@@ -25,17 +25,20 @@ Bare addon providing ONNX Runtime session management for QVAC inference addons. 
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────┐
-│  ONNX Runtime 1.22.0  (static, via vcpkg)           │
+│  ONNX Runtime 1.22.0  (via vcpkg)                   │
+│  Desktop: exported from qvac__onnx.bare (shared)    │
+│  Mobile:  static libs shipped in prebuilds/lib/     │
 │  + XNNPack EP · CoreML · NNAPI · DirectML           │
 └─────────────────────────────────────────────────────┘
 ```
 
 **Key design points:**
 
+- **Single ORT load** — On desktop, `@qvac/onnx.bare` exports `OrtGetApiBase` and EP registration symbols. Consumer addons dynamically link against it (`DT_NEEDED: qvac__onnx@0.bare`), so ORT is loaded exactly once per process via ELF SONAME deduplication.
 - **Single Ort::Env** — `OnnxRuntime` is a Meyers singleton. All sessions across all consumer addons in the same process share one environment.
-- **Header-only C++** — Consumer addons include `<qvac-onnx/OnnxSession.hpp>` and link `qvac-onnx::qvac-onnx`. No separate `.a`/`.so` to manage.
+- **Header-only C++** — Consumer addons include `<qvac-onnx/OnnxSession.hpp>` and link `qvac-onnx::headers` (compile-time headers only). ORT symbols are resolved at runtime from the shared `.bare`.
 - **Abstract interface** — `IOnnxSession` lets consumers decouple pipeline code from ONNX Runtime headers.
-- **Symbol isolation** — Each consumer addon hides ORT symbols via linker scripts so multiple ONNX-based addons can coexist.
+- **Mobile static linking** — On Android/iOS, consumer addons statically link via `qvac-onnx::qvac-onnx-static` (which transitively provides `onnxruntime::onnxruntime_static`), since bare module dynamic linking is not available on mobile.
 
 ## JS API
 
@@ -149,7 +152,7 @@ const float* out = results[0].as<float>();
 
 ## Consumer Addon Integration
 
-ONNX-based consumer addons (e.g. `ocr-onnx`, `tts`) get `@qvac/onnx` via npm. This single dependency provides the C++ headers, ONNX Runtime headers, static libraries, and CMake targets. Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`.
+ONNX-based consumer addons (e.g. `ocr-onnx`, `tts`) get `@qvac/onnx` via npm. This single dependency provides the C++ headers, ONNX Runtime headers, CMake targets, and — on mobile — static libraries. On desktop, ORT symbols are resolved at runtime from the shared `@qvac/onnx.bare` (installed as a companion library). Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`.
 
 See **[INTEGRATION.md](./INTEGRATION.md)** for the full step-by-step guide covering `package.json`, `vcpkg.json`, `CMakeLists.txt`, symbol visibility, and platform-specific setup.
 

@@ -7,9 +7,17 @@ This guide covers all steps needed for an ONNX-based consumer addon (e.g. `ocr-o
 `@qvac/onnx` is distributed as an **npm package** (bare addon). It ships everything a consumer addon needs to build against ONNX Runtime:
 
 - **qvac-onnx C++ headers** (`prebuilds/include/qvac-onnx/`) — header-only `OnnxSession`, `OnnxRuntime`, config types, tensor types
-- **ONNX Runtime headers and static libraries** (`prebuilds/include/onnxruntime/`, `prebuilds/lib/`) — plus all transitive dependencies (abseil, protobuf, re2, eigen, etc.)
-- **CMake config** (`prebuilds/share/`) — `find_package(qvac-onnx)` exposes the `qvac-onnx::qvac-onnx` imported target which transitively provides `onnxruntime::onnxruntime_static`
+- **ONNX Runtime headers** (`prebuilds/include/onnxruntime/`) — public ORT C/C++ API headers
+- **CMake config** (`prebuilds/share/qvac-onnx/`) — `find_package(qvac-onnx)` exposes:
+  - `qvac-onnx::headers` — compile-time headers (always available)
+  - `qvac-onnx::qvac-onnx-static` — static ORT linking (mobile builds only, when `prebuilds/share/onnxruntime/` exists)
+- **Prebuilt `.bare` shared library** (`prebuilds/<platform>/qvac__onnx.bare`) — exports `OrtGetApiBase` and EP registration symbols; desktop consumers dynamically link against this
 - **JS API** — `configureEnvironment`, `getAvailableProviders`, `createSession`, `run`, `destroySession`, etc. (see [README.md](./README.md))
+
+### Desktop vs Mobile
+
+- **Desktop** (Linux, macOS, Windows): Consumer addons dynamically link against `@qvac/onnx.bare` via `include_bare_module`. ORT symbols (`OrtGetApiBase`, etc.) are resolved at runtime from the shared `.bare`. This means ORT is loaded once per process, regardless of how many ONNX-based addons are loaded.
+- **Mobile** (Android, iOS): Bare module dynamic linking is not available. Consumer addons statically link via `qvac-onnx::qvac-onnx-static`, which transitively provides `onnxruntime::onnxruntime_static`.
 
 Consumer addons do **not** need `onnxruntime` in their own `vcpkg.json`. The ONNX Runtime comes bundled with `@qvac/onnx`.
 
@@ -22,7 +30,7 @@ Add `@qvac/onnx` to the consumer's `package.json`:
 ```json
 {
   "dependencies": {
-    "@qvac/onnx": "^0.10.0"
+    "@qvac/onnx": "^0.11.0"
   },
   "devDependencies": {
     "cmake-bare": "^1.5.0",
@@ -31,7 +39,7 @@ Add `@qvac/onnx` to the consumer's `package.json`:
 }
 ```
 
-After `npm install`, the headers, static libraries, and cmake configs are available under `node_modules/@qvac/onnx/prebuilds/`.
+After `npm install`, the headers, prebuilt `.bare` shared library, and cmake configs are available under `node_modules/@qvac/onnx/prebuilds/`.
 
 ---
 
@@ -98,7 +106,7 @@ Add only the Microsoft registry packages your addon directly depends on. Package
 
 ### Finding @qvac/onnx
 
-A single `find_package` call discovers everything:
+A single `find_package` call discovers headers and cmake targets:
 
 ```cmake
 cmake_minimum_required(VERSION 3.25)
@@ -113,70 +121,72 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# --- Find @qvac/onnx (provides headers + onnxruntime) ---
+# --- Find @qvac/onnx (provides headers + cmake targets) ---
 find_package(qvac-onnx CONFIG REQUIRED
     PATHS node_modules/@qvac/onnx/prebuilds)
-
-# --- Find qvac-lib-inference-addon-cpp (from vcpkg) ---
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
-          "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 
 # --- Define bare addon ---
 add_bare_module(my-consumer-addon EXPORTS)
 
 target_sources(${my-consumer-addon} PRIVATE addon/binding.cpp)
 
-target_include_directories(${my-consumer-addon} PRIVATE
-    ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
-)
-
-target_link_libraries(${my-consumer-addon} PRIVATE
-    qvac-onnx::qvac-onnx
-)
-
 # Route ONNX session logs through JsLogger
 target_compile_definitions(${my-consumer-addon} PRIVATE JS_LOGGER)
 ```
 
-`qvac-onnx::qvac-onnx` is an INTERFACE target that transitively provides:
-- qvac-onnx C++ headers (`<qvac-onnx/OnnxSession.hpp>`, etc.)
-- ONNX Runtime headers (`<onnxruntime_cxx_api.h>`, etc.)
-- `onnxruntime::onnxruntime_static` link library and all its transitive dependencies
+### Linking — desktop vs mobile
 
-### Symbol visibility (required)
-
-Each consumer addon **must** hide internal ONNX Runtime symbols to prevent conflicts when multiple ONNX-based addons are loaded in the same process.
-
-Create a `symbols.map` file in the consumer addon root:
-
-```
-{
-  global:
-    bare_*;
-    napi_*;
-  local:
-    *;
-};
-```
-
-Then add to `CMakeLists.txt`:
+Consumer addons must use platform-conditional linking:
 
 ```cmake
-# Linux/Unix: version script
-if(UNIX AND NOT APPLE)
-  target_link_options(${my-consumer-addon}_module PRIVATE
-      -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
+if(ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
+  # Mobile: static linking (bare module dynamic linking not available)
+  target_link_libraries(${my-consumer-addon} PRIVATE
+      qvac-onnx::qvac-onnx-static
   )
-# macOS: exported symbols list
-elseif(APPLE)
-  target_link_options(${my-consumer-addon}_module PRIVATE
-      -Wl,-exported_symbol,_bare_get_module_name_v0
-      -Wl,-exported_symbol,_bare_register_module_v0
+else()
+  # Desktop: dynamic link against @qvac/onnx.bare
+  include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
+
+  # Headers for compile-time (OnnxSession.hpp, onnxruntime_cxx_api.h, etc.)
+  target_link_libraries(${my-consumer-addon} PRIVATE
+      qvac-onnx::headers
   )
+
+  # Dynamic link — adds DT_NEEDED: qvac__onnx@0.bare
+  target_link_libraries(${my-consumer-addon}_module PRIVATE
+      ${qvac_onnx_target}_module
+  )
+
+  # Install @qvac/onnx.bare as companion library alongside the consumer .bare
+  bare_target(host)
+  bare_module_target("." _unused NAME addon_name)
+  install(FILES $<TARGET_FILE:${qvac_onnx_target}_module>
+      DESTINATION ${host}/${addon_name}
+      RENAME qvac__onnx@0.bare)
 endif()
 ```
 
-**Note:** Target the `_module` shared library (not the object library) for link options.
+**How it works at runtime (desktop):**
+
+1. Consumer addon `.bare` has `DT_NEEDED: qvac__onnx@0.bare`
+2. The dynamic linker resolves this via RPATH to the companion directory
+3. If `qvac__onnx@0.bare` is already loaded (by another addon) → reuses it (SONAME match)
+4. ORT symbols (`OrtGetApiBase`, etc.) resolve from the single loaded instance
+5. All consumer addons share one ORT in memory
+
+**CMake targets:**
+
+| Target | Description | When available |
+|--------|-------------|----------------|
+| `qvac-onnx::headers` | Compile-time headers only (qvac-onnx + ORT public API) | Always |
+| `qvac-onnx::qvac-onnx-static` | Headers + `onnxruntime::onnxruntime_static` | Mobile builds only (when `prebuilds/share/onnxruntime/` exists) |
+
+### Symbol visibility
+
+Consumer addons on desktop do **not** need a `symbols.map` or version script. ORT symbols are resolved at runtime from the shared `@qvac/onnx.bare`, not statically linked into each consumer.
+
+On mobile, since ORT is statically linked into each consumer, symbol visibility is handled automatically by the platform's default linking behavior.
 
 ### Platform-specific additions
 
@@ -390,13 +400,13 @@ DirectML on Windows automatically disables memory patterns and forces sequential
 
 | # | Step | What to verify |
 |---|------|----------------|
-| 1 | `package.json` | `@qvac/onnx` listed in `dependencies`; `cmake-bare` and `cmake-vcpkg` in `devDependencies` |
+| 1 | `package.json` | `@qvac/onnx` `^0.11.0` in `dependencies`; `cmake-bare` and `cmake-vcpkg` in `devDependencies` |
 | 2 | `vcpkg.json` | `onnxruntime` is **not** listed (it ships with `@qvac/onnx`); only addon-specific deps remain |
 | 3 | `vcpkg-configuration.json` | Tether registry as default; Microsoft registry only for addon-specific upstream packages |
-| 4 | `CMakeLists.txt` | `find_package(qvac-onnx CONFIG REQUIRED PATHS node_modules/@qvac/onnx/prebuilds)`; link `qvac-onnx::qvac-onnx`; `JS_LOGGER` defined |
-| 5 | `symbols.map` | Exports only `bare_*` and `napi_*`; applied via `--version-script` (Linux) or `-exported_symbol` (macOS) |
+| 4 | `CMakeLists.txt` | `find_package(qvac-onnx ...)`, platform guard with `qvac-onnx::headers` + `include_bare_module` (desktop) or `qvac-onnx::qvac-onnx-static` (mobile); `JS_LOGGER` defined |
+| 5 | Companion lib | Desktop: `qvac__onnx@0.bare` installed in `prebuilds/<host>/<addon_name>/` |
 | 6 | C++ sources | Include `<qvac-onnx/OnnxSession.hpp>` instead of raw `<onnxruntime_cxx_api.h>` |
-| 7 | Build | `npm run build` succeeds on target platform |
+| 7 | Build | `npm run build` succeeds; `readelf -d` shows `NEEDED qvac__onnx@0.bare` (desktop) |
 
 ## Supported Platforms
 

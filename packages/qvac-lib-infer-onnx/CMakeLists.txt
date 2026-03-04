@@ -16,7 +16,7 @@ endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx VERSION 1.0.0 LANGUAGES C CXX)
+project(qvac-onnx VERSION 0.11.5 LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 
@@ -56,8 +56,7 @@ if(UNIX AND NOT APPLE)
     -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
 elseif(APPLE)
   target_link_options(${qvac-onnx}_module PRIVATE
-    -Wl,-exported_symbol,_bare_get_module_name_v0
-    -Wl,-exported_symbol,_bare_register_module_v0)
+    -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)
 endif()
 
 # Strip .bare module
@@ -65,7 +64,7 @@ if(CMAKE_STRIP AND NOT WIN32)
   if(APPLE)
     set(_strip_flags -x)
   else()
-    set(_strip_flags -s)
+    set(_strip_flags --strip-unneeded)
   endif()
   add_custom_command(
     TARGET ${qvac-onnx}_module POST_BUILD
@@ -73,13 +72,13 @@ if(CMAKE_STRIP AND NOT WIN32)
     COMMENT "Stripping ${qvac-onnx}_module")
 endif()
 
-# --- Export headers, libs, and cmake config for consumer addons ---
+# --- Export headers and cmake config for consumer addons ---
 add_library(qvac-onnx-headers INTERFACE)
-set_target_properties(qvac-onnx-headers PROPERTIES EXPORT_NAME qvac-onnx)
+set_target_properties(qvac-onnx-headers PROPERTIES EXPORT_NAME headers)
 target_include_directories(qvac-onnx-headers INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-  $<INSTALL_INTERFACE:include>)
-target_link_libraries(qvac-onnx-headers INTERFACE onnxruntime::onnxruntime_static)
+  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:include/onnxruntime>)
 
 # --- Installs ---
 install(DIRECTORY src/qvac-onnx DESTINATION include FILES_MATCHING PATTERN "*.hpp")
@@ -93,129 +92,132 @@ install(DIRECTORY ${VCPKG_INSTALLED_PATH}/include/ DESTINATION include
   PATTERN "cxxopts.hpp" EXCLUDE PATTERN "utf8_range.h" EXCLUDE
   PATTERN "utf8_validity.h" EXCLUDE PATTERN "experiments-config.h" EXCLUDE)
 
-install(DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/ DESTINATION lib
-  FILES_MATCHING PATTERN "*.a" PATTERN "*.lib"
-  PATTERN "pkgconfig" EXCLUDE PATTERN "libprotoc*" EXCLUDE PATTERN "libbenchmark*" EXCLUDE)
+# Mobile: also install static libs and cmake configs for static linking
+if(ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
+  install(DIRECTORY ${VCPKG_INSTALLED_PATH}/lib/ DESTINATION lib
+    FILES_MATCHING PATTERN "*.a" PATTERN "*.lib"
+    PATTERN "pkgconfig" EXCLUDE PATTERN "libprotoc*" EXCLUDE PATTERN "libbenchmark*" EXCLUDE)
 
-install(CODE [=[
-  if(NOT WIN32)
-    find_program(_strip strip)
-    if(_strip)
-      file(GLOB _libs "${CMAKE_INSTALL_PREFIX}/lib/*.a")
-      foreach(_lib IN LISTS _libs)
-        if(APPLE)
-          execute_process(COMMAND "${_strip}" -x "${_lib}" ERROR_QUIET)
-        else()
-          execute_process(COMMAND "${_strip}" --strip-unneeded "${_lib}" ERROR_QUIET)
-        endif()
-      endforeach()
+  install(CODE [=[
+    if(NOT WIN32)
+      find_program(_strip strip)
+      if(_strip)
+        file(GLOB _libs "${CMAKE_INSTALL_PREFIX}/lib/*.a")
+        foreach(_lib IN LISTS _libs)
+          if(APPLE)
+            execute_process(COMMAND "${_strip}" -x "${_lib}" ERROR_QUIET)
+          else()
+            execute_process(COMMAND "${_strip}" --strip-unneeded "${_lib}" ERROR_QUIET)
+          endif()
+        endforeach()
+      endif()
     endif()
-  endif()
-]=])
+  ]=])
 
-install(DIRECTORY ${VCPKG_INSTALLED_PATH}/share/ DESTINATION share
-  PATTERN "gtest" EXCLUDE PATTERN "pybind11" EXCLUDE PATTERN "benchmark" EXCLUDE
-  PATTERN "cxxopts" EXCLUDE PATTERN "qvac-lint-cpp" EXCLUDE PATTERN "pkgconfig" EXCLUDE
-  PATTERN "vcpkg-cmake" EXCLUDE PATTERN "vcpkg-cmake-config" EXCLUDE
-  PATTERN "vcpkg-boost" EXCLUDE PATTERN "vcpkg.spdx.json" EXCLUDE
-  PATTERN "vcpkg_abi_info.txt" EXCLUDE PATTERN "copyright" EXCLUDE)
+  install(DIRECTORY ${VCPKG_INSTALLED_PATH}/share/ DESTINATION share
+    PATTERN "gtest" EXCLUDE PATTERN "pybind11" EXCLUDE PATTERN "benchmark" EXCLUDE
+    PATTERN "cxxopts" EXCLUDE PATTERN "qvac-lint-cpp" EXCLUDE PATTERN "pkgconfig" EXCLUDE
+    PATTERN "vcpkg-cmake" EXCLUDE PATTERN "vcpkg-cmake-config" EXCLUDE
+    PATTERN "vcpkg-boost" EXCLUDE PATTERN "vcpkg.spdx.json" EXCLUDE
+    PATTERN "vcpkg_abi_info.txt" EXCLUDE PATTERN "copyright" EXCLUDE)
 
-# Patch shipped protobuf cmake configs
-install(CODE [=[
-  set(_dir "${CMAKE_INSTALL_PREFIX}/share/protobuf")
-  set(_f "${_dir}/protobuf-targets.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REPLACE
-      "# Create imported target protobuf::protoc\nadd_executable(protobuf::protoc IMPORTED)\n"
-      "" _c "${_c}")
-    string(REGEX REPLACE
-      "# Create imported target protobuf::libprotoc\nadd_library\\(protobuf::libprotoc STATIC IMPORTED\\)\n\nset_target_properties\\(protobuf::libprotoc PROPERTIES\n[^)]*\\)\n"
-      "" _c "${_c}")
-    string(REPLACE " protobuf::protoc" "" _c "${_c}")
-    string(REPLACE " protobuf::libprotoc" "" _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-  set(_f "${_dir}/protobuf-targets-release.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REGEX REPLACE
-      "# Import target .protobuf::protoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::protoc[^\n]*\nset_target_properties\\(protobuf::protoc[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::protoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::protoc[^\n]*\n"
-      "" _c "${_c}")
-    string(REGEX REPLACE
-      "# Import target .protobuf::libprotoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::libprotoc[^\n]*\nset_target_properties\\(protobuf::libprotoc[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::libprotoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::libprotoc[^\n]*\n"
-      "" _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-]=])
-
-# Patch shipped flatbuffers cmake configs
-install(CODE [=[
-  set(_dir "${CMAKE_INSTALL_PREFIX}/share/flatbuffers")
-  file(REMOVE "${_dir}/FlatcTargets.cmake" "${_dir}/FlatcTargets-release.cmake")
-]=])
-
-# Patch shipped onnxruntime cmake configs
-install(CODE [=[
-  set(_dir "${CMAKE_INSTALL_PREFIX}/share/onnxruntime")
-  set(_f "${_dir}/onnxruntimeTargets.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REGEX REPLACE
-      "# Create imported target onnxruntime::onnxruntime\nadd_library\\(onnxruntime::onnxruntime SHARED IMPORTED\\)\n\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n"
-      "" _c "${_c}")
-    string(REPLACE " onnxruntime::onnxruntime " " " _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-  set(_f "${_dir}/onnxruntimeTargets-release.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REGEX REPLACE
-      "# Import target .onnxruntime::onnxruntime. for configuration .[^.]*.\nset_property\\(TARGET onnxruntime::onnxruntime APPEND[^\n]*\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n\nlist\\(APPEND _cmake_import_check_targets onnxruntime::onnxruntime \\)\nlist\\(APPEND _cmake_import_check_files_for_onnxruntime::onnxruntime[^\n]*\n"
-      "" _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-]=])
-
-# Add missing find_dependency to shipped onnxruntimeConfig
-install(CODE [=[
-  set(_f "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeConfig.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REPLACE
-      "include(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
-      "find_dependency(unofficial-pthreadpool CONFIG)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
-      _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-]=])
-
-# Patch shipped Eigen3 cmake configs — remove non-existent include dir
-install(CODE [=[
-  set(_f "${CMAKE_INSTALL_PREFIX}/share/eigen3/Eigen3Targets.cmake")
-  if(EXISTS "${_f}")
-    file(READ "${_f}" _c)
-    string(REGEX REPLACE
-      "set_target_properties\\(Eigen3::Eigen PROPERTIES\n  INTERFACE_INCLUDE_DIRECTORIES[^\n]*\n\\)\n"
-      ""
-      _c "${_c}")
-    file(WRITE "${_f}" "${_c}")
-  endif()
-]=])
-
-# Strip LINK_ONLY from shipped cmake configs for cmake 4.x consumers
-install(CODE [=[
-  foreach(_lo_file
-      "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeTargets.cmake"
-      "${CMAKE_INSTALL_PREFIX}/share/protobuf/protobuf-targets.cmake")
-    if(EXISTS "${_lo_file}")
-      file(READ "${_lo_file}" _c)
-      string(CONCAT _lo_re "\\\\?" "\\$" "<LINK_ONLY:([^>]+)>")
-      string(REGEX REPLACE "${_lo_re}" "\\1" _c "${_c}")
-      file(WRITE "${_lo_file}" "${_c}")
+  # Patch shipped protobuf cmake configs
+  install(CODE [=[
+    set(_dir "${CMAKE_INSTALL_PREFIX}/share/protobuf")
+    set(_f "${_dir}/protobuf-targets.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REPLACE
+        "# Create imported target protobuf::protoc\nadd_executable(protobuf::protoc IMPORTED)\n"
+        "" _c "${_c}")
+      string(REGEX REPLACE
+        "# Create imported target protobuf::libprotoc\nadd_library\\(protobuf::libprotoc STATIC IMPORTED\\)\n\nset_target_properties\\(protobuf::libprotoc PROPERTIES\n[^)]*\\)\n"
+        "" _c "${_c}")
+      string(REPLACE " protobuf::protoc" "" _c "${_c}")
+      string(REPLACE " protobuf::libprotoc" "" _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
     endif()
-  endforeach()
-]=])
+    set(_f "${_dir}/protobuf-targets-release.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REGEX REPLACE
+        "# Import target .protobuf::protoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::protoc[^\n]*\nset_target_properties\\(protobuf::protoc[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::protoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::protoc[^\n]*\n"
+        "" _c "${_c}")
+      string(REGEX REPLACE
+        "# Import target .protobuf::libprotoc. for configuration .[^.]*.\nset_property\\(TARGET protobuf::libprotoc[^\n]*\nset_target_properties\\(protobuf::libprotoc[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n\nlist\\(APPEND _cmake_import_check_targets protobuf::libprotoc \\)\nlist\\(APPEND _cmake_import_check_files_for_protobuf::libprotoc[^\n]*\n"
+        "" _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
+    endif()
+  ]=])
+
+  # Patch shipped flatbuffers cmake configs
+  install(CODE [=[
+    set(_dir "${CMAKE_INSTALL_PREFIX}/share/flatbuffers")
+    file(REMOVE "${_dir}/FlatcTargets.cmake" "${_dir}/FlatcTargets-release.cmake")
+  ]=])
+
+  # Patch shipped onnxruntime cmake configs
+  install(CODE [=[
+    set(_dir "${CMAKE_INSTALL_PREFIX}/share/onnxruntime")
+    set(_f "${_dir}/onnxruntimeTargets.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REGEX REPLACE
+        "# Create imported target onnxruntime::onnxruntime\nadd_library\\(onnxruntime::onnxruntime SHARED IMPORTED\\)\n\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n"
+        "" _c "${_c}")
+      string(REPLACE " onnxruntime::onnxruntime " " " _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
+    endif()
+    set(_f "${_dir}/onnxruntimeTargets-release.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REGEX REPLACE
+        "# Import target .onnxruntime::onnxruntime. for configuration .[^.]*.\nset_property\\(TARGET onnxruntime::onnxruntime APPEND[^\n]*\nset_target_properties\\(onnxruntime::onnxruntime PROPERTIES\n[^)]*\\)\n\nlist\\(APPEND _cmake_import_check_targets onnxruntime::onnxruntime \\)\nlist\\(APPEND _cmake_import_check_files_for_onnxruntime::onnxruntime[^\n]*\n"
+        "" _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
+    endif()
+  ]=])
+
+  # Add missing find_dependency to shipped onnxruntimeConfig
+  install(CODE [=[
+    set(_f "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeConfig.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REPLACE
+        "include(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
+        "find_dependency(unofficial-pthreadpool CONFIG)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/onnxruntimeTargets.cmake\")"
+        _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
+    endif()
+  ]=])
+
+  # Patch shipped Eigen3 cmake configs — remove non-existent include dir
+  install(CODE [=[
+    set(_f "${CMAKE_INSTALL_PREFIX}/share/eigen3/Eigen3Targets.cmake")
+    if(EXISTS "${_f}")
+      file(READ "${_f}" _c)
+      string(REGEX REPLACE
+        "set_target_properties\\(Eigen3::Eigen PROPERTIES\n  INTERFACE_INCLUDE_DIRECTORIES[^\n]*\n\\)\n"
+        ""
+        _c "${_c}")
+      file(WRITE "${_f}" "${_c}")
+    endif()
+  ]=])
+
+  # Strip LINK_ONLY from shipped cmake configs for cmake 4.x consumers
+  install(CODE [=[
+    foreach(_lo_file
+        "${CMAKE_INSTALL_PREFIX}/share/onnxruntime/onnxruntimeTargets.cmake"
+        "${CMAKE_INSTALL_PREFIX}/share/protobuf/protobuf-targets.cmake")
+      if(EXISTS "${_lo_file}")
+        file(READ "${_lo_file}" _c)
+        string(CONCAT _lo_re "\\\\?" "\\$" "<LINK_ONLY:([^>]+)>")
+        string(REGEX REPLACE "${_lo_re}" "\\1" _c "${_c}")
+        file(WRITE "${_lo_file}" "${_c}")
+      endif()
+    endforeach()
+  ]=])
+endif()
 
 # --- qvac-onnx cmake package config ---
 install(TARGETS qvac-onnx-headers EXPORT qvac-onnxTargets)

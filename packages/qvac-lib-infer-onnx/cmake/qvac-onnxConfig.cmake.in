@@ -1,13 +1,19 @@
 @PACKAGE_INIT@
 
-# Make the shipped onnxruntime and its transitive dependencies (abseil,
-# protobuf, re2, eigen, …) discoverable by prepending our install prefix
-# to CMAKE_PREFIX_PATH.  This lets the onnxruntime cmake config's own
-# find_dependency() calls resolve against the libraries we ship.
-list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
-
-include(CMakeFindDependencyMacro)
-find_dependency(onnxruntime CONFIG)
-
 include("${CMAKE_CURRENT_LIST_DIR}/qvac-onnxTargets.cmake")
+
+# Mobile builds ship static libs — provide qvac-onnx::qvac-onnx-static
+if(EXISTS "${PACKAGE_PREFIX_DIR}/share/onnxruntime")
+  list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
+
+  include(CMakeFindDependencyMacro)
+  find_dependency(onnxruntime CONFIG)
+
+  if(NOT TARGET qvac-onnx::qvac-onnx-static)
+    add_library(qvac-onnx::qvac-onnx-static INTERFACE IMPORTED)
+    set_target_properties(qvac-onnx::qvac-onnx-static PROPERTIES
+      INTERFACE_LINK_LIBRARIES "qvac-onnx::headers;onnxruntime::onnxruntime_static")
+  endif()
+endif()
+
 check_required_components(qvac-onnx)
