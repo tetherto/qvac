@@ -26,6 +26,7 @@ import os
 import sys
 
 import torch
+import torch.nn.functional as F
 import easyocr
 
 # ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ import easyocr
 # EasyOCR uses one recognizer model per script family; any language from the
 # family triggers downloading the same model.
 SCRIPT_FAMILIES = {
-    'latin':      {'lang': 'en',     'filename': 'recognizer_latin.onnx'},
+    'latin':      {'lang': 'fr',     'filename': 'recognizer_latin.onnx'},
     'korean':     {'lang': 'ko',     'filename': 'recognizer_korean.onnx'},
     'arabic':     {'lang': 'ar',     'filename': 'recognizer_arabic.onnx'},
     'cyrillic':   {'lang': 'ru',     'filename': 'recognizer_cyrillic.onnx'},
@@ -170,6 +171,21 @@ def _create_reader_with_fallback(lang, gpu, quantize=False):
     return reader
 
 
+def _replace_relu_with_functional(model):
+    """Replace nn.ReLU modules with functional F.relu throughout the model.
+
+    The ONNX tracer includes module paths in node names: a module-based
+    ``self.relu(x)`` produces names like ``/relu/Relu_output_0``, while
+    functional ``F.relu(x)`` produces ``/Relu_output_0``.  The S3 reference
+    models use functional ReLU, so we patch the model to match.
+    """
+    for module in model.modules():
+        if hasattr(module, 'relu') and isinstance(module.relu, torch.nn.ReLU):
+            inplace = module.relu.inplace
+            del module._modules['relu']
+            module.relu = lambda x, _inp=inplace: F.relu(x, inplace=_inp)
+
+
 class _RecognizerExportWrapper(torch.nn.Module):
     """Wrapper that adapts the EasyOCR recognizer for ONNX export.
 
@@ -186,13 +202,15 @@ class _RecognizerExportWrapper(torch.nn.Module):
         self.FeatureExtraction = model.FeatureExtraction
         self.SequenceModeling = model.SequenceModeling
         self.Prediction = model.Prediction
+        _replace_relu_with_functional(self)
 
     def forward(self, image):
-        visual_feature = self.FeatureExtraction(image)
-        visual_feature = visual_feature.permute(0, 3, 1, 2)
-        # Equivalent to AdaptiveAvgPool2d((None, 1)) — pools last dim to 1
-        visual_feature = visual_feature.mean(dim=3, keepdim=True)
-        visual_feature = visual_feature.squeeze(3)
+        visual_feature = self.FeatureExtraction(image)  # [B, C, H, W]
+        # Equivalent to AdaptiveAvgPool2d((None, 1)) followed by squeeze + permute.
+        # Mean over height dim, squeeze it, then transpose to [B, W, C] for LSTM.
+        visual_feature = visual_feature.mean(dim=2, keepdim=True)  # [B, C, 1, W]
+        visual_feature = visual_feature.squeeze(2)  # [B, C, W]
+        visual_feature = visual_feature.permute(0, 2, 1)  # [B, W, C]
         contextual_feature = self.SequenceModeling(visual_feature)
         prediction = self.Prediction(contextual_feature.contiguous())
         return prediction
@@ -224,9 +242,9 @@ def export_detector(reader, output_dir, opset_version=DEFAULT_OPSET):
             input_names=['input'],
             output_names=['output', 'feature'],
             dynamic_axes={
-                'input': {0: 'batch', 2: 'height', 3: 'width'},
-                'output': {0: 'batch', 1: 'height', 2: 'width'},
-                'feature': {0: 'batch', 2: 'height', 3: 'width'},
+                'input': {0: 'batch_size', 2: 'height', 3: 'width'},
+                'output': {0: 'batch_size', 1: 'height', 2: 'width'},
+                'feature': {0: 'batch_size', 2: 'height', 3: 'width'},
             },
             opset_version=opset_version,
             do_constant_folding=True,
@@ -260,8 +278,8 @@ def export_recognizer(reader, script_name, output_dir, opset_version=DEFAULT_OPS
             input_names=['image'],
             output_names=['output'],
             dynamic_axes={
-                'image': {0: 'batch', 3: 'width'},
-                'output': {0: 'batch', 1: 'sequence'},
+                'image': {0: 'batch_size', 3: 'width'},
+                'output': {0: 'batch_size', 1: 'seq_len'},
             },
             opset_version=opset_version,
             do_constant_folding=True,
