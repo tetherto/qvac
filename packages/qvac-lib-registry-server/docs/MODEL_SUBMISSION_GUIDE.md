@@ -96,3 +96,14 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 
 Note: `deprecatedAt` timestamp is auto-generated when syncing to the database.
 
+## Common Issues
+
+### Concurrent PRs auto-deprecate each other's models
+
+The sync-staging pipeline compares the **entire** `models.prod.json` from the PR branch against the current database state. If two PRs that modify `models.prod.json` are open at the same time:
+
+1. PR-A adds models X. Sync runs on PR-A → models X are synced to the staging database.
+2. PR-B (branched before PR-A) does not contain models X. Sync runs on PR-B → models X are missing from its `models.prod.json`, so the sync script auto-deprecates them as "Removed from configuration".
+
+**Workaround**: Merge model PRs sequentially. Before triggering sync-staging on your PR, ensure no other `models.prod.json` PR has unmerged synced changes in the database. If models were incorrectly auto-deprecated, undeprecate them (see [Undeprecating a Model](#undeprecating-a-model)) or rebase your branch onto the latest `main` and re-run the sync.
+
