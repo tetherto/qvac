@@ -12,7 +12,7 @@
  *
  * Programmatic Usage:
  *   const { generateChangelog } = require("./scripts/generate-changelog-qvac.cjs");
- *   const result = await generateChangelog({ packageName: "qvac-sdk" });
+ *   const result = await generateChangelog({ packageName: "sdk" });
  */
 
 const fs = require("fs");
@@ -70,8 +70,8 @@ function getGitHubToken() {
 
 /**
  * Find the latest tag for a package
- * @param {string} packageName - e.g., "qvac-sdk"
- * @returns {string|null} - e.g., "qvac-sdk-v1.0.0" or null
+ * @param {string} packageName - e.g., "sdk"
+ * @returns {string|null} - e.g., "sdk-v1.0.0" or null
  */
 function getLatestTag(packageName) {
   try {
@@ -85,7 +85,7 @@ function getLatestTag(packageName) {
 
 /**
  * Extract version string from a tag
- * @param {string} tag - e.g., "qvac-sdk-v1.2.3"
+ * @param {string} tag - e.g., "sdk-v1.2.3"
  * @returns {string|null} - e.g., "1.2.3"
  */
 function extractVersionFromTag(tag) {
@@ -112,7 +112,7 @@ function resolveBaseRef(packageName, baseCommit) {
  * Searches all commits (not just merges) because squash-merged PRs
  * have only one parent but still contain "#123" in the commit message.
  * @param {string|null} baseRef - Tag, commit SHA, or null for all commits
- * @param {string} packagePath - e.g., "packages/qvac-sdk"
+ * @param {string} packagePath - e.g., "packages/sdk"
  * @returns {number[]}
  */
 function getPRNumbers(baseRef, packagePath) {
@@ -193,7 +193,7 @@ async function fetchPRMetadata(repo, prNumber, token) {
 /**
  * Get package.json version from a package directory
  * Resolves from git repo root to work regardless of CWD.
- * @param {string} packagePath - e.g., "packages/qvac-sdk"
+ * @param {string} packagePath - e.g., "packages/sdk"
  * @returns {string}
  */
 function getPackageVersion(packagePath) {
@@ -264,7 +264,7 @@ function parseArgs(argv) {
 /**
  * Main programmatic entry point
  * @param {object} options
- * @param {string} options.packageName - e.g., "qvac-sdk"
+ * @param {string} options.packageName - e.g., "sdk"
  * @param {string} [options.baseCommit] - Override tag lookup with a commit SHA
  * @param {string} [options.baseVersion] - Version label for display
  * @param {boolean} [options.dryRun] - If true, don't write files
@@ -438,7 +438,7 @@ async function main() {
     );
     console.error("");
     console.error("Options:");
-    console.error("  --package        Package name (e.g., qvac-sdk)");
+    console.error("  --package        Package name (e.g., sdk)");
     console.error(
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );

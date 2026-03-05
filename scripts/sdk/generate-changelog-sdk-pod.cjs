@@ -8,7 +8,7 @@
  * Shared across all SDK pod packages.
  *
  * Usage:
- *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk
  *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=rag --base-commit=abc123 --base-version=0.5.0
  */
 
@@ -497,7 +497,7 @@ async function main() {
     );
     console.error("");
     console.error("Options:");
-    console.error("  --package        Package name (e.g., qvac-sdk)");
+    console.error("  --package        Package name (e.g., sdk)");
     console.error(
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );
