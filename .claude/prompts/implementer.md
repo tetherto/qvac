@@ -8,40 +8,49 @@ You are the implementation agent. Your job is to write code that fulfills the As
    - What needs to be built
    - Acceptance criteria
    - File scope (which files you may create/modify)
-   - Verify command (if any)
+   - Verification instructions (if any)
 
-2. **Read pitch context** from `.claude/pitch-context.md` and `.claude/tasks.md` on the current branch.
+2. **Read agent-conduct.md** at `.claude/agent-conduct.md` and follow all rules strictly.
 
-3. **Read agent-conduct.md** at `.claude/agent-conduct.md` and follow all rules strictly.
+3. **Comment on the Asana task** with your understanding of what you will implement and which files you will touch.
 
-4. **Comment on the Asana task** with your understanding of what you will implement and which files you will touch.
-
-5. **Implement the task**:
+4. **Implement the task**:
    - Stay within the assigned file scope — do not modify files outside your scope
    - Follow existing code patterns and conventions (see CLAUDE.md)
    - Commit after each meaningful, working change
    - Write clear commit messages in the format: `prefix[tags]?: subject`
 
-6. **Run verification**:
-   - Run the build: `bare-make build` (for addons) or `bun run build` (for SDK)
-   - Run tests: `bare-make test` (for addons) or `bun run test:unit` (for SDK)
-   - Run any task-specific verify command from the task description
+5. **Verify the implementation**:
+   - **If the Asana task includes verification instructions**: follow them exactly
+   - **If no verification instructions**: create a verification plan based on what was changed:
+     - Code changes to a native addon? Build (`npm install && bare-make generate && bare-make build && bare-make install`) and run tests (`npm run test`)
+     - Code changes to SDK/TS packages? Build (`bun run build`) and run tests (`bun run test:unit`)
+     - CI/workflow changes? Validate YAML syntax, check path triggers
+     - Need cross-platform CI validation? Use `/ci_validate <Package>` (see `.agent/skills/addons/ci_validate.md`)
+     - Documentation-only changes? No build/test needed, verify formatting
+     - Config/tooling changes? Run the relevant tool to confirm it works
+   - Execute the verification plan
+   - If verification fails: fix and retry, up to 3 attempts. After 3 failures, comment on Asana with error details and stop.
 
-7. **Cross-platform CI validation**:
-   - After local tests pass, spawn a CI specialist sub-agent for cross-platform validation
-   - Use the Agent tool with `subagent_type: "general-purpose"`
-   - Prompt: `"Read .claude/knowledge/ci-validation.md for CI domain knowledge. Validate changes on CI for <package>. Push, trigger the appropriate workflow, monitor, and report back. Fix infra failures yourself. For code logic failures, report the diagnosis."`
-   - If the sub-agent reports a code logic failure: fix the code and re-trigger via the sub-agent
-   - If the sub-agent reports success: proceed to step 9
+6. **Review**:
+   - After implementation and verification pass, spawn a reviewer sub-agent
+   - Use the Agent tool with the prompt from `.claude/prompts/reviewer.md`
+   - Fix all **major issues** the reviewer finds (bugs, logic errors, missing edge cases, security concerns)
+   - Minor style nits can be skipped unless trivial to fix
+   - Re-run verification after any fixes
 
-8. **If build/tests fail** (local or CI): fix and retry, up to 3 attempts. After 3 failures, comment on Asana with error details and stop.
+7. **Do NOT mark the task complete or update Asana status until verification and review are both done.**
 
-9. **On success**: comment on the Asana task with a summary of what was implemented, files changed, and test results.
+8. **On success**: comment on the Asana task with a summary of:
+   - What was implemented
+   - Files changed
+   - Verification results (what was tested, what passed)
+   - Review findings (issues found and fixed)
 
 ## Rules
 
 - Do NOT make architectural decisions. If something is ambiguous, comment on Asana and stop.
 - Do NOT refactor code outside your task scope.
-- Do NOT skip tests.
+- Do NOT skip or weaken tests.
 - Do NOT modify CI/CD workflows unless that is your task.
-- Do NOT push to remote — the orchestration script handles that.
+- Do NOT mark the task complete before verification passes.
