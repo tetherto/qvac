@@ -197,7 +197,7 @@ TEST_F(TextLlmContextTest, LoadMediaDoesNothing) {
   if (test_projection_path.empty()) {
     LlamaModel::Prompt prompt;
     prompt.input = R"([{"role": "user", "content": "Hello"}])";
-    prompt.media = std::move(binary_input);
+    prompt.media.push_back(std::move(binary_input));
     EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
   }
 }
