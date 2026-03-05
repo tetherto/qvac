@@ -54,7 +54,7 @@ The engine is auto-detected based on the arguments you provide.
 - Chatterbox TTS: Neural text-to-speech engine with voice cloning
 - Supertonic TTS: Diffusion-based text-to-speech engine with pre-trained voices
 - Bare Runtime (>=1.17.3): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
+- Linux requires Clang/LLVM 19 with libc++
 
 ## TTS Engines
 

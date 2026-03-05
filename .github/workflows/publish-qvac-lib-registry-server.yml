@@ -31,6 +31,7 @@ env:
 jobs:
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-qvac-registry-schema') &&
@@ -52,6 +53,7 @@ jobs:
 
   release-merge-guard-client:
     name: Release Merge Guard (Client)
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-qvac-registry-client') &&
@@ -226,6 +228,8 @@ jobs:
       needs.detect-changes.outputs.schema_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
@@ -255,7 +259,6 @@ jobs:
           repo_name: "registry-server"
           git-token: ${{ secrets.GITHUB_TOKEN }}
 
-
   publish-schema:
     name: Publish Schema (meta)
     needs: [publish-schema-gpr, publish-schema-npm]
@@ -266,6 +269,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Schema publish completed or skipped."
+
+  publish-schema-release:
+    needs: [publish-schema-npm]
+    if: needs.publish-schema-npm.result == 'success' && needs.publish-schema-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "registry-server"
+      release_name: "QVAC Registry Server"
+      published_version: ${{ needs.publish-schema-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-registry-server/shared"
 
   lint-and-test:
     needs: detect-changes
@@ -292,7 +309,6 @@ jobs:
           set -euo pipefail
           git fetch origin ${{ github.event.pull_request.head.sha }}:refs/remotes/origin/pr-head
           git checkout --detach ${{ github.event.pull_request.head.sha }}
-
 
       - uses: actions/setup-node@v6
         with:
@@ -381,6 +397,8 @@ jobs:
       needs.detect-changes.outputs.client_changed == 'true' &&
       needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
@@ -409,5 +427,19 @@ jobs:
           secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "latest"
           workdir: ${{ env.PKG_DIR }}/client
-          repo_name: "registry-server"
+          repo_name: "registry-client"
           git-token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-client-release:
+    needs: [publish-client-npm]
+    if: needs.publish-client-npm.result == 'success' && needs.publish-client-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "registry-client"
+      release_name: "QVAC Registry Client"
+      published_version: ${{ needs.publish-client-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-registry-server/client"

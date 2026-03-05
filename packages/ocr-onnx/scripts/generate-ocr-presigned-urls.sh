@@ -26,6 +26,11 @@ BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 # Use rec_dyn subdirectory - dynamic width models (same as desktop integration)
 BASE_PATH="qvac_models_compiled/ocr/rec_dyn"
 
+if [ -z "$BUCKET" ]; then
+  echo "❌ S3 bucket not set. Set S3_BUCKET or MODEL_S3_BUCKET environment variable."
+  exit 1
+fi
+
 # Recognizers aligned with full-ocr-suite and download-ocr-models.js
 RECOGNIZERS=(latin korean arabic cyrillic devanagari bengali thai zh_sim zh_tra japanese tamil telugu kannada)
 

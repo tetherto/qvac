@@ -47,7 +47,7 @@ public:
 
   StepRecognizeText(
       const ORTCHAR_T* pathRecognizer, std::span<const std::string> langList,
-      bool useGPU = true, const Config& config = Config{});
+      bool useGPU = false, const Config& config = Config{});
 
   CONSTRUCT_FROM_TUPLE(StepRecognizeText)
 
@@ -61,7 +61,6 @@ public:
 
 private:
   Config config_;
-  Ort::Env ortEnv_;
   Ort::Session ortSession_{nullptr};
 
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;

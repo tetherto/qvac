@@ -20,7 +20,7 @@ Makefile
 *.cmake
 !CMakeLists.txt
 !cmake/*.cmake
-!vcpkg-override-triplets/**/*.cmake
+!vcpkg/**/*.cmake
 compile_commands.json
 .vscode/
 .idea/
