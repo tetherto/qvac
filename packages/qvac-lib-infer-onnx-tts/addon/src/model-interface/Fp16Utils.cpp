@@ -63,28 +63,31 @@ uint16_t fromFp32(float f) {
   uint32_t mantissa = x & 0x007FFFFFu;
 
   if (exponent <= 0) {
-    if (exponent < -10) return sign;
+    if (exponent < -10)
+      return sign;
     mantissa = (mantissa | 0x00800000u) >> (1 - exponent);
     return sign | static_cast<uint16_t>(mantissa >> 13u);
   }
 
   if (exponent == 0xFF - (127 - 15)) {
-    if (mantissa == 0) return sign | 0x7C00u;
+    if (mantissa == 0)
+      return sign | 0x7C00u;
     return sign | 0x7C00u | static_cast<uint16_t>(mantissa >> 13u);
   }
 
-  if (exponent > 30) return sign | 0x7C00u;
-  return sign | static_cast<uint16_t>(exponent << 10u) | static_cast<uint16_t>(mantissa >> 13u);
+  if (exponent > 30)
+    return sign | 0x7C00u;
+  return sign | static_cast<uint16_t>(exponent << 10u) |
+         static_cast<uint16_t>(mantissa >> 13u);
 }
 
 bool isFp16(const chatterbox::OrtTensor &tensor) {
   return tensor.type == chatterbox::OrtElementType::Fp16;
 }
 
-void readTensorToFloatVector(
-    const chatterbox::OrtTensor &tensor,
-    std::vector<float> &dest,
-    std::vector<float>::iterator destStart) {
+void readTensorToFloatVector(const chatterbox::OrtTensor &tensor,
+                             std::vector<float> &dest,
+                             std::vector<float>::iterator destStart) {
   const int64_t numElements = getNumElements(tensor);
   if (isFp16(tensor)) {
     const auto *src = static_cast<const uint16_t *>(tensor.data);
@@ -99,9 +102,8 @@ void readTensorToFloatVector(
   }
 }
 
-void readTensorToFloatBuffer(
-    const chatterbox::OrtTensor &tensor,
-    float *dest, int64_t offset, int64_t count) {
+void readTensorToFloatBuffer(const chatterbox::OrtTensor &tensor, float *dest,
+                             int64_t offset, int64_t count) {
   if (isFp16(tensor)) {
     const auto *src = static_cast<const uint16_t *>(tensor.data) + offset;
     for (int64_t i = 0; i < count; i++) {
@@ -113,9 +115,8 @@ void readTensorToFloatBuffer(
   }
 }
 
-void writeFloatDataToTensor(
-    const chatterbox::OrtTensor &tensor,
-    const float *src, size_t numElements) {
+void writeFloatDataToTensor(const chatterbox::OrtTensor &tensor,
+                            const float *src, size_t numElements) {
   if (isFp16(tensor)) {
     auto *dest = static_cast<uint16_t *>(tensor.data);
     for (size_t i = 0; i < numElements; i++) {

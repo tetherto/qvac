@@ -1,0 +1,31 @@
+@startuml
+title RPC Communication Flow
+
+participant "Client Application" as Client
+participant "RPC Layer" as RPC
+participant "Worker (Bare)" as Server
+
+Client -> RPC : loadModel({ modelSrc, ... })
+RPC -> Server : JSON request
+
+note over Server : Download model (if needed)
+Server --> RPC : progress: { downloaded, total }
+RPC --> Client : progress: { downloaded, total }
+
+note over Server : Plugin.createModel -> load native addon
+Server -> RPC : response: { modelId }
+RPC -> Client : response: { modelId }
+
+Client -> RPC : completion({ modelId, history })
+RPC -> Server : JSON request
+
+note over Server : Plugin handler (streaming)
+loop Token streaming
+    Server --> RPC : stream: token chunk
+    RPC --> Client : stream: token chunk
+end
+
+Server -> RPC : final: { stats }
+RPC -> Client : final: { stats }
+
+@enduml

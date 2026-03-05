@@ -48,37 +48,11 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "SmolVLM-500M-Instruct-Q8_0.gguf";
-      }
-    }
-
-    fs::path projectionPath =
-        basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (fs::exists(projectionPath)) {
-      test_projection_path = projectionPath.string();
-    } else {
-      projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-      if (fs::exists(projectionPath)) {
-        test_projection_path = projectionPath.string();
-      } else {
-        test_projection_path = "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-      }
-    }
+    test_model_path = test_common::BaseTestModelPath::get(
+        "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+    test_projection_path = test_common::BaseTestModelPath::get(
+        "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+        "mmproj-SmolVLM-500M-Instruct.gguf");
 
     fs::path backendDir;
 #ifdef TEST_BINARY_DIR

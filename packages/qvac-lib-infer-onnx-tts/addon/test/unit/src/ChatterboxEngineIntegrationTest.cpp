@@ -91,7 +91,8 @@ static std::vector<float> makeMinimalReferenceAudio() {
   return std::vector<float>(oneSecondAt24k, 0.01f);
 }
 
-TEST(ChatterboxEngineIntegrationTest, synthesizeProducesAudioWhenModelsAvailable) {
+TEST(ChatterboxEngineIntegrationTest,
+     synthesizeProducesAudioWhenModelsAvailable) {
   fs::path root = getPackageRoot();
   ASSERT_FALSE(root.empty()) << "Could not resolve package root";
 
@@ -100,7 +101,8 @@ TEST(ChatterboxEngineIntegrationTest, synthesizeProducesAudioWhenModelsAvailable
 
   if (!chatterboxModelDirReady(fs::path(modelDir))) {
     int ret = runEnsureChatterboxModels(root.string());
-    ASSERT_EQ(0, ret) << "Failed to download Chatterbox models (npm run models:ensure)";
+    ASSERT_EQ(0, ret)
+        << "Failed to download Chatterbox models (npm run models:ensure)";
   }
 
   ASSERT_TRUE(chatterboxModelDirReady(fs::path(modelDir)))

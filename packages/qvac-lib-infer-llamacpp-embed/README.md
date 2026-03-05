@@ -115,7 +115,7 @@ const args = {
 The `args` obj contains the following properties:
 
 * `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a [`QvacLogger`](../qvac-lib-logging) instance, which handles all logging functionality. 
+* `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality. 
 * `opts.stats`: This flag determines whether to calculate inference stats.
 * `diskPath`: The local directory where the model file will be downloaded to.
 * `modelName`: The name of model file in the Data Loader.

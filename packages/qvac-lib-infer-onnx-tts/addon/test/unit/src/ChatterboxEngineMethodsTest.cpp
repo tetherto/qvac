@@ -1,7 +1,7 @@
 #include "src/model-interface/ChatterboxEngine.hpp"
 #include "src/model-interface/Fp16Utils.hpp"
-#include <gtest/gtest.h>
 #include <cmath>
+#include <gtest/gtest.h>
 
 namespace qvac::ttslib::chatterbox::testing {
 
@@ -11,11 +11,11 @@ public:
 
   void setEnglish(bool value) { isEnglish_ = value; }
 
-  using ChatterboxEngine::sanitizeTokenIds;
-  using ChatterboxEngine::buildInitialPositionIds;
-  using ChatterboxEngine::assembleSpeechTokenSequence;
-  using ChatterboxEngine::convertToAudioResult;
   using ChatterboxEngine::advancePositionIds;
+  using ChatterboxEngine::assembleSpeechTokenSequence;
+  using ChatterboxEngine::buildInitialPositionIds;
+  using ChatterboxEngine::convertToAudioResult;
+  using ChatterboxEngine::sanitizeTokenIds;
   using ChatterboxEngine::selectNextToken;
 };
 
@@ -124,7 +124,8 @@ TEST_F(BuildInitialPositionIdsTest, handlesEmptyInput) {
   EXPECT_EQ(result.shape[1], 0);
 }
 
-TEST_F(AssembleSpeechTokenSequenceTest, combinesPromptAndGeneratedTokensForEnglish) {
+TEST_F(AssembleSpeechTokenSequenceTest,
+       combinesPromptAndGeneratedTokensForEnglish) {
   engine_.setEnglish(true);
 
   TensorData<int64_t> prompt;
@@ -237,7 +238,8 @@ TEST_F(AdvancePositionIdsTest, advancesForMultilingual) {
 
 TEST_F(SelectNextTokenTest, selectsHighestLogit) {
   std::vector<float> logitsData = {0.1f, 0.5f, 0.9f, 0.2f};
-  OrtTensor tensor{logitsData.data(), "logits", {1, 1, 4}, OrtElementType::Fp32};
+  OrtTensor tensor{
+      logitsData.data(), "logits", {1, 1, 4}, OrtElementType::Fp32};
 
   std::vector<int64_t> generatedTokens = {6561};
 
@@ -247,12 +249,8 @@ TEST_F(SelectNextTokenTest, selectsHighestLogit) {
 }
 
 TEST_F(SelectNextTokenTest, selectsHighestLogitFromFp16Tensor) {
-  std::vector<uint16_t> fp16Data = {
-      fp16::fromFp32(0.1f),
-      fp16::fromFp32(0.5f),
-      fp16::fromFp32(0.9f),
-      fp16::fromFp32(0.2f)
-  };
+  std::vector<uint16_t> fp16Data = {fp16::fromFp32(0.1f), fp16::fromFp32(0.5f),
+                                    fp16::fromFp32(0.9f), fp16::fromFp32(0.2f)};
   OrtTensor tensor{fp16Data.data(), "logits", {1, 1, 4}, OrtElementType::Fp16};
 
   std::vector<int64_t> generatedTokens = {6561};
@@ -264,7 +262,8 @@ TEST_F(SelectNextTokenTest, selectsHighestLogitFromFp16Tensor) {
 
 TEST_F(SelectNextTokenTest, appliesRepetitionPenalty) {
   std::vector<float> logitsData = {0.9f, 0.1f, 0.8f, 0.2f};
-  OrtTensor tensor{logitsData.data(), "logits", {1, 1, 4}, OrtElementType::Fp32};
+  OrtTensor tensor{
+      logitsData.data(), "logits", {1, 1, 4}, OrtElementType::Fp32};
 
   std::vector<int64_t> generatedTokens = {0};
 

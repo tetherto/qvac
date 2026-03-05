@@ -20,8 +20,8 @@ public:
   virtual OrtTensor getInput(const std::string &inputName) = 0;
   virtual OrtTensor getOutput(const std::string &outputName) = 0;
 
-  virtual void initInputTensors(
-      const std::vector<std::vector<int64_t>> &inputShapes) = 0;
+  virtual void
+  initInputTensors(const std::vector<std::vector<int64_t>> &inputShapes) = 0;
 };
 
 } // namespace qvac::ttslib::chatterbox

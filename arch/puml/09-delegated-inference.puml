@@ -1,0 +1,29 @@
+@startuml
+!include <C4/C4_Component>
+
+title QVAC SDK - Delegated Inference Components
+
+Container_Boundary(provider, "Provider Side") {
+    Component(start_provider, "startQVACProvider", "API", "Announces model on topic")
+    Component(swarm_p, "Hyperswarm", "P2P", "Announce on topic")
+    Component(rpc_proxy, "RPC Server (proxy)", "Handler", "Forwards requests to local model")
+    Component(local_model, "Local Model", "Native Addon", "Executes inference")
+}
+
+Container_Boundary(consumer, "Consumer Side") {
+    Component(load_model, "loadModel(delegate:{})", "API", "Connects to remote provider")
+    Component(swarm_c, "Hyperswarm", "P2P", "Join topic")
+    Component(rpc_delegated, "RPC Client (delegated)", "Client", "Sends requests to provider")
+}
+
+Rel(start_provider, swarm_p, "Registers")
+Rel(swarm_p, rpc_proxy, "Receives connections")
+Rel(rpc_proxy, local_model, "Invokes")
+
+Rel(load_model, swarm_c, "Joins")
+Rel(swarm_c, rpc_delegated, "Establishes connection")
+
+BiRel(swarm_p, swarm_c, "Swarm Discovery")
+BiRel(rpc_proxy, rpc_delegated, "Encrypted P2P Stream")
+
+@enduml

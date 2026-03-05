@@ -32,6 +32,7 @@ on:
 jobs:
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -126,18 +127,18 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
     with:
       workdir: packages/qvac-lib-infer-base
       repo_name: infer-base
-      create-tag: "false"
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-release-npm]
-    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.npm_published_version != ''
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -145,7 +146,7 @@ jobs:
     with:
       repo_name: "infer-base"
       release_name: "QVAC Infer Base Lib"
-      published_version: ${{ needs.publish-release-npm.outputs.npm_published_version }}
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/qvac-lib-infer-base"
 

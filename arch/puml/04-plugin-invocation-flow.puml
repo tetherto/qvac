@@ -1,0 +1,29 @@
+@startuml
+title Plugin Invocation Flow
+
+participant "Client Application" as Client
+participant "RPC Layer" as RPC
+participant "Plugin Registry" as PluginReg
+participant "Plugin Handler" as Handler
+
+Client -> RPC : invokePlugin({ modelId, handler, params })
+RPC -> PluginReg : resolvePluginHandler(modelId, handlerName)
+
+note over PluginReg
+  getModelEntry(modelId) -> modelType
+  getPlugin(modelType) -> plugin
+  getPluginHandler(modelType, handler) -> handlerDef
+end note
+
+PluginReg -> Handler : validate params with requestSchema
+Handler -> Handler : execute handler(params)
+Handler -> PluginReg : validate result with responseSchema
+PluginReg -> RPC : response: { type, result }
+RPC -> Client : result
+
+note over Client, Handler
+  Streaming variant uses invokePluginStream
+  -> async generator -> NDJSON chunks
+end note
+
+@enduml
