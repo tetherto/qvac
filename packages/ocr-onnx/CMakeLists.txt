@@ -5,7 +5,7 @@ option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
 
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
- message(STATUS "enter special apple")
+ message(STATUS "Configuring for Apple platform")
   # Force Apple Clang from Xcode, not Homebrew
   execute_process(
     COMMAND xcrun --find clang
@@ -79,7 +79,7 @@ set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(
   qvac-lib-inference-addon-onnx-ocr-fasttext
-  VERSION 0.1.14
+  VERSION 0.2.0
   LANGUAGES C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -131,6 +131,8 @@ target_sources(
     addon/pipeline/StepDetectionInference.cpp
     addon/pipeline/StepBoundingBox.cpp
     addon/pipeline/StepRecognizeText.cpp
+    addon/pipeline/StepDoctrDetection.cpp
+    addon/pipeline/StepDoctrRecognition.cpp
 )
 target_include_directories(
   ${qvac-lib-inference-addon-onnx-ocr-fasttext}
@@ -230,6 +232,8 @@ if(BUILD_TESTING)
         addon/pipeline/StepDetectionInference.cpp
         addon/pipeline/StepBoundingBox.cpp
         addon/pipeline/StepRecognizeText.cpp
+        addon/pipeline/StepDoctrDetection.cpp
+        addon/pipeline/StepDoctrRecognition.cpp
     )
 
     target_include_directories(

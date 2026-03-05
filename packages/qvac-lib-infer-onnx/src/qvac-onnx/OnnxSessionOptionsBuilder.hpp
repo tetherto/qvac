@@ -6,15 +6,13 @@
 #include <string>
 
 #include "OnnxConfig.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "Logger.hpp"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <dml_provider_factory.h>
 #endif
 
 namespace onnx_addon {
-
-namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 // Try to append XNNPack execution provider if available and enabled
 inline void tryAppendXnnpack(Ort::SessionOptions& sessionOptions) {
@@ -57,6 +55,20 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
       sessionOptions.SetGraphOptimizationLevel(
           ::GraphOptimizationLevel::ORT_ENABLE_ALL);
       break;
+  }
+
+  // Execution mode
+  sessionOptions.SetExecutionMode(
+      config.executionMode == ExecutionMode::PARALLEL
+          ? ::ExecutionMode::ORT_PARALLEL
+          : ::ExecutionMode::ORT_SEQUENTIAL);
+
+  // Memory options
+  if (!config.enableMemoryPattern) {
+    sessionOptions.DisableMemPattern();
+  }
+  if (!config.enableCpuMemArena) {
+    sessionOptions.DisableCpuMemArena();
   }
 
   // CPU-only mode

@@ -23,7 +23,7 @@ struct AddonInstance {
 /// C++ tests.
 inline AddonInstance createInstance(
     const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
-    std::span<const std::string> langList, bool useGPU = true,
+    std::span<const std::string> langList, bool useGPU = false,
     int timeout = Pipeline::DEFAULT_PIPELINE_TIMEOUT_SECONDS,
     const Pipeline::Config& config = Pipeline::Config{}) {
   using namespace qvac_lib_inference_addon_cpp;
