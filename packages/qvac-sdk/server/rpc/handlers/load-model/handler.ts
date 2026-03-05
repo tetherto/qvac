@@ -27,16 +27,92 @@ const logger = getServerLogger();
 
 const OCR_DETECTOR_FILENAME = "detector_craft.onnx";
 
+type ResolveFn = (src: unknown) => Promise<string>;
+
+// ---------------------------------------------------------------------------
+// Source derivation — pure functions that figure out which sources to resolve
+// ---------------------------------------------------------------------------
+
+function getOcrCompanionSources(
+  modelSrc: string,
+  detectorModelSrc?: string,
+): Record<string, unknown> {
+  if (detectorModelSrc) return { detectorModelPath: detectorModelSrc };
+  if (modelSrc.startsWith("pear://")) {
+    const { key } = hyperdriveUrlSchema.parse(modelSrc);
+    return { detectorModelPath: `pear://${key}/${OCR_DETECTOR_FILENAME}` };
+  }
+  if (modelSrc.startsWith("registry://")) {
+    return { detectorModelPath: OCR_CRAFT_DETECTOR };
+  }
+  return {};
+}
+
+function getNmtCompanionSources(
+  modelSrc: string,
+  modelConfig: unknown,
+  srcVocabSrc?: string,
+  dstVocabSrc?: string,
+): Record<string, string> {
+  const config = modelConfig as { engine?: string } | undefined;
+  if (config?.engine !== "Bergamot") return {};
+
+  let src = srcVocabSrc;
+  let dst = dstVocabSrc;
+
+  if (!srcVocabSrc || !dstVocabSrc) {
+    const derived = modelSrc.startsWith("pear://")
+      ? deriveBergamotVocabSources(modelSrc)
+      : modelSrc.startsWith("registry://")
+        ? deriveBergamotRegistryVocabSources(modelSrc)
+        : null;
+    if (derived) {
+      src = srcVocabSrc ?? derived.srcVocabSrc;
+      dst = dstVocabSrc ?? derived.dstVocabSrc;
+    }
+  }
+
+  const result: Record<string, string> = {};
+  if (src) result["srcVocabPath"] = src;
+  if (dst) result["dstVocabPath"] = dst;
+  return result;
+}
+
+function getDefaultCompanionSources(
+  projectionModelSrc?: string,
+  vadModelSrc?: string,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (projectionModelSrc) result["projectionModelPath"] = projectionModelSrc;
+  if (vadModelSrc) result["vadModelPath"] = vadModelSrc;
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Generic parallel resolver — resolves a named set of sources concurrently
+// ---------------------------------------------------------------------------
+
+async function resolveInParallel(
+  resolve: ResolveFn,
+  sources: Record<string, unknown>,
+): Promise<Record<string, string>> {
+  const entries = Object.entries(sources);
+  const paths = await Promise.all(entries.map(([, src]) => resolve(src)));
+  return Object.fromEntries(entries.map(([key], i) => [key, paths[i]!]));
+}
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+
 export async function handleLoadModel(
   request: LoadModelRequest,
   progressCallback?: (update: ModelProgressUpdate) => void,
 ): Promise<LoadModelResponse> {
-  // Handle reload config
   if (isReloadConfigRequest(request)) {
     return handleConfigReload(request);
   }
 
-  // Handle load new model from source
   const { modelSrc, modelName, seed, projectionModelSrc, vadModelSrc } =
     request;
   const canonicalModelType = normalizeModelType(request.modelType);
@@ -54,110 +130,44 @@ export async function handleLoadModel(
       : undefined;
 
   try {
-    const modelPath = await resolveModelPath(modelSrc, progressCallback, seed);
+    const resolve: ResolveFn = (src) => resolveModelPath(src, progressCallback, seed);
 
-    let projectionModelPath: string | undefined;
-    if (projectionModelSrc) {
-      projectionModelPath = await resolveModelPath(
-        projectionModelSrc,
-        progressCallback,
-        seed,
-      );
-    }
+    // Companion sources are mutually exclusive per model type (schema union).
+    // Each derive function returns only the sources relevant to its type.
+    const companions =
+      canonicalModelType === ModelType.onnxOcr
+        ? getOcrCompanionSources(modelSrc, detectorModelSrc)
+        : canonicalModelType === ModelType.nmtcppTranslation
+          ? getNmtCompanionSources(modelSrc, request.modelConfig, srcVocabSrc, dstVocabSrc)
+          : getDefaultCompanionSources(projectionModelSrc, vadModelSrc);
 
-    let vadModelPath: string | undefined;
-    if (vadModelSrc) {
-      vadModelPath = await resolveModelPath(
-        vadModelSrc,
-        progressCallback,
-        seed,
-      );
-    }
+    const resolved = await resolveInParallel(resolve, {
+      modelPath: modelSrc,
+      ...companions,
+    });
 
-    // For OCR models: use provided detectorModelSrc or auto-derive
-    let detectorModelPath: string | undefined;
-    if (canonicalModelType === ModelType.onnxOcr) {
-      if (detectorModelSrc) {
-        detectorModelPath = await resolveModelPath(
-          detectorModelSrc,
-          progressCallback,
-          seed,
-        );
-      } else if (modelSrc.startsWith("pear://")) {
-        const { key } = hyperdriveUrlSchema.parse(modelSrc);
-        const derivedDetectorSrc = `pear://${key}/${OCR_DETECTOR_FILENAME}`;
-        detectorModelPath = await resolveModelPath(
-          derivedDetectorSrc,
-          progressCallback,
-          seed,
-        );
-      } else if (modelSrc.startsWith("registry://")) {
-        detectorModelPath = await resolveModelPath(
-          OCR_CRAFT_DETECTOR,
-          progressCallback,
-          seed,
-        );
-      }
-    }
-
-    // For Bergamot models, resolve vocabulary sources to local paths
-    if (
-      canonicalModelType === ModelType.nmtcppTranslation &&
-      request.modelConfig
-    ) {
+    // Apply NMT vocab paths back to config
+    if (resolved["srcVocabPath"] || resolved["dstVocabPath"]) {
       const nmtConfig = request.modelConfig as {
-        engine?: string;
         srcVocabPath?: string;
         dstVocabPath?: string;
       };
-      if (nmtConfig.engine === "Bergamot") {
-        let resolvedSrcVocabSrc = srcVocabSrc;
-        let resolvedDstVocabSrc = dstVocabSrc;
-
-        if (!srcVocabSrc || !dstVocabSrc) {
-          const derivedVocabSrcs = modelSrc.startsWith("pear://")
-            ? deriveBergamotVocabSources(modelSrc)
-            : modelSrc.startsWith("registry://")
-              ? deriveBergamotRegistryVocabSources(modelSrc)
-              : null;
-          if (derivedVocabSrcs) {
-            resolvedSrcVocabSrc = srcVocabSrc ?? derivedVocabSrcs.srcVocabSrc;
-            resolvedDstVocabSrc = dstVocabSrc ?? derivedVocabSrcs.dstVocabSrc;
-          }
-        }
-
-        if (resolvedSrcVocabSrc) {
-          nmtConfig.srcVocabPath = await resolveModelPath(
-            resolvedSrcVocabSrc,
-            progressCallback,
-            seed,
-          );
-        }
-        if (resolvedDstVocabSrc) {
-          nmtConfig.dstVocabPath = await resolveModelPath(
-            resolvedDstVocabSrc,
-            progressCallback,
-            seed,
-          );
-        }
-      }
+      if (resolved["srcVocabPath"]) nmtConfig.srcVocabPath = resolved["srcVocabPath"];
+      if (resolved["dstVocabPath"]) nmtConfig.dstVocabPath = resolved["dstVocabPath"];
     }
 
-    // Use plugin's resolveConfig hook if available to resolve model sources
+    // Use plugin's resolveConfig hook if available (e.g. TTS, Parakeet)
     let resolvedModelConfig = request.modelConfig as
       | Record<string, unknown>
       | undefined;
     const plugin = getPlugin(canonicalModelType);
     if (plugin?.resolveConfig && resolvedModelConfig) {
-      const resolve = (src: string) =>
-        resolveModelPath(src, progressCallback, seed);
       resolvedModelConfig = await plugin.resolveConfig(
         resolvedModelConfig,
-        resolve,
+        (src: string) => resolveModelPath(src, progressCallback, seed),
       );
     }
 
-    // Generate hash-based modelId from modelConfig (includes all sources for TTS)
     const configStr = JSON.stringify(
       request.modelConfig,
       Object.keys(request.modelConfig as object).sort(),
@@ -165,18 +175,13 @@ export async function handleLoadModel(
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
-    const loadModelOptions = {
-      ...request,
-      modelConfig: resolvedModelConfig,
-    };
-
     await loadModel({
       modelId,
-      modelPath,
-      options: loadModelOptions,
-      projectionModelPath,
-      vadModelPath,
-      detectorModelPath,
+      modelPath: resolved["modelPath"]!,
+      options: { ...request, modelConfig: resolvedModelConfig },
+      projectionModelPath: resolved["projectionModelPath"],
+      vadModelPath: resolved["vadModelPath"],
+      detectorModelPath: resolved["detectorModelPath"],
       modelName,
     });
 

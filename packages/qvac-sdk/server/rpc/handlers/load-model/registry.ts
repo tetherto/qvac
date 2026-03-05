@@ -16,10 +16,7 @@ import {
   calculatePercentage,
 } from "@/server/utils";
 import { getModelByPath, type RegistryItem } from "@/models/registry";
-import {
-  getRegistryClient,
-  closeRegistryClient,
-} from "@/server/bare/registry/registry-client";
+import { getRegistryClient } from "@/server/bare/registry/registry-client";
 import {
   getActiveDownload,
   registerDownload,
@@ -126,107 +123,97 @@ async function downloadSingleFileFromRegistry(
 
   const client = await getRegistryClient();
 
-  try {
-    let readStream: Readable;
+  let readStream: Readable;
 
-    if (blobBinding) {
-      logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-      const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
-      if (!("stream" in result.artifact)) {
-        throw new RegistryDownloadFailedError(
-          `No stream returned for blob ${modelFileName}`,
-        );
-      }
-      readStream = result.artifact.stream as unknown as Readable;
-    } else {
-      logger.info(`📥 Downloading from registry: ${registryPath}`);
-      const result = await client.downloadModel(registryPath, registrySource, {
-        timeout: REGISTRY_STREAM_TIMEOUT_MS,
-      });
-      if (!("stream" in result.artifact)) {
-        throw new RegistryDownloadFailedError(
-          `No stream returned for ${registryPath}`,
-        );
-      }
-      readStream = result.artifact.stream as unknown as Readable;
-    }
-
-    const dir = path.dirname(modelPath);
-    await fsPromises.mkdir(dir, { recursive: true });
-
-    const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
-
-    // Track progress
-    let downloadedBytes = 0;
-
-    readStream.on("data", (chunk: unknown) => {
-      const buffer = chunk as Buffer;
-      downloadedBytes += buffer.length;
-
-      if (progressCallback) {
-        progressCallback({
-          type: "modelProgress",
-          downloaded: downloadedBytes,
-          total: expectedSize || downloadedBytes,
-          percentage: expectedSize
-            ? calculatePercentage(downloadedBytes, expectedSize)
-            : 0,
-          downloadKey,
-        });
-      }
-    });
-
-    // Pipe stream to file
-    readStream.pipe(writeStream);
-
-    // Wait for download to complete
-    await new Promise<void>((resolve, reject) => {
-      writeStream.on("finish", resolve);
-      writeStream.on("error", reject);
-      readStream.on("error", reject);
-
-      signal?.addEventListener(
-        "abort",
-        () => reject(new Error("Download cancelled")),
-        { once: true },
-      );
-    });
-
-    logger.info(`✅ Downloaded to ${modelPath}`);
-
-    // Validate file size
-    const stats = await fsPromises.stat(modelPath);
-    if (expectedSize && stats.size !== expectedSize) {
-      await fsPromises.unlink(modelPath).catch(() => {});
-      throw new ChecksumValidationFailedError(
-        `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`,
+  if (blobBinding) {
+    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
+    const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
+    if (!("stream" in result.artifact)) {
+      throw new RegistryDownloadFailedError(
+        `No stream returned for blob ${modelFileName}`,
       );
     }
-
-    // Validate checksum
-    if (expectedChecksum && expectedChecksum.length === 64) {
-      const checksum = await calculateFileChecksum(modelPath);
-      if (checksum !== expectedChecksum) {
-        await fsPromises.unlink(modelPath);
-        throw new ChecksumValidationFailedError(
-          `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`,
-        );
-      }
-      logger.info(`✅ Checksum validated for ${modelFileName}`);
+    readStream = result.artifact.stream as unknown as Readable;
+  } else {
+    logger.info(`📥 Downloading from registry: ${registryPath}`);
+    const result = await client.downloadModel(registryPath, registrySource, {
+      timeout: REGISTRY_STREAM_TIMEOUT_MS,
+    });
+    if (!("stream" in result.artifact)) {
+      throw new RegistryDownloadFailedError(
+        `No stream returned for ${registryPath}`,
+      );
     }
+    readStream = result.artifact.stream as unknown as Readable;
+  }
 
-    // Send final 100% progress
+  const dir = path.dirname(modelPath);
+  await fsPromises.mkdir(dir, { recursive: true });
+
+  const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
+
+  let downloadedBytes = 0;
+
+  readStream.on("data", (chunk: unknown) => {
+    const buffer = chunk as Buffer;
+    downloadedBytes += buffer.length;
+
     if (progressCallback) {
       progressCallback({
         type: "modelProgress",
-        downloaded: stats.size,
-        total: stats.size,
-        percentage: 100,
+        downloaded: downloadedBytes,
+        total: expectedSize || downloadedBytes,
+        percentage: expectedSize
+          ? calculatePercentage(downloadedBytes, expectedSize)
+          : 0,
         downloadKey,
       });
     }
-  } finally {
-    await closeRegistryClient();
+  });
+
+  readStream.pipe(writeStream);
+
+  await new Promise<void>((resolve, reject) => {
+    writeStream.on("finish", resolve);
+    writeStream.on("error", reject);
+    readStream.on("error", reject);
+
+    signal?.addEventListener(
+      "abort",
+      () => reject(new Error("Download cancelled")),
+      { once: true },
+    );
+  });
+
+  logger.info(`✅ Downloaded to ${modelPath}`);
+
+  const stats = await fsPromises.stat(modelPath);
+  if (expectedSize && stats.size !== expectedSize) {
+    await fsPromises.unlink(modelPath).catch(() => {});
+    throw new ChecksumValidationFailedError(
+      `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`,
+    );
+  }
+
+  if (expectedChecksum && expectedChecksum.length === 64) {
+    const checksum = await calculateFileChecksum(modelPath);
+    if (checksum !== expectedChecksum) {
+      await fsPromises.unlink(modelPath);
+      throw new ChecksumValidationFailedError(
+        `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`,
+      );
+    }
+    logger.info(`✅ Checksum validated for ${modelFileName}`);
+  }
+
+  if (progressCallback) {
+    progressCallback({
+      type: "modelProgress",
+      downloaded: stats.size,
+      total: stats.size,
+      percentage: 100,
+      downloadKey,
+    });
   }
 }
 
@@ -238,51 +225,43 @@ async function findModelShards(
 ): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
   const client = await getRegistryClient();
 
-  try {
-    // Extract the base path without the shard suffix
-    const shardInfo = detectShardedModel(registryPath.split("/").pop() || "");
-    if (!shardInfo.isSharded) {
-      throw new Error(`Not a sharded model path: ${registryPath}`);
-    }
-
-    // Get path prefix by removing the shard suffix
-    const pathPrefix = registryPath.replace(/-\d{5}-of-\d{5}\./, ".");
-    const basePath = pathPrefix.substring(0, pathPrefix.lastIndexOf("."));
-
-    logger.info(`🔍 Finding shards with prefix: ${basePath}`);
-
-    // Use indexed path range query instead of fetching all models
-    const shards: QVACModelEntry[] = await client.findModels({
-      gte: { path: basePath },
-      lte: { path: basePath + "\uffff" },
-    });
-
-    // Sort shards by shard number
-    const sortedShards = shards
-      .filter((s) => {
-        const info = detectShardedModel(s.path.split("/").pop() || "");
-        return info.isSharded;
-      })
-      .sort((a, b) => {
-        const aInfo = detectShardedModel(a.path.split("/").pop() || "");
-        const bInfo = detectShardedModel(b.path.split("/").pop() || "");
-        return (aInfo.currentShard || 0) - (bInfo.currentShard || 0);
-      })
-      .map((s) => ({
-        path: s.path,
-        source: s.source,
-        size: s.blobBinding?.byteLength || 0,
-        checksum:
-          (s.blobBinding as unknown as Record<string, string>)?.["sha256"] ||
-          s.sha256 ||
-          "",
-      }));
-
-    logger.info(`📦 Found ${sortedShards.length} shards`);
-    return sortedShards;
-  } finally {
-    await closeRegistryClient();
+  const shardInfo = detectShardedModel(registryPath.split("/").pop() || "");
+  if (!shardInfo.isSharded) {
+    throw new Error(`Not a sharded model path: ${registryPath}`);
   }
+
+  const pathPrefix = registryPath.replace(/-\d{5}-of-\d{5}\./, ".");
+  const basePath = pathPrefix.substring(0, pathPrefix.lastIndexOf("."));
+
+  logger.info(`🔍 Finding shards with prefix: ${basePath}`);
+
+  const shards: QVACModelEntry[] = await client.findModels({
+    gte: { path: basePath },
+    lte: { path: basePath + "\uffff" },
+  });
+
+  const sortedShards = shards
+    .filter((s) => {
+      const info = detectShardedModel(s.path.split("/").pop() || "");
+      return info.isSharded;
+    })
+    .sort((a, b) => {
+      const aInfo = detectShardedModel(a.path.split("/").pop() || "");
+      const bInfo = detectShardedModel(b.path.split("/").pop() || "");
+      return (aInfo.currentShard || 0) - (bInfo.currentShard || 0);
+    })
+    .map((s) => ({
+      path: s.path,
+      source: s.source,
+      size: s.blobBinding?.byteLength || 0,
+      checksum:
+        (s.blobBinding as unknown as Record<string, string>)?.["sha256"] ||
+        s.sha256 ||
+        "",
+    }));
+
+  logger.info(`📦 Found ${sortedShards.length} shards`);
+  return sortedShards;
 }
 
 /**
