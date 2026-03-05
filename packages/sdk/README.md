@@ -478,10 +478,10 @@ bun run build  # or `watch` for hotreload
 bun run build:pack
 ```
 
-This outputs a tarball under `dist/qvac-sdk-{version}.tgz` that you can install in your project, e.g.:
+This outputs a tarball under `dist/sdk-{version}.tgz` that you can install in your project, e.g.:
 
 ```bash
-npm i path/to/qvac-sdk-0.3.0.tgz
+npm i path/to/sdk-0.3.0.tgz
 ```
 
 ## More Resources

@@ -110,7 +110,7 @@ import {
   PLUGIN_TTS, 
   SDK_DEFAULT_PLUGINS, 
   type BuiltinPlugin 
-} from "qvac-sdk";
+} from "sdk";
 ```
 
 ```typescript

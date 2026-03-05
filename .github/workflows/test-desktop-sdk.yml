@@ -448,7 +448,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
-          workflow: test-desktop-qvac-sdk.yml
+          workflow: test-desktop-sdk.yml
           branch: ${{ github.event.pull_request.base.ref }}
           name: baseline-*
           path: ${{ inputs.working-directory }}/baseline-results/

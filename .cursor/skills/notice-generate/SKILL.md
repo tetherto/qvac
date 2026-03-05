@@ -43,7 +43,7 @@ source .env
 node .cursor/skills/notice-generate/scripts/generate-notice.js <package-dir-name>
 ```
 
-Example: `node .cursor/skills/notice-generate/scripts/generate-notice.js qvac-sdk`
+Example: `node .cursor/skills/notice-generate/scripts/generate-notice.js sdk`
 
 For registry sub-packages use the full path:
 - `qvac-lib-registry-server/client`
@@ -61,7 +61,7 @@ node .cursor/skills/notice-generate/scripts/generate-notice.js --all
 ```bash
 source .env
 node .cursor/skills/notice-generate/scripts/generate-notice.js --all --dry-run
-node .cursor/skills/notice-generate/scripts/generate-notice.js qvac-sdk --dry-run
+node .cursor/skills/notice-generate/scripts/generate-notice.js sdk --dry-run
 ```
 
 In dry-run mode:
@@ -116,7 +116,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 ## Package coverage
 
 - **Skip**: `packages/docs` (not a package)
-- **Models (full list)**: `qvac-sdk`, `qvac-lib-registry-server/client`
+- **Models (full list)**: `sdk`, `qvac-lib-registry-server/client`
 - **Models (by engine)**: All addon packages, mapped by engine name
 - **JS**: Every package with dependencies in `package.json`
 - **Python**: Packages with `requirements.txt` or `pyproject.toml` in benchmarks/scripts

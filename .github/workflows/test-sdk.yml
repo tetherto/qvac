@@ -1,15 +1,15 @@
 # QVAC SDK Tests
 # Uses reusable workflow from qvac-devops
-# Originally from qvac-sdk/.github/workflows/qvac-tests.yml
+# Originally from sdk/.github/workflows/qvac-tests.yml
 
-name: QVAC Tests (Qvac-sdk)
+name: QVAC Tests (sdk)
 
 on:
   # Disabled until it's stabilised, to not waste compute resources
   workflow_dispatch:
   # pull_request:
   #   paths:
-  #     - "packages/qvac-sdk/**"
+  #     - "packages/sdk/**"
   #   branches:
   #     - main
   #     - release-*
@@ -20,7 +20,7 @@ on:
   #     - feature-*
   #     - tmp-*
   #   paths:
-  #     - "packages/qvac-sdk/**"
+  #     - "packages/sdk/**"
 
 permissions:
   contents: read
@@ -29,10 +29,10 @@ permissions:
 
 jobs:
   desktop-tests:
-    uses: ./.github/workflows/test-desktop-qvac-sdk.yml
+    uses: ./.github/workflows/test-desktop-sdk.yml
     with:
-      project-directory: "packages/qvac-sdk"
-      working-directory: "packages/qvac-sdk/tests-qvac"
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/tests-qvac"
       platforms: '["ai-run-linux-gpu", "macos-latest-xlarge"]'
       consumer-timeout: 60
       filter: "model-load-llm,completion-streaming"

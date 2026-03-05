@@ -82,7 +82,7 @@ test("extractVersionFromTag: returns null for null input", (t) => {
 
 test("extractVersionFromTag: returns null for malformed tag", (t) => {
   t.absent(extractVersionFromTag("not-a-tag"));
-  t.absent(extractVersionFromTag("qvac-sdk-1.0.0"));
+  t.absent(extractVersionFromTag("sdk-1.0.0"));
   t.absent(extractVersionFromTag("v1.0.0"));
 });
 
@@ -194,17 +194,17 @@ test("generateBasicChangelog: includes all PRs in output", (t) => {
 // ============================================================
 
 test("parseArgs: parses --package flag", (t) => {
-  const result = parseArgs(["--package=qvac-sdk"]);
-  t.is(result.package, "qvac-sdk");
+  const result = parseArgs(["--package=sdk"]);
+  t.is(result.package, "sdk");
 });
 
 test("parseArgs: parses multiple flags", (t) => {
   const result = parseArgs([
-    "--package=qvac-sdk",
+    "--package=sdk",
     "--base-commit=abc123",
     "--base-version=1.0.0",
   ]);
-  t.is(result.package, "qvac-sdk");
+  t.is(result.package, "sdk");
   t.is(result["base-commit"], "abc123");
   t.is(result["base-version"], "1.0.0");
 });
@@ -454,7 +454,7 @@ test("generateChangelogFiles: generates CHANGELOG.md with correct sections", (t)
   const validPRs = processSDKPRs(basicMock.input.prs);
   const outDir = path.join(tmpDir, "basic");
 
-  generateChangelogFiles("qvac-sdk", "1.0.0", validPRs, outDir);
+  generateChangelogFiles("sdk", "1.0.0", validPRs, outDir);
 
   const changelog = fs.readFileSync(path.join(outDir, "CHANGELOG.md"), "utf-8");
   t.ok(changelog.includes("# Changelog v1.0.0"));
@@ -471,7 +471,7 @@ test("generateChangelogFiles: generates breaking.md for [bc] PRs", (t) => {
   const validPRs = processSDKPRs(breakingMock.input.prs);
   const outDir = path.join(tmpDir, "breaking");
 
-  generateChangelogFiles("qvac-sdk", "2.0.0", validPRs, outDir);
+  generateChangelogFiles("sdk", "2.0.0", validPRs, outDir);
 
   t.ok(fs.existsSync(path.join(outDir, "breaking.md")));
   const breakingMd = fs.readFileSync(path.join(outDir, "breaking.md"), "utf-8");
@@ -485,7 +485,7 @@ test("generateChangelogFiles: generates api.md for [api] PRs", (t) => {
   const validPRs = processSDKPRs(basicMock.input.prs);
   const outDir = path.join(tmpDir, "api");
 
-  generateChangelogFiles("qvac-sdk", "1.0.0", validPRs, outDir);
+  generateChangelogFiles("sdk", "1.0.0", validPRs, outDir);
 
   t.ok(fs.existsSync(path.join(outDir, "api.md")));
   const apiMd = fs.readFileSync(path.join(outDir, "api.md"), "utf-8");
@@ -498,7 +498,7 @@ test("generateChangelogFiles: generates models.md for [mod] PRs", (t) => {
   const validPRs = processSDKPRs(modelsMock.input.prs);
   const outDir = path.join(tmpDir, "models");
 
-  generateChangelogFiles("qvac-sdk", "3.0.0", validPRs, outDir);
+  generateChangelogFiles("sdk", "3.0.0", validPRs, outDir);
 
   t.ok(fs.existsSync(path.join(outDir, "models.md")));
   const modelsMd = fs.readFileSync(path.join(outDir, "models.md"), "utf-8");
@@ -518,7 +518,7 @@ test("generateChangelogFiles: does not generate detail files when not needed", (
   ]);
   const outDir = path.join(tmpDir, "simple");
 
-  generateChangelogFiles("qvac-sdk", "1.0.1", prs, outDir);
+  generateChangelogFiles("sdk", "1.0.1", prs, outDir);
 
   t.ok(fs.existsSync(path.join(outDir, "CHANGELOG.md")));
   t.ok(!fs.existsSync(path.join(outDir, "breaking.md")));
