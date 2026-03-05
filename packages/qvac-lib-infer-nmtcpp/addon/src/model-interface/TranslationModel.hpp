@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 #include <variant>
 
 #include "nmt.hpp"
