@@ -7,7 +7,6 @@ on:
 jobs:
   check-approvals:
     if: github.event.review.state == 'approved'
-    needs: run-when-command
     permissions:
       contents: write
       pull-requests: write
