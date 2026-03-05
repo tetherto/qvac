@@ -87,6 +87,14 @@ setup_claude() {
     copy_with_header "$f" "$REPO_ROOT/.claude/commands/sdk/$(basename "$f")"
   done
 
+  # SDK references (subdirectories under skills/sdk/)
+  if [ -d "$SCRIPT_DIR/skills/sdk/references" ]; then
+    for f in "$SCRIPT_DIR"/skills/sdk/references/*.md; do
+      [ -f "$f" ] || continue
+      copy_with_header "$f" "$REPO_ROOT/.claude/commands/sdk/references/$(basename "$f")"
+    done
+  fi
+
   # MCP: print instructions (Claude Code uses user-level config)
   echo ""
   echo "  MCP servers are defined in .agent/mcp.json."
@@ -103,8 +111,8 @@ setup_cursor() {
   echo ""
   echo "Setting up Cursor (.cursor/)..."
 
-  # Commands (addons — plain copy with header)
-  for f in "$SCRIPT_DIR"/skills/addons/prepare_release_notes.md "$SCRIPT_DIR"/skills/addons/prepare_pr_description.md; do
+  # Commands (addons — all addon skills as Cursor commands)
+  for f in "$SCRIPT_DIR"/skills/addons/*.md; do
     [ -f "$f" ] || continue
     copy_with_header "$f" "$REPO_ROOT/.cursor/commands/addons/$(basename "$f")"
   done
@@ -129,6 +137,14 @@ setup_cursor() {
     "addon-changelog" \
     "Generate changelog entries for a target add-on package. Use when preparing a new release." \
     "$REPO_ROOT/.cursor/skills/addon-changelog/SKILL.md"
+
+  # SDK references for changelog skill
+  if [ -d "$SCRIPT_DIR/skills/sdk/references" ]; then
+    for f in "$SCRIPT_DIR"/skills/sdk/references/*.md; do
+      [ -f "$f" ] || continue
+      copy_with_header "$f" "$REPO_ROOT/.cursor/skills/sdk-changelog/references/$(basename "$f")"
+    done
+  fi
 
   # MCP: generate .cursor/mcp.json from .agent/mcp.json
   # Cursor uses mcpServers at the top level (not nested under "servers")

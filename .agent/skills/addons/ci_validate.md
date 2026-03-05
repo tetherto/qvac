@@ -48,11 +48,14 @@ After the run completes, get the result:
   2. Show the user which jobs/platforms failed and the relevant error logs
   3. Ask if they want you to investigate and fix the issue
 
+For failure analysis, platform details, and troubleshooting: see `.agent/knowledge/ci-validation.md`.
+
+**Important:** Only attempt to fix **infra/CI failures** (environment, config, workflow issues). If the failure is a **code logic error** (compilation error, test assertion, lint violation, type error), report the failure back to the user with the relevant logs — do not attempt to fix application code.
+
 ### Step 5: Retry loop (if called by an agent, not interactively)
 
 If running as part of an automated pipeline (not interactive):
-1. Analyze the failure logs
-2. Fix the issue
-3. Commit and push
-4. Re-trigger the workflow (go to Step 2)
-5. If the **same stage fails more than 5 times** after fixes: document on the Asana task with full error logs, what was tried, and which platforms are affected — then STOP
+1. Analyze the failure logs using the classification guide in `.agent/knowledge/ci-validation.md`
+2. If **infra failure**: fix the CI/config issue, commit and push, re-trigger (go to Step 2)
+3. If **code logic failure**: stop and report back with the error logs, affected platforms, and which source files need attention
+4. If the **same infra failure persists more than 5 times** after fixes: document on the Asana task with full error logs, what was tried, and which platforms are affected — then STOP
