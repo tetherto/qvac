@@ -231,9 +231,7 @@ jobs:
       - name: Linux - install dependencies
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers libomp5
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - name: macOS — Metal GPU diagnostic
         if: matrix.platform == 'darwin'
