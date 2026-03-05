@@ -43,7 +43,7 @@ function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   }
 
   if (typeof embedConfig.embdNormalize === "number") {
-    config.embed_normalize = `${embedConfig.embdNormalize}`;
+    config.embd_normalize = `${embedConfig.embdNormalize}`;
   }
 
   if (embedConfig.mainGpu !== undefined) {
