@@ -22,3 +22,4 @@ logs/
 .clang-format
 output/
 *.deb
+test/integration/all.js

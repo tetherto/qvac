@@ -63,10 +63,11 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          - os: windows-11
-            platform: win32
-            arch: x64
-            runner: ai-run-windows11-gpu
+          # TODO: Enable once win32 prebuild is fixed
+          # - os: windows-11
+          #   platform: win32
+          #   arch: x64
+          #   runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
@@ -231,7 +232,9 @@ jobs:
       - name: Linux - install dependencies
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libomp5
 
       - name: macOS — Metal GPU diagnostic
         if: matrix.platform == 'darwin'
@@ -309,4 +312,3 @@ jobs:
           path: ${{ env.WORKDIR }}/test/model/*.png
           if-no-files-found: ignore
           retention-days: 30
-

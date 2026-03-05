@@ -36,11 +36,11 @@ const PROMPT = [
 
 const NEGATIVE_PROMPT = 'blurry, low quality, watermark, text, bad anatomy'
 
-const STEPS    = 28    // SD3 Medium typically 20–30 steps
-const WIDTH    = 512
-const HEIGHT   = 512
-const CFG      = 5.0   // SD3 flow-matching; lower than SD1/SD2 (4.5–7.0 range)
-const SEED     = 42    // -1 = random
+const STEPS = 28 // SD3 Medium typically 20–30 steps
+const WIDTH = 512
+const HEIGHT = 512
+const CFG = 5.0 // SD3 flow-matching; lower than SD1/SD2 (4.5–7.0 range)
+const SEED = 42 // -1 = random
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -72,8 +72,8 @@ async function main () {
       threads: 4,
       // SD3 uses flow-matching. The safetensors metadata allows auto-detection,
       // but we set these explicitly as safety overrides.
-      prediction: 'flow',   // FLOW_PRED — SD3 flow-matching
-      flow_shift: '3.0'     // SD3 Medium default; overrides INFINITY sentinel
+      prediction: 'flow', // FLOW_PRED — SD3 flow-matching
+      flow_shift: '3.0' // SD3 Medium default; overrides INFINITY sentinel
     }
   )
 
@@ -94,8 +94,8 @@ async function main () {
       steps: STEPS,
       width: WIDTH,
       height: HEIGHT,
-      cfg_scale: CFG,            // SD3 CFG — not the FLUX distilled 'guidance'
-      sampling_method: 'euler',  // SD3 flow-matching requires euler (not euler_a)
+      cfg_scale: CFG, // SD3 CFG — not the FLUX distilled 'guidance'
+      sampling_method: 'euler', // SD3 flow-matching requires euler (not euler_a)
       seed: SEED
     })
 

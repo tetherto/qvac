@@ -88,9 +88,10 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-2022
-            platform: win32
-            arch: x64
+          # TODO: Enable once win32 prebuild is fixed (C1128 /bigobj issue)
+          # - os: windows-2022
+          #   platform: win32
+          #   arch: x64
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}

@@ -33,11 +33,11 @@ const PROMPT = [
 
 const NEGATIVE_PROMPT = 'blurry, low quality, watermark, text, bad anatomy'
 
-const STEPS    = 30
-const WIDTH    = 1024
-const HEIGHT   = 1024
-const CFG      = 6.5
-const SEED     = 15    // -1 = random
+const STEPS = 30
+const WIDTH = 1024
+const HEIGHT = 1024
+const CFG = 6.5
+const SEED = 15 // -1 = random
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })

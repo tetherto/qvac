@@ -12,8 +12,8 @@ const ImgStableDiffusion = require('../index')
 const MODELS_DIR = path.resolve(__dirname, '../models')
 
 const MODEL_NAME = 'flux-2-klein-4b-Q8_0.gguf'
-const LLM_MODEL  = 'Qwen3-4B-Q4_K_M.gguf'
-const VAE_MODEL  = 'flux2-vae.safetensors'
+const LLM_MODEL = 'Qwen3-4B-Q4_K_M.gguf'
+const VAE_MODEL = 'flux2-vae.safetensors'
 
 async function main () {
   console.log('FLUX.2 [klein] 4B — load/unload example')
@@ -29,17 +29,17 @@ async function main () {
 
   // ── 2. Construct — stores config, allocates nothing ───────────────────────
   const model = new ImgStableDiffusion(
-        {
-          loader,
-          logger: console,
-          diskPath: MODELS_DIR,
-          modelName: MODEL_NAME,
-          llmModel: LLM_MODEL,
-          vaeModel: VAE_MODEL
-        },
-        {
-          threads: 8   // Metal handles GPU; threads are for CPU fallback ops
-        }
+    {
+      loader,
+      logger: console,
+      diskPath: MODELS_DIR,
+      modelName: MODEL_NAME,
+      llmModel: LLM_MODEL,
+      vaeModel: VAE_MODEL
+    },
+    {
+      threads: 8 // Metal handles GPU; threads are for CPU fallback ops
+    }
   )
 
   try {

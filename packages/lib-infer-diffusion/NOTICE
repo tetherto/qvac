@@ -1,0 +1,21 @@
+@qvac/diffusion-cpp
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/diffusion-cpp itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+Required Attribution Notices
+=========================================================================
+
+stable-diffusion.cpp
+  Copyright (c) 2023-2024 leejet
+  License: MIT
+  https://github.com/leejet/stable-diffusion.cpp
+
+ggml
+  Copyright (c) 2023-2024 Georgi Gerganov
+  License: MIT
+  https://github.com/ggerganov/ggml

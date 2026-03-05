@@ -68,11 +68,11 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
     const response = await model.run({
       prompt: 'a red fox in a snowy forest, photorealistic',
       negative_prompt: 'blurry, low quality, watermark',
-      steps: 10,     // keep low for CI speed; enough to produce a valid PNG
+      steps: 10, // keep low for CI speed; enough to produce a valid PNG
       width: 512,
       height: 512,
       cfg_scale: 7.5,
-      seed: 42       // fixed seed for reproducibility
+      seed: 42 // fixed seed for reproducibility
     })
 
     await response
@@ -104,8 +104,8 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
     t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
-    // Save output for manual inspection
-    const outPath = path.join(outputDir, 'integration-sd2-seed42.png')
+    // Save output for CI artifact upload — filename encodes test origin
+    const outPath = path.join(outputDir, 'generate-image--sd2-txt2img-seed42.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
 
@@ -117,7 +117,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
     console.log(` Gen time    : ${(genMs / 1000).toFixed(1)}s`)
     console.log(` Steps ticks : ${progressTicks.length}`)
     console.log(` Image size  : ${img.length} bytes`)
-    console.log(` PNG valid   : true`)
+    console.log(' PNG valid   : true')
     console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
