@@ -1,0 +1,61 @@
+diff --git a/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js b/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
+index 4af4e8a..b27fb0c 100644
+--- a/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
++++ b/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
+@@ -295,6 +295,9 @@ class BaseInference {
+   */
+   _outputCallback (addon, event, jobId, data, error) {
+     const response = this._jobToResponse.get(jobId)
++    this.logger.info(
++      `[InferBaseDebug] event=${event} jobId=${jobId} hasResponse=${!!response} mapSize=${this._jobToResponse.size}`
++    )
+     if (!response) {
+       this.logger.warn(`No response found for job ${jobId}`)
+       return
+@@ -317,19 +320,37 @@ class BaseInference {
+     } else if (event === 'FinetuneProgress') {
+       if (this.opts?.stats) {
++        this.logger.info(
++          `[InferBaseDebug] FinetuneProgress jobId=${jobId} global_steps=${data?.stats?.global_steps}`
++        )
+         response.updateStats(data.stats)
+       }
+     } else if (event === 'JobEnded') {
+       this.logger.info(`Job ${jobId} completed. Stats: ${JSON.stringify(data)}`)
+       const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
+-      if (this.opts?.stats && !isFinetuneTerminal) {
+-        response.updateStats(data)
+-      }
+-      if (isFinetuneTerminal) {
+-        response.ended(data)
+-      } else {
+-        response.ended()
++      this.logger.info(
++        `[InferBaseDebug] JobEnded pre-ended jobId=${jobId} isFinetuneTerminal=${isFinetuneTerminal}`
++      )
++      try {
++        if (this.opts?.stats && !isFinetuneTerminal) {
++          response.updateStats(data)
++        }
++        if (isFinetuneTerminal) {
++          response.ended(data)
++        } else {
++          response.ended()
++        }
++
++        this.logger.info(`[InferBaseDebug] JobEnded post-ended jobId=${jobId}`)
++        this._deleteJobMapping(jobId)
++        this.logger.info(
++          `[InferBaseDebug] JobEnded mapping-deleted jobId=${jobId}`
++        )
++      } catch (e) {
++        this.logger.error(
++          `[InferBaseDebug] response.ended threw for jobId=${jobId}: ${e?.stack || e}`
++        )
++        response.failed(e)
++        this._deleteJobMapping(jobId)
+       }
+-      this._deleteJobMapping(jobId)
+     } else {
+       this.logger.debug(`Received event for job ${jobId}: ${event}`)
+     }

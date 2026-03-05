@@ -28,7 +28,8 @@
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
     "test:all": "npm run test && npm run test:cpp",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
-    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1"
+    "benchmarks:windows": "powershell -ExecutionPolicy Bypass -File ./benchmarks/run-benchmarks.ps1",
+    "postinstall": "patch-package"
   },
   "standard": {
     "ignore": [
@@ -43,6 +44,7 @@
     "addonLogging.js",
     "addonLogging.d.ts",
     "prebuilds",
+    "patches",
     "index.d.ts",
     "LICENSE",
     "NOTICE"
@@ -85,6 +87,7 @@
     "@qvac/infer-base": "^0.3.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
+    "patch-package": "^8.0.1",
     "require-asset": "^1.1.0"
   },
   "engines": {

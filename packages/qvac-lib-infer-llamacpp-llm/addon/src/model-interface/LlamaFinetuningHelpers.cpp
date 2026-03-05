@@ -433,11 +433,13 @@ bool tryHandlePauseRequest(
   const auto attemptId = state->pauseAttemptId.load();
   const bool pauseRequested = state->pauseRequested.load();
   const bool pauseSaved = state->pauseCheckpointSaved.load();
+  const int64_t displayBatch =
+      (state->batchOffsetWithinEpoch > 0) ? (ibatch + 1) : ibatch;
   std::ostringstream entryMsg;
   entryMsg << "[PauseDebug][attempt=" << attemptId
            << "] tryHandlePauseRequest: entry"
            << " train=" << (train ? "true" : "false")
-           << " ibatch=" << (ibatch + 1) << "/" << ibatchMax
+           << " ibatch=" << displayBatch << "/" << ibatchMax
            << " pauseRequested=" << (pauseRequested ? "true" : "false")
            << " pauseCheckpointSaved=" << (pauseSaved ? "true" : "false")
            << " shouldExit=" << (state->shouldExit.load() ? "true" : "false")
@@ -483,7 +485,7 @@ bool tryHandlePauseRequest(
   if (pausedDuringValidation) {
     pauseMsg << " during validation";
   }
-  pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax << " | epoch "
+  pauseMsg << " at batch " << displayBatch << "/" << ibatchMax << " | epoch "
            << (state->currentEpoch + 1)
            << " | Checkpoint saved at: " << state->pauseCheckpointPath.string()
            << " | [PauseDebug][attempt=" << attemptId << "]";
