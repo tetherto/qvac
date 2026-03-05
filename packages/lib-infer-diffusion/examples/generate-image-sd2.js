@@ -33,11 +33,11 @@ const PROMPT = [
 
 const NEGATIVE_PROMPT = 'blurry, low quality, watermark, text, bad anatomy'
 
-const STEPS    = 30    // SD2.1 benefits from more steps than FLUX distilled
-const WIDTH    = 712   // native training resolution for SD2.1
-const HEIGHT   = 712
-const CFG      = 7.5   // classifier-free guidance scale
-const SEED     = -1    // -1 = random
+const STEPS = 30 // SD2.1 benefits from more steps than FLUX distilled
+const WIDTH = 712 // native training resolution for SD2.1
+const HEIGHT = 712
+const CFG = 7.5 // classifier-free guidance scale
+const SEED = -1 // -1 = random
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -88,7 +88,7 @@ async function main () {
       steps: STEPS,
       width: WIDTH,
       height: HEIGHT,
-      cfg_scale: CFG,   // SD1.x / SD2.x CFG — not the FLUX distilled 'guidance'
+      cfg_scale: CFG, // SD1.x / SD2.x CFG — not the FLUX distilled 'guidance'
       seed: SEED
     })
 

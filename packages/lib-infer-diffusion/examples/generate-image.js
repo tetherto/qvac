@@ -13,8 +13,8 @@ const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
 
 const MODEL_NAME = 'flux-2-klein-4b-Q8_0.gguf'
-const LLM_MODEL  = 'Qwen3-4B-Q4_K_M.gguf'
-const VAE_MODEL  = 'flux2-vae.safetensors'
+const LLM_MODEL = 'Qwen3-4B-Q4_K_M.gguf'
+const VAE_MODEL = 'flux2-vae.safetensors'
 
 // ---------------------------------------------------------------------------
 // Generation params — edit freely
@@ -25,11 +25,11 @@ const PROMPT = [
   'photorealistic, 8k, detailed fur'
 ].join(' ')
 
-const STEPS    = 20
-const WIDTH    = 512
-const HEIGHT   = 512
-const GUIDANCE = 3.5    // distilled guidance scale for FLUX.2
-const SEED     = 42     // -1 = random
+const STEPS = 20
+const WIDTH = 512
+const HEIGHT = 512
+const GUIDANCE = 3.5 // distilled guidance scale for FLUX.2
+const SEED = 42 // -1 = random
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
