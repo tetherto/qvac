@@ -32,7 +32,8 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "devDependencies": {
-    "cmake-bare": "^1.5.0",
-    "cmake-vcpkg": "^1.0.2"
+    "cmake-bare": "1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "standard": "^17.0.0"
   }
 }
