@@ -33,10 +33,9 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          # TODO: Enable once win32 prebuild is fixed
-          # - os: windows-11
-          #   platform: windows
-          #   runner: ai-run-windows11-gpu
+          - os: windows-11
+            platform: windows
+            runner: ai-run-windows11-gpu
 
     runs-on: ${{ matrix.runner || matrix.os }}
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}

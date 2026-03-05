@@ -63,11 +63,10 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          # TODO: Enable once win32 prebuild is fixed
-          # - os: windows-11
-          #   platform: win32
-          #   arch: x64
-          #   runner: ai-run-windows11-gpu
+          - os: windows-11
+            platform: win32
+            arch: x64
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
