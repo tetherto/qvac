@@ -63,11 +63,10 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          # TODO: Enable once win32 prebuild is fixed
-          # - os: windows-11
-          #   platform: win32
-          #   arch: x64
-          #   runner: ai-run-windows11-gpu
+          - os: windows-11
+            platform: win32
+            arch: x64
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
@@ -312,3 +311,39 @@ jobs:
           path: ${{ env.WORKDIR }}/test/model/*.png
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Post images to PR
+        if: always() && github.event.pull_request
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const imgDir = path.join(process.env.GITHUB_WORKSPACE, '${{ env.WORKDIR }}', 'test', 'model');
+
+            if (!fs.existsSync(imgDir)) return;
+            const pngs = fs.readdirSync(imgDir).filter(f => f.endsWith('.png'));
+            if (pngs.length === 0) return;
+
+            const platform = '${{ matrix.platform }}-${{ matrix.arch }}';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+            let body = `### 🖼 SD Integration Test Images — \`${platform}\`\n\n`;
+            body += `| File | Test Source | Size |\n|------|------------|------|\n`;
+
+            for (const fname of pngs) {
+              const fpath = path.join(imgDir, fname);
+              const size = (fs.statSync(fpath).size / 1024).toFixed(0) + 'KB';
+              const testSource = fname.replace(/--.*/, '') + '.test.js';
+              body += `| \`${fname}\` | \`${testSource}\` | ${size} |\n`;
+            }
+            body += `\n[View run](${runUrl}) · Download **sd-test-images-${platform}** artifact to inspect images.\n`;
+
+            const prNumber = context.payload.pull_request.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });

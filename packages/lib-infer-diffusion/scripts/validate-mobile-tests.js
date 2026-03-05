@@ -32,7 +32,8 @@ function getGeneratedIntegrationRefs (content) {
 }
 
 function setDiff (left, right) {
-  return [...left].filter(item => !right.has(item)).sort()
+  const rightSet = right instanceof Set ? right : new Set(right)
+  return [...left].filter(item => !rightSet.has(item)).sort((a, b) => a - b)
 }
 
 function printMismatchDetails (label, items) {

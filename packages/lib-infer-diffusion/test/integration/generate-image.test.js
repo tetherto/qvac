@@ -6,42 +6,46 @@ const test = require('brittle')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
+const { ensureModel } = require('./utils')
 const {
   detectPlatform,
-  getTestPaths,
   setupJsLogger,
-  ensureModelSd2,
   isPng
 } = require('./helpers')
 
 const platform = detectPlatform()
-const { modelsDir, outputDir } = getTestPaths()
 
-const MODEL_NAME = 'stable-diffusion-v2-1-Q8_0.gguf'
+const DEFAULT_MODEL = {
+  name: 'stable-diffusion-v2-1-Q8_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+}
 
 test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async (t) => {
   setupJsLogger(binding)
+
+  const [downloadedModelName, modelDir] = await ensureModel({
+    modelName: DEFAULT_MODEL.name,
+    downloadUrl: DEFAULT_MODEL.url
+  })
 
   console.log('\n' + '='.repeat(60))
   console.log('STABLE DIFFUSION 2.1 — INTEGRATION TEST')
   console.log('='.repeat(60))
   console.log(` Platform  : ${platform}`)
-  console.log(` Model     : ${MODEL_NAME}`)
-  console.log(` Models dir: ${modelsDir}`)
+  console.log(` Model     : ${downloadedModelName}`)
+  console.log(` Models dir: ${modelDir}`)
 
-  // Ensure model is present — downloads if missing
-  await ensureModelSd2(modelsDir)
-  const modelPath = path.join(modelsDir, MODEL_NAME)
+  const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const loader = new FilesystemDL({ dirPath: modelsDir })
+  const loader = new FilesystemDL({ dirPath: modelDir })
 
   const model = new ImgStableDiffusion(
     {
       loader,
       logger: console,
-      diskPath: modelsDir,
-      modelName: MODEL_NAME
+      diskPath: modelDir,
+      modelName: downloadedModelName
     },
     {
       threads: 4,
@@ -105,7 +109,8 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
     // Save output for CI artifact upload — filename encodes test origin
-    const outPath = path.join(outputDir, 'generate-image--sd2-txt2img-seed42.png')
+    // Saved to modelDir so mobile has write permission to the same path
+    const outPath = path.join(modelDir, 'generate-image--sd2-txt2img-seed42.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
 
