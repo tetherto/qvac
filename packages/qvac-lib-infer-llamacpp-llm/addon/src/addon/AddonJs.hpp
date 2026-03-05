@@ -323,7 +323,8 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
     if (llamaModel == nullptr) {
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=0] AddonJs::cancel: llamaModel=null fallback cancelJob");
+          "[PauseDebug][attempt=0] AddonJs::cancel: llamaModel=null fallback "
+          "cancelJob");
       addonCpp->cancelJob();
       return;
     }
@@ -385,9 +386,10 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
               std::to_string(fallbackElapsedMs));
     }
 
-    const auto totalElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    std::chrono::steady_clock::now() - cancelStart)
-                                    .count();
+    const auto totalElapsedMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - cancelStart)
+            .count();
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[PauseDebug][attempt=" + std::to_string(attemptId) +

@@ -1552,7 +1552,8 @@ bool LlamaModel::requestPause() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
     QLOG_IF(
-        Priority::INFO, "[PauseDebug][attempt=0] requestPause: no active state");
+        Priority::INFO,
+        "[PauseDebug][attempt=0] requestPause: no active state");
     return false;
   }
   const auto attemptId =
@@ -1596,7 +1597,8 @@ void LlamaModel::waitUntilFinetuningPauseComplete() {
   if (state == nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[PauseDebug][attempt=0] waitUntilFinetuningPauseComplete: no active state");
+        "[PauseDebug][attempt=0] waitUntilFinetuningPauseComplete: no active "
+        "state");
     return;
   }
 
@@ -1625,9 +1627,10 @@ void LlamaModel::waitUntilFinetuningPauseComplete() {
   std::unique_lock lock(state->pauseDoneMutex);
   const bool signaled = state->pauseDoneCv.wait_for(
       lock, timeout, [&state] { return state->pauseWaitDone.load(); });
-  const auto waitElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now() - waitStart)
-                                 .count();
+  const auto waitElapsedMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - waitStart)
+          .count();
   const bool postPauseWaitDone = state->pauseWaitDone.load();
   const bool postShouldExit = state->shouldExit.load();
   const bool postIsFinetuning = state->isFinetuning.load();

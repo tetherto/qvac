@@ -271,23 +271,23 @@ findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir) {
   return latestPath;
 }
 
-static void writeCheckpointMetadata(const std::filesystem::path& path,
-                                    const CheckpointMetadata& meta) {
+static void writeCheckpointMetadata(
+    const std::filesystem::path& path, const CheckpointMetadata& meta) {
   std::ofstream out(path);
   if (!out) {
-    throw std::runtime_error("Failed to open checkpoint metadata: " +
-                             path.string());
+    throw std::runtime_error(
+        "Failed to open checkpoint metadata: " + path.string());
   }
   out << "epoch=" << meta.epoch << '\n'
       << "lora_rank=" << meta.loraRank << '\n'
-      << std::fixed << std::setprecision(6)
-      << "lora_alpha=" << meta.loraAlpha << '\n'
+      << std::fixed << std::setprecision(6) << "lora_alpha=" << meta.loraAlpha
+      << '\n'
       << "target_modules=" << meta.targetModules << '\n'
       << "global_step=" << meta.globalStep << '\n'
       << "current_step=" << meta.currentStep << '\n';
   if (!out) {
-    throw std::runtime_error("Failed to write checkpoint metadata: " +
-                             path.string());
+    throw std::runtime_error(
+        "Failed to write checkpoint metadata: " + path.string());
   }
 }
 
@@ -302,15 +302,17 @@ void saveCheckpoint(ggml_opt_context_t optCtx, TrainingCheckpointState& state) {
   std::error_code ec;
   std::filesystem::create_directories(stepDir, ec);
   if (ec) {
-    throw std::runtime_error("Checkpoint directory creation failed at step " +
-                             std::to_string(step) + ": " + ec.message());
+    throw std::runtime_error(
+        "Checkpoint directory creation failed at step " + std::to_string(step) +
+        ": " + ec.message());
   }
 
   const std::string stepDirStr = stepDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, stepDirStr.c_str(), state.model, state.ctx)) {
-    throw std::runtime_error("Failed to save LoRA checkpoint at step " +
-                             std::to_string(step) + " in " + stepDirStr);
+    throw std::runtime_error(
+        "Failed to save LoRA checkpoint at step " + std::to_string(step) +
+        " in " + stepDirStr);
   }
 
   const auto optimizerPath = stepDir / "optimizer.gguf";
@@ -383,15 +385,15 @@ void savePauseCheckpoint(
   std::error_code ec;
   std::filesystem::create_directories(pauseDir, ec);
   if (ec) {
-    throw std::runtime_error("Pause checkpoint directory creation failed: " +
-                             ec.message());
+    throw std::runtime_error(
+        "Pause checkpoint directory creation failed: " + ec.message());
   }
 
   const std::string pauseDirStr = pauseDir.string();
   if (!llama_lora_save_checkpoint(
           state.adapter, pauseDirStr.c_str(), state.model, state.ctx)) {
-    throw std::runtime_error("Failed to save LoRA pause checkpoint in " +
-                             pauseDirStr);
+    throw std::runtime_error(
+        "Failed to save LoRA pause checkpoint in " + pauseDirStr);
   }
 
   const auto optimizerPath = pauseDir / "optimizer.gguf";
@@ -424,7 +426,8 @@ bool tryHandlePauseRequest(
   if (state == nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[PauseDebug][attempt=0] tryHandlePauseRequest: state=nullptr early-return");
+        "[PauseDebug][attempt=0] tryHandlePauseRequest: state=nullptr "
+        "early-return");
     return false;
   }
   const auto attemptId = state->pauseAttemptId.load();
@@ -438,7 +441,8 @@ bool tryHandlePauseRequest(
            << " pauseRequested=" << (pauseRequested ? "true" : "false")
            << " pauseCheckpointSaved=" << (pauseSaved ? "true" : "false")
            << " shouldExit=" << (state->shouldExit.load() ? "true" : "false")
-           << " isFinetuning=" << (state->isFinetuning.load() ? "true" : "false");
+           << " isFinetuning="
+           << (state->isFinetuning.load() ? "true" : "false");
   QLOG_IF(Priority::INFO, entryMsg.str());
 
   if (!pauseRequested) {
@@ -479,8 +483,8 @@ bool tryHandlePauseRequest(
   if (pausedDuringValidation) {
     pauseMsg << " during validation";
   }
-  pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
-           << " | epoch " << (state->currentEpoch + 1)
+  pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax << " | epoch "
+           << (state->currentEpoch + 1)
            << " | Checkpoint saved at: " << state->pauseCheckpointPath.string()
            << " | [PauseDebug][attempt=" << attemptId << "]";
   QLOG_IF(Priority::INFO, pauseMsg.str());

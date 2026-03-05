@@ -30,8 +30,8 @@ public:
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded)
-      override;
+      const std::vector<common_chat_msg>& chatMsgs,
+      bool isCacheLoaded) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -185,5 +185,3 @@ private:
 
   std::atomic<bool> stopGeneration_ = false;
 };
-
-
