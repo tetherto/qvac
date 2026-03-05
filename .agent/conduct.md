@@ -78,9 +78,9 @@ CI must pass on all platforms before marking the task as complete.
 
 To avoid triggering permission prompts, keep shell commands simple and pre-approvable:
 
-- **No `$()` command substitution** in shell commands — write to a temp file instead (e.g. use `git commit -F /tmp/msg.txt` instead of `git commit -m "$(cat <<EOF ... EOF)"`)
-- **No shell redirects** like `2>/dev/null`, `2>&1`, or pipes (`|`) in compound commands — these trigger permission prompts that cannot be pre-approved
-- **One command per Bash call** — never chain with `&&`, `||`, or `;`. Make multiple separate Bash tool calls instead.
+- **No `$()` command substitution** in shell commands — write to a temp file instead (e.g. use `git commit -F /tmp/msg.txt` instead of `git commit -m "$(cat <<EOF ... EOF)"`). For `$(nproc)`, query `nproc` first then hardcode the value (e.g. `make -j12`)
+- **No shell redirects** like `2>/dev/null`, `2>&1`, or pipes (`|`) — these trigger permission prompts that cannot be pre-approved. Just omit them; tool output captures both stdout and stderr already
+- **One command per Bash call** — never chain with `&&`, `||`, or `;`. Make multiple separate Bash tool calls instead. Use flags like `git -C <path>` instead of `cd <path> && git ...`
 - **Use dedicated tools** when available — use Read instead of `cat`, Grep instead of `grep`, Glob instead of `find`, Edit instead of `sed`
 - **Use simple `ls`** to check if files/dirs exist — one path per call if needed
 

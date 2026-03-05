@@ -21,8 +21,8 @@ NEVER delete, disable, skip, or weaken existing tests. Fix the code or the test.
 These rules are mandatory. Violating them blocks the automated pipeline.
 
 - **NEVER use heredocs** (`<< EOF`), `cat >`, or `echo >` to write files — use the Write tool instead
-- **NEVER use `$()` command substitution** in bash — write to a temp file instead (e.g. `git commit -F /tmp/msg.txt`)
-- **NEVER chain commands** with `&&`, `||`, or `;` — make separate Bash tool calls
+- **NEVER use `$()` command substitution** in bash — write to a temp file instead (e.g. `git commit -F /tmp/msg.txt`). For `$(nproc)`, query `nproc` first then hardcode the value (e.g. `make -j12`)
+- **NEVER chain commands** with `&&`, `||`, or `;` — make separate Bash tool calls. Use flags like `git -C <path>` instead of `cd <path> && git ...`
 - **NEVER use pipes** (`|`) or redirects (`2>&1`, `2>/dev/null`) — use dedicated tools or separate calls
 - **ALWAYS use dedicated tools**: Write instead of `cat >`, Read instead of `cat`, Grep instead of `grep`, Glob instead of `find`, Edit instead of `sed`
 
