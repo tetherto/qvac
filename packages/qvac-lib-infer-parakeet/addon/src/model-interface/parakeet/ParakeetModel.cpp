@@ -258,6 +258,12 @@ void ParakeetModel::set_weights_for_file(
 //  Vocabulary
 // ═════════════════════════════════════════════════════════════════════════════
 
+void ParakeetModel::setWeightsForFile(
+    const std::string& filename,
+    std::unique_ptr<std::basic_streambuf<char>>&& streambuf) {
+  set_weights_for_file(filename, std::move(streambuf));
+}
+
 void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
   std::string vocabStr(vocabData.begin(), vocabData.end());
   std::istringstream iss(vocabStr);
@@ -2095,6 +2101,10 @@ std::string ParakeetModel::processSortformer(const Input& input) {
 }
 
 void ParakeetModel::process(const Input& input) {
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (input.empty()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -2178,6 +2188,23 @@ ParakeetModel::Output ParakeetModel::process(
 //  Audio preprocessing
 // ═════════════════════════════════════════════════════════════════════════════
 
+std::any ParakeetModel::process(const std::any& input) {
+  AnyInput modelInput;
+  if (const auto* anyInput = std::any_cast<AnyInput>(&input)) {
+    modelInput = *anyInput;
+  } else if (const auto* inputVector = std::any_cast<Input>(&input)) {
+    modelInput.input = *inputVector;
+  } else {
+    throw std::invalid_argument(
+        std::string("Invalid input type for ParakeetModel::process: ") +
+        input.type().name());
+  }
+
+  reset();
+  process(modelInput.input);
+  return output_;
+}
+
 std::vector<float> ParakeetModel::preprocessAudioData(
     const std::vector<uint8_t>& audioData, const std::string& audioFormat) {
   std::vector<float> result;
@@ -2205,7 +2232,6 @@ std::vector<float> ParakeetModel::preprocessAudioData(
 // ═════════════════════════════════════════════════════════════════════════════
 //  Runtime stats
 // ═════════════════════════════════════════════════════════════════════════════
-
 qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
 
@@ -2242,6 +2268,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("totalEncodedFrames", totalEncodedFrames_);
 
   return stats;
+}
+
+void ParakeetModel::cancel() const {
+  cancelRequested_.store(true, std::memory_order_relaxed);
 }
 
 } // namespace qvac_lib_infer_parakeet

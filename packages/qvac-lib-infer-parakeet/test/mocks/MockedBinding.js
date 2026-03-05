@@ -9,40 +9,38 @@ const state = Object.freeze({
   STOPPED: 'stopped'
 })
 
-const END_OF_INPUT = 'end of job'
-const END_OF_OUTPUT = 'end of job'
-
 class MockedBinding {
   constructor () {
     this._handle = null
     this._state = state.LOADING
-    this.jobId = 1
-    this._baseInferenceCallback = null // Store reference to BaseInference callback
+    this._busy = false
+    this._runToken = 0
+    this._baseInferenceCallback = null
+    this._interfaceType = null
   }
 
   createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
     console.log('Constructing the parakeet addon')
+    this._interfaceType = interfaceType
     this.outputCb = outputCb
     this.transitionCb = transitionCb
     this._handle = { id: Date.now() } // Create a mock handle
     return this._handle
   }
 
-  // Mock only: Method to set the BaseInference callback to call in addition to custom outputCb
   setBaseInferenceCallback (callback) {
     this._baseInferenceCallback = callback
   }
 
-  // Helper method to call both callbacks
-  _callCallbacks (event, jobId, output, error) {
-    // Call the test's onOutput function
-    if (this.outputCb) {
-      this.outputCb(this, event, jobId, output, error)
+  _callCallbacks (event, output, error = null) {
+    if (this._baseInferenceCallback) {
+      const jobId = this._interfaceType?._activeJobId
+      const baseEvent = event === 'RuntimeStats' ? 'JobEnded' : event
+      this._baseInferenceCallback(this, baseEvent, jobId, output, error)
     }
 
-    // Call the BaseInference callback to resolve _finishPromise
-    if (this._baseInferenceCallback) {
-      this._baseInferenceCallback(this, event, jobId, output, error)
+    if (this.outputCb) {
+      this.outputCb(this, event, output, error)
     }
   }
 
@@ -56,6 +54,7 @@ class MockedBinding {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Activated the addon')
     this._state = state.LISTENING
+    this._busy = false
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
     }
@@ -82,7 +81,9 @@ class MockedBinding {
   cancel (handle, jobId) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log(`Cancel job id: ${jobId}`)
-    this._state = state.STOPPED
+    this._runToken++
+    this._busy = false
+    this._state = state.LISTENING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
     }
@@ -93,65 +94,43 @@ class MockedBinding {
     return this._state
   }
 
-  append (handle, data) {
+  runJob (handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    const currentJob = this.jobId
-
-    // Only process if in a receptive state.
-    if (this._state !== state.LISTENING && this._state !== state.PROCESSING && this._state !== state.IDLE) {
-      process.nextTick(() => {
-        this._callCallbacks('Error', currentJob, { error: 'Invalid state for appending data' }, null)
-      })
-      return currentJob
+    if (this._busy) {
+      return false
     }
 
-    // If in IDLE state, transition to LISTENING when receiving new data
-    if (this._state === state.IDLE) {
-      this._state = state.LISTENING
-      if (this.transitionCb) this.transitionCb(this, this._state)
+    if (data.type !== 'audio' || !data.input) {
+      process.nextTick(() => {
+        this._callCallbacks('Error', undefined, `Invalid runJob payload type: ${data.type}`)
+      })
+      return true
     }
 
-    if (data.type === END_OF_INPUT) {
-      // End-of-job: emit a JobEnded event and increment job id.
-      process.nextTick(() => {
-        this._callCallbacks('JobEnded', currentJob, { type: END_OF_OUTPUT }, null)
-      })
-      this.jobId++
-      return currentJob
-    } else if (data.type === 'audio') {
-      // Validate audio data
-      if (!data.data) {
-        process.nextTick(() => {
-          this._callCallbacks('Error', currentJob, { error: 'Invalid audio input: missing data property' }, null)
-        })
-        return currentJob
+    this._busy = true
+    this._state = state.PROCESSING
+    if (this.transitionCb) this.transitionCb(this, this._state)
+
+    const runToken = ++this._runToken
+    process.nextTick(() => {
+      if (runToken !== this._runToken) return
+
+      const audioLength = data.input.length ?? (data.input.byteLength / 4)
+      const mockTranscription = {
+        text: audioLength > 0 ? `Mock transcription for ${audioLength} samples of audio` : '[No speech detected]',
+        start: 0,
+        end: audioLength / 16000,
+        toAppend: true
       }
 
-      this._state = state.PROCESSING
+      this._callCallbacks('Output', [mockTranscription], null)
+      this._callCallbacks('RuntimeStats', { totalTime: 0.001, audioDurationMs: Math.floor((audioLength / 16000) * 1000), totalSamples: audioLength }, null)
+      this._busy = false
+      this._state = state.LISTENING
       if (this.transitionCb) this.transitionCb(this, this._state)
+    })
 
-      // Simulate transcription output
-      process.nextTick(() => {
-        const audioSize = data.data.byteLength || 0
-        const mockTranscription = {
-          text: audioSize > 0 ? `Mock transcription for ${audioSize} bytes of audio` : '[No speech detected]',
-          start: 0,
-          end: audioSize / 16000 / 4, // Approximate duration in seconds (float32 @ 16kHz)
-          toAppend: true
-        }
-        this._callCallbacks('Output', currentJob, [mockTranscription], null)
-        // After processing, return to listening.
-        this._state = state.LISTENING
-        if (this.transitionCb) this.transitionCb(this, this._state)
-      })
-      return currentJob
-    } else {
-      // Unknown type: emit an error.
-      process.nextTick(() => {
-        this._callCallbacks('Error', currentJob, { error: `Unknown type: ${data.type}` }, null)
-      })
-      return currentJob
-    }
+    return true
   }
 
   load (handle, configurationParams) {
@@ -166,6 +145,8 @@ class MockedBinding {
   reload (handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Reloaded configuration:', configurationParams)
+    this._runToken++
+    this._busy = false
     this._state = state.LOADING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
@@ -204,6 +185,8 @@ class MockedBinding {
 
   destroyInstance (handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
+    this._runToken++
+    this._busy = false
     this._handle = null
     console.log('Destroyed the addon')
     this._state = state.IDLE

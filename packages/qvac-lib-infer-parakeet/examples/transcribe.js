@@ -202,10 +202,11 @@ async function main () {
   await parakeet.destroyInstance()
   binding.releaseLogger()
   console.log('\nDone!')
+  Bare.exit(0)
 }
 
 main().catch(err => {
   console.error('Error:', err)
   binding.releaseLogger()
-  process.exit(1)
+  Bare.exit(1)
 })

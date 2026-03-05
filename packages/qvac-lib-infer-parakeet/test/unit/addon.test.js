@@ -118,7 +118,7 @@ test('Model emits error events when an error occurs during processing', async (t
   // Create a custom binding that throws an error on append
   const binding = {
     createInstance: () => ({ id: 1 }),
-    append: () => { throw new Error('Forced error for testing') },
+    runJob: () => { throw new Error('Forced error for testing') },
     loadWeights: () => { },
     activate: () => { },
     pause: () => { },
@@ -132,8 +132,9 @@ test('Model emits error events when an error occurs during processing', async (t
   await model.load()
 
   try {
-    await model.run('trigger error')
-    t.fail('Should have thrown an error')
+    const response = await model.run('trigger error')
+    await response.await()
+    t.fail('Should have rejected the response')
   } catch (error) {
     // The error should be a QvacErrorAddonParakeet
     t.ok(error.constructor.name === 'QvacErrorAddonParakeet', 'Error should be a QvacErrorAddonParakeet')
@@ -195,13 +196,13 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   t.ok(appendResult1 === 1, 'Job ID should be 1 for the first appended chunk')
 
   await wait()
-  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
-  t.ok(outputEvent, 'Output callback should be triggered for audio chunk')
 
   const appendResult2 = await addon.append({ type: 'end of job' })
   t.ok(appendResult2 === 1, 'Job ID should remain 1 for the end-of-job signal')
 
   await wait()
+  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
+  t.ok(outputEvent, 'Output callback should be triggered for audio chunk')
   t.ok(
     events.find(e => e.event === 'JobEnded' && e.jobId === 1),
     'JobEnded callback should be emitted for job 1'
