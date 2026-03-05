@@ -4000,6 +4000,70 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text detector - DBNet ResNet50",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "detector",
+      "db_resnet50"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text detector - DBNet MobileNetV3 Large",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "detector",
+      "db_mobilenet_v3_large"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text recognizer - PARSeq",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "recognizer",
+      "parseq"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text recognizer - CRNN MobileNetV3 Small",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "recognizer",
+      "crnn_mobilenet_v3_small"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Chatterbox tokenizer",
