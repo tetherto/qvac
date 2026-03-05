@@ -89,6 +89,87 @@ def get_recognizer_model(reader):
     )
 
 
+def _load_recognizer_direct(model_path, device='cpu'):
+    """Load a recognizer model directly from its checkpoint file.
+
+    Infers architecture parameters (hidden size, num_class) from the
+    checkpoint rather than relying on EasyOCR's character config, which
+    can be out of sync with the pre-trained weights for some languages.
+
+    Detects whether the model uses VGG (gen2) or ResNet (gen1) feature
+    extraction based on checkpoint key names.
+    """
+    state_dict = torch.load(model_path, map_location=device, weights_only=True)
+
+    # Strip 'module.' prefix if present (DataParallel wrapper)
+    cleaned = {}
+    for k, v in state_dict.items():
+        cleaned[k.replace('module.', '')] = v
+
+    # Infer architecture from checkpoint shapes
+    num_class = cleaned['Prediction.weight'].shape[0]
+    hidden_size = cleaned['SequenceModeling.0.rnn.weight_ih_l0'].shape[0] // 4
+    output_channel = cleaned['SequenceModeling.0.rnn.weight_ih_l0'].shape[1]
+
+    # Detect feature extractor type: ResNet (gen1) has 'layer1' keys,
+    # VGG (gen2) has sequential indices like 'ConvNet.0'
+    uses_resnet = any('layer1' in k for k in cleaned if 'FeatureExtraction' in k)
+
+    if uses_resnet:
+        from easyocr.model.model import Model
+    else:
+        from easyocr.model.vgg_model import Model
+
+    model = Model(
+        input_channel=1,
+        output_channel=output_channel,
+        hidden_size=hidden_size,
+        num_class=num_class,
+    )
+    model.load_state_dict(cleaned)
+    model.to(device)
+    model.eval()
+    return model
+
+
+def _create_reader_with_fallback(lang, gpu, quantize=False):
+    """Create an EasyOCR Reader, falling back to direct loading on mismatch.
+
+    Some EasyOCR models have character-set mismatches between the config and
+    the pre-trained weights (e.g. Tamil, Telugu, Kannada). When Reader fails,
+    we load the recognizer directly from the checkpoint with architecture
+    params inferred from the weights.
+    """
+    try:
+        return easyocr.Reader([lang], gpu=gpu, verbose=False, quantize=quantize)
+    except RuntimeError as e:
+        if 'size mismatch' not in str(e):
+            raise
+
+    # Load detector normally, but manually load the recognizer
+    reader = easyocr.Reader(
+        [lang], gpu=gpu, verbose=False, quantize=quantize,
+        detector=True, recognizer=False,
+    )
+
+    # Find the model path EasyOCR would have used
+    model_dir = reader.model_storage_directory
+    model_lang = reader.model_lang
+    # EasyOCR stores model files as <model_lang>.pth
+    model_path = os.path.join(model_dir, f'{model_lang}.pth')
+    if not os.path.exists(model_path):
+        # Try finding the downloaded model
+        import glob
+        candidates = glob.glob(os.path.join(model_dir, f'*{lang}*'))
+        if candidates:
+            model_path = candidates[0]
+
+    device = 'cuda' if gpu and torch.cuda.is_available() else 'cpu'
+    reader.recognizer = _load_recognizer_direct(model_path, device)
+    print('    (loaded recognizer directly due to character-set mismatch)')
+    return reader
+
+
 class _RecognizerExportWrapper(torch.nn.Module):
     """Wrapper that adapts the EasyOCR recognizer for ONNX export.
 
@@ -311,9 +392,7 @@ def main():
     # --- Detector ---
     if not args.skip_detector:
         print('\nExporting CRAFT detector...')
-        reader = easyocr.Reader(
-            ['en'], gpu=args.gpu, verbose=False, quantize=False,
-        )
+        reader = _create_reader_with_fallback('en', gpu=args.gpu)
         path = export_detector(reader, output_dir, args.opset_version)
         exported.append(path)
         del reader
@@ -322,9 +401,7 @@ def main():
     for script_name in recognizers:
         info = SCRIPT_FAMILIES[script_name]
         print(f'\nExporting {script_name} recognizer (lang={info["lang"]})...')
-        reader = easyocr.Reader(
-            [info['lang']], gpu=args.gpu, verbose=False, quantize=False,
-        )
+        reader = _create_reader_with_fallback(info['lang'], gpu=args.gpu)
         path = export_recognizer(reader, script_name, output_dir, args.opset_version)
         exported.append(path)
         del reader
