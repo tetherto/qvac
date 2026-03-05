@@ -65,13 +65,21 @@ async function resolveChatterboxConfig(
     throw new TtsReferenceAudioRequiredError();
   }
 
-  // Download sequentially to avoid race conditions with registry client
-  const resolvedTokenizer = await resolve(ttsTokenizerSrc);
-  const resolvedSpeechEncoder = await resolve(ttsSpeechEncoderSrc);
-  const resolvedEmbedTokens = await resolve(ttsEmbedTokensSrc);
-  const resolvedConditionalDecoder = await resolve(ttsConditionalDecoderSrc);
-  const resolvedLanguageModel = await resolve(ttsLanguageModelSrc);
-  const resolvedReferenceAudio = await resolve(referenceAudioSrc);
+  const [
+    resolvedTokenizer,
+    resolvedSpeechEncoder,
+    resolvedEmbedTokens,
+    resolvedConditionalDecoder,
+    resolvedLanguageModel,
+    resolvedReferenceAudio,
+  ] = await Promise.all([
+    resolve(ttsTokenizerSrc),
+    resolve(ttsSpeechEncoderSrc),
+    resolve(ttsEmbedTokensSrc),
+    resolve(ttsConditionalDecoderSrc),
+    resolve(ttsLanguageModelSrc),
+    resolve(referenceAudioSrc),
+  ]);
 
   const result: TtsModelConfig = {
     ttsEngine: "chatterbox",
@@ -111,12 +119,19 @@ async function resolveSupertonicConfig(
     throw new TtsArtifactsRequiredError();
   }
 
-  // Download sequentially to avoid race conditions with registry client
-  const resolvedTokenizer = await resolve(ttsTokenizerSrc);
-  const resolvedTextEncoder = await resolve(ttsTextEncoderSrc);
-  const resolvedLatentDenoiser = await resolve(ttsLatentDenoiserSrc);
-  const resolvedVoiceDecoder = await resolve(ttsVoiceDecoderSrc);
-  const resolvedVoice = await resolve(ttsVoiceSrc);
+  const [
+    resolvedTokenizer,
+    resolvedTextEncoder,
+    resolvedLatentDenoiser,
+    resolvedVoiceDecoder,
+    resolvedVoice,
+  ] = await Promise.all([
+    resolve(ttsTokenizerSrc),
+    resolve(ttsTextEncoderSrc),
+    resolve(ttsLatentDenoiserSrc),
+    resolve(ttsVoiceDecoderSrc),
+    resolve(ttsVoiceSrc),
+  ]);
 
   const result: TtsModelConfig = {
     ttsEngine: "supertonic",

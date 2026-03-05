@@ -101,19 +101,12 @@ export const parakeetPlugin = definePlugin({
       parakeetPreprocessorSrc?: string;
     };
 
-    // Resolve sequentially to avoid race conditions with registry client
-    const encoderDataPath = config.parakeetEncoderDataSrc
-      ? await resolve(config.parakeetEncoderDataSrc)
-      : undefined;
-    const decoderPath = config.parakeetDecoderSrc
-      ? await resolve(config.parakeetDecoderSrc)
-      : undefined;
-    const vocabPath = config.parakeetVocabSrc
-      ? await resolve(config.parakeetVocabSrc)
-      : undefined;
-    const preprocessorPath = config.parakeetPreprocessorSrc
-      ? await resolve(config.parakeetPreprocessorSrc)
-      : undefined;
+    const [encoderDataPath, decoderPath, vocabPath, preprocessorPath] = await Promise.all([
+      config.parakeetEncoderDataSrc ? resolve(config.parakeetEncoderDataSrc) : undefined,
+      config.parakeetDecoderSrc ? resolve(config.parakeetDecoderSrc) : undefined,
+      config.parakeetVocabSrc ? resolve(config.parakeetVocabSrc) : undefined,
+      config.parakeetPreprocessorSrc ? resolve(config.parakeetPreprocessorSrc) : undefined,
+    ]);
 
     return { ...modelConfig, encoderDataPath, decoderPath, vocabPath, preprocessorPath };
   },
