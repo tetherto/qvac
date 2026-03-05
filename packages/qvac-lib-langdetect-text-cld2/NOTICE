@@ -1,0 +1,51 @@
+@qvac/langdetect-text-cld2
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/langdetect-text-cld2 itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  cld@2.10.1
+    https://github.com/dachev/cld
+
+--- isc (ISC License) ---
+
+  fs.realpath@1.0.0
+    https://github.com/isaacs/fs.realpath
+  glob@7.2.3
+    https://github.com/isaacs/node-glob
+  inflight@1.0.6
+    https://github.com/npm/inflight
+  inherits@2.0.4
+    https://github.com/isaacs/inherits
+  minimatch@3.1.5
+    https://github.com/isaacs/minimatch
+  once@1.4.0
+    https://github.com/isaacs/once
+  wrappy@1.0.2
+    https://github.com/npm/wrappy
+
+--- mit (MIT License) ---
+
+  balanced-match@1.0.2
+    https://github.com/juliangruber/balanced-match
+  brace-expansion@1.1.12
+    https://github.com/juliangruber/brace-expansion
+  concat-map@0.0.1
+    https://github.com/substack/node-concat-map
+  iso-language-codes@2.0.0
+    https://github.com/pubcore/iso-language-codes
+  node-addon-api@8.6.0
+    https://github.com/nodejs/node-addon-api
+  path-is-absolute@1.0.1
+    https://github.com/sindresorhus/path-is-absolute
+  underscore@1.13.8
+    https://github.com/jashkenas/underscore
+
