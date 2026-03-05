@@ -84,8 +84,8 @@ jobs:
           else
             # pull_request_target
             workdir="packages/qvac-lib-infer-onnx-tts"
-            repo="${{ github.event.pull_request.head.repo.full_name }}"
-            ref="${{ github.event.pull_request.head.ref }}"
+            repo="${{ github.repository }}"
+            ref="${{ github.event.pull_request.head.sha }}"
             run_verify="${{ contains(github.event.pull_request.labels.*.name, 'verify') }}"
             base_sha="${{ github.event.pull_request.base.sha }}"
             head_sha="${{ github.event.pull_request.head.sha }}"

@@ -29,6 +29,23 @@ Pin to specific commit/version. Avoid `main` or `latest`.
 The S3 bucket name is **not** stored in `models.prod.json`. Set `QVAC_S3_BUCKET` in your `.env` file.
 The server resolves the bucket at runtime when downloading artifacts.
 
+### S3 Date Folder Requirement
+
+S3 source paths **must** include a date folder (`YYYY-MM-DD`) identifying when the artifact was uploaded:
+
+```
+s3:///qvac_models_compiled/<type>/<model-name>/<YYYY-MM-DD>/<filename>
+```
+
+Example:
+```
+s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/Llama-3.2-1B-Instruct-Q4_0.gguf
+```
+
+**Why**: The registry tracks models by their source URL. If a model binary is replaced at the same S3 path, the registry has no way to detect the change — checksums, file sizes, and content become inconsistent without any visible update. Dated directories guarantee each version has a unique path. When updating a model, upload the new version to a new date folder and submit a new registry entry (deprecating the old one if needed).
+
+The validation script enforces this for all new S3 entries. Legacy paths predating this rule are listed in `data/s3-legacy-paths.json`.
+
 ### Registry Sync Process
 
 After the PR is created:

@@ -162,12 +162,6 @@ jobs:
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Visual Studio Build Tools (Windows)
-        run: |
-          winget install Microsoft.VisualStudio.BuildTools -e --source winget --disable-interactivity --accept-package-agreements --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-        shell: powershell
-
-      - if: ${{ matrix.os == 'windows-11' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
           git clone https://github.com/microsoft/vcpkg.git
