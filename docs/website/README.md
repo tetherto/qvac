@@ -35,7 +35,7 @@ After cloning, the baseline docs pages (Overview, Health, Workbench, Contributor
 ```bash
 cd docs/website
 npm install
-cp .env.example .env          # then set SDK_PATH to your qvac-sdk location
+cp .env.example .env          # then set SDK_PATH to your sdk location
 bun run scripts/generate-api-docs.ts 0.7.0
 npm run dev
 ```
@@ -51,7 +51,7 @@ Without running the generation step, `/docs` will load but SDK API links will 40
 
 ## API doc generation (SDK path)
 
-The generator reads the **qvac-sdk** package (TypeScript entry and JSDoc). Set **`SDK_PATH`** in a `.env` file (copy from `.env.example` and set your path). Bun loads `.env` automatically when running the scripts. The SDK folder must contain `index.ts` and `tsconfig.json`.
+The generator reads the **sdk** package (TypeScript entry and JSDoc). Set **`SDK_PATH`** in a `.env` file (copy from `.env.example` and set your path). Bun loads `.env` automatically when running the scripts. The SDK folder must contain `index.ts` and `tsconfig.json`.
 
 **Generated API docs** (`content/docs/sdk/api/latest/`, `content/docs/sdk/api/v*/`, `content/docs/sdk/api/.latest-backup/`) are in `.gitignore`; generate them locally with `bun run scripts/generate-api-docs.ts <version>` or in CI. Baseline content (index, overview, health, workbench, contributors) is committed.
 
@@ -60,10 +60,10 @@ The generator reads the **qvac-sdk** package (TypeScript entry and JSDoc). Set *
 The workflow **Generate API Documentation** (`.github/workflows/docs-generate-api.yml`) runs on manual trigger or `repository_dispatch`. It clones the SDK repo, generates MDX, and opens a PR.
 
 **Setup:** In the docs repo, add a **repository variable**:
-- **`SDK_REPOSITORY`**: `owner/repo` of the SDK (e.g. `myorg/qvac` if the SDK is at `packages/qvac-sdk`).
+- **`SDK_REPOSITORY`**: `owner/repo` of the SDK (e.g. `myorg/qvac` if the SDK is at `packages/sdk`).
 
 Optional **repository variable**:
-- **`SDK_SUBPATH`**: Path to the SDK inside the repo (default `packages/qvac-sdk`). Set to empty if the SDK is at repo root.
+- **`SDK_SUBPATH`**: Path to the SDK inside the repo (default `packages/sdk`). Set to empty if the SDK is at repo root.
 
 **Run:** Actions → Generate API Documentation → Run workflow, enter version (e.g. `0.7.0`). The workflow clones the branch `release-qvac-sdk-<version>` (or tag `v<version>` or `main`), generates docs, and opens a PR on branch `docs/api-v<version>`.
 

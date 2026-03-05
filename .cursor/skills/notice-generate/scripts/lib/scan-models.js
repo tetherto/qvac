@@ -69,7 +69,7 @@ function toAttribution (record) {
 }
 
 // ---------------------------------------------------------------------------
-// Scan all models (for qvac-sdk / registry-client)
+// Scan all models (for sdk / registry-client)
 // ---------------------------------------------------------------------------
 function scanAllModels () {
   const models = loadModels()
