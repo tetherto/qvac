@@ -7,6 +7,34 @@ if(ENABLE_XNNPACK)
   list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
 endif()
 
+# Force Apple Clang from Xcode instead of Homebrew LLVM and set the correct
+# sysroot so that -framework flags resolve against the target SDK.
+if(APPLE)
+  execute_process(
+    COMMAND xcrun --find clang
+    OUTPUT_VARIABLE _XCODE_CLANG OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(
+    COMMAND xcrun --find clang++
+    OUTPUT_VARIABLE _XCODE_CLANGXX OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  set(CMAKE_C_COMPILER   "${_XCODE_CLANG}"   CACHE FILEPATH "" FORCE)
+  set(CMAKE_CXX_COMPILER "${_XCODE_CLANGXX}" CACHE FILEPATH "" FORCE)
+
+  if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # Resolve the sysroot set by the toolchain (iphoneos or iphonesimulator)
+    # to a full SDK path so that -framework flags resolve against the correct SDK.
+    if(CMAKE_OSX_SYSROOT MATCHES "iphonesimulator")
+      set(_xcrun_sdk iphonesimulator)
+    else()
+      set(_xcrun_sdk iphoneos)
+    endif()
+    execute_process(
+      COMMAND xcrun --sdk ${_xcrun_sdk} --show-sdk-path
+      OUTPUT_VARIABLE _IOS_SDK OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(CMAKE_OSX_SYSROOT "${_IOS_SDK}" CACHE PATH "" FORCE)
+  endif()
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
