@@ -4,9 +4,6 @@ import logging
 import httpx
 import numpy as np
 import os
-import time
-import json
-import yaml
 from sentence_transformers import SentenceTransformer
 from huggingface_hub import hf_hub_download, list_repo_files
 
