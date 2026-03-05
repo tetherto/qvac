@@ -1,8 +1,3 @@
----
-name: sdk-changelog
-description: Generate changelogs for SDK pod packages using tag-based GitFlow. Use when preparing a release, generating changelog, or creating CHANGELOG_LLM.md.
----
-
 # SDK Changelog Generation
 
 Generate changelogs for SDK pod packages following the monorepo GitFlow.
@@ -72,7 +67,7 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 
 Additionally:
 
-- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
+- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest -> oldest)
 
 ## Tag Format
 
@@ -90,12 +85,12 @@ After changelog generation completes, run notice-generate for the same `--packag
 
 ```bash
 source .env
-node .cursor/skills/notice-generate/scripts/generate-notice.js <package-name>
+node .agent/scripts/notice-generate/generate-notice.js <package-name>
 ```
 
 Do NOT commit — the user will review and commit.
 
-See `.cursor/skills/notice-generate/SKILL.md` for full details.
+See `.agent/skills/sdk/notice-generate.md` for full details.
 
 ## Quality Checklist
 
@@ -118,4 +113,4 @@ Before completing:
 - GitFlow: `/gitflow.md`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
-- NOTICE generation: `.cursor/skills/notice-generate/SKILL.md`
+- NOTICE generation: `.agent/skills/sdk/notice-generate.md`

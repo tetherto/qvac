@@ -1,8 +1,3 @@
----
-name: notice-generate
-description: Generate NOTICE files with third-party attributions for all packages in the monorepo.
----
-
 # NOTICE File Generator
 
 Generate deterministic, sorted NOTICE files for individual packages or all packages at once, covering model, JS, Python, and C++ dependency attributions.
@@ -40,10 +35,10 @@ System requirements for Python scanning:
 
 ```bash
 source .env
-node .cursor/skills/notice-generate/scripts/generate-notice.js <package-dir-name>
+node .agent/scripts/notice-generate/generate-notice.js <package-dir-name>
 ```
 
-Example: `node .cursor/skills/notice-generate/scripts/generate-notice.js sdk`
+Example: `node .agent/scripts/notice-generate/generate-notice.js qvac-sdk`
 
 For registry sub-packages use the full path:
 - `qvac-lib-registry-server/client`
@@ -53,15 +48,15 @@ For registry sub-packages use the full path:
 
 ```bash
 source .env
-node .cursor/skills/notice-generate/scripts/generate-notice.js --all
+node .agent/scripts/notice-generate/generate-notice.js --all
 ```
 
 ### Dry-run (no file writes, safe for testing)
 
 ```bash
 source .env
-node .cursor/skills/notice-generate/scripts/generate-notice.js --all --dry-run
-node .cursor/skills/notice-generate/scripts/generate-notice.js sdk --dry-run
+node .agent/scripts/notice-generate/generate-notice.js --all --dry-run
+node .agent/scripts/notice-generate/generate-notice.js qvac-sdk --dry-run
 ```
 
 In dry-run mode:
@@ -73,11 +68,11 @@ In dry-run mode:
 
 ```bash
 source .env
-node .cursor/skills/notice-generate/scripts/check-forbidden-licenses.js --all --dry-run
-node .cursor/skills/notice-generate/scripts/check-forbidden-licenses.js --all
+node .agent/scripts/notice-generate/check-forbidden-licenses.js --all --dry-run
+node .agent/scripts/notice-generate/check-forbidden-licenses.js --all
 ```
 
-Uses an **allowlist** approach. The `ALLOWED_LICENSES` array in `config.js` controls which licenses pass:
+Uses an **allowlist** approach. The `ALLOWED_LICENSES` array in `constants.js` controls which licenses pass:
 - **Empty list (default)** -- every license is allowed (open gate). Useful while you are still cataloguing your deps.
 - **Populated list** -- only those SPDX identifiers pass; anything else is a violation.
 
@@ -85,12 +80,12 @@ License strings from all sources (npm, PyPI, GitHub, models) are normalized to c
 
 If violations are found, writes `FORBIDDEN_LICENSES.txt` to the repo root and exits with code 1.
 
-**Important:** The agent should NOT edit `ALLOWED_LICENSES` directly. Present the scan results to the user and let them decide which licenses to allow. The allowlist and normalization map live in `.cursor/skills/notice-generate/scripts/constants.js`.
+**Important:** The agent should NOT edit `ALLOWED_LICENSES` directly. Present the scan results to the user and let them decide which licenses to allow. The allowlist and normalization map live in `.agent/scripts/notice-generate/constants.js`.
 
 ### Generate license overview report
 
 ```bash
-node .cursor/skills/notice-generate/scripts/generate-report.js
+node .agent/scripts/notice-generate/generate-report.js
 ```
 
 Reads existing NOTICE files across all packages (no scanning, no tokens needed) and produces `NOTICE_FULL_REPORT.txt` with:
@@ -143,6 +138,6 @@ All entries within every NOTICE file section are sorted deterministically using 
 
 ## References
 
-- Constants (allowlist, normalization, copyright): `.cursor/skills/notice-generate/scripts/constants.js`
-- Package definitions & internal wiring: `.cursor/skills/notice-generate/scripts/lib/config.js`
+- Constants (allowlist, normalization, copyright): `.agent/scripts/notice-generate/constants.js`
+- Package definitions & internal wiring: `.agent/scripts/notice-generate/lib/config.js`
 - SDK pod packages: `.cursor/rules/sdk/sdk-pod-packages.mdc`

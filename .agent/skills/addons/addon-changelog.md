@@ -1,8 +1,3 @@
----
-name: addon-changelog
-description: Generate changelog entries for a target add-on package. Use when preparing a new release.
----
-
 # Generate Human-Readable Changelog Entries
 
 Generate changelog entries for add-on packages following the add-on release workflow.
@@ -33,8 +28,8 @@ Identify the full set of changes for the **target add-on package only**, validat
    - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user, substituting `<addon>` with the actual add-on name:
 
    -----------------------------------
-   ⚠️⚠️⚠️ VERSION BUMP REQUIRED ⚠️⚠️⚠️  
-   The `version` in `packages/<addon>/package.json` is unchanged compared to `main`.  
+   VERSION BUMP REQUIRED
+   The `version` in `packages/<addon>/package.json` is unchanged compared to `main`.
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 

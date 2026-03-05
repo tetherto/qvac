@@ -15,6 +15,7 @@ All coding agents working on this repository MUST follow these rules. These are 
 
 - Run the full test suite before declaring done
 - Run the task's Verify command (if specified) before marking Asana complete
+- **If you create a test or example, you MUST run it and confirm it passes before declaring done** — never commit untested code
 - No new compiler warnings
 - No new linting errors (`bun run lint` for SDK, `standard` for addons, `clang-tidy` for C++)
 - All existing tests must continue to pass
@@ -55,8 +56,46 @@ All coding agents working on this repository MUST follow these rules. These are 
 - See `.cursor/rules/sdk/` for SDK-specific rules (function declarations over arrows, `@` imports, no `any`, composition over classes)
 - Commit messages follow the format: `prefix[tags]?: subject` (see CLAUDE.md)
 
+## Cross-Platform CI Validation
+
+After local tests pass, validate changes across all platforms using CI:
+
+1. **Push your branch** to the remote
+2. **Trigger the CI workflow** manually: `gh workflow run "On PR Trigger (<package>)" --ref <your-branch>`
+   - Package names: `LLM`, `OCR`, `TTS`, etc. — match the package you changed
+3. **Monitor the run**: `gh run list --workflow "On PR Trigger (<package>)" --branch <your-branch> --limit 1`
+4. **Wait for completion**: `gh run watch <run-id>` — this blocks until the workflow finishes and shows live status
+5. **Check results**: all platforms must pass (Linux, macOS, Windows, mobile if applicable)
+6. **If a stage fails**:
+   - Read the logs: `gh run view <run-id> --log-failed`
+   - Fix the issue, commit, push, and re-trigger the workflow
+   - Repeat until all platforms pass
+7. **If the same stage fails more than 5 times** after fixes: document the failure details on the Asana task (error logs, what was tried, platforms affected) and STOP
+
+CI must pass on all platforms before marking the task as complete.
+
+## Bash Command Rules
+
+To avoid triggering permission prompts, keep shell commands simple and pre-approvable:
+
+- **No `$()` command substitution** in shell commands — write to a temp file instead (e.g. use `git commit -F /tmp/msg.txt` instead of `git commit -m "$(cat <<EOF ... EOF)"`)
+- **No shell redirects** like `2>/dev/null`, `2>&1`, or pipes (`|`) in compound commands — these trigger permission prompts that cannot be pre-approved
+- **One command per Bash call** — never chain with `&&`, `||`, or `;`. Make multiple separate Bash tool calls instead.
+- **Use dedicated tools** when available — use Read instead of `cat`, Grep instead of `grep`, Glob instead of `find`, Edit instead of `sed`
+- **Use simple `ls`** to check if files/dirs exist — one path per call if needed
+
+## Tests Are Sacred
+
+- **NEVER delete, disable, or skip existing tests** — no `skip()`, no `todo()`, no commenting out, no removing test files
+- **NEVER add flags or options to bypass failing tests** (e.g. `--bail`, `--ignore`, filter patterns that exclude tests)
+- **NEVER weaken assertions** to make a test pass (e.g. changing `t.ok(result.length > 80)` to `t.ok(result.length > 0)`)
+- If a test fails: **fix the code or the test**, not skip it
+- If a fix is not possible: **document on the Asana task** why the test fails, what you tried, and STOP — let the engineer decide
+- New code must have tests. Existing tests must keep passing.
+
 ## What Agents Must NOT Do
 
+- Delete, skip, or disable existing tests (see above)
 - Delete or rename files not in their task scope
 - Modify `.github/workflows/` unless that is the task
 - Push to `main` or `release-*` branches directly

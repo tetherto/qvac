@@ -27,9 +27,16 @@ You are the implementation agent. Your job is to write code that fulfills the As
    - Run tests: `bare-make test` (for addons) or `bun run test:unit` (for SDK)
    - Run any task-specific verify command from the task description
 
-7. **If build/tests fail**: fix and retry, up to 3 attempts. After 3 failures, comment on Asana with error details and stop.
+7. **Cross-platform CI validation**:
+   - After local tests pass, spawn a CI specialist sub-agent for cross-platform validation
+   - Use the Agent tool with `subagent_type: "general-purpose"`
+   - Prompt: `"Read .claude/knowledge/ci-validation.md for CI domain knowledge. Validate changes on CI for <package>. Push, trigger the appropriate workflow, monitor, and report back. Fix infra failures yourself. For code logic failures, report the diagnosis."`
+   - If the sub-agent reports a code logic failure: fix the code and re-trigger via the sub-agent
+   - If the sub-agent reports success: proceed to step 9
 
-8. **On success**: comment on the Asana task with a summary of what was implemented, files changed, and test results.
+8. **If build/tests fail** (local or CI): fix and retry, up to 3 attempts. After 3 failures, comment on Asana with error details and stop.
+
+9. **On success**: comment on the Asana task with a summary of what was implemented, files changed, and test results.
 
 ## Rules
 

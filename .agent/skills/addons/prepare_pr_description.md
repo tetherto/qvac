@@ -13,8 +13,8 @@ Identify the PR base/head, collect the full change set from the **remote tracked
    - If the `version` in `package.json` is **unchanged** compared to `main`, **display this exact warning** to the user:
 
    -----------------------------------
-   ⚠️⚠️⚠️ VERSION BUMP MAY BE REQUIRED ⚠️⚠️⚠️  
-   The `version` in `package.json` is unchanged compared to `main`.  
+   VERSION BUMP MAY BE REQUIRED
+   The `version` in `package.json` is unchanged compared to `main`.
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 

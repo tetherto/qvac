@@ -1,8 +1,3 @@
----
-name: sdk-pr-create
-description: Generate PR descriptions for SDK pod packages following template and format rules.
----
-
 # SDK Pod PR Creation
 
 Generate PR titles and descriptions for SDK pod packages, following the team's template and format rules.
@@ -40,10 +35,10 @@ Infer first, ask only if uncertain:
 - Extract from branch name prefix: `feat/`, `fix/`, `infra/`, etc.
 - Use majority prefix from commit messages
 - If no conventional commits, infer from diff:
-  - New files/exports → `feat`
-  - Bug-related changes → `fix`
-  - Only .md files → `doc`
-  - Only test files → `test`
+  - New files/exports -> `feat`
+  - Bug-related changes -> `fix`
+  - Only .md files -> `doc`
+  - Only test files -> `test`
 - ASK only if mixed signals or unclear
 
 **Tags ([api]/[bc]/[mod]):**
@@ -53,8 +48,8 @@ Infer first, ask only if uncertain:
 - ASK only if change scope is ambiguous
 
 **Testing section:**
-- If test files modified → "Unit tests added/updated for X"
-- If no tests → ASK what manual testing was done
+- If test files modified -> "Unit tests added/updated for X"
+- If no tests -> ASK what manual testing was done
 
 ## Format References
 
@@ -77,7 +72,7 @@ TICKET prefix[tags]: subject
 ```markdown
 **Note**: be concise and prefer bullet points.
 
-## 🎯 What problem does this PR solve?
+## What problem does this PR solve?
 ...
 ```
 ~~~
@@ -105,7 +100,7 @@ gh pr create \
 gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 ```
 
-**Important:** 
+**Important:**
 - `--web` alone only opens browser for manual creation, does NOT create the PR
 - For fork PRs, must specify `--repo`, `--base`, and `--head` explicitly
 - Commit and push before creating PR

@@ -12,8 +12,8 @@ Identify the full set of changes that will land in `main` for the PR, and **vali
    - If the `version` in `package.json` is **unchanged** compared to `main`, **stop and display this exact warning** to the user:
 
    -----------------------------------
-   ⚠️⚠️⚠️ VERSION BUMP REQUIRED ⚠️⚠️⚠️  
-   The `version` in `package.json` is unchanged compared to `main`.  
+   VERSION BUMP REQUIRED
+   The `version` in `package.json` is unchanged compared to `main`.
    If this PR includes any changes that must be released in the package, you **must** bump the package version, commit/push it and re-run this command.
    -----------------------------------
 
