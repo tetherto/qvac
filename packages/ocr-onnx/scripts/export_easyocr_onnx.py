@@ -226,7 +226,7 @@ def export_detector(reader, output_dir, opset_version=DEFAULT_OPSET):
             dynamic_axes={
                 'input': {0: 'batch', 2: 'height', 3: 'width'},
                 'output': {0: 'batch', 1: 'height', 2: 'width'},
-                'feature': {0: 'batch', 1: 'height', 2: 'width'},
+                'feature': {0: 'batch', 2: 'height', 3: 'width'},
             },
             opset_version=opset_version,
             do_constant_folding=True,
