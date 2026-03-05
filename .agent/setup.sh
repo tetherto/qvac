@@ -76,6 +76,12 @@ setup_claude() {
     copy_with_header "$f" "$REPO_ROOT/.claude/knowledge/$(basename "$f")"
   done
 
+  # Top-level commands from skills/
+  for f in "$SCRIPT_DIR"/skills/*.md; do
+    [ -f "$f" ] || continue
+    copy_with_header "$f" "$REPO_ROOT/.claude/commands/$(basename "$f")"
+  done
+
   # Commands from skills (plain markdown, no frontmatter needed)
   for f in "$SCRIPT_DIR"/skills/addons/*.md; do
     [ -f "$f" ] || continue
