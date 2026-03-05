@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+2026-03-04
+
+### Added
+
+- DocTR OCR pipeline with DBNet text detection and CRNN/PARSeq text recognition models.
+- Support for 4 DocTR ONNX models: db_resnet50, db_mobilenet_v3_large, parseq, crnn_mobilenet_v3_small.
+- Symmetric padding, sigmoid postprocessing, and attention decoding matching Python OnnxTR.
+- `straightenPages` option for perspective-corrected text region extraction.
+- `decodingMethod` option (`greedy` or `attention`) for recognition decoding.
+- DocTR model entries in the registry (models.prod.json).
+- S3 presigned URL generation script for DocTR model distribution on mobile.
+- DocTR integration tests: basic, French, lab results, and multi-model test suites.
+- Bucket validation and jq-based JSON generation in presigned URL scripts.
+
+### Changed
+
+- Pipeline now supports both EasyOCR and DocTR modes, selected via `detectionArch` option.
+- Shared ONNX Runtime environment across all sessions for stability.
+- Safe tensor shape logging in detection and recognition steps to prevent out-of-bounds crashes.
+- XNNPACK execution provider inherits ORT thread pool to prevent session destruction hangs.
+- Skip 1200px resize for DocTR mode (uses full resolution).
+
+### Fixed
+
+- Windows ONNX Runtime session stability (XNNPACK threading, session lifecycle).
+- `for...in` bug in MockONNXOcr.js language map iteration.
+- Typo in bounding box log message.
+
 ## [0.1.8]
 2026-02-20
 

@@ -40,9 +40,10 @@ async function loadOcr () {
 // Static methods & properties (index.js)
 // =============================================
 
-test('getModelKey returns onnx-ocr-fasttext', function (t) {
-  t.is(ONNXOcr.getModelKey(), 'onnx-ocr-fasttext')
-  t.is(ONNXOcr.getModelKey({ anything: true }), 'onnx-ocr-fasttext', 'Ignores params argument')
+test('getModelKey returns onnx-ocr-fasttext-easyocr by default', function (t) {
+  t.is(ONNXOcr.getModelKey(), 'onnx-ocr-fasttext-easyocr')
+  t.is(ONNXOcr.getModelKey({ anything: true }), 'onnx-ocr-fasttext-easyocr', 'Defaults to easyocr when pipelineMode not set')
+  t.is(ONNXOcr.getModelKey({ pipelineMode: 'doctr' }), 'onnx-ocr-fasttext-doctr', 'Returns doctr key when pipelineMode is doctr')
 })
 
 test('inferenceManagerConfig.noAdditionalDownload is true', function (t) {
