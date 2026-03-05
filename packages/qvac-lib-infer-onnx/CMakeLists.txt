@@ -27,17 +27,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Patch LINK_ONLY out of cmake config files for cmake 4.x compatibility
+# Patch cmake config files for cmake 4.x compatibility
 foreach(_cmake4_fix_file
     "${VCPKG_INSTALLED_PATH}/share/onnxruntime/onnxruntimeTargets.cmake"
     "${VCPKG_INSTALLED_PATH}/share/protobuf/protobuf-targets.cmake")
   if(EXISTS "${_cmake4_fix_file}")
     file(READ "${_cmake4_fix_file}" _cmake4_fix_content)
+    # Strip LINK_ONLY generator expressions
     if(_cmake4_fix_content MATCHES "LINK_ONLY:")
       string(REGEX REPLACE "\\\\?\\$<LINK_ONLY:([^>]+)>" "\\1"
         _cmake4_fix_content "${_cmake4_fix_content}")
-      file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
     endif()
+    # Fix malformed $<CONFIG:CFG:lib> → $<$<CONFIG:CFG>:lib>
+    string(REGEX REPLACE "\\$<CONFIG:([A-Za-z]+):([^>]+)>"
+      "$<$<CONFIG:\\1>:\\2>"
+      _cmake4_fix_content "${_cmake4_fix_content}")
+    file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
   endif()
 endforeach()
 
