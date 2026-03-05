@@ -9,7 +9,9 @@
     "lint": "next lint",
     "docs:generate": "node scripts/run-docs-generate.cjs",
     "docs:generate-api": "node scripts/generate-api-docs.cjs",
-    "docs:update-versions": "node scripts/update-versions-list.cjs"
+    "docs:update-versions": "node scripts/update-versions-list.cjs",
+    "validate:frontmatter": "bun scripts/validate-frontmatter.ts",
+    "validate:links": "bun scripts/check-links.ts"
   },
   "dependencies": {
     "fumadocs-core": "^13.2.1",
@@ -23,6 +25,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "gray-matter": "^4.0.3",
     "typedoc": "^0.26.0",
     "@types/mdx": "^2.0.13",
     "@types/node": "^22.0.0",
