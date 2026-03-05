@@ -227,7 +227,8 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
-    const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu) {
+    const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
+    std::optional<int>* outAdrenoVersion) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -303,6 +304,10 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     openClBackends.clear();
   }
 
+  if (outAdrenoVersion != nullptr) {
+    *outAdrenoVersion = maxAdrenoVersion;
+  }
+
   // Normally, check if Adreno GPU is present and force OpenCL backend,
   // otherwise let llama.cpp choose Vulkan GPU backend. There are some
   // exceptions such as BitNet models which do not currently support OpenCl,
@@ -329,7 +334,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata) {
+    const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
+    std::optional<int>* outAdrenoVersion) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -340,5 +346,5 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_type,
       llamaLogcallback};
   return backend_selection::chooseBackend(
-      preferredBackendType, bckI, metadata, mainGpu);
+      preferredBackendType, bckI, metadata, mainGpu, outAdrenoVersion);
 }
