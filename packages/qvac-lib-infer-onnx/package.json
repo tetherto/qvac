@@ -1,13 +1,33 @@
 {
-  "name": "qvac-onnx",
-  "version": "1.0.0",
-  "description": "Header-only C++ library for ONNX Runtime session management",
-  "private": true,
+  "name": "@qvac/onnx",
+  "version": "0.12.0",
+  "description": "Bare addon for ONNX Runtime session management",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.19.3"
+  },
   "scripts": {
-    "build": "bare-make generate && bare-make build",
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
     "test:cpp:run": "cd build && ctest --output-on-failure",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run"
+  },
+  "files": [
+    "binding.js",
+    "prebuilds/*/*.bare",
+    "prebuilds/include",
+    "prebuilds/share/qvac-onnx",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    ".": "./binding.js",
+    "./package": "./package.json"
   },
   "author": "Tether",
   "license": "Apache-2.0",

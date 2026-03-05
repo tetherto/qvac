@@ -6,11 +6,14 @@ declare interface ONNXOcrParams {
   langList: string[];
   useGPU?: boolean;
   timeout?: number;
+  pipelineMode?: 'easyocr' | 'doctr';
   magRatio?: number;
   defaultRotationAngles?: number[];
   contrastRetry?: boolean;
   lowConfidenceThreshold?: number;
   recognizerBatchSize?: number;
+  decodingMethod?: 'ctc' | 'attention';
+  straightenPages?: boolean;
 }
 
 declare interface ONNXOcrArgs {

@@ -148,8 +148,7 @@ void normalizeMeanVariance(cv::Mat &inputImage,
 StepDetectionInference::StepDetectionInference(
     const ORTCHAR_T* pathDetector, bool useGPU, float magRatio)
     : magRatio_(magRatio),
-      ortEnv_(ORT_LOGGING_LEVEL_WARNING, "OnnxInferenceDetector"),
-      ortSession_(ortEnv_, pathDetector, getOrtSessionOptions(useGPU)) {}
+      ortSession_(getSharedOrtEnv(), pathDetector, getOrtSessionOptions(useGPU)) {}
 
 std::vector<Ort::Value> StepDetectionInference::runInference(cv::Mat inputBlob) {
   int dims = inputBlob.dims;
