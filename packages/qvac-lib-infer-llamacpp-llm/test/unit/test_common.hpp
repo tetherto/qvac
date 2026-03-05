@@ -198,11 +198,9 @@ readFileToStreambufBinary(const std::string& path) {
  * so that GTEST_SKIP / FAIL return from the correct stack frame.
  */
 #define REQUIRE_MODEL(m)                                                       \
-  do {                                                                         \
-    if (!(m).found()) {                                                        \
-      if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)      \
-        GTEST_SKIP() << (m).missingMessage();                                  \
-      else                                                                     \
-        FAIL() << (m).missingMessage();                                        \
-    }                                                                          \
-  } while (false)
+  if (!(m).found()) {                                                          \
+    if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)        \
+      GTEST_SKIP() << (m).missingMessage();                                    \
+    FAIL() << (m).missingMessage();                                            \
+  }                                                                            \
+  static_assert(true, "")
