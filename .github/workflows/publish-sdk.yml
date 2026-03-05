@@ -1,4 +1,4 @@
-name: Build and Publish QVAC SDK (Qvac-sdk)
+name: Build and Publish QVAC SDK (sdk)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
   pull_request_target:
     types:
       - opened
@@ -22,7 +22,7 @@ on:
       - tmp-*
       - main
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
 
   workflow_dispatch:
     inputs:
@@ -32,7 +32,7 @@ on:
         default: "dev"
 
 env:
-  WORKDIR: packages/qvac-sdk
+  WORKDIR: packages/sdk
 
 permissions:
   contents: read
@@ -57,9 +57,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-sdk
-          package-json-path: packages/qvac-sdk/package.json
-          changelog-path: packages/qvac-sdk/CHANGELOG.md
+          package-slug: sdk
+          package-json-path: packages/sdk/package.json
+          changelog-path: packages/sdk/CHANGELOG.md
 
   build:
     if: >
@@ -393,4 +393,4 @@ jobs:
       release_name: "QVAC SDK"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-sdk"
+      workdir: "packages/sdk"

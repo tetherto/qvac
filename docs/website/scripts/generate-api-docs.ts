@@ -8,7 +8,7 @@
  *   bun run scripts/generate-api-docs.ts --rollback
  *
  * Path format: content/docs/sdk/api/vX.Y.Z/ and content/docs/sdk/api/latest/
- * SDK path: Set SDK_PATH env to point to qvac-sdk package (default: ../qvac-sdk from cwd).
+ * SDK path: Set SDK_PATH env to point to sdk package (default: ../sdk from cwd).
  */
 
 import * as fs from "fs/promises";
@@ -37,7 +37,7 @@ interface GenerateOptions {
 
 const SDK_PATH =
   process.env.SDK_PATH ||
-  path.join(process.cwd(), "..", "qvac-sdk");
+  path.join(process.cwd(), "..", "sdk");
 
 async function generateApiDocs(
   version: string,
@@ -64,10 +64,10 @@ async function generateApiDocs(
     throw new Error(
       `SDK entry point not found: ${entryPoint}\n\n` +
         `Either:\n` +
-        `  1. Clone or copy the qvac-sdk package to: ${SDK_PATH}\n` +
+        `  1. Clone or copy the sdk package to: ${SDK_PATH}\n` +
         `  2. Or set SDK_PATH to your SDK root, e.g.:\n` +
-        `     set SDK_PATH=C:\\path\\to\\qvac-sdk   (Windows)\n` +
-        `     export SDK_PATH=/path/to/qvac-sdk     (Linux/macOS)\n` +
+        `     set SDK_PATH=C:\\path\\to\\sdk   (Windows)\n` +
+        `     export SDK_PATH=/path/to/sdk     (Linux/macOS)\n` +
         `  Then run: npm run docs:generate-api -- 0.7.0`
     );
   }

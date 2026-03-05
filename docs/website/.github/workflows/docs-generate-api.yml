@@ -1,8 +1,8 @@
-# Generate API documentation from qvac-sdk and open a PR.
+# Generate API documentation from sdk and open a PR.
 # Trigger manually with a version (e.g. 0.7.0) or via repository_dispatch from the SDK repo.
 #
 # Required: Set repository variable SDK_REPOSITORY (e.g. owner/qvac) so the workflow can clone the SDK.
-# Optional: Set SDK_SUBPATH (e.g. packages/qvac-sdk) if the SDK is not at repo root; default below.
+# Optional: Set SDK_SUBPATH (e.g. packages/sdk) if the SDK is not at repo root; default below.
 
 name: Generate API Documentation
 
@@ -17,7 +17,7 @@ on:
     types: [generate-api-docs]
 
 env:
-  SDK_SUBPATH: "packages/qvac-sdk"
+  SDK_SUBPATH: "packages/sdk"
 
 jobs:
   generate-api-docs:

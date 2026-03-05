@@ -110,7 +110,7 @@
     "check-models": "tsx ./models/update-models/index.ts --check",
     "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
     "update-models": "tsx ./models/update-models/index.ts",
-    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk && prettier --write changelog",
+    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog",
     "docs:gen-pages": "remark \"docs/*.mdx\" --output .docs-build",
     "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
   },

@@ -1,13 +1,13 @@
-name: Dispatch on README (Qvac-sdk)
+name: Dispatch on README (sdk)
 
 on:
   pull_request:
     types: [closed]
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
 
 env:
-  WORKDIR: packages/qvac-sdk
+  WORKDIR: packages/sdk
 
 jobs:
   dispatch:
