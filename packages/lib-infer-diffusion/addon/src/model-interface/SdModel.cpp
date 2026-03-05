@@ -103,7 +103,14 @@ void SdModel::load() {
   // ── Memory management ─────────────────────────────────────────────────────
   params.enable_mmap = config_.mmap;
   params.offload_params_to_cpu = config_.offloadToCpu;
+#if defined(__APPLE__)
+  // The ggml Metal backend does not fully support GGML_OP_NORM for
+  // non-contiguous tensors (the CLIP text encoder hits this path).
+  // Force CLIP to CPU on Apple to avoid a Metal encoder abort.
+  params.keep_clip_on_cpu = true;
+#else
   params.keep_clip_on_cpu = config_.keepClipOnCpu;
+#endif
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
 
   // ── Precision ─────────────────────────────────────────────────────────────

@@ -28,6 +28,11 @@ if(SD_CUDA)
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 endif()
 
+option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
+if(SD_OPENCL)
+  list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
+endif()
+
 # Vulkan is auto-enabled in portfile.cmake via PLATFORM_OPTIONS on all
 # non-Apple, non-Android platforms — no separate feature flag needed here.
 # CUDA requires a specific build machine so it remains opt-in via SD_CUDA.

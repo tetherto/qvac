@@ -19,7 +19,8 @@
       "description": "Enable CUDA GPU acceleration"
     },
     "opencl": {
-      "description": "Enable OpenCL GPU acceleration (Android/Adreno)"
+      "description": "Enable OpenCL GPU acceleration (Android/Adreno)",
+      "dependencies": ["opencl"]
     },
     "flash-attn": {
       "description": "Enable Flash Attention for memory efficiency"

@@ -51,6 +51,15 @@
           "features": ["cuda"]
         }
       ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend (Android/Adreno)",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": ["opencl"]
+        }
+      ]
     }
   }
 }

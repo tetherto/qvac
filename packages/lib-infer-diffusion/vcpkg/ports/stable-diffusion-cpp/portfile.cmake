@@ -103,6 +103,30 @@ if(VCPKG_TARGET_IS_ANDROID)
     endif()
 endif()
 
+# 3. SD_CPU_ONLY environment variable (all GPU platforms).
+#    stable-diffusion.cpp unconditionally calls ggml_backend_metal_init() (or
+#    CUDA/Vulkan/OpenCL) in init_backend() when the GPU define is set.
+#    If the GPU backend initialises successfully but later cannot encode a
+#    particular op, the Metal encoder hard-ABORTs (no graceful fallback).
+#    This patch gates GPU init behind a runtime check: when the SD_CPU_ONLY
+#    env var is set, GPU backends are skipped and CPU is used instead.
+#    This lets CI (where the Metal device is virtualised and incomplete) run
+#    integration tests with the same binary that ships to end-users.
+set(_sd_file "${SOURCE_PATH}/src/stable-diffusion.cpp")
+file(READ "${_sd_file}" _sd_contents)
+
+if(NOT _sd_contents MATCHES "QVAC: SD_CPU_ONLY")
+    string(REPLACE
+        "void init_backend() {"
+        "void init_backend() { /* QVAC: SD_CPU_ONLY */ if (getenv(\"SD_CPU_ONLY\")) { LOG_INFO(\"SD_CPU_ONLY set — using CPU backend\"); backend = ggml_backend_cpu_init(); return; }"
+        _sd_contents "${_sd_contents}"
+    )
+    file(WRITE "${_sd_file}" "${_sd_contents}")
+    message(STATUS "[qvac] Patched init_backend() with SD_CPU_ONLY env var gate")
+else()
+    message(STATUS "[qvac] SD_CPU_ONLY patch already applied")
+endif()
+
 # --- Platform options (mirrors qvac-fabric pattern) ---
 set(PLATFORM_OPTIONS)
 
@@ -132,6 +156,13 @@ else()
     set(DL_BACKENDS OFF)
     list(APPEND PLATFORM_OPTIONS -DGGML_BACKEND_DL=OFF)
 endif()
+
+# Disable OpenMP on all platforms.  When ggml is built with OpenMP the static
+# lib's cmake config exports GGML_OPENMP_ENABLED which forces the consumer to
+# find_dependency(OpenMP).  On Windows bare-make can't locate MSVC's OpenMP
+# runtime; on Linux the runner may lack libomp.so.5.  ggml falls back to
+# std::thread when OpenMP is off — no performance loss for inference.
+list(APPEND PLATFORM_OPTIONS -DGGML_OPENMP=OFF)
 
 # --- GPU feature flags ---
 set(SD_GGML_CUDA   OFF)
@@ -177,6 +208,10 @@ endif()
 if(DL_BACKENDS)
     set(VCPKG_LIBRARY_LINKAGE dynamic)
 endif()
+
+# Only build Release — debug builds of ggml/stable-diffusion are not needed
+# for the prebuild and can fail with MSVC iterator-debug-level mismatches.
+set(VCPKG_BUILD_TYPE release)
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -274,5 +309,3 @@ file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 
 # Install license
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")
-
-set(VCPKG_BUILD_TYPE release)
