@@ -327,10 +327,10 @@ test('Fresh instance timing: new model per transcription (app restart simulation
             transcriptions.push(segment)
           }
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 

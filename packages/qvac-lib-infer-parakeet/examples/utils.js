@@ -20,10 +20,25 @@ const TDT_MODEL_FILES = [
  * @param {Object} binding - The native binding
  */
 function setupLogger (binding) {
+  const shouldEnableNativeLogs = typeof globalThis.process !== 'undefined' &&
+    globalThis.process &&
+    globalThis.process.env &&
+    globalThis.process.env.QVAC_EXAMPLE_NATIVE_LOGS === '1'
+
+  if (!shouldEnableNativeLogs) {
+    if (!binding.__qvacExampleReleaseLoggerPatched) {
+      binding.releaseLogger = () => {}
+      binding.__qvacExampleReleaseLoggerPatched = true
+    }
+    return
+  }
+
+  if (binding.__qvacExampleLoggerSet) return
   binding.setLogger((priority, message) => {
     const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
     console.log(`[C++ ${priorityName}] ${message}`)
   })
+  binding.__qvacExampleLoggerSet = true
 }
 
 /**

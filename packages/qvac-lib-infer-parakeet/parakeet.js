@@ -35,6 +35,27 @@ try {
   }
 }
 
+const state = Object.freeze({
+  LOADING: 'loading',
+  LISTENING: 'listening',
+  PROCESSING: 'processing',
+  IDLE: 'idle',
+  PAUSED: 'paused',
+  STOPPED: 'stopped'
+})
+
+const END_OF_INPUT = 'end of job'
+
+function createParakeetError (code, message, cause = undefined) {
+  // @qvac/error expects an options object, while the local fallback class
+  // accepts positional args. Support both call shapes.
+  try {
+    return new QvacErrorAddonParakeet({ code, adds: message, cause })
+  } catch {
+    return new QvacErrorAddonParakeet(code, message)
+  }
+}
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  * Provides low-level access to the Parakeet speech-to-text model.
@@ -61,14 +82,65 @@ class ParakeetInterface {
     this._outputCallback = outputCallback
     this._stateCallback = stateCallback
     this._handle = null
+    this._state = state.LOADING
+    this._nextJobId = 1
+    this._activeJobId = null
+    this._bufferedAudio = []
 
     // Create the native instance
     this._handle = this._binding.createInstance(
-      'parakeet',
+      this,
       this._config,
-      this._outputCallback,
+      this._addonOutputCallback.bind(this),
       this._stateCallback
     )
+  }
+
+  _setState (newState) {
+    this._state = newState
+    if (this._stateCallback) {
+      this._stateCallback(this, newState)
+    }
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const isError = typeof error === 'string' && error.length > 0
+    const isStats = data && typeof data === 'object' && (
+      'totalTime' in data ||
+      'audioDurationMs' in data ||
+      'totalSamples' in data
+    )
+    const isTranscriptOutput = (
+      Array.isArray(data) ||
+      (data && typeof data === 'object' && typeof data.text === 'string')
+    )
+
+    let mappedEvent = event
+    if (isError || String(event).includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (isStats || String(event).includes('RuntimeStats')) {
+      mappedEvent = 'JobEnded'
+    } else if (isTranscriptOutput || String(event).includes('Output')) {
+      mappedEvent = 'Output'
+    }
+
+    const jobId = this._activeJobId
+    if (jobId === null || jobId === undefined) {
+      return
+    }
+
+    if (mappedEvent === 'Output') {
+      this._setState(state.PROCESSING)
+    }
+
+    if (this._outputCallback) {
+      this._outputCallback(addon, mappedEvent, jobId, data, isError ? error : null)
+    }
+
+    if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+    }
   }
 
   /**
@@ -85,7 +157,7 @@ class ParakeetInterface {
     try {
       return this._binding.loadWeights(this._handle, weightsData)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_LOAD_WEIGHTS, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_LOAD_WEIGHTS, error.message, error)
     }
   }
 
@@ -95,9 +167,10 @@ class ParakeetInterface {
    */
   async activate () {
     try {
-      return this._binding.activate(this._handle)
+      this._binding.activate(this._handle)
+      this._setState(state.LISTENING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_ACTIVATE, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_ACTIVATE, error.message, error)
     }
   }
 
@@ -110,9 +183,41 @@ class ParakeetInterface {
    */
   async append (data) {
     try {
-      return this._binding.append(this._handle, data)
+      if (data?.type === END_OF_INPUT) {
+        const currentJobId = this._nextJobId
+        const input = this._concatBufferedAudio()
+        this._activeJobId = currentJobId
+        let accepted = false
+        try {
+          accepted = this._binding.runJob(this._handle, {
+            type: 'audio',
+            input
+          })
+        } catch (error) {
+          this._activeJobId = null
+          this._setState(state.LISTENING)
+          throw error
+        }
+        if (!accepted) {
+          this._activeJobId = null
+          this._setState(state.LISTENING)
+          throw new Error('Cannot set new job: a job is already set or being processed')
+        }
+
+        this._nextJobId += 1
+        this._bufferedAudio = []
+        this._setState(state.PROCESSING)
+        return currentJobId
+      }
+
+      if (data?.type === 'audio') {
+        this._bufferedAudio.push(this._normalizeAudioInput(data.data))
+        return this._nextJobId
+      }
+
+      throw new Error(`Unknown append input type: ${data?.type}`)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_APPEND, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
     }
   }
 
@@ -122,9 +227,9 @@ class ParakeetInterface {
    */
   async status () {
     try {
-      return this._binding.status(this._handle)
+      return this._state
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_GET_STATUS, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_GET_STATUS, error.message, error)
     }
   }
 
@@ -134,9 +239,9 @@ class ParakeetInterface {
    */
   async pause () {
     try {
-      return this._binding.pause(this._handle)
+      this._setState(state.PAUSED)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_PAUSE, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_PAUSE, error.message, error)
     }
   }
 
@@ -146,9 +251,14 @@ class ParakeetInterface {
    */
   async stop () {
     try {
-      return this._binding.stop(this._handle)
+      this._bufferedAudio = []
+      if (this._activeJobId !== null) {
+        this._binding.cancel(this._handle, this._activeJobId)
+        this._activeJobId = null
+      }
+      this._setState(state.STOPPED)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
   }
 
@@ -159,9 +269,12 @@ class ParakeetInterface {
    */
   async cancel (jobId) {
     try {
-      return this._binding.cancel(this._handle, jobId)
+      this._binding.cancel(this._handle, jobId)
+      this._bufferedAudio = []
+      this._activeJobId = null
+      this._setState(state.LISTENING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_CANCEL, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_CANCEL, error.message, error)
     }
   }
 
@@ -172,9 +285,18 @@ class ParakeetInterface {
    */
   async reload (configurationParams) {
     try {
-      return this._binding.reload(this._handle, configurationParams)
+      await this.cancel()
+      await this.destroyInstance()
+      this._config = configurationParams
+      this._handle = this._binding.createInstance(
+        this,
+        this._config,
+        this._addonOutputCallback.bind(this),
+        this._stateCallback
+      )
+      this._setState(state.LOADING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
   }
 
@@ -184,10 +306,30 @@ class ParakeetInterface {
    */
   async unloadWeights () {
     try {
-      return this._binding.unloadWeights(this._handle)
+      return true
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
+  }
+
+  async load (configurationParams) {
+    try {
+      await this.destroyInstance()
+      this._config = configurationParams
+      this._handle = this._binding.createInstance(
+        this,
+        this._config,
+        this._addonOutputCallback.bind(this),
+        this._stateCallback
+      )
+      this._setState(state.LOADING)
+    } catch (error) {
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
+    }
+  }
+
+  async unload () {
+    await this.destroyInstance()
   }
 
   /**
@@ -196,10 +338,78 @@ class ParakeetInterface {
    */
   async destroyInstance () {
     try {
-      return this._binding.destroyInstance(this._handle)
+      if (this._handle === null) {
+        return
+      }
+      try {
+        this._binding.cancel(this._handle)
+      } catch {}
+      this._binding.destroyInstance(this._handle)
+      this._handle = null
+      this._activeJobId = null
+      this._bufferedAudio = []
+      this._setState(state.IDLE)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_DESTROY, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_DESTROY, error.message, error)
     }
+  }
+
+  async runJob (data) {
+    try {
+      this._activeJobId = this._nextJobId
+      this._nextJobId += 1
+      this._setState(state.PROCESSING)
+      const accepted = this._binding.runJob(this._handle, data)
+      if (!accepted) {
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+      }
+      return accepted
+    } catch (error) {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+      throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
+    }
+  }
+
+  _normalizeAudioInput (data) {
+    if (!data) {
+      throw new Error('Audio input is required')
+    }
+    if (data instanceof Float32Array) {
+      return data
+    }
+    if (ArrayBuffer.isView(data)) {
+      if (data instanceof Int16Array) {
+        const audio = new Float32Array(data.length)
+        for (let i = 0; i < data.length; i++) {
+          audio[i] = data[i] / 32768.0
+        }
+        return audio
+      }
+      return new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4))
+    }
+    if (data instanceof ArrayBuffer) {
+      return new Float32Array(data)
+    }
+    throw new Error('Unsupported audio input format')
+  }
+
+  _concatBufferedAudio () {
+    if (this._bufferedAudio.length === 0) {
+      return new Float32Array(0)
+    }
+    if (this._bufferedAudio.length === 1) {
+      return this._bufferedAudio[0]
+    }
+    const totalLength = this._bufferedAudio.reduce((sum, chunk) => sum + chunk.length, 0)
+    const merged = new Float32Array(totalLength)
+    let offset = 0
+    for (const chunk of this._bufferedAudio) {
+      merged.set(chunk, offset)
+      offset += chunk.length
+    }
+    return merged
   }
 }
 

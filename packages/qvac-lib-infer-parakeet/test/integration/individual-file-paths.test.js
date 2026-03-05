@@ -78,10 +78,10 @@ test('Directory and individual file path loading both produce correct transcript
         for (const segment of output) {
           if (segment && segment.text) transcriptions.push(segment)
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -163,10 +163,10 @@ test('Directory and individual file path loading both produce correct transcript
         for (const segment of output) {
           if (segment && segment.text) transcriptions.push(segment)
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 

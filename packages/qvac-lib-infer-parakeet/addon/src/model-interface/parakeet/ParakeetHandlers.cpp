@@ -91,7 +91,7 @@ const HandlersMap<ParakeetConfig> PARAKEET_AUDIO_HANDLERS = {
        constexpr std::array validRates = {8000, 16000, 22050, 44100, 48000};
        int rate = static_cast<int>(std::get<double>(value));
 
-       if (!std::ranges::contains(validRates, rate)) {
+       if (std::ranges::find(validRates, rate) == validRates.end()) {
          throw qvac_errors::StatusError(
              qvac_errors::general_error::InvalidArgument,
              "sampleRate must be one of: 8000, 16000, 22050, 44100, 48000");

@@ -1,9 +1,12 @@
 #pragma once
 
+#include <any>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
 #include <span>
+#include <streambuf>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -11,6 +14,7 @@
 
 #include "ParakeetConfig.hpp"
 #include "model-interface/ParakeetTypes.hpp"
+#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
 // Forward declarations for ONNX Runtime
@@ -23,13 +27,18 @@ class MemoryInfo;
 
 namespace qvac_lib_infer_parakeet {
 
-class ParakeetModel {
+class ParakeetModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+                      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
   using InputView = std::span<const ValueType>;
   using Output = std::vector<Transcript>;
+  struct AnyInput {
+    Input input;
+  };
 
   explicit ParakeetModel(const ParakeetConfig& config);
   ~ParakeetModel();
@@ -72,7 +81,10 @@ public:
   void endOfStream() { stream_ended_ = true; }
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
-  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats();
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+  std::any process(const std::any& input) override;
+  std::string getName() const override { return "ParakeetModel"; }
+  void cancel() const override;
   void warmup();
 
   static std::vector<float> preprocessAudioData(
@@ -87,6 +99,11 @@ public:
       void>::type
   saveLoadParams(T&&, Args&&...) {}
 
+  void setWeightsForFile(
+      const std::string& filename,
+      std::unique_ptr<std::basic_streambuf<char>>&& streambuf) override;
+  void waitForLoadInitialization() override { load(); }
+
   void set_weights_for_file(
       const std::string& filename,
       const std::span<const uint8_t>& contents, bool completed);
@@ -99,7 +116,7 @@ public:
   template <typename T>
   void set_weights_for_file(const std::string& filename, T&& contents) {}
 
-  std::string getName() const {
+  std::string getDisplayName() const {
     switch (cfg_.modelType) {
       case ModelType::CTC: return "Parakeet-CTC";
       case ModelType::TDT: return "Parakeet-TDT";
@@ -213,6 +230,7 @@ private:
   int64_t decoderMs_ = 0;
   int64_t totalMelFrames_ = 0;
   int64_t totalEncodedFrames_ = 0;
+  mutable std::atomic_bool cancelRequested_ = false;
 };
 
 } // namespace qvac_lib_infer_parakeet

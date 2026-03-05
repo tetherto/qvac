@@ -194,48 +194,44 @@ class ONNXTTS extends InferBase {
   }
 
   async unload () {
-    return await this._withExclusiveRun(async () => {
-      await this.cancel()
-      this._failAndClearActiveResponse('Model was unloaded')
-      if (this.addon) {
-        await this.addon.destroyInstance()
-      }
-      this.state.configLoaded = false
-      this.state.weightsLoaded = false
-    })
+    await this.cancel()
+    this._failAndClearActiveResponse('Model was unloaded')
+    if (this.addon) {
+      await this.addon.destroyInstance()
+    }
+    this.state.configLoaded = false
+    this.state.weightsLoaded = false
   }
 
   async _runInternal (input) {
-    return this._withExclusiveRun(async () => {
-      if (this._hasActiveResponse) {
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
 
-      const response = this._createResponse(ONLY_ONE_JOB_ID)
-      let accepted
-      try {
-        accepted = await this.addon.runJob({
-          type: input.type || 'text',
-          input: input.input
-        })
-      } catch (error) {
-        this._deleteJobMapping(ONLY_ONE_JOB_ID)
-        response.failed(error)
-        throw error
-      }
+    const response = this._createResponse(ONLY_ONE_JOB_ID)
+    let accepted
+    try {
+      accepted = await this.addon.runJob({
+        type: input.type || 'text',
+        input: input.input
+      })
+    } catch (error) {
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      response.failed(error)
+      throw error
+    }
 
-      if (!accepted) {
-        this._deleteJobMapping(ONLY_ONE_JOB_ID)
-        response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
-        throw new Error(RUN_BUSY_ERROR_MESSAGE)
-      }
+    if (!accepted) {
+      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
 
-      this._hasActiveResponse = true
-      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-      finalized.catch(() => {})
-      response.await = () => finalized
-      return response
-    })
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch(() => {})
+    response.await = () => finalized
+    return response
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -282,49 +278,47 @@ class ONNXTTS extends InferBase {
    * @param {Function} [newConfig.reportProgressCallback] - Hook for download progress updates
    */
   async reload (newConfig = {}) {
-    return await this._withExclusiveRun(async () => {
-      this.logger.debug('Reloading addon with new configuration', newConfig)
+    this.logger.debug('Reloading addon with new configuration', newConfig)
 
-      if (newConfig.language !== undefined) {
-        this._config.language = newConfig.language
-      }
-      if (newConfig.useGPU !== undefined) {
-        this._config.useGPU = newConfig.useGPU
-      }
+    if (newConfig.language !== undefined) {
+      this._config.language = newConfig.language
+    }
+    if (newConfig.useGPU !== undefined) {
+      this._config.useGPU = newConfig.useGPU
+    }
 
-      // Download new weights if model changed and we have a loader
-      if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
-        await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
-      }
+    // Download new weights if model changed and we have a loader
+    if (this._weightsProvider && (newConfig.mainModelUrl || newConfig.configJsonPath)) {
+      await this._downloadWeights(newConfig.reportProgressCallback, { closeLoader: false })
+    }
 
-      let ttsParams
-      if (this._engineType === ENGINE_SUPERTONIC) {
-        ttsParams = this._getSupertonicTtsParams()
-      } else {
-        ttsParams = {
-          tokenizerPath: this._resolvePath(this._tokenizerPath),
-          speechEncoderPath: this._resolvePath(this._speechEncoderPath),
-          embedTokensPath: this._resolvePath(this._embedTokensPath),
-          conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
-          languageModelPath: this._resolvePath(this._languageModelPath),
-          language: this._config?.language || 'en',
-          useGPU: this._config?.useGPU || false,
-          lazySessionLoading: this._lazySessionLoading
-        }
-        if (this._referenceAudio != null) {
-          ttsParams.referenceAudio = this._referenceAudio
-        }
+    let ttsParams
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      ttsParams = this._getSupertonicTtsParams()
+    } else {
+      ttsParams = {
+        tokenizerPath: this._resolvePath(this._tokenizerPath),
+        speechEncoderPath: this._resolvePath(this._speechEncoderPath),
+        embedTokensPath: this._resolvePath(this._embedTokensPath),
+        conditionalDecoderPath: this._resolvePath(this._conditionalDecoderPath),
+        languageModelPath: this._resolvePath(this._languageModelPath),
+        language: this._config?.language || 'en',
+        useGPU: this._config?.useGPU || false,
+        lazySessionLoading: this._lazySessionLoading
       }
-
-      await this.cancel()
-      this._failAndClearActiveResponse('Model was reloaded')
-
-      if (this.addon) {
-        await this.addon.destroyInstance()
+      if (this._referenceAudio != null) {
+        ttsParams.referenceAudio = this._referenceAudio
       }
-      this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-      await this.addon.activate()
-    })
+    }
+
+    await this.cancel()
+    this._failAndClearActiveResponse('Model was reloaded')
+
+    if (this.addon) {
+      await this.addon.destroyInstance()
+    }
+    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
+    await this.addon.activate()
   }
 
   static inferenceManagerConfig = {

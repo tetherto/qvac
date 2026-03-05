@@ -8,6 +8,7 @@ const { ParakeetInterface } = require('../../parakeet')
 const {
   detectPlatform,
   setupJsLogger,
+  waitUntilIdle,
   getTestPaths,
   validateAccuracy,
   ensureModel,
@@ -76,11 +77,10 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
           transcriptions.push(segment)
         }
       }
-      // Resolve when we get actual output (transcription completed)
-      if (transcriptions.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -177,6 +177,7 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     console.log('\n=== Cleanup ===')
     if (parakeet) {
       try {
+        await waitUntilIdle(parakeet, 60000)
         parakeet.destroyInstance()
         console.log('   Instance destroyed')
       } catch (e) {
@@ -189,5 +190,129 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     } catch (e) {
       console.log('   Logger release error:', e.message)
     }
+  }
+})
+
+test('Cancel active job keeps model usable for next job', { timeout: 600000 }, async (t) => {
+  const loggerBinding = setupJsLogger(binding)
+
+  await ensureModel(modelPath)
+
+  const samplePath = path.join(samplesDir, 'sample.raw')
+  if (!fs.existsSync(samplePath)) {
+    loggerBinding.releaseLogger()
+    t.fail(`Required audio file not found: ${samplePath}`)
+    return
+  }
+
+  const config = {
+    modelPath,
+    modelType: 'tdt',
+    maxThreads: 4,
+    useGPU: false,
+    sampleRate: 16000,
+    channels: 1
+  }
+
+  const outputsByJob = new Map()
+  const resolvers = new Map()
+  const waitForJob = (jobId, timeoutMs = 180000) => new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      resolvers.delete(jobId)
+      resolve({ event: 'Timeout', error: null })
+    }, timeoutMs)
+    resolvers.set(jobId, (event, error) => {
+      clearTimeout(timeout)
+      resolve({ event, error: error || null })
+    })
+  })
+
+  function toFloat32Audio (rawBuffer) {
+    const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+    const audioData = new Float32Array(pcmData.length)
+    for (let i = 0; i < pcmData.length; i++) {
+      audioData[i] = pcmData[i] / 32768.0
+    }
+    return audioData
+  }
+
+  function outputCallback (handle, event, id, output, error) {
+    if (event === 'Output' && Array.isArray(output)) {
+      if (!outputsByJob.has(id)) outputsByJob.set(id, [])
+      for (const segment of output) {
+        if (segment && segment.text) {
+          outputsByJob.get(id).push(segment)
+        }
+      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && resolvers.has(id)) {
+      const resolve = resolvers.get(id)
+      resolvers.delete(id)
+      resolve(event, error)
+    }
+  }
+
+  let parakeet = null
+  try {
+    parakeet = new ParakeetInterface(binding, config, outputCallback)
+
+    const modelFiles = [
+      'encoder-model.onnx',
+      'encoder-model.onnx.data',
+      'decoder_joint-model.onnx',
+      'vocab.txt',
+      'preprocessor.onnx'
+    ]
+    for (const file of modelFiles) {
+      const filePath = path.join(modelPath, file)
+      if (!fs.existsSync(filePath)) continue
+      const chunks = []
+      for (const buffer of readFileChunked(filePath)) {
+        chunks.push(buffer)
+      }
+      const fullBuffer = Buffer.concat(chunks)
+      const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
+      await parakeet.loadWeights({ filename: file, chunk, completed: true })
+    }
+
+    await parakeet.activate()
+
+    const shortAudio = toFloat32Audio(fs.readFileSync(samplePath))
+
+    // Start a job and cancel it immediately.
+    await parakeet.append({ type: 'audio', data: shortAudio.buffer })
+    const firstJobId = await parakeet.append({ type: 'end of job' })
+    await parakeet.cancel(firstJobId)
+
+    const statusAfterCancel = await parakeet.status()
+    t.ok(statusAfterCancel === 'listening', `Status should return to listening after cancel (got ${statusAfterCancel})`)
+
+    // Ensure model still accepts and completes the next job.
+    // Cancellation is cooperative, and `ParakeetInterface.cancel()` clears the
+    // active JS-side job id before native completion callbacks arrive.
+    // Give the native worker a short window to settle before submitting next work.
+    await new Promise(resolve => setTimeout(resolve, 15000))
+    await parakeet.append({ type: 'audio', data: shortAudio.buffer })
+    const secondJobId = await parakeet.append({ type: 'end of job' })
+
+    const secondJobResult = await waitForJob(secondJobId)
+
+    t.ok(secondJobId > firstJobId, `Second job id should increment (first=${firstJobId}, second=${secondJobId})`)
+    t.ok(secondJobResult.event === 'JobEnded', `Second job should finish successfully (got ${secondJobResult.event})`)
+
+    const secondSegments = outputsByJob.get(secondJobId) || []
+    const secondText = secondSegments.map(s => s.text).join(' ').trim()
+    t.ok(secondSegments.length > 0, `Second job should produce output segments (got ${secondSegments.length})`)
+    t.ok(secondText.length > 0, `Second job should produce non-empty text (got ${secondText.length} chars)`)
+  } finally {
+    if (parakeet) {
+      try {
+        await waitUntilIdle(parakeet, 60000)
+        parakeet.destroyInstance()
+      } catch {}
+    }
+    try {
+      loggerBinding.releaseLogger()
+    } catch {}
   }
 })

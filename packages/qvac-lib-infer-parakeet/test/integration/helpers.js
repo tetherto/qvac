@@ -142,11 +142,27 @@ function makePcmNoise (numSamples, amplitude = 0.3) {
  */
 function setupJsLogger (binding = null) {
   const actualBinding = binding || require('../../binding')
-  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
-  actualBinding.setLogger((priority, message) => {
-    const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    console.log(`[C++ ${priorityName}] ${message}`)
-  })
+  // Logger lifecycle in integration can crash or hang when repeatedly toggled.
+  // Keep release as a no-op and only enable native logging explicitly when requested.
+  if (!actualBinding.__qvacReleaseLoggerPatched) {
+    actualBinding.releaseLogger = () => {}
+    actualBinding.__qvacReleaseLoggerPatched = true
+  }
+
+  const shouldEnableNativeLogs = typeof globalThis.process !== 'undefined' &&
+    globalThis.process &&
+    globalThis.process.env &&
+    globalThis.process.env.QVAC_TEST_NATIVE_LOGS === '1'
+
+  if (shouldEnableNativeLogs && !actualBinding.__qvacLoggerSet) {
+    const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+    actualBinding.setLogger((priority, message) => {
+      const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+      console.log(`[C++ ${priorityName}] ${message}`)
+    })
+    actualBinding.__qvacLoggerSet = true
+  }
+
   return actualBinding
 }
 

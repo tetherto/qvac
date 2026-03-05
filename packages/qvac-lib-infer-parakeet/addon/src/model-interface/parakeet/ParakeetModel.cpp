@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "onnxruntime/onnxruntime_cxx_api.h"
+#include "qvac-lib-inference-addon-cpp/Errors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #include <Eigen/Core>
@@ -71,6 +72,12 @@ void ParakeetModel::set_weights_for_file(
   if (filename == "vocab.txt") {
     loadVocabulary(model_weights_[filename]);
   }
+}
+
+void ParakeetModel::setWeightsForFile(
+    const std::string& filename,
+    std::unique_ptr<std::basic_streambuf<char>>&& streambuf) {
+  set_weights_for_file(filename, std::move(streambuf));
 }
 
 void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
@@ -273,9 +280,14 @@ void ParakeetModel::load() {
     }
 
   } catch (const Ort::Exception& e) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-         std::string("ONNX Runtime error: ") + e.what());
-    throw;
+    const std::string message = std::string("ONNX Runtime error: ") + e.what();
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR, message);
+    throw qvac_errors::StatusError("Parakeet", "UnableToLoadModel", message);
+  } catch (const std::exception& e) {
+    const std::string message =
+        std::string("Model loading error: ") + e.what();
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR, message);
+    throw qvac_errors::StatusError("Parakeet", "UnableToLoadModel", message);
   }
 }
 
@@ -900,6 +912,10 @@ std::pair<std::vector<float>, int64_t> ParakeetModel::runPreprocessor(const Inpu
 }
 
 void ParakeetModel::process(const Input& input) {
+  if (cancelRequested_.exchange(false)) {
+    throw std::runtime_error("Job cancelled");
+  }
+
   if (input.empty()) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
          "Empty audio input received");
@@ -942,6 +958,9 @@ void ParakeetModel::process(const Input& input) {
       
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
            "Mel-spectrogram: " + std::to_string(numFrames) + " frames");
+      if (cancelRequested_.exchange(false)) {
+        throw std::runtime_error("Job cancelled");
+      }
       
       if (!melFeatures.empty() && numFrames > 0) {
         std::vector<float> encoderOutput;
@@ -953,6 +972,9 @@ void ParakeetModel::process(const Input& input) {
         
         QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
              "Encoder output: " + std::to_string(encodedLength) + " encoded frames");
+        if (cancelRequested_.exchange(false)) {
+          throw std::runtime_error("Job cancelled");
+        }
         
         measureTime(decoderMs_, [&]() {
           text = greedyDecode(encoderOutput, encodedLength);
@@ -969,6 +991,9 @@ void ParakeetModel::process(const Input& input) {
         text = "[Audio too short]";
       }
     } catch (const std::exception& e) {
+      if (std::strcmp(e.what(), "Job cancelled") == 0) {
+        throw;
+      }
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
            std::string("Inference error: ") + e.what());
       text = "[Inference error]";
@@ -1010,6 +1035,24 @@ ParakeetModel::Output ParakeetModel::process(
   return result;
 }
 
+std::any ParakeetModel::process(const std::any& input) {
+  AnyInput modelInput;
+  if (const auto* anyInput = std::any_cast<AnyInput>(&input)) {
+    modelInput = *anyInput;
+  } else if (const auto* inputVector = std::any_cast<Input>(&input)) {
+    modelInput.input = *inputVector;
+  } else {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Invalid input type for ParakeetModel::process: ") +
+            input.type().name());
+  }
+
+  reset();
+  process(modelInput.input);
+  return output_;
+}
+
 std::vector<float> ParakeetModel::preprocessAudioData(
     const std::vector<uint8_t>& audioData, const std::string& audioFormat) {
   std::vector<float> result;
@@ -1030,7 +1073,7 @@ std::vector<float> ParakeetModel::preprocessAudioData(
   return result;
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() {
+qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
   
   const double audioDurationSec = totalSamples_ > 0 ? (double)totalSamples_ / SAMPLE_RATE : 0.0;
@@ -1061,6 +1104,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParakeetModel::runtimeStats() {
   stats.emplace_back("totalEncodedFrames", totalEncodedFrames_);
   
   return stats;
+}
+
+void ParakeetModel::cancel() const {
+  cancelRequested_.store(true, std::memory_order_relaxed);
 }
 
 } // namespace qvac_lib_infer_parakeet
