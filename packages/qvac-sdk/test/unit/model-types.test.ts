@@ -15,6 +15,7 @@ test("ModelType contains all canonical values", (t) => {
   t.is(ModelType.whispercppTranscription, "whispercpp-transcription");
   t.is(ModelType.llamacppEmbedding, "llamacpp-embedding");
   t.is(ModelType.nmtcppTranslation, "nmtcpp-translation");
+  t.is(ModelType.parakeetTranscription, "parakeet-transcription");
   t.is(ModelType.onnxTts, "onnx-tts");
   t.is(ModelType.onnxOcr, "onnx-ocr");
 });
@@ -24,6 +25,7 @@ test("ModelTypeAliases maps to correct canonical values", (t) => {
   t.is(ModelTypeAliases.whisper, ModelType.whispercppTranscription);
   t.is(ModelTypeAliases.embeddings, ModelType.llamacppEmbedding);
   t.is(ModelTypeAliases.nmt, ModelType.nmtcppTranslation);
+  t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription);
   t.is(ModelTypeAliases.tts, ModelType.onnxTts);
   t.is(ModelTypeAliases.ocr, ModelType.onnxOcr);
 });
@@ -34,6 +36,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   t.is(PUBLIC_MODEL_TYPES.whispercppTranscription, "whispercpp-transcription");
   t.is(PUBLIC_MODEL_TYPES.llamacppEmbedding, "llamacpp-embedding");
   t.is(PUBLIC_MODEL_TYPES.nmtcppTranslation, "nmtcpp-translation");
+  t.is(PUBLIC_MODEL_TYPES.parakeetTranscription, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.onnxTts, "onnx-tts");
   t.is(PUBLIC_MODEL_TYPES.onnxOcr, "onnx-ocr");
 
@@ -42,6 +45,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   t.is(PUBLIC_MODEL_TYPES.whisper, "whispercpp-transcription");
   t.is(PUBLIC_MODEL_TYPES.embeddings, "llamacpp-embedding");
   t.is(PUBLIC_MODEL_TYPES.nmt, "nmtcpp-translation");
+  t.is(PUBLIC_MODEL_TYPES.parakeet, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.tts, "onnx-tts");
   t.is(PUBLIC_MODEL_TYPES.ocr, "onnx-ocr");
 });
@@ -52,6 +56,7 @@ test("normalizeModelType converts aliases to canonical", (t) => {
   t.is(normalizeModelType("whisper"), "whispercpp-transcription");
   t.is(normalizeModelType("embeddings"), "llamacpp-embedding");
   t.is(normalizeModelType("nmt"), "nmtcpp-translation");
+  t.is(normalizeModelType("parakeet"), "parakeet-transcription");
   t.is(normalizeModelType("tts"), "onnx-tts");
   t.is(normalizeModelType("ocr"), "onnx-ocr");
 });
@@ -64,6 +69,10 @@ test("normalizeModelType passes through canonical values unchanged", (t) => {
   );
   t.is(normalizeModelType("llamacpp-embedding"), "llamacpp-embedding");
   t.is(normalizeModelType("nmtcpp-translation"), "nmtcpp-translation");
+  t.is(
+    normalizeModelType("parakeet-transcription"),
+    "parakeet-transcription",
+  );
   t.is(normalizeModelType("onnx-tts"), "onnx-tts");
   t.is(normalizeModelType("onnx-ocr"), "onnx-ocr");
 });
@@ -74,6 +83,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
   t.is(isModelTypeAlias("whisper"), true);
   t.is(isModelTypeAlias("embeddings"), true);
   t.is(isModelTypeAlias("nmt"), true);
+  t.is(isModelTypeAlias("parakeet"), true);
   t.is(isModelTypeAlias("tts"), true);
   t.is(isModelTypeAlias("ocr"), true);
 
@@ -82,6 +92,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
   t.is(isModelTypeAlias("whispercpp-transcription"), false);
   t.is(isModelTypeAlias("llamacpp-embedding"), false);
   t.is(isModelTypeAlias("nmtcpp-translation"), false);
+  t.is(isModelTypeAlias("parakeet-transcription"), false);
   t.is(isModelTypeAlias("onnx-tts"), false);
   t.is(isModelTypeAlias("onnx-ocr"), false);
 });
@@ -91,6 +102,7 @@ test("modelTypeInputSchema accepts aliases", (t) => {
   t.is(modelTypeInputSchema.parse("whisper"), "whisper");
   t.is(modelTypeInputSchema.parse("embeddings"), "embeddings");
   t.is(modelTypeInputSchema.parse("nmt"), "nmt");
+  t.is(modelTypeInputSchema.parse("parakeet"), "parakeet");
   t.is(modelTypeInputSchema.parse("tts"), "tts");
   t.is(modelTypeInputSchema.parse("ocr"), "ocr");
 });
@@ -106,6 +118,10 @@ test("modelTypeInputSchema accepts canonical values", (t) => {
   );
   t.is(modelTypeInputSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
   t.is(modelTypeInputSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
+  t.is(
+    modelTypeInputSchema.parse("parakeet-transcription"),
+    "parakeet-transcription",
+  );
   t.is(modelTypeInputSchema.parse("onnx-tts"), "onnx-tts");
   t.is(modelTypeInputSchema.parse("onnx-ocr"), "onnx-ocr");
 });
@@ -122,6 +138,7 @@ test("modelTypeSchema transforms aliases to canonical", (t) => {
   t.is(modelTypeSchema.parse("whisper"), "whispercpp-transcription");
   t.is(modelTypeSchema.parse("embeddings"), "llamacpp-embedding");
   t.is(modelTypeSchema.parse("nmt"), "nmtcpp-translation");
+  t.is(modelTypeSchema.parse("parakeet"), "parakeet-transcription");
   t.is(modelTypeSchema.parse("tts"), "onnx-tts");
   t.is(modelTypeSchema.parse("ocr"), "onnx-ocr");
 });
@@ -134,6 +151,10 @@ test("modelTypeSchema passes through canonical values", (t) => {
   );
   t.is(modelTypeSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
   t.is(modelTypeSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
+  t.is(
+    modelTypeSchema.parse("parakeet-transcription"),
+    "parakeet-transcription",
+  );
   t.is(modelTypeSchema.parse("onnx-tts"), "onnx-tts");
   t.is(modelTypeSchema.parse("onnx-ocr"), "onnx-ocr");
 });

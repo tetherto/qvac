@@ -154,7 +154,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto langList = js::toVector<js::String, std::string>(
       env, args1.getProperty<js::Array>(env, "langList"));
   auto optUseGPU = args1.getOptionalProperty<js::Boolean>(env, "useGPU");
-  bool useGPU = optUseGPU ? optUseGPU->as<bool>(env) : true;
+  bool useGPU = optUseGPU ? optUseGPU->as<bool>(env) : false;
   auto optTimeout = args1.getOptionalProperty<js::Number>(env, "timeout");
   int timeout = optTimeout ? static_cast<int>(optTimeout->as<double>(env))
                            : DEFAULT_PIPELINE_TIMEOUT_SECONDS;
@@ -192,6 +192,34 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   if (optRecognizerBatchSize) {
     config.recognizerBatchSize =
         static_cast<int>(optRecognizerBatchSize->as<double>(env));
+  }
+
+  auto optPipelineMode =
+      args1.getOptionalProperty<js::String>(env, "pipelineMode");
+  if (optPipelineMode) {
+    auto modeStr = optPipelineMode->as<std::string>(env);
+    if (modeStr == "doctr") {
+      config.mode = PipelineMode::DOCTR;
+    } else {
+      config.mode = PipelineMode::EASYOCR;
+    }
+  }
+
+  auto optDecoding =
+      args1.getOptionalProperty<js::String>(env, "decodingMethod");
+  if (optDecoding) {
+    auto str = optDecoding->as<std::string>(env);
+    if (str == "attention") {
+      config.decodingMethod = DecodingMethod::ATTENTION;
+    } else {
+      config.decodingMethod = DecodingMethod::CTC;
+    }
+  }
+
+  auto optStraighten =
+      args1.getOptionalProperty<js::Boolean>(env, "straightenPages");
+  if (optStraighten) {
+    config.straightenPages = optStraighten->as<bool>(env);
   }
 
   auto model = make_unique<Pipeline>(

@@ -562,3 +562,4 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           repo_name: "llamacpp-llm"
           git-token: ${{ secrets.GITHUB_TOKEN }}
+          create-tag: "false"

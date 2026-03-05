@@ -237,6 +237,8 @@ graph TB
     
     subgraph "Layer 4: Model"
         LLAMAMODEL["LlamaModel<br/>(model-interface/LlamaModel.cpp)"]
+        METADATA["ModelMetaData<br/>(model-interface/ModelMetadata.cpp)"]
+        ASYNCWL["AsyncWeightsLoader<br/>(model-interface/AsyncWeightsLoader.cpp)"]
         TEXTCTX["TextLlmContext<br/>(model-interface/TextLlmContext.cpp)"]
         MTMDCTX["MtmdLlmContext<br/>(model-interface/MtmdLlmContext.cpp)"]
     end
@@ -260,7 +262,11 @@ graph TB
     JSINTERFACE --> ADDONCPP
     ADDONCPP --> WEIGHTSLOAD
     ADDONCPP --> LLAMAMODEL
+    ADDONCPP --> WEIGHTSLOAD
     
+    LLAMAMODEL --> METADATA
+    LLAMAMODEL --> ASYNCWL
+    ASYNCWL --> METADATA
     LLAMAMODEL --> TEXTCTX
     LLAMAMODEL --> MTMDCTX
     TEXTCTX --> LLAMACPP
@@ -285,7 +291,7 @@ graph TB
 | 1. JavaScript API | LlmLlamacpp, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | LlamaModel, Contexts | Inference logic, chat formatting | C++ | Direct llama.cpp integration |
+| 4. Model | LlamaModel, ModelMetaData, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
@@ -362,6 +368,26 @@ graph TB
 - Progress tracking and reporting
 - Handles sharded GGUF expansion
 - Streaming chunk delivery
+
+#### **ModelMetaData (model-interface/ModelMetadata.cpp)**
+
+**Responsibility:** Extract and query GGUF metadata without loading model weights into backend memory
+
+- Parses GGUF key-value metadata from disk files or streamed buffers
+- Enables early decisions (quantization detection, backend selection) before the full model is loaded
+- For streaming loads, coordinates with `AsyncWeightsLoader` to borrow the first shard buffer: `AsyncWeightsLoader` calls `provide()` to lend the buffer, `ModelMetaData::parse()` reads metadata via `waitConsumeAndClear()`, then releases it so the shard can proceed to llama.cpp
+- Exposes typed queries: `tryGetU32()`, `isU32OneOf()`, `hasOneBitQuantization()`
+- After `parse()`, all metadata is held in memory and no further disk/stream access is needed
+
+#### **AsyncWeightsLoader (model-interface/AsyncWeightsLoader.cpp)**
+
+**Responsibility:** Coordinate async/streaming weight loading for sharded and single-GGUF models
+
+- Receives streamed shards via `setWeightsForFile()` from the JavaScript download thread
+- For sharded models, the first shard is lent to `ModelMetaData` for metadata extraction before being forwarded to llama.cpp via `fulfillSplitFuture()`
+- The first-shard lending runs on an async worker thread to avoid blocking the download thread while metadata is parsed
+- `waitForRelease()` has a configurable timeout (template parameter, default 60s) to detect stalled metadata parsing 
+- For single-GGUF models, buffers are stored until `init()` consumes them
 
 #### **CacheManager (model-interface/CacheManager.cpp)**
 
@@ -905,4 +931,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-03-02

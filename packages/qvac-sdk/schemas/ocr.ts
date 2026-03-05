@@ -5,11 +5,14 @@ export const ocrConfigSchema = z.object({
   langList: z.array(z.string()).optional(),
   useGPU: z.boolean().optional(),
   timeout: z.number().optional(),
+  pipelineMode: z.enum(["easyocr", "doctr"]).optional(),
   magRatio: z.number().optional(),
   defaultRotationAngles: z.array(z.number()).optional(),
   contrastRetry: z.boolean().optional(),
   lowConfidenceThreshold: z.number().optional(),
   recognizerBatchSize: z.number().optional(),
+  decodingMethod: z.enum(["ctc", "attention"]).optional(),
+  straightenPages: z.boolean().optional(),
 });
 
 // Image input types

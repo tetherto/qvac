@@ -1,0 +1,82 @@
+# Notify docs owner when a release branch is pushed (e.g. after merge).
+# Docs live in the monorepo at packages/docs; deploy is via PR main → docs-production.
+name: Docs Deploy Notify
+
+on:
+  push:
+    branches:
+      - 'release-*'
+  workflow_dispatch:
+    inputs:
+      test_ref:
+        description: 'Override ref for testing (e.g. release-qvac-sdk-0.1.0)'
+        required: false
+        default: ''
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Ensure docs-deploy label exists
+        uses: actions/github-script@v8
+        with:
+          script: |
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'docs-deploy'
+              });
+            } catch (err) {
+              if (err.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'docs-deploy',
+                  color: '0E8A16',
+                  description: 'Docs ready for production deploy'
+                });
+              } else throw err;
+            }
+
+      - name: Notify docs owner
+        uses: actions/github-script@v8
+        env:
+          NOTIFY_USER: ${{ secrets.DOCS_DEPLOY_NOTIFY_USER }}
+          TEST_REF: ${{ github.event.inputs.test_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        with:
+          script: |
+            const testRef = process.env.TEST_REF || '';
+            let ref, refType;
+            if (testRef) {
+              ref = testRef;
+              refType = 'ref';
+            } else {
+              ref = context.ref.replace('refs/heads/', '').replace('refs/tags/', '');
+              refType = context.ref.startsWith('refs/tags/') ? 'tag' : 'branch';
+            }
+            const notifyUser = process.env.NOTIFY_USER || 'please-set-DOCS_DEPLOY_NOTIFY_USER';
+            const isManual = process.env.EVENT_NAME === 'workflow_dispatch';
+            const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+            const commitUrl = `${repoUrl}/commit/${context.sha}`;
+            const body = [
+              isManual ? '*Triggered manually for testing.*' : 'Docs in the monorepo are ready for deploy.',
+              '',
+              `- **Release ref (${refType}):** \`${ref}\``,
+              `- **Commit:** ${context.sha}`,
+              `- **Link:** ${commitUrl}`,
+              '',
+              'Please open a PR from `main` to `docs-production` (if applicable) and deploy after review.',
+              '',
+              `cc @${notifyUser}`
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Docs] Deploy ready — ${ref}`,
+              body,
+              labels: ['docs-deploy']
+            });

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.7.0
+## [0.7.0]
 
 Release Date: 2026-02-27
 
@@ -44,7 +44,7 @@ Release Date: 2026-02-27
 - Update SDK pod changelog generation and shared tooling. (see PR [#155](https://github.com/tetherto/qvac/pull/155))
 - Configure test workflow with auth tokens. (see PR [#509](https://github.com/tetherto/qvac/pull/509))
 
-## v0.6.1
+## [0.6.1]
 
 Release Date: 2026-02-10
 
@@ -56,7 +56,7 @@ Release Date: 2026-02-10
 
 - Update SDK pod changelog generation and shared tooling. (see PR [#155](https://github.com/tetherto/qvac/pull/155))
 
-## v0.6.0
+## [0.6.0]
 
 Release Date: 2026-02-02
 
@@ -103,7 +103,7 @@ Release Date: 2026-02-02
 - RPC request logging summarization for large payloads. (see PR [#376](https://github.com/tetherto/qvac-sdk/pull/376))
 - Add github issue templates for bugs and features. (see PR [#388](https://github.com/tetherto/qvac-sdk/pull/388))
 
-## v0.5.0
+## [0.5.0]
 
 Release Date: 2025-12-19
 

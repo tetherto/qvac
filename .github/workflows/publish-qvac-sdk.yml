@@ -41,6 +41,7 @@ permissions:
 jobs:
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -74,11 +75,18 @@ jobs:
       WRITE_NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Fetch PR head commits
+        if: github.event_name == 'pull_request_target'
+        run: |
+          git fetch origin ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -347,6 +355,8 @@ jobs:
     needs: [build, publish-logic, release-merge-guard]
     if: needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
       contents: write
       packages: write
@@ -369,3 +379,18 @@ jobs:
           git-token: ${{ secrets.GITHUB_TOKEN }}
           repo_name: sdk
           workdir: ${{ env.WORKDIR }}
+
+  # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [publish-npm]
+    if:  needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "sdk"
+      release_name: "QVAC SDK"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-sdk"

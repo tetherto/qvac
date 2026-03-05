@@ -5,12 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.4] - 2026-02-19
+## [0.3.4]
 
 ### Added
 - `NOTICE` file with full third-party dependency attributions
 
-## [0.3.3] - 2026-01-14
+## [0.3.3]
 
 ### Added
 - Mobile integration testing with AWS Device Farm (#101)
@@ -22,12 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type definitions for FFmpegDecoder.run() (#106)
 - Added DecoderOutput interface export for consumer usage (#106)
 
-## [0.3.2] - 2026-01-06
+## [0.3.2]
 
 ### Added
 - Runtime statistics tracking for FFmpegDecoder including decode time, input/output bytes, samples decoded, codec name, sample rates, and audio format (#102)
 
-## [0.3.1] - 2025-12-23
+## [0.3.1]
 
 ### Removed
 - GStreamer/C++ addon code references (#97)
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Restored npm publish workflow that was accidentally removed (#99)
 
-## [0.3.0] - 2025-12-18
+## [0.3.0]
 
 ### Added
 - Windows x64 integration tests (#92)
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - GstDecoder - library now uses FFmpegDecoder only (#94)
 
-## [0.2.10] - 2025-12-16
+## [0.2.10]
 
 ### Added
 - Corrupted audio test (#87)
@@ -59,12 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - M4A/MP4 audio format decoding by adding seek support to FFmpegDecoder IOContext (#91)
 
-## [0.2.9] - 2025-12-15
+## [0.2.9]
 
 ### Fixed
 - F32le audio format producing invalid samples during resampler flush (#88)
 
-## [0.2.8] - 2025-12-08
+## [0.2.8]
 
 ### Changed
 - Integrated QLOG-based logging across addon and pipeline components (#82)
@@ -73,22 +73,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - qvac-lib-inference-addon-cpp submodule (#84)
 
-## [0.2.7] - 2025-12-08
+## [0.2.7]
 
 ### Fixed
 - Race condition in corrupted audio detection using GStreamer's native bus API (#85)
 
-## [0.2.6] - 2025-12-08
+## [0.2.6]
 
 ### Removed
 - darwin-x64 (macOS Intel) prebuild support (#86)
 
-## [0.2.5] - 2025-12-03
+## [0.2.5]
 
 ### Fixed
 - Mobile platform crash by removing bare-worker multi-threading (#81)
 
-## [0.2.4] - 2025-12-02
+## [0.2.4]
 
 ### Fixed
 - Decoder hanging indefinitely on corrupted or invalid audio files (#78)
