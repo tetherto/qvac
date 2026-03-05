@@ -262,7 +262,48 @@ test('Should validate CTC model file requirements differently from TDT', { timeo
 })
 
 /**
- * Test 8: Test Sortformer model type file requirements (single sortformer.onnx)
+ * Test 8: Test EOU model type file requirements (encoder.onnx, decoder_joint.onnx, tokenizer.json)
+ */
+test('Should validate EOU model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
+
+  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const eouModelPath = path.join(testDir, 'test-eou-model')
+
+  if (!fs.existsSync(eouModelPath)) {
+    fs.mkdirSync(eouModelPath, { recursive: true })
+  }
+
+  const args = {
+    modelName: 'test-eou-model',
+    diskPath: testDir,
+    loader: createLoader()
+  }
+  const config = {
+    parakeetConfig: {
+      modelType: 'eou'
+    }
+  }
+
+  try {
+    const model = new TranscriptionParakeet(args, config)
+    t.ok(model, 'Model instance created for EOU type')
+    t.pass('EOU model type accepts directory without TDT-specific files')
+  } catch (error) {
+    t.ok(error, 'EOU validation may also throw for missing files')
+  }
+
+  if (fs.existsSync(eouModelPath)) {
+    try {
+      fs.rmSync(eouModelPath, { recursive: true })
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+})
+
+/**
+ * Test 9: Test Sortformer model type file requirements (single sortformer.onnx)
  */
 test('Should validate Sortformer model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()

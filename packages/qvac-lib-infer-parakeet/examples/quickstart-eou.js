@@ -6,6 +6,11 @@
  * Streaming transcription with automatic utterance boundary detection.
  * Uses a cache-aware FastConformer-RNNT encoder (120M params).
  *
+ * NOTE: The EOU model (120M params) is optimized for low-latency streaming,
+ * not transcription accuracy. Expect lower quality (e.g. subword fragments like
+ * "peep ed", "box eat ing") compared to the larger TDT/CTC models (~600M params).
+ * This is inherent to the model size/architecture, not a bug.
+ *
  * Usage: bare examples/quickstart-eou.js
  */
 

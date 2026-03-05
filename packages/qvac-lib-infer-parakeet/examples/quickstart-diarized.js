@@ -8,6 +8,11 @@
  * Combines TDT (transcription) and Sortformer (speaker diarization)
  * to produce speaker-attributed transcription output.
  *
+ * NOTE: Speaker boundary accuracy depends on the Sortformer model and audio
+ * characteristics (overlap, background noise, microphone quality). Word-to-speaker
+ * attribution is approximate since we lack word-level timestamps — words are
+ * distributed proportionally to segment duration, so boundary imprecision is expected.
+ *
  * Usage: bare examples/quickstart-diarized.js [path/to/audio.wav]
  */
 

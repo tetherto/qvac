@@ -86,6 +86,12 @@ class TranscriptionParakeet extends BaseInference {
    * @param {string} [config.decoderPath] - Absolute path to decoder-joint ONNX file
    * @param {string} [config.vocabPath] - Absolute path to vocabulary file
    * @param {string} [config.preprocessorPath] - Absolute path to preprocessor ONNX file
+   * @param {string} [config.ctcModelPath] - Absolute path to CTC model.onnx file
+   * @param {string} [config.ctcModelDataPath] - Absolute path to CTC model.onnx_data file
+   * @param {string} [config.tokenizerPath] - Absolute path to tokenizer.json file (CTC/EOU)
+   * @param {string} [config.eouEncoderPath] - Absolute path to EOU encoder.onnx file
+   * @param {string} [config.eouDecoderPath] - Absolute path to EOU decoder_joint.onnx file
+   * @param {string} [config.sortformerPath] - Absolute path to sortformer.onnx file
    * @param {Object} config.parakeetConfig - Parakeet-specific configuration
    * @param {string} [config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
    * @param {number} [config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
@@ -182,11 +188,22 @@ class TranscriptionParakeet extends BaseInference {
    */
   _resolveFilePath (modelPath, filename) {
     const namedPaths = {
+      // TDT
       'encoder-model.onnx': this._config.encoderPath,
       'encoder-model.onnx.data': this._config.encoderDataPath,
       'decoder_joint-model.onnx': this._config.decoderPath,
       'vocab.txt': this._config.vocabPath,
-      'preprocessor.onnx': this._config.preprocessorPath
+      'preprocessor.onnx': this._config.preprocessorPath,
+      // CTC
+      'model.onnx': this._config.ctcModelPath,
+      'model.onnx_data': this._config.ctcModelDataPath,
+      // CTC / EOU shared
+      'tokenizer.json': this._config.tokenizerPath,
+      // EOU
+      'encoder.onnx': this._config.eouEncoderPath,
+      'decoder_joint.onnx': this._config.eouDecoderPath,
+      // Sortformer
+      'sortformer.onnx': this._config.sortformerPath
     }
     if (namedPaths[filename]) {
       return namedPaths[filename]
@@ -201,7 +218,10 @@ class TranscriptionParakeet extends BaseInference {
    */
   _hasNamedPaths () {
     return !!(this._config.encoderPath || this._config.encoderDataPath ||
-      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath)
+      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath ||
+      this._config.ctcModelPath || this._config.ctcModelDataPath ||
+      this._config.tokenizerPath || this._config.eouEncoderPath ||
+      this._config.eouDecoderPath || this._config.sortformerPath)
   }
 
   /**
@@ -229,13 +249,23 @@ class TranscriptionParakeet extends BaseInference {
       seed: this.params.seed ?? -1
     }
 
-    // Pass individual file paths to native addon when available
     if (this._hasNamedPaths()) {
-      if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
-      if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
-      if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
-      if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
-      if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
+      const pathFields = {
+        encoderPath: this._config.encoderPath,
+        encoderDataPath: this._config.encoderDataPath,
+        decoderPath: this._config.decoderPath,
+        vocabPath: this._config.vocabPath,
+        preprocessorPath: this._config.preprocessorPath,
+        ctcModelPath: this._config.ctcModelPath,
+        ctcModelDataPath: this._config.ctcModelDataPath,
+        tokenizerPath: this._config.tokenizerPath,
+        eouEncoderPath: this._config.eouEncoderPath,
+        eouDecoderPath: this._config.eouDecoderPath,
+        sortformerPath: this._config.sortformerPath
+      }
+      for (const [key, val] of Object.entries(pathFields)) {
+        if (val) configurationParams[key] = val
+      }
     }
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
