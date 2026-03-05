@@ -146,7 +146,9 @@ async function initSystemPromptCache(
   const primeResponse = await model.run(primeMessages);
 
   primeResponse.once("output", () => {
-    void primeResponse.cancel();
+    if (model.cancel) {
+      void model.cancel();
+    }
   });
 
   await primeResponse.await();
