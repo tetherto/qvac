@@ -379,8 +379,8 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, LlamaModel::llamaLogCallback, mainGpu);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackend, LlamaModel::llamaLogCallback, mainGpu, &metadata_);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
