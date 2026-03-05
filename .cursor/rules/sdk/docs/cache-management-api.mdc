@@ -1,7 +1,7 @@
 ---
 description: Model Cache Management APIs
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
 alwaysApply: false
 ---
 
@@ -105,8 +105,8 @@ for (const id of loadedModelIds) {
 ### Usage Example
 
 ```typescript
-import { WHISPER_TINY, LLAMA_3_2_1B_INST_Q4_0_SHARD } from "qvac-sdk";
-import { getModelInfo } from "qvac-sdk";
+import { WHISPER_TINY, LLAMA_3_2_1B_INST_Q4_0_SHARD } from "sdk";
+import { getModelInfo } from "sdk";
 
 // Single-file model
 const info = await getModelInfo(WHISPER_TINY);
@@ -165,7 +165,7 @@ Explicitly download a model to cache without loading it into memory.
 
 ```typescript
 import { WHISPER_TINY } from "@/models/hyperdrive";
-import { downloadAsset } from "qvac-sdk";
+import { downloadAsset } from "sdk";
 
 // Download with progress tracking
 await downloadAsset({
@@ -203,7 +203,7 @@ string; // Registry ID for the loaded model
 
 ```typescript
 import { WHISPER_TINY } from "@/models/hyperdrive";
-import { loadModel } from "qvac-sdk";
+import { loadModel } from "sdk";
 
 // Load model (downloads if not cached)
 const modelId = await loadModel({
@@ -238,7 +238,7 @@ Unload a model from memory.
 ### Usage Example
 
 ```typescript
-import { unloadModel } from "qvac-sdk";
+import { unloadModel } from "sdk";
 
 await unloadModel({ modelId });
 console.log("✅ Model unloaded from memory");
@@ -253,7 +253,7 @@ import {
   downloadAsset, 
   loadModel, 
   unloadModel 
-} from "qvac-sdk";
+} from "sdk";
 
 try {
   // 1. Check initial status
@@ -400,7 +400,7 @@ console.log("✅ All models pre-downloaded");
 
 ```typescript
 import { WHISPER_TINY } from "@/models/hyperdrive";
-import { getModelInfo } from "qvac-sdk";
+import { getModelInfo } from "sdk";
 
 try {
   const info = await getModelInfo(WHISPER_TINY);
