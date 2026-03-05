@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       test_ref:
-        description: 'Override ref for testing (e.g. release-qvac-sdk-0.1.0)'
+        description: 'Override ref for testing (e.g. release-sdk-0.1.0)'
         required: false
         default: ''
 

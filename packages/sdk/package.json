@@ -1,0 +1,238 @@
+{
+  "name": "@qvac/sdk",
+  "version": "0.7.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./package": "./package.json",
+    "./dist/server/worker.js": {
+      "import": "./dist/server/worker.js",
+      "require": "./dist/server/worker.js"
+    },
+    "./llamacpp-completion/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+    },
+    "./llamacpp-embedding/plugin": {
+      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+    },
+    "./whispercpp-transcription/plugin": {
+      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+    },
+    "./parakeet-transcription/plugin": {
+      "types": "./dist/server/bare/plugins/parakeet-transcription/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/parakeet-transcription/plugin.js"
+    },
+    "./nmtcpp-translation/plugin": {
+      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+    },
+    "./onnx-tts/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-tts/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-tts/plugin.js"
+    },
+    "./onnx-ocr/plugin": {
+      "types": "./dist/server/bare/plugins/onnx-ocr/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/onnx-ocr/plugin.js"
+    },
+    "./plugin-utils": {
+      "types": "./dist/schemas/plugin.d.ts",
+      "import": "./dist/schemas/plugin.js"
+    },
+    "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
+    "./worker-core": {
+      "import": "./dist/server/worker-core.js"
+    },
+    "./plugins": {
+      "import": "./dist/server/plugins/index.js"
+    },
+    "./logging": {
+      "import": "./dist/logging/index.js"
+    },
+    "./pear-pre": "./dist/pear/pre.js"
+  },
+  "imports": {
+    "#rpc": {
+      "react-native": "./dist/client/rpc/expo-rpc-client.js",
+      "bare": "./dist/client/rpc/bare-client.js",
+      "default": "./dist/client/rpc/node-rpc-client.js"
+    }
+  },
+  "expo": {
+    "plugins": [
+      "./dist/expo/plugins/index.js"
+    ]
+  },
+  "files": [
+    "bare-imports.json",
+    "dist/**/*",
+    "expo/plugins/patches/**/*",
+    "!dist/**/*.map",
+    "!**/package-lock.json",
+    "!**/yarn.lock",
+    "!**/pnpm-lock.yaml",
+    "!**/bun.lock",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test:unit": "bun run scripts/run-unit-tests.ts",
+    "test:security": "bun run scripts/run-security-tests.ts",
+    "test:security:bare": "bun run scripts/run-security-tests-bare.ts",
+    "lint": "eslint . --max-warnings=0 && bun run typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
+    "build": "rm -rf dist && bun run lint && tsc --project tsconfig.json && bun run postcompile:aliases",
+    "build:pack": "bun run build && bun pm pack --destination dist/",
+    "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
+    "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
+    "bare:ensureprebuilds:whispercpp": "cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-x64",
+    "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
+    "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
+    "prepare:husky": "bun run husky",
+    "bare:example": "bare ./scripts/bare-bootstrap.js",
+    "docs_api:website": "typedoc --out ./docs/api/website --entryPoints index.ts --entryPointStrategy expand --readme none",
+    "docs_api:markdown": "typedoc --plugin typedoc-plugin-markdown --out ./docs/api/markdown --entryPoints index.ts --entryPointStrategy expand --readme none && sed -i '1,4d' ./docs/api/markdown/README.md",
+    "docs_api": "bun run docs_api:website && bun run docs_api:markdown",
+    "check-models": "tsx ./models/update-models/index.ts --check",
+    "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
+    "update-models": "tsx ./models/update-models/index.ts",
+    "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog",
+    "docs:gen-pages": "remark \"docs/*.mdx\" --output .docs-build",
+    "docs:gen-api": "typedoc --options docs/typedoc.jsonc"
+  },
+  "dependencies": {
+    "@qvac/decoder-audio": "^0.3.3",
+    "@qvac/dl-filesystem": "^0.2.0",
+    "@qvac/embed-llamacpp": "^0.10.7",
+    "@qvac/error": "^0.1.1",
+    "@qvac/langdetect-text": "^0.1.0",
+    "@qvac/llm-llamacpp": "^0.8.9",
+    "@qvac/logging": "^0.1.0",
+    "@qvac/ocr-onnx": "^0.2.0",
+    "@qvac/rag": "^0.4.2",
+    "@qvac/registry-client": "^0.2.0",
+    "@qvac/transcription-parakeet": "^0.1.9",
+    "@qvac/transcription-whispercpp": "^0.3.17",
+    "@qvac/translation-nmtcpp": "^0.3.9",
+    "@qvac/tts-onnx": "^0.5.4",
+    "fast-safe-stringify": "2.1.1",
+    "which-runtime": "^1.3.2",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@expo/config-plugins": "^54.0.1",
+    "@lancedb/lancedb": "^0.21.3",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@qvac/cli": "^0.1.3",
+    "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
+    "@types/node": "^24.2.1",
+    "@types/tar-stream": "^3.1.4",
+    "bare-pack": "^2.0.0",
+    "bare-readline": "^1.2.0",
+    "brittle": "^3.19.1",
+    "chromadb": "^3.0.14",
+    "eslint": "^9.33.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.30.0",
+    "eslint-plugin-react": "^7.37.5",
+    "expo": "^54.0.0",
+    "expo-device": "^8.0.0",
+    "expo-file-system": "^19.0.15",
+    "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "hyperdb": "^4.16.1",
+    "pear-pipe": "^1.0.6",
+    "prettier": "^3.6.2",
+    "react-native-bare-kit": "^0.11.5",
+    "remark-cli": "^12.0.1",
+    "remark-code-import": "^1.2.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-mdx": "^3.1.1",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.28.11",
+    "typedoc-plugin-frontmatter": "^1.3.1",
+    "typedoc-plugin-markdown": "^4.8.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@qvac/cli": "^0.1.2",
+    "bare-abort-controller": "^1.0.0",
+    "bare-buffer": "^3.4.2",
+    "bare-crypto": "^1.11.2",
+    "bare-dns": "^2.1.4",
+    "bare-fetch": "^2.5.1",
+    "bare-fs": "^4.5.2",
+    "bare-http1": "^4.1.6",
+    "bare-https": "^2.1.1",
+    "bare-link": "^2.1.10",
+    "bare-net": "^2.2.0",
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-rpc": "^1.0.0",
+    "bare-runtime": "^1.24.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^5.2.1",
+    "bare-zlib": "^1.3.1",
+    "compact-encoding": "^2.19.0",
+    "corestore": "^7.4.5",
+    "events": "^3.3.0",
+    "expo-build-properties": ">=0.12.0",
+    "expo-device": "^8.0.0",
+    "expo-file-system": "^19.0.15",
+    "hyperdb": "^4.19.0",
+    "hyperdrive": "^13.0.1",
+    "hyperswarm": "^4.12.1",
+    "llm-splitter": "~0.2.0",
+    "pear-pipe": "^1.0.6",
+    "react-native-bare-kit": "^0.11.5",
+    "tar-stream": "^3.1.7"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "expo-build-properties": {
+      "optional": true
+    },
+    "expo-device": {
+      "optional": true
+    },
+    "expo-file-system": {
+      "optional": true
+    },
+    "react-native-bare-kit": {
+      "optional": true
+    },
+    "compact-encoding": {
+      "optional": true
+    },
+    "pear-pipe": {
+      "optional": true
+    }
+  },
+  "patchedDependencies": {},
+  "overrides": {
+    "@qvac/dl-hyperdrive": "^0.2.0"
+  }
+}
