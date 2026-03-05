@@ -68,7 +68,8 @@ static std::string resolveOnnxModelPath() {
 
   const std::string candidates[] = {
       (canonicalRoot / "models" / "chatterbox" / "embed_tokens.onnx").string(),
-      (canonicalRoot / "models" / "chatterbox" / "embed_tokens_fp16.onnx").string(),
+      (canonicalRoot / "models" / "chatterbox" / "embed_tokens_fp16.onnx")
+          .string(),
   };
   for (const auto &path : candidates) {
     std::ifstream f(path);
@@ -82,7 +83,8 @@ static std::string resolveOnnxModelPath() {
 TEST(OnnxInferSessionIntegrationTest, sessionLoadsAndRunWithRealModel) {
   const std::string modelPath = resolveOnnxModelPath();
   if (modelPath.empty()) {
-    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have models/chatterbox/embed_tokens.onnx";
+    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have "
+                    "models/chatterbox/embed_tokens.onnx";
   }
 
   OnnxInferSession session(modelPath);
@@ -110,7 +112,8 @@ TEST(OnnxInferSessionIntegrationTest, sessionLoadsAndRunWithRealModel) {
   OrtTensor inputTensor = session.getInput(inputNames[0]);
   EXPECT_FALSE(inputTensor.name.empty());
   EXPECT_EQ(inputTensor.shape.size(), 2u);
-  if (inputTensor.shape[0] >= 1 && inputTensor.shape[1] >= 1 && inputTensor.data != nullptr) {
+  if (inputTensor.shape[0] >= 1 && inputTensor.shape[1] >= 1 &&
+      inputTensor.data != nullptr) {
     static_cast<int64_t *>(inputTensor.data)[0] = 0;
   }
 
@@ -121,10 +124,12 @@ TEST(OnnxInferSessionIntegrationTest, sessionLoadsAndRunWithRealModel) {
   EXPECT_TRUE(outputTensor.data != nullptr);
 }
 
-TEST(OnnxInferSessionIntegrationTest, getInputNamesAndGetOutputNamesReturnModelMetadata) {
+TEST(OnnxInferSessionIntegrationTest,
+     getInputNamesAndGetOutputNamesReturnModelMetadata) {
   const std::string modelPath = resolveOnnxModelPath();
   if (modelPath.empty()) {
-    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have models/chatterbox/embed_tokens.onnx";
+    GTEST_SKIP() << "Set ONNX_TEST_MODEL_PATH or run integration to have "
+                    "models/chatterbox/embed_tokens.onnx";
   }
 
   OnnxInferSession session(modelPath);

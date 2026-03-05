@@ -1,9 +1,9 @@
+#include "mocks/OnnxInferSessionMock.hpp"
 #include "src/model-interface/ChatterboxEngine.hpp"
 #include "src/model-interface/IChatterboxEngine.hpp"
-#include "mocks/OnnxInferSessionMock.hpp"
-#include <gtest/gtest.h>
 #include <cstdlib>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,14 +42,8 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
   const std::string condDecPath = "conditional_decoder.onnx";
   const std::string langPath = "language_model.onnx";
 
-  ChatterboxConfig config{"en",
-                          referenceAudio,
-                          tokenizerPath,
-                          speechPath,
-                          embedPath,
-                          condDecPath,
-                          langPath,
-                          false};
+  ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, speechPath,
+                          embedPath, condDecPath,    langPath,      false};
 
   ChatterboxEngine engine(config, factory);
 
@@ -61,7 +55,8 @@ TEST(ChatterboxEngineFactoryTest, injectedFactoryIsUsedWhenLoadingSessions) {
   EXPECT_EQ(factoryInvokedPaths[3], langPath);
 }
 
-TEST(ChatterboxEngineFactoryTest, constructorAcceptsNullFactoryWithLazyLoading) {
+TEST(ChatterboxEngineFactoryTest,
+     constructorAcceptsNullFactoryWithLazyLoading) {
   const std::string tokenizerPath = getTokenizerPathFromEnv();
   if (tokenizerPath.empty()) {
     GTEST_SKIP()
@@ -70,8 +65,8 @@ TEST(ChatterboxEngineFactoryTest, constructorAcceptsNullFactoryWithLazyLoading) 
 
   const std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   const std::string dummyPath = "dummy.onnx";
-  ChatterboxConfig config{"en", referenceAudio, tokenizerPath, dummyPath,
-                          dummyPath, dummyPath, dummyPath, true};
+  ChatterboxConfig config{"en",      referenceAudio, tokenizerPath, dummyPath,
+                          dummyPath, dummyPath,      dummyPath,     true};
 
   EXPECT_NO_THROW({
     ChatterboxEngine engine(config, nullptr);

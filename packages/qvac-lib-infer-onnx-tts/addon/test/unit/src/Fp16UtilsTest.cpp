@@ -1,6 +1,6 @@
 #include "src/model-interface/Fp16Utils.hpp"
-#include <gtest/gtest.h>
 #include <cmath>
+#include <gtest/gtest.h>
 #include <limits>
 #include <vector>
 
@@ -62,7 +62,8 @@ TEST_F(Fp16ConversionTest, subnormalSmallest) {
 }
 
 TEST_F(Fp16ConversionTest, roundtripPreservesCommonValues) {
-  std::vector<float> values = {0.0f, 1.0f, -1.0f, 0.5f, -0.5f, 0.25f, 2.0f, -2.0f, 100.0f, 0.001f};
+  std::vector<float> values = {0.0f,  1.0f, -1.0f, 0.5f,   -0.5f,
+                               0.25f, 2.0f, -2.0f, 100.0f, 0.001f};
   for (float original : values) {
     uint16_t fp16 = fromFp32(original);
     float restored = toFp32(fp16);
@@ -71,13 +72,9 @@ TEST_F(Fp16ConversionTest, roundtripPreservesCommonValues) {
   }
 }
 
-TEST_F(Fp16ConversionTest, fromFp32Zero) {
-  EXPECT_EQ(fromFp32(0.0f), 0x0000);
-}
+TEST_F(Fp16ConversionTest, fromFp32Zero) { EXPECT_EQ(fromFp32(0.0f), 0x0000); }
 
-TEST_F(Fp16ConversionTest, fromFp32One) {
-  EXPECT_EQ(fromFp32(1.0f), 0x3C00);
-}
+TEST_F(Fp16ConversionTest, fromFp32One) { EXPECT_EQ(fromFp32(1.0f), 0x3C00); }
 
 TEST_F(Fp16ConversionTest, fromFp32NegativeOne) {
   EXPECT_EQ(fromFp32(-1.0f), 0xBC00);
@@ -141,9 +138,8 @@ TEST_F(TensorReadWriteTest, readFp32TensorToFloatVector) {
 }
 
 TEST_F(TensorReadWriteTest, readFp16TensorToFloatVector) {
-  std::vector<uint16_t> fp16Data = {
-      fromFp32(1.0f), fromFp32(2.0f), fromFp32(3.0f)
-  };
+  std::vector<uint16_t> fp16Data = {fromFp32(1.0f), fromFp32(2.0f),
+                                    fromFp32(3.0f)};
   OrtTensor tensor{fp16Data.data(), "test", {1, 3}, OrtElementType::Fp16};
 
   std::vector<float> dest;
@@ -168,9 +164,8 @@ TEST_F(TensorReadWriteTest, readFp32TensorToFloatBuffer) {
 }
 
 TEST_F(TensorReadWriteTest, readFp16TensorToFloatBufferWithOffset) {
-  std::vector<uint16_t> fp16Data = {
-      fromFp32(10.0f), fromFp32(20.0f), fromFp32(30.0f), fromFp32(40.0f)
-  };
+  std::vector<uint16_t> fp16Data = {fromFp32(10.0f), fromFp32(20.0f),
+                                    fromFp32(30.0f), fromFp32(40.0f)};
   OrtTensor tensor{fp16Data.data(), "test", {1, 4}, OrtElementType::Fp16};
 
   std::vector<float> dest(2);
@@ -208,10 +203,16 @@ TEST_F(TensorReadWriteTest, fp16RoundtripThroughTensorReadWrite) {
   std::vector<float> original = {0.5f, -0.5f, 1.5f, -1.5f, 0.0f};
 
   std::vector<uint16_t> fp16Buffer(original.size());
-  OrtTensor writeTensor{fp16Buffer.data(), "test", {1, static_cast<int64_t>(original.size())}, OrtElementType::Fp16};
+  OrtTensor writeTensor{fp16Buffer.data(),
+                        "test",
+                        {1, static_cast<int64_t>(original.size())},
+                        OrtElementType::Fp16};
   writeFloatDataToTensor(writeTensor, original.data(), original.size());
 
-  OrtTensor readTensor{fp16Buffer.data(), "test", {1, static_cast<int64_t>(original.size())}, OrtElementType::Fp16};
+  OrtTensor readTensor{fp16Buffer.data(),
+                       "test",
+                       {1, static_cast<int64_t>(original.size())},
+                       OrtElementType::Fp16};
   std::vector<float> restored;
   readTensorToFloatVector(readTensor, restored, restored.begin());
 

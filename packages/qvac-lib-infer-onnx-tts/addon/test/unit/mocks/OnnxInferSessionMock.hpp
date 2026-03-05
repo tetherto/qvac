@@ -16,7 +16,8 @@ public:
   MOCK_METHOD(std::vector<std::string>, getOutputNames, (), (const, override));
 
   MOCK_METHOD(OrtTensor, getInput, (const std::string &inputName), (override));
-  MOCK_METHOD(OrtTensor, getOutput, (const std::string &outputName), (override));
+  MOCK_METHOD(OrtTensor, getOutput, (const std::string &outputName),
+              (override));
 
   MOCK_METHOD(void, initInputTensors,
               (const std::vector<std::vector<int64_t>> &inputShapes),

@@ -13,7 +13,6 @@ public:
 
   void run() override;
 
-
   std::vector<std::string> getInputNames() const override;
   std::vector<std::string> getOutputNames() const override;
 
