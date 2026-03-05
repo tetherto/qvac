@@ -159,9 +159,8 @@ jobs:
         if: matrix.platform == 'linux' || matrix.platform == 'android'
         shell: bash
         run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers gcc-13 g++-13 libstdc++-13-dev
+          sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -170,15 +169,48 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Download Bergamot model from S3
+      - name: Download Bergamot model from Firefox CDN
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          echo "Downloading Bergamot en-it model from S3..."
-          mkdir -p model/bergamot/enit
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/memory-base/bergamot-enit/2025-11-26/" model/bergamot/enit/ --recursive
-          echo "Bergamot model files:"
-          ls -la model/bergamot/enit/
+          echo "Downloading Bergamot en-it model from Firefox Remote Settings CDN..."
+          PAIR_CODE="enit"
+          SRC_LANG="en"
+          DST_LANG="it"
+          DEST_DIR="model/bergamot/${PAIR_CODE}"
+          mkdir -p "$DEST_DIR"
+
+          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
+          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
+
+          echo "Fetching model index from Mozilla..."
+          RECORDS=$(curl -sS "$RECORDS_URL")
+
+          URLS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for r in data.get('data', []):
+              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
+                  att = r.get('attachment', {})
+                  loc = att.get('location', '')
+                  name = r.get('name', '') or att.get('filename', '')
+                  if loc and name:
+                      print(f'{name}|{loc}')
+          ")
+
+          if [ -z "$URLS" ]; then
+              echo "❌ No Firefox model found for ${SRC_LANG}-${DST_LANG}"
+              exit 1
+          fi
+
+          while IFS='|' read -r FILENAME LOCATION; do
+              URL="${ATTACHMENT_BASE}/${LOCATION}"
+              echo "  Downloading ${FILENAME}..."
+              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
+          done <<< "$URLS"
+
+          echo "✅ Bergamot model files downloaded from Firefox CDN:"
+          ls -la "$DEST_DIR"
 
       - name: Download IndicTrans model from S3
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}

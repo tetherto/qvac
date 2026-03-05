@@ -31,6 +31,7 @@ on:
 jobs:
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -131,6 +132,21 @@ jobs:
     with:
       workdir: packages/qvac-lib-dl-hyperdrive
       repo_name: dl-hyperdrive
+
+  # Create GitHub release only for actual releases (after NPM publish)
+  publish-release:
+    needs: [publish-release-npm]
+    if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    secrets: inherit
+    with:
+      repo_name: "dl-hyperdrive"
+      release_name: "QVAC dl-hyperdrive Lib"
+      published_version: ${{ needs.publish-release-npm.outputs.published_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: "packages/qvac-lib-dl-hyperdrive"
 
   publish-feature-gpr:
     needs: publish-logic

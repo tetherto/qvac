@@ -15,7 +15,14 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
 project(qvac-lib-inference-addon-llama C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -45,16 +52,23 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   )
 
   list(APPEND ADDON_SOURCES
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
@@ -92,11 +106,13 @@ if(BUILD_CLI)
   # Cache management integration test with automatic model download
   add_executable(cli_tool
     ${PROJECT_SOURCE_DIR}/addon/src/cli/cli_tool.cc
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp

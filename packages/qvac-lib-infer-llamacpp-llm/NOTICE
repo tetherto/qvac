@@ -112,7 +112,7 @@ JavaScript Dependencies
   @qvac/response@0.1.2
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.7.5
+  b4a@1.8.0
     https://github.com/holepunchto/b4a
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
@@ -124,13 +124,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
-  bare-fs@4.5.4
+  bare-fs@4.5.5
     https://github.com/holepunchto/bare-fs
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
   bare-module-resolve@1.12.1
     https://github.com/holepunchto/bare-module-resolve
-  bare-os@3.6.2
+  bare-os@3.7.0
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
@@ -150,7 +150,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-url
   blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.18.0
+  compact-encoding@2.19.0
     https://github.com/compact-encoding/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
@@ -167,18 +167,22 @@ JavaScript Dependencies
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-storage@2.4.1
-  hyperdrive@13.2.1
+  hyperdrive@13.3.0
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.19.1
+  hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
   index-encoder@3.4.0
     https://github.com/holepunchto/index-encoder
-  mirror-drive@1.12.0
+  mirror-drive@1.13.0
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
   quickbit-native@2.4.8
     https://github.com/holepunchto/quickbit-native
+  rabin-native@2.0.0
+    https://github.com/holepunchto/rabin-native
+  rabin-stream@2.0.0
+    https://github.com/holepunchto/rabin-stream
   rache@1.0.0
     https://github.com/holepunchto/rache
   refcounter@1.0.0
@@ -235,7 +239,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.1
+  dht-rpc@6.26.3
     https://github.com/mafintosh/dht-rpc
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
@@ -247,13 +251,13 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.24.0
+  hypercore@11.26.0
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
   hyperdht@6.29.0
     https://github.com/holepunchto/hyperdht
-  hyperswarm@4.16.0
+  hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
   is-options@1.0.2
     https://github.com/mafintosh/is-options
@@ -364,6 +368,11 @@ C++ Dependencies
 
   opencl
     https://github.com/KhronosGroup/OpenCL-ICD-Loader
+
+--- apache-2.0-with-llvm-exception ---
+
+  libc++ (LLVM C++ Standard Library)
+    https://github.com/llvm/llvm-project
 
 --- bsd-2-clause (BSD 2-Clause License) ---
 

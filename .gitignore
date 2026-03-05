@@ -11,3 +11,4 @@ confirmed.txt
 packages/**/.npmrc
 NOTICE_LOG.txt
 NOTICE_FULL_REPORT.txt
+.claude/worktrees

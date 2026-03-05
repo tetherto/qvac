@@ -6,6 +6,8 @@ const { platform } = require('bare-os')
 const { OcrFasttextInterface } = require('./ocr-fasttext')
 const languages = require('./supportedLanguages')
 const { QvacErrorAddonOcr, ERR_CODES } = require('./lib/error')
+const binding = require('./binding')
+const addonLogging = require('./addonLogging')
 const addon = require.addon.resolve('.')
 
 /**
@@ -41,20 +43,30 @@ class ONNXOcr extends ONNXBase {
   }
 
   async _load () {
-    if (!this.params.langList) {
-      throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'langList' })
-    }
+    const isDoctr = this.params.pipelineMode === 'doctr'
 
-    // filter out unsupported languages
-    const supported = this.params.langList.filter(l => languages.onnxOcrAllSupportedLanguages.includes(l))
-    const removed = this.params.langList.filter(l => !supported.includes(l))
-    if (removed.length > 0) {
-      this.logger.warn(`Unsupported language(s) removed from langList: ${JSON.stringify(removed)}`)
+    if (!isDoctr) {
+      // EasyOCR mode: validate languages
+      if (!this.params.langList) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'langList' })
+      }
+
+      // filter out unsupported languages
+      const supported = this.params.langList.filter(l => languages.onnxOcrAllSupportedLanguages.includes(l))
+      const removed = this.params.langList.filter(l => !supported.includes(l))
+      if (removed.length > 0) {
+        this.logger.warn(`Unsupported language(s) removed from langList: ${JSON.stringify(removed)}`)
+      }
+      if (supported.length === 0) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.UNSUPPORTED_LANGUAGE, adds: JSON.stringify(this.params.langList) })
+      }
+      this.params.langList = supported
+    } else {
+      // DocTR mode: langList is not used for model selection but still passed
+      if (!this.params.langList) {
+        this.params.langList = ['en']
+      }
     }
-    if (supported.length === 0) {
-      throw new QvacErrorAddonOcr({ code: ERR_CODES.UNSUPPORTED_LANGUAGE, adds: JSON.stringify(this.params.langList) })
-    }
-    this.params.langList = supported
 
     if (!this.params.pathDetector) {
       throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'pathDetector' })
@@ -62,6 +74,9 @@ class ONNXOcr extends ONNXBase {
 
     // If pathRecognizer is not provided, use pathRecognizerPrefix and getRecognizerModelName to construct the path.
     if (!this.params.pathRecognizer) {
+      if (isDoctr) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'pathRecognizer is required for doctr mode' })
+      }
       if (!this.params.pathRecognizerPrefix) {
         // If pathRecognizerPrefix is not provided, throw error.
         throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'either pathRecognizer or pathRecognizerPrefix must be provided' })
@@ -77,21 +92,16 @@ class ONNXOcr extends ONNXBase {
       timeout: this.params.timeout ?? 120
     }
 
-    // Add optional performance tuning parameters
-    if (this.params.magRatio !== undefined) {
-      onnxOcrParams.magRatio = this.params.magRatio
-    }
-    if (this.params.defaultRotationAngles !== undefined) {
-      onnxOcrParams.defaultRotationAngles = this.params.defaultRotationAngles
-    }
-    if (this.params.contrastRetry !== undefined) {
-      onnxOcrParams.contrastRetry = this.params.contrastRetry
-    }
-    if (this.params.lowConfidenceThreshold !== undefined) {
-      onnxOcrParams.lowConfidenceThreshold = this.params.lowConfidenceThreshold
-    }
-    if (this.params.recognizerBatchSize !== undefined) {
-      onnxOcrParams.recognizerBatchSize = this.params.recognizerBatchSize
+    // Add optional parameters if provided
+    const optionalFields = [
+      'pipelineMode', 'magRatio', 'defaultRotationAngles',
+      'contrastRetry', 'lowConfidenceThreshold',
+      'recognizerBatchSize', 'decodingMethod', 'straightenPages'
+    ]
+    for (const field of optionalFields) {
+      if (this.params[field] !== undefined) {
+        onnxOcrParams[field] = this.params[field]
+      }
     }
 
     this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
@@ -303,12 +313,17 @@ class ONNXOcr extends ONNXBase {
 
   static getModelKey (params) {
     // Prevents loading same model multiple times
-    return 'onnx-ocr-fasttext'
+    const mode = (params && params.pipelineMode) || 'easyocr'
+    return `onnx-ocr-fasttext-${mode}`
   }
 }
 
 module.exports = {
   ONNXOcr,
   modelClass: ONNXOcr,
-  modelFile: addon
+  modelFile: addon,
+  QvacErrorAddonOcr,
+  ERR_CODES,
+  binding,
+  addonLogging
 }

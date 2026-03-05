@@ -149,20 +149,6 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Update c++ tools to install GLIBC++ (Ubuntu 22.04)
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Update c++ tools to install GLIBC++ (Ubuntu 24.04)
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
