@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <condition_variable>
 #include <filesystem>
 #include <functional>
@@ -71,6 +72,7 @@ struct TrainingCheckpointState {
   std::atomic<bool> isIdle{true};
   std::atomic<bool> isFinetuning{false};
   std::atomic<bool> isPaused{false};
+  std::atomic<uint64_t> pauseAttemptId{0};
   int64_t expectedFirstBatchAfterResume = -1;
   bool firstBatchAfterResumeLogged = false;
   int64_t batchOffsetWithinEpoch = -1;

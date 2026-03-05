@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 
@@ -151,14 +152,54 @@ public:
   }
 
   void cancel() {
+    static std::atomic<uint64_t> cancelDebugAttemptCounter{0};
+    const auto cancelAttemptId =
+        cancelDebugAttemptCounter.fetch_add(1, std::memory_order_relaxed) + 1;
+    const auto cancelStart = std::chrono::steady_clock::now();
+
+    {
+      std::ostringstream entryMsg;
+      entryMsg << "[PauseDebug][jobRunnerCancelAttempt=" << cancelAttemptId
+               << "] JobRunner::cancel: enter";
+      QLOG(logger::Priority::INFO, entryMsg.str());
+    }
+
     std::scoped_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
       return;
     }
+    {
+      std::ostringstream stateMsg;
+      stateMsg << "[PauseDebug][jobRunnerCancelAttempt=" << cancelAttemptId
+               << "] JobRunner::cancel: state jobHasValue="
+               << (job_.has_value() ? "true" : "false")
+               << " ready=" << (ready_.load() ? "true" : "false");
+      QLOG(logger::Priority::INFO, stateMsg.str());
+    }
     if (job_.has_value()) {
+      QLOG(
+          logger::Priority::INFO,
+          "[PauseDebug][jobRunnerCancelAttempt=" +
+          std::to_string(cancelAttemptId) +
+          "] JobRunner::cancel: before modelCancel_->cancel()");
       modelCancel_->cancel();
+      QLOG(
+          logger::Priority::INFO,
+          "[PauseDebug][jobRunnerCancelAttempt=" +
+          std::to_string(cancelAttemptId) +
+          "] JobRunner::cancel: before processingSync_.waitInactive()");
+      const auto waitStart = std::chrono::steady_clock::now();
       processingSync_.waitInactive();
+      const auto waitElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now() - waitStart)
+                                     .count();
+      QLOG(
+          logger::Priority::INFO,
+          "[PauseDebug][jobRunnerCancelAttempt=" +
+          std::to_string(cancelAttemptId) +
+          "] JobRunner::cancel: after processingSync_.waitInactive elapsedMs=" +
+          std::to_string(waitElapsedMs));
       job_.reset();
       if (ready_.load()) {
         // If the worker has not taken the job yet (ready_ == true, still in
@@ -166,6 +207,13 @@ public:
         outputQueue_->queueException(std::runtime_error("Job cancelled"));
       }
     }
+    const auto totalElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::steady_clock::now() - cancelStart)
+                                    .count();
+    QLOG(
+        logger::Priority::INFO,
+        "[PauseDebug][jobRunnerCancelAttempt=" + std::to_string(cancelAttemptId) +
+        "] JobRunner::cancel: exit elapsedMs=" + std::to_string(totalElapsedMs));
   }
 };
 } // namespace qvac_lib_inference_addon_cpp

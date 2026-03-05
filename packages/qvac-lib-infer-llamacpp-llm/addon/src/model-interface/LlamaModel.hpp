@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -113,6 +114,7 @@ public:
   bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
+  uint64_t getCurrentPauseAttemptIdForDebug() const;
 
   /** Block until the training thread has completed the finetuning pause path.
    */

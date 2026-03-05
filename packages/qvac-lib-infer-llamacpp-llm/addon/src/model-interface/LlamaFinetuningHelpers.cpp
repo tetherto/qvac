@@ -421,10 +421,38 @@ void savePauseCheckpoint(
 bool tryHandlePauseRequest(
     ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
     int64_t ibatch, int64_t ibatchMax) {
-  if (state == nullptr || !state->pauseRequested.load()) {
+  if (state == nullptr) {
+    QLOG_IF(
+        Priority::INFO,
+        "[PauseDebug][attempt=0] tryHandlePauseRequest: state=nullptr early-return");
     return false;
   }
-  if (state->pauseCheckpointSaved.load()) {
+  const auto attemptId = state->pauseAttemptId.load();
+  const bool pauseRequested = state->pauseRequested.load();
+  const bool pauseSaved = state->pauseCheckpointSaved.load();
+  std::ostringstream entryMsg;
+  entryMsg << "[PauseDebug][attempt=" << attemptId
+           << "] tryHandlePauseRequest: entry"
+           << " train=" << (train ? "true" : "false")
+           << " ibatch=" << (ibatch + 1) << "/" << ibatchMax
+           << " pauseRequested=" << (pauseRequested ? "true" : "false")
+           << " pauseCheckpointSaved=" << (pauseSaved ? "true" : "false")
+           << " shouldExit=" << (state->shouldExit.load() ? "true" : "false")
+           << " isFinetuning=" << (state->isFinetuning.load() ? "true" : "false");
+  QLOG_IF(Priority::INFO, entryMsg.str());
+
+  if (!pauseRequested) {
+    QLOG_IF(
+        Priority::INFO,
+        "[PauseDebug][attempt=" + std::to_string(attemptId) +
+            "] tryHandlePauseRequest: pauseRequested=false early-return");
+    return false;
+  }
+  if (pauseSaved) {
+    QLOG_IF(
+        Priority::INFO,
+        "[PauseDebug][attempt=" + std::to_string(attemptId) +
+            "] tryHandlePauseRequest: pauseCheckpointSaved=true early-return");
     return true;
   }
   if (state->ctx != nullptr) {
@@ -434,6 +462,10 @@ bool tryHandlePauseRequest(
   try {
     savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
   } catch (...) {
+    QLOG_IF(
+        Priority::INFO,
+        "[PauseDebug][attempt=" + std::to_string(attemptId) +
+            "] SIGNAL_FROM_TRY_HANDLE_PAUSE_EXCEPTION");
     state->pauseWaitDone.store(true);
     state->pauseDoneCv.notify_all();
     throw;
@@ -449,8 +481,13 @@ bool tryHandlePauseRequest(
   }
   pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax
            << " | epoch " << (state->currentEpoch + 1)
-           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
-  QLOG_IF(Priority::DEBUG, pauseMsg.str());
+           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string()
+           << " | [PauseDebug][attempt=" << attemptId << "]";
+  QLOG_IF(Priority::INFO, pauseMsg.str());
+  QLOG_IF(
+      Priority::INFO,
+      "[PauseDebug][attempt=" + std::to_string(attemptId) +
+          "] SIGNAL_FROM_TRY_HANDLE_PAUSE_SUCCESS");
   state->pauseWaitDone.store(true);
   state->pauseDoneCv.notify_all();
   return true;
