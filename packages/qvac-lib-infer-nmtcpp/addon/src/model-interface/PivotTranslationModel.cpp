@@ -7,20 +7,21 @@ namespace qvac_lib_inference_addon_marian {
 
 PivotTranslationModel::PivotTranslationModel(
     const std::string& firstModelPath,
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>> firstModelConfig,
+    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+        firstModelConfig,
     const std::string& secondModelPath,
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>> secondModelConfig)
-    : firstModelPath_(firstModelPath),
-      secondModelPath_(secondModelPath),
-      firstModel_( std::make_unique<TranslationModel>(firstModelPath)),
+    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+        secondModelConfig)
+    : firstModelPath_(firstModelPath), secondModelPath_(secondModelPath),
+      firstModel_(std::make_unique<TranslationModel>(firstModelPath)),
       secondModel_(std::make_unique<TranslationModel>(secondModelPath)) {
 
-        firstModel_->setConfig(std::move(firstModelConfig));
-        secondModel_->setConfig(std::move(secondModelConfig));
-        
-        firstModel_->load();
-        secondModel_->load();
-      }
+  firstModel_->setConfig(std::move(firstModelConfig));
+  secondModel_->setConfig(std::move(secondModelConfig));
+
+  firstModel_->load();
+  secondModel_->load();
+}
 
 void PivotTranslationModel::load() {
 #ifndef HAVE_BERGAMOT
@@ -61,14 +62,14 @@ bool PivotTranslationModel::isLoaded() const {
 }
 
 void PivotTranslationModel::saveLoadParams(
-    const std::string& firstModelPath,
-    const std::string& secondModelPath) {
+    const std::string& firstModelPath, const std::string& secondModelPath) {
   firstModelPath_ = firstModelPath;
   secondModelPath_ = secondModelPath;
 }
 
 void PivotTranslationModel::setConfig(
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>> config) {
+    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+        config) {
   config_ = std::move(config);
   firstModel_->setConfig(config_);
   secondModel_->setConfig(config_);
@@ -93,11 +94,12 @@ std::any PivotTranslationModel::process(const std::any& input) {
     return translateBatch(*batch);
   }
 
-  throw std::runtime_error(
-      "PivotTranslationModel expects std::string or std::vector<std::string> input");
+  throw std::runtime_error("PivotTranslationModel expects std::string or "
+                           "std::vector<std::string> input");
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats PivotTranslationModel::runtimeStats() const {
+qvac_lib_inference_addon_cpp::RuntimeStats
+PivotTranslationModel::runtimeStats() const {
   auto firstStats = firstModel_->runtimeStats();
   auto secondStats = secondModel_->runtimeStats();
 
@@ -119,8 +121,8 @@ std::any PivotTranslationModel::translateString(const std::string& input) {
   return secondModel_->process(firstOutput);
 }
 
-std::any PivotTranslationModel::translateBatch(
-    const std::vector<std::string>& inputs) {
+std::any
+PivotTranslationModel::translateBatch(const std::vector<std::string>& inputs) {
   if (!isLoaded()) {
     throw std::runtime_error("PivotTranslationModel models are not loaded");
   }
@@ -128,4 +130,4 @@ std::any PivotTranslationModel::translateBatch(
   return secondModel_->processBatch(firstBatch);
 }
 
-} // namespace qvac_lib_inference_addon_cpp
+} // namespace qvac_lib_inference_addon_marian

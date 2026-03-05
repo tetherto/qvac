@@ -12,14 +12,19 @@
 
 namespace qvac_lib_inference_addon_marian {
 
-class PivotTranslationModel : public qvac_lib_inference_addon_cpp::model::IModel {
+class PivotTranslationModel
+    : public qvac_lib_inference_addon_cpp::model::IModel {
 public:
   PivotTranslationModel() = default;
   PivotTranslationModel(
       const std::string& firstModelPath,
-      std::unordered_map<std::string, std::variant<double, int64_t, std::string>> firstModelconfig,
+      std::unordered_map<
+          std::string, std::variant<double, int64_t, std::string>>
+          firstModelconfig,
       const std::string& secondModelPath,
-      std::unordered_map<std::string, std::variant<double, int64_t, std::string>> secondModelConfig = {});
+      std::unordered_map<
+          std::string, std::variant<double, int64_t, std::string>>
+          secondModelConfig = {});
 
   ~PivotTranslationModel() override = default;
 
@@ -35,15 +40,16 @@ public:
   bool isLoaded() const;
 
   void saveLoadParams(
-      const std::string& firstModelPath,
-      const std::string& secondModelPath);
-  void setConfig(
-      std::unordered_map<std::string, std::variant<double, int64_t, std::string>> config);
+      const std::string& firstModelPath, const std::string& secondModelPath);
+  void setConfig(std::unordered_map<
+                 std::string, std::variant<double, int64_t, std::string>>
+                     config);
   void setUseGpu(bool useGpu);
 
   std::string getName() const override;
   std::any process(const std::any& input) override;
-  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
+  runtimeStats() const override;
 
 private:
   std::any translateString(const std::string& input);
@@ -57,7 +63,8 @@ private:
 
   bool useGpu_ = true;
 
-  std::unordered_map<std::string, std::variant<double, int64_t, std::string>> config_;
+  std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
+      config_;
 };
 
-} // namespace qvac_lib_inference_addon_cpp
+} // namespace qvac_lib_inference_addon_marian
