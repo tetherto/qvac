@@ -11,6 +11,32 @@ const { processJsonRequest: parseJson, formatZodError } = require('./utils/helpe
 const { ZodError } = require('zod')
 
 /**
+ * Detect context overflow errors from addon/runtime message
+ * @param {Error} error
+ * @returns {{ isOverflow: boolean, details?: { sequenceIndex?: number, sequenceTokens?: number, contextSize?: number } }}
+ */
+const parseContextOverflowError = (error) => {
+  const message = error?.message || String(error)
+  if (!/context overflow/i.test(message)) {
+    return { isOverflow: false }
+  }
+
+  const match = message.match(/sequence\s+(\d+)\s+\((\d+)\).*size\s+\((\d+)\)/i)
+  if (!match) {
+    return { isOverflow: true, details: {} }
+  }
+
+  return {
+    isOverflow: true,
+    details: {
+      sequenceIndex: Number(match[1]),
+      sequenceTokens: Number(match[2]),
+      contextSize: Number(match[3])
+    }
+  }
+}
+
+/**
  * Handle errors and send appropriate response
  * @param {Error} error
  * @param {http.ServerResponse} res
@@ -28,6 +54,20 @@ const handleError = (error, res) => {
     res.statusCode = error.status
     return res.end(JSON.stringify({
       error: error.message
+    }))
+  }
+
+  const contextOverflow = parseContextOverflowError(error)
+  if (contextOverflow.isOverflow) {
+    res.statusCode = 422
+    return res.end(JSON.stringify({
+      error: 'Input exceeded model context window',
+      code: 'CONTEXT_OVERFLOW',
+      retryable: true,
+      details: {
+        ...contextOverflow.details,
+        message: error?.message || String(error)
+      }
     }))
   }
 

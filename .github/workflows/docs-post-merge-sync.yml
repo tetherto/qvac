@@ -1,0 +1,70 @@
+# Post-merge: regenerate docs on main when SDK changes, commit back to main.
+# Keeps monorepo main in sync with generated docs.
+# Only triggered by SDK or docs-script changes (other libs not automated yet).
+name: Docs Post-Merge Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/qvac-sdk/**'
+      - 'docs/website/scripts/**'
+
+concurrency:
+  group: docs-post-merge-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install docs dependencies
+        working-directory: docs/website
+        run: bun install
+
+      - name: Install SDK dependencies
+        working-directory: packages/qvac-sdk
+        run: bun install
+
+      - name: Generate docs
+        working-directory: docs/website
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/qvac-sdk
+        run: bun run docs:generate
+
+      - name: Check for doc changes
+        id: changes
+        run: |
+          git add docs/website/content/docs/sdk/api/ docs/website/src/lib/versions.ts 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "has_doc_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_doc_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push generated docs
+        if: steps.changes.outputs.has_doc_changes == 'true'
+        env:
+          BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
+          BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
+          TOKEN: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          git commit -m "chore(docs): regenerate SDK API docs [skip ci]"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin main
