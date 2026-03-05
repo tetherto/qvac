@@ -8,6 +8,10 @@
 #include "OnnxConfig.hpp"
 #include "Logger.hpp"
 
+#ifdef __ANDROID__
+#include <nnapi_provider_factory.h>
+#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <dml_provider_factory.h>
 #endif
