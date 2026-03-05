@@ -1,5 +1,5 @@
-#include "src/model-interface/OrtTypes.hpp"
 #include "mocks/OnnxInferSessionMock.hpp"
+#include "src/model-interface/OrtTypes.hpp"
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
@@ -14,7 +14,8 @@ TEST(OnnxInferSessionMockTest, runIsInvoked) {
 
 TEST(OnnxInferSessionMockTest, getInputNamesReturnsEmptyByDefault) {
   OnnxInferSessionMock mock;
-  EXPECT_CALL(mock, getInputNames()).WillOnce(::testing::Return(std::vector<std::string>{}));
+  EXPECT_CALL(mock, getInputNames())
+      .WillOnce(::testing::Return(std::vector<std::string>{}));
   std::vector<std::string> names = mock.getInputNames();
   EXPECT_TRUE(names.empty());
 }
