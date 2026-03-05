@@ -155,15 +155,27 @@ def _create_reader_with_fallback(lang, gpu, quantize=False):
 
     # Find the model path EasyOCR would have used
     model_dir = reader.model_storage_directory
-    model_lang = reader.model_lang
-    # EasyOCR stores model files as <model_lang>.pth
-    model_path = os.path.join(model_dir, f'{model_lang}.pth')
-    if not os.path.exists(model_path):
-        # Try finding the downloaded model
+    model_lang = getattr(reader, 'model_lang', None)
+    model_path = None
+
+    if model_lang:
+        # EasyOCR stores model files as <model_lang>.pth
+        candidate = os.path.join(model_dir, f'{model_lang}.pth')
+        if os.path.exists(candidate):
+            model_path = candidate
+
+    if model_path is None:
+        # Try finding the downloaded model by language code
         import glob
         candidates = glob.glob(os.path.join(model_dir, f'*{lang}*'))
         if candidates:
             model_path = candidates[0]
+
+    if model_path is None or not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f'Could not find recognizer checkpoint for lang={lang!r} '
+            f'in {model_dir}. Ensure EasyOCR has downloaded the model.'
+        )
 
     device = 'cuda' if gpu and torch.cuda.is_available() else 'cpu'
     reader.recognizer = _load_recognizer_direct(model_path, device)
@@ -179,11 +191,14 @@ def _replace_relu_with_functional(model):
     functional ``F.relu(x)`` produces ``/Relu_output_0``.  The S3 reference
     models use functional ReLU, so we patch the model to match.
     """
-    for module in model.modules():
-        if hasattr(module, 'relu') and isinstance(module.relu, torch.nn.ReLU):
-            inplace = module.relu.inplace
-            del module._modules['relu']
-            module.relu = lambda x, _inp=inplace: F.relu(x, inplace=_inp)
+    targets = [
+        m for m in model.modules()
+        if hasattr(m, 'relu') and isinstance(m.relu, torch.nn.ReLU)
+    ]
+    for module in targets:
+        inplace = module.relu.inplace
+        del module._modules['relu']
+        module.relu = lambda x, _inp=inplace: F.relu(x, inplace=_inp)
 
 
 class _RecognizerExportWrapper(torch.nn.Module):
