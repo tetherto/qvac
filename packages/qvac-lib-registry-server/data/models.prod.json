@@ -4013,7 +4013,8 @@
       "db_resnet50"
     ],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx",
@@ -4029,7 +4030,8 @@
       "db_mobilenet_v3_large"
     ],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx",
@@ -4045,7 +4047,8 @@
       "parseq"
     ],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx",
@@ -4061,7 +4064,8 @@
       "crnn_mobilenet_v3_small"
     ],
     "notes": "",
-    "link": "https://github.com/felixdittrich92/OnnxTR"
+    "link": "https://github.com/felixdittrich92/OnnxTR",
+    "deprecated": false
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
