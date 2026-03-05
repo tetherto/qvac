@@ -4,10 +4,12 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <gtest/gtest.h>
 
+#include "model-interface/ModelMetadata.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 
 namespace test_common {
@@ -178,6 +180,25 @@ inline fs::path getTestBackendsDir() {
   return fs::current_path() / "build" / "test" / "unit";
 #endif
 }
+
+class MockModelMetaData : public ModelMetaData {
+public:
+  MockModelMetaData(bool oneBitQuant, std::string arch)
+      : oneBitQuant_(oneBitQuant), arch_(std::move(arch)) {}
+
+  [[nodiscard]] bool hasOneBitQuantization() const override {
+    return oneBitQuant_;
+  }
+  std::optional<std::string> tryGetString(const char* key) const override {
+    if (std::string(key) == "general.architecture")
+      return arch_;
+    return std::nullopt;
+  }
+
+private:
+  bool oneBitQuant_;
+  std::string arch_;
+};
 
 inline std::unique_ptr<std::basic_streambuf<char>>
 readFileToStreambufBinary(const std::string& path) {

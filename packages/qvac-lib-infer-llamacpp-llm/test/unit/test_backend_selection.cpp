@@ -10,10 +10,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "model-interface/ModelMetadata.hpp"
+#include "test_common.hpp"
 #include "utils/BackendSelection.hpp"
 
 using namespace backend_selection;
+using test_common::MockModelMetaData;
 
 // Mock types for ggml backend structures
 struct MockDevice {
@@ -208,25 +209,6 @@ void expectChosen(
   auto result = chooseBackend(expectedBackend, bckI, nullptr, mainGpu);
   expectChosen(result, expectedBackend, expectedBackendName);
 }
-
-class MockModelMetaData : public ModelMetaData {
-public:
-  MockModelMetaData(bool oneBitQuant, std::string arch)
-      : oneBitQuant_(oneBitQuant), arch_(std::move(arch)) {}
-
-  [[nodiscard]] bool hasOneBitQuantization() const override {
-    return oneBitQuant_;
-  }
-  std::optional<std::string> tryGetString(const char* key) const override {
-    if (std::string(key) == "general.architecture")
-      return arch_;
-    return std::nullopt;
-  }
-
-private:
-  bool oneBitQuant_;
-  std::string arch_;
-};
 
 void expectChosenWithMetadata(
     MockBackendInterface& mockBackend, BackendType preferredBackend,
