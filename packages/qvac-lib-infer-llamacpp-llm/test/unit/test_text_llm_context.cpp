@@ -49,34 +49,10 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "test_model.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "Llama-3.2-1B-Instruct-Q4_0.gguf";
-      }
-    }
+    test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
 
-    fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-    backendDir = fs::path(TEST_BINARY_DIR);
-#else
-    backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-
-    config_files["backendsDir"] = backendDir.string();
+    config_files["backendsDir"] = test_common::getTestBackendsDir().string();
   }
 
   std::unordered_map<std::string, std::string> config_files;

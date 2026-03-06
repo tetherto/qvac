@@ -1,7 +1,6 @@
 #include "TranslationModel.hpp"
 
 #include <filesystem>
-#include <iostream>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -295,7 +294,8 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
 }
 
 std::any TranslationModel::process(const std::any& input) {
-  std::unique_lock<std::mutex> unique_lock(mtx_);
+  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+
   if (auto* inputString = std::any_cast<std::string>(&input)) {
     return processString(*inputString);
   } else if (

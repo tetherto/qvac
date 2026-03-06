@@ -261,13 +261,6 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 19 all
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Install g++-13 on Ubuntu 22.04
-        run: |
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-          sudo apt update
-          sudo apt install -y g++-13
-
       - if: ${{ startsWith(matrix.os, 'ubuntu') }}
         name: Install ccache on Linux
         run: sudo apt-get install -y ccache

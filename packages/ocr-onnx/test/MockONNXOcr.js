@@ -150,7 +150,7 @@ class ONNXOcr {
       te: 'telugu',
       kn: 'kannada'
     }
-    for (const [k, v] in langMap) {
+    for (const [k, v] of Object.entries(langMap)) {
       if (langList.includes(k)) return v
     }
 

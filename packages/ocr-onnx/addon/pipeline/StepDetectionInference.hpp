@@ -13,7 +13,7 @@ public:
   using Output = StepDetectionInferenceOutput;
 
   explicit StepDetectionInference(
-      const ORTCHAR_T* pathDetector, bool useGPU = true, float magRatio = 1.5F);
+      const ORTCHAR_T* pathDetector, bool useGPU = false, float magRatio = 1.5F);
 
   CONSTRUCT_FROM_TUPLE(StepDetectionInference)
 
@@ -33,7 +33,6 @@ public:
 
 private:
   float magRatio_;
-  Ort::Env ortEnv_;
   Ort::Session ortSession_{nullptr};
 
   /**

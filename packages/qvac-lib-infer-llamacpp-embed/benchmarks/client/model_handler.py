@@ -4,12 +4,18 @@ import logging
 import httpx
 import numpy as np
 import os
-import time
-import yaml
 from sentence_transformers import SentenceTransformer
 from huggingface_hub import hf_hub_download, list_repo_files
 
 logger = logging.getLogger(__name__)
+
+
+class ContextOverflowError(RuntimeError):
+    """Raised when addon input exceeds model context window."""
+
+    def __init__(self, message: str, payload: dict | None = None):
+        super().__init__(message)
+        self.payload = payload or {}
 
 
 def parse_dtype_suffix(model_name: str) -> tuple[str, str | None]:
@@ -407,6 +413,44 @@ class QvacEmbedHandler:
         except httpx.TimeoutException:
             logger.error(f"Request timed out after {self.timeout} seconds")
             raise
+        except httpx.HTTPStatusError as e:
+            response_text = ""
+            response_json = None
+
+            if e.response is not None:
+                try:
+                    response_text = e.response.text
+                except Exception:
+                    response_text = "<unavailable>"
+
+                try:
+                    response_json = e.response.json()
+                except Exception:
+                    response_json = None
+
+            logger.error(
+                "Server returned HTTP %s for %s. Response text: %s",
+                e.response.status_code if e.response is not None else "unknown",
+                self.url,
+                response_text or "<empty>"
+            )
+
+            if response_json is not None:
+                logger.error("Server JSON error payload: %s", response_json)
+
+            if isinstance(response_json, dict) and response_json.get("code") == "CONTEXT_OVERFLOW":
+                details = response_json.get("details", {})
+                overflow_message = (
+                    details.get("message")
+                    if isinstance(details, dict)
+                    else response_text
+                )
+                raise ContextOverflowError(
+                    overflow_message or "Input exceeded model context window",
+                    payload=response_json
+                ) from e
+
+            raise
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise
@@ -568,7 +612,13 @@ class MTEBModelWrapper(SentenceTransformer):
         """Return embedding dimension. Required by MTEB."""
         return self._embedding_dim
     
-    def _truncate_text(self, text: str, max_tokens: int = None) -> str:
+    def _truncate_text(
+        self,
+        text: str,
+        max_tokens: int = None,
+        chars_per_token: float = 2.5,
+        reserve_tokens: int = 2
+    ) -> str:
         """
         Truncate text to fit within the model's context window.
         
@@ -579,17 +629,144 @@ class MTEBModelWrapper(SentenceTransformer):
         if max_tokens is None:
             max_tokens = self._max_seq_length
         
-        # Reserve 2 tokens for [CLS] and [SEP]
-        effective_max = max_tokens - 2
+        # Reserve a small token headroom for model-specific overhead.
+        effective_max = max_tokens - reserve_tokens
         
         # Character-based truncation: ~2.5 chars per token handles scientific/medical
         # texts with numbers, punctuation, and short words
         # This avoids tokenizing in Python (addon tokenizes again in C++)
-        max_chars = int(effective_max * 2.5)
+        max_chars = int(effective_max * chars_per_token)
         
         if len(text) > max_chars:
             return text[:max_chars]
         return text
+
+    def _truncate_batch(
+        self,
+        sentences: list[str],
+        chars_per_token: float,
+        reserve_tokens: int,
+        per_sentence_max_chars: dict[int, int] | None = None
+    ) -> list[str]:
+        """Apply fast char-based truncation strategy to a full batch."""
+        truncated_batch = [
+            self._truncate_text(
+                sentence,
+                chars_per_token=chars_per_token,
+                reserve_tokens=reserve_tokens
+            )
+            for sentence in sentences
+        ]
+
+        if per_sentence_max_chars:
+            for idx, max_chars in per_sentence_max_chars.items():
+                if 0 <= idx < len(truncated_batch):
+                    truncated_batch[idx] = truncated_batch[idx][:max_chars]
+
+        return truncated_batch
+
+    def _embed_batch_with_retry(self, batch: list[str]) -> np.ndarray:
+        """
+        Encode a single batch with adaptive truncation retries on context overflow.
+        Keeps hot path fast (no tokenizer) and only retries when overflow occurs.
+        """
+        max_attempts = 8
+        chars_per_token = 2.5
+        reserve_tokens = 2
+        per_sentence_max_chars: dict[int, int] = {}
+        last_error = None
+
+        for attempt in range(1, max_attempts + 1):
+            truncated_batch = self._truncate_batch(
+                batch,
+                chars_per_token,
+                reserve_tokens,
+                per_sentence_max_chars=per_sentence_max_chars
+            )
+            try:
+                embeddings = self.handler.embed(truncated_batch)
+                if attempt > 1:
+                    logger.info(
+                        "Recovered from context overflow on attempt %s/%s "
+                        "(chars_per_token=%.3f, reserve_tokens=%s, dynamic_overrides=%s)",
+                        attempt,
+                        max_attempts,
+                        chars_per_token,
+                        reserve_tokens,
+                        len(per_sentence_max_chars)
+                    )
+                return embeddings
+            except ContextOverflowError as error:
+                last_error = error
+                payload = error.payload if isinstance(error.payload, dict) else {}
+                details = payload.get("details", {}) if isinstance(payload, dict) else {}
+
+                sequence_index = details.get("sequenceIndex")
+                sequence_tokens = details.get("sequenceTokens")
+                context_size = details.get("contextSize") or self._max_seq_length
+
+                can_target_sequence = (
+                    isinstance(sequence_index, int) and
+                    0 <= sequence_index < len(truncated_batch)
+                )
+
+                if can_target_sequence:
+                    offending_text = truncated_batch[sequence_index]
+                    offending_length = len(offending_text)
+                    prior_limit = per_sentence_max_chars.get(sequence_index, offending_length)
+
+                    if (
+                        isinstance(sequence_tokens, int) and sequence_tokens > 0 and
+                        isinstance(context_size, int) and context_size > 0
+                    ):
+                        # Keep a small safety margin so the next attempt lands below limit.
+                        target_tokens = max(1, context_size - 8)
+                        shrink_ratio = max(0.10, min(0.98, target_tokens / sequence_tokens))
+                    else:
+                        shrink_ratio = 0.80
+
+                    new_limit = max(32, int(offending_length * shrink_ratio))
+                    # Ensure we make progress if rounding keeps size unchanged.
+                    if new_limit >= prior_limit:
+                        new_limit = max(32, prior_limit - 8)
+
+                    per_sentence_max_chars[sequence_index] = min(prior_limit, new_limit)
+
+                    logger.warning(
+                        "Context overflow on batch (attempt %s/%s): sequence %s tokens=%s ctx=%s. "
+                        "Applying targeted shrink: chars %s -> %s (ratio=%.3f).",
+                        attempt,
+                        max_attempts,
+                        sequence_index,
+                        sequence_tokens,
+                        context_size,
+                        prior_limit,
+                        per_sentence_max_chars[sequence_index],
+                        shrink_ratio
+                    )
+                else:
+                    # Fallback if server did not provide usable sequence details.
+                    chars_per_token = max(0.6, chars_per_token * 0.85)
+                    reserve_tokens = min(96, reserve_tokens + 8)
+                    logger.warning(
+                        "Context overflow on batch (attempt %s/%s) without usable sequence details. "
+                        "Applying global tightening (chars_per_token=%.3f, reserve_tokens=%s).",
+                        attempt,
+                        max_attempts,
+                        chars_per_token,
+                        reserve_tokens
+                    )
+
+                if attempt == max_attempts:
+                    logger.error(
+                        "Context overflow persisted after %s attempts for this batch.",
+                        max_attempts
+                    )
+
+        if last_error is not None:
+            raise last_error
+
+        raise RuntimeError("Failed to encode batch with adaptive truncation")
     
     def encode(
         self,
@@ -612,10 +789,7 @@ class MTEBModelWrapper(SentenceTransformer):
         
         if isinstance(sentences, str):
             sentences = [sentences]
-        
-        # Truncate sentences to fit within model's context window
-        sentences = [self._truncate_text(s) for s in sentences]
-        
+
         effective_batch_size = batch_size if batch_size is not None else self._batch_size
         all_embeddings = []
         total_sentences = len(sentences)
@@ -628,7 +802,7 @@ class MTEBModelWrapper(SentenceTransformer):
         
         for batch_idx, i in enumerate(range(0, len(sentences), effective_batch_size)):
             batch = sentences[i:i + effective_batch_size]
-            embeddings = self.handler.embed(batch)
+            embeddings = self._embed_batch_with_retry(batch)
             all_embeddings.append(embeddings)
             
             # Progress feedback (every N seconds or at milestones)

@@ -1,6 +1,6 @@
 ---
 description: 
-globs: packages/qvac-sdk/**
+globs: packages/sdk/**
 alwaysApply: false
 ---
 
