@@ -9,9 +9,10 @@ const process = require('process')
 global.process = process
 const sinon = require('sinon')
 
-function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
   const args = {
     opts: { stats: true },
+    exclusiveRun,
     tokenizerPath: './models/chatterbox/tokenizer.json',
     speechEncoderPath: './models/chatterbox/speech_encoder.onnx',
     embedTokensPath: './models/chatterbox/embed_tokens.onnx',
@@ -38,6 +39,18 @@ function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefine
   return model
 }
 
+async function waitWithTimeout (promise, timeoutMs, message) {
+  let timeoutId
+  const timeoutPromise = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 test('Chatterbox: run returns audio output and stats', async (t) => {
   const events = []
   const model = createMockedChatterboxModel({
@@ -58,6 +71,26 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
   await model.unload()
 })
 
+test('Chatterbox: exclusiveRun does not deadlock run()', async (t) => {
+  const model = createMockedChatterboxModel({ exclusiveRun: true })
+  await model.load()
+
+  const response = await waitWithTimeout(
+    model.run({ type: 'text', input: 'Hello with exclusive run' }),
+    1000,
+    'run() timed out under exclusiveRun'
+  )
+
+  await waitWithTimeout(
+    response.await(),
+    1000,
+    'response.await() timed out under exclusiveRun'
+  )
+
+  t.ok(response.stats.totalSamples > 0, 'Exclusive run should still produce runtime stats')
+  await model.unload()
+})
+
 test('Chatterbox: Reload reloads configuration', async (t) => {
   const model = createMockedChatterboxModel()
   await model.load()
@@ -71,6 +104,35 @@ test('Chatterbox: Reload reloads configuration', async (t) => {
 
   t.ok(after.stats.audioDurationMs > 0, 'Reloaded model should still produce stats')
   await model.unload()
+})
+
+test('Chatterbox: exclusiveRun does not deadlock reload() or unload()', async (t) => {
+  const model = createMockedChatterboxModel({ exclusiveRun: true })
+  await model.load()
+
+  await waitWithTimeout(
+    model.reload({ language: 'es' }),
+    1000,
+    'reload() timed out under exclusiveRun'
+  )
+
+  const response = await waitWithTimeout(
+    model.run({ type: 'text', input: 'after reload' }),
+    1000,
+    'run() after reload timed out under exclusiveRun'
+  )
+  await waitWithTimeout(
+    response.await(),
+    1000,
+    'response.await() after reload timed out under exclusiveRun'
+  )
+
+  await waitWithTimeout(
+    model.unload(),
+    1000,
+    'unload() timed out under exclusiveRun'
+  )
+  t.pass('exclusiveRun operations complete without deadlock')
 })
 
 test('Chatterbox: reload during in-flight job does not stay busy', async (t) => {
