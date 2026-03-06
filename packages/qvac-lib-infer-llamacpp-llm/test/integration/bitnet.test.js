@@ -5,9 +5,10 @@ const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
-const os = require('bare-os')
 
-const isAndroid = os.platform() === 'android'
+// TODO: Enable test with `skip: !isAndroid` when Collabora merges Vulkan fixes.
+// const os = require('bare-os')
+// const isAndroid = os.platform() === 'android'
 
 const BITNET_MODEL = {
   name: 'bitnet_b1_58-large-TQ2_0.gguf',
@@ -26,7 +27,7 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
-test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndroid }, async t => {
+test('bitnet model can run simple inference', { timeout: 600_000, skip: true }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: BITNET_MODEL.name,
     downloadUrl: BITNET_MODEL.url
