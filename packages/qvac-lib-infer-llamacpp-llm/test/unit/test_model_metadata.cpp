@@ -565,6 +565,15 @@ TEST_F(ModelMetadataTest, DiskSingleFile_Qwen3Arch_IsSpecificallyQ8_0) {
 // gemma3 architecture – medgemma-4b-it-Q4_1
 // Set GEMMA3_MODEL_PATH or place medgemma-4b-it-Q4_1.gguf in models/unit-test.
 
+TEST_F(ModelMetadataTest, DiskSingleFile_MedGemmaModel_ArchitectureIsGemma3) {
+  REQUIRE_MODEL(gemma3Model_);
+  parseDiskSingleFile(gemma3Model_.path, [](const ModelMetaData& meta) {
+    auto arch = meta.tryGetString("general.architecture");
+    ASSERT_TRUE(arch.has_value());
+    EXPECT_EQ(arch.value(), "gemma3");
+  });
+}
+
 TEST_F(
     ModelMetadataTest,
     DiskSingleFile_Gemma3Arch_Q4_1_VulkanNeededForFinetuneAdreno800Plus) {

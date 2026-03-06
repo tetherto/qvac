@@ -8,6 +8,7 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
+#include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
@@ -893,4 +894,24 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, FinetuneThrowsForUnsupportedArchitecture) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.finetuningParams =
+      qvac_lib_inference_addon_llama::LlamaFinetuningParams{};
+
+  EXPECT_THROW({ model.process(std::any(prompt)); }, qvac_errors::StatusError);
 }

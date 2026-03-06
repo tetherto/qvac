@@ -19,6 +19,11 @@ enum class MainGpuType : std::uint8_t { Integrated, Dedicated };
 
 using MainGpu = std::variant<int, MainGpuType>;
 
+/// @brief Returns the architecture name if it is NOT in the known finetuning
+/// list (gemma3, qwen3, bitnet), or std::nullopt if it IS known.
+std::optional<std::string>
+getUnknownFinetuneArchitecture(const ModelMetaData* metadata);
+
 BackendType preferredBackendTypeFromString(const std::string& device);
 
 std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr);
@@ -45,24 +50,21 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
 /// Vulkan backend. Uses CPU if no GPU backends are available.
 ///
-/// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
-///   - Adreno 800+: prefer Vulkan over OpenCL
-///   - Adreno <800: prefer CPU (TQ kernels run faster on CPU)
+/// For known architectures (gemma3, qwen3, bitnet) on Adreno 800+:
+///   prefer Vulkan over OpenCL.
 ///
-/// When @p isFinetuning is true, throws StatusError (InvalidArgument) if the
-/// model architecture is not in the supported list. For supported archs on
-/// Adreno:
-///   - Adreno 800+: prefer Vulkan
-///   - Adreno 700+: CPU for bitnet+TQ, otherwise OpenCL
-///   - Adreno 600+: CPU
+/// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno 700-799:
+///   prefer CPU (TQ kernels run faster on CPU).
+///
+/// For Adreno <700: always CPU.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr);
 } // namespace backend_selection

@@ -272,6 +272,15 @@ std::any LlamaModel::process(const std::any& input) {
         "Invalid input type");
   }
   const auto& prompt = std::any_cast<const Prompt&>(input);
+  if (prompt.finetuningParams.has_value()) {
+    if (auto unsupported =
+            backend_selection::getUnknownFinetuneArchitecture(&metadata_)) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Finetuning is not supported for architecture: " +
+              unsupported.value());
+    }
+  }
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
