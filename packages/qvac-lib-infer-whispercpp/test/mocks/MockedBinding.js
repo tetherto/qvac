@@ -84,6 +84,15 @@ class MockedBinding {
     // Will be in IDLE status while waiting for next job
   }
 
+  reload (handle, configurationParams) {
+    if (handle !== this._handle) throw new Error('Invalid handle')
+    this._configurationParams = configurationParams
+    this._state = state.LOADING
+    if (this.transitionCb) {
+      this.transitionCb(this, this._state)
+    }
+  }
+
   cancel (handle, jobId) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log(`Cancel job id: ${jobId}`)

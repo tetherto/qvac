@@ -151,4 +151,26 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto configurationParams = args.getJsObject(1, "configurationParams");
+  WhisperConfig config = createWhisperConfig(env, configurationParams);
+
+  return js::JsAsyncTask::run(
+      env,
+      [addonCpp = instance.addonCpp, config = std::move(config)]() mutable {
+        auto* whisperModel =
+            dynamic_cast<WhisperModel*>(&addonCpp->model.get());
+        if (whisperModel == nullptr) {
+          throw std::runtime_error("Invalid model type for reload");
+        }
+        whisperModel->setConfig(config);
+      });
+}
+JSCATCH
+
 } // namespace qvac_lib_inference_addon_whisper

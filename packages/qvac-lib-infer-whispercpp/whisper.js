@@ -136,7 +136,19 @@ class WhisperInterface {
    */
   async reload (configurationParams) {
     checkConfig(configurationParams)
+    this._audioFormat = configurationParams?.audio_format || this._audioFormat
     await this.cancel()
+
+    if (typeof this._binding.reload === 'function') {
+      // Native WhisperModel::setConfig handles fast in-place config updates and
+      // only triggers a full context reload when fundamental context keys change
+      // (model/use_gpu/flash_attn/gpu_device).
+      await this._binding.reload(this._handle, configurationParams)
+      this._setState(state.LOADING)
+      return
+    }
+
+    // Fallback for older bindings without reload support.
     await this.load(configurationParams)
   }
 
@@ -210,7 +222,7 @@ class WhisperInterface {
    */
   async cancel (jobId) {
     try {
-      this._binding.cancel(this._handle, jobId)
+      await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
       this._activeJobId = null
       this._setState(state.LISTENING)
