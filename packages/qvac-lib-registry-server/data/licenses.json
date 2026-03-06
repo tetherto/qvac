@@ -43,10 +43,5 @@
     "spdxId": "openrail++",
     "name": "Open RAIL++-M License",
     "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/raw/main/LICENSE.md"
-  },
-  {
-    "spdxId": "stabilityai-nc-research-community",
-    "name": "STABILITY AI NON-COMMERCIAL RESEARCH COMMUNITY LICENSE",
-    "url": "https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/raw/main/LICENSE"
   }
 ]

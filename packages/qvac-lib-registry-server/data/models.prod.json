@@ -5485,17 +5485,6 @@
     ]
   },
   {
-    "source": "https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/74b6131496fceb9f896c2e3d6465c2241ea22ae6/sd3_medium_incl_clips.safetensors",
-    "engine": "@qvac/diffusion-cpp",
-    "description": "Stable Diffusion 3 Medium model",
-    "notes": "Ungated version of https://huggingface.co/stabilityai/stable-diffusion-3-medium",
-    "license": "stabilityai-nc-research-community",
-    "tags": [
-      "generation",
-      "diffusion"
-    ]
-  },
-  {
     "source": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/5f58340891db3ef66a79758c2dcddad92b1de169/stable-diffusion-xl-base-1.0-Q4_0.gguf",
     "engine": "@qvac/diffusion-cpp",
     "description": "Stable Diffusion XL model",
