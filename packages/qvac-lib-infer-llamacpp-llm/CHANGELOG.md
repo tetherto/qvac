@@ -1,4 +1,16 @@
 # Changelog
+## [0.10.1] - 2026-03-06
+
+### Added
+
+#### Prefill mode for context preloading
+
+`model.run(prompt, { prefill: true })` evaluates the prompt into the KV cache without generating tokens. This enables context preloading so that subsequent runs start with a warm cache.
+
+- Prefill runs report `TTFT=0`, `TPS=0`, `generatedTokens=0`, `promptTokens=0`, while `CacheTokens` reflects actual KV cache occupancy.
+- JS `normalizeRunOptions` validates `prefill` as a boolean; a `TypeError` is thrown otherwise.
+- C++ `evalMessage`/`evalMessageWithTools` suppress logits on the last token when prefill is set; `processPrompt` returns immediately after evaluation.
+
 ## [0.10.0] - 2026-03-02
 
 ### Added
