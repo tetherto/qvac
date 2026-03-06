@@ -140,7 +140,7 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
                     "DmlExecutionProvider") != providers.end();
 
       if (dmlAvailable) {
-        sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+        sessionOptions.SetExecutionMode(::ExecutionMode::ORT_SEQUENTIAL);
         sessionOptions.DisableMemPattern();
         Ort::ThrowOnError(
             OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
