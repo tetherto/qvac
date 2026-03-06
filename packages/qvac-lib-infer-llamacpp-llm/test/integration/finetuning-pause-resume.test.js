@@ -157,17 +157,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       })
       await sleep(15000)
 
-      const pauseStartMs = Date.now()
-      t.comment(`[${modelVariant.id}] [PauseDebug] calling model.pause() at ${pauseStartMs}`)
       await model.pause()
-      const pauseResolvedMs = Date.now()
-      t.comment(`[${modelVariant.id}] [PauseDebug] model.pause() resolved at ${pauseResolvedMs} (elapsed ${pauseResolvedMs - pauseStartMs} ms)`)
 
-      const awaitStartMs = Date.now()
-      t.comment(`[${modelVariant.id}] [PauseDebug] calling finetuneHandle.await() at ${awaitStartMs}`)
       const pauseResult = await finetuneHandle.await()
-      const awaitResolvedMs = Date.now()
-      t.comment(`[${modelVariant.id}] [PauseDebug] finetuneHandle.await() resolved at ${awaitResolvedMs} (elapsed ${awaitResolvedMs - awaitStartMs} ms)`)
       assertLossAndAccuracyAreFinite(t, pauseResult, modelVariant.id)
       if (pauseResult?.status === 'COMPLETED') {
         t.comment(`[${modelVariant.id}] Finetune result: ${JSON.stringify(pauseResult)}`)
@@ -344,17 +336,9 @@ test('resume after final-epoch validation pause returns stats', { timeout: PAUSE
     const finetuneHandle = await model.finetune(finetuneConfig)
     await sleep(20000)
 
-    const pauseStartMs = Date.now()
-    t.comment(`[${modelVariant.id}] [PauseDebug] calling model.pause() at ${pauseStartMs}`)
     await model.pause()
-    const pauseResolvedMs = Date.now()
-    t.comment(`[${modelVariant.id}] [PauseDebug] model.pause() resolved at ${pauseResolvedMs} (elapsed ${pauseResolvedMs - pauseStartMs} ms)`)
 
-    const awaitStartMs = Date.now()
-    t.comment(`[${modelVariant.id}] [PauseDebug] calling finetuneHandle.await() at ${awaitStartMs}`)
     const pauseResult = await finetuneHandle.await()
-    const awaitResolvedMs = Date.now()
-    t.comment(`[${modelVariant.id}] [PauseDebug] finetuneHandle.await() resolved at ${awaitResolvedMs} (elapsed ${awaitResolvedMs - awaitStartMs} ms)`)
     t.comment(`Initial finetune result: ${JSON.stringify(pauseResult)}`)
 
     const assertStats = (res, label) => {

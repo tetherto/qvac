@@ -39,8 +39,6 @@ using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
-static std::atomic<uint64_t> g_pauseDebugAttemptCounter{0};
-
 static std::vector<std::string> split(const std::string& str, char delimiter) {
   auto trim = [](const std::string& str) -> std::string {
     auto start =
@@ -996,11 +994,6 @@ std::string LlamaModel::finetune(
           outStats);
     } catch (...) {
       if (checkpointState) {
-        const auto attemptId = checkpointState->pauseAttemptId.load();
-        QLOG_IF(
-            Priority::INFO,
-            "[PauseDebug][attempt=" + std::to_string(attemptId) +
-                "] SIGNAL_FROM_FINETUNE_EXECUTE_TRAINING_LOOP_EXCEPTION");
         checkpointState->pauseWaitDone.store(true);
         checkpointState->pauseDoneCv.notify_all();
       }
@@ -1016,12 +1009,6 @@ std::string LlamaModel::finetune(
       if (!wasPaused) {
         checkpointState->isPaused.store(false);
       }
-      const auto attemptId = checkpointState->pauseAttemptId.load();
-      QLOG_IF(
-          Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] SIGNAL_FROM_FINETUNE_TERMINAL_CLEANUP wasPaused=" +
-              std::string(wasPaused ? "true" : "false"));
       checkpointState->pauseWaitDone.store(true);
       checkpointState->pauseDoneCv.notify_all();
       clearCurrentCheckpointState();
@@ -1046,12 +1033,7 @@ std::string LlamaModel::finetune(
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
     if (state) {
-      const auto attemptId = state->pauseAttemptId.load();
       state->setIdle();
-      QLOG_IF(
-          Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] SIGNAL_FROM_FINETUNE_OUTER_CATCH");
       state->pauseWaitDone.store(true);
       state->pauseDoneCv.notify_all();
     }
@@ -1560,104 +1542,26 @@ bool LlamaModel::isFinetuneRunning() const {
 bool LlamaModel::requestPause() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=0] requestPause: no active state");
     return false;
   }
-  const auto attemptId =
-      g_pauseDebugAttemptCounter.fetch_add(1, std::memory_order_relaxed) + 1;
-  state->pauseAttemptId.store(attemptId, std::memory_order_release);
-
-  const bool wasPauseRequested = state->pauseRequested.load();
-  const bool isFinetuning = state->isFinetuning.load();
-  const bool shouldExit = state->shouldExit.load();
-  const bool isPaused = state->isPaused.load();
-  const bool pauseWaitDone = state->pauseWaitDone.load();
-  const int64_t globalStep = state->globalStep;
-  const int32_t currentEpoch = state->currentEpoch;
-
-  std::ostringstream preMsg;
-  preMsg << "[PauseDebug][attempt=" << attemptId
-         << "] requestPause: state snapshot before set"
-         << " pauseRequested=" << (wasPauseRequested ? "true" : "false")
-         << " isFinetuning=" << (isFinetuning ? "true" : "false")
-         << " shouldExit=" << (shouldExit ? "true" : "false")
-         << " isPaused=" << (isPaused ? "true" : "false")
-         << " pauseWaitDone=" << (pauseWaitDone ? "true" : "false")
-         << " globalStep=" << globalStep << " currentEpoch=" << currentEpoch;
-  QLOG_IF(Priority::INFO, preMsg.str());
-
   state->pauseRequested.store(true);
   llama_context* ctx = getContext();
   if (ctx != nullptr) {
     llama_opt_request_stop(ctx);
   }
-  QLOG_IF(
-      Priority::INFO,
-      "[PauseDebug][attempt=" + std::to_string(attemptId) +
-          "] requestPause: pauseRequested=true stopRequested=" +
-          std::string(ctx != nullptr ? "true" : "false"));
   return true;
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=0] waitUntilFinetuningPauseComplete: no active "
-        "state");
     return;
   }
 
-  const auto attemptId = state->pauseAttemptId.load(std::memory_order_acquire);
-  const bool prePauseWaitDone = state->pauseWaitDone.load();
-  const bool prePauseRequested = state->pauseRequested.load();
-  const bool preShouldExit = state->shouldExit.load();
-  const bool preIsFinetuning = state->isFinetuning.load();
-  const bool preIsPaused = state->isPaused.load();
-  const int64_t preGlobalStep = state->globalStep;
-  const int32_t preCurrentEpoch = state->currentEpoch;
-  std::ostringstream enterMsg;
-  enterMsg << "[PauseDebug][attempt=" << attemptId
-           << "] waitUntilFinetuningPauseComplete: enter"
-           << " pauseWaitDone=" << (prePauseWaitDone ? "true" : "false")
-           << " pauseRequested=" << (prePauseRequested ? "true" : "false")
-           << " shouldExit=" << (preShouldExit ? "true" : "false")
-           << " isFinetuning=" << (preIsFinetuning ? "true" : "false")
-           << " isPaused=" << (preIsPaused ? "true" : "false")
-           << " globalStep=" << preGlobalStep
-           << " currentEpoch=" << preCurrentEpoch;
-  QLOG_IF(Priority::INFO, enterMsg.str());
-
   constexpr auto timeout = std::chrono::minutes(5);
-  const auto waitStart = std::chrono::steady_clock::now();
   std::unique_lock lock(state->pauseDoneMutex);
-  const bool signaled = state->pauseDoneCv.wait_for(
+  state->pauseDoneCv.wait_for(
       lock, timeout, [&state] { return state->pauseWaitDone.load(); });
-  const auto waitElapsedMs =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - waitStart)
-          .count();
-  const bool postPauseWaitDone = state->pauseWaitDone.load();
-  const bool postShouldExit = state->shouldExit.load();
-  const bool postIsFinetuning = state->isFinetuning.load();
-  const bool postIsPaused = state->isPaused.load();
-  const int64_t postGlobalStep = state->globalStep;
-  const int32_t postCurrentEpoch = state->currentEpoch;
-  std::ostringstream exitMsg;
-  exitMsg << "[PauseDebug][attempt=" << attemptId
-          << "] waitUntilFinetuningPauseComplete: exit"
-          << " result=" << (signaled ? "SIGNALED" : "TIMEOUT")
-          << " elapsedMs=" << waitElapsedMs
-          << " pauseWaitDone=" << (postPauseWaitDone ? "true" : "false")
-          << " shouldExit=" << (postShouldExit ? "true" : "false")
-          << " isFinetuning=" << (postIsFinetuning ? "true" : "false")
-          << " isPaused=" << (postIsPaused ? "true" : "false")
-          << " globalStep=" << postGlobalStep
-          << " currentEpoch=" << postCurrentEpoch;
-  QLOG_IF(Priority::INFO, exitMsg.str());
 }
 
 void LlamaModel::clearPauseRequest() {
@@ -1668,14 +1572,6 @@ void LlamaModel::clearPauseRequest() {
   if (ctx != nullptr) {
     llama_opt_reset_stop(ctx);
   }
-}
-
-uint64_t LlamaModel::getCurrentPauseAttemptIdForDebug() const {
-  auto state = getCurrentCheckpointStateShared();
-  if (state == nullptr) {
-    return 0;
-  }
-  return state->pauseAttemptId.load(std::memory_order_acquire);
 }
 
 #endif // STANDALONE_TEST_BUILD

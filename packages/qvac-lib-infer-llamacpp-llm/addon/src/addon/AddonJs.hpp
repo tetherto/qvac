@@ -1,8 +1,6 @@
 #pragma once
-#include <chrono>
 #include <functional>
 #include <memory>
-#include <sstream>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
@@ -14,7 +12,6 @@
 
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
-#include "utils/LoggingMacros.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -319,82 +316,11 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   auto* addonCpp = instance.addonCpp.get();
 
   return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
-    const auto cancelStart = std::chrono::steady_clock::now();
-    if (llamaModel == nullptr) {
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=0] AddonJs::cancel: llamaModel=null fallback "
-          "cancelJob");
-      addonCpp->cancelJob();
-      return;
-    }
-
-    const bool finetuneRunning = llamaModel->isFinetuneRunning();
-    bool didRequestPause = false;
-    uint64_t attemptId = llamaModel->getCurrentPauseAttemptIdForDebug();
-    if (finetuneRunning) {
-      didRequestPause = llamaModel->requestPause();
-      attemptId = llamaModel->getCurrentPauseAttemptIdForDebug();
-    }
-
-    std::ostringstream decisionMsg;
-    decisionMsg << "[PauseDebug][attempt=" << attemptId
-                << "] AddonJs::cancel: branch-decision"
-                << " isFinetuneRunning=" << (finetuneRunning ? "true" : "false")
-                << " requestPause=" << (didRequestPause ? "true" : "false")
-                << " path="
-                << ((finetuneRunning && didRequestPause)
-                        ? "WAIT_FOR_PAUSE_DONE"
-                        : "CANCEL_JOB_FALLBACK");
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        decisionMsg.str());
-
-    if (finetuneRunning && didRequestPause) {
-      const auto waitStart = std::chrono::steady_clock::now();
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] AddonJs::cancel: entering waitUntilFinetuningPauseComplete");
+    if (llamaModel && llamaModel->isFinetuneRunning() &&
+        llamaModel->requestPause())
       llamaModel->waitUntilFinetuningPauseComplete();
-      const auto waitElapsedMs =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::steady_clock::now() - waitStart)
-              .count();
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] AddonJs::cancel: waitUntilFinetuningPauseComplete returned"
-              " elapsedMs=" +
-              std::to_string(waitElapsedMs));
-    } else {
-      const auto fallbackStart = std::chrono::steady_clock::now();
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] AddonJs::cancel: entering addonCpp->cancelJob fallback");
+    else
       addonCpp->cancelJob();
-      const auto fallbackElapsedMs =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::steady_clock::now() - fallbackStart)
-              .count();
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "[PauseDebug][attempt=" + std::to_string(attemptId) +
-              "] AddonJs::cancel: addonCpp->cancelJob fallback returned"
-              " elapsedMs=" +
-              std::to_string(fallbackElapsedMs));
-    }
-
-    const auto totalElapsedMs =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - cancelStart)
-            .count();
-    QLOG_IF(
-        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "[PauseDebug][attempt=" + std::to_string(attemptId) +
-            "] AddonJs::cancel: completed elapsedMs=" +
-            std::to_string(totalElapsedMs));
   });
 }
 JSCATCH
