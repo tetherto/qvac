@@ -1406,16 +1406,26 @@ void LlamaModel::executeTrainingLoop(
       resumeFromBatch = checkpointState->batchOffsetWithinEpoch;
     }
 
-    (void)resumeFromBatch;
-    llama_opt_epoch(
-        ctx,
-        dataset,
-        trainResult.get(),
-        evalResult.get(),
-        idataSplit,
-        callbackTrain,
-        evalSplit > 0 ? callbackTrain : nullptr,
-        resumeFromBatch);
+    if (resumeFromBatch > 0) {
+      llama_opt_epoch_resume(
+          ctx,
+          dataset,
+          trainResult.get(),
+          evalResult.get(),
+          idataSplit,
+          callbackTrain,
+          evalSplit > 0 ? callbackTrain : nullptr,
+          resumeFromBatch);
+    } else {
+      llama_opt_epoch(
+          ctx,
+          dataset,
+          trainResult.get(),
+          evalResult.get(),
+          idataSplit,
+          callbackTrain,
+          evalSplit > 0 ? callbackTrain : nullptr);
+    }
 
     if (evalDataset != nullptr && evalDatasetSampleCount > 0 &&
         (!checkpointState || !checkpointState->shouldExit.load())) {
@@ -1426,8 +1436,7 @@ void LlamaModel::executeTrainingLoop(
           evalResult.get(),
           0,
           nullptr,
-          callbackTrain,
-          -1);
+          callbackTrain);
     }
 
     if (!checkpointState || !checkpointState->shouldExit.load()) {
