@@ -1,14 +1,8 @@
 import { parseBuiltinSpecifier } from './plugins.js'
 
-/**
- * Generates the worker entry file with selected plugins.
- * Uses only static imports for tree-shaking.
- * @param {string[]} pluginSpecifiers
- * @param {string} sdkName
- */
-export function generateWorkerEntry (pluginSpecifiers, sdkName) {
-  const imports = []
-  const registrations = []
+export function generateWorkerEntry (pluginSpecifiers: string[], sdkName: string): string {
+  const imports: string[] = []
+  const registrations: string[] = []
   let varIndex = 0
 
   for (const specifier of pluginSpecifiers) {

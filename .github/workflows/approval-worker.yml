@@ -2,12 +2,42 @@
 name: Approval Check Worker
 
 on:
+  issue_comment:
+    types: [created]
   pull_request_review:
     types: [submitted]
     
 jobs:
+  run-when-command:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      statuses: write
+
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
+
+    steps:
+      - name: Get latest PR head SHA
+        id: pr
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.issue.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            core.setOutput('number', String(prNumber));
+            core.setOutput('sha', pr.head.sha);
+
   check-approvals:
-    if: github.event.review.state == 'approved'
+    needs: run-when-command
     permissions:
       contents: write
       pull-requests: write
@@ -16,5 +46,5 @@ jobs:
     uses: tetherto/qvac-devops/.github/workflows/approval-check-worker.yml@monorepo_update
     secrets: inherit
     with:
-      pr_number: ${{ github.event.pull_request.number }}
-      pr_sha: ${{ github.sha }}
+      pr_number: ${{ fromJSON(needs.run-when-command.outputs.number) }}
+      pr_sha: ${{ needs.run-when-command.outputs.sha }}
