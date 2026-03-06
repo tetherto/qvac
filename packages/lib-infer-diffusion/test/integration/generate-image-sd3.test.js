@@ -15,9 +15,9 @@ const {
 } = require('./utils')
 
 const platform = detectPlatform()
-const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
+const isDarwin = os.platform() === 'darwin'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
-const useCpu = isDarwinX64 || isLinuxArm64
+const useCpu = isDarwin || isLinuxArm64
 
 const DEFAULT_MODEL = {
   name: 'sd3_medium_incl_clips.safetensors',
