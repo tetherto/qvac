@@ -179,7 +179,7 @@ On merge to the upstream `release-*` branch, CI should:
 
 **Tag format (standard):**
 - `<package>-v<x.y.z>`  
-  Example: `qvac-sdk-v1.0.0`
+  Example: `sdk-v1.0.0`
 
 ### 4) Keep `main` aligned with what shipped (fork-based, no upstream cross-merge)
 

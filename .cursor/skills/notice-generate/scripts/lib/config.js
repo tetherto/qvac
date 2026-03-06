@@ -43,7 +43,7 @@ for (const [engine, pkgDir] of Object.entries(ENGINE_MAP)) {
 // Packages that get the FULL model list in their NOTICE
 // ---------------------------------------------------------------------------
 const FULL_MODEL_LIST_PACKAGES = [
-  'qvac-sdk',
+  'sdk',
   'qvac-lib-registry-server/client'
 ]
 

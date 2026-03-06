@@ -1,10 +1,10 @@
 ---
 description: Error handling guidelines for the QVAC SDK
 globs:
-  - packages/qvac-sdk/client/**/*.ts
-  - packages/qvac-sdk/server/**/*.ts
-  - packages/qvac-sdk/schemas/**/*.ts
-  - packages/qvac-sdk/utils/**/*.ts
+  - packages/sdk/client/**/*.ts
+  - packages/sdk/server/**/*.ts
+  - packages/sdk/schemas/**/*.ts
+  - packages/sdk/utils/**/*.ts
 alwaysApply: false
 ---
 

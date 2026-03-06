@@ -41,6 +41,16 @@ jobs:
           run-integration: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
           workdir: packages/lib-infer-diffusion
 
+  cpp-tests:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    needs: sanity-checks
+    uses: ./.github/workflows/cpp-tests-diffusion.yml
+    secrets: inherit
+    with:
+      workdir: packages/lib-infer-diffusion
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
   cpp-lint:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
     uses: tetherto/qvac-devops/.github/workflows/cpp-lint.yaml@monorepo_update
@@ -49,6 +59,35 @@ jobs:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/lib-infer-diffusion
+
+  ts-checks:
+    if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Configure npm auth
+        working-directory: packages/lib-infer-diffusion
+        run: |
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
+          NPMRC
+
+      - name: Install dependencies
+        working-directory: packages/lib-infer-diffusion
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: packages/lib-infer-diffusion
+        run: npm run test:dts
 
   prebuild:
     if: contains( github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
@@ -89,7 +128,9 @@ jobs:
         run-mobile-integration-tests,
         sanity-checks,
         prebuild,
+        cpp-tests,
         cpp-lint,
+        ts-checks,
       ]
     if: always()
     uses: tetherto/qvac-devops/.github/workflows/public-pr.yml@monorepo_update

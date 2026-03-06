@@ -361,6 +361,22 @@ jobs:
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
+      - name: Dump vcpkg build logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          LOG_DIR="${VCPKG_ROOT}/buildtrees/stable-diffusion-cpp"
+          if [ -d "$LOG_DIR" ]; then
+            for f in "$LOG_DIR"/{config,install,build}-*.log; do
+              [ -f "$f" ] || continue
+              echo "===== $(basename "$f") ====="
+              tail -200 "$f"
+              echo ""
+            done
+          else
+            echo "vcpkg buildtrees not found at $LOG_DIR"
+          fi
+
       - name: Run bare-make build
         working-directory: ${{ env.WORKDIR }}
         run: bare-make build

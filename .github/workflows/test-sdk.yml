@@ -1,0 +1,47 @@
+# QVAC SDK Tests
+# Uses reusable workflow from qvac-devops
+# Originally from sdk/.github/workflows/qvac-tests.yml
+
+name: QVAC Tests (sdk)
+
+on:
+  # Disabled until it's stabilised, to not waste compute resources
+  workflow_dispatch:
+  # pull_request:
+  #   paths:
+  #     - "packages/sdk/**"
+  #   branches:
+  #     - main
+  #     - release-*
+  # push:
+  #   branches:
+  #     - main
+  #     - release-*
+  #     - feature-*
+  #     - tmp-*
+  #   paths:
+  #     - "packages/sdk/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  packages: read
+
+jobs:
+  desktop-tests:
+    uses: ./.github/workflows/test-desktop-sdk.yml
+    with:
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/tests-qvac"
+      platforms: '["ai-run-linux-gpu", "macos-latest-xlarge"]'
+      consumer-timeout: 60
+      filter: "model-load-llm,completion-streaming"
+    secrets:
+      MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
+      MQTT_HOST: ${{ secrets.MQTT_HOST }}
+      MQTT_PORT: ${{ secrets.MQTT_PORT }}
+      MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
+      MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
