@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "docs:generate": "node scripts/run-docs-generate.cjs",
-    "docs:generate-api": "node scripts/generate-api-docs.cjs",
-    "docs:update-versions": "node scripts/update-versions-list.cjs"
+    "docs:generate": "bun run scripts/run-docs-generate.ts",
+    "docs:generate-api": "bun run scripts/generate-api-docs.ts",
+    "docs:update-versions": "bun run scripts/update-versions-list.ts"
   },
   "dependencies": {
     "fumadocs-core": "^13.2.1",

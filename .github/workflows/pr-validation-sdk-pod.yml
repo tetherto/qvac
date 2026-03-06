@@ -8,7 +8,7 @@ on:
       - synchronize
       - reopened
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
       - "packages/cli/**"
       - "packages/docs/**"
       - "packages/rag/**"

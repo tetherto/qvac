@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["../qvac-sdk/index.ts"],
+  "entryPoints": ["../sdk/index.ts"],
   "entryPointStrategy": "expand",
   "out": ".typedoc-temp",
   "readme": "none",
@@ -9,5 +9,5 @@
   "excludeExternals": true,
   "skipErrorChecking": true,
   "plugin": [],
-  "tsconfig": "../qvac-sdk/tsconfig.json"
+  "tsconfig": "../sdk/tsconfig.json"
 }

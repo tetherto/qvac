@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-05
+
+This release adds pivot translation support so a single request can be translated through an intermediate language using two configured models. It also aligns the translation model with the shared `IModel` interface to improve consistency with other inference add-ons. Together, these updates make multi-hop translation flows easier to configure while preserving existing single-model usage.
+
+## Features
+
+Pivot translation is now available through a dedicated `PivotTranslationModel` that chains two `TranslationModel` instances and supports both single-text and batch processing flows. The JavaScript addon creation path now detects optional `pivotModel` configuration and automatically initializes either the pivot pipeline or the existing single-model pipeline based on user configuration. Build integration was updated to compile and link the new pivot model implementation as part of the addon.
+
+## Other
+
+The package API surface was cleaned up by promoting `processBatch` to the public `TranslationModel` interface to support pivot composition, and by removing unused includes in translation model headers and implementation files.
+
 ## [0.3.9]
 2026-02-25
 

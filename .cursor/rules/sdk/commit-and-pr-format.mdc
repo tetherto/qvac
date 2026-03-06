@@ -1,7 +1,7 @@
 ---
 description: Commit message and PR title format requirements
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
   - packages/docs/**
   - packages/rag/**
   - packages/logging/**
