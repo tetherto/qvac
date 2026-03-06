@@ -7,8 +7,10 @@ import {
   type RuntimeContext,
 } from "@/schemas";
 import { llmConfigSchema, embedConfigSchema } from "@/schemas/llamacpp-config";
-import { whisperConfigSchema } from "@/schemas/whispercpp-config";
-import { parakeetRuntimeConfigSchema } from "@/schemas/parakeet-config";
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema,
+} from "@/schemas/transcription-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {

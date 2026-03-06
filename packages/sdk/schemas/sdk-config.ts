@@ -2,8 +2,10 @@ import { z } from "zod";
 import { logLevelSchema } from "./logging-stream";
 import { ModelType } from "./model-types";
 import { llmConfigBaseSchema, embedConfigBaseSchema } from "./llamacpp-config";
-import { whisperConfigSchema } from "./whispercpp-config";
-import { parakeetConfigSchema } from "./parakeet-config";
+import {
+  whisperConfigSchema,
+  parakeetConfigSchema,
+} from "./transcription-config";
 import { ocrConfigSchema } from "./ocr";
 import { runtimeContextSchema } from "./runtime-context";
 
