@@ -10,6 +10,9 @@ export interface Version {
 export const VERSIONS: Version[] = [
   { label: 'Latest (v0.7.0)', path: 'latest', isLatest: true },
   { label: 'v0.7.0', path: 'v0.7.0' },
+  { label: 'v0.6.1', path: 'v0.6.1' },
+  { label: 'v0.6.0', path: 'v0.6.0' },
+  { label: 'v0.5.0', path: 'v0.5.0' },
 ];
 
 export const LATEST_VERSION = 'v0.7.0';

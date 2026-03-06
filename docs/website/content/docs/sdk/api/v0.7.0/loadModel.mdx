@@ -1,0 +1,115 @@
+---
+title: "loadModel( )"
+titleStyle: code
+description: "Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution."
+---
+
+```typescript
+function loadModel(options: LoadModelOptions): Promise
+```
+
+## Description
+
+Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `options` | `LoadModelOptions` | ✓ | An object that defines all configuration parameters required for loading the model, including:
+  - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
+  - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
+  - modelConfig: Model-specific configuration options
+  - projectionModelSrc: (LLM only) Projection model source for multimodal models
+  - vadModelSrc: (Whisper only) VAD model source for voice activity detection
+  - onProgress: Callback for download progress updates
+  - logger: Logger instance for model operation logs |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Local file path - absolute path
+const localModelId = await loadModel({
+  modelSrc: "/home/user/models/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { contextSize: 2048 }
+});
+
+// Local file path - relative path
+const relativeModelId = await loadModel({
+  modelSrc: "./models/whisper-base.gguf",
+  modelType: "whisper"
+});
+
+// Hyperdrive URL with key and path
+const hyperdriveId = await loadModel({
+  modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { contextSize: 2048 }
+});
+
+// Remote HTTP/HTTPS URL with progress tracking
+const remoteId = await loadModel({
+  modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
+  modelType: "llm",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+
+// Multimodal model with projection
+const multimodalId = await loadModel({
+  modelSrc: "https://huggingface.co/.../main-model.gguf",
+  modelType: "llm",
+  projectionModelSrc: "https://huggingface.co/.../projection-model.gguf",
+  modelConfig: { ctx_size: 512 },
+  onProgress: (progress) => {
+    console.log(`Loading: ${progress.percentage}%`);
+  }
+});
+
+// Whisper with VAD model
+const whisperId = await loadModel({
+  modelSrc: "https://huggingface.co/.../whisper-model.gguf",
+  modelType: "whisper",
+  vadModelSrc: "https://huggingface.co/.../vad-model.bin",
+  modelConfig: {
+    mode: "caption",
+    output_format: "plaintext",
+    min_seconds: 2,
+    max_seconds: 6
+  }
+});
+
+// Load with automatic logging - logs from the model will be forwarded to your logger
+import { getLogger } from "@/logging";
+const logger = getLogger("my-app");
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+  logger // Pass logger in options
+});
+```
+```
