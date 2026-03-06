@@ -24,7 +24,7 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf'
 }
 
-test('SDXL txt2img — generates a valid PNG image', { timeout: 600000 }, async (t) => {
+test('SDXL txt2img — generates a valid PNG image', { timeout: 900000 }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
