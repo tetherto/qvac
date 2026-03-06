@@ -45,16 +45,24 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
-/// Vulkan backend. Uses CPU if no GPU backends are available. For BitNet
-/// models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
+/// Vulkan backend. Uses CPU if no GPU backends are available.
+///
+/// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL
 ///   - Adreno <800: prefer CPU (TQ kernels run faster on CPU)
+///
+/// When @p isFinetuning is true, throws StatusError (InvalidArgument) if the
+/// model architecture is not in the supported list. For supported archs on
+/// Adreno:
+///   - Adreno 800+: prefer Vulkan
+///   - Adreno 700+: CPU for bitnet+TQ, otherwise OpenCL
+///   - Adreno 600+: CPU
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
 } // namespace backend_selection

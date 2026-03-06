@@ -159,3 +159,82 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
+
+// ---- Finetuning on Adreno 800+: ubatch=128 regardless of arch ----
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno800_UbatchSetTo128) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 800, true);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_Qwen3_Adreno830_UbatchSetTo128) {
+  MockModelMetaData meta(false, "qwen3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
+// ---- Finetuning on Adreno <800: ubatch unchanged ----
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno740_UbatchUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 740, true);
+
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno799_UbatchUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 799, true);
+
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+}
+
+// ---- Finetuning without Adreno: ubatch unchanged ----
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_NoAdreno_UbatchUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+}
+
+// ---- Finetuning user override respected ----
+
+TEST_F(TuneConfigMapTest, Finetuning_Adreno830_UserSetUbatchHyphen_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["ubatch-size"] = "256";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+
+  EXPECT_EQ(configFilemap_["ubatch-size"], "256");
+}
+
+TEST_F(
+    TuneConfigMapTest, Finetuning_Adreno830_UserSetUbatchUnderscore_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["ubatch_size"] = "64";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+  EXPECT_EQ(configFilemap_["ubatch_size"], "64");
+}

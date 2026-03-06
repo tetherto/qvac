@@ -65,9 +65,11 @@ public:
   /// @param configFilemap The user-supplied config map (will be written to).
   /// @param metadata Model metadata (architecture, quantization info).
   /// @param adrenoVersion Detected Adreno GPU version, if any.
+  /// @param isFinetuning Whether finetuning mode is active.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
-      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion);
+      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
+      bool isFinetuning = false);
 
   /**
    * The Constructor for llama model.
