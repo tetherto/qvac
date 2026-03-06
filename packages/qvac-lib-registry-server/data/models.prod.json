@@ -1587,7 +1587,8 @@
       "whisper-norwegian",
       "norwegian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper/ggml-futo/2025-10-20/tiny_acft_q8_0.bin",
@@ -2111,7 +2112,8 @@
       "whisper-french",
       "french"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-q8_0.bin",
@@ -2127,7 +2129,8 @@
       "whisper-french",
       "french"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-tiny-ggml-model-f16.bin",
@@ -2143,7 +2146,8 @@
       "whisper-german",
       "german"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-tiny-ggml-model-q8_0.bin",
@@ -2159,7 +2163,8 @@
       "whisper-german",
       "german"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-tiny-ggml-model-f16.bin",
@@ -2175,7 +2180,8 @@
       "whisper-italian",
       "italian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-tiny-ggml-model-q8_0.bin",
@@ -2191,7 +2197,8 @@
       "whisper-italian",
       "italian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/2026-03-05/es-tiny-ggml-model-f16.bin",
@@ -2207,7 +2214,8 @@
       "whisper-spanish",
       "spanish"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/2026-03-05/es-tiny-ggml-model-q8_0.bin",
@@ -2223,7 +2231,8 @@
       "whisper-spanish",
       "spanish"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-tiny-ggml-model-f16.bin",
@@ -2239,7 +2248,8 @@
       "whisper-portuguese",
       "portuguese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-tiny-ggml-model-q8_0.bin",
@@ -2255,7 +2265,8 @@
       "whisper-portuguese",
       "portuguese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-base-ggml-model-f16.bin",
@@ -2271,7 +2282,8 @@
       "whisper-french",
       "french"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-base-ggml-model-q8_0.bin",
@@ -2287,7 +2299,8 @@
       "whisper-french",
       "french"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-base-ggml-model-f16.bin",
@@ -2303,7 +2316,8 @@
       "whisper-german",
       "german"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-base-ggml-model-q8_0.bin",
@@ -2319,7 +2333,8 @@
       "whisper-german",
       "german"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-base-ggml-model-f16.bin",
@@ -2335,7 +2350,8 @@
       "whisper-italian",
       "italian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-base-ggml-model-q8_0.bin",
@@ -2351,7 +2367,8 @@
       "whisper-italian",
       "italian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-base-ggml-model-f16.bin",
@@ -2367,7 +2384,8 @@
       "whisper-portuguese",
       "portuguese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-base-ggml-model-q8_0.bin",
@@ -2383,7 +2401,8 @@
       "whisper-portuguese",
       "portuguese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-english/2026-03-05/en-base-ggml-model-f16.bin",
@@ -2399,7 +2418,8 @@
       "whisper-english",
       "english"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-english/2026-03-05/en-base-ggml-model-q8_0.bin",
@@ -2415,7 +2435,8 @@
       "whisper-english",
       "english"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-base-ggml-model-f16.bin",
@@ -2431,7 +2452,8 @@
       "whisper-russian",
       "russian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-base-ggml-model-q8_0.bin",
@@ -2447,7 +2469,8 @@
       "whisper-russian",
       "russian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-tiny-ggml-model-f16.bin",
@@ -2463,7 +2486,8 @@
       "whisper-russian-tiny",
       "russian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-tiny-ggml-model-q8_0.bin",
@@ -2479,7 +2503,8 @@
       "whisper-russian-tiny",
       "russian"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-base-ggml-model-f16.bin",
@@ -2495,7 +2520,8 @@
       "whisper-japanese",
       "japanese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-base-ggml-model-q8_0.bin",
@@ -2511,7 +2537,8 @@
       "whisper-japanese",
       "japanese"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-tiny-ggml-model-f16.bin",
@@ -2527,7 +2554,8 @@
       "whisper-japanese-tiny",
       "japanese-fleurs"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-tiny-ggml-model-q8_0.bin",
@@ -2543,7 +2571,8 @@
       "whisper-japanese-tiny",
       "japanese-fleurs"
     ],
-    "notes": ""
+    "notes": "",
+    "deprecated": false
   },
   {
     "source": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
@@ -5289,7 +5318,8 @@
       "encoder",
       "en"
     ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx",
@@ -5305,7 +5335,8 @@
       "decoder",
       "en"
     ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/vocab.txt",
@@ -5321,7 +5352,8 @@
       "vocab",
       "en"
     ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "deprecated": false
   },
   {
     "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/preprocessor.onnx",
@@ -5337,6 +5369,7 @@
       "preprocessor",
       "en"
     ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+    "deprecated": false
   }
 ]
