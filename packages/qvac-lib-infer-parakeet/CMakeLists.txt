@@ -8,17 +8,18 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-# Use custom triplet overrides for Apple platforms
-# Includes -Wno-array-bounds fix for onnxruntime MLAS on x64 macOS
-if(APPLE)
-  set(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-endif()
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(qvac_lib_infer_parakeet
   VERSION 0.1.0
   LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++)
+endif()
 
 # Find dependencies
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp" REQUIRED)
@@ -67,6 +68,10 @@ endif()
 
 # Create the Bare addon module using bare-make's helper
 add_bare_module(qvac_lib_infer_parakeet EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac_lib_infer_parakeet}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac_lib_infer_parakeet}
@@ -192,6 +197,24 @@ if(ORT_LIB_LOCATION)
       DESTINATION "${PREBUILD_DIR}"
       OPTIONAL
     )
+    # Bundle libc++ runtime libs required by onnxruntime's shared library
+    install(CODE "
+      foreach(_lib libc++.so.1 libc++abi.so.1 libunwind.so.1)
+        execute_process(
+          COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=\${_lib}
+          OUTPUT_VARIABLE _lib_path OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(EXISTS \"\${_lib_path}\")
+          get_filename_component(_real_path \"\${_lib_path}\" REALPATH)
+          file(INSTALL \"\${_real_path}\" DESTINATION \"${PREBUILD_DIR}\")
+          get_filename_component(_real_name \"\${_real_path}\" NAME)
+          if(NOT _real_name STREQUAL \"\${_lib}\")
+            file(CREATE_LINK \"\${_real_name}\" \"${PREBUILD_DIR}/\${_lib}\" SYMBOLIC)
+          endif()
+          message(STATUS \"Bundled \${_lib} -> \${_real_path}\")
+        endif()
+      endforeach()
+    ")
   elseif(APPLE)
     # macOS: Install dylib files
     file(GLOB ORT_DYLIBS "${ORT_LIB_DIR}/libonnxruntime*.dylib")

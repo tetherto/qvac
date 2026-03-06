@@ -4,12 +4,11 @@
 #include <string>
 #include <vector>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "qvac-onnx/OnnxRuntime.hpp"
 #include "qvac-onnx/OnnxSession.hpp"
 
 namespace oa = onnx_addon;
-namespace logger = qvac_lib_inference_addon_cpp::logger;
+namespace logger = onnx_addon::logger;
 
 #ifndef TEST_FIXTURES_DIR
 #error "TEST_FIXTURES_DIR must be defined at compile time"

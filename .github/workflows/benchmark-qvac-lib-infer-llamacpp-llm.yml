@@ -6,7 +6,7 @@ on:
       gguf_model:
         description: 'GGUF Model to benchmark (HuggingFace format: "owner/repo:quantization")'
         required: true
-        default: "bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_0"
+        default: "unsloth/Qwen3-1.7B-GGUF:Q4_0"
         type: string
       num_samples:
         description: 'Number of samples per dataset (default: 10)'
@@ -66,7 +66,7 @@ on:
       transformers_model:
         description: 'HuggingFace transformers model for comparison (should match GGUF model architecture)'
         required: false
-        default: "meta-llama/Llama-3.2-1B-Instruct"
+        default: "Qwen/Qwen3-1.7B"
         type: string
       device:
         description: 'Device type for inference'
@@ -148,7 +148,7 @@ on:
         type: boolean
       transformers_model:
         required: false
-        default: "meta-llama/Llama-3.2-1B-Instruct"
+        default: "Qwen/Qwen3-1.7B"
         type: string
       device:
         required: false
@@ -455,9 +455,11 @@ jobs:
         shell: bash
         working-directory: ${{ inputs.workdir }}
         run: |
-          LATEST_MD=$(ls -t benchmarks/results/*.md 2>/dev/null | head -n 1 || true)
-          if [[ -n "${LATEST_MD:-}" ]]; then
-            cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d "benchmarks/results" ]; then
+            LATEST_MD=$(find benchmarks/results -type f -name "*.md" -exec ls -t {} + 2>/dev/null | head -n 1)
+            if [[ -n "$LATEST_MD" ]]; then
+              cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
       - name: Upload benchmark results

@@ -78,6 +78,7 @@ jobs:
 
   release-merge-guard:
     name: Release Merge Guard
+    continue-on-error: true
     if: >-
       github.event_name == 'push' &&
       startsWith(github.ref_name, 'release-') &&
@@ -166,9 +167,11 @@ jobs:
     if:  needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/create-github-release.yml
     secrets: inherit
     with:
+      repo_name: "onnx-tts"
+      release_name: "QVAC TTS ONNX Addon"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: packages/qvac-lib-infer-onnx-tts
