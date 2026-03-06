@@ -782,8 +782,19 @@ std::string LlamaModel::finetune(
             ? std::filesystem::path{"./checkpoints"}
             : std::filesystem::path{params.checkpointSaveDir};
     bool allowResumeFromPause = pauseCheckpointExists(checkpointDir);
+    {
+      std::ostringstream msg;
+      msg << "[ResumeTrace] finetune.resume-check checkpointDir="
+          << checkpointDir.string()
+          << " allowResumeFromPause="
+          << (allowResumeFromPause ? "true" : "false")
+          << " thread=" << std::this_thread::get_id();
+      QLOG_IF(Priority::INFO, msg.str());
+    }
     if (allowResumeFromPause) {
+      QLOG_IF(Priority::INFO, "[ResumeTrace] finetune.clearPauseRequest begin");
       clearPauseRequest();
+      QLOG_IF(Priority::INFO, "[ResumeTrace] finetune.clearPauseRequest end");
     }
 
     auto dataset = prepareTrainingDataset(params);
@@ -866,6 +877,9 @@ std::string LlamaModel::finetune(
     if (allowResumeFromPause) {
       pausePath =
           llama_finetuning_helpers::findLatestPauseCheckpoint(checkpointDir);
+      QLOG_IF(
+          Priority::INFO,
+          "[ResumeTrace] finetune.pausePath path=" + pausePath.string());
 
       if (!pausePath.empty() && pauseCheckpointExists(checkpointDir)) {
         const auto metadataPath = pausePath / "metadata.json";
@@ -877,10 +891,20 @@ std::string LlamaModel::finetune(
                     << (resumeMeta.epoch + 1) << " | expected next batch: "
                     << (resumeMeta.globalStep + 1);
           QLOG_IF(Priority::DEBUG, resumeMsg.str());
+          std::ostringstream traceMeta;
+          traceMeta << "[ResumeTrace] finetune.resume-meta parsed"
+                    << " epoch=" << resumeMeta.epoch
+                    << " globalStep=" << resumeMeta.globalStep
+                    << " currentStep=" << resumeMeta.currentStep
+                    << " loraRank=" << resumeMeta.loraRank;
+          QLOG_IF(Priority::INFO, traceMeta.str());
         } else {
           QLOG_IF(
               Priority::WARNING,
               "Failed to parse checkpoint metadata, starting fresh");
+          QLOG_IF(
+              Priority::INFO,
+              "[ResumeTrace] finetune.resume-meta parse-failed");
         }
       }
     }
@@ -947,12 +971,25 @@ std::string LlamaModel::finetune(
       }
     }
 
+    QLOG_IF(
+        Priority::INFO,
+        "[ResumeTrace] finetune.configureOptimizer begin resumingFromPause=" +
+            std::string(resumingFromPause ? "true" : "false"));
+    const auto optimizerStart = std::chrono::steady_clock::now();
     configureOptimizer(
         params,
         adapterPtr.get(),
         schedulerState,
         checkpointState.get(),
         resumingFromPause);
+    const auto optimizerElapsedMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - optimizerStart)
+            .count();
+    QLOG_IF(
+        Priority::INFO,
+        "[ResumeTrace] finetune.configureOptimizer end elapsedMs=" +
+            std::to_string(optimizerElapsedMs));
 
     if (resumingFromPause) {
       QLOG_IF(Priority::DEBUG, "Checkpoint loaded successfully");
@@ -982,6 +1019,14 @@ std::string LlamaModel::finetune(
     }
 
     try {
+      std::ostringstream loopEnter;
+      loopEnter << "[ResumeTrace] finetune.executeTrainingLoop begin"
+                << " startEpoch=" << (resumingFromPause ? resumeMeta.epoch : 0)
+                << " resumingFromPause="
+                << (resumingFromPause ? "true" : "false")
+                << " trainSplit=" << trainSplit << " evalSplit=" << evalSplit;
+      QLOG_IF(Priority::INFO, loopEnter.str());
+      const auto loopStart = std::chrono::steady_clock::now();
       executeTrainingLoop(
           params,
           datasetPtr.get(),
@@ -994,6 +1039,14 @@ std::string LlamaModel::finetune(
           evalDatasetPtr.get(),
           evalDatasetSampleCount,
           outStats);
+      const auto loopElapsedMs =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - loopStart)
+              .count();
+      QLOG_IF(
+          Priority::INFO,
+          "[ResumeTrace] finetune.executeTrainingLoop end elapsedMs=" +
+              std::to_string(loopElapsedMs));
     } catch (...) {
       if (checkpointState) {
         const auto attemptId = checkpointState->pauseAttemptId.load();
@@ -1341,10 +1394,26 @@ void LlamaModel::configureOptimizer(
                  << (optParams.assistant_loss_only ? "true" : "false");
     QLOG_IF(Priority::DEBUG, optimizerMsg.str());
   }
+  {
+    std::ostringstream traceMsg;
+    traceMsg << "[ResumeTrace] configureOptimizer pre-init"
+             << " load_optimizer_state="
+             << (optParams.load_optimizer_state ? "true" : "false")
+             << " checkpoint_path="
+             << (optParams.checkpoint_path ? optParams.checkpoint_path : "");
+    QLOG_IF(Priority::INFO, traceMsg.str());
+  }
 
   llama_opt_cleanup(ctx);
-
+  const auto initStart = std::chrono::steady_clock::now();
   llama_opt_init(ctx, mdl, optParams);
+  const auto initElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - initStart)
+                                 .count();
+  QLOG_IF(
+      Priority::INFO,
+      "[ResumeTrace] configureOptimizer post-init elapsedMs=" +
+          std::to_string(initElapsedMs));
   optimizerInitialized_ = true;
 }
 

@@ -95,6 +95,7 @@ class LlmLlamacpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
+    this._resumeTraceCounter = 0
   }
 
   /**
@@ -429,25 +430,50 @@ class LlmLlamacpp extends BaseInference {
       this._defaultFinetuneParams = params
     }
     const paramsToSend = normalizeFinetuneParams(params)
+    const resumeCall = finetuningOptions == null
+    const resumeTraceId = ++this._resumeTraceCounter
     this.logger?.info?.('finetune() called')
     this.logger?.info?.('Finetuning parameters:', params)
+    this.logger?.info?.(
+      `[ResumeTrace][rid=${resumeTraceId}] finetune.entry resumeCall=${resumeCall} hasActiveResponse=${this._hasActiveResponse} mapSize=${this._jobToResponse.size}`
+    )
 
     return this._withExclusiveRun(async () => {
+      const queueEnterAt = Date.now()
+      this.logger?.info?.(
+        `[ResumeTrace][rid=${resumeTraceId}] finetune.queue-enter elapsedMs=0 hasActiveResponse=${this._hasActiveResponse} mapSize=${this._jobToResponse.size}`
+      )
       if (this._hasActiveResponse) {
+        this.logger?.warn?.(
+          `[ResumeTrace][rid=${resumeTraceId}] finetune.queue-enter busy hasActiveResponse=true`
+        )
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
       const response = this._createResponse('OnlyOneJob')
       let accepted
       try {
+        const addonCallStart = Date.now()
+        this.logger?.info?.(
+          `[ResumeTrace][rid=${resumeTraceId}] finetune.before-addon-call resumeCall=${resumeCall}`
+        )
         accepted = await this.addon.finetune(paramsToSend)
+        this.logger?.info?.(
+          `[ResumeTrace][rid=${resumeTraceId}] finetune.after-addon-call accepted=${accepted} elapsedMs=${Date.now() - addonCallStart}`
+        )
       } catch (err) {
+        this.logger?.error?.(
+          `[ResumeTrace][rid=${resumeTraceId}] finetune.addon-call.error elapsedMs=${Date.now() - queueEnterAt} message=${err?.message || String(err)}`
+        )
         this._deleteJobMapping('OnlyOneJob')
         response.failed(err)
         throw err
       }
 
       if (!accepted) {
+        this.logger?.warn?.(
+          `[ResumeTrace][rid=${resumeTraceId}] finetune.rejected elapsedMs=${Date.now() - queueEnterAt}`
+        )
         this._deleteJobMapping('OnlyOneJob')
         const msg = RUN_BUSY_ERROR_MESSAGE
         response.failed(new Error(msg))
@@ -455,6 +481,9 @@ class LlmLlamacpp extends BaseInference {
       }
 
       this._hasActiveResponse = true
+      this.logger?.info?.(
+        `[ResumeTrace][rid=${resumeTraceId}] finetune.accepted elapsedMs=${Date.now() - queueEnterAt} mapSize=${this._jobToResponse.size}`
+      )
       const finalized = response.await().finally(() => { this._hasActiveResponse = false })
       finalized.catch(() => {})
       response.await = () => finalized

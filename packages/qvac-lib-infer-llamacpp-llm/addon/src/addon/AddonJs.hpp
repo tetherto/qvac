@@ -402,9 +402,13 @@ JSCATCH
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
+  const auto start = std::chrono::steady_clock::now();
 
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "[ResumeTrace][bridge] AddonJs::finetune enter");
 
   LlamaModel* llamaModel = getLlamaModel(instance);
   if (llamaModel == nullptr) {
@@ -417,6 +421,10 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
       1, "finetuningParams", [](js_env_t* e, js::Object& jsObj) {
         return parseLlamaFinetuningParams(e, jsObj);
       });
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "[ResumeTrace][bridge] AddonJs::finetune params-parsed hasParams=" +
+          std::string(paramsOpt.has_value() ? "true" : "false"));
   if (!paramsOpt.has_value()) {
     throw StatusError(
         general_error::InvalidArgument, "Finetuning parameters not provided");
@@ -426,8 +434,19 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   prompt.finetuningParams = *paramsOpt;
   prompt.outputCallback = makeQueueOutputCallback(instance);
   prompt.progressCallback = makeQueueProgressCallback(instance);
-
-  return instance.runJob(any(std::move(prompt)));
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "[ResumeTrace][bridge] AddonJs::finetune before-runJob");
+  const bool accepted = instance.addonCpp->runJob(any(std::move(prompt)));
+  const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - start)
+                             .count();
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "[ResumeTrace][bridge] AddonJs::finetune after-runJob accepted=" +
+          std::string(accepted ? "true" : "false") +
+          " elapsedMs=" + std::to_string(elapsedMs));
+  return js::Boolean::create(env, accepted);
 }
 JSCATCH
 
