@@ -7,9 +7,9 @@ const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvide
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
+const { QvacErrorAddonWhisper, ERR_CODES } = require('./lib/error')
 
 const END_OF_INPUT = 'end of job'
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
  * GGML client implementation for the Whisper transcription model
@@ -115,7 +115,9 @@ class TranscriptionWhispercpp extends BaseInference {
 
   async _runInternal (audioStream) {
     if (this.exclusiveRun && this._hasActiveResponse) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.JOB_ALREADY_RUNNING
+      })
     }
 
     const jobId = await this.addon.append({
@@ -152,7 +154,10 @@ class TranscriptionWhispercpp extends BaseInference {
 
   _normalizeAudioStream (audioStream) {
     if (!audioStream) {
-      throw new Error('audioStream is required')
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.INVALID_AUDIO_INPUT,
+        adds: 'audioStream is required'
+      })
     }
 
     if (typeof audioStream[Symbol.asyncIterator] === 'function') {
@@ -171,7 +176,10 @@ class TranscriptionWhispercpp extends BaseInference {
       return [Uint8Array.from(audioStream)]
     }
 
-    throw new Error('Unsupported audio input. Expected stream, Uint8Array, or chunk array.')
+    throw new QvacErrorAddonWhisper({
+      code: ERR_CODES.INVALID_AUDIO_INPUT,
+      adds: 'Unsupported audio input. Expected stream, Uint8Array, or chunk array.'
+    })
   }
 
   /**

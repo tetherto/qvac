@@ -96,9 +96,7 @@ test('[low level] Real C++ addon bindings work correctly', async (t) => {
     ])
     t.ok(sawJobEnded, 'JobEnded should be emitted for low-level run')
 
-    // Always cancel and destroy to avoid leaking active native jobs between
-    // integration cases.
-    try { await model.cancel() } catch {}
+    // destroyInstance() performs native cancellation/cleanup internally.
     try { await model.destroyInstance() } catch {}
 
     console.log('All tests passed!')
@@ -106,7 +104,6 @@ test('[low level] Real C++ addon bindings work correctly', async (t) => {
     console.error('Unexpected error in addon bindings test:', error.message)
     throw error
   } finally {
-    try { if (model) await model.cancel() } catch {}
     try { if (model) await model.destroyInstance() } catch {}
   }
 })
