@@ -14,7 +14,8 @@
 namespace qvac_lib_inference_addon_marian {
 
 class PivotTranslationModel
-    : public qvac_lib_inference_addon_cpp::model::IModel, qvac_lib_inference_addon_cpp::model::IModelCancel {
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   PivotTranslationModel() = default;
   PivotTranslationModel(
@@ -53,6 +54,7 @@ public:
   runtimeStats() const override;
 
   void cancel() const override;
+
 private:
   std::any translateString(const std::string& input);
   std::any translateBatch(const std::vector<std::string>& inputs);
