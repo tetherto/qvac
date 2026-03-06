@@ -6,6 +6,9 @@ import TranscriptionParakeet, {
 } from "@qvac/transcription-parakeet";
 import {
   definePlugin,
+  defineHandler,
+  transcribeStreamRequestSchema,
+  transcribeStreamResponseSchema,
   ModelType,
   type ParakeetRuntimeConfig,
   type CreateModelParams,
@@ -16,8 +19,7 @@ import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
 import { ModelLoadFailedError } from "@/utils/errors-server";
 import FilesystemDL from "@qvac/dl-filesystem";
-import { transcribe } from "@/server/bare/plugins/parakeet-transcription/ops/transcribe-stream";
-import { createTranscribeStreamHandler } from "@/server/bare/utils/transcription-handler";
+import { transcribe } from "@/server/bare/ops/transcribe";
 
 type ParakeetModelConfig = ParakeetRuntimeConfig & {
   encoderDataPath?: string;
@@ -118,7 +120,30 @@ export const parakeetPlugin = definePlugin({
   },
 
   handlers: {
-    transcribeStream: createTranscribeStreamHandler(transcribe),
+    transcribeStream: defineHandler({
+      requestSchema: transcribeStreamRequestSchema,
+      responseSchema: transcribeStreamResponseSchema,
+      streaming: true,
+
+      handler: async function* (request) {
+        for await (const text of transcribe({
+          modelId: request.modelId,
+          audioChunk: request.audioChunk,
+          prompt: request.prompt,
+        })) {
+          yield {
+            type: "transcribeStream" as const,
+            text,
+          };
+        }
+
+        yield {
+          type: "transcribeStream" as const,
+          text: "",
+          done: true,
+        };
+      },
+    }),
   },
 
   logging: {

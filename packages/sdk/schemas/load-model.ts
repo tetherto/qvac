@@ -5,11 +5,11 @@ import {
   type LlmConfig,
   type EmbedConfig,
 } from "./llamacpp-config";
-import { whisperConfigSchema } from "./whispercpp-config";
 import {
+  whisperConfigSchema,
   parakeetConfigSchema,
   parakeetModelTypeEnumSchema,
-} from "./parakeet-config";
+} from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import {
