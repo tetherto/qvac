@@ -1,0 +1,33 @@
+@startuml
+title Model Loading Flow
+
+participant "Client API" as Client
+participant Handler
+participant "Download Manager" as Download
+participant "Plugin Registry" as PluginReg
+participant "Plugin.createModel" as Plugin
+
+Client -> Handler : loadModel()
+Handler -> Download : resolve source
+
+alt pear:// (Hyperdrive)
+    Download --> Handler : P2P download
+else https:// (HTTP)
+    Download --> Handler : HTTP download
+else Registry model
+    Download --> Handler : Registry download
+else /path (Local)
+    Download --> Handler : Use local file
+end
+
+Download --> Client : progress updates
+Download -> Handler : path to model
+
+Handler -> PluginReg : getPlugin(modelType)
+PluginReg -> Plugin : createModel({ modelId, modelPath, modelConfig, artifacts })
+Plugin -> Plugin : load weights via native addon
+
+Handler -> Handler : register(modelId, instance)
+Handler -> Client : modelId
+
+@enduml

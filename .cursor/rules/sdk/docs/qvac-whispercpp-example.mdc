@@ -1,7 +1,7 @@
 ---
 description:
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
 alwaysApply: false
 ---
 import FilesystemDL from "@qvac/dl-filesystem";

@@ -8,7 +8,7 @@ on:
       - reopened
       - labeled
     paths:
-      - "packages/qvac-sdk/**"
+      - "packages/sdk/**"
       - "packages/cli/**"
       - "packages/rag/**"
       - "packages/logging/**"

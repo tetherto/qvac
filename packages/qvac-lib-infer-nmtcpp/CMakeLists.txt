@@ -145,6 +145,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/PivotTranslationModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_state_backend.cpp
