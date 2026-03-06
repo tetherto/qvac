@@ -2,7 +2,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "SalamandrTA 2B instruct model for multilingual text generation (q8 quantization)",
     "quantization": "q8",
     "params": "2B",
     "license": "Apache-2.0",
@@ -16,7 +16,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q4.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "SalamandrTA 2B instruct model for multilingual text generation (q4 quantization)",
     "quantization": "q4",
     "params": "2B",
     "license": "Apache-2.0",
