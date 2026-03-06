@@ -8,3 +8,4 @@ huggingface_hub>=0.16.0
 httpx
 psutil
 deepeval
+llama-cpp-python
