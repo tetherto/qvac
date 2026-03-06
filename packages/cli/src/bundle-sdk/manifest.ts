@@ -1,12 +1,25 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
+import type { Logger } from '../logger.js'
 
-/**
- * Extracts the packed string from a bare-pack bundle without executing it.
- * Bundle format: `module.exports = "<packed string>";`
- * @param {string} bundleJsText
- */
-export function extractPackedString (bundleJsText) {
+interface BarePackHeader {
+  id?: string
+  resolutions?: Record<string, unknown>
+}
+
+interface GenerateAddonsManifestOptions {
+  bundlePath: string
+  outputDir: string
+  projectRoot: string
+  logger: Logger
+}
+
+interface GenerateAddonsManifestResult {
+  manifestPath: string
+  addons: string[]
+}
+
+export function extractPackedString (bundleJsText: string): string {
   const idx = bundleJsText.indexOf('module.exports')
   if (idx === -1) {
     throw new Error("bundle does not contain 'module.exports'")
@@ -18,51 +31,32 @@ export function extractPackedString (bundleJsText) {
   }
 
   let i = eq + 1
-  while (i < bundleJsText.length && /\s/.test(bundleJsText[i])) i++
+  while (i < bundleJsText.length && /\s/.test(bundleJsText[i] ?? '')) i++
 
   const quote = bundleJsText[i]
   if (quote !== '"' && quote !== "'") {
     throw new Error('export value is not a string literal')
   }
-  i++ // past opening quote
+  i++
 
   let out = ''
   let esc = false
 
   for (; i < bundleJsText.length; i++) {
-    const ch = bundleJsText[i]
+    const ch = bundleJsText[i]!
 
     if (esc) {
       switch (ch) {
-        case 'n':
-          out += '\n'
-          break
-        case 'r':
-          out += '\r'
-          break
-        case 't':
-          out += '\t'
-          break
-        case 'b':
-          out += '\b'
-          break
-        case 'f':
-          out += '\f'
-          break
-        case 'v':
-          out += '\v'
-          break
-        case '\\':
-          out += '\\'
-          break
-        case '"':
-          out += '"'
-          break
-        case "'":
-          out += "'"
-          break
+        case 'n': out += '\n'; break
+        case 'r': out += '\r'; break
+        case 't': out += '\t'; break
+        case 'b': out += '\b'; break
+        case 'f': out += '\f'; break
+        case 'v': out += '\v'; break
+        case '\\': out += '\\'; break
+        case '"': out += '"'; break
+        case "'": out += "'"; break
         case 'x': {
-          // \xHH
           const hex = bundleJsText.slice(i + 1, i + 3)
           if (!/^[0-9a-fA-F]{2}$/.test(hex)) throw new Error('bad \\x escape')
           out += String.fromCharCode(parseInt(hex, 16))
@@ -70,7 +64,6 @@ export function extractPackedString (bundleJsText) {
           break
         }
         case 'u': {
-          // \uHHHH
           const hex = bundleJsText.slice(i + 1, i + 5)
           if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new Error('bad \\u escape')
           out += String.fromCharCode(parseInt(hex, 16))
@@ -78,7 +71,6 @@ export function extractPackedString (bundleJsText) {
           break
         }
         default:
-          // Keep unknown escapes as-is
           out += ch
       }
       esc = false
@@ -89,7 +81,7 @@ export function extractPackedString (bundleJsText) {
       esc = true
       continue
     }
-    if (ch === quote) break // end of string literal
+    if (ch === quote) break
 
     out += ch
   }
@@ -101,7 +93,7 @@ export function extractPackedString (bundleJsText) {
   return out
 }
 
-export function extractBarePackHeader (packed) {
+export function extractBarePackHeader (packed: string): BarePackHeader {
   const firstNL = packed.indexOf('\n')
   if (firstNL === -1) {
     throw new Error('packed string missing first newline separator')
@@ -132,7 +124,7 @@ export function extractBarePackHeader (packed) {
     else if (ch === '}') {
       depth--
       if (depth === 0) {
-        i++ // include closing brace
+        i++
         break
       }
     }
@@ -142,10 +134,10 @@ export function extractBarePackHeader (packed) {
     throw new Error('unbalanced braces while extracting header JSON')
   }
 
-  return JSON.parse(packed.slice(jsonStart, i))
+  return JSON.parse(packed.slice(jsonStart, i)) as BarePackHeader
 }
 
-export async function generateAddonsManifest (options) {
+export async function generateAddonsManifest (options: GenerateAddonsManifestOptions): Promise<GenerateAddonsManifestResult> {
   const { bundlePath, outputDir, projectRoot, logger } = options
 
   logger.info('\n📦 Generating addons manifest...')
@@ -155,19 +147,17 @@ export async function generateAddonsManifest (options) {
   const header = extractBarePackHeader(packed)
   const resolutions = header.resolutions ?? {}
 
-  // Extract package names from resolution keys
-  const packageNames = new Set()
+  const packageNames = new Set<string>()
   const nodeModulesRegex = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)\//
 
   for (const key of Object.keys(resolutions)) {
     const match = key.match(nodeModulesRegex)
-    if (match) {
+    if (match?.[1]) {
       packageNames.add(match[1])
     }
   }
 
-  // Check which packages have "addon": true
-  const addons = []
+  const addons: string[] = []
   for (const pkgName of packageNames) {
     const pkgJsonPath = path.join(
       projectRoot,
@@ -177,17 +167,16 @@ export async function generateAddonsManifest (options) {
     )
     try {
       if (fs.existsSync(pkgJsonPath)) {
-        const pkgJson = JSON.parse(await fsp.readFile(pkgJsonPath, 'utf8'))
+        const pkgJson = JSON.parse(await fsp.readFile(pkgJsonPath, 'utf8')) as { addon?: boolean }
         if (pkgJson.addon === true) {
           addons.push(pkgName)
         }
       }
     } catch (err) {
-      logger.warn(`   Could not read ${pkgName}/package.json: ${err.message}`)
+      logger.warn(`   Could not read ${pkgName}/package.json: ${(err as Error).message}`)
     }
   }
 
-  // Sort for deterministic output
   addons.sort()
 
   const bundleId =

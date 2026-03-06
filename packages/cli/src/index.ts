@@ -6,17 +6,13 @@ import { bundleSdk } from './bundle-sdk/index.js'
 import { handleError } from './errors.js'
 
 const require = createRequire(import.meta.url)
-const pkg = require('../package.json')
+const pkg = require('../package.json') as { version: string }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CLI Entry Point
-// ─────────────────────────────────────────────────────────────────────────────
-
-function collect (value, previous) {
+function collect (value: string, previous: string[]): string[] {
   return previous.concat([value])
 }
 
-function setupCli () {
+function setupCli (): void {
   const program = new Command()
 
   program
@@ -37,7 +33,14 @@ function setupCli () {
     .option('--defer <module>', 'Defer a module (repeatable)', collect, [])
     .option('-q, --quiet', 'Minimal output')
     .option('-v, --verbose', 'Detailed output')
-    .action(async (options) => {
+    .action(async (options: {
+      config?: string
+      sdkPath?: string
+      host: string[]
+      defer: string[]
+      quiet?: boolean
+      verbose?: boolean
+    }) => {
       try {
         await bundleSdk({
           projectRoot: process.cwd(),
@@ -48,7 +51,7 @@ function setupCli () {
           quiet: options.quiet,
           verbose: options.verbose
         })
-      } catch (error) {
+      } catch (error: unknown) {
         handleError(error)
         process.exit(1)
       }
