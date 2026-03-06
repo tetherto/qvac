@@ -161,9 +161,39 @@ function makeOutputCollector (t, logger = console) {
   }
 }
 
+function detectPlatform () {
+  return `${os.platform()}-${os.arch()}`
+}
+
+function setupJsLogger (binding) {
+  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+  binding.setLogger((priority, message) => {
+    const label = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+    console.log(`[C++ ${label}] ${message}`)
+  })
+  return binding
+}
+
+function isPng (buf) {
+  if (!buf || buf.length < 8) return false
+  return (
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4E &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0D &&
+    buf[5] === 0x0A &&
+    buf[6] === 0x1A &&
+    buf[7] === 0x0A
+  )
+}
+
 module.exports = {
   ensureModel,
   ensureModelPath,
   getMediaPath,
-  makeOutputCollector
+  makeOutputCollector,
+  detectPlatform,
+  setupJsLogger,
+  isPng
 }

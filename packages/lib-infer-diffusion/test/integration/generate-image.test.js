@@ -6,12 +6,12 @@ const test = require('brittle')
 const FilesystemDL = require('@qvac/dl-filesystem')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
-const { ensureModel } = require('./utils')
 const {
+  ensureModel,
   detectPlatform,
   setupJsLogger,
   isPng
-} = require('./helpers')
+} = require('./utils')
 
 const platform = detectPlatform()
 
