@@ -6,6 +6,18 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runGenerateImageFlux2Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2.test.js', options)
+}
+
+async function runGenerateImageSd3Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-sd3.test.js', options)
+}
+
+async function runGenerateImageSdxlTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-sdxl.test.js', options)
+}
+
 async function runGenerateImageTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image.test.js', options)
 }
