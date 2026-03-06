@@ -12,12 +12,14 @@
      "params": "1B",
      "tags": ["generation", "instruct"],
      "description": "",
-     "notes": ""
+     "notes": "",
+     "link": "https://huggingface.co/<org>/<repo>"
    }
    ```
 
-2. Run validation: `npm run validate:models`
-3. Submit PR targeting `main`
+2. If the model uses a license not already in `data/licenses.json`, add a new entry there and place the full license text at `data/licenses/<license-id>/LICENSE.txt`.
+3. Run validation: `npm run validate:models`
+4. Submit PR targeting `main`
 
 ### Source URL Formats
 
@@ -48,18 +50,16 @@ The validation script enforces this for all new S3 entries. Legacy paths predati
 
 ### Registry Sync Process
 
-After the PR is created:
+The staging registry syncs **automatically on merge to `main`**. No manual labels required.
 
-1. Add the **"staging"** label to the PR. This triggers the `sync-staging` pipeline that applies changes to the staging registry.
-2. Wait for the `sync-staging` pipeline to pass. **Do not merge the PR if the pipeline fails** — fix the issue first.
-3. Once the pipeline passes and the PR is approved, merge to `main`.
+1. Submit PR targeting `main` with `models.prod.json` changes.
+2. Ensure validation passes (the `validate-json` job runs on PRs with the `verify` label).
+3. Once approved, merge to `main`. The `sync-staging` pipeline triggers automatically on push to `main` when `models.prod.json` is modified.
 
 How sync works:
 
 - The sync process compares the full `models.prod.json` against the current database state and applies **all** differences — not just changes from the current PR. If a previous PR was merged without triggering a sync, its changes will be included in the next sync run.
-- If a PR is merged without the "staging" label (i.e., without triggering a sync), the changes are not lost. They will be applied the next time a sync is triggered by another PR.
-
-**Important**: For now, notify **@yuri.samarin** directly when submitting changes to `models.prod.json` so he can assist with the sync process.
+- A `workflow_dispatch` trigger is available for manual sync when needed.
 
 ## Deprecating a Model
 
@@ -101,15 +101,27 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 |-------|----------|-------------|
 | `source` | Yes | URL to model file (`https://huggingface.co/...` or `s3:///key`) |
 | `engine` | Yes | Engine identifier (e.g., `@qvac/llm-llamacpp`) |
-| `license` | Yes | SPDX license identifier |
+| `license` | Yes | License identifier matching an entry in `data/licenses.json` |
 | `quantization` | No | Quantization format (e.g., `q4_0`, `q8_0`) |
 | `params` | No | Model parameter count (e.g., `1B`, `4B`) |
 | `description` | No | Human-readable description |
 | `notes` | No | Additional notes |
 | `tags` | No | Array of tag strings |
+| `link` | No | URL to the model's HuggingFace page or project. Required for S3-hosted models to provide traceability back to the original source. |
 | `deprecated` | No | Boolean flag for deprecation |
 | `replacedBy` | No | Source URL of replacement model |
 | `deprecationReason` | No | Reason for deprecation |
 
 Note: `deprecatedAt` timestamp is auto-generated when syncing to the database.
+
+### License Files
+
+Each license used in `models.prod.json` must have:
+
+1. An entry in `data/licenses.json` with `spdxId`, `name`, and `url`.
+2. A full license text at `data/licenses/<spdxId>/LICENSE.txt`.
+
+Existing licenses: `Apache-2.0`, `MIT`, `llama3.2`, `gemma`, `health-ai-developer-foundations`, `MPL-2.0`, `CC-BY-4.0`, `openrail`.
+
+When adding a model with a new license, include the license file in the same PR.
 
