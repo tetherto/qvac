@@ -20,38 +20,6 @@ defaults:
     working-directory: docs/website
 
 jobs:
-  frontmatter:
-    name: Validate MDX Frontmatter
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Validate frontmatter
-        run: bun run validate:frontmatter
-
-  links:
-    name: Check Internal Links
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Check links
-        run: bun run validate:links
-
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -70,5 +38,5 @@ jobs:
           mkdir -p content/docs/sdk/api/latest
           printf '%s\n' '---' 'title: API Reference' 'description: API Reference for the latest version of the QVAC SDK.' '---' > content/docs/sdk/api/latest/index.mdx
 
-      - name: Build site
+      - name: Build and validate
         run: bun run build
