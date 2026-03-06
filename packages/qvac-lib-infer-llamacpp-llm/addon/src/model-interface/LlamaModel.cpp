@@ -88,7 +88,8 @@ void LlamaModel::resolveShardPaths(
 
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
-    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion) {
+    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
+    const bool isFinetuning) {
 
   const bool isBitnet =
       metadata.hasOneBitQuantization() &&
@@ -103,14 +104,15 @@ void LlamaModel::tuneConfigMap(
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
-  if (isBitnet && adrenoVersion.has_value() &&
-      adrenoVersion.value() >= kAdrenoUbatchThreshold &&
-      configFilemap.find("ubatch-size") == configFilemap.end() &&
+  const bool needsUbatch = (isBitnet || isFinetuning) &&
+                           adrenoVersion.has_value() &&
+                           adrenoVersion.value() >= kAdrenoUbatchThreshold;
+  if (needsUbatch && configFilemap.find("ubatch-size") == configFilemap.end() &&
       configFilemap.find("ubatch_size") == configFilemap.end()) {
     configFilemap["ubatch-size"] = "128";
     QLOG_IF(
         Priority::INFO,
-        "[LlamaModel] BitNet on Adreno 800+: defaulting ubatch-size=128\n");
+        "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
   }
 }
 
