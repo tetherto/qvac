@@ -143,14 +143,6 @@ jobs:
         name: Install ccache on macOS
         run: brew install ccache
 
-      - if: ${{ matrix.os == 'macos-15' }}
-        name: Remove Homebrew LLVM (use Apple Clang for iOS framework linking)
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-           chmod +x ./ci/remove-brew-llvm.sh
-           ./ci/remove-brew-llvm.sh
-
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Configure ccache
         run: |
@@ -259,6 +251,14 @@ jobs:
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
           Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
+
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Remove Homebrew LLVM (use Apple Clang for iOS framework linking)
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+           chmod +x ./ci/remove-brew-llvm.sh
+           ./ci/remove-brew-llvm.sh
 
       - if: ${{ matrix.os == 'macos-15' }}
         name: Install vcpkg in macos
