@@ -130,7 +130,7 @@ class TranscriptionParakeet extends BaseInference {
     const modelPath = this._config.path || this._getModelFilePath()
 
     // When using named path overrides, skip directory-level validation
-    if (this._hasNamedPaths()) {
+    if (this._hasAnyNamedPaths()) {
       const modelType = this.params.modelType || 'tdt'
       const requiredFiles = getRequiredModelFiles(modelType)
       for (const file of requiredFiles) {
@@ -212,16 +212,29 @@ class TranscriptionParakeet extends BaseInference {
   }
 
   /**
-   * Whether individual file paths have been provided via named config params.
+   * Whether TDT individual file paths have been provided via named config params.
+   * Only TDT paths are checked because the C++ addon can load directly from these.
+   * CTC/EOU/Sortformer named paths are handled by _resolveFilePath during
+   * JS-side weight loading.
    * @returns {boolean}
    * @private
    */
   _hasNamedPaths () {
     return !!(this._config.encoderPath || this._config.encoderDataPath ||
-      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath ||
-      this._config.ctcModelPath || this._config.ctcModelDataPath ||
-      this._config.tokenizerPath || this._config.eouEncoderPath ||
-      this._config.eouDecoderPath || this._config.sortformerPath)
+      this._config.decoderPath || this._config.vocabPath || this._config.preprocessorPath)
+  }
+
+  /**
+   * Whether any named paths (TDT or CTC/EOU/Sortformer) have been provided.
+   * Used for validation to skip directory-level checks when individual paths are given.
+   * @returns {boolean}
+   * @private
+   */
+  _hasAnyNamedPaths () {
+    return this._hasNamedPaths() ||
+      !!(this._config.ctcModelPath || this._config.ctcModelDataPath ||
+        this._config.tokenizerPath || this._config.eouEncoderPath ||
+        this._config.eouDecoderPath || this._config.sortformerPath)
   }
 
   /**
@@ -249,28 +262,21 @@ class TranscriptionParakeet extends BaseInference {
       seed: this.params.seed ?? -1
     }
 
+    // TDT named paths are passed to C++ which loads directly from disk
     if (this._hasNamedPaths()) {
-      const pathFields = {
-        encoderPath: this._config.encoderPath,
-        encoderDataPath: this._config.encoderDataPath,
-        decoderPath: this._config.decoderPath,
-        vocabPath: this._config.vocabPath,
-        preprocessorPath: this._config.preprocessorPath,
-        ctcModelPath: this._config.ctcModelPath,
-        ctcModelDataPath: this._config.ctcModelDataPath,
-        tokenizerPath: this._config.tokenizerPath,
-        eouEncoderPath: this._config.eouEncoderPath,
-        eouDecoderPath: this._config.eouDecoderPath,
-        sortformerPath: this._config.sortformerPath
-      }
-      for (const [key, val] of Object.entries(pathFields)) {
-        if (val) configurationParams[key] = val
-      }
+      if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
+      if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
+      if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
+      if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
+      if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
     }
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
     this.addon = this._createAddon(configurationParams)
 
+    // TDT with named paths: C++ loads directly from file paths, skip JS weight loading.
+    // CTC/EOU/Sortformer (with or without named paths): JS loads weights via
+    // _loadModelWeights which uses _resolveFilePath to handle custom paths.
     if (!this._hasNamedPaths()) {
       await this._loadModelWeights(modelPath, modelType)
     }
@@ -435,7 +441,7 @@ class TranscriptionParakeet extends BaseInference {
    * @private
    */
   async _downloadWeights (reportProgressCallback, opts) {
-    if (this._hasNamedPaths()) {
+    if (this._hasAnyNamedPaths()) {
       this.logger.info('File paths provided via config, skipping WeightsProvider download')
       if (opts.closeLoader) {
         await this.weightsProvider.loader.close()
