@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5]
+
+### Added
+- Fp16 quantization support for Chatterbox ONNX models (English and multilingual) in the C++ inference path; `Fp16Utils` module for fp16↔fp32 conversion and type-aware tensor read/write
+- Refactored `ChatterboxEngine::synthesize()` into smaller, testable helpers; `IOnnxInferSession` interface and `OrtTypes.hpp` for clearer boundaries and session factory injection in tests
+- Unit tests for `Fp16Utils`, ChatterboxEngine helpers, `OnnxInferSessionMock`, and factory injection; integration tests for `OnnxInferSession` and full Chatterbox synthesis (with optional model download via `models:ensure` script)
+- C++ coverage and CI: workflow publishes test results to Checks, writes coverage summary to job summary; LLVM coverage symlinks and correct coverage paths in TTS C++ coverage workflow
+- `models:ensure` script to download Chatterbox (en/multilingual, fp32/fp16) and Supertonic models; respects `CHATTERBOX_VARIANT`, `CHATTERBOX_LANGUAGE`; use `TTS_ENSURES=all` to ensure all variants
+
+### Changed
+- Checkout step in `cpp-test-coverage-qvac-lib-infer-onnx-tts.yml` and `integration-test-qvac-lib-infer-onnx-tts.yml` now uses `PAT_TOKEN` for PR/fork compatibility
+
 ## [0.5.4]
 
 ### Added

@@ -1,11 +1,12 @@
 import { BUILTIN_PLUGINS, BUILTIN_SUFFIXES } from './constants.js'
 import { InvalidPluginSpecifierError } from '../errors.js'
+import type { Logger } from '../logger.js'
 
-export function buildBuiltinSpecifier (sdkName, suffix) {
+export function buildBuiltinSpecifier (sdkName: string, suffix: string): string {
   return `${sdkName}/${suffix}/plugin`
 }
 
-export function parseBuiltinSpecifier (specifier, sdkName) {
+export function parseBuiltinSpecifier (specifier: string, sdkName: string): { suffix: string; exportName: string } | null {
   const prefix = `${sdkName}/`
   const pluginSuffix = '/plugin'
 
@@ -20,11 +21,10 @@ export function parseBuiltinSpecifier (specifier, sdkName) {
   return null
 }
 
-export function resolvePluginSpecifiers (config, sdkName, logger) {
-  let { plugins = [] } = config
+export function resolvePluginSpecifiers (config: { plugins?: string[] }, sdkName: string, logger: Logger): string[] {
+  let plugins = config.plugins ?? []
 
-  // Default to all built-in plugins if none specified
-  if (!plugins || plugins.length === 0) {
+  if (plugins.length === 0) {
     const allBuiltins = BUILTIN_SUFFIXES.map((suffix) =>
       buildBuiltinSpecifier(sdkName, suffix)
     )
@@ -35,9 +35,9 @@ export function resolvePluginSpecifiers (config, sdkName, logger) {
 
   const uniquePlugins = [...new Set(plugins)]
 
-  const resolved = []
-  const customPlugins = []
-  const errors = []
+  const resolved: string[] = []
+  const customPlugins: string[] = []
+  const errors: string[] = []
 
   for (const specifier of uniquePlugins) {
     const builtin = parseBuiltinSpecifier(specifier, sdkName)
