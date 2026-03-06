@@ -16,13 +16,11 @@ namespace qvac_lib_inference_addon_whisper {
 
 struct AddonInstance {
   std::unique_ptr<qvac_lib_inference_addon_cpp::AddonCpp> addon;
-  std::shared_ptr<
-      qvac_lib_inference_addon_cpp::out_handl::CppQueuedOutputHandler<
-          Transcript>>
+  std::shared_ptr<qvac_lib_inference_addon_cpp::out_handl::
+                      CppQueuedOutputHandler<Transcript>>
       transcriptOutput;
-  std::shared_ptr<
-      qvac_lib_inference_addon_cpp::out_handl::CppQueuedOutputHandler<
-          std::vector<Transcript>>>
+  std::shared_ptr<qvac_lib_inference_addon_cpp::out_handl::
+                      CppQueuedOutputHandler<std::vector<Transcript>>>
       transcriptArrayOutput;
   std::shared_ptr<
       qvac_lib_inference_addon_cpp::out_handl::CppQueuedOutputHandler<
@@ -47,9 +45,11 @@ inline AddonInstance createInstance(WhisperConfig&& config) {
       make_shared<out_handl::CppQueuedOutputHandler<std::vector<Transcript>>>();
   auto statsOutput =
       make_shared<out_handl::CppQueuedOutputHandler<RuntimeStats>>();
-  auto errorOutput = make_shared<out_handl::CppQueuedOutputHandler<Output::Error>>();
+  auto errorOutput =
+      make_shared<out_handl::CppQueuedOutputHandler<Output::Error>>();
 
-  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>> outputHandlers;
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>>
+      outputHandlers;
   outputHandlers.add(transcriptOutput);
   outputHandlers.add(transcriptArrayOutput);
   outputHandlers.add(statsOutput);

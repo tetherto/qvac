@@ -7,8 +7,6 @@
 #include <vector>
 
 #include <js.h>
-#include <whisper.h>
-
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
 #include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
@@ -16,6 +14,7 @@
 #include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <whisper.h>
 
 #include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
@@ -29,8 +28,8 @@ using qvac_lib_inference_addon_cpp::OutputQueue;
 inline void disableWhisperLogs(
     enum ggml_log_level /*level*/, const char* /*text*/, void* /*userData*/) {}
 
-inline WhisperConfig createWhisperConfig(
-    js_env_t* env, const js::Object& configurationParams) {
+inline WhisperConfig
+createWhisperConfig(js_env_t* env, const js::Object& configurationParams) {
   JSAdapter adapter;
   return adapter.loadFromJSObject(configurationParams, env);
 }
@@ -48,14 +47,15 @@ struct JsTranscriptOutputHandler
               "toAppend",
               js::Boolean::create(this->env_, output.toAppend));
           jsTranscript.setProperty(
-              this->env_, "start", js::Number::create(this->env_, output.start));
+              this->env_,
+              "start",
+              js::Number::create(this->env_, output.start));
           jsTranscript.setProperty(
               this->env_, "end", js::Number::create(this->env_, output.end));
           jsTranscript.setProperty(
               this->env_,
               "id",
-              js::Number::create(
-                  this->env_, static_cast<uint64_t>(output.id)));
+              js::Number::create(this->env_, static_cast<uint64_t>(output.id)));
           return jsTranscript;
         }) {}
 };

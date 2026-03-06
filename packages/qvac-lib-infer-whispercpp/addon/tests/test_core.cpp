@@ -20,7 +20,9 @@ std::string getValidModelPath() {
   return "../../../examples/models/ggml-tiny.bin";
 }
 
-bool hasValidModelPath() { return std::filesystem::exists(getValidModelPath()); }
+bool hasValidModelPath() {
+  return std::filesystem::exists(getValidModelPath());
+}
 
 class WhisperCoreSimpleTest : public ::testing::Test {};
 
@@ -874,7 +876,8 @@ TEST_F(WhisperModelTest, ModelReset) {
 
 TEST_F(WhisperModelTest, ModelProcessEmptyInput) {
   if (!hasValidModelPath()) {
-    GTEST_SKIP() << "Skipping: whisper model file not available for process test";
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for process test";
   }
   auto config = createTestConfig();
   WhisperModel model(config);
@@ -891,7 +894,8 @@ TEST_F(WhisperModelTest, ModelProcessEmptyInput) {
 
 TEST_F(WhisperModelTest, ModelProcessWithCallback) {
   if (!hasValidModelPath()) {
-    GTEST_SKIP() << "Skipping: whisper model file not available for process test";
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for process test";
   }
   auto config = createTestConfig();
   WhisperModel model(config);
@@ -945,7 +949,8 @@ TEST_F(WhisperModelTest, ModelInputViewType) {
 
 TEST_F(WhisperModelTest, ModelWarmup) {
   if (!hasValidModelPath()) {
-    GTEST_SKIP() << "Skipping: whisper model file not available for warmup test";
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for warmup test";
   }
   auto config = createTestConfig();
   WhisperModel model(config);
@@ -1195,4 +1200,3 @@ TEST_F(WhisperModelTest, PreprocessAudioDataUnsupportedFormatThrows) {
         testing::HasSubstr("Unsupported audio_format: mp3"));
   }
 }
-

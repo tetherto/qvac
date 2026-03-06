@@ -1,4 +1,5 @@
 #include <bare.h>
+
 #include "src/addon/AddonJs.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
@@ -24,7 +25,8 @@ auto qvac_lib_inference_addon_whisper_exports(
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
-  V("destroyInstance", qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
+  V("destroyInstance",
+    qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
   V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V

@@ -1,9 +1,9 @@
 #include "WhisperModel.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstring>
-#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <iterator>

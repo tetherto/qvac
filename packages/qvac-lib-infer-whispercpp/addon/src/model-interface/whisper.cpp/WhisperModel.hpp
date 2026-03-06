@@ -20,9 +20,10 @@
 
 namespace qvac_lib_inference_addon_whisper {
 
-class WhisperModel : public qvac_lib_inference_addon_cpp::model::IModel,
-                     public qvac_lib_inference_addon_cpp::model::IModelCancel,
-                     public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
+class WhisperModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
