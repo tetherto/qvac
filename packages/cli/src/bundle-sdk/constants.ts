@@ -1,11 +1,8 @@
-/**
- * Built-in plugin registry mapping suffix to export name.
- * Specifier format: `${sdkName}/${suffix}/plugin`
- */
-export const BUILTIN_PLUGINS = {
+export const BUILTIN_PLUGINS: Record<string, { exportName: string }> = {
   'llamacpp-completion': { exportName: 'llmPlugin' },
   'llamacpp-embedding': { exportName: 'embeddingsPlugin' },
   'whispercpp-transcription': { exportName: 'whisperPlugin' },
+  'parakeet-transcription': { exportName: 'parakeetPlugin' },
   'nmtcpp-translation': { exportName: 'nmtPlugin' },
   'onnx-tts': { exportName: 'ttsPlugin' },
   'onnx-ocr': { exportName: 'ocrPlugin' }
@@ -13,7 +10,6 @@ export const BUILTIN_PLUGINS = {
 
 export const BUILTIN_SUFFIXES = Object.keys(BUILTIN_PLUGINS)
 
-/** Supported bare-pack host targets */
 export const DEFAULT_HOSTS = [
   'darwin-arm64',
   'darwin-x64',
