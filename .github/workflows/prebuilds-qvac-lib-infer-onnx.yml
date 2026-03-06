@@ -143,6 +143,10 @@ jobs:
         name: Install ccache on macOS
         run: brew install ccache
 
+      - if: ${{ matrix.os == 'macos-15' }}
+        name: Remove Homebrew LLVM (use Apple Clang for iOS framework linking)
+        run: bash ${{ env.PKG_DIR }}/ci/remove-brew-llvm.sh
+
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Configure ccache
         run: |
