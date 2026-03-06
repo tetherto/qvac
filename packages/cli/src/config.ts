@@ -12,7 +12,7 @@ export const CONFIG_CANDIDATES = [
   'qvac.config.ts'
 ]
 
-export function findConfigFile (projectRoot, explicitPath) {
+export function findConfigFile (projectRoot: string, explicitPath?: string): string | null {
   if (explicitPath) {
     const absPath = path.resolve(projectRoot, explicitPath)
     if (fs.existsSync(absPath)) return absPath
@@ -27,7 +27,7 @@ export function findConfigFile (projectRoot, explicitPath) {
   return null
 }
 
-export async function loadConfig (configPath) {
+export async function loadConfig (configPath: string): Promise<unknown> {
   if (!configPath) {
     throw new ConfigNotFoundError(null, CONFIG_CANDIDATES)
   }
@@ -37,20 +37,20 @@ export async function loadConfig (configPath) {
   try {
     if (ext === '.json') {
       const content = await fsp.readFile(configPath, 'utf8')
-      return JSON.parse(content)
+      return JSON.parse(content) as unknown
     }
 
     if (ext === '.js' || ext === '.mjs') {
       const fileUrl = `file://${configPath}`
-      const module = await import(fileUrl)
-      return module.default ?? module
+      const mod = await import(fileUrl) as { default?: unknown }
+      return mod.default ?? mod
     }
 
     if (ext === '.ts') {
       const tsxApiPath = require.resolve('tsx/esm/api')
-      const { tsImport } = await import(tsxApiPath)
-      const module = await tsImport(configPath, import.meta.url)
-      return module.default ?? module
+      const { tsImport } = await import(tsxApiPath) as { tsImport: (path: string, base: string) => Promise<{ default?: unknown }> }
+      const mod = await tsImport(configPath, import.meta.url)
+      return mod.default ?? mod
     }
 
     throw new Error(
