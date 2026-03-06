@@ -108,18 +108,9 @@ async function main () {
     console.log('Starting pivot translation...')
     const response = await model.run(spanishText)
 
-    let translatedText = ''
     await response
       .onUpdate(data => {
         process.stdout.write(data)
-        translatedText += data
-      })
-      .onFinish(() => {
-        console.log('\n\n-----------------------------------------------------------')
-        console.log('Translation completed!')
-        console.log('Italian translation:')
-        console.log(translatedText)
-        console.log('-----------------------------------------------------------')
       })
       .await()
   } finally {

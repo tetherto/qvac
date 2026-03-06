@@ -268,10 +268,10 @@ class TranslationNmtcpp extends BaseInference {
       pivotConfig.config = this._bergamotPivotModel.config || {}
 
       if (pivotSrcVocab) {
-        pivotConfig.src_vocab = pivotSrcVocab
+        pivotConfig.config.src_vocab = pivotSrcVocab
       }
       if (pivotDstVocab) {
-        pivotConfig.dst_vocab = pivotDstVocab
+        pivotConfig.config.dst_vocab = pivotDstVocab
       }
 
       // Add pivot model to config
@@ -279,6 +279,7 @@ class TranslationNmtcpp extends BaseInference {
         ...configurationParams.config,
         pivotModel: pivotConfig
       }
+      console.log(configurationParams)
     }
   }
 
