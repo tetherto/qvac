@@ -145,7 +145,11 @@ jobs:
 
       - if: ${{ matrix.os == 'macos-15' }}
         name: Remove Homebrew LLVM (use Apple Clang for iOS framework linking)
-        run: bash ${{ env.PKG_DIR }}/ci/remove-brew-llvm.sh
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+           chmod +x ./ci/remove-brew-llvm.sh
+           ./ci/remove-brew-llvm.sh
 
       - if: ${{ matrix.os != 'windows-2022' }}
         name: Configure ccache
