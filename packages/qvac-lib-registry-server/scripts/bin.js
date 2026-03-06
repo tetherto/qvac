@@ -21,6 +21,12 @@ const DEFAULT_WRITER_STORAGE = './writer-storage'
 
 const DEFAULT_COMPACTION_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
+function toInt (val) {
+  if (val === undefined || val === null) return undefined
+  const n = parseInt(val, 10)
+  return Number.isNaN(n) ? undefined : n
+}
+
 const runCmd = command('run',
   flag('--storage|-s [path]', `storage path (default ${DEFAULT_STORAGE})`),
   flag('--bootstrap|-b [key]', 'Autobase bootstrap key (hex)'),
@@ -66,8 +72,8 @@ const runCmd = command('run',
       config,
       {
         logger,
-        ackInterval: flags.ackInterval ? parseInt(flags.ackInterval, 10) : undefined,
-        ackThreshold: flags.ackThreshold !== undefined ? parseInt(flags.ackThreshold, 10) : undefined,
+        ackInterval: toInt(flags.ackInterval),
+        ackThreshold: toInt(flags.ackThreshold),
         autobaseBootstrap,
         blindPeerKeys,
         clearAfterReseed: flags.clearAfterReseed,
