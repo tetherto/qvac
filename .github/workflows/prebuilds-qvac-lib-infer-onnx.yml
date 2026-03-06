@@ -328,6 +328,7 @@ jobs:
         run: npm install
 
       - name: Create vcpkg cache location
+        shell: bash
         working-directory: ${{ env.PKG_DIR }}
         run: mkdir -p vcpkg/cache
 
@@ -336,7 +337,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg/ports/**', 'packages/qvac-lib-infer-onnx/vcpkg/triplets/**') }}
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
           restore-keys: |
             vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-
             vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}-
@@ -344,6 +345,13 @@ jobs:
       - name: Generate
         working-directory: ${{ env.PKG_DIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} -D CMAKE_C_COMPILER_LAUNCHER=ccache -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg-override-triplets/**') }}
 
       - name: Run bare-make build
         working-directory: ${{ env.PKG_DIR }}
@@ -380,13 +388,6 @@ jobs:
         with:
           path: ~\AppData\Local\ccache
           key: ccache-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
-
-      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
-        name: Save vcpkg cache
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ env.PKG_DIR }}/vcpkg/cache
-          key: vcpkg-v3-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}-${{ hashFiles('packages/qvac-lib-infer-onnx/vcpkg.json', 'packages/qvac-lib-infer-onnx/vcpkg-configuration.json', 'packages/qvac-lib-infer-onnx/vcpkg/ports/**', 'packages/qvac-lib-infer-onnx/vcpkg/triplets/**') }}
 
       - uses: actions/upload-artifact@v6
         with:
