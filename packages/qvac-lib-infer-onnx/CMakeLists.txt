@@ -33,10 +33,13 @@ foreach(_cmake4_fix_file
     "${VCPKG_INSTALLED_PATH}/share/protobuf/protobuf-targets.cmake")
   if(EXISTS "${_cmake4_fix_file}")
     file(READ "${_cmake4_fix_file}" _cmake4_fix_content)
-    # Strip LINK_ONLY generator expressions (use [^;]+ instead of [^>]+ to
-    # handle nested genexes like $<LINK_ONLY:$<$<CONFIG:DEBUG>:Dbghelp>>)
+    # Strip LINK_ONLY generator expressions.
+    # Use [^";] to exclude " (property value boundary) and ; (entry separator)
+    # while still allowing nested genexes like $<$<CONFIG:DEBUG>:Dbghelp>.
+    # Build pattern with string(CONCAT) to prevent cmake genex evaluation.
     if(_cmake4_fix_content MATCHES "LINK_ONLY:")
-      string(REGEX REPLACE "\\\\?\\$<LINK_ONLY:([^;]+)>" "\\1"
+      string(CONCAT _lo_re "\\\\?" "\\$" [=[<LINK_ONLY:([^";]+)>]=])
+      string(REGEX REPLACE "${_lo_re}" "\\1"
         _cmake4_fix_content "${_cmake4_fix_content}")
     endif()
     file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
@@ -213,7 +216,7 @@ if(ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
         "${CMAKE_INSTALL_PREFIX}/share/protobuf/protobuf-targets.cmake")
       if(EXISTS "${_lo_file}")
         file(READ "${_lo_file}" _c)
-        string(CONCAT _lo_re "\\\\?" "\\$" "<LINK_ONLY:([^;]+)>")
+        string(CONCAT _lo_re "\\\\?" "\\$" [==[<LINK_ONLY:([^";]+)>]==])
         string(REGEX REPLACE "${_lo_re}" "\\1" _c "${_c}")
         file(WRITE "${_lo_file}" "${_c}")
       endif()
