@@ -1,9 +1,9 @@
 diff --git a/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js b/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
-index 4af4e8a..b27fb0c 100644
+index a4688ac..0e3b792 100644
 --- a/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
 +++ b/node_modules/@qvac/infer-base/WeightsProvider/BaseInference.js
 @@ -295,6 +295,9 @@ class BaseInference {
-   */
+    */
    _outputCallback (addon, event, jobId, data, error) {
      const response = this._jobToResponse.get(jobId)
 +    this.logger.info(
@@ -12,7 +12,8 @@ index 4af4e8a..b27fb0c 100644
      if (!response) {
        this.logger.warn(`No response found for job ${jobId}`)
        return
-@@ -317,19 +320,37 @@ class BaseInference {
+@@ -317,20 +320,39 @@ class BaseInference {
+       response.updateOutput(data)
      } else if (event === 'FinetuneProgress') {
        if (this.opts?.stats) {
 +        this.logger.info(
