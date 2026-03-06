@@ -13,7 +13,7 @@ export async function cancel(params: CancelInferenceBaseParams) {
     throw new ModelNotLoadedError(modelId);
   }
 
-  if (model.cancel) {
-    await model.cancel();
+  if (model.addon && model.addon.cancel) {
+    await model.addon.cancel();
   }
 }
