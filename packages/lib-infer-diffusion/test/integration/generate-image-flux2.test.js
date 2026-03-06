@@ -15,9 +15,9 @@ const {
 } = require('./utils')
 
 const platform = detectPlatform()
-const isDarwin = os.platform() === 'darwin'
+const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
-const useCpu = isDarwin || isLinuxArm64
+const useCpu = isDarwinX64 || isLinuxArm64
 
 const DIFFUSION_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf',
