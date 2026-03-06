@@ -16,7 +16,7 @@ endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx VERSION 0.11.5 LANGUAGES C CXX)
+project(qvac-onnx C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 
