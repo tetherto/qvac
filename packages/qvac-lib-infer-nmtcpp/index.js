@@ -265,14 +265,13 @@ class TranslationNmtcpp extends BaseInference {
       const pivotDstVocab = pivotVocabConfig.dstPath ||
         (pivotVocabConfig.dstName ? path.join(this._bergamotPivotModel.diskPath, pivotVocabConfig.dstName) : null)
 
+      pivotConfig.config = this._bergamotPivotModel.config || {}
+
       if (pivotSrcVocab) {
         pivotConfig.src_vocab = pivotSrcVocab
       }
       if (pivotDstVocab) {
         pivotConfig.dst_vocab = pivotDstVocab
-      }
-      if (this._bergamotPivotModel.config) {
-        pivotConfig.config = this._bergamotPivotModel.config
       }
 
       // Add pivot model to config
