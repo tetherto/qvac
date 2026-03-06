@@ -22,7 +22,6 @@ const DEFAULT_WRITER_STORAGE = './writer-storage'
 const DEFAULT_COMPACTION_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
 function toInt (val) {
-  if (val === undefined || val === null) return undefined
   const n = parseInt(val, 10)
   return Number.isNaN(n) ? undefined : n
 }
