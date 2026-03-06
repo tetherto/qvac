@@ -29,6 +29,8 @@ export function readBody (req: IncomingMessage): Promise<Record<string, unknown>
 }
 
 export function sendJson (res: ServerResponse, status: number, body: unknown): void {
+  if (res.headersSent) return
+
   const payload = JSON.stringify(body)
   res.writeHead(status, {
     'Content-Type': 'application/json',
@@ -38,6 +40,12 @@ export function sendJson (res: ServerResponse, status: number, body: unknown): v
 }
 
 export function sendError (res: ServerResponse, status: number, code: string, message: string): void {
+  if (res.headersSent) {
+    sendSSE(res, { error: { message, type: 'server_error', code } })
+    endSSE(res)
+    return
+  }
+
   sendJson(res, status, {
     error: {
       message,

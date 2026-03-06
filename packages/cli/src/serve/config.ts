@@ -21,8 +21,15 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
 
 interface RawServeConfig {
   serve?: {
-    models?: Record<string, string | ExplicitModelEntry>
+    models?: Record<string, string | ConstantModelEntry | ExplicitModelEntry>
   }
+}
+
+interface ConstantModelEntry {
+  model: string
+  default?: boolean
+  preload?: boolean
+  config?: Record<string, unknown>
 }
 
 interface ExplicitModelEntry {
@@ -51,9 +58,14 @@ export async function parseServeConfig (rawConfig: RawServeConfig, cliOptions: C
   const registry = await loadModelConstants()
 
   for (const [alias, entry] of Object.entries(rawModels)) {
-    const resolved = typeof entry === 'string'
-      ? resolveModelConstant(alias, entry, registry)
-      : parseExplicitEntry(alias, entry)
+    let resolved: ResolvedModelEntry
+    if (typeof entry === 'string') {
+      resolved = resolveModelConstant(alias, entry, registry)
+    } else if (isConstantModelEntry(entry)) {
+      resolved = resolveModelConstant(alias, entry.model, registry, entry)
+    } else {
+      resolved = parseExplicitEntry(alias, entry as ExplicitModelEntry)
+    }
 
     models.set(alias, resolved)
   }
@@ -78,7 +90,16 @@ export function normalizeEndpointCategory (sdkType: string): string {
   return ENDPOINT_CATEGORY[sdkType] ?? sdkType
 }
 
-function resolveModelConstant (alias: string, constantName: string, registry: Map<string, SDKModelConstant>): ResolvedModelEntry {
+function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
+  return (
+    entry !== null &&
+    typeof entry === 'object' &&
+    'model' in entry &&
+    typeof (entry as Record<string, unknown>)['model'] === 'string'
+  )
+}
+
+function resolveModelConstant (alias: string, constantName: string, registry: Map<string, SDKModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
   const model = registry.get(constantName)
   if (!model) {
     throw new Error(
@@ -92,9 +113,9 @@ function resolveModelConstant (alias: string, constantName: string, registry: Ma
     src: model.src,
     sdkType: model.addon,
     endpointCategory: normalizeEndpointCategory(model.addon),
-    isDefault: false,
-    preload: true,
-    config: {}
+    isDefault: overrides?.default === true,
+    preload: overrides?.preload !== false,
+    config: overrides?.config ?? {}
   }
 }
 
