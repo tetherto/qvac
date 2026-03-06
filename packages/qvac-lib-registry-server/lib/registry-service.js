@@ -53,7 +53,8 @@ class RegistryService extends ReadyResource {
     this.config = config
     this.logger = opts.logger || console
 
-    this.ackInterval = opts.ackInterval ?? 10
+    this.ackInterval = opts.ackInterval ?? 5000
+    this.ackThreshold = opts.ackThreshold ?? 0
     this.autobaseBootstrap = opts.autobaseBootstrap || null
     this.blindPeerKeys = Array.isArray(opts.blindPeerKeys) ? opts.blindPeerKeys : []
     this.skipStorageCheck = opts.skipStorageCheck ?? false
@@ -78,7 +79,8 @@ class RegistryService extends ReadyResource {
       open: this._openAutobase.bind(this),
       apply: this._apply.bind(this),
       close: this._closeAutobase.bind(this),
-      ackInterval: this.ackInterval
+      ackInterval: this.ackInterval,
+      ackThreshold: this.ackThreshold
     })
 
     this.logger.info('RegistryService: initialized')

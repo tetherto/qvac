@@ -9,12 +9,25 @@ import { generateWorkerEntry } from './entry-gen.js'
 import { runBarePack } from './bare-pack.js'
 import { generateAddonsManifest } from './manifest.js'
 
-/**
- * Resolves the SDK path.
- * If explicitSdkPath is provided, uses that directly.
- * Otherwise, auto-detects from node_modules/@qvac/sdk.
- */
-function resolveSdkPath (projectRoot, explicitSdkPath) {
+export interface BundleSdkOptions {
+  projectRoot?: string | undefined
+  configPath?: string | undefined
+  sdkPath?: string | undefined
+  hosts?: string[] | undefined
+  defer?: string[] | undefined
+  quiet?: boolean | undefined
+  verbose?: boolean | undefined
+}
+
+interface BundleSdkResult {
+  bundlePath: string
+  plugins: string[]
+  addons: string[]
+  entryPaths: { worker: string }
+  manifestPath: string
+}
+
+function resolveSdkPath (projectRoot: string, explicitSdkPath?: string): string {
   if (explicitSdkPath) {
     return path.isAbsolute(explicitSdkPath)
       ? explicitSdkPath
@@ -23,17 +36,14 @@ function resolveSdkPath (projectRoot, explicitSdkPath) {
   return path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
 }
 
-/**
- * Reads the SDK package name from its package.json.
- */
-async function resolveSdkName (sdkPath) {
+async function resolveSdkName (sdkPath: string): Promise<string> {
   const sdkPackageJsonPath = path.join(sdkPath, 'package.json')
 
   try {
     if (fs.existsSync(sdkPackageJsonPath)) {
       const content = await fsp.readFile(sdkPackageJsonPath, 'utf8')
-      const pkg = JSON.parse(content)
-      return pkg.name
+      const pkg = JSON.parse(content) as { name?: string }
+      if (pkg.name) return pkg.name
     }
   } catch {
     // Fall through to default
@@ -42,7 +52,7 @@ async function resolveSdkName (sdkPath) {
   return DEFAULT_SDK_NAME
 }
 
-function resolveImportsMapPath (sdkPath, sdkName) {
+function resolveImportsMapPath (sdkPath: string, sdkName: string): string {
   const importsMapPath = path.join(sdkPath, 'bare-imports.json')
 
   if (fs.existsSync(importsMapPath)) {
@@ -52,7 +62,7 @@ function resolveImportsMapPath (sdkPath, sdkName) {
   throw new BareImportsMapNotFoundError(sdkName, importsMapPath)
 }
 
-export async function bundleSdk (options = {}) {
+export async function bundleSdk (options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
   const startTime = Date.now()
 
   const projectRoot = options.projectRoot ?? process.cwd()
@@ -70,10 +80,10 @@ export async function bundleSdk (options = {}) {
 
   const configPath = findConfigFile(projectRoot, options.configPath)
 
-  let config = {}
+  let config: { plugins?: string[] } = {}
   if (configPath) {
     logger.info(`📄 Config: ${path.relative(projectRoot, configPath)}`)
-    config = await loadConfig(configPath)
+    config = await loadConfig(configPath) as { plugins?: string[] }
   } else {
     logger.info('📄 Config: (none)')
     logger.warn('No config file found — continuing with defaults.')
@@ -120,7 +130,6 @@ export async function bundleSdk (options = {}) {
   }
 
   await runBarePack({
-    projectRoot,
     entryPath,
     outputPath: bundlePath,
     hosts,

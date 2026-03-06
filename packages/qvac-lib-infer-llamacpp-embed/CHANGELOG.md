@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.3] - 2026-03-06
+
+### Fixed
+
+- The `GGMLConfig` type now exposes `embd_normalize` instead of `embed_normalize` in `index.d.ts`. This fixes a mismatch where TypeScript users could be guided toward an incorrect property name, reducing configuration mistakes and autocomplete friction.
+
 ## [0.11.2] - 2026-03-03
 
 ### Fixed
