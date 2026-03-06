@@ -85,9 +85,9 @@ async function main () {
       loader: pivotLoader,
       modelName: 'model.enit.intgemm.alphas.bin',
       diskPath: './models/en-it',
-      srcVocabName: 'vocab.enit.spm',
-      dstVocabName: 'vocab.enit.spm', // Shared vocab for en-it
       config: {
+        srcVocabName: 'vocab.enit.spm',
+        dstVocabName: 'vocab.enit.spm', // Shared vocab for en-it
         // Any pivot model specific configuration
         beamsize: 4,
         topk: 100

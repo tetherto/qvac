@@ -95,11 +95,11 @@ class TranslationNmtcpp extends BaseInference {
    * @param {Object} config.bergamotPivotModel.loader - Loader for pivot model files
    * @param {string} config.bergamotPivotModel.modelName - Name of the pivot model file (e.g., 'en-fr.bin')
    * @param {string} [config.bergamotPivotModel.diskPath] - Disk path for pivot model (defaults to primary diskPath)
-   * @param {string} [config.bergamotPivotModel.srcVocabPath] - Path to pivot source vocab file
-   * @param {string} [config.bergamotPivotModel.dstVocabPath] - Path to pivot destination vocab file
-   * @param {string} [config.bergamotPivotModel.srcVocabName] - Name of pivot source vocab file to download
-   * @param {string} [config.bergamotPivotModel.dstVocabName] - Name of pivot destination vocab file to download
    * @param {string} [config.bergamotPivotModel.config] - pivot model specific configuration
+   * @param {string} [config.bergamotPivotModel.config.srcVocabPath] - Path to pivot source vocab file
+   * @param {string} [config.bergamotPivotModel.config.dstVocabPath] - Path to pivot destination vocab file
+   * @param {string} [config.bergamotPivotModel.config.srcVocabName] - Name of pivot source vocab file to download
+   * @param {string} [config.bergamotPivotModel.config.dstVocabName] - Name of pivot destination vocab file to download
    */
   constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
     super({ logger, exclusiveRun, ...args })
@@ -132,10 +132,10 @@ class TranslationNmtcpp extends BaseInference {
         modelName: bergamotPivotModel.modelName,
         weightsProvider: new WeightsProvider(bergamotPivotModel.loader, this.logger),
         vocabConfig: {
-          srcPath: bergamotPivotModel.srcVocabPath || null,
-          dstPath: bergamotPivotModel.dstVocabPath || null,
-          srcName: bergamotPivotModel.srcVocabName || null,
-          dstName: bergamotPivotModel.dstVocabName || null
+          srcPath: bergamotPivotModel.config.srcVocabPath || null,
+          dstPath: bergamotPivotModel.config.dstVocabPath || null,
+          srcName: bergamotPivotModel.config.srcVocabName || null,
+          dstName: bergamotPivotModel.config.dstVocabName || null
         },
         config: bergamotPivotModel.config
       }
