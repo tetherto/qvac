@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { whisperConfigSchema } from "./whispercpp-config";
+import { whisperConfigSchema } from "./transcription-config";
 import { whisperModelTypeSchema } from "./model-types";
 
 export const modelIdSchema = z

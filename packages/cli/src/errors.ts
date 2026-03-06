@@ -1,9 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Config Errors
-// ─────────────────────────────────────────────────────────────────────────────
-
 export class ConfigNotFoundError extends Error {
-  constructor (explicitPath, candidates = []) {
+  constructor (explicitPath: string | null, candidates: string[] = []) {
     const message = explicitPath
       ? `Config file not found: ${explicitPath}`
       : `No config file found. Create one of:\n${candidates.map((c) => `  - ${c}`).join('\n')}`
@@ -13,7 +9,8 @@ export class ConfigNotFoundError extends Error {
 }
 
 export class ConfigLoadError extends Error {
-  constructor (configPath, cause) {
+  override cause: unknown
+  constructor (configPath: string, cause: unknown) {
     const causeMessage =
       cause instanceof Error ? cause.message : String(cause)
     super(`Failed to load config from ${configPath}: ${causeMessage}`)
@@ -22,21 +19,13 @@ export class ConfigLoadError extends Error {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Plugin Errors
-// ─────────────────────────────────────────────────────────────────────────────
-
 export class InvalidPluginSpecifierError extends Error {
-  constructor (specifiers) {
+  constructor (specifiers: string[]) {
     const list = specifiers.map((s) => `  - ${s}`).join('\n')
     super(`Invalid plugin specifiers (must end with /plugin):\n${list}`)
     this.name = 'InvalidPluginSpecifierError'
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Bundler Errors
-// ─────────────────────────────────────────────────────────────────────────────
 
 export class BarePackNotInstalledError extends Error {
   constructor () {
@@ -50,7 +39,9 @@ export class BarePackNotInstalledError extends Error {
 }
 
 export class BarePackError extends Error {
-  constructor (exitCode, entryPath, outputPath) {
+  entryPath: string
+  outputPath: string
+  constructor (exitCode: number, entryPath: string, outputPath: string) {
     super(
       `bare-pack exited with code ${exitCode}\n\n` +
       `  Entry file: ${entryPath}\n` +
@@ -64,7 +55,9 @@ export class BarePackError extends Error {
 }
 
 export class BareImportsMapNotFoundError extends Error {
-  constructor (sdkName, expectedPath) {
+  sdkName: string
+  expectedPath: string
+  constructor (sdkName: string, expectedPath: string) {
     super(
       'bare-imports.json not found.\n\n' +
       `  Expected at: ${expectedPath}\n\n` +
@@ -76,11 +69,7 @@ export class BareImportsMapNotFoundError extends Error {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Error Handler (for CLI output)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ERROR_LABELS = {
+const ERROR_LABELS: Record<string, string> = {
   ConfigNotFoundError: 'Configuration Error',
   ConfigLoadError: 'Config Load Error',
   InvalidPluginSpecifierError: 'Plugin Error',
@@ -89,7 +78,7 @@ const ERROR_LABELS = {
   BareImportsMapNotFoundError: 'SDK Error'
 }
 
-export function handleError (error) {
+export function handleError (error: unknown): void {
   if (error instanceof Error) {
     const label = ERROR_LABELS[error.name]
     if (label) {
@@ -97,7 +86,7 @@ export function handleError (error) {
       console.error(`   ${error.message}\n`)
     } else {
       console.error('\n❌ Error:', error.message)
-      if (process.env.DEBUG) {
+      if (process.env['DEBUG']) {
         console.error(error.stack)
       }
     }
