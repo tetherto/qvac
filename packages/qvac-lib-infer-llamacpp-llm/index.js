@@ -316,7 +316,9 @@ class LlmLlamacpp extends BaseInference {
           fs.rmSync(path.join(checkpointDir, entry.name), { recursive: true, force: true })
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      this.logger.error('Failed to clear pause checkpoints:', err)
+    }
   }
 
   /**
@@ -326,7 +328,7 @@ class LlmLlamacpp extends BaseInference {
   async unload () {
     return await this._withExclusiveRun(async () => {
       try {
-        await this.cancel()
+        await this.pause()
       } catch (_) {}
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
