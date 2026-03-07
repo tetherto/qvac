@@ -288,6 +288,7 @@ class LlmLlamacpp extends BaseInference {
 
   /**
    * Pause finetuning, saving a checkpoint so training can resume later.
+   * cancel inference job if it is running
    */
   async pause () {
     if (this.addon?.cancel) {
@@ -298,6 +299,7 @@ class LlmLlamacpp extends BaseInference {
   /**
    * Cancel finetuning and remove the pause checkpoint so the next
    * finetune() call starts fresh instead of resuming.
+   * cancel inference job if it is running
    */
   async cancel () {
     if (this.addon?.cancel) {
