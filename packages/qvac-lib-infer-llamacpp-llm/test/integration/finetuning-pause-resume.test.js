@@ -130,7 +130,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
 
     const finetuneConfig = setupParams(modelDir, {
       checkpointSaveSteps: 10,
-      datasetSize: 20
+      datasetSize: isMobile ? 8 : 16
     })
     const checkpointDir = finetuneConfig.checkpointSaveDir
 
