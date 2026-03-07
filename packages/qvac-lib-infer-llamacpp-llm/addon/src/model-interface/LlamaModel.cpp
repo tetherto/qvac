@@ -933,9 +933,9 @@ std::string LlamaModel::finetune(
         const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
         const int64_t batchOffset = (resumeMeta.globalStep - 1) % stepsPerEpoch;
         checkpointState->batchOffsetWithinEpoch = batchOffset;
-        checkpointState->skippingBatches = (batchOffset > 0);
+        checkpointState->skippingBatches = (batchOffset >= 0);
 
-        if (batchOffset > 0) {
+        if (batchOffset >= 0) {
           std::ostringstream batchOffsetMsg;
           batchOffsetMsg << "Resuming from batch " << (batchOffset + 1) << "/"
                          << trainSplit << " within epoch "
@@ -1384,30 +1384,19 @@ void LlamaModel::executeTrainingLoop(
 
     int64_t resumeFromBatch = -1;
     if (resumingFromPause && checkpointState &&
-        checkpointState->batchOffsetWithinEpoch > 0 && epoch == startEpoch) {
+        checkpointState->batchOffsetWithinEpoch >= 0 && epoch == startEpoch) {
       resumeFromBatch = checkpointState->batchOffsetWithinEpoch;
     }
 
-    if (resumeFromBatch > 0) {
-      llama_opt_epoch_resume(
-          ctx,
-          dataset,
-          trainResult.get(),
-          evalResult.get(),
-          idataSplit,
-          callbackTrain,
-          evalSplit > 0 ? callbackTrain : nullptr,
-          resumeFromBatch);
-    } else {
-      llama_opt_epoch(
-          ctx,
-          dataset,
-          trainResult.get(),
-          evalResult.get(),
-          idataSplit,
-          callbackTrain,
-          evalSplit > 0 ? callbackTrain : nullptr);
-    }
+    llama_opt_epoch_resume(
+        ctx,
+        dataset,
+        trainResult.get(),
+        evalResult.get(),
+        idataSplit,
+        callbackTrain,
+        evalSplit > 0 ? callbackTrain : nullptr,
+        resumeFromBatch);
 
     if (evalDataset != nullptr && evalDatasetSampleCount > 0 &&
         (!checkpointState || !checkpointState->shouldExit.load())) {

@@ -433,8 +433,6 @@ bool tryHandlePauseRequest(
     llama_opt_request_stop(state->ctx);
   }
   const bool pausedDuringValidation = !train;
-  const int64_t displayBatch =
-      (state->batchOffsetWithinEpoch > 0) ? (ibatch + 1) : ibatch;
   try {
     savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
   } catch (...) {
@@ -451,9 +449,10 @@ bool tryHandlePauseRequest(
   if (pausedDuringValidation) {
     pauseMsg << " during validation";
   }
-  pauseMsg << " at batch " << displayBatch << "/" << ibatchMax << " | epoch "
+  pauseMsg << " at batch " << (ibatch + 1) << "/" << ibatchMax << " | epoch "
            << (state->currentEpoch + 1)
-           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string();
+           << " | Checkpoint saved at: "
+           << state->pauseCheckpointPath.string();
   QLOG_IF(Priority::DEBUG, pauseMsg.str());
   state->pauseWaitDone.store(true);
   state->pauseDoneCv.notify_all();
@@ -497,10 +496,10 @@ void optEpochCallback(
   const bool isFinalBatch = (ibatch == ibatchMax - 1);
   // Add +1 only when backend sent 0-indexed ibatch. That happens if we resumed
   // mid-epoch and epoch==startEpoch (executeTrainingLoop passes resumeFromBatch
-  // only then), so batchOffsetWithinEpoch>0 exactly when we are in that resumed
-  // epoch.
+  // only then), so batchOffsetWithinEpoch>=0 exactly when we are in that resumed
+  // epoch.  Default is -1 (no resume).
   const int64_t displayBatch =
-      (checkpointState && checkpointState->batchOffsetWithinEpoch > 0)
+      (checkpointState && checkpointState->batchOffsetWithinEpoch >= 0)
           ? (ibatch + 1)
           : ibatch;
 
@@ -548,7 +547,7 @@ void optEpochCallback(
 
   // After last batch of resumed epoch, clear so next epoch uses raw (1-indexed)
   // ibatch
-  if (state->batchOffsetWithinEpoch > 0 && isFinalBatch) {
+  if (state->batchOffsetWithinEpoch >= 0 && isFinalBatch) {
     state->batchOffsetWithinEpoch = -1;
   }
 
