@@ -319,20 +319,20 @@ function createTestDataset (filePath, format = 'chat') {
   return filePath
 }
 
-function createPauseResumeTestDataset (filePath) {
+function createPauseResumeTestDataset (filePath, count = 8) {
   const baseSamples = [
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] }
   ]
+  const samples = []
+  for (let i = 0; i < count; i++) {
+    samples.push(baseSamples[i % baseSamples.length])
+  }
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  const content = baseSamples.map(s => JSON.stringify(s)).join('\n')
+  const content = samples.map(s => JSON.stringify(s)).join('\n')
   fs.writeFileSync(filePath, content)
   return filePath
 }
@@ -342,7 +342,8 @@ function setupParams (modelDir, overrides = {}) {
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
 
-  createPauseResumeTestDataset(trainDatasetPath)
+  const { datasetSize, ...finetuneOverrides } = overrides
+  createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
 
   return {
@@ -361,7 +362,7 @@ function setupParams (modelDir, overrides = {}) {
     checkpointSaveSteps: 5,
     checkpointSaveDir: checkpointDir,
     validation: { type: 'split', fraction: 0.05 },
-    ...overrides
+    ...finetuneOverrides
   }
 }
 
