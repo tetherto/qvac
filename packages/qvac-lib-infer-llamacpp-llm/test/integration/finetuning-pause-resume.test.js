@@ -44,8 +44,7 @@ const FINETUNE_MODELS = [
     id: 'medgemma-4b-it-q4_1',
     name: 'medgemma-4b-it-Q4_1.gguf',
     url: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf',
-    skipOnMobile: true,
-    skipOnNonGpu: true
+    skip: isMobile || forceCpuDevice || platform === 'darwin' || isWindows
   }
 ]
 
@@ -110,17 +109,9 @@ async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapt
 }
 
 test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
-  const baseModelsToRun = FINETUNE_MODELS
-  const modelsToRun = isMobile
-    ? baseModelsToRun.filter(modelVariant => !modelVariant.skipOnMobile)
-    : baseModelsToRun
-  const gpuFilteredModelsToRun = forceCpuDevice
-    ? modelsToRun.filter(modelVariant => !modelVariant.skipOnNonGpu)
-    : modelsToRun
-
-  for (const modelVariant of gpuFilteredModelsToRun) {
-    if (modelVariant.skipOnDarwin && platform === 'darwin') {
-      t.comment(`[${modelVariant.id}] skipped on macOS (Metal does not support TQ2_0)`)
+  for (const modelVariant of FINETUNE_MODELS) {
+    if (modelVariant.skip) {
+      t.comment(`[${modelVariant.id}] skipped on ${platform}-${arch}`)
       continue
     }
     const [modelName, modelDir] = await ensureModel({
