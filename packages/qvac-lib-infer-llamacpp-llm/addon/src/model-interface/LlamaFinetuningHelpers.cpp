@@ -433,13 +433,7 @@ bool tryHandlePauseRequest(
     llama_opt_request_stop(state->ctx);
   }
   const bool pausedDuringValidation = !train;
-  try {
-    savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
-  } catch (...) {
-    state->pauseWaitDone.store(true);
-    state->pauseDoneCv.notify_all();
-    throw;
-  }
+  savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
   state->pauseCheckpointSaved.store(true);
   state->shouldExit.store(true);
   state->isFinetuning.store(false);
@@ -454,8 +448,6 @@ bool tryHandlePauseRequest(
            << " | Checkpoint saved at: "
            << state->pauseCheckpointPath.string();
   QLOG_IF(Priority::DEBUG, pauseMsg.str());
-  state->pauseWaitDone.store(true);
-  state->pauseDoneCv.notify_all();
   return true;
 }
 

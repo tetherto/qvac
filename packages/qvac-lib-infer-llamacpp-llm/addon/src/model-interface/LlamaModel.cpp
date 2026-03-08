@@ -1549,8 +1549,10 @@ void LlamaModel::waitUntilFinetuningPauseComplete() {
 
   constexpr auto timeout = std::chrono::minutes(5);
   std::unique_lock lock(state->pauseDoneMutex);
-  state->pauseDoneCv.wait_for(
-      lock, timeout, [&state] { return state->pauseWaitDone.load(); });
+  state->pauseDoneCv.wait_for(lock, timeout, [&state] {
+    return state->pauseWaitDone.load(std::memory_order_acquire) &&
+           state->isIdle.load(std::memory_order_acquire);
+  });
 }
 
 void LlamaModel::clearPauseRequest() {
