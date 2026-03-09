@@ -8,6 +8,8 @@ import {
   embedRequestSchema,
   embedResponseSchema,
   ModelType,
+  embedConfigBaseSchema,
+  ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
   type EmbedConfig,
@@ -73,7 +75,8 @@ function createEmbeddingsModel(
 export const embeddingsPlugin = definePlugin({
   modelType: ModelType.llamacppEmbedding,
   displayName: "Embeddings (llama.cpp)",
-  addonPackage: "@qvac/embed-llamacpp",
+  addonPackage: ADDON_EMBEDDING,
+  loadConfigSchema: embedConfigBaseSchema,
 
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
