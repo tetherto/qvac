@@ -61,6 +61,9 @@ jobs:
           - macos-14-xlarge
           - macos-15-large
           - windows-2022
+        exclude:
+          - os: ubuntu-24.04-arm
+            variant: fp16
         include:
           - os: ubuntu-22.04
             platform: linux
