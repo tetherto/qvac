@@ -287,7 +287,7 @@ ${ex}
   const bodyDesc = String(fn.description ?? "No description available").replace(/\bundefined\b/g, "—");
 
   const deprecationCallout = fn.deprecated
-    ? `> [!WARNING] Deprecated\n> ${fn.deprecated}\n\n`
+    ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
     : "";
 
   return `---
