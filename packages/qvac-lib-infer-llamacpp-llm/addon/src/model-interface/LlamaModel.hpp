@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -108,20 +109,16 @@ public:
   /**
    * The Reset method.
    */
-  void reset() { resetState(); }
+  void reset() {
+    std::shared_lock lock(stateMtx_);
+    resetState();
+  }
 
   /// @brief Rebuilds reloadable model state using stored construction args.
-  /// TODO: Caller must ensure model is not in use before calling this method.
-  /// TODO: At JS-addon level thats possible by calling cancel() before
-  /// reloading.
-  /// TODO: on a custom operation
-  /// TODO: Add thread-safety guarantees.
+  /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
+  /// any in-flight operation that access the state finishes, then safely swaps
+  /// the state.
   void reload();
-
-  /**
-   * Initialize backend (llama.cpp setup).
-   */
-  void initializeBackend(const std::string& backendsDir = "");
 
   /**
    * Check if model is loaded.
@@ -132,6 +129,7 @@ public:
    * Ensure model is initialized
    */
   void waitForLoadInitialization() final {
+    std::shared_lock lock(stateMtx_);
     state_->initLoader_.waitForLoadInitialization();
   }
 
@@ -149,6 +147,10 @@ public:
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
 private:
+  // Impl without mutexes
+  std::string processPromptImpl(const Prompt& prompt);
+  void cancelImpl() const;
+
   struct ReloadableState {
     ReloadableState(
         const ConstructionArgs& args, const std::string& loadingContext,
@@ -185,6 +187,11 @@ private:
     bool shouldResetAfterInference = false;
   };
   ResolvedPrompt resolveChatAndTools(const std::string& input);
+
+  /**
+   * Initialize backend (llama.cpp setup).
+   */
+  void initializeBackend(const std::string& backendsDir = "");
 
   /**
    * The Common params parse method. It parses the common params.
@@ -239,5 +246,9 @@ private:
   const std::string loadingContext_;
   ModelMetaData metadata_;
   ConstructionArgs constructionArgs_;
+
+  /// Shared lock for all methods that read/use state_ members; exclusive lock
+  /// only in reload()
+  mutable std::shared_mutex stateMtx_;
   std::unique_ptr<ReloadableState> state_;
 };

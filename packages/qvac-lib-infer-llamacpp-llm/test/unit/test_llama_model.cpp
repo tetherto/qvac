@@ -101,15 +101,6 @@ TEST_F(LlamaModelTest, IsLoadedMethodBeforeInit) {
   EXPECT_FALSE(model.isLoaded());
 }
 
-TEST_F(LlamaModelTest, InitializeBackend) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  LlamaModel model = createModel();
-  EXPECT_NO_THROW(model.initializeBackend());
-}
-
 TEST_F(LlamaModelTest, ReloadLoadsImmediatelyAndInferenceStillWorks) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

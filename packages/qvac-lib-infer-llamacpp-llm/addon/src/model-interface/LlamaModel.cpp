@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -115,11 +116,20 @@ LlamaModel::LlamaModel(
 }
 
 void LlamaModel::reload() {
-  constructionArgs_.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
+  { 
+    std::shared_lock lock(stateMtx_);
+    if (state_->asyncWeightsLoader_.isStreaming()) {
+      // TODO: Make Fabric support moving/streaming existing loaded tensors
+      // TODO: to a different backend.
+    }
+    constructionArgs_.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
+  }
   setInitLoader();
 }
 
 void LlamaModel::setInitLoader() {
+  cancelImpl();
+  std::unique_lock lock(stateMtx_);
   state_ = std::make_unique<ReloadableState>(
       constructionArgs_, loadingContext_, metadata_);
   state_->initLoader_.init(
@@ -204,10 +214,14 @@ void LlamaModel::initializeBackend(const std::string& backendsDir) {
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
+  std::shared_lock lock(stateMtx_);
   state_->asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
 }
 
-bool LlamaModel::isLoaded() { return static_cast<bool>(state_->llmContext_); }
+bool LlamaModel::isLoaded() {
+  std::shared_lock lock(stateMtx_);
+  return static_cast<bool>(state_->llmContext_);
+}
 
 void LlamaModel::llamaLogCallback(
     ggml_log_level level, const char* text, void* userData) {
@@ -236,20 +250,34 @@ void LlamaModel::llamaLogCallback(
   // level
   QLOG_IF(priority, string_format("[Llama.cpp] %s", text));
 }
+
 void LlamaModel::cancel() const {
-  if (state_->llmContext_) {
+  std::shared_lock lock(stateMtx_, std::try_to_lock);
+  if (!lock.owns_lock()) {
+    // If lock could not be acquired, it means reload
+    // is in progress. It would be pointless to cancel
+    // after it finishes reloading since there would be
+    // nothing executing.
+    return;
+  }
+  cancelImpl();
+}
+
+void LlamaModel::cancelImpl() const {
+  if (state_ && state_->llmContext_) {
     state_->llmContext_->stop();
   }
 }
 
 std::any LlamaModel::process(const std::any& input) {
+  std::shared_lock lock(stateMtx_);
   if (input.type() != typeid(Prompt)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
   }
-  return processPrompt(std::any_cast<const Prompt&>(input));
+  return processPromptImpl(std::any_cast<const Prompt&>(input));
 }
 
 LlamaModel::ResolvedPrompt
@@ -276,6 +304,11 @@ LlamaModel::resolveChatAndTools(const std::string& input) {
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
+  std::shared_lock lock(stateMtx_);
+  return processPromptImpl(prompt);
+}
+
+std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->lastRunWasPrefill_ = prompt.prefill;
 
   for (const auto& media : prompt.media) {
@@ -336,6 +369,7 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
+  std::shared_lock lock(stateMtx_);
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
 
@@ -356,6 +390,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens}};
 }
+
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 void LlamaModel::commonParamsParse(
