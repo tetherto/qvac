@@ -16,6 +16,13 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
 
+function formatProgress (stats, totalEpochs) {
+  const epoch = Number.isFinite(stats.current_epoch) ? stats.current_epoch + 1 : 1
+  const loss = Number.isFinite(stats.loss) ? stats.loss.toFixed(4) : 'n/a'
+  const acc = Number.isFinite(stats.accuracy) ? (stats.accuracy * 100).toFixed(1) : 'n/a'
+  return `epoch=${epoch}/${totalEpochs} step=${stats.global_steps} loss=${loss} acc=${acc}% backend_batch=${stats.current_batch}/${stats.total_batches}`
+}
+
 function listPauseCheckpointDirs (checkpointDir) {
   if (!fs.existsSync(checkpointDir)) return []
   const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
@@ -159,7 +166,8 @@ async function main () {
     device: 'gpu',
     gpu_layers: '999',
     ctx_size: '512',
-    flash_attn: 'off'
+    flash_attn: 'off',
+    verbosity: '2'
   }
 
   let client
@@ -179,8 +187,8 @@ async function main () {
       lrScheduler: 'cosine',
       warmupRatio: 0.1,
       contextLength: 128,
-      batchSize: 128,
-      microBatchSize: 128,
+      batchSize: 32,
+      microBatchSize: 8,
       loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down',
       assistantLossOnly: true,
       checkpointSaveSteps: 10,
@@ -193,6 +201,8 @@ async function main () {
     console.log(`  Learning rate: ${finetuneOptions.learningRate}`)
     console.log(`  Checkpoint every: ${finetuneOptions.checkpointSaveSteps} steps`)
     console.log(`  Checkpoint directory: ${finetuneOptions.checkpointSaveDir}`)
+    console.log(`  Requested batch/micro-batch: ${finetuneOptions.batchSize}/${finetuneOptions.microBatchSize}`)
+    console.log('  Compare runtime logs for: "llama_context: n_batch" and "llama_context: n_ubatch"')
     console.log('')
 
     try {
@@ -211,7 +221,7 @@ async function main () {
     console.log('🚀 Starting finetuning...')
     const finetuneHandle = await client.finetune(finetuneOptions)
     finetuneHandle.on('stats', stats => {
-      console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+      console.log(`  [progress] ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
 
     console.log('Training for 20 seconds to allow several batches to complete...')
@@ -249,7 +259,7 @@ async function main () {
     console.log('▶️  Resuming finetuning...')
     const resumeHandle = await client.finetune()
     resumeHandle.on('stats', stats => {
-      console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+      console.log(`  [progress] ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
     })
     console.log('✅ Finetuning has RESUMED')
 

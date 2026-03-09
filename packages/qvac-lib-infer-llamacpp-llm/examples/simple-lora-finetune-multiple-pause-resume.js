@@ -14,6 +14,13 @@ const MODEL = {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+function formatProgress (stats, totalEpochs) {
+  const epoch = Number.isFinite(stats.current_epoch) ? stats.current_epoch + 1 : 1
+  const loss = Number.isFinite(stats.loss) ? stats.loss.toFixed(4) : 'n/a'
+  const acc = Number.isFinite(stats.accuracy) ? (stats.accuracy * 100).toFixed(1) : 'n/a'
+  return `epoch=${epoch}/${totalEpochs} step=${stats.global_steps} loss=${loss} acc=${acc}% backend_batch=${stats.current_batch}/${stats.total_batches}`
+}
+
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
     let resolved = false
@@ -231,7 +238,7 @@ async function main () {
 
     const attachProgressLogger = (handle) => {
       handle.on('stats', stats => {
-        console.log(`  [progress] data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+        console.log(`  [progress] ${formatProgress(stats, finetuneOptions.numberOfEpochs)}`)
       })
     }
 

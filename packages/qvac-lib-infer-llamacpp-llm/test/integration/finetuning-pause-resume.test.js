@@ -154,9 +154,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       let progressCount = 0
       finetuneHandle.on('stats', stats => {
         progressCount++
-        t.ok(!isNaN(stats.loss), `[${modelVariant.id}] progress loss must not be NaN (batch ${stats.current_batch})`)
-        t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] progress accuracy must not be NaN (batch ${stats.current_batch})`)
-        t.comment(`[${modelVariant.id}] progress: data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+        t.ok(!isNaN(stats.loss), `[${modelVariant.id}] progress loss must not be NaN (step ${stats.global_steps})`)
+        t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] progress accuracy must not be NaN (step ${stats.global_steps})`)
+        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
       await sleep(15000)
 
@@ -187,9 +187,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       const resumeHandle = await model.finetune()
       resumeHandle.on('stats', stats => {
         progressCount++
-        t.ok(!isNaN(stats.loss), `[${modelVariant.id}] resume progress loss must not be NaN (batch ${stats.current_batch})`)
-        t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] resume progress accuracy must not be NaN (batch ${stats.current_batch})`)
-        t.comment(`[${modelVariant.id}] progress: data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+        t.ok(!isNaN(stats.loss), `[${modelVariant.id}] resume progress loss must not be NaN (step ${stats.global_steps})`)
+        t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] resume progress accuracy must not be NaN (step ${stats.global_steps})`)
+        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
       const result = await resumeHandle.await()
 
@@ -372,4 +372,42 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     cleanupCheckpoints(checkpointDir)
     try { fs.unlinkSync(sessionFile) } catch (_) {}
   }
+})
+
+test('microBatchSize override changes backend batch geometry', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+  const modelVariant = FINETUNE_MODELS[0]
+  const [modelName, modelDir] = await ensureModel({
+    modelName: modelVariant.name,
+    downloadUrl: modelVariant.url
+  })
+
+  async function getTotalBatches (batchSize, microBatchSize, testId) {
+    const config = setupParams(modelDir, { batchSize, microBatchSize, checkpointSaveSteps: 0, testId })
+    const loader = new FilesystemDL({ dirPath: modelDir })
+    const model = new LlmLlamacpp(
+      { loader, modelName, diskPath: modelDir, logger: console, opts: { stats: true } },
+      { gpu_layers: '999', ctx_size: '512', device: forceCpuDevice ? 'cpu' : 'gpu', verbosity: '0' },
+      config
+    )
+    try {
+      await model.load()
+      const handle = await model.finetune(config)
+      let totalBatches = null
+      handle.on('stats', stats => { if (totalBatches === null) totalBatches = stats.total_batches })
+      await handle.await()
+      return totalBatches
+    } finally {
+      await model.unload().catch(() => {})
+      await loader.close().catch(() => {})
+      cleanupCheckpoints(config.checkpointSaveDir)
+    }
+  }
+
+  const largeMicro = await getTotalBatches(128, 128, 'batch-large')
+  const smallMicro = await getTotalBatches(32, 8, 'batch-small')
+
+  t.ok(largeMicro > 0, `total_batches with microBatch=128 should be positive (got ${largeMicro})`)
+  t.ok(smallMicro > 0, `total_batches with microBatch=8 should be positive (got ${smallMicro})`)
+  t.ok(smallMicro > largeMicro, `smaller microBatchSize should produce more total_batches (${smallMicro} > ${largeMicro})`)
+  t.comment(`total_batches: microBatch=128 -> ${largeMicro}, microBatch=8 -> ${smallMicro}`)
 })

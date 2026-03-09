@@ -875,6 +875,12 @@ std::string LlamaModel::finetune(
 
   std::unordered_map<std::string, std::string> configOverrides = {
       {"flash_attn", "off"}};
+  if (params.batchSize > 0) {
+    configOverrides["batch_size"] = std::to_string(params.batchSize);
+  }
+  if (params.microBatchSize > 0) {
+    configOverrides["ubatch_size"] = std::to_string(params.microBatchSize);
+  }
 
 #ifdef __ANDROID__
   using backend_selection::AdrenoGeneration;
@@ -975,7 +981,11 @@ std::string LlamaModel::finetune(
       QLOG_IF(Priority::WARNING, microBatchMsg.str());
     }
 
-    const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
+    const int64_t ubatchPerSample = std::max<int64_t>(
+        int64_t{1},
+        static_cast<int64_t>(llama_n_ctx(ctx)) / static_cast<int64_t>(llama_n_ubatch(ctx)));
+    const int64_t stepsPerEpoch = std::max<int64_t>(
+        int64_t{1}, trainSplit * ubatchPerSample);
     const int64_t totalSteps = std::max<int64_t>(
         int64_t{1},
         static_cast<int64_t>(params.numberOfEpochs) * stepsPerEpoch);
@@ -985,6 +995,8 @@ std::string LlamaModel::finetune(
     CheckpointMetadata resumeMeta{};
     bool resumingFromPause = false;
     std::filesystem::path pausePath;
+    uint32_t resumeStartEpoch = 0;
+    int64_t resumeBatchCursor = -1;
 
     if (allowResumeFromPause) {
       pausePath =
@@ -1054,19 +1066,19 @@ std::string LlamaModel::finetune(
         checkpointState->expectedFirstBatchAfterResume =
             resumeMeta.globalStep + 1;
         checkpointState->firstBatchAfterResumeLogged = false;
-
-        const int64_t stepsPerEpoch = std::max<int64_t>(int64_t{1}, trainSplit);
-        const int64_t batchOffset = (resumeMeta.globalStep - 1) % stepsPerEpoch;
-        checkpointState->batchOffsetWithinEpoch = batchOffset;
-        checkpointState->skippingBatches = (batchOffset >= 0);
-
-        if (batchOffset >= 0) {
-          std::ostringstream batchOffsetMsg;
-          batchOffsetMsg << "Resuming from batch " << (batchOffset + 1) << "/"
-                         << trainSplit << " within epoch "
-                         << (resumeMeta.epoch + 1);
-          QLOG_IF(Priority::DEBUG, batchOffsetMsg.str());
+        if (resumeMeta.resumeEpoch >= 0) {
+          resumeStartEpoch = static_cast<uint32_t>(resumeMeta.resumeEpoch);
+          resumeBatchCursor = resumeMeta.resumeBatch;
+        } else {
+          resumeStartEpoch = static_cast<uint32_t>(resumeMeta.epoch);
+          resumeBatchCursor = -1;
         }
+        checkpointState->batchOffsetWithinEpoch = resumeBatchCursor;
+
+        std::ostringstream batchOffsetMsg;
+        batchOffsetMsg << "Resuming from epoch " << (resumeStartEpoch + 1)
+                       << " | idata batch cursor=" << resumeBatchCursor;
+        QLOG_IF(Priority::DEBUG, batchOffsetMsg.str());
       }
     }
 
@@ -1112,7 +1124,7 @@ std::string LlamaModel::finetune(
           evalSplit,
           schedulerState,
           checkpointState.get(),
-          resumingFromPause ? resumeMeta.epoch : 0,
+          resumingFromPause ? resumeStartEpoch : 0,
           resumingFromPause,
           evalDatasetPtr.get(),
           evalDatasetSampleCount,
@@ -1233,6 +1245,15 @@ void LlamaModel::validateFinetuningParams(
 
   if (params.learningRate <= 0.0) {
     throw std::runtime_error("Learning rate must be positive");
+  }
+
+  if (params.batchSize > 0 && params.microBatchSize > 0) {
+    if (params.microBatchSize > params.batchSize) {
+      throw std::runtime_error("microBatchSize must be <= batchSize");
+    }
+    if (params.batchSize % params.microBatchSize != 0) {
+      throw std::runtime_error("batchSize must be divisible by microBatchSize");
+    }
   }
 }
 

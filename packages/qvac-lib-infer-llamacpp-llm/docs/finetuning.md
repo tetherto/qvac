@@ -76,9 +76,9 @@ Default (when `loraModules` is empty): attention Q, K, V, O only.
 Starts or resumes finetuning. If the model is not loaded, it will be loaded first. Finetuning runs exclusively (no concurrent inference). Returns a handle immediately (like `run()`); use `handle.await()` to wait for completion. If a pause checkpoint exists in `checkpointSaveDir`, training resumes from it automatically; otherwise a fresh run starts.
 
 ```js
-const handle = await model.finetune(finetuningOptions)
+const handle = await model.finetune(finetuneOptions)
 handle.on('stats', stats => {
-  console.log(`data=${stats.current_batch}/${stats.total_batches} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+  console.log(`epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
 })
 const result = await handle.await()
 
@@ -90,7 +90,7 @@ const resumeResult = await resumeHandle.await()
 - **Parameters**
   - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Omit to use params from construction or a previous call (e.g. after a pause). When omitted, the backend resumes from a pause checkpoint if one exists in the stored params' `checkpointSaveDir`; otherwise you must provide params. **Resume contract:** call `finetune()` only after you have **awaited** `pause()`. There is no status API; await the previous command to know something is done.
 - **Returns** — `Promise<FinetuneHandle>`. The handle has `await()` — returns `Promise<{ op: 'finetune', status: 'COMPLETED' | 'PAUSED', stats?: object }>` when training completes or pauses. `stats` may include terminal metrics such as `train_loss`, `val_loss`, `learning_rate`, `global_steps`, and `epochs_completed`. Runtime failures reject `await()` (same failure path as inference) instead of resolving with an error status.
-- **Progress events** — if `opts.stats` is enabled, finetuning emits `stats` events on the handle with per-iteration metrics (`loss`, `accuracy`, `current_batch`, `total_batches`, etc.).
+- **Progress events** — if `opts.stats` is enabled, finetuning emits `stats` events on the handle with per-iteration metrics (`loss`, `accuracy`, `global_steps`, `current_epoch`, `current_batch`, `total_batches`). `global_steps` is the canonical monotonic step counter; `current_batch`/`total_batches` reflect backend ubatch indexing and may have non-sequential jumps depending on batch/microbatch configuration.
 
 **Related example:** [examples/simple-lora-finetune.js](../examples/simple-lora-finetune.js) — Run with: `bare examples/simple-lora-finetune.js`
 
@@ -131,8 +131,8 @@ await model.cancel()
 | `numberOfEpochs` | number | Yes | — | Number of training epochs |
 | `learningRate` | number | Yes | — | Initial learning rate (e.g., 1e-5) |
 | `contextLength` | number | No | ctx_size/2 | Training sequence length |
-| `microBatchSize` | number | No | 1 | Samples per optimizer step (messages per batch in SFT). Adjusted to gcd(datasetSampleCount, requested) if needed. For 256 samples, valid values: 1, 2, 4, 8, 16, 32, 64, 128, 256. |
-| `batchSize` | number | No | 0 | Reserved; batch size is controlled by `microBatchSize`. |
+| `batchSize` | number | No | 0 (use default) | Sets the backend `n_batch` (number of tokens processed per batch). Must be >= `microBatchSize` and divisible by it when both are set. |
+| `microBatchSize` | number | No | 1 | Sets the backend `n_ubatch` (micro-batch size). Controls how many tokens are processed per optimizer step. Adjusted to gcd(datasetSampleCount, requested) if needed. Must be <= `batchSize` when both are set. |
 | `assistantLossOnly` | boolean | No | false | Use SFT (chat) mode; if false, causal mode |
 | `loraModules` | string | No | attn_q,k,v,o | Comma-separated target modules |
 | `loraRank` | number | No | 8 | LoRA rank |
@@ -225,7 +225,7 @@ The finetuning and pause/resume flow uses **wait conditions** and **events** onl
 The choice between a **fresh run** and **resume from pause** is made in C++ inside `LlamaModel::finetune()`. The JS API exposes a single `finetune(opts?)`; resume is determined by the backend from the presence of a pause checkpoint on disk. There is no in-process "we were paused" state: if you restart the script and call `finetune(opts)` with the same `checkpointSaveDir`, the backend will resume from any existing pause checkpoint in that directory.
 
 - **How it’s decided:** After validating params, C++ sets `checkpointDir = params.checkpointSaveDir` (or `"./checkpoints"`) and calls `pauseCheckpointExists(checkpointDir)`. If that returns true, it calls `clearPauseRequest()` and then uses `findLatestPauseCheckpoint()` and `parseCheckpointMetadata()` to set `resumingFromPause` and load resume metadata; the rest of the function branches on `resumingFromPause` (load adapter from checkpoint vs init from params, restore step/epoch, etc.).
-- **Params on resume:** The current `params` (from the call—e.g. from the original run when you call `finetune()` with no args) are used for dataset paths, `numberOfEpochs`, learning rate, scheduler, checkpoint dir, and so on. The checkpoint supplies only the **position** (epoch, globalStep, currentStep) and saved LoRA layout (targetModules, loraRank, loraAlpha); `loraDropout` and `loraInitStd` come from `params`.
+- **Params on resume:** The current `params` (from the call—e.g. from the original run when you call `finetune()` with no args) are used for dataset paths, `numberOfEpochs`, learning rate, scheduler, checkpoint dir, and so on. The checkpoint supplies the **position** (epoch, globalStep, currentStep, resumeEpoch, resumeBatch, pausedDuringValidation) and saved LoRA layout (targetModules, loraRank, loraAlpha); `loraDropout` and `loraInitStd` come from `params`.
 
 ### UML: finetune and pause flow (JS → C++)
 
@@ -336,7 +336,7 @@ sequenceDiagram
 
 | Parameter | Note |
 |-----------|------|
-| `batchSize` | Batch size is controlled by `microBatchSize`. |
+| `batchSize` | Sets backend `n_batch`. When both `batchSize` and `microBatchSize` are set, `microBatchSize` must be <= `batchSize` and `batchSize` must be divisible by `microBatchSize`. |
 | `warmupRatio` | Warmup steps = `warmupRatio × totalSteps` when `warmupRatioSet: true`. |
 | `validation.path` | Required when `validation.type` is `'dataset'`; must differ from `trainDatasetDir`. The JS layer forwards this as addon `evalDatasetPath`. |
 | `evalDatasetPath` (top-level JS param) | Not supported in `finetune(opts)` and throws. Use `validation: { type: 'dataset', path: '...' }`. |
@@ -355,10 +355,10 @@ The finetuning backend lives in `addon/src/` and uses the llama.cpp optimizer AP
 
 1. **Dataset** — `prepareTrainingDataset()`: SFT mode reads JSONL and builds chat-formatted samples; causal mode tokenizes plain text and builds next-token pairs via `buildNextTokenDataset()`. Validation: when `validationSplit` > 0 the same dataset is split (first N samples train, rest eval); when `useEvalDatasetForValidation` is true, `prepareEvalDataset()` loads a separate file and validation runs on it after each epoch.
 2. **Checkpoint state** — `initializeCheckpointing()` creates `TrainingCheckpointState` (ctx, model, adapter, checkpoint dir, atomic flags). Stored in `LlamaModel`; the per-batch callback receives the current state via a thread-local pointer (`setCurrentCheckpointState` / `tlsCurrentCheckpointState`) so the JobRunner thread running the finetune job sees its state.
-3. **Resume** — At the start of `finetune()`, C++ calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true: `clearPauseRequest()`; then `findLatestPauseCheckpoint()` locates the latest `pause_checkpoint_step_*` dir; `parseCheckpointMetadata()` loads epoch/step and LoRA config; adapter and optimizer state are restored from the checkpoint. Training continues from the saved position. Session params (dataset paths, `numberOfEpochs`, learning rate, validation settings, etc.) come from the current `params`. Only the resume **position** and saved LoRA layout (rank, alpha, target modules) come from the checkpoint.
+3. **Resume** — At the start of `finetune()`, C++ calls `pauseCheckpointExists(params.checkpointSaveDir)`. If true: `clearPauseRequest()`; then `findLatestPauseCheckpoint()` locates the latest `pause_checkpoint_step_*` dir; `parseCheckpointMetadata()` loads epoch/step, LoRA config, and explicit resume cursor fields (`resume_epoch`, `resume_batch`, `paused_during_validation`); adapter and optimizer state are restored from the checkpoint. The resume cursor is passed directly to `llama_opt_epoch_resume()` so training continues from the exact saved position. Session params (dataset paths, `numberOfEpochs`, learning rate, validation settings, etc.) come from the current `params`. Only the resume **position** and saved LoRA layout (rank, alpha, target modules) come from the checkpoint. Old checkpoints without the new resume fields fall back to starting from the beginning of the saved epoch.
 4. **Optimizer** — `configureOptimizer()` sets up `llama_opt_params` (AdamW, LoRA param filter, LR scheduler). `schedulerOptimizerParams` provides per-step learning rate.
 5. **Training loop** — `executeTrainingLoop()` calls `llama_opt_epoch()` for each epoch (train split, optional eval split or separate eval dataset). When validation is enabled, `val_loss` is computed and logged after each epoch. The per-batch callback is `optEpochCallbackWrapper` → `optEpochCallback()`.
-6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; on first batch, emits `FinetuningStarted` and sets `isFinetuning=true`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json), sets `shouldExit`, `pauseCheckpointSaved`, `isPaused` (and clears `isFinetuning`), and notifies the pause waiter; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
+6. **Per-batch callback** — `optEpochCallback()`: increments `globalStep`; on first batch, emits `FinetuningStarted` and sets `isFinetuning=true`; if `pauseRequested` is set, calls `savePauseCheckpoint()` (model.gguf, optimizer.gguf, metadata.json with explicit resume cursor: `resume_epoch`, `resume_batch`, `paused_during_validation`), sets `shouldExit`, `pauseCheckpointSaved`, `isPaused` (and clears `isFinetuning`), and notifies the pause waiter; otherwise, saves periodic checkpoints when `checkpointInterval` is reached.
 7. **Pause request path** — `requestPause()`: if `currentCheckpointState_` (atomic, per instance) is non-null, sets `pauseRequested.store(true)` and `llama_opt_request_stop(ctx)`; returns immediately. Returns `false` if no checkpoint state exists (e.g. training not started yet).
 8. **Completion** — On normal finish: `saveLoraAdapter()` writes the final LoRA to `outputParametersDir` and finetune ends as `COMPLETED`. On pause: terminal status is `PAUSED`. On runtime error: C++ throws; JS receives an `Error` event and `handle.await()` rejects.
 
@@ -559,7 +559,7 @@ Each checkpoint directory typically contains:
 
 ### Resume from Pause
 
-Call `finetune()` (no args) to resume. The addon finds the latest `pause_checkpoint_step_*` in `checkpointSaveDir` and continues training from there, reusing the stored finetuning parameters. When resuming mid-epoch, the backend uses the epoch-relative batch index in the callback so progress logging and checkpoint logic stay correct. **Checkpoint lifecycle:** After loading a pause checkpoint to resume, the backend removes that checkpoint directory so the same run does not resume from it again. When training completes successfully (COMPLETED), any remaining pause checkpoint in `checkpointSaveDir` is also cleared. Pause checkpoints remain on disk only while training is paused (after `pause()` and before the next `finetune()`), unless `cancel()` is called, which clears them.
+Call `finetune()` (no args) to resume. The addon finds the latest `pause_checkpoint_step_*` in `checkpointSaveDir` and continues training from there, reusing the stored finetuning parameters. The pause checkpoint metadata includes explicit resume cursor fields (`resume_epoch`, `resume_batch`) which are passed directly to the backend's `llama_opt_epoch_resume()`, so training resumes at the exact saved position without deriving it from step counters. If paused during validation, resume starts at the next epoch. **Checkpoint lifecycle:** After loading a pause checkpoint to resume, the backend removes that checkpoint directory so the same run does not resume from it again. When training completes successfully (COMPLETED), any remaining pause checkpoint in `checkpointSaveDir` is also cleared. Pause checkpoints remain on disk only while training is paused (after `pause()` and before the next `finetune()`), unless `cancel()` is called, which clears them.
 
 ---
 
