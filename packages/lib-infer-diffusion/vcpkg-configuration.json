@@ -14,7 +14,8 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "gtest",
-        "picojson"
+        "picojson",
+        "stb"
       ]
     }
   ]

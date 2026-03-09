@@ -1,6 +1,10 @@
 {
   "dependencies": [
     {
+      "name": "ggml",
+      "version>=": "2026-01-30"
+    },
+    {
       "name": "opencl",
       "platform": "android"
     },
@@ -15,14 +19,27 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "0.0.1"
-    }
+      "version>=": "2026-03-01"
+    },
+    {
+      "name": "stable-diffusion-cpp",
+      "features": [
+        "vulkan"
+      ],
+      "platform": "linux"
+    },
+    "stb"
   ],
   "features": {
-    "tests": {
-      "description": "Build tests",
+    "cuda": {
+      "description": "Enable CUDA GPU backend",
       "dependencies": [
-        "gtest"
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "cuda"
+          ]
+        }
       ]
     },
     "metal": {
@@ -30,25 +47,9 @@
       "dependencies": [
         {
           "name": "stable-diffusion-cpp",
-          "features": ["metal"]
-        }
-      ]
-    },
-    "vulkan": {
-      "description": "Enable Vulkan GPU backend",
-      "dependencies": [
-        {
-          "name": "stable-diffusion-cpp",
-          "features": ["vulkan"]
-        }
-      ]
-    },
-    "cuda": {
-      "description": "Enable CUDA GPU backend",
-      "dependencies": [
-        {
-          "name": "stable-diffusion-cpp",
-          "features": ["cuda"]
+          "features": [
+            "metal"
+          ]
         }
       ]
     },
@@ -57,7 +58,26 @@
       "dependencies": [
         {
           "name": "stable-diffusion-cpp",
-          "features": ["opencl"]
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        {
+          "name": "stable-diffusion-cpp",
+          "features": [
+            "vulkan"
+          ]
         }
       ]
     }

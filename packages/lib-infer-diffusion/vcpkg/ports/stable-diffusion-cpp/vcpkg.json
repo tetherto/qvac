@@ -1,26 +1,52 @@
 {
   "name": "stable-diffusion-cpp",
-  "version": "0.0.1",
+  "version-date": "2026-03-01",
+  "port-version": 0,
   "description": "Diffusion model inference in pure C/C++ (SD1.x, SD2.x, SDXL, SD3, FLUX, Wan, ...)",
   "homepage": "https://github.com/leejet/stable-diffusion.cpp",
   "license": "MIT",
   "dependencies": [
     { "name": "vcpkg-cmake", "host": true },
-    { "name": "vcpkg-cmake-config", "host": true }
+    { "name": "vcpkg-cmake-config", "host": true },
+    {
+      "name": "ggml",
+      "version>=": "2026-01-30"
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
   ],
   "features": {
     "metal": {
-      "description": "Enable Metal GPU acceleration (macOS/iOS)"
+      "description": "Enable Metal GPU acceleration (macOS/iOS)",
+      "dependencies": [
+        { "name": "ggml", "features": ["metal"] }
+      ]
     },
     "vulkan": {
-      "description": "Enable Vulkan GPU acceleration"
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        { "name": "ggml", "features": ["vulkan"] }
+      ]
     },
     "cuda": {
-      "description": "Enable CUDA GPU acceleration"
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        { "name": "ggml", "features": ["cuda"] }
+      ]
     },
     "opencl": {
       "description": "Enable OpenCL GPU acceleration (Android/Adreno)",
-      "dependencies": ["opencl"]
+      "dependencies": [
+        { "name": "ggml", "features": ["opencl"] }
+      ]
     },
     "flash-attn": {
       "description": "Enable Flash Attention for memory efficiency"
