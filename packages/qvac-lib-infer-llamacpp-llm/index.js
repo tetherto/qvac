@@ -109,14 +109,6 @@ class LlmLlamacpp extends BaseInference {
 
     try {
       const configForLoad = { ...this._config }
-      const shouldDisableFlashAttn = this._defaultFinetuneParams !== null
-      if (shouldDisableFlashAttn) {
-        const hasFlashSetting = Object.prototype.hasOwnProperty.call(configForLoad, 'flash_attn')
-        const requestedValue = hasFlashSetting ? configForLoad.flash_attn : undefined
-        if (requestedValue !== 'off') {
-          configForLoad.flash_attn = 'off'
-        }
-      }
 
       const configurationParams = {
         path: path.join(this._diskPath, this._modelName),
@@ -271,6 +263,7 @@ class LlmLlamacpp extends BaseInference {
       data.op === 'finetune' &&
       typeof data.status === 'string'
     ) {
+      this._skipNextRuntimeStats = true
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
     if (
