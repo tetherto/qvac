@@ -192,9 +192,13 @@ void LlamaModel::reinitialize(
     backendsDir = it->second;
     configFilemap.erase(it);
   }
-  initializeBackend(backendsDir);
 
   common_params params;
+  if (auto it = configFilemap.find("training"); it != configFilemap.end()) {
+    params.training = trainingMode;
+    configFilemap.erase(it);
+  }
+  initializeBackend(backendsDir);
   commonParamsParse(modelPath_, configFilemap, params);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
@@ -218,6 +222,7 @@ void LlamaModel::reinitialize(
         });
   }
 }
+
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
@@ -874,12 +879,17 @@ std::string LlamaModel::finetune(
   }
 
   std::unordered_map<std::string, std::string> configOverrides = {
-      {"flash_attn", "off"}};
+      {"flash_attn", "off"},
+      {"no_mmap", ""},
+      {"training", ""}};
   if (params.batchSize > 0) {
     configOverrides["batch_size"] = std::to_string(params.batchSize);
   }
   if (params.microBatchSize > 0) {
     configOverrides["ubatch_size"] = std::to_string(params.microBatchSize);
+  }
+  if (params.contextLength > 0) {
+    configOverrides["ctx_size"] = std::to_string(params.contextLength);
   }
 
 #ifdef __ANDROID__
