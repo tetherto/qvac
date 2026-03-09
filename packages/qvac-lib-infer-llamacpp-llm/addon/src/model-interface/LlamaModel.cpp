@@ -820,6 +820,8 @@ std::string LlamaModel::finetune(
     LlamaModel::ProgressCallback progressCallback) {
   using namespace llama_finetuning_helpers;
 
+  validateModelForFinetuning();
+
   if (cacheManager_.has_value() && cacheManager_->hasActiveCache()) {
     cacheManager_->saveCache();
   }
@@ -1123,6 +1125,41 @@ std::string LlamaModel::finetune(
     clearCurrentCheckpointStateShared();
     reinitialize({});
     throw;
+  }
+}
+
+void LlamaModel::validateModelForFinetuning() {
+  auto fileType = metadata_.tryGetU32("general.file_type");
+  if (fileType.has_value()) {
+    const uint32_t ft = *fileType;
+    const bool supportedQuant =
+        ft == LLAMA_FTYPE_ALL_F32 || ft == LLAMA_FTYPE_MOSTLY_F16 ||
+        ft == LLAMA_FTYPE_MOSTLY_Q4_0 || ft == LLAMA_FTYPE_MOSTLY_Q8_0 ||
+        ft == LLAMA_FTYPE_MOSTLY_TQ1_0 || ft == LLAMA_FTYPE_MOSTLY_TQ2_0;
+    if (!supportedQuant) {
+      throw std::runtime_error(
+          "Finetuning is not supported for this quantization type "
+          "(file_type=" +
+          std::to_string(ft) +
+          "). Supported: F32, F16, Q4_0, Q8_0, TQ1_0, TQ2_0");
+    }
+  }
+
+  llama_model* mdl = getModel();
+  if (mdl != nullptr) {
+    char arch[64] = {0};
+    int len = llama_model_meta_val_str(
+        mdl, "general.architecture", arch, sizeof(arch));
+    if (len > 0 && len < static_cast<int>(sizeof(arch))) {
+      std::string archStr(arch, static_cast<size_t>(len));
+      const bool supportedArch =
+          archStr == "gemma3" || archStr == "qwen3" || archStr == "bitnet";
+      if (!supportedArch) {
+        throw std::runtime_error(
+            "Finetuning is not supported for architecture '" + archStr +
+            "'. Supported: gemma3, qwen3, bitnet");
+      }
+    }
   }
 }
 

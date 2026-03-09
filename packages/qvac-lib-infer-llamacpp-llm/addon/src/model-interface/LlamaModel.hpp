@@ -165,6 +165,7 @@ private:
   llama_pos configuredNDiscarded_ = 0;
   std::optional<CacheManager> cacheManager_;
 
+  void validateModelForFinetuning();
   void validateFinetuningParams(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
   ggml_opt_dataset_t prepareTrainingDataset(
