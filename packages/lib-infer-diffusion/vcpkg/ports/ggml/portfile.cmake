@@ -23,6 +23,7 @@ vcpkg_from_github(
     PATCHES
         ggml-max-name.patch
         ggml-opencl-public-header.patch
+        ggml-config-include-dir.patch
 )
 
 # --- GPU feature flags ---

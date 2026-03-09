@@ -15,9 +15,9 @@
 # Pinned to release tag master-514-5792c66 (2026-03-01).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO leejet/stable-diffusion.cpp
+    REPO tetherto/qvac-ext-stable-diffusion.cpp
     REF 5792c668798083f9f6d57dac66fbc62ddfdac405
-    SHA512 2d19089cab693253e555c8ac5401e976dc8bb6387ff603da52837c28670f8029687afcc92994ee5bd5e75d94f038f40fd023342ed43e447da1355f886958a9fc
+    SHA512 9bdf945d27ea24d9ea8218a7b875b6d1346711122723453840f4648cd862de3be28e37736ce0ef46ed304cbe810593dfa4264eec969c9e0c8dafb854298280f7
     HEAD_REF master
     PATCHES
         sd-cpu-only.patch

@@ -86,7 +86,7 @@ if((ANDROID OR UNIX) AND NOT APPLE)
     # loaded at runtime. ggml's cmake config does not export them as imported
     # targets — find the installed .so files and create targets ourselves.
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-      find_library(_${_backend}_LIB "qvac-diffusion-${_backend}" REQUIRED)
+      find_library(_${_backend}_LIB "${_backend}" REQUIRED)
       add_library(ggml::${_backend} SHARED IMPORTED)
       set_target_properties(ggml::${_backend} PROPERTIES
         IMPORTED_LOCATION "${_${_backend}_LIB}"
