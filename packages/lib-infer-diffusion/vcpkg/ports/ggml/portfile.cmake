@@ -87,6 +87,23 @@ if(VCPKG_TARGET_IS_ANDROID AND "vulkan" IN_LIST FEATURES)
          DESTINATION "${SOURCE_PATH}/src/")
 endif()
 
+# --- Platform options ---
+set(PLATFORM_OPTIONS)
+
+if(VCPKG_TARGET_IS_ANDROID)
+    # GGML_BACKEND_DL compiles each GPU backend as a MODULE (.so) loaded at
+    # runtime via dlopen.  Requires BUILD_SHARED_LIBS=ON so ggml-base is a
+    # shared library that MODULE backends can link against.
+    set(VCPKG_LIBRARY_LINKAGE dynamic)
+    list(APPEND PLATFORM_OPTIONS
+        -DGGML_BACKEND_DL=ON
+        -DGGML_CPU_ALL_VARIANTS=ON
+        -DGGML_CPU_REPACK=ON
+        -DGGML_VULKAN_DISABLE_COOPMAT=ON
+        -DGGML_VULKAN_DISABLE_COOPMAT2=ON
+    )
+endif()
+
 # --- Configure & build ---
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
@@ -94,6 +111,8 @@ vcpkg_cmake_configure(
         -DBUILD_SHARED_LIBS=OFF
         -DGGML_NATIVE=OFF
         -DGGML_CCACHE=OFF
+        -DGGML_OPENMP=OFF
+        -DGGML_LLAMAFILE=OFF
         -DGGML_BUILD_TESTS=OFF
         -DGGML_BUILD_EXAMPLES=OFF
         -DGGML_METAL=${GGML_METAL}
@@ -102,9 +121,22 @@ vcpkg_cmake_configure(
         -DGGML_OPENCL=${GGML_OPENCL}
         -DGGML_MAX_NAME=128  # stable-diffusion.cpp requires >= 128
         ${GGML_CUDA_COMPILER_OPTION}
+        ${PLATFORM_OPTIONS}
 )
 
 vcpkg_cmake_install()
+
+# --- Install DL backend .so files for Android ---
+# When GGML_BACKEND_DL is ON, ggml builds each backend as a MODULE target
+# but does NOT install them via cmake install().  They sit in the build
+# output directory (bin/).  Copy them into the vcpkg packages lib/ so the
+# consuming addon can find and bundle them.
+if(VCPKG_TARGET_IS_ANDROID)
+    file(GLOB _backend_sos "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libggml-*.so")
+    if(_backend_sos)
+        file(INSTALL ${_backend_sos} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
+    endif()
+endif()
 
 # Fix up the CMake package config installed by ggml's own build system.
 vcpkg_cmake_config_fixup(PACKAGE_NAME ggml CONFIG_PATH lib/cmake/ggml)
