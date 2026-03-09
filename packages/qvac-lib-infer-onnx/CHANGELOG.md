@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1] - 2026-03-05
+
+### Fixed
+
+- Failed CI sanity checks
+- CI build errors for android, osx, and ios
+
+
 ## [0.12.0] - 2026-03-04
 
 ### Added

@@ -1,0 +1,42 @@
+name: Docs Website PR Checks
+
+on:
+  pull_request:
+    paths:
+      - 'docs/website/**'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-website-pr-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: docs/website
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Create placeholder for generated API docs
+        run: |
+          mkdir -p content/docs/sdk/api/latest
+          printf '%s\n' '---' 'title: API Reference' 'description: API Reference for the latest version of the QVAC SDK.' '---' > content/docs/sdk/api/latest/index.mdx
+
+      - name: Build and validate
+        run: bun run build

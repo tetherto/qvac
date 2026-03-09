@@ -20,7 +20,7 @@ class ModelManager {
    * Includes all parameters that affect model behavior
    */
   _generateModelKey (modelPath, config) {
-    const device = config?.device || 'cpu'
+    const device = config?.device === 'cpu' ? 'cpu' : 'gpu'
     const gpuLayers = config?.gpu_layers || '0'
     const ctxSize = config?.ctx_size || '512'
     const batchSize = config?.batch_size || '2048'
@@ -86,6 +86,7 @@ class ModelManager {
     // Build addon config map from parameters
     // Config is a map with string values: { gpu_layers: '25', ctx_size: '512', batch_size: '512' }
     const addonConfig = {}
+    addonConfig.device = config?.device === 'cpu' ? 'cpu' : 'gpu'
     if (config?.gpu_layers != null && config.gpu_layers !== '') {
       addonConfig.gpu_layers = config.gpu_layers
     } else {
