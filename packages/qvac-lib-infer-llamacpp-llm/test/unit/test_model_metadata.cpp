@@ -319,6 +319,50 @@ TEST_F(
       });
 }
 
+// ---- tryGetString: architecture detection via "general.architecture" ----
+//
+// The "general.architecture" GGUF string key is "bitnet" for BitNet models
+// and a different value (e.g. "llama", "qwen3") for all others.
+
+TEST_F(ModelMetadataTest, DiskSingleFile_NormalModel_ArchitectureIsNotBitnet) {
+  REQUIRE_MODEL(normalModel_);
+  parseDiskSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
+    auto arch = meta.tryGetString("general.architecture");
+    ASSERT_TRUE(arch.has_value());
+    EXPECT_NE(arch.value(), "bitnet");
+  });
+}
+
+TEST_F(ModelMetadataTest, DiskSingleFile_BitnetModel_ArchitectureIsBitnet) {
+  REQUIRE_MODEL(bitnetModel_);
+  parseDiskSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
+    auto arch = meta.tryGetString("general.architecture");
+    ASSERT_TRUE(arch.has_value());
+    EXPECT_EQ(arch.value(), "bitnet");
+  });
+}
+
+TEST_F(
+    ModelMetadataTest,
+    StreamingSingleFile_NormalModel_ArchitectureIsNotBitnet) {
+  REQUIRE_MODEL(normalModel_);
+  parseStreamingSingleFile(normalModel_.path, [](const ModelMetaData& meta) {
+    auto arch = meta.tryGetString("general.architecture");
+    ASSERT_TRUE(arch.has_value());
+    EXPECT_NE(arch.value(), "bitnet");
+  });
+}
+
+TEST_F(
+    ModelMetadataTest, StreamingSingleFile_BitnetModel_ArchitectureIsBitnet) {
+  REQUIRE_MODEL(bitnetModel_);
+  parseStreamingSingleFile(bitnetModel_.path, [](const ModelMetaData& meta) {
+    auto arch = meta.tryGetString("general.architecture");
+    ASSERT_TRUE(arch.has_value());
+    EXPECT_EQ(arch.value(), "bitnet");
+  });
+}
+
 // ---- AsyncWeightsLoader: streaming single file ----
 //
 // setWeightsForFile is called during the download phase (before activate()),
