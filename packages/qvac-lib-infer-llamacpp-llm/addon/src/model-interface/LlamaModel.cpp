@@ -824,21 +824,21 @@ std::string LlamaModel::finetune(
     cacheManager_->saveCache();
   }
 
-  std::unordered_map<std::string, std::string> finetuneOverrides = {
+  std::unordered_map<std::string, std::string> configOverrides = {
       {"flash_attn", "off"}};
 
 #ifdef __ANDROID__
   using backend_selection::AdrenoGeneration;
   const auto adrenoGen = backend_selection::detectAdrenoGeneration();
   if (adrenoGen == AdrenoGeneration::Adreno800) {
-    finetuneOverrides["disable_opencl"] = "true";
+    configOverrides["disable_opencl"] = "true";
   } else if (adrenoGen == AdrenoGeneration::Adreno700 ||
              adrenoGen == AdrenoGeneration::Adreno600) {
-    finetuneOverrides["device"] = "cpu";
+    configOverrides["device"] = "cpu";
   }
 #endif
 
-  reinitialize(finetuneOverrides);
+  reinitialize(configOverrides);
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
