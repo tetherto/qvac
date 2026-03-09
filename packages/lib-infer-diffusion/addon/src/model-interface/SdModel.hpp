@@ -99,6 +99,11 @@ public:
 
   void cancel() const final;
 
+  /** True if cancel() has been called since the last job started. */
+  [[nodiscard]] bool isCancelRequested() const noexcept {
+    return cancelRequested_.load();
+  }
+
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 

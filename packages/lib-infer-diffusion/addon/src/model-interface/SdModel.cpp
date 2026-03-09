@@ -29,6 +29,10 @@ struct ProgressCtx {
 };
 
 thread_local ProgressCtx tl_progressCtx;
+// Thread-local model pointer for abort callback routing — same pattern as
+// tl_progressCtx for progress.  Avoids relying on the process-global
+// sd_abort_cb_data when multiple SdModel instances could coexist.
+thread_local const SdModel* tl_abortModel = nullptr;
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
@@ -44,6 +48,14 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
       << elapsed << "}";
 
   tl_progressCtx.job->progressCallback(oss.str());
+}
+
+// Abort callback — wired into sd_set_abort_callback() so that
+// generate_image() can be interrupted mid-denoising.
+// Reads from thread-local tl_abortModel (not the global sd_abort_cb_data)
+// to avoid concurrency issues when multiple SdModel instances coexist.
+bool sdAbortCallback(void* /*data*/) {
+  return tl_abortModel && tl_abortModel->isCancelRequested();
 }
 
 } // namespace
@@ -206,6 +218,21 @@ std::any SdModel::process(const std::any& input) {
   tl_progressCtx.job = &job;
   tl_progressCtx.startTime = std::chrono::steady_clock::now();
   sd_set_progress_callback(sdProgressCallback, nullptr);
+  tl_abortModel = this;
+  sd_set_abort_callback(sdAbortCallback, nullptr);
+
+  // Scope guard: clear process-global callbacks on any exit path (including
+  // early exceptions from parsing/validation before generate_image runs).
+  auto clearCallbacks = [&]() {
+    tl_progressCtx.job = nullptr;
+    tl_abortModel = nullptr;
+    sd_set_progress_callback(nullptr, nullptr);
+    sd_set_abort_callback(nullptr, nullptr);
+  };
+  struct CallbackGuard {
+    std::function<void()> fn;
+    ~CallbackGuard() { fn(); }
+  } guard{clearCallbacks};
 
   // ── Parse JSON params ─────────────────────────────────────────────────────
   picojson::value v;
@@ -294,19 +321,30 @@ std::any SdModel::process(const std::any& input) {
   if (initImg.data)
     free(initImg.data);
 
+  const bool wasCancelled = cancelRequested_.load();
+
+  // Always free native image buffers, whether cancelled or not.
   int outputCount = 0;
   if (results) {
     for (int i = 0; i < gen.batchCount; ++i) {
-      if (results[i].data && !cancelRequested_.load()) {
-        auto png = encodeToPng(results[i]);
-        if (!png.empty() && job.outputCallback) {
-          job.outputCallback(png);
-          ++outputCount;
+      if (results[i].data) {
+        if (!wasCancelled) {
+          auto png = encodeToPng(results[i]);
+          if (!png.empty() && job.outputCallback) {
+            job.outputCallback(png);
+            ++outputCount;
+          }
         }
         free(results[i].data);
       }
     }
     free(results);
+  }
+
+  // If cancelled, propagate as an exception so JobRunner emits
+  // queueException (error path), not queueResult + queueJobEnded.
+  if (wasCancelled) {
+    throw std::runtime_error("Job cancelled");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -334,7 +372,10 @@ std::any SdModel::process(const std::any& input) {
           ? (static_cast<double>(totalPixels_) / 1e6 / totalTimeSec)
           : 0.0;
 
-  // ── Build stats ────────────────────────────────────────────────────────────
+  // ── Build stats for runtimeStats() ─────────────────────────────────────────
+  // Stats are stored and emitted via queueJobEnded() → runtimeStats().
+  // process() returns std::any{} (empty) so images delivered via
+  // outputCallback are not duplicated as a queueResult event.
   lastStats_.clear();
 
   lastStats_.emplace_back("generation_time", genMs);
@@ -359,10 +400,9 @@ std::any SdModel::process(const std::any& input) {
   lastStats_.emplace_back("seed", gen.seed);
   lastStats_.emplace_back("output_count", static_cast<int64_t>(outputCount));
 
-  tl_progressCtx.job = nullptr;
-  sd_set_progress_callback(nullptr, nullptr);
-
-  return lastStats_;
+  // Return empty — images are already delivered via outputCallback,
+  // and stats are emitted by queueJobEnded() → runtimeStats().
+  return std::any{};
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,24 @@
+diff --git a/src/stable-diffusion.cpp b/src/stable-diffusion.cpp
+index d769d45..db3f242 100644
+--- a/src/stable-diffusion.cpp
++++ b/src/stable-diffusion.cpp
+@@ -2203,7 +2203,7 @@ public:
+                 control_net->free_control_ctx();
+                 control_net->free_compute_buffer();
+             }
+-            diffusion_model->free_compute_buffer();
++            work_diffusion_model->free_compute_buffer();
+             return NULL;
+         }
+ 
+@@ -3796,6 +3796,10 @@ sd_image_t* generate_image(sd_ctx_t* sd_ctx, const sd_img_gen_params_t* sd_img_g
+ 
+     size_t t2 = ggml_time_ms();
+ 
++    if (result_images == nullptr) {
++        ggml_free(work_ctx);
++    }
++
+     LOG_INFO("generate_image completed in %.2fs", (t2 - t0) * 1.0f / 1000);
+ 
+     return result_images;
