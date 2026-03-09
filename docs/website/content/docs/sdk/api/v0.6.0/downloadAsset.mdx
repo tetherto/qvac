@@ -1,0 +1,58 @@
+---
+title: "downloadAsset( )"
+titleStyle: code
+description: "Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity."
+---
+
+```typescript
+function downloadAsset(options: any): Promise
+```
+
+## Description
+
+Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `options` | `any` | ✓ | Download configuration including:
+  - assetSrc: The location from which the asset is downloaded (local path, remote URL, or Hyperdrive URL)
+  - seed: Optional boolean for hyperdrive seeding
+  - onProgress: Optional callback for download progress |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Download model without loading
+const assetId = await downloadAsset({
+  assetSrc: "/path/to/model.gguf",
+  seed: true
+});
+
+// Download with progress tracking
+const assetId = await downloadAsset({
+  assetSrc: "pear://key123/model.gguf",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+```
+```

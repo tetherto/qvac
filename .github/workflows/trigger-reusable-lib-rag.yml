@@ -127,6 +127,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     if: needs.publish-logic.outputs.publish_release == 'true'
     uses: tetherto/qvac-devops/.github/workflows/public-reusable-npm.yml@monorepo_update
     secrets: inherit
