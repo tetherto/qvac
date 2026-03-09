@@ -1399,6 +1399,9 @@ llama_finetuning_helpers::LoraLrSchedulerState LlamaModel::createLrScheduler(
           ? 0.0f
           : static_cast<float>(schedulerState.warmupSteps) /
                 static_cast<float>(schedulerState.totalSteps);
+  schedulerState.currentStep = 0;
+  schedulerState.lastLr =
+      schedulerLrForStep(schedulerState, schedulerState.currentStep);
 
   return schedulerState;
 }
