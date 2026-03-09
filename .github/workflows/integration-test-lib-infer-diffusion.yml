@@ -269,7 +269,7 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
-          SD_CPU_ONLY: ${{ matrix.platform == 'darwin' && '1' || '' }}
+          SD_CPU_ONLY: '1'
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
