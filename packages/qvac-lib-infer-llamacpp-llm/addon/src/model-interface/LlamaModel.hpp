@@ -303,6 +303,8 @@ private:
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
 
+  bool isFinetuning_ = false;
+
   mutable std::mutex checkpointStateMutex_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       currentCheckpointState_;

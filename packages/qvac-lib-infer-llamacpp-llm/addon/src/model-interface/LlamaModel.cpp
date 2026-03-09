@@ -405,6 +405,7 @@ std::any LlamaModel::process(const std::any& input) {
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
+    lock.unlock();
     std::string status =
         finetune(*prompt.finetuningParams, &stats, prompt.progressCallback);
     FinetuneTerminalResult result{"finetune", std::move(status)};
@@ -626,7 +627,7 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(deviceIt);
   }
 
-  tuneConfigMap(configFilemap, metadata_, outAdrenoVersion);
+  tuneConfigMap(configFilemap, metadata_, outAdrenoVersion, isFinetuning_);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
@@ -1031,46 +1032,22 @@ std::string LlamaModel::finetune(
 
   validateModelForFinetuning();
 
-  if (state_->cacheManager_.has_value() &&
-      state_->cacheManager_->hasActiveCache()) {
-    state_->cacheManager_->saveCache();
+  {
+    std::shared_lock lock(stateMtx_);
+    if (state_->cacheManager_.has_value() &&
+        state_->cacheManager_->hasActiveCache()) {
+      state_->cacheManager_->saveCache();
+    }
   }
 
-  std::unordered_map<std::string, std::string> configOverrides = {
-      {"flash_attn", "off"}, {"no_mmap", ""}};
-  if (params.batchSize > 0) {
-    configOverrides["batch_size"] = std::to_string(params.batchSize);
-  }
-  if (params.microBatchSize > 0) {
-    configOverrides["ubatch_size"] = std::to_string(params.microBatchSize);
-  }
-  if (!gpuSupportsOutProdF16()) {
-    configOverrides["cache_type_k"] = "f32";
-    configOverrides["cache_type_v"] = "f32";
-  }
-  if (params.contextLength > 0) {
-    configOverrides["ctx_size"] = std::to_string(params.contextLength);
-  }
-
-#ifdef __ANDROID__
-  using backend_selection::AdrenoGeneration;
-  const auto adrenoGen = backend_selection::detectAdrenoGeneration();
-  if (adrenoGen == AdrenoGeneration::Adreno800) {
-    configOverrides["disable_opencl"] = "true";
-  } else if (
-      adrenoGen == AdrenoGeneration::Adreno700 ||
-      adrenoGen == AdrenoGeneration::Adreno600) {
-    configOverrides["device"] = "cpu";
-  }
-#endif
-
-  reinitialize(configOverrides, true);
+  isFinetuning_ = true;
+  reload();
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
     throw std::runtime_error(
-        "Finetune error: model/context not available after reinitialize.");
+        "Finetune error: model/context not available after reload.");
   }
 
   try {
@@ -1333,7 +1310,8 @@ std::string LlamaModel::finetune(
     }
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
-    reinitialize({});
+    isFinetuning_ = false;
+    reload();
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1348,9 +1326,11 @@ std::string LlamaModel::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
+    isFinetuning_ = false;
     try {
-      reinitialize({});
+      reload();
     } catch (...) {
+      QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
     }
     throw;
   }
