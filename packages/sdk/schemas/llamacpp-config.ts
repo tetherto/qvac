@@ -79,7 +79,7 @@ export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;
 export const EMBED_CONFIG_DEFAULTS = {
   gpuLayers: 99,
   device: "gpu",
-  batchSize: 2048,
+  batchSize: 1024,
 } as const satisfies Partial<EmbedConfigInput>;
 
 // Full schema - validates then applies defaults via transform
