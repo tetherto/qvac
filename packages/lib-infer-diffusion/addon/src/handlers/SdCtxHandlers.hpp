@@ -104,7 +104,7 @@ struct SdCtxConfig {
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
   // ── Internal ──────────────────────────────────────────────────────────────
-  bool freeParamsImmediately = true;
+  bool freeParamsImmediately = false;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
