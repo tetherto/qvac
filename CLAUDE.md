@@ -179,9 +179,15 @@ Generated copies are placed in `.claude/agent-conduct.md` by `.agent/setup.sh`.
 
 ## Knowledge Base
 
-Domain-specific reference docs for specialist sub-agents (canonical source in `.agent/knowledge/`):
-- CI validation: `.agent/knowledge/ci-validation.md`
-- vcpkg management: `.agent/knowledge/vcpkg-management.md`
+Domain-specific reference docs (canonical source in `.agent/knowledge/`, generated copies in `.claude/knowledge/`).
+When a question relates to one of these topics, read the corresponding knowledge file before answering.
+
+| Topic | When to read | File |
+|-------|-------------|------|
+| CI / GitHub Actions | CI failures, workflow triggers, validation, publishing | `.claude/knowledge/ci-validation.md` |
+| vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `.claude/knowledge/vcpkg-management.md` |
+
+Skills: `/kb-ci <question>`, `/kb-vcpkg <question>`
 
 ## Never Commit
 
