@@ -298,7 +298,6 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
   }
 })
 
-
 test('inference with session cache works after finetuning', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   const modelVariant = FINETUNE_MODELS[0]
   const [modelName, modelDir] = await ensureModel({
@@ -319,7 +318,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     device: forceCpuDevice ? 'cpu' : 'gpu',
     verbosity: '2',
     n_predict: '64',
-    seed: '42',
+    seed: '42'
   }
 
   const model = new LlmLlamacpp(
@@ -374,4 +373,3 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     try { fs.unlinkSync(sessionFile) } catch (_) {}
   }
 })
-
