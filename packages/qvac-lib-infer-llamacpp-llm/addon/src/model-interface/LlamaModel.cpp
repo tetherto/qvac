@@ -107,6 +107,10 @@ void LlamaModel::init(
   std::unordered_map<std::string, std::string> configFilemap =
       std::move(configFilemapRvalue);
 
+  modelPath_ = modelPath;
+  projectionPath_ = projectionPath;
+  baseConfigFilemap_ = configFilemap;
+
   // Set verbosity level
   setVerbosityLevel(configFilemap);
 
@@ -170,6 +174,49 @@ void LlamaModel::init(
 
 void LlamaModel::initializeBackend(const std::string& backendsDir) {
   backendsHandle_ = LlamaBackendsHandle(backendsDir);
+}
+
+void LlamaModel::reinitialize(
+    const std::unordered_map<std::string, std::string>& configOverrides) {
+  cacheManager_.reset();
+  llmContext_.reset();
+  backendsHandle_.reset();
+
+  std::unordered_map<std::string, std::string> configFilemap = baseConfigFilemap_;
+  for (const auto& [key, value] : configOverrides) {
+    configFilemap[key] = value;
+  }
+
+  std::string backendsDir;
+  if (auto it = configFilemap.find("backendsDir"); it != configFilemap.end()) {
+    backendsDir = it->second;
+    configFilemap.erase(it);
+  }
+  initializeBackend(backendsDir);
+
+  common_params params;
+  commonParamsParse(modelPath_, configFilemap, params);
+
+  const std::string errorWhenFailed = toString(UnableToLoadModel);
+  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> noStreams;
+  common_init_result llamaInit = initFromConfig(
+      params, modelPath_, noStreams, shards_, loadingContext_,
+      false, ADDON_ID, errorWhenFailed);
+
+  std::string projPath = projectionPath_;
+  llmContext_ =
+      createContext(std::move(projPath), params, std::move(llamaInit));
+
+  if (configuredNDiscarded_ > 0 && llmContext_) {
+    llmContext_->setNDiscarded(configuredNDiscarded_);
+  }
+
+  if (llmContext_) {
+    cacheManager_.emplace(
+        llmContext_.get(), configuredNDiscarded_, [this](bool resetStats) {
+          this->resetState(resetStats);
+        });
+  }
 }
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
@@ -764,18 +811,18 @@ std::string LlamaModel::finetune(
     LlamaModel::ProgressCallback progressCallback) {
   using namespace llama_finetuning_helpers;
 
+  if (cacheManager_.has_value() && cacheManager_->hasActiveCache()) {
+    cacheManager_->saveCache();
+  }
+
+  reinitialize({{"flash_attn", "off"}});
+
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
     throw std::runtime_error(
-        "Finetune error: model/context not available. Call activate() first.");
+        "Finetune error: model/context not available after reinitialize.");
   }
-
-  if (cacheManager_.has_value() && cacheManager_->hasActiveCache()) {
-    cacheManager_->saveCache();
-    cacheManager_->invalidate();
-  }
-  resetState();
 
   try {
 
@@ -1035,14 +1082,8 @@ std::string LlamaModel::finetune(
       QLOG_IF(Priority::DEBUG, "Finetune completed successfully");
     }
 
-    if (optimizerInitialized_) {
-      llama_opt_cleanup(ctx);
-      optimizerInitialized_ = false;
-    }
-    llama_clear_adapter_lora(ctx);
-    resetState();
-
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
+    reinitialize({});
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1057,12 +1098,7 @@ std::string LlamaModel::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
-    if (optimizerInitialized_) {
-      llama_opt_cleanup(ctx);
-      optimizerInitialized_ = false;
-    }
-    llama_clear_adapter_lora(ctx);
-    resetState();
+    reinitialize({});
     throw;
   }
 }

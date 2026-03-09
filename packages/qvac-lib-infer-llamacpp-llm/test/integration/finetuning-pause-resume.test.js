@@ -132,7 +132,6 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       gpu_layers: '999',
       ctx_size: '512',
       device: forceCpuDevice ? 'cpu' : 'gpu',
-      flash_attn: 'off',
       verbosity: '2'
     }
 
@@ -263,7 +262,6 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
       gpu_layers: '999',
       ctx_size: '512',
       device: forceCpuDevice ? 'cpu' : 'gpu',
-      flash_attn: 'off',
       verbosity: '2'
     },
     finetuneConfig
@@ -319,7 +317,6 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     gpu_layers: '999',
     ctx_size: '512',
     device: forceCpuDevice ? 'cpu' : 'gpu',
-    flash_attn: 'off',
     verbosity: '2',
     n_predict: '64',
     seed: '42',

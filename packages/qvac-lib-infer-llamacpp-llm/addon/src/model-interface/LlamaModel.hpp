@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -141,6 +142,8 @@ private:
   void init(
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
+  void reinitialize(
+      const std::unordered_map<std::string, std::string>& configOverrides);
 
   const std::string loadingContext_;
   GGUFShards shards_;
@@ -148,6 +151,10 @@ private:
   InitLoader initLoader_;
   ModelMetaData metadata_;
   AsyncWeightsLoader asyncWeightsLoader_;
+
+  std::string modelPath_;
+  std::string projectionPath_;
+  std::unordered_map<std::string, std::string> baseConfigFilemap_;
 
   bool isTextLlm_ = false;
 
