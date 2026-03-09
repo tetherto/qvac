@@ -143,7 +143,8 @@ private:
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
   void reinitialize(
-      const std::unordered_map<std::string, std::string>& configOverrides);
+      const std::unordered_map<std::string, std::string>& configOverrides,
+      bool training = false);
 
   const std::string loadingContext_;
   GGUFShards shards_;

@@ -22,6 +22,7 @@
 #include <common/chat.h>
 #include <common/common.h>
 #include <common/log.h>
+#include <ggml-backend.h>
 #include <ggml-opt.h>
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
@@ -177,7 +178,8 @@ void LlamaModel::initializeBackend(const std::string& backendsDir) {
 }
 
 void LlamaModel::reinitialize(
-    const std::unordered_map<std::string, std::string>& configOverrides) {
+    const std::unordered_map<std::string, std::string>& configOverrides,
+    bool training) {
   cacheManager_.reset();
   llmContext_.reset();
   backendsHandle_.reset();
@@ -196,6 +198,7 @@ void LlamaModel::reinitialize(
 
   common_params params;
   commonParamsParse(modelPath_, configFilemap, params);
+  params.training = training;
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> noStreams;
@@ -859,6 +862,55 @@ void LlamaModel::validateBitnetQuantization() {
   }
 }
 
+static bool gpuSupportsOutProdF16() {
+  ggml_backend_dev_t gpu =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU);
+  if (gpu == nullptr) {
+    return true;
+  }
+
+  constexpr int64_t ne0 = 4;
+  constexpr int64_t ne1 = 3;
+  constexpr int64_t k = 2;
+
+  struct ggml_tensor src0 = {};
+  struct ggml_tensor src1 = {};
+  struct ggml_tensor dst = {};
+
+  src0.type = GGML_TYPE_F16;
+  src1.type = GGML_TYPE_F32;
+  dst.type = GGML_TYPE_F32;
+
+  src0.ne[0] = ne0; src0.ne[1] = k;   src0.ne[2] = 1; src0.ne[3] = 1;
+  src1.ne[0] = ne1; src1.ne[1] = k;   src1.ne[2] = 1; src1.ne[3] = 1;
+  dst.ne[0]  = ne0; dst.ne[1]  = ne1; dst.ne[2]  = 1; dst.ne[3]  = 1;
+
+  src0.nb[0] = sizeof(ggml_fp16_t);
+  src0.nb[1] = src0.nb[0] * ne0;
+  src0.nb[2] = src0.nb[1] * k;
+  src0.nb[3] = src0.nb[2];
+
+  src1.nb[0] = sizeof(float);
+  src1.nb[1] = src1.nb[0] * ne1;
+  src1.nb[2] = src1.nb[1] * k;
+  src1.nb[3] = src1.nb[2];
+
+  dst.nb[0] = sizeof(float);
+  dst.nb[1] = dst.nb[0] * ne0;
+  dst.nb[2] = dst.nb[1] * ne1;
+  dst.nb[3] = dst.nb[2];
+
+  dst.op = GGML_OP_OUT_PROD;
+  dst.src[0] = &src0;
+  dst.src[1] = &src1;
+
+  if (ggml_backend_dev_type(gpu) == GGML_BACKEND_DEVICE_TYPE_GPU &&
+      !ggml_backend_dev_supports_op(gpu, &dst)) {
+    return false;
+  }
+  return true;
+}
+
 // Finetuning implementation
 #ifndef STANDALONE_TEST_BUILD
 std::string LlamaModel::finetune(
@@ -881,6 +933,10 @@ std::string LlamaModel::finetune(
   if (params.microBatchSize > 0) {
     configOverrides["ubatch_size"] = std::to_string(params.microBatchSize);
   }
+  if (!gpuSupportsOutProdF16()) {
+    configOverrides["cache_type_k"] = "f32";
+    configOverrides["cache_type_v"] = "f32";
+  }
 
 #ifdef __ANDROID__
   using backend_selection::AdrenoGeneration;
@@ -893,7 +949,7 @@ std::string LlamaModel::finetune(
   }
 #endif
 
-  reinitialize(configOverrides);
+  reinitialize(configOverrides, true);
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
