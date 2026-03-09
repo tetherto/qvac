@@ -17,6 +17,7 @@ const {
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
@@ -24,7 +25,7 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors'
 }
 
-test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000 }, async (t) => {
+test('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, skip: isMobile }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({

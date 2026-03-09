@@ -17,6 +17,7 @@ const {
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DIFFUSION_MODEL = {
@@ -34,7 +35,7 @@ const VAE_MODEL = {
   url: 'https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors'
 }
 
-test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000 }, async (t) => {
+test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000, skip: isMobile }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({

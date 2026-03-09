@@ -17,6 +17,7 @@ const {
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const DEFAULT_MODEL = {
@@ -24,7 +25,7 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf'
 }
 
-test('SDXL txt2img — generates a valid PNG image', { timeout: 900000 }, async (t) => {
+test('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip: isMobile }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
