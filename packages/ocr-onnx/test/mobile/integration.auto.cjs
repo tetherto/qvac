@@ -6,6 +6,22 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-basic.test.js', options)
+}
+
+async function runDoctrFrenchTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-french.test.js', options)
+}
+
+async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-lab-results.test.js', options)
+}
+
+async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-models.test.js', options)
+}
+
 async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/error-handling.test.js', options)
 }

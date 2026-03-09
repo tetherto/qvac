@@ -1,7 +1,7 @@
 ---
 description: SDK Configuration System - Immutable Config Loaded at Initialization
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
 alwaysApply: false
 ---
 

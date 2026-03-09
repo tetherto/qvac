@@ -39,10 +39,34 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: ubuntu-22.04
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: ai-run-linux-gpu
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-            runner: macos-14
+            runner: macos-15-xlarge
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            runner: macos-15-large
+          - os: windows-11
+            platform: win32
+            arch: x64
+            runner: ai-run-windows11-gpu
 
     steps:
       - name: Setup Node.js
@@ -209,16 +233,6 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Windows - Install Vulkan
-        if: ${{ matrix.platform == 'win32' }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe -PassThru -UseBasicParsing
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-        shell: powershell
-        timeout-minutes: 40
-
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
@@ -238,3 +252,33 @@ jobs:
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: List generated images
+        if: always()
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "## Generated Images (${{ matrix.os }}-${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if ls test/model/*.png 1>/dev/null 2>&1; then
+            echo "| File | Test Source | Size |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|------------|------|" >> $GITHUB_STEP_SUMMARY
+            for f in test/model/*.png; do
+              fname=$(basename "$f")
+              test_source=$(echo "$fname" | sed 's/--.*//')
+              size=$(du -h "$f" | cut -f1)
+              echo "| \`$fname\` | \`${test_source}.test.js\` | $size |" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "*No images were generated.*" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload generated images
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: sd-test-images-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.WORKDIR }}/test/model/*.png
+          if-no-files-found: ignore
+          retention-days: 30
+

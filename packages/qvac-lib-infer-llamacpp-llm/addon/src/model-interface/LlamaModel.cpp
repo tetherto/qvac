@@ -63,11 +63,52 @@ static std::vector<std::string> split(const std::string& str, char delimiter) {
   return tokens;
 }
 
+void LlamaModel::resolveShardPaths(
+    GGUFShards& shards, const std::string& modelPath) {
+  if (shards.gguf_files.empty())
+    return;
+  auto baseDir = std::filesystem::path(modelPath).parent_path();
+  if (baseDir.empty())
+    return;
+  for (auto& f : shards.gguf_files)
+    f = (baseDir / f).string();
+  shards.tensors_file = (baseDir / shards.tensors_file).string();
+}
+
+void LlamaModel::tuneConfigMap(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion) {
+
+  const bool isBitnet =
+      metadata.hasOneBitQuantization() &&
+      metadata.tryGetString("general.architecture") == "bitnet";
+
+  if (isBitnet && configFilemap.find("flash-attn") == configFilemap.end() &&
+      configFilemap.find("flash_attn") == configFilemap.end()) {
+    configFilemap["flash-attn"] = "off";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] BitNet model detected: disabling flash attention\n");
+  }
+
+  constexpr int kAdrenoUbatchThreshold = 800;
+  if (isBitnet && adrenoVersion.has_value() &&
+      adrenoVersion.value() >= kAdrenoUbatchThreshold &&
+      configFilemap.find("ubatch-size") == configFilemap.end() &&
+      configFilemap.find("ubatch_size") == configFilemap.end()) {
+    configFilemap["ubatch-size"] = "128";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] BitNet on Adreno 800+: defaulting ubatch-size=128\n");
+  }
+}
+
 LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(modelPath)) {
+      shards_(GGUFShards::expandGGUFIntoShards(modelPath)),
+      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
   auto thisModelInit = [this](auto&&... args) {
     this->init(std::forward<decltype(args)>(args)...);
   };
@@ -89,6 +130,22 @@ void LlamaModel::init(
   // Set verbosity level
   setVerbosityLevel(configFilemap);
 
+  if (!asyncWeightsLoader_.isStreaming()) {
+    resolveShardPaths(shards_, modelPath);
+  }
+
+  metadata_.parse(
+      modelPath, shards_, asyncWeightsLoader_.isStreaming(), ADDON_ID);
+  {
+    auto fileType = metadata_.tryGetU32("general.file_type");
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[LlamaModel] general.file_type = %s\n",
+            fileType.has_value() ? std::to_string(*fileType).c_str()
+                                 : "unknown"));
+  }
+
   {
     std::string backendsDir;
     if (auto backendsDirIt = configFilemap.find("backendsDir");
@@ -100,16 +157,18 @@ void LlamaModel::init(
   }
 
   common_params params;
-  commonParamsParse(modelPath, configFilemap, params);
+  std::optional<int> adrenoVersion;
+  commonParamsParse(modelPath, configFilemap, params, adrenoVersion);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
+  auto streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
   common_init_result llamaInit = initFromConfig(
       params,
       modelPath,
-      singleGgufStreamedFiles_,
+      streamedFiles,
       shards_,
       loadingContext_,
-      isStreaming_,
+      asyncWeightsLoader_.isStreaming(),
       ADDON_ID,
       errorWhenFailed);
 
@@ -137,22 +196,7 @@ void LlamaModel::initializeBackend(const std::string& backendsDir) {
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  isStreaming_ = true;
-  if (shards_.gguf_files.empty()) {
-    // Store it and make it available when `init` is called
-    singleGgufStreamedFiles_[filename] = std::move(shard);
-    return;
-  }
-  // Asynchronous shard loading
-  initLoader_.ensureLoadInBackground();
-  if (!llama_model_load_fulfill_split_future(
-          filename.c_str(), loadingContext_.c_str(), std::move(shard))) {
-    std::string errorMsg = string_format(
-        "%s: failed to load model from %s\n", __func__, filename.c_str());
-
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadModel), errorMsg);
-  }
+  asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
 }
 
 bool LlamaModel::isLoaded() { return static_cast<bool>(llmContext_); }
@@ -306,7 +350,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params) {
+    common_params& params, std::optional<int>& outAdrenoVersion) {
 
   std::vector<std::string> configVector;
 
@@ -364,8 +408,12 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, LlamaModel::llamaLogCallback, mainGpu);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackend,
+        LlamaModel::llamaLogCallback,
+        mainGpu,
+        &metadata_,
+        &outAdrenoVersion);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -387,6 +435,8 @@ void LlamaModel::commonParamsParse(
     configVector.emplace_back(chosenBackend.second);
     configFilemap.erase(deviceIt);
   }
+
+  tuneConfigMap(configFilemap, metadata_, outAdrenoVersion);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {

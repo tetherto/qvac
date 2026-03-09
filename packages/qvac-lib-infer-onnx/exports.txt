@@ -1,0 +1,4 @@
+_bare_*
+_napi_*
+_OrtGetApiBase
+_OrtSessionOptionsAppendExecutionProvider_*

@@ -1,0 +1,64 @@
+---
+title: "cancel( )"
+titleStyle: code
+description: "Cancels an ongoing operation."
+---
+
+```typescript
+function cancel(params: Object | Object | Object): Promise
+```
+
+## Description
+
+Cancels an ongoing operation.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `Object | Object | Object` | ✓ | The parameters for the cancellation |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```ts
+// Cancel inference
+await cancel({ operation: "inference", modelId: "model-123" });
+```
+```
+
+```typescript
+```ts
+// Pause download (preserves partial file for automatic resume)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
+```
+```
+
+```typescript
+```ts
+// Cancel download completely (deletes partial file)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+```
+```
+
+```typescript
+```ts
+// Cancel RAG operation on default workspace
+await cancel({ operation: "rag" });
+```
+```
+
+```typescript
+```ts
+// Cancel RAG operation on specific workspace
+await cancel({ operation: "rag", workspace: "my-workspace" });
+```
+```

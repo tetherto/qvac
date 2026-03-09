@@ -5,12 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.9] - 2026-02-27
+## [0.1.9]
 
 ### Changed
 - Logger type in `TranscriptionParakeetArgs` now uses `LoggerInterface` from `@qvac/logging` instead of a package-specific type, aligning with the shared logging interface used across all addons
 
-## [0.1.7] - 2026-02-23
+## [0.1.7]
 
 ### Added
 - Native C++ support for loading ONNX sessions directly from individual file paths (`encoderPath`, `encoderDataPath`, `decoderPath`, `vocabPath`, `preprocessorPath`)
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_load()` skips buffer-based `_loadModelWeights` when named paths are detected, reducing memory overhead
 - `_downloadWeights()` short-circuits when named paths are provided
 
-## [0.1.6] - 2026-02-19
+## [0.1.6]
 
 ### Added
 - Individual named file path parameters (`encoderPath`, `encoderDataPath`, `decoderPath`, `vocabPath`, `preprocessorPath`) as alternative to `filePaths` map
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Removed unused `Loader` type and `Readable` import from type declarations; `loader` argument now typed as `unknown`
 
-## [0.1.5] - 2026-02-18
+## [0.1.5]
 
 ### Added
 - `NOTICE` file with full third-party dependency attributions
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `@qvac/dl-hyperdrive` from `devDependencies` and `peerDependencies`
 
-## [0.1.2] - 2026-02-18
+## [0.1.2]
 
 ### Added
 - Unified `transcribe.js` script with CLI flags (`--file`, `--model`) replacing individual language scripts

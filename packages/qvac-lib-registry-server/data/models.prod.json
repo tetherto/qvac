@@ -1574,7 +1574,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-norwegian/nb-tiny-ggml-model.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-norwegian/2026-03-05/nb-tiny-ggml-model.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/NbAiLab/nb-whisper-tiny/blob/main/ggml-model.bin",
     "description": "Fine-tuned for Norwegian",
@@ -2098,7 +2098,7 @@
     "link": "https://huggingface.co/Helsinki-NLP/opus-mt-roa-en"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "Fine-tuned for French",
@@ -2114,7 +2114,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
     "description": "",
@@ -2130,7 +2130,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "Fine-tuned for German",
@@ -2146,7 +2146,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/primeline/whisper-tiny-german-1224",
     "description": "",
@@ -2162,7 +2162,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
@@ -2178,7 +2178,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/luigisaetta/whisper-tiny-it",
     "description": "",
@@ -2194,7 +2194,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/2026-03-05/es-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
@@ -2210,7 +2210,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/es-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-spanish/2026-03-05/es-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-es",
     "description": "",
@@ -2226,7 +2226,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
@@ -2242,7 +2242,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra",
     "description": "",
@@ -2258,7 +2258,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
@@ -2274,7 +2274,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-french/fr-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/personalizedrefrigerator/whisper-base-fr",
     "description": "",
@@ -2290,7 +2290,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
@@ -2306,7 +2306,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-german/de-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-german/2026-03-05/de-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/aware-ai/whisper-base-german",
     "description": "",
@@ -2322,7 +2322,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
@@ -2338,7 +2338,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/it-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-italian/2026-03-05/it-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/gustavv-andrzejewski/distil-whisper-base-it",
     "description": "",
@@ -2354,7 +2354,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
@@ -2370,7 +2370,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/pt-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-portuguese/2026-03-05/pt-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/mariana-coelho-9/whisper-base-pt",
     "description": "",
@@ -2386,7 +2386,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-english/2026-03-05/en-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
@@ -2402,7 +2402,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-english/en-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-english/2026-03-05/en-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/openai/whisper-base",
     "description": "",
@@ -2418,7 +2418,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
@@ -2434,7 +2434,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-base-rus-8",
     "description": "",
@@ -2450,7 +2450,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
@@ -2466,7 +2466,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/ru-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-russian/2026-03-05/ru-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/yaroslav0530/whisper-tiny-ru",
     "description": "",
@@ -2482,7 +2482,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-base-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
@@ -2498,7 +2498,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-base-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-base-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/bygreencn/whisper-base-ja",
     "description": "",
@@ -2514,7 +2514,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-f16.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
@@ -2530,7 +2530,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/ja-tiny-ggml-model-q8_0.bin",
+    "source": "s3:///qvac_models_compiled/ggml/whisper-japanese/2026-03-05/ja-tiny-ggml-model-q8_0.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k",
     "description": "",
@@ -4000,6 +4000,70 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_resnet50.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text detector - DBNet ResNet50",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "detector",
+      "db_resnet50"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/db_mobilenet_v3_large.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text detector - DBNet MobileNetV3 Large",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "detector",
+      "db_mobilenet_v3_large"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/parseq.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text recognizer - PARSeq",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "recognizer",
+      "parseq"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/doctr/2026-03-04/crnn_mobilenet_v3_small.onnx",
+    "engine": "@qvac/ocr-onnx",
+    "description": "DocTR text recognizer - CRNN MobileNetV3 Small",
+    "quantization": "",
+    "params": "",
+    "license": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "doctr",
+      "recognizer",
+      "crnn_mobilenet_v3_small"
+    ],
+    "notes": "",
+    "link": "https://github.com/felixdittrich92/OnnxTR"
+  },
+  {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Chatterbox tokenizer",
@@ -5183,6 +5247,7 @@
   {
     "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 vocabulary",
     "quantization": "",
     "params": "0.6B",
@@ -5211,7 +5276,7 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/encoder-model.onnx",
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/encoder-model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 encoder INT8 (weights embedded)",
@@ -5227,7 +5292,7 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/decoder_joint-model.onnx",
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 decoder-joint INT8",
@@ -5243,7 +5308,7 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/vocab.txt",
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/vocab.txt",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 vocabulary",
@@ -5259,7 +5324,7 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/preprocessor.onnx",
+    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/preprocessor.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
     "description": "Parakeet TDT 0.6B v3 preprocessor INT8",

@@ -1,6 +1,8 @@
 .idea/
 .vs/
 build/
+prebuilds/
+node_modules/
 
 # Added by qvac-lint-cpp
 .clang-format
