@@ -98,13 +98,23 @@ test('idle | cancel: allowed, no-op', { timeout: 600000, skip: isMobile }, async
 test('run | cancel: cancels current job', { timeout: 600000, skip: isMobile }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
-  const cancelPromise = model.cancel()
+
+  // Cancel inside onUpdate after first progress tick — ensures native generation
+  // is actually active (matches LLM addon's runAndCancelAfterFirstToken pattern)
+  let cancelFired = false
+  let chain = response.onUpdate(async data => {
+    if (cancelFired) return
+    if (typeof data === 'string') {
+      cancelFired = true
+      await model.cancel()
+    }
+  })
+
   try {
-    await response.await()
+    await chain.await()
   } catch (err) {
     if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
   }
-  await cancelPromise
   t.pass('cancel during run resolves and stops job')
 })
 
@@ -140,11 +150,20 @@ test('run | run: second run() throws busy error', { timeout: 600000, skip: isMob
 test('cancel | run: can run again after cancel', { timeout: 600000, skip: isMobile }, async t => {
   const { model } = await setupModel(t)
 
-  // Start and cancel a long job
+  // Start a long job and cancel after first progress tick
   const response1 = await model.run(LONG_PARAMS)
-  await model.cancel()
+  let cancelFired = false
+  const chain1 = response1.onUpdate(async data => {
+    if (cancelFired) return
+    if (typeof data === 'string') {
+      cancelFired = true
+      await model.cancel()
+    }
+  })
   // Wait for the cancelled job to fully settle (resolve or reject)
-  await response1.onUpdate(() => {}).await().catch(() => {})
+  await chain1.await().catch(err => {
+    if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
+  })
 
   // Should be able to run again
   const response2 = await model.run(SHORT_PARAMS)
