@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 export const VERBOSITY = {
   ERROR: 0,
@@ -40,6 +41,7 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   tools: z.boolean().optional(),
+  projectionModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>;

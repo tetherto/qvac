@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 // Model config
 export const ocrConfigSchema = z.object({
@@ -13,6 +14,7 @@ export const ocrConfigSchema = z.object({
   recognizerBatchSize: z.number().optional(),
   decodingMethod: z.enum(["ctc", "attention"]).optional(),
   straightenPages: z.boolean().optional(),
+  detectorModelSrc: modelSrcInputSchema.optional(),
 });
 
 // Image input types
