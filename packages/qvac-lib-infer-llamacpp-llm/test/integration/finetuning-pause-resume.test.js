@@ -43,7 +43,7 @@ const FINETUNE_MODELS = [
   {
     id: 'medgemma-4b-it-q4_1',
     name: 'medgemma-4b-it-Q4_1.gguf',
-    url: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf',
+    url: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_0.gguf',
     skip: isMobile || forceCpuDevice || platform === 'darwin' || isWindows
   }
 ]
@@ -244,7 +244,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     downloadUrl: modelVariant.url
   })
 
-  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5 })
+  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, testId: 'cancel-test' })
   const checkpointDir = finetuneConfig.checkpointSaveDir
 
   const loader = new FilesystemDL({ dirPath: modelDir })
