@@ -137,8 +137,8 @@ await model.cancel()
 | `loraModules` | string | No | attn_q,k,v,o | Comma-separated target modules |
 | `loraRank` | number | No | 8 | LoRA rank |
 | `loraAlpha` | number | No | 16.0 | LoRA alpha (scaling) |
-| `loraDropout` | number | No | 0 | LoRA dropout |
 | `loraInitStd` | number | No | 0.01 | LoRA init std |
+| `loraSeed` | number | No | 42 | Seed for LoRA weight initialization (0 = non-deterministic) |
 | `checkpointSaveDir` | string | No | `./checkpoints` | Directory for checkpoints |
 | `checkpointSaveSteps` | number | No | 0 | Save checkpoint every N steps (0 = only pause) |
 | `chatTemplatePath` | string | No | `""` | Path to chat template (for SFT) |
@@ -225,7 +225,7 @@ The finetuning and pause/resume flow uses **wait conditions** and **events** onl
 The choice between a **fresh run** and **resume from pause** is made in C++ inside `LlamaModel::finetune()`. The JS API exposes a single `finetune(opts?)`; resume is determined by the backend from the presence of a pause checkpoint on disk. There is no in-process "we were paused" state: if you restart the script and call `finetune(opts)` with the same `checkpointSaveDir`, the backend will resume from any existing pause checkpoint in that directory.
 
 - **How it’s decided:** After validating params, C++ sets `checkpointDir = params.checkpointSaveDir` (or `"./checkpoints"`) and calls `pauseCheckpointExists(checkpointDir)`. If that returns true, it calls `clearPauseRequest()` and then uses `findLatestPauseCheckpoint()` and `parseCheckpointMetadata()` to set `resumingFromPause` and load resume metadata; the rest of the function branches on `resumingFromPause` (load adapter from checkpoint vs init from params, restore step/epoch, etc.).
-- **Params on resume:** The current `params` (from the call—e.g. from the original run when you call `finetune()` with no args) are used for dataset paths, `numberOfEpochs`, learning rate, scheduler, checkpoint dir, and so on. The checkpoint supplies the **position** (epoch, globalStep, currentStep, resumeEpoch, resumeBatch, pausedDuringValidation) and saved LoRA layout (targetModules, loraRank, loraAlpha); `loraDropout` and `loraInitStd` come from `params`.
+- **Params on resume:** The current `params` (from the call—e.g. from the original run when you call `finetune()` with no args) are used for dataset paths, `numberOfEpochs`, learning rate, scheduler, checkpoint dir, and so on. The checkpoint supplies the **position** (epoch, globalStep, currentStep, resumeEpoch, resumeBatch, pausedDuringValidation) and saved LoRA layout (targetModules, loraRank, loraAlpha); `loraInitStd` comes from `params`.
 
 ### UML: finetune and pause flow (JS → C++)
 

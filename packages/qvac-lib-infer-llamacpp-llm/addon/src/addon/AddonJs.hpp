@@ -179,12 +179,12 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.loraAlpha =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
           .value_or(16.0);
-  params.loraDropout =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraDropout")
-          .value_or(0.0);
   params.loraInitStd =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
           .value_or(0.01);
+  params.loraSeed =
+      jsObj.getOptionalPropertyAs<js::Uint32, uint32_t>(env, "loraSeed")
+          .value_or(42);
   params.chatTemplatePath = jsObj
                                 .getOptionalPropertyAs<js::String, std::string>(
                                     env, "chatTemplatePath")

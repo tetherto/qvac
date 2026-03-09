@@ -96,6 +96,8 @@ class LlmLlamacpp extends BaseInference {
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
     this._skipNextRuntimeStats = false
+    this._originalLogger = this.logger
+    this._baseOutputCallback = this._outputCallback.bind(this)
   }
 
   /**
@@ -224,16 +226,12 @@ class LlmLlamacpp extends BaseInference {
     )
     const binding = require('./binding')
 
-    const originalLogger = this.logger
-    const filteredLogger = this._createFilteredLogger(originalLogger)
-    const originalLoggerRef = this.logger
-    this.logger = filteredLogger
+    this.logger = this._createFilteredLogger(this._originalLogger)
 
-    const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
       return this._handleAddonOutputEvent(
-        originalOutputCb,
-        originalLoggerRef,
+        this._baseOutputCallback,
+        this._originalLogger,
         instance,
         eventType,
         jobId,

@@ -279,4 +279,308 @@ TEST(
   fs::remove_all(tmpDir);
 }
 
+TEST(LlamaFinetuningHelpers, SetIdle_ClearsAllFinetuningFlags) {
+  llama_finetuning_helpers::TrainingCheckpointState state;
+  state.isIdle.store(false);
+  state.isFinetuning.store(true);
+  state.isPaused.store(true);
+
+  state.setIdle();
+
+  EXPECT_TRUE(state.isIdle.load());
+  EXPECT_FALSE(state.isFinetuning.load());
+  EXPECT_FALSE(state.isPaused.load());
+}
+
+TEST(LlamaFinetuningHelpers, ClearPauseCheckpoint_RemovesPauseButKeepsRegular) {
+  fs::path tmpDir =
+      fs::temp_directory_path() / ("finetune_test_clear_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  fs::path pauseDir = tmpDir / "pause_checkpoint_step_00000010";
+  fs::path regularDir = tmpDir / "checkpoint_step_00000010";
+  fs::create_directories(pauseDir);
+  fs::create_directories(regularDir);
+
+  llama_finetuning_helpers::clearPauseCheckpoint(tmpDir);
+
+  EXPECT_FALSE(fs::exists(pauseDir));
+  EXPECT_TRUE(fs::exists(regularDir));
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers, ClearPauseCheckpoint_NoOpOnEmptyDir) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_clear_empty_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  EXPECT_NO_THROW(llama_finetuning_helpers::clearPauseCheckpoint(tmpDir));
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers,
+     ParseCheckpointMetadata_ResumeEpochAndBatchAndPausedFlag) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_resume_meta_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  const fs::path metaPath = tmpDir / "metadata.json";
+  {
+    std::ofstream out(metaPath);
+    out << "epoch=2\n"
+        << "lora_rank=16\n"
+        << "lora_alpha=32.000000\n"
+        << "target_modules=15\n"
+        << "global_step=50\n"
+        << "current_step=50\n"
+        << "resume_epoch=3\n"
+        << "resume_batch=7\n"
+        << "paused_during_validation=1\n";
+  }
+
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+  ASSERT_TRUE(
+      llama_finetuning_helpers::parseCheckpointMetadata(metaPath, meta));
+  EXPECT_EQ(meta.epoch, 2);
+  EXPECT_EQ(meta.loraRank, 16);
+  EXPECT_NEAR(meta.loraAlpha, 32.0f, 1e-3f);
+  EXPECT_EQ(meta.targetModules, 15u);
+  EXPECT_EQ(meta.globalStep, 50);
+  EXPECT_EQ(meta.currentStep, 50);
+  EXPECT_EQ(meta.resumeEpoch, 3);
+  EXPECT_EQ(meta.resumeBatch, 7);
+  EXPECT_TRUE(meta.pausedDuringValidation);
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers, ParseCheckpointMetadata_DefaultsForMissingFields) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_defaults_meta_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  const fs::path metaPath = tmpDir / "metadata.json";
+  {
+    std::ofstream out(metaPath);
+    out << "epoch=1\n"
+        << "global_step=10\n";
+  }
+
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+  ASSERT_TRUE(
+      llama_finetuning_helpers::parseCheckpointMetadata(metaPath, meta));
+  EXPECT_EQ(meta.epoch, 1);
+  EXPECT_EQ(meta.globalStep, 10);
+  EXPECT_EQ(meta.resumeEpoch, -1);
+  EXPECT_EQ(meta.resumeBatch, -1);
+  EXPECT_FALSE(meta.pausedDuringValidation);
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers, ParseCheckpointMetadata_NonexistentReturnsFalse) {
+  fs::path noFile =
+      fs::temp_directory_path() / ("nonexistent_meta_" + uniqueTestId());
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+  EXPECT_FALSE(
+      llama_finetuning_helpers::parseCheckpointMetadata(noFile, meta));
+}
+
+TEST(LlamaFinetuningHelpers, SetAndClearCurrentCheckpointState) {
+  llama_finetuning_helpers::TrainingCheckpointState state;
+  state.globalStep = 42;
+
+  llama_finetuning_helpers::setCurrentCheckpointState(&state);
+  llama_finetuning_helpers::clearCurrentCheckpointState();
+}
+
+TEST(LlamaFinetuningHelpers, SchedulerOptimizerParams_AdvancesStepAndSetsLr) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.lrMin = 0.0f;
+  state.totalSteps = 100;
+  state.currentStep = 0;
+  state.weightDecay = 0.01f;
+  state.warmupSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Constant;
+
+  auto params =
+      llama_finetuning_helpers::schedulerOptimizerParams(&state);
+
+  EXPECT_EQ(state.currentStep, 1);
+  EXPECT_NEAR(params.adamw.alpha, 1e-4f, 1e-7f);
+  EXPECT_NEAR(params.adamw.wd, 0.01f, 1e-7f);
+  EXPECT_NEAR(params.sgd.alpha, 1e-4f, 1e-7f);
+  EXPECT_NEAR(params.sgd.wd, 0.01f, 1e-7f);
+  EXPECT_NEAR(state.lastLr, 1e-4f, 1e-7f);
+
+  llama_finetuning_helpers::schedulerOptimizerParams(&state);
+  EXPECT_EQ(state.currentStep, 2);
+}
+
+TEST(LlamaFinetuningHelpers,
+     SchedulerOptimizerParams_DoesNotAdvancePastTotalSteps) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.totalSteps = 5;
+  state.currentStep = 5;
+  state.warmupSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Constant;
+
+  llama_finetuning_helpers::schedulerOptimizerParams(&state);
+  EXPECT_EQ(state.currentStep, 5);
+}
+
+TEST(LlamaFinetuningHelpers, SchedulerLrForStep_ZeroTotalStepsReturnsLrInit) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 5e-5f;
+  state.totalSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Cosine;
+
+  float lr = llama_finetuning_helpers::schedulerLrForStep(state, 0);
+  EXPECT_NEAR(lr, 5e-5f, 1e-7f);
+}
+
+TEST(LlamaFinetuningHelpers,
+     SchedulerLrForStep_StepBeyondTotalIsClamped) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.lrMin = 1e-6f;
+  state.totalSteps = 100;
+  state.warmupSteps = 0;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Linear;
+
+  float lrAtEnd = llama_finetuning_helpers::schedulerLrForStep(state, 100);
+  float lrBeyond = llama_finetuning_helpers::schedulerLrForStep(state, 200);
+  EXPECT_NEAR(lrAtEnd, lrBeyond, 1e-7f);
+  EXPECT_GE(lrBeyond, state.lrMin);
+}
+
+TEST(LlamaFinetuningHelpers,
+     SchedulerLrForStep_WarmupBoundaryMatchesPostWarmup) {
+  llama_finetuning_helpers::LoraLrSchedulerState state{};
+  state.lrInit = 1e-4f;
+  state.lrMin = 0.0f;
+  state.totalSteps = 100;
+  state.warmupSteps = 10;
+  state.schedule = llama_finetuning_helpers::LoraLrScheduleType::Constant;
+
+  float lrAtWarmupEnd =
+      llama_finetuning_helpers::schedulerLrForStep(state, 10);
+  float lrPostWarmup =
+      llama_finetuning_helpers::schedulerLrForStep(state, 11);
+  EXPECT_NEAR(lrAtWarmupEnd, state.lrInit, 1e-6f);
+  EXPECT_NEAR(lrPostWarmup, state.lrInit, 1e-6f);
+}
+
+TEST(LlamaFinetuningHelpers, TryHandlePauseRequest_NullStateReturnsFalse) {
+  EXPECT_FALSE(llama_finetuning_helpers::tryHandlePauseRequest(
+      nullptr, nullptr, true, 1, 10));
+}
+
+TEST(LlamaFinetuningHelpers,
+     TryHandlePauseRequest_NoPauseRequestedReturnsFalse) {
+  llama_finetuning_helpers::TrainingCheckpointState state;
+  state.pauseRequested.store(false);
+
+  EXPECT_FALSE(llama_finetuning_helpers::tryHandlePauseRequest(
+      nullptr, &state, true, 1, 10));
+}
+
+TEST(LlamaFinetuningHelpers,
+     TryHandlePauseRequest_AlreadySavedReturnsTrueWithoutResaving) {
+  llama_finetuning_helpers::TrainingCheckpointState state;
+  state.pauseRequested.store(true);
+  state.pauseCheckpointSaved.store(true);
+  state.shouldExit.store(false);
+  state.isFinetuning.store(true);
+  state.isPaused.store(false);
+
+  EXPECT_TRUE(llama_finetuning_helpers::tryHandlePauseRequest(
+      nullptr, &state, true, 5, 10));
+
+  EXPECT_FALSE(state.shouldExit.load());
+  EXPECT_TRUE(state.isFinetuning.load());
+  EXPECT_FALSE(state.isPaused.load());
+}
+
+TEST(LlamaFinetuningHelpers, LoadPauseCheckpoint_SucceedsWithValidMetadata) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_load_ckpt_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  fs::path ckptDir = tmpDir / "pause_checkpoint_step_00000025";
+  fs::create_directories(ckptDir);
+  {
+    std::ofstream out(ckptDir / "metadata.json");
+    out << "epoch=1\n"
+        << "lora_rank=8\n"
+        << "lora_alpha=16.000000\n"
+        << "target_modules=15\n"
+        << "global_step=25\n"
+        << "current_step=25\n"
+        << "resume_epoch=1\n"
+        << "resume_batch=3\n"
+        << "paused_during_validation=0\n";
+  }
+
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+  bool ok = llama_finetuning_helpers::loadPauseCheckpoint(
+      ckptDir, nullptr, nullptr, nullptr, nullptr, meta);
+
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(meta.epoch, 1);
+  EXPECT_EQ(meta.globalStep, 25);
+  EXPECT_EQ(meta.resumeEpoch, 1);
+  EXPECT_EQ(meta.resumeBatch, 3);
+  EXPECT_FALSE(meta.pausedDuringValidation);
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers,
+     LoadPauseCheckpoint_ReturnsFalseForNonexistentPath) {
+  fs::path noDir =
+      fs::temp_directory_path() / ("nonexistent_ckpt_" + uniqueTestId());
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+
+  EXPECT_FALSE(llama_finetuning_helpers::loadPauseCheckpoint(
+      noDir, nullptr, nullptr, nullptr, nullptr, meta));
+}
+
+TEST(LlamaFinetuningHelpers,
+     LoadPauseCheckpoint_ReturnsFalseWhenMetadataFileMissing) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_no_meta_" + uniqueTestId());
+  fs::path ckptDir = tmpDir / "pause_checkpoint_step_00000001";
+  fs::create_directories(ckptDir);
+
+  llama_finetuning_helpers::CheckpointMetadata meta{};
+  EXPECT_FALSE(llama_finetuning_helpers::loadPauseCheckpoint(
+      ckptDir, nullptr, nullptr, nullptr, nullptr, meta));
+
+  fs::remove_all(tmpDir);
+}
+
+TEST(LlamaFinetuningHelpers,
+     ClearPauseCheckpoint_OnlyRemovesLatestWhenMultipleExist) {
+  fs::path tmpDir = fs::temp_directory_path() /
+                    ("finetune_test_clear_multi_" + uniqueTestId());
+  fs::create_directories(tmpDir);
+
+  fs::path older = tmpDir / "pause_checkpoint_step_00000005";
+  fs::path latest = tmpDir / "pause_checkpoint_step_00000015";
+  fs::create_directories(older);
+  fs::create_directories(latest);
+
+  llama_finetuning_helpers::clearPauseCheckpoint(tmpDir);
+
+  EXPECT_TRUE(fs::exists(older));
+  EXPECT_FALSE(fs::exists(latest));
+
+  fs::remove_all(tmpDir);
+}
+
 } // namespace

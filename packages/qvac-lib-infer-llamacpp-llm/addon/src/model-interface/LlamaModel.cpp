@@ -1029,8 +1029,9 @@ std::string LlamaModel::finetune(
           targetModules,
           static_cast<int32_t>(resumeMeta.loraRank),
           resumeMeta.loraAlpha,
-          static_cast<float>(params.loraDropout),
-          static_cast<float>(params.loraInitStd)};
+          0.0f,
+          static_cast<float>(params.loraInitStd),
+          params.loraSeed};
       adapter = llama_lora_training_init(ctx, mdl, &loraParams);
       if (adapter == nullptr) {
         throw std::runtime_error(
@@ -1182,7 +1183,9 @@ std::string LlamaModel::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
-    reinitialize({});
+    try {
+      reinitialize({});
+    } catch (...) {}
     throw;
   }
 }
@@ -1330,8 +1333,9 @@ void LlamaModel::initializeLoraAdapter(
       targetModules,
       params.loraRank,
       static_cast<float>(params.loraAlpha),
-      static_cast<float>(params.loraDropout),
-      static_cast<float>(params.loraInitStd)};
+      0.0f,
+      static_cast<float>(params.loraInitStd),
+      params.loraSeed};
 
   adapter = llama_lora_training_init(ctx, mdl, &loraParams);
   if (adapter == nullptr) {
@@ -1341,7 +1345,6 @@ void LlamaModel::initializeLoraAdapter(
         std::to_string(targetModules) +
         ", loraRank=" + std::to_string(params.loraRank) +
         ", loraAlpha=" + std::to_string(params.loraAlpha) +
-        ", loraDropout=" + std::to_string(params.loraDropout) +
         ", loraInitStd=" + std::to_string(params.loraInitStd);
     throw std::runtime_error(errorMsg);
   }
