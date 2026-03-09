@@ -11,7 +11,7 @@
         "@qvac/langdetect-text": "^0.1.0",
         "@qvac/llm-llamacpp": "^0.8.9",
         "@qvac/logging": "^0.1.0",
-        "@qvac/ocr-onnx": "^0.1.5",
+        "@qvac/ocr-onnx": "^0.2.0",
         "@qvac/rag": "^0.4.2",
         "@qvac/registry-client": "^0.2.0",
         "@qvac/transcription-parakeet": "^0.1.9",
@@ -528,7 +528,7 @@
 
     "@qvac/logging": ["@qvac/logging@0.1.0", "", {}, "sha512-B9JayZKJGzSsM/9JmMdO7wiOOZ2mY5aWTbXl2aIKzy+l2Uqzkoby0IxMjKSVtYo6uMDs2zcrZqLtjI2dDSaYog=="],
 
-    "@qvac/ocr-onnx": ["@qvac/ocr-onnx@0.1.7", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/response": "^0.1.2", "bare-fetch": "^2.5.1", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.1" } }, "sha512-Z3VlrKG1gRVDvLnyr2RiYFhMdDKNV3zfpJ+9AhOfRih9azYtPYm+ii0nyexc+l35LVGFwTs+74KfcJ6unnNlvw=="],
+    "@qvac/ocr-onnx": ["@qvac/ocr-onnx@0.2.0", "", { "dependencies": { "@qvac/dl-hyperdrive": "^0.1.0", "@qvac/error": "^0.1.0", "@qvac/infer-base": "^0.1.0", "@qvac/response": "^0.1.2", "bare-fetch": "^2.5.1", "bare-fs": "^4.5.1", "bare-path": "^3.0.0", "bare-process": "^4.2.1" } }, "sha512-byHaI6+4VnC/OlvdSE2YpFhNVtNK19Tu5CSEJLAG6jF5JIMvDgHGNDQgAckO0EJhAmpPCno0TTtGgB/R4tWshA=="],
 
     "@qvac/rag": ["@qvac/rag@0.4.2", "", { "dependencies": { "@qvac/error": "^0.1.0", "bare-crypto": "^1.11.2", "hyperdht": "^6.23.0", "ready-resource": "^1.1.2", "uuid-random": "^1.3.2", "zod": "^4.1.13" }, "peerDependencies": { "bare-fetch": "^2.5.0", "hyperdb": "^4.19.0", "hyperschema": "^1.13.0", "llm-splitter": "^0.2.0" }, "optionalPeers": ["bare-fetch", "hyperdb", "hyperschema", "llm-splitter"] }, "sha512-vjDhgv5AG/n3d8dI0K9iS5xGhxHfnX+mzaefBnuaIDatf/z1PNm6c4d91j8jDNGprrBAz23pj4po0wUlFZe+ig=="],
 
