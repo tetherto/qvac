@@ -29,7 +29,7 @@ const LIGHTON_OCR_CONFIG = {
 }
 
 const TEST_CONSTANTS = {
-  timeout: 900_000, // 15 minutes — image encoding is slow (~30s+ on mobile)
+  timeout: 1_800_000, // 30 minutes — model download (~1.2GB) + slow image encoding on Intel Macs
   maxTokens: '2048'
 }
 
