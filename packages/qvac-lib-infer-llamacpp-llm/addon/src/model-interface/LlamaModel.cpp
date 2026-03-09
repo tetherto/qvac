@@ -473,8 +473,17 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    bool disableOpenCl = false;
+    if (auto it = configFilemap.find("disable_opencl");
+        it != configFilemap.end()) {
+      disableOpenCl = (it->second == "true");
+      configFilemap.erase(it);
+    }
+
     const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, LlamaModel::llamaLogCallback, mainGpu);
+        chooseBackend(
+            preferredBackend, LlamaModel::llamaLogCallback, mainGpu,
+            disableOpenCl);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -815,7 +824,21 @@ std::string LlamaModel::finetune(
     cacheManager_->saveCache();
   }
 
-  reinitialize({{"flash_attn", "off"}});
+  std::unordered_map<std::string, std::string> finetuneOverrides = {
+      {"flash_attn", "off"}};
+
+#ifdef __ANDROID__
+  using backend_selection::AdrenoGeneration;
+  const auto adrenoGen = backend_selection::detectAdrenoGeneration();
+  if (adrenoGen == AdrenoGeneration::Adreno800) {
+    finetuneOverrides["disable_opencl"] = "true";
+  } else if (adrenoGen == AdrenoGeneration::Adreno700 ||
+             adrenoGen == AdrenoGeneration::Adreno600) {
+    finetuneOverrides["device"] = "cpu";
+  }
+#endif
+
+  reinitialize(finetuneOverrides);
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();

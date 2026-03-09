@@ -196,7 +196,7 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, bool disableOpenCl) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -239,9 +239,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  // check if Adreno GPU is present and force OpenCL backend, otherwise let
-  // llama.cpp choose Vulkan GPU backend
-  if (!openClBackends.empty()) {
+  if (!openClBackends.empty() && !disableOpenCl) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
   }
@@ -263,7 +261,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, bool disableOpenCl) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -273,5 +271,44 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       llamaLogcallback};
-  return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
+  return backend_selection::chooseBackend(
+      preferredBackendType, bckI, mainGpu, disableOpenCl);
+}
+
+AdrenoGeneration backend_selection::detectAdrenoGeneration() {
+  const size_t deviceCount = ggml_backend_dev_count();
+  for (size_t i = 0; i < deviceCount; ++i) {
+    const ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    const auto devType = ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+
+    std::string desc = ggml_backend_dev_description(dev);
+    std::transform(desc.begin(), desc.end(), desc.begin(), tolower);
+    if (desc.find("adreno") == std::string::npos) {
+      continue;
+    }
+
+    auto numPos = desc.find_first_of("0123456789");
+    if (numPos == std::string::npos) {
+      return AdrenoGeneration::Adreno600;
+    }
+    int model = 0;
+    try {
+      model = std::stoi(desc.substr(numPos));
+    } catch (...) {
+      return AdrenoGeneration::Adreno600;
+    }
+
+    if (model >= 800) {
+      return AdrenoGeneration::Adreno800;
+    }
+    if (model >= 700) {
+      return AdrenoGeneration::Adreno700;
+    }
+    return AdrenoGeneration::Adreno600;
+  }
+  return AdrenoGeneration::None;
 }
