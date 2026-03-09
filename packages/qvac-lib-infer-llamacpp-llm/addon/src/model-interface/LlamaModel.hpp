@@ -165,6 +165,8 @@ private:
   llama_pos configuredNDiscarded_ = 0;
   std::optional<CacheManager> cacheManager_;
 
+  bool isBitnetModel() const;
+  void validateBitnetQuantization();
   void validateModelForFinetuning();
   void validateFinetuningParams(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);

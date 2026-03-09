@@ -287,6 +287,7 @@ std::any LlamaModel::process(const std::any& input) {
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
   }
+  validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
@@ -473,6 +474,7 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+#ifdef __ANDROID__
     bool disableOpenCl = false;
     if (auto it = configFilemap.find("disable_opencl");
         it != configFilemap.end()) {
@@ -480,9 +482,22 @@ void LlamaModel::commonParamsParse(
       configFilemap.erase(it);
     }
 
+    if (preferredBackend == BackendType::GPU && !disableOpenCl &&
+        isBitnetModel()) {
+      const auto adrenoGen = detectAdrenoGeneration();
+      if (adrenoGen == AdrenoGeneration::Adreno800) {
+        disableOpenCl = true;
+      } else if (adrenoGen == AdrenoGeneration::Adreno700 ||
+                 adrenoGen == AdrenoGeneration::Adreno600) {
+        deviceIt->second = "cpu";
+      }
+    }
+#endif
+
     const std::pair<BackendType, std::string> chosenBackend =
         chooseBackend(
-            preferredBackend, LlamaModel::llamaLogCallback, mainGpu,
+            preferredBackendTypeFromString(deviceIt->second),
+            LlamaModel::llamaLogCallback, mainGpu,
             disableOpenCl);
 
     if (chosenBackend.first == BackendType::GPU) {
@@ -1125,6 +1140,33 @@ std::string LlamaModel::finetune(
     clearCurrentCheckpointStateShared();
     reinitialize({});
     throw;
+  }
+}
+
+bool LlamaModel::isBitnetModel() const {
+  return metadata_.hasOneBitQuantization();
+}
+
+void LlamaModel::validateBitnetQuantization() {
+  llama_model* mdl = getModel();
+  if (mdl == nullptr) {
+    return;
+  }
+
+  char arch[64] = {0};
+  int len = llama_model_meta_val_str(
+      mdl, "general.architecture", arch, sizeof(arch));
+  if (len <= 0 || len >= static_cast<int>(sizeof(arch))) {
+    return;
+  }
+
+  std::string archStr(arch, static_cast<size_t>(len));
+  if (archStr == "bitnet" && !isBitnetModel()) {
+    auto fileType = metadata_.tryGetU32("general.file_type");
+    throw std::runtime_error(
+        "Bitnet models are only supported with TQ1_0 or TQ2_0 quantization "
+        "(file_type=" +
+        std::to_string(fileType.value_or(0)) + ")");
   }
 }
 
