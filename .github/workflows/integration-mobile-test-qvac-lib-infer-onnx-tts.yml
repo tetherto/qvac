@@ -46,7 +46,7 @@ env:
 
 jobs:
   build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+    name: Build ${{ matrix.platform }} and Run E2E Tests (${{ matrix.variant }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     continue-on-error: true # Don't block PR merges if tests fail
@@ -1153,9 +1153,9 @@ jobs:
 
           # Set run name based on trigger
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}"
+            RUN_NAME="Manual-${{ github.run_number }}-${{ matrix.platform }}-${{ matrix.variant }}"
           else
-            RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
+            RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}-${{ matrix.variant }}"
           fi
 
           echo "🚀 Scheduling Device Farm test run..."
