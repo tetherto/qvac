@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/api-behavior.test.js', options)
+}
+
 async function runGenerateImageFlux2Test (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2.test.js', options)
 }

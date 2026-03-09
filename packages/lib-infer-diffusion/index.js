@@ -9,13 +9,11 @@ const { SdInterface } = require('./addon')
 const noop = () => {}
 const LOG_METHODS = ['error', 'warn', 'info', 'debug']
 
-/** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
- * Image and video generation using stable-diffusion.cpp.
- * Supports SD1.x, SD2.x, SDXL, SD3, FLUX, Wan2.x video models.
+ * Text-to-image and image-to-image generation using stable-diffusion.cpp.
+ * Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2 [klein].
  */
 class ImgStableDiffusion extends BaseInference {
   /**
@@ -57,26 +55,24 @@ class ImgStableDiffusion extends BaseInference {
     this._llmModel = llmModel || null
     this._vaeModel = vaeModel || null
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._lastJobResult = Promise.resolve()
+    this._hasActiveResponse = false
   }
 
-  /**
-   * Load model weights, initialize the native addon, and activate.
-   * @param {boolean} [closeLoader=true]
-   * @param {Function} [onDownloadProgress]
-   */
+  _getWeightFiles () {
+    const files = [this._modelName]
+    if (this._clipLModel) files.push(this._clipLModel)
+    if (this._clipGModel) files.push(this._clipGModel)
+    if (this._t5XxlModel) files.push(this._t5XxlModel)
+    if (this._llmModel) files.push(this._llmModel)
+    if (this._vaeModel) files.push(this._vaeModel)
+    return files
+  }
+
   async _load (closeLoader = true, onDownloadProgress = noop) {
     this.logger.info('Starting stable-diffusion model load')
 
     try {
-      const filesToDownload = [this._modelName]
-      if (this._clipLModel) filesToDownload.push(this._clipLModel)
-      if (this._clipGModel) filesToDownload.push(this._clipGModel)
-      if (this._t5XxlModel) filesToDownload.push(this._t5XxlModel)
-      if (this._llmModel) filesToDownload.push(this._llmModel)
-      if (this._vaeModel) filesToDownload.push(this._vaeModel)
-
-      await this.weightsProvider.downloadFiles(filesToDownload, this._diskPath, {
+      await this.weightsProvider.downloadFiles(this._getWeightFiles(), this._diskPath, {
         closeLoader,
         onDownloadProgress
       })
@@ -125,14 +121,7 @@ class ImgStableDiffusion extends BaseInference {
    * @param {object} [opts]
    */
   async _downloadWeights (onDownloadProgress, opts) {
-    const filesToDownload = [this._modelName]
-    if (this._clipLModel) filesToDownload.push(this._clipLModel)
-    if (this._clipGModel) filesToDownload.push(this._clipGModel)
-    if (this._t5XxlModel) filesToDownload.push(this._t5XxlModel)
-    if (this._llmModel) filesToDownload.push(this._llmModel)
-    if (this._vaeModel) filesToDownload.push(this._vaeModel)
-
-    return this.weightsProvider.downloadFiles(filesToDownload, this._diskPath, {
+    return this.weightsProvider.downloadFiles(this._getWeightFiles(), this._diskPath, {
       closeLoader: opts.closeLoader,
       onDownloadProgress
     })
@@ -186,9 +175,6 @@ class ImgStableDiffusion extends BaseInference {
     } else if (data instanceof Uint8Array) {
       mappedEvent = 'Output'
     } else if (typeof data === 'string') {
-      try {
-        JSON.parse(data)
-      } catch (_) {}
       mappedEvent = 'Output'
     }
 
@@ -215,7 +201,7 @@ class ImgStableDiffusion extends BaseInference {
         currentJobResponse.failed(new Error('Model was unloaded'))
         this._deleteJobMapping('OnlyOneJob')
       }
-      // Guard: addon may never have been created if _load() threw before assignment.
+      this._hasActiveResponse = false
       if (this.addon) {
         await super.unload()
       }
@@ -246,7 +232,7 @@ class ImgStableDiffusion extends BaseInference {
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
    * @returns {Promise<QvacResponse>}
    */
-  async run (params) {
+  async _runInternal (params) {
     return this._runGeneration({ ...params, mode: 'txt2img' })
   }
 
@@ -268,14 +254,9 @@ class ImgStableDiffusion extends BaseInference {
     this.logger.info('Starting generation with mode:', params.mode)
 
     return this._withExclusiveRun(async () => {
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
-        }, PREVIOUS_JOB_WAIT_MS)
-        this._lastJobResult
-          .then(() => { clearTimeout(timer); resolve() })
-          .catch(() => { clearTimeout(timer); resolve() })
-      })
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
 
       const response = this._createResponse('OnlyOneJob')
 
@@ -295,7 +276,10 @@ class ImgStableDiffusion extends BaseInference {
         throw new Error(msg)
       }
 
-      this._lastJobResult = response.await()
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       this.logger.info('Generation job started successfully')
 
