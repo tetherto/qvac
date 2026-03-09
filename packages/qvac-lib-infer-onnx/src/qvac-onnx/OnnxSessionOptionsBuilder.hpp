@@ -8,6 +8,10 @@
 #include "OnnxConfig.hpp"
 #include "Logger.hpp"
 
+#ifdef __ANDROID__
+#include <nnapi_provider_factory.h>
+#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <dml_provider_factory.h>
 #endif
@@ -136,7 +140,7 @@ inline Ort::SessionOptions buildSessionOptions(const SessionConfig& config) {
                     "DmlExecutionProvider") != providers.end();
 
       if (dmlAvailable) {
-        sessionOptions.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+        sessionOptions.SetExecutionMode(::ExecutionMode::ORT_SEQUENTIAL);
         sessionOptions.DisableMemPattern();
         Ort::ThrowOnError(
             OrtSessionOptionsAppendExecutionProvider_DML(sessionOptions, 0));
