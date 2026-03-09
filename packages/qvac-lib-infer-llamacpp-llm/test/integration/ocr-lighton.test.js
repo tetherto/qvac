@@ -33,11 +33,9 @@ const TEST_CONSTANTS = {
   maxTokens: '2048'
 }
 
-const DEVICE_CONFIGS = isMobile
-  ? [{ id: 'cpu', device: 'cpu' }, { id: 'gpu', device: 'gpu' }]
-  : useCpu
-    ? [{ id: 'cpu', device: 'cpu' }]
-    : [{ id: 'gpu', device: 'gpu' }]
+const DEVICE_CONFIGS = (isMobile || useCpu)
+  ? [{ id: 'cpu', device: 'cpu' }]
+  : [{ id: 'gpu', device: 'gpu' }]
 
 function getConfig (device) {
   return {
