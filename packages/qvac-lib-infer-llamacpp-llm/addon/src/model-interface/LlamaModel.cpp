@@ -194,9 +194,13 @@ void LlamaModel::reinitialize(
     backendsDir = it->second;
     configFilemap.erase(it);
   }
-  initializeBackend(backendsDir);
 
   common_params params;
+  if (auto it = configFilemap.find("training"); it != configFilemap.end()) {
+    params.training = "true";
+    configFilemap.erase(it);
+  }
+  initializeBackend(backendsDir);
   commonParamsParse(modelPath_, configFilemap, params);
   params.training = training;
 
@@ -221,6 +225,7 @@ void LlamaModel::reinitialize(
         });
   }
 }
+
 void LlamaModel::setWeightsForFile(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>>&& shard) {
@@ -926,7 +931,9 @@ std::string LlamaModel::finetune(
   }
 
   std::unordered_map<std::string, std::string> configOverrides = {
-      {"flash_attn", "off"}};
+      {"flash_attn", "off"},
+      {"no_mmap", ""},
+      {"training", ""}};
   if (params.batchSize > 0) {
     configOverrides["batch_size"] = std::to_string(params.batchSize);
   }
@@ -936,6 +943,8 @@ std::string LlamaModel::finetune(
   if (!gpuSupportsOutProdF16()) {
     configOverrides["cache_type_k"] = "f32";
     configOverrides["cache_type_v"] = "f32";
+  if (params.contextLength > 0) {
+    configOverrides["ctx_size"] = std::to_string(params.contextLength);
   }
 
 #ifdef __ANDROID__
@@ -1535,12 +1544,8 @@ void LlamaModel::configureOptimizer(
     throw std::runtime_error("Model/context not available");
   }
 
-  llama_opt_params optParams{};
-  optParams.n_ctx_train = params.contextLength > 0
-                              ? static_cast<uint32_t>(params.contextLength)
-                              : 0;
+  llama_opt_params optParams = llama_opt_default_params();
   optParams.param_filter = llama_opt_param_filter_lora;
-  optParams.param_filter_ud = adapter;
   optParams.get_opt_pars = schedulerOptimizerParams;
   optParams.get_opt_pars_ud = &scheduler;
   optParams.optimizer_type = GGML_OPT_OPTIMIZER_TYPE_ADAMW;
