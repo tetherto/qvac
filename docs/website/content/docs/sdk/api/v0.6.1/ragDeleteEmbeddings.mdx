@@ -1,0 +1,42 @@
+---
+title: "ragDeleteEmbeddings( )"
+titleStyle: code
+description: "Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace."
+---
+
+```typescript
+function ragDeleteEmbeddings(params: infer): Promise
+```
+
+## Description
+
+Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `infer` | ✓ | The parameters for deleting embeddings |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+await ragDeleteEmbeddings({
+  ids: ["doc-1", "doc-2"],
+  workspace: "my-docs",
+});
+```
+```

@@ -1,0 +1,54 @@
+---
+title: "ragSaveEmbeddings( )"
+titleStyle: code
+description: "Saves pre-embedded documents to the RAG vector database.
+Part of the segregated flow: chunk() → embed() → saveEmbeddings()
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed."
+---
+
+```typescript
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams): Promise
+```
+
+## Description
+
+Saves pre-embedded documents to the RAG vector database.
+Part of the segregated flow: chunk() → embed() → saveEmbeddings()
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `RagSaveEmbeddingsParams` | ✓ | The parameters for saving |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Segregated flow
+const chunks = await ragChunk({ documents: ["text1", "text2"] });
+const embeddings = await embed({ modelId, text: chunks.map(c => c.content) });
+const embeddedDocs = chunks.map((chunk, i) => ({
+  ...chunk,
+  embedding: embeddings[i],
+  embeddingModelId: modelId,
+}));
+const result = await ragSaveEmbeddings({
+  documents: embeddedDocs,
+  workspace: "my-workspace",
+});
+```
+```
