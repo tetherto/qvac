@@ -492,7 +492,12 @@ void LlamaModel::commonParamsParse(
         deviceIt->second = "cpu";
       }
     }
+    configFilemap["ubatch_size"] = "128";
 #endif
+
+    if (isBitnetModel()) {
+      configFilemap["flash_attn"] = "off";
+    }
 
     const std::pair<BackendType, std::string> chosenBackend =
         chooseBackend(
