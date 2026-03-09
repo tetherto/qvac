@@ -57,6 +57,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        variant: [fp32, fp16]
+        platform: [Android, iOS]
         include:
           - platform: Android
             os: ubuntu-24.04
@@ -343,6 +345,25 @@ jobs:
           echo "Setting up mobile test framework..."
           npm install
           echo "✅ Test framework dependencies installed"
+
+      - name: Inject Variant for Mobile Tests
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          echo "Injecting CHATTERBOX_VARIANT=${{ matrix.variant }} into mobile runtime"
+          
+          # Create a patch to mock os.getEnv for our specific variable
+          echo "
+          const os = require('bare-os');
+          const originalGetEnv = os.getEnv;
+          os.getEnv = function(key) {
+            if (key === 'CHATTERBOX_VARIANT') return '${{ matrix.variant }}';
+            return originalGetEnv ? originalGetEnv.call(this, key) : undefined;
+          };
+          " > test/mobile/inject-env.cjs
+          
+          # Prepend this patch to the integration runtime wrapper
+          cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
+          mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
 
       - name: Build test app with addon
         working-directory: ./test-framework
