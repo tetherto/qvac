@@ -232,11 +232,9 @@ private:
    */
   bool loadMedia(const std::vector<uint8_t>& input);
 
-  void init(
-      std::string&& modelPath, std::string&& projectionPath,
-      std::unordered_map<std::string, std::string>&& configFilemap);
+  void setInitLoader();
 
-  void init(ConstructionArgs&& args, std::unique_ptr<ReloadableState>& state);
+  void init();
 
   const std::string loadingContext_;
   ModelMetaData metadata_;

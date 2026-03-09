@@ -107,47 +107,29 @@ LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
     : loadingContext_(InitLoader::getLoadingContext("LlamaModel")),
-      constructionArgs_{modelPath, projectionPath, configFilemap},
-      state_(
-          std::make_unique<ReloadableState>(
-              constructionArgs_, loadingContext_, metadata_)) {
-  auto constArgsCpy =
-      constructionArgs_; // TODO fix design, now that args are copied inside the
-                         // LlamaModel, we could just safely use them directly
-                         // on init, without passing anything
-  init(std::move(constArgsCpy), state_);
+      constructionArgs_{
+          std::move(modelPath),
+          std::move(projectionPath),
+          std::move(configFilemap)} {
+  setInitLoader();
 }
 
 void LlamaModel::reload() {
-  ConstructionArgs argsCopy = constructionArgs_;
-  argsCopy.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
-  state_ =
-      std::make_unique<ReloadableState>(argsCopy, loadingContext_, metadata_);
-  init(std::move(argsCopy), state_);
+  constructionArgs_.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
+  setInitLoader();
 }
 
-void LlamaModel::init(
-    ConstructionArgs&& args, std::unique_ptr<ReloadableState>& state) {
-  auto thisModelInit = [this](auto&&... initArgs) {
-    this->init(std::forward<decltype(initArgs)>(initArgs)...);
-  };
-  state->initLoader_.init(
-      args.loaderType,
-      thisModelInit,
-      std::move(args.modelPath),
-      std::move(args.projectionPath),
-      std::move(args.configFilemap));
+void LlamaModel::setInitLoader() {
+  state_ = std::make_unique<ReloadableState>(
+      constructionArgs_, loadingContext_, metadata_);
+  state_->initLoader_.init(
+      constructionArgs_.loaderType, [this]() { this->init(); });
 }
 
-void LlamaModel::init(
-    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-    std::string&& modelPathRvalue, std::string&& projectionPath,
-    std::unordered_map<std::string, std::string>&& configFilemapRvalue) {
-  std::string modelPath = std::move(modelPathRvalue);
-  std::unordered_map<std::string, std::string> configFilemap =
-      std::move(configFilemapRvalue);
+void LlamaModel::init() {
+  const auto& modelPath = constructionArgs_.modelPath;
+  auto configFilemap = constructionArgs_.configFilemap;
 
-  // Set verbosity level
   setVerbosityLevel(configFilemap);
 
   if (!state_->asyncWeightsLoader_.isStreaming()) {
@@ -197,8 +179,10 @@ void LlamaModel::init(
       errorWhenFailed);
 
   // Create the appropriate context based on projectionPath
-  state_->llmContext_ =
-      createContext(std::move(projectionPath), params, std::move(llamaInit));
+  state_->llmContext_ = createContext(
+      std::string(constructionArgs_.projectionPath),
+      params,
+      std::move(llamaInit));
 
   // Apply configured nDiscarded if provided (> 0)
   if (state_->configuredNDiscarded_ > 0 && state_->llmContext_) {
