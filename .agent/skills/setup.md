@@ -1,8 +1,12 @@
-Run the agent setup script to configure agent tooling.
+Run the agent config setup script to configure tooling for the specified agent.
 
-Argument: $ARGUMENTS (one of: claude, cursor, all — defaults to "all" if empty)
+Usage: /setup <agent>
+Where <agent> is: claude, cursor, or all
 
-Steps:
-1. Run `.agent/setup.sh` with the provided argument from the repository root.
-2. If $ARGUMENTS is empty, run `.agent/setup.sh all`.
-3. Report the output to the user.
+Execute the following command:
+
+```bash
+bash .agent/setup.sh $ARGUMENTS
+```
+
+After running, report what was copied/generated.
