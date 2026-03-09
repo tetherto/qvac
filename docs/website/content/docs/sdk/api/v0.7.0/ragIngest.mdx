@@ -1,0 +1,57 @@
+---
+title: "ragIngest( )"
+titleStyle: code
+description: "Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed."
+---
+
+```typescript
+function ragIngest(params: RagIngestParams): Promise
+```
+
+## Description
+
+Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `RagIngestParams` | ✓ | The parameters for ingestion |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Simple ingest
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+});
+
+// With progress tracking
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
+```
+```

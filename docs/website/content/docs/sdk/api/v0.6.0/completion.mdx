@@ -1,0 +1,64 @@
+---
+title: "completion( )"
+titleStyle: code
+description: "Generates completion from a language model based on conversation history."
+---
+
+```typescript
+function completion(params: CompletionParams): Object
+```
+
+## Description
+
+Generates completion from a language model based on conversation history.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `CompletionParams` | ✓ | The completion parameters |
+
+## Returns
+
+```typescript
+Object
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+import { z } from "zod";
+
+const result = completion({
+  modelId: "llama-2",
+  history: [
+    { role: "user", content: "What's the weather in Tokyo?" }
+  ],
+  stream: true,
+  tools: [{
+    name: "get_weather",
+    description: "Get current weather",
+    parameters: z.object({
+      city: z.string().describe("City name"),
+    }),
+    handler: async (args) => {
+      return { temperature: 22, condition: "sunny" };
+    }
+  }]
+});
+
+for await (const token of result.tokenStream) {
+  process.stdout.write(token);
+}
+
+for (const toolCall of await result.toolCalls) {
+  if (toolCall.invoke) {
+    const toolResult = await toolCall.invoke();
+    console.log(toolResult);
+  }
+}
+```
+```
