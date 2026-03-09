@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.10.1] - 2026-03-06
+## [0.11.1] - 2026-03-09
 
 ### Added
 
@@ -11,7 +11,8 @@
 - Prefill runs report `TTFT=0`, `TPS=0`, `generatedTokens=0`, `promptTokens=0`, while `CacheTokens` reflects actual KV cache occupancy.
 - JS `normalizeRunOptions` validates `prefill` as a boolean; a `TypeError` is thrown otherwise.
 - C++ `evalMessage`/`evalMessageWithTools` suppress logits on the last token when prefill is set; `processPrompt` returns immediately after evaluation.
-=======
+
+
 ## [0.11.0] - 2026-03-05
 
 Preparation before fully supporting BitNet. Not officially supported yet, but this version already integrates logic necessary to support BitNet models.
@@ -53,7 +54,7 @@ Added comprehensive unit tests covering BitNet TQ backend selection across Adren
 - Refactored `ModelMetaData` internal getters using a template helper, reducing duplication between `tryGetU32` and `tryGetString`.
 - Added virtual destructor to `ModelMetaData` for correct polymorphic cleanup.
 - Simplified `REQUIRE_MODEL` test macro by removing the `do {} while(false)` wrapper to suppress compiler warnings.
->>>>>>> main
+
 
 ## [0.10.0] - 2026-03-02
 
