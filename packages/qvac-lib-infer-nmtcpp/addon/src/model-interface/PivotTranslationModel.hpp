@@ -1,6 +1,7 @@
 #pragma once
 
 #include <any>
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -13,7 +14,8 @@
 namespace qvac_lib_inference_addon_marian {
 
 class PivotTranslationModel
-    : public qvac_lib_inference_addon_cpp::model::IModel {
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   PivotTranslationModel() = default;
   PivotTranslationModel(
@@ -51,6 +53,8 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const override;
 
+  void cancel() const override;
+
 private:
   std::any translateString(const std::string& input);
   std::any translateBatch(const std::vector<std::string>& inputs);
@@ -65,6 +69,8 @@ private:
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;
+
+  mutable std::atomic<bool> stopTranslation_ = false;
 };
 
 } // namespace qvac_lib_inference_addon_marian
