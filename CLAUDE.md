@@ -186,8 +186,9 @@ When a question relates to one of these topics, read the corresponding knowledge
 |-------|-------------|------|
 | CI / GitHub Actions | CI failures, workflow triggers, validation, publishing | `.claude/knowledge/ci-validation.md` |
 | vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `.claude/knowledge/vcpkg-management.md` |
+| llama.cpp Android | Cross-compiling llama.cpp, ADB deployment, Vulkan GPU, Android inference | `.claude/knowledge/llama-cpp-android.md` |
 
-Skills: `/kb-ci <question>`, `/kb-vcpkg <question>`
+Skills: `/kb-ci <question>`, `/kb-vcpkg <question>`, `/kb-llama-android <question>`
 
 ## Never Commit
 
