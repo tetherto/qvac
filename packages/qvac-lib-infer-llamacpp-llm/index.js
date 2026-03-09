@@ -95,6 +95,7 @@ class LlmLlamacpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
+    this._skipNextRuntimeStats = false
   }
 
   /**
@@ -258,6 +259,10 @@ class LlmLlamacpp extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      if (this._skipNextRuntimeStats) {
+        this._skipNextRuntimeStats = false
+        return
+      }
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
     if (
