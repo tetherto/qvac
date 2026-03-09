@@ -1,0 +1,34 @@
+{
+  "name": "@qvac/langdetect-text-cld2",
+  "version": "0.1.0",
+  "description": "Language detection using CLD2 with same API as @qvac/langdetect-text",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "coverage": "nyc npm run test",
+    "test": "npm run test:unit",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:dts": "tsc index.d.ts --noEmit",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "cld": "^2.10.1",
+    "iso-language-codes": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.12.0",
+    "brittle": "3.10.0",
+    "nyc": "17.1.0",
+    "standard": "17.1.2"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "LICENSE"
+  ]
+}

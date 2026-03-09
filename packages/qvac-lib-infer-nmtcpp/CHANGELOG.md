@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-05
+
+### Added
+- Cancellation support for pivot translation by implementing `IModelCancel` in `PivotTranslationModel`.
+
+### Changed
+- Aligned pivot translation internals with the shared addon model lifecycle and updated model interface wiring for `PivotTranslationModel`.
+- Updated native build integration so pivot translation sources are compiled and linked consistently across package targets.
+
 ## [0.4.0] - 2026-03-05
 
 This release adds pivot translation support so a single request can be translated through an intermediate language using two configured models. It also aligns the translation model with the shared `IModel` interface to improve consistency with other inference add-ons. Together, these updates make multi-hop translation flows easier to configure while preserving existing single-model usage.
