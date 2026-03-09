@@ -22,6 +22,7 @@ vcpkg_from_github(
     HEAD_REF master
     PATCHES
         ggml-max-name.patch
+        ggml-opencl-public-header.patch
 )
 
 # --- GPU feature flags ---
@@ -57,6 +58,33 @@ endif()
 
 if("opencl" IN_LIST FEATURES)
     set(GGML_OPENCL ON)
+endif()
+
+# --- Android: fetch NDK-matched Vulkan C++ headers ---
+# The NDK ships vulkan/vulkan_core.h (C) but not vulkan/vulkan.hpp (C++).
+# Rather than pulling the vcpkg vulkan-headers package (which may be a
+# different version), we detect the NDK's exact Vulkan version and download
+# the matching C++ headers from KhronosGroup/Vulkan-Headers.
+if(VCPKG_TARGET_IS_ANDROID AND "vulkan" IN_LIST FEATURES)
+    include(${CMAKE_CURRENT_LIST_DIR}/android-vulkan-version.cmake)
+    detect_ndk_vulkan_version()
+    message(STATUS "NDK Vulkan version: ${vulkan_version}")
+
+    file(DOWNLOAD
+        "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v${vulkan_version}.tar.gz"
+        "${SOURCE_PATH}/vulkan-hpp-${vulkan_version}.tar.gz"
+        TLS_VERIFY ON
+    )
+    file(ARCHIVE_EXTRACT
+        INPUT "${SOURCE_PATH}/vulkan-hpp-${vulkan_version}.tar.gz"
+        DESTINATION "${SOURCE_PATH}"
+        PATTERNS "*.hpp"
+    )
+    # ggml_add_backend_library adds target_include_directories(${backend} PRIVATE ..)
+    # which resolves to src/ for backends under src/ggml-vulkan/.  Placing the
+    # headers at src/vulkan/*.hpp makes #include <vulkan/vulkan.hpp> resolve.
+    file(COPY "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}/include/"
+         DESTINATION "${SOURCE_PATH}/src/")
 endif()
 
 # --- Configure & build ---

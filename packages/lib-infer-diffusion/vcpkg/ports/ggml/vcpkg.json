@@ -17,6 +17,10 @@
     {
       "name": "vulkan",
       "platform": "windows | linux | android"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
     }
   ],
   "features": {
@@ -30,7 +34,8 @@
       "description": "Enable CUDA GPU backend"
     },
     "opencl": {
-      "description": "Enable OpenCL GPU backend"
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": ["opencl"]
     }
   }
 }

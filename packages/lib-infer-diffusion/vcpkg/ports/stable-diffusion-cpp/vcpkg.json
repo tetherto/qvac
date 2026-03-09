@@ -21,6 +21,10 @@
     {
       "name": "vulkan",
       "platform": "windows | linux | android"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
     }
   ],
   "features": {
