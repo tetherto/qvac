@@ -832,6 +832,33 @@ bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {
   return true;
 }
 
+bool LlamaModel::isBitnetModel() const {
+  return metadata_.hasOneBitQuantization();
+}
+
+void LlamaModel::validateBitnetQuantization() {
+  llama_model* mdl = getModel();
+  if (mdl == nullptr) {
+    return;
+  }
+
+  char arch[64] = {0};
+  int len = llama_model_meta_val_str(
+      mdl, "general.architecture", arch, sizeof(arch));
+  if (len <= 0 || len >= static_cast<int>(sizeof(arch))) {
+    return;
+  }
+
+  std::string archStr(arch, static_cast<size_t>(len));
+  if (archStr == "bitnet" && !isBitnetModel()) {
+    auto fileType = metadata_.tryGetU32("general.file_type");
+    throw std::runtime_error(
+        "Bitnet models are only supported with TQ1_0 or TQ2_0 quantization "
+        "(file_type=" +
+        std::to_string(fileType.value_or(0)) + ")");
+  }
+}
+
 // Finetuning implementation
 #ifndef STANDALONE_TEST_BUILD
 std::string LlamaModel::finetune(
@@ -1145,33 +1172,6 @@ std::string LlamaModel::finetune(
     clearCurrentCheckpointStateShared();
     reinitialize({});
     throw;
-  }
-}
-
-bool LlamaModel::isBitnetModel() const {
-  return metadata_.hasOneBitQuantization();
-}
-
-void LlamaModel::validateBitnetQuantization() {
-  llama_model* mdl = getModel();
-  if (mdl == nullptr) {
-    return;
-  }
-
-  char arch[64] = {0};
-  int len = llama_model_meta_val_str(
-      mdl, "general.architecture", arch, sizeof(arch));
-  if (len <= 0 || len >= static_cast<int>(sizeof(arch))) {
-    return;
-  }
-
-  std::string archStr(arch, static_cast<size_t>(len));
-  if (archStr == "bitnet" && !isBitnetModel()) {
-    auto fileType = metadata_.tryGetU32("general.file_type");
-    throw std::runtime_error(
-        "Bitnet models are only supported with TQ1_0 or TQ2_0 quantization "
-        "(file_type=" +
-        std::to_string(fileType.value_or(0)) + ")");
   }
 }
 
@@ -1490,7 +1490,6 @@ void LlamaModel::configureOptimizer(
   llama_opt_cleanup(ctx);
 
   llama_opt_init(ctx, mdl, optParams);
-  optimizerInitialized_ = true;
 }
 
 void LlamaModel::executeTrainingLoop(

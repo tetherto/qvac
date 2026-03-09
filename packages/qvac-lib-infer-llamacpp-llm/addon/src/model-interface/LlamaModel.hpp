@@ -224,5 +224,4 @@ private:
       currentCheckpointState_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       pausedCheckpointState_;
-  bool optimizerInitialized_ = false;
 };
