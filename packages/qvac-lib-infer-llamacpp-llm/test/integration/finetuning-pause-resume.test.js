@@ -41,8 +41,8 @@ const FINETUNE_MODELS = [
     url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
   },
   {
-    id: 'medgemma-4b-it-q4_1',
-    name: 'medgemma-4b-it-Q4_1.gguf',
+    id: 'medgemma-4b-it-q4_0',
+    name: 'medgemma-4b-it-Q4_0.gguf',
     url: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_0.gguf',
     skip: isMobile || forceCpuDevice || platform === 'darwin' || isWindows
   }
