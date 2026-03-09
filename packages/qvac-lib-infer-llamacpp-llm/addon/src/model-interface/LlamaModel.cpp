@@ -932,8 +932,7 @@ std::string LlamaModel::finetune(
 
   std::unordered_map<std::string, std::string> configOverrides = {
       {"flash_attn", "off"},
-      {"no_mmap", ""},
-      {"training", ""}};
+      {"no_mmap", ""}};
   if (params.batchSize > 0) {
     configOverrides["batch_size"] = std::to_string(params.batchSize);
   }
@@ -943,6 +942,7 @@ std::string LlamaModel::finetune(
   if (!gpuSupportsOutProdF16()) {
     configOverrides["cache_type_k"] = "f32";
     configOverrides["cache_type_v"] = "f32";
+  }
   if (params.contextLength > 0) {
     configOverrides["ctx_size"] = std::to_string(params.contextLength);
   }
