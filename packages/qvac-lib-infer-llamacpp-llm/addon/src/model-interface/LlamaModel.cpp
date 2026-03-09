@@ -771,6 +771,12 @@ std::string LlamaModel::finetune(
         "Finetune error: model/context not available. Call activate() first.");
   }
 
+  if (cacheManager_.has_value() && cacheManager_->hasActiveCache()) {
+    cacheManager_->saveCache();
+    cacheManager_->invalidate();
+  }
+  resetState();
+
   try {
 
     validateFinetuningParams(params);
@@ -1028,6 +1034,14 @@ std::string LlamaModel::finetune(
       QLOG_IF(Priority::DEBUG, "LoRA adapter saved to: " + adapterPath);
       QLOG_IF(Priority::DEBUG, "Finetune completed successfully");
     }
+
+    if (optimizerInitialized_) {
+      llama_opt_cleanup(ctx);
+      optimizerInitialized_ = false;
+    }
+    llama_clear_adapter_lora(ctx);
+    resetState();
+
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
     return status;
   } catch (...) {
@@ -1043,6 +1057,12 @@ std::string LlamaModel::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
+    if (optimizerInitialized_) {
+      llama_opt_cleanup(ctx);
+      optimizerInitialized_ = false;
+    }
+    llama_clear_adapter_lora(ctx);
+    resetState();
     throw;
   }
 }
