@@ -258,7 +258,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "## Generated Images (${{ matrix.platform }}-${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          echo "## Generated Images (${{ matrix.os }}-${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if ls test/model/*.png 1>/dev/null 2>&1; then
             echo "| File | Test Source | Size |" >> $GITHUB_STEP_SUMMARY
@@ -269,8 +269,6 @@ jobs:
               size=$(du -h "$f" | cut -f1)
               echo "| \`$fname\` | \`${test_source}.test.js\` | $size |" >> $GITHUB_STEP_SUMMARY
             done
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> Download the **sd-test-images-${{ matrix.platform }}-${{ matrix.arch }}** artifact to view images." >> $GITHUB_STEP_SUMMARY
           else
             echo "*No images were generated.*" >> $GITHUB_STEP_SUMMARY
           fi
@@ -279,7 +277,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: sd-test-images-${{ matrix.platform }}-${{ matrix.arch }}
+          name: sd-test-images-${{ matrix.os }}-${{ matrix.arch }}
           path: ${{ env.WORKDIR }}/test/model/*.png
           if-no-files-found: ignore
           retention-days: 30
