@@ -55,12 +55,17 @@ public:
 
   // ── Processing ─────────────────────────────────────────────────────────
   void process(const Input& input);
-  Output process(const Input& input, std::function<void(const Output&)> callback);
+  Output
+  process(const Input& input, std::function<void(const Output&)> callback);
 
   // ── Configuration ──────────────────────────────────────────────────────
   void setConfig(const ParakeetConfig& config) { cfg_ = config; }
-  void setOnSegmentCallback(const OutputCallback& callback) { on_segment_ = callback; }
-  void addTranscription(const Transcript& transcript) { output_.push_back(transcript); }
+  void setOnSegmentCallback(const OutputCallback& callback) {
+    on_segment_ = callback;
+  }
+  void addTranscription(const Transcript& transcript) {
+    output_.push_back(transcript);
+  }
 
   void saveLoadParams(const ParakeetConfig& config) { cfg_ = config; }
 
@@ -71,12 +76,13 @@ public:
   saveLoadParams(T&&, Args&&...) {}
 
   // ── Weight loading ─────────────────────────────────────────────────────
-  void set_weights_for_file(const std::string& filename,
-                            std::span<const uint8_t> contents,
-                            bool completed);
+  void set_weights_for_file(
+      const std::string& filename, std::span<const uint8_t> contents,
+      bool completed);
 
-  void set_weights_for_file(const std::string& filename,
-                            std::unique_ptr<std::basic_streambuf<char>> streambuf);
+  void set_weights_for_file(
+      const std::string& filename,
+      std::unique_ptr<std::basic_streambuf<char>> streambuf);
 
   template <typename T>
   void set_weights_for_file(const std::string& filename, T&& contents) {}
@@ -109,13 +115,14 @@ private:
 
   // ── Feature extraction ─────────────────────────────────────────────────
   std::pair<std::vector<float>, int64_t> runPreprocessor(const Input& audio);
-  std::vector<float> computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
-  void stftMelEnergies(const float* source, size_t sourceLen,
-                       size_t numFrames, int numMelBins, float logGuard,
-                       const std::vector<MelFilter>& melFilterbank,
-                       std::vector<float>& melSpec);
-  static void applyCMVN(std::vector<float>& melSpec,
-                         size_t numFrames, int numMelBins);
+  std::vector<float>
+  computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
+  void stftMelEnergies(
+      const float* source, size_t sourceLen, size_t numFrames, int numMelBins,
+      float logGuard, const std::vector<MelFilter>& melFilterbank,
+      std::vector<float>& melSpec);
+  static void
+  applyCMVN(std::vector<float>& melSpec, size_t numFrames, int numMelBins);
 
   // ── Per-model-type pipelines ───────────────────────────────────────────
   std::string runInferencePipeline(const Input& audio);
@@ -125,38 +132,37 @@ private:
   std::string processSortformer(const Input& input);
 
   // ── TDT transducer ─────────────────────────────────────────────────────
-  std::vector<float> runEncoder(const std::vector<float>& melFeatures,
-                                int64_t numFrames,
-                                int64_t& encodedLength,
-                                bool alreadyTransposed = false);
-  std::string greedyDecode(const std::vector<float>& encoderOutput,
-                           int64_t encodedLength);
+  std::vector<float> runEncoder(
+      const std::vector<float>& melFeatures, int64_t numFrames,
+      int64_t& encodedLength, bool alreadyTransposed = false);
+  std::string
+  greedyDecode(const std::vector<float>& encoderOutput, int64_t encodedLength);
 
   // ── CTC ────────────────────────────────────────────────────────────────
-  std::vector<float> runCTCModel(const std::vector<float>& melFeatures,
-                                 int64_t numFrames);
-  std::string ctcGreedyDecode(const std::vector<float>& logits,
-                              int64_t numFrames);
+  std::vector<float>
+  runCTCModel(const std::vector<float>& melFeatures, int64_t numFrames);
+  std::string
+  ctcGreedyDecode(const std::vector<float>& logits, int64_t numFrames);
 
   // ── EOU streaming ──────────────────────────────────────────────────────
   void resetEOUStreamingState();
-  std::vector<float> eouEncodeChunk(const std::vector<float>& melChunk,
-                                    int64_t chunkFrames,
-                                    int64_t& outFrames);
-  std::string eouDecodeChunk(const std::vector<float>& encoderOutput,
-                             int64_t encodedFrames,
-                             int& eouCount);
+  std::vector<float> eouEncodeChunk(
+      const std::vector<float>& melChunk, int64_t chunkFrames,
+      int64_t& outFrames);
+  std::string eouDecodeChunk(
+      const std::vector<float>& encoderOutput, int64_t encodedFrames,
+      int& eouCount);
 
   // ── Sortformer diarization ─────────────────────────────────────────────
-  std::string runSortformerFromMel(const std::vector<float>& melFeatures,
-                                   int64_t numFrames);
-  std::vector<float> runSortformerChunked(const std::vector<float>& melFeatures,
-                                          int64_t numFrames);
-  std::vector<float> medianFilter(const std::vector<float>& preds,
-                                  int64_t numFrames,
-                                  int numSpeakers) const;
-  std::vector<SpeakerSegment> binarizePredictions(const std::vector<float>& preds,
-                                                   int64_t numFrames) const;
+  std::string runSortformerFromMel(
+      const std::vector<float>& melFeatures, int64_t numFrames);
+  std::vector<float> runSortformerChunked(
+      const std::vector<float>& melFeatures, int64_t numFrames);
+  std::vector<float> medianFilter(
+      const std::vector<float>& preds, int64_t numFrames,
+      int numSpeakers) const;
+  std::vector<SpeakerSegment>
+  binarizePredictions(const std::vector<float>& preds, int64_t numFrames) const;
 
   // ── State ──────────────────────────────────────────────────────────────
   ParakeetConfig cfg_;
@@ -190,12 +196,12 @@ private:
   static constexpr int64_t EOU_FALLBACK_TOKEN = 1024;
 
   // ── Error return strings (non-exception feedback to callers) ───────────
-  static constexpr const char* ERR_NO_SPEECH    = "[No speech detected]";
-  static constexpr const char* ERR_AUDIO_SHORT  = "[Audio too short]";
-  static constexpr const char* ERR_MODEL_NOT_READY  = "[Model not ready]";
+  static constexpr const char* ERR_NO_SPEECH = "[No speech detected]";
+  static constexpr const char* ERR_AUDIO_SHORT = "[Audio too short]";
+  static constexpr const char* ERR_MODEL_NOT_READY = "[Model not ready]";
   static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
-  static constexpr const char* ERR_INFERENCE    = "[Inference error]";
-  static constexpr const char* ERR_NO_SPEAKERS  = "[No speakers detected]";
+  static constexpr const char* ERR_INFERENCE = "[Inference error]";
+  static constexpr const char* ERR_NO_SPEAKERS = "[No speakers detected]";
 
   static bool isSentinel(const std::string& text) {
     return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||
@@ -277,4 +283,4 @@ private:
   int64_t totalEncodedFrames_ = 0;
 };
 
-}  // namespace qvac_lib_infer_parakeet
+} // namespace qvac_lib_infer_parakeet

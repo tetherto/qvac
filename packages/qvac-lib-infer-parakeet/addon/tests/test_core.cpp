@@ -1,13 +1,14 @@
-#include "model-interface/parakeet/ParakeetModel.hpp"
-#include "model-interface/parakeet/ParakeetConfig.hpp"
-#include "model-interface/ParakeetTypes.hpp"
-
-#include <gtest/gtest.h>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <variant>
 #include <vector>
-#include <filesystem>
-#include <fstream>
+
+#include <gtest/gtest.h>
+
+#include "model-interface/ParakeetTypes.hpp"
+#include "model-interface/parakeet/ParakeetConfig.hpp"
+#include "model-interface/parakeet/ParakeetModel.hpp"
 
 using namespace qvac_lib_infer_parakeet;
 
@@ -15,7 +16,8 @@ std::variant<double, int64_t> findStat(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
     const std::string& key) {
   for (const auto& [k, v] : stats) {
-    if (k == key) return v;
+    if (k == key)
+      return v;
   }
   return int64_t(0);
 }
@@ -168,7 +170,7 @@ TEST_F(ParakeetModelTest, RuntimeStatsInitializedToZero) {
   auto stats = model.runtimeStats();
   
   EXPECT_FALSE(stats.empty());
-  
+
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 0);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTokens")), 0);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 0);
@@ -184,7 +186,7 @@ TEST_F(ParakeetModelTest, RuntimeStatsUpdatedAfterProcess) {
   model.process(dummyAudio);
   
   auto stats = model.runtimeStats();
-  
+
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 16000);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 1);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 1);
@@ -202,7 +204,7 @@ TEST_F(ParakeetModelTest, RuntimeStatsResetToZero) {
   
   model.reset();
   auto statsAfter = model.runtimeStats();
-  
+
   EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "totalSamples")), 0);
   EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "processCalls")), 0);
   EXPECT_EQ(std::get<int64_t>(findStat(statsAfter, "totalWallMs")), 0);
@@ -260,7 +262,7 @@ TEST_F(ParakeetModelTest, UnloadWeightsCallsUnload) {
 
 TEST_F(ParakeetModelTest, ReloadIsNoOp) {
   ParakeetModel model(config);
-  
+
   EXPECT_NO_THROW({ model.reload(); });
   EXPECT_FALSE(model.isLoaded());
 }
@@ -296,7 +298,7 @@ TEST_F(ParakeetModelTest, MultipleProcessCallsAccumulateStats) {
   model.process(audio2);
   
   auto stats = model.runtimeStats();
-  
+
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalSamples")), 24000);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "processCalls")), 2);
   EXPECT_EQ(std::get<int64_t>(findStat(stats, "totalTranscriptions")), 2);
@@ -679,7 +681,7 @@ TEST_F(ParakeetModelTest, ProcessWithLoadedModelAndRealAudio) {
   });
   
   auto stats = model.runtimeStats();
-  
+
   EXPECT_GT(std::get<int64_t>(findStat(stats, "melSpecMs")), 0);
   EXPECT_GT(std::get<int64_t>(findStat(stats, "encoderMs")), 0);
   EXPECT_GT(std::get<int64_t>(findStat(stats, "decoderMs")), 0);
@@ -878,9 +880,9 @@ TEST_F(CTCModelTest, LoadTokenizerJsonThrowsOnEmptyVocab) {
   std::vector<uint8_t> data(tokenizerJson.begin(), tokenizerJson.end());
   std::span<const uint8_t> dataSpan(data);
 
-  EXPECT_THROW({
-    model.set_weights_for_file("tokenizer.json", dataSpan, true);
-  }, std::runtime_error);
+  EXPECT_THROW(
+      { model.set_weights_for_file("tokenizer.json", dataSpan, true); },
+      std::runtime_error);
 }
 
 TEST_F(CTCModelTest, SetWeightsForCTCModel) {
@@ -889,9 +891,8 @@ TEST_F(CTCModelTest, SetWeightsForCTCModel) {
   std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
   std::span<const uint8_t> weightsSpan(dummyWeights);
 
-  EXPECT_NO_THROW({
-    model.set_weights_for_file("model.onnx", weightsSpan, true);
-  });
+  EXPECT_NO_THROW(
+      { model.set_weights_for_file("model.onnx", weightsSpan, true); });
 }
 
 TEST_F(CTCModelTest, LoadFailsWithoutCTCModelWeights) {
@@ -942,17 +943,19 @@ TEST_F(CTCModelTest, LoadWithRealCTCModelIfAvailable) {
   ParakeetModel model(config);
 
   std::ifstream modelFile(modelsPath + "/model.onnx", std::ios::binary);
-  std::vector<uint8_t> modelData((std::istreambuf_iterator<char>(modelFile)),
-                                  std::istreambuf_iterator<char>());
-  model.set_weights_for_file("model.onnx",
-                              std::span<const uint8_t>(modelData), true);
+  std::vector<uint8_t> modelData(
+      (std::istreambuf_iterator<char>(modelFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "model.onnx", std::span<const uint8_t>(modelData), true);
 
   std::ifstream tokFile(modelsPath + "/tokenizer.json");
-  std::string tokContent((std::istreambuf_iterator<char>(tokFile)),
-                          std::istreambuf_iterator<char>());
+  std::string tokContent(
+      (std::istreambuf_iterator<char>(tokFile)),
+      std::istreambuf_iterator<char>());
   std::vector<uint8_t> tokData(tokContent.begin(), tokContent.end());
-  model.set_weights_for_file("tokenizer.json",
-                              std::span<const uint8_t>(tokData), true);
+  model.set_weights_for_file(
+      "tokenizer.json", std::span<const uint8_t>(tokData), true);
 
   EXPECT_NO_THROW({ model.load(); });
   EXPECT_TRUE(model.isLoaded());
@@ -987,9 +990,8 @@ TEST_F(EOUModelTest, SetWeightsForEOUEncoder) {
   std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
   std::span<const uint8_t> weightsSpan(dummyWeights);
 
-  EXPECT_NO_THROW({
-    model.set_weights_for_file("encoder.onnx", weightsSpan, true);
-  });
+  EXPECT_NO_THROW(
+      { model.set_weights_for_file("encoder.onnx", weightsSpan, true); });
 }
 
 TEST_F(EOUModelTest, SetWeightsForEOUDecoder) {
@@ -998,9 +1000,8 @@ TEST_F(EOUModelTest, SetWeightsForEOUDecoder) {
   std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
   std::span<const uint8_t> weightsSpan(dummyWeights);
 
-  EXPECT_NO_THROW({
-    model.set_weights_for_file("decoder_joint.onnx", weightsSpan, true);
-  });
+  EXPECT_NO_THROW(
+      { model.set_weights_for_file("decoder_joint.onnx", weightsSpan, true); });
 }
 
 TEST_F(EOUModelTest, LoadFailsWithoutEOUEncoderWeights) {
@@ -1013,8 +1014,8 @@ TEST_F(EOUModelTest, LoadFailsWithEncoderButNoDecoder) {
   ParakeetModel model(config);
 
   std::vector<uint8_t> fakeEncoder = {0x08, 0x03, 0x12, 0x05};
-  model.set_weights_for_file("encoder.onnx",
-                              std::span<const uint8_t>(fakeEncoder), true);
+  model.set_weights_for_file(
+      "encoder.onnx", std::span<const uint8_t>(fakeEncoder), true);
 
   EXPECT_ANY_THROW({ model.load(); });
 }
@@ -1114,9 +1115,10 @@ TEST_F(EOUModelTest, ProcessWithCallbackReturnsOutput) {
   std::vector<float> audio(16000, 0.1f);
 
   bool callbackCalled = false;
-  auto output = model.process(audio, [&callbackCalled](const ParakeetModel::Output& out) {
-    callbackCalled = true;
-  });
+  auto output =
+      model.process(audio, [&callbackCalled](const ParakeetModel::Output& out) {
+        callbackCalled = true;
+      });
 
   EXPECT_TRUE(callbackCalled);
   EXPECT_FALSE(output.empty());
@@ -1134,23 +1136,26 @@ TEST_F(EOUModelTest, LoadWithRealEOUModelIfAvailable) {
   ParakeetModel model(config);
 
   std::ifstream encFile(modelsPath + "/encoder.onnx", std::ios::binary);
-  std::vector<uint8_t> encoderData((std::istreambuf_iterator<char>(encFile)),
-                                    std::istreambuf_iterator<char>());
-  model.set_weights_for_file("encoder.onnx",
-                              std::span<const uint8_t>(encoderData), true);
+  std::vector<uint8_t> encoderData(
+      (std::istreambuf_iterator<char>(encFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "encoder.onnx", std::span<const uint8_t>(encoderData), true);
 
   std::ifstream decFile(modelsPath + "/decoder_joint.onnx", std::ios::binary);
-  std::vector<uint8_t> decoderData((std::istreambuf_iterator<char>(decFile)),
-                                    std::istreambuf_iterator<char>());
-  model.set_weights_for_file("decoder_joint.onnx",
-                              std::span<const uint8_t>(decoderData), true);
+  std::vector<uint8_t> decoderData(
+      (std::istreambuf_iterator<char>(decFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "decoder_joint.onnx", std::span<const uint8_t>(decoderData), true);
 
   std::ifstream tokFile(modelsPath + "/tokenizer.json");
-  std::string tokContent((std::istreambuf_iterator<char>(tokFile)),
-                          std::istreambuf_iterator<char>());
+  std::string tokContent(
+      (std::istreambuf_iterator<char>(tokFile)),
+      std::istreambuf_iterator<char>());
   std::vector<uint8_t> tokData(tokContent.begin(), tokContent.end());
-  model.set_weights_for_file("tokenizer.json",
-                              std::span<const uint8_t>(tokData), true);
+  model.set_weights_for_file(
+      "tokenizer.json", std::span<const uint8_t>(tokData), true);
 
   EXPECT_NO_THROW({ model.load(); });
   EXPECT_TRUE(model.isLoaded());
@@ -1168,23 +1173,26 @@ TEST_F(EOUModelTest, ProcessWithLoadedModelIfAvailable) {
   ParakeetModel model(config);
 
   std::ifstream encFile(modelsPath + "/encoder.onnx", std::ios::binary);
-  std::vector<uint8_t> encoderData((std::istreambuf_iterator<char>(encFile)),
-                                    std::istreambuf_iterator<char>());
-  model.set_weights_for_file("encoder.onnx",
-                              std::span<const uint8_t>(encoderData), true);
+  std::vector<uint8_t> encoderData(
+      (std::istreambuf_iterator<char>(encFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "encoder.onnx", std::span<const uint8_t>(encoderData), true);
 
   std::ifstream decFile(modelsPath + "/decoder_joint.onnx", std::ios::binary);
-  std::vector<uint8_t> decoderData((std::istreambuf_iterator<char>(decFile)),
-                                    std::istreambuf_iterator<char>());
-  model.set_weights_for_file("decoder_joint.onnx",
-                              std::span<const uint8_t>(decoderData), true);
+  std::vector<uint8_t> decoderData(
+      (std::istreambuf_iterator<char>(decFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "decoder_joint.onnx", std::span<const uint8_t>(decoderData), true);
 
   std::ifstream tokFile(modelsPath + "/tokenizer.json");
-  std::string tokContent((std::istreambuf_iterator<char>(tokFile)),
-                          std::istreambuf_iterator<char>());
+  std::string tokContent(
+      (std::istreambuf_iterator<char>(tokFile)),
+      std::istreambuf_iterator<char>());
   std::vector<uint8_t> tokData(tokContent.begin(), tokContent.end());
-  model.set_weights_for_file("tokenizer.json",
-                              std::span<const uint8_t>(tokData), true);
+  model.set_weights_for_file(
+      "tokenizer.json", std::span<const uint8_t>(tokData), true);
 
   model.load();
 
@@ -1227,9 +1235,8 @@ TEST_F(SortformerModelTest, SetWeightsForSortformerModel) {
   std::vector<uint8_t> dummyWeights = {0x01, 0x02, 0x03};
   std::span<const uint8_t> weightsSpan(dummyWeights);
 
-  EXPECT_NO_THROW({
-    model.set_weights_for_file("sortformer.onnx", weightsSpan, true);
-  });
+  EXPECT_NO_THROW(
+      { model.set_weights_for_file("sortformer.onnx", weightsSpan, true); });
 }
 
 TEST_F(SortformerModelTest, LoadFailsWithoutSortformerWeights) {
@@ -1279,10 +1286,11 @@ TEST_F(SortformerModelTest, LoadWithRealSortformerModelIfAvailable) {
   ParakeetModel model(config);
 
   std::ifstream modelFile(modelsPath + "/sortformer.onnx", std::ios::binary);
-  std::vector<uint8_t> modelData((std::istreambuf_iterator<char>(modelFile)),
-                                  std::istreambuf_iterator<char>());
-  model.set_weights_for_file("sortformer.onnx",
-                              std::span<const uint8_t>(modelData), true);
+  std::vector<uint8_t> modelData(
+      (std::istreambuf_iterator<char>(modelFile)),
+      std::istreambuf_iterator<char>());
+  model.set_weights_for_file(
+      "sortformer.onnx", std::span<const uint8_t>(modelData), true);
 
   EXPECT_NO_THROW({ model.load(); });
   EXPECT_TRUE(model.isLoaded());
