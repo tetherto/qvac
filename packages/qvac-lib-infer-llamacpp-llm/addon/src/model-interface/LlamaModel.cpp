@@ -116,11 +116,16 @@ LlamaModel::LlamaModel(
 }
 
 void LlamaModel::reload() {
-  { 
+  {
     std::shared_lock lock(stateMtx_);
     if (state_->asyncWeightsLoader_.isStreaming()) {
       // TODO: Make Fabric support moving/streaming existing loaded tensors
       // TODO: to a different backend.
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(ReloadNotSupportedForStreamedModel),
+          "Cannot reload a model that was loaded via streamed shards; "
+          "the streamed weights have already been consumed.");
     }
     constructionArgs_.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
   }
