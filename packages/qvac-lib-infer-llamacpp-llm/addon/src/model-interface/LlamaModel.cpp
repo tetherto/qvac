@@ -1466,12 +1466,8 @@ void LlamaModel::configureOptimizer(
     throw std::runtime_error("Model/context not available");
   }
 
-  llama_opt_params optParams{};
-  optParams.n_ctx_train = params.contextLength > 0
-                              ? static_cast<uint32_t>(params.contextLength)
-                              : 0;
+  llama_opt_params optParams = llama_opt_default_params();
   optParams.param_filter = llama_opt_param_filter_lora;
-  optParams.param_filter_ud = adapter;
   optParams.get_opt_pars = schedulerOptimizerParams;
   optParams.get_opt_pars_ud = &scheduler;
   optParams.optimizer_type = GGML_OPT_OPTIMIZER_TYPE_ADAMW;
