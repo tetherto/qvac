@@ -181,7 +181,7 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
           .value_or(16.0);
   params.loraInitStd =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
-          .value_or(0.01);
+          .value_or(0.02);
   params.loraSeed =
       jsObj.getOptionalPropertyAs<js::Uint32, uint32_t>(env, "loraSeed")
           .value_or(42);

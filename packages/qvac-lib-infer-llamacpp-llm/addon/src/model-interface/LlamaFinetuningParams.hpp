@@ -18,7 +18,7 @@ struct LlamaFinetuningParams {
   std::string loraModules;
   int32_t loraRank{8};
   double loraAlpha{16.0};
-  double loraInitStd{0.01};
+  double loraInitStd{0.02};
   uint32_t loraSeed{42};
   std::string chatTemplatePath;
   int64_t checkpointSaveSteps{0};

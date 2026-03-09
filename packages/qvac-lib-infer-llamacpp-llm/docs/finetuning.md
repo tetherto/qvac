@@ -137,7 +137,7 @@ await model.cancel()
 | `loraModules` | string | No | attn_q,k,v,o | Comma-separated target modules |
 | `loraRank` | number | No | 8 | LoRA rank |
 | `loraAlpha` | number | No | 16.0 | LoRA alpha (scaling) |
-| `loraInitStd` | number | No | 0.01 | LoRA init std |
+| `loraInitStd` | number | No | 0.02 | LoRA init std |
 | `loraSeed` | number | No | 42 | Seed for LoRA weight initialization (0 = non-deterministic) |
 | `checkpointSaveDir` | string | No | `./checkpoints` | Directory for checkpoints |
 | `checkpointSaveSteps` | number | No | 0 | Save checkpoint every N steps (0 = only pause) |

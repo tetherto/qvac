@@ -1250,6 +1250,24 @@ void LlamaModel::validateFinetuningParams(
     throw std::runtime_error("Learning rate must be positive");
   }
 
+  if (params.weightDecay < 0.0) {
+    throw std::runtime_error("Weight decay must be non-negative");
+  }
+
+  if (params.lrMin < 0.0) {
+    throw std::runtime_error("Minimum learning rate must be non-negative");
+  }
+
+  LoraLrScheduleType scheduleType;
+  if (parseLrScheduler(params.lrScheduler, scheduleType)) {
+    if (scheduleType != LoraLrScheduleType::Constant &&
+        params.lrMin > params.learningRate) {
+      throw std::runtime_error(
+          "lrMin cannot exceed learningRate for " + params.lrScheduler +
+          " scheduler");
+    }
+  }
+
   if (params.batchSize > 0 && params.microBatchSize > 0) {
     if (params.microBatchSize > params.batchSize) {
       throw std::runtime_error("microBatchSize must be <= batchSize");
@@ -1277,7 +1295,7 @@ ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
           ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
           : std::max<int64_t>(ctxSize / 2, 8);
 
-  int64_t datasetStride = -1;
+  const int64_t datasetStride = std::max<int64_t>(sequenceLength / 2, int64_t{1});
   ggml_opt_dataset_t datasetRaw = nullptr;
 
   if (params.assistantLossOnly) {
@@ -1285,7 +1303,6 @@ ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
     datasetRaw = common_opt_sft_dataset_init(
         ctx, jsonContent, datasetStride, params.chatTemplatePath);
   } else {
-    datasetStride = std::max<int64_t>(sequenceLength / 2, int64_t{1});
     auto tokens = tokenizeDataset(ctx, datasetPath);
     const int64_t availableTokens = static_cast<int64_t>(tokens.size());
     if (availableTokens <= sequenceLength) {
