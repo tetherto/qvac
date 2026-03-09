@@ -474,8 +474,8 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-#ifdef __ANDROID__
     bool disableOpenCl = false;
+#ifdef __ANDROID__
     if (auto it = configFilemap.find("disable_opencl");
         it != configFilemap.end()) {
       disableOpenCl = (it->second == "true");
