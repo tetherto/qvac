@@ -338,11 +338,9 @@ function createPauseResumeTestDataset (filePath, count = 8) {
 }
 
 function setupParams (modelDir, overrides = {}) {
-  const testId = 'pause-resume'
+  const { testId = 'pause-resume', datasetSize, ...finetuneOverrides } = overrides
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
-
-  const { datasetSize, ...finetuneOverrides } = overrides
   createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
 
