@@ -37,6 +37,7 @@ const ALLOWED_LICENSES = [
   'gemma',
   'health-ai-developer-foundations',
   'openrail',
+  'openrail++',
 ]
 
 // ---------------------------------------------------------------------------
