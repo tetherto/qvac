@@ -16,7 +16,8 @@ NOTICE_FULL_REPORT.txt
 # Auto-generated agent config (run .agent/setup.sh to regenerate)
 .claude/agent-conduct.md
 .claude/knowledge/
-.claude/commands/
+.claude/commands/*
+!.claude/commands/setup.md
 .cursor/skills/sdk-pr-create/SKILL.md
 .cursor/skills/sdk-changelog/SKILL.md
 .cursor/skills/notice-generate/SKILL.md
