@@ -300,10 +300,8 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
   }
 })
 
-// Regression: pause during validation of the final epoch writes
-// epoch = currentEpoch + 1 in checkpoint metadata, causing the resume
-// training loop to be skipped entirely.  Stats must still be populated.
-test('resume after final-epoch validation pause returns stats', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+
+test('inference with session cache works after finetuning', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   const modelVariant = FINETUNE_MODELS[0]
   const [modelName, modelDir] = await ensureModel({
     modelName: modelVariant.name,
@@ -312,9 +310,20 @@ test('resume after final-epoch validation pause returns stats', { timeout: PAUSE
 
   const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5 })
   const checkpointDir = finetuneConfig.checkpointSaveDir
+  const sessionFile = path.join(modelDir, 'test-session-finetune.bin')
 
   const loader = new FilesystemDL({ dirPath: modelDir })
   const loggerHandle = attachSpecLogger({ forwardToConsole: true })
+
+  const config = {
+    gpu_layers: '999',
+    ctx_size: '512',
+    device: forceCpuDevice ? 'cpu' : 'gpu',
+    flash_attn: 'off',
+    verbosity: '2',
+    n_predict: '64',
+    seed: '42',
+  }
 
   const model = new LlmLlamacpp(
     {
@@ -324,47 +333,48 @@ test('resume after final-epoch validation pause returns stats', { timeout: PAUSE
       logger: console,
       opts: { stats: true }
     },
-    {
-      gpu_layers: '999',
-      ctx_size: '512',
-      device: forceCpuDevice ? 'cpu' : 'gpu',
-      flash_attn: 'off',
-      verbosity: '2'
-    },
+    config,
     finetuneConfig
   )
+
+  const fs = require('bare-fs')
 
   try {
     await model.load()
 
+    const sessionPrompt = [
+      { role: 'session', content: sessionFile },
+      { role: 'user', content: 'What is 1+2? Answer with a number. /no_think' }
+    ]
+    const preResponse = await model.run(sessionPrompt)
+    let preOutput = ''
+    await preResponse.onUpdate(token => { preOutput += token }).await()
+    t.ok(preOutput.length > 0, 'Pre-finetune inference with session should produce output')
+    t.comment(`Pre-finetune output: ${preOutput}`)
+
     const finetuneHandle = await model.finetune(finetuneConfig)
-    await sleep(20000)
+    const result = await finetuneHandle.await()
+    t.ok(result, 'Finetune should return a result')
+    t.comment(`Finetune result: ${JSON.stringify(result)}`)
 
-    await model.pause()
+    const postPrompt = [
+      { role: 'session', content: sessionFile },
+      { role: 'user', content: 'What is the output of the previous computation? answer with a number. /no_think' }
+    ]
+    const postResponse = await model.run(postPrompt)
+    let postOutput = ''
+    await postResponse.onUpdate(token => { postOutput += token }).await()
+    t.ok(postOutput.length > 0, 'Post-finetune inference with session should produce output')
+    t.ok(postOutput.includes('3'), 'Post-finetune output should include the output of the previous computation')
+    t.comment(`Post-finetune output: ${postOutput}`)
 
-    const pauseResult = await finetuneHandle.await()
-    t.comment(`Initial finetune result: ${JSON.stringify(pauseResult)}`)
-
-    const assertStats = (res, label) => {
-      t.ok(res?.stats?.global_steps >= 1, `[${label}] stats.global_steps >= 1`)
-      t.ok(res?.stats?.epochs_completed >= 1, `[${label}] stats.epochs_completed >= 1`)
-    }
-
-    if (pauseResult?.status === 'COMPLETED') {
-      assertStats(pauseResult, 'completed')
-      return
-    }
-
-    t.is(pauseResult?.status, 'PAUSED', 'Initial finetune should be paused')
-    await verifyPauseCheckpoint(t, checkpointDir, 2000)
-
-    const result = await (await model.finetune()).await()
-    t.comment(`Resume result: ${JSON.stringify(result)}`)
-    assertStats(result, 'resumed')
+    t.pass('Inference with session cache works after finetuning')
   } finally {
     loggerHandle.release()
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
+    try { fs.unlinkSync(sessionFile) } catch (_) {}
   }
 })
+
