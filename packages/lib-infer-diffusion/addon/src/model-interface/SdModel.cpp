@@ -123,8 +123,8 @@ void SdModel::load() {
   // Adreno 800+ uses GPU (OpenCL), Adreno 600/700 is forced to CPU,
   // everything else uses GPU (Vulkan).
   auto preferredDevice = config_.device == "cpu"
-      ? sd_backend_selection::BackendDevice::CPU
-      : sd_backend_selection::BackendDevice::GPU;
+                             ? sd_backend_selection::BackendDevice::CPU
+                             : sd_backend_selection::BackendDevice::GPU;
   auto effectiveDevice =
       sd_backend_selection::resolveBackendForDevice(preferredDevice);
 

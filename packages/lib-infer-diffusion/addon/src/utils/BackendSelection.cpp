@@ -18,8 +18,10 @@ namespace {
 // Example: "Adreno (TM) 830" -> 830, "Adreno (TM) 740" -> 740
 int parseAdrenoModel(const std::string& description) {
   std::string lower = description;
-  std::transform(lower.begin(), lower.end(), lower.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  std::transform(
+      lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return std::tolower(c);
+      });
 
   auto pos = lower.find("adreno");
   if (pos == std::string::npos)
@@ -77,8 +79,9 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
   }
 
   const size_t nDevices = ggml_backend_dev_count();
-  QLOG_IF(Priority::INFO,
-           "Backend selection: " + std::to_string(nDevices) + " device(s)");
+  QLOG_IF(
+      Priority::INFO,
+      "Backend selection: " + std::to_string(nDevices) + " device(s)");
 
   for (size_t i = 0; i < nDevices; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -89,14 +92,16 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
 
     const char* desc = ggml_backend_dev_description(dev);
     const char* name = ggml_backend_dev_name(dev);
-    QLOG_IF(Priority::INFO,
-             std::string("Backend selection: GPU device '") + desc +
-                 "' (backend: " + name + ")");
+    QLOG_IF(
+        Priority::INFO,
+        std::string("Backend selection: GPU device '") + desc +
+            "' (backend: " + name + ")");
 
     int model = parseAdrenoModel(desc);
     if (model > 0) {
-      QLOG_IF(Priority::INFO,
-               "Backend selection: Adreno model " + std::to_string(model));
+      QLOG_IF(
+          Priority::INFO,
+          "Backend selection: Adreno model " + std::to_string(model));
     }
 
     if (model >= 800) {
