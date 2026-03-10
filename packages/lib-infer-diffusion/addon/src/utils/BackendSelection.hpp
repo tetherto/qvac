@@ -22,4 +22,17 @@ BackendDevice preferredDeviceFromMap(
 int threadsFromMap(
     const std::unordered_map<std::string, std::string>& configMap);
 
+/**
+ * Resolve the effective backend for stable-diffusion.cpp by inspecting
+ * available ggml devices at runtime.
+ *
+ * Priority:
+ *   Adreno 800+  -> GPU (OpenCL will be selected by init_backend)
+ *   Adreno 600/700 -> CPU (OpenCL works but is slow; force CPU)
+ *   Everything else -> GPU (Vulkan or other backend via init_backend)
+ *
+ * Returns the resolved BackendDevice.
+ */
+BackendDevice resolveBackendForDevice(BackendDevice preferred);
+
 } // namespace sd_backend_selection

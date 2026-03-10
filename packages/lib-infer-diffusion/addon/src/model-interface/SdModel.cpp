@@ -12,6 +12,7 @@
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <stb_image_write.h>
 
+#include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
@@ -118,9 +119,16 @@ void SdModel::load() {
   params.enable_mmap = config_.mmap;
   params.offload_params_to_cpu = config_.offloadToCpu;
 
-  // device: "cpu" skips GPU backend entirely (sets env var read by
-  // init_backend())
-  if (config_.device == "cpu") {
+  // Resolve the effective backend based on GPU capabilities.
+  // Adreno 800+ uses GPU (OpenCL), Adreno 600/700 is forced to CPU,
+  // everything else uses GPU (Vulkan).
+  auto preferredDevice = config_.device == "cpu"
+      ? sd_backend_selection::BackendDevice::CPU
+      : sd_backend_selection::BackendDevice::GPU;
+  auto effectiveDevice =
+      sd_backend_selection::resolveBackendForDevice(preferredDevice);
+
+  if (effectiveDevice == sd_backend_selection::BackendDevice::CPU) {
 #ifdef _WIN32
     _putenv_s("SD_CPU_ONLY", "1");
 #else
