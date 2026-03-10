@@ -5,6 +5,27 @@ const { getImagePath, formatOCRPerformanceMetrics, ensureDoctrModels, runDoctrOC
 
 const TEST_TIMEOUT = 300 * 1000
 
+// Words from english.bmp (WHO coronavirus infographic). At least 7 of 10 must be recognized
+// to catch OCR accuracy regressions without being overly strict.
+const ENGLISH_RECOGNITION_WORDS = [
+  'health', 'world', 'cook', 'soap', 'water', 'hands', 'reduce', 'risk', 'avoid', 'symptoms'
+]
+
+/**
+ * Assert at least minMatch of expectedWords appear in recognition results (substring match).
+ * Catches accuracy regressions while tolerating minor OCR variation.
+ */
+function assertRecognitionAccuracy (t, texts, expectedWords, minMatch, label) {
+  const lowerTexts = texts.map(w => w.toLowerCase())
+  const found = expectedWords.filter(word =>
+    lowerTexts.some(txt => txt.includes(word.toLowerCase()))
+  )
+  t.ok(
+    found.length >= minMatch,
+    `${label}: at least ${minMatch}/${expectedWords.length} words recognized (got ${found.length}: ${JSON.stringify(found)})`
+  )
+}
+
 let DOCTR_DETECTOR
 let DOCTR_RECOGNIZER
 
@@ -31,7 +52,7 @@ test('DocTR basic - BMP image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `BMP: should detect text regions, got ${results.length}`)
-  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'BMP should detect "normal"')
+  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'BMP')
   t.comment('BMP detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR BMP]', stats, outputTexts))
 })
@@ -49,7 +70,7 @@ test('DocTR basic - JPEG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `JPEG: should detect text regions, got ${results.length}`)
-  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'JPEG should detect "normal"')
+  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'JPEG')
   t.comment('JPEG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR JPEG]', stats, outputTexts))
 })
@@ -67,7 +88,7 @@ test('DocTR basic - PNG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `PNG: should detect text regions, got ${results.length}`)
-  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'PNG should detect "normal"')
+  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'PNG')
   t.comment('PNG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR PNG]', stats, outputTexts))
 })
@@ -85,6 +106,9 @@ test('DocTR basic - English image', { timeout: TEST_TIMEOUT }, async function (t
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `English: should detect text regions, got ${results.length}`)
+
+  // Recognition accuracy: at least 7 of 10 expected words to catch OCR regressions
+  assertRecognitionAccuracy(t, outputTexts, ENGLISH_RECOGNITION_WORDS, 7, 'English')
 
   // english.bmp is 905x480 — verify coordinates are in original image space
   let coordsInBounds = true
