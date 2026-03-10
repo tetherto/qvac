@@ -61,11 +61,12 @@ test('DocTR load() rejects when pathDetector is missing', { timeout: TEST_TIMEOU
   }
 })
 
-test('DocTR load() defaults langList to ["en"] when omitted', { timeout: TEST_TIMEOUT }, async function (t) {
+test('DocTR defaults langList to ["en"] when omitted in doctr mode', { timeout: TEST_TIMEOUT }, async function (t) {
   const onnxOcr = new ONNXOcr({
     params: {
-      pathDetector: '/nonexistent/detector.onnx',
-      pathRecognizer: '/nonexistent/recognizer.onnx',
+      pathDetector: DOCTR_DETECTOR,
+      // pathRecognizer intentionally omitted — load() fails at JS validation
+      // AFTER langList default is applied but BEFORE C++ addon is created (0 ONNX memory)
       useGPU: false,
       pipelineMode: 'doctr'
     }
@@ -74,7 +75,7 @@ test('DocTR load() defaults langList to ["en"] when omitted', { timeout: TEST_TI
   try {
     await onnxOcr.load()
   } catch (err) {
-    // load() fails at C++ layer (file not found) but JS defaults are already applied
+    t.ok(err instanceof QvacErrorAddonOcr, 'load() should fail for missing pathRecognizer')
   }
 
   t.ok(Array.isArray(onnxOcr.params.langList), 'langList should be an array')
@@ -83,11 +84,12 @@ test('DocTR load() defaults langList to ["en"] when omitted', { timeout: TEST_TI
   t.pass('DocTR correctly defaults langList to ["en"]')
 })
 
-test('DocTR load() does not reject unsupported languages (no filtering)', { timeout: TEST_TIMEOUT }, async function (t) {
+test('DocTR does not filter unsupported languages from langList', { timeout: TEST_TIMEOUT }, async function (t) {
   const onnxOcr = new ONNXOcr({
     params: {
-      pathDetector: '/nonexistent/detector.onnx',
-      pathRecognizer: '/nonexistent/recognizer.onnx',
+      pathDetector: DOCTR_DETECTOR,
+      // pathRecognizer intentionally omitted — load() fails at JS validation
+      // AFTER langList passthrough but BEFORE C++ addon is created (0 ONNX memory)
       langList: ['fr', 'klingon'],
       useGPU: false,
       pipelineMode: 'doctr'
@@ -97,7 +99,7 @@ test('DocTR load() does not reject unsupported languages (no filtering)', { time
   try {
     await onnxOcr.load()
   } catch (err) {
-    // load() fails at C++ layer (file not found) but langList is preserved
+    t.ok(err instanceof QvacErrorAddonOcr, 'load() should fail for missing pathRecognizer')
   }
 
   t.ok(onnxOcr.params.langList.includes('fr'), 'Should keep "fr"')
