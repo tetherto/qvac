@@ -1,7 +1,11 @@
 'use strict'
 
 const test = require('brittle')
-const diagnostics = require('../../../qvac-lib-diagnostics')
+
+let diagnostics
+try { diagnostics = require('@qvac/diagnostics') } catch (e) {
+  try { diagnostics = require('../../../qvac-lib-diagnostics') } catch (e) { diagnostics = null }
+}
 
 // Minimal test class that replicates the ONNXOcr constructor fields and
 // _getDiagnosticsJSON method without requiring native bindings.
@@ -97,7 +101,7 @@ test('_getDiagnosticsJSON uses defaults when params fields are absent', t => {
   t.is(parsed.pipelineMode, 'easyocr', 'pipelineMode defaults to easyocr')
 })
 
-test('round-trip: registerAddon with OCR callback, generateReport shows addon', t => {
+test('round-trip: registerAddon with OCR callback, generateReport shows addon', { skip: !diagnostics }, t => {
   diagnostics.reset()
 
   const ocr = new TestOCR({
