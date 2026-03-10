@@ -6,6 +6,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <codecvt>
 #include <locale>
@@ -55,9 +56,11 @@ public:
    * @brief main processing function to extract the text in the image for each bounding box
    *
    * @param input : bounding box output
+   * @param cancelFlag : optional pointer to an atomic cancel flag; if set and flag becomes true,
+   *                     throws CancelledException between recognition batches
    * @return StepRecognizeText::Output
    */
-  Output process(Input input);
+  Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 
 private:
   Config config_;
@@ -127,9 +130,10 @@ private:
    *
    * For each sublist, selects the best result and extracts InferredText
    *
+   * @param cancelFlag : optional pointer to an atomic cancel flag; throws CancelledException between batches
    * @return std::vector<InferredText> : the extracted results
    */
-  std::vector<InferredText> processImgList();
+  std::vector<InferredText> processImgList(const std::atomic<bool>* cancelFlag);
 
   /**
    * @brief decodes the textIndex outputed by the recognizer into characters, and create the string with those characters
