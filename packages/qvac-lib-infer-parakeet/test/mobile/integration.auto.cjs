@@ -44,14 +44,15 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
 
   console.log('[test] Starting Parakeet transcription test')
 
+  let binding = null
+  let parakeet = null
+
   try {
-    // Load native addon
-    const binding = require('@qvac/transcription-parakeet/binding.js')
+    binding = require('@qvac/transcription-parakeet/binding.js')
     const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
     binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
     console.log('[test] ✓ Addon loaded')
 
-    // Download model files
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
     for (const name of MODEL_FILES) {
@@ -63,9 +64,9 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
       await downloadFile(`${HF_BASE}/${name}`, dest, name)
     }
 
-    // Initialize Parakeet
     let result = null
-    const parakeet = new ParakeetInterface(binding, {
+    let addonError = null
+    parakeet = new ParakeetInterface(binding, {
       modelPath: modelDir,
       modelType: 'tdt',
       language: 'en',
@@ -80,26 +81,31 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
           if (seg?.text) result = seg.text
         }
       }
-      if (error) console.error('[test] Error:', error)
+      if (error) {
+        console.error('[test] Error:', error)
+        addonError = error
+      }
     })
 
-    // Load weights
+    // ONNX external data files (e.g. encoder-model.onnx.data) are too large to
+    // load into JS memory (~2.4 GB). Send a 1-byte dummy so the C++ side
+    // registers the filename, then it resolves the actual data from disk via
+    // the model path when creating the ONNX Runtime session.
     for (const filename of MODEL_FILES) {
       const filePath = path.join(modelDir, filename)
       if (!fs.existsSync(filePath)) continue
-      // ONNX external data files (e.g. encoder-model.onnx.data) are too large to
-      // load into JS memory (~2.4 GB). Send a 1-byte dummy so the C++ side
-      // registers the filename, then it resolves the actual data from disk via
-      // the model path when creating the ONNX Runtime session.
       const chunk = filename.endsWith('.data')
         ? new Uint8Array([0])
         : new Uint8Array(fs.readFileSync(filePath))
       await parakeet.loadWeights({ filename, chunk, completed: true })
     }
     await parakeet.activate()
+
+    await new Promise(r => setTimeout(r, 500))
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+
     console.log('[test] ✓ Model loaded')
 
-    // Transcribe
     const audioPath = getAssetPath('sample.raw')
     if (!audioPath) throw new Error('sample.raw not found')
 
@@ -112,13 +118,12 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
     await parakeet.append({ type: 'audio', data: audio.buffer })
     await parakeet.append({ type: 'end of job' })
 
-    // Wait for result
     for (let i = 0; i < 60 && !result; i++) {
       await new Promise(r => setTimeout(r, 2000))
     }
 
-    await parakeet.destroyInstance()
-    binding.releaseLogger()
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+    if (!result || result.startsWith('[')) throw new Error(`No valid transcription result: "${result}"`)
 
     console.log(`[test] Result: "${result}"`)
     console.log(`[test] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
@@ -130,6 +135,15 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   } catch (error) {
     console.error(`[test] ❌ FAILED: ${error.message}`)
     return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  } finally {
+    try {
+      if (parakeet) {
+        await parakeet.unloadWeights()
+        await new Promise(r => setTimeout(r, 500))
+        await parakeet.destroyInstance()
+      }
+    } catch (_) {}
+    try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
 
@@ -152,8 +166,11 @@ async function runModelTest (opts) {
 
   console.log(`[${tag}] Starting Parakeet ${modelType.toUpperCase()} test`)
 
+  let binding = null
+  let parakeet = null
+
   try {
-    const binding = require('@qvac/transcription-parakeet/binding.js')
+    binding = require('@qvac/transcription-parakeet/binding.js')
     const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
     binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
     console.log(`[${tag}] ✓ Addon loaded`)
@@ -170,7 +187,8 @@ async function runModelTest (opts) {
     }
 
     let result = null
-    const parakeet = new ParakeetInterface(binding, {
+    let addonError = null
+    parakeet = new ParakeetInterface(binding, {
       modelPath: modelDir,
       modelType,
       maxThreads: 4,
@@ -184,20 +202,27 @@ async function runModelTest (opts) {
           if (seg?.text) result = seg.text
         }
       }
-      if (error) console.error(`[${tag}] Error:`, error)
+      if (error) {
+        console.error(`[${tag}] Error:`, error)
+        addonError = error
+      }
     })
 
+    // ONNX external data files are loaded from disk by the C++ side;
+    // send a 1-byte dummy so the filename is registered.
     for (const file of files) {
       const filePath = path.join(modelDir, file.name)
       if (!fs.existsSync(filePath)) continue
-      // ONNX external data files are loaded from disk by the C++ side;
-      // send a 1-byte dummy so the filename is registered.
       const chunk = file.skipRead
         ? new Uint8Array([0])
         : new Uint8Array(fs.readFileSync(filePath))
       await parakeet.loadWeights({ filename: file.name, chunk, completed: true })
     }
     await parakeet.activate()
+
+    await new Promise(r => setTimeout(r, 500))
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+
     console.log(`[${tag}] ✓ Model loaded`)
 
     const audioPath = getAssetPath('sample.raw')
@@ -216,8 +241,8 @@ async function runModelTest (opts) {
       await new Promise(r => setTimeout(r, 2000))
     }
 
-    await parakeet.destroyInstance()
-    binding.releaseLogger()
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+    if (!result || result.startsWith('[')) throw new Error(`No valid result: "${result}"`)
 
     console.log(`[${tag}] Result: "${result}"`)
     console.log(`[${tag}] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
@@ -229,6 +254,15 @@ async function runModelTest (opts) {
   } catch (error) {
     console.error(`[${tag}] ❌ FAILED: ${error.message}`)
     return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  } finally {
+    try {
+      if (parakeet) {
+        await parakeet.unloadWeights()
+        await new Promise(r => setTimeout(r, 500))
+        await parakeet.destroyInstance()
+      }
+    } catch (_) {}
+    try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
 
