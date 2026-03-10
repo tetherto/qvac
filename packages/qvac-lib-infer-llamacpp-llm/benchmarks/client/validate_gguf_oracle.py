@@ -95,8 +95,8 @@ def parse_args():
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=50,
-        help="Max tokens to generate per prompt (default: 50)",
+        default=256,
+        help="Max tokens to generate per prompt (default: 256)",
     )
     parser.add_argument(
         "--compare",

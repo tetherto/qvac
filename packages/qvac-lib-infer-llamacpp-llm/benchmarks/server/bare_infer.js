@@ -15,7 +15,7 @@ if (args.length < 3) {
 const ggufPath = args[0]
 const promptsFile = args[1]
 const outputsFile = args[2]
-const maxTokens = args[3] || '50'
+const maxTokens = args[3] || '256'
 
 const modelName = path.basename(ggufPath)
 const diskPath = path.dirname(ggufPath)

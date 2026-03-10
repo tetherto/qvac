@@ -27,7 +27,7 @@ const AFRIQUEGEMMA_CONFIG = {
   temp: '0',
   top_p: '1',
   top_k: '1',
-  n_predict: '64',
+  n_predict: '256',
   repeat_penalty: '1',
   seed: '42',
   tools: 'true',
