@@ -184,7 +184,8 @@ void LlamaModel::reinitialize(
   llmContext_.reset();
   backendsHandle_.reset();
 
-  std::unordered_map<std::string, std::string> configFilemap = baseConfigFilemap_;
+  std::unordered_map<std::string, std::string> configFilemap =
+      baseConfigFilemap_;
   for (const auto& [key, value] : configOverrides) {
     configFilemap[key] = value;
   }
@@ -203,8 +204,14 @@ void LlamaModel::reinitialize(
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> noStreams;
   common_init_result llamaInit = initFromConfig(
-      params, modelPath_, noStreams, shards_, loadingContext_,
-      false, ADDON_ID, errorWhenFailed);
+      params,
+      modelPath_,
+      noStreams,
+      shards_,
+      loadingContext_,
+      false,
+      ADDON_ID,
+      errorWhenFailed);
 
   std::string projPath = projectionPath_;
   llmContext_ =
@@ -491,8 +498,9 @@ void LlamaModel::commonParamsParse(
       const auto adrenoGen = detectAdrenoGeneration();
       if (adrenoGen == AdrenoGeneration::Adreno800) {
         disableOpenCl = true;
-      } else if (adrenoGen == AdrenoGeneration::Adreno700 ||
-                 adrenoGen == AdrenoGeneration::Adreno600) {
+      } else if (
+          adrenoGen == AdrenoGeneration::Adreno700 ||
+          adrenoGen == AdrenoGeneration::Adreno600) {
         deviceIt->second = "cpu";
       }
     }
@@ -503,11 +511,11 @@ void LlamaModel::commonParamsParse(
       configFilemap["flash_attn"] = "off";
     }
 
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(
-            preferredBackendTypeFromString(deviceIt->second),
-            LlamaModel::llamaLogCallback, mainGpu,
-            disableOpenCl);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackendTypeFromString(deviceIt->second),
+        LlamaModel::llamaLogCallback,
+        mainGpu,
+        disableOpenCl);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -847,8 +855,8 @@ void LlamaModel::validateBitnetQuantization() {
   }
 
   char arch[64] = {0};
-  int len = llama_model_meta_val_str(
-      mdl, "general.architecture", arch, sizeof(arch));
+  int len =
+      llama_model_meta_val_str(mdl, "general.architecture", arch, sizeof(arch));
   if (len <= 0 || len >= static_cast<int>(sizeof(arch))) {
     return;
   }
@@ -882,9 +890,18 @@ static bool gpuSupportsOutProdF16() {
   src1.type = GGML_TYPE_F32;
   dst.type = GGML_TYPE_F32;
 
-  src0.ne[0] = ne0; src0.ne[1] = k;   src0.ne[2] = 1; src0.ne[3] = 1;
-  src1.ne[0] = ne1; src1.ne[1] = k;   src1.ne[2] = 1; src1.ne[3] = 1;
-  dst.ne[0]  = ne0; dst.ne[1]  = ne1; dst.ne[2]  = 1; dst.ne[3]  = 1;
+  src0.ne[0] = ne0;
+  src0.ne[1] = k;
+  src0.ne[2] = 1;
+  src0.ne[3] = 1;
+  src1.ne[0] = ne1;
+  src1.ne[1] = k;
+  src1.ne[2] = 1;
+  src1.ne[3] = 1;
+  dst.ne[0] = ne0;
+  dst.ne[1] = ne1;
+  dst.ne[2] = 1;
+  dst.ne[3] = 1;
 
   src0.nb[0] = sizeof(ggml_fp16_t);
   src0.nb[1] = src0.nb[0] * ne0;
@@ -927,8 +944,7 @@ std::string LlamaModel::finetune(
   }
 
   std::unordered_map<std::string, std::string> configOverrides = {
-      {"flash_attn", "off"},
-      {"no_mmap", ""}};
+      {"flash_attn", "off"}, {"no_mmap", ""}};
   if (params.batchSize > 0) {
     configOverrides["batch_size"] = std::to_string(params.batchSize);
   }
@@ -948,8 +964,9 @@ std::string LlamaModel::finetune(
   const auto adrenoGen = backend_selection::detectAdrenoGeneration();
   if (adrenoGen == AdrenoGeneration::Adreno800) {
     configOverrides["disable_opencl"] = "true";
-  } else if (adrenoGen == AdrenoGeneration::Adreno700 ||
-             adrenoGen == AdrenoGeneration::Adreno600) {
+  } else if (
+      adrenoGen == AdrenoGeneration::Adreno700 ||
+      adrenoGen == AdrenoGeneration::Adreno600) {
     configOverrides["device"] = "cpu";
   }
 #endif
@@ -975,8 +992,7 @@ std::string LlamaModel::finetune(
     {
       std::ostringstream msg;
       msg << "[ResumeTrace] finetune.resume-check checkpointDir="
-          << checkpointDir.string()
-          << " allowResumeFromPause="
+          << checkpointDir.string() << " allowResumeFromPause="
           << (allowResumeFromPause ? "true" : "false")
           << " thread=" << std::this_thread::get_id();
       QLOG_IF(Priority::INFO, msg.str());
@@ -1055,9 +1071,10 @@ std::string LlamaModel::finetune(
 
     const int64_t ubatchPerSample = std::max<int64_t>(
         int64_t{1},
-        static_cast<int64_t>(llama_n_ctx(ctx)) / static_cast<int64_t>(llama_n_ubatch(ctx)));
-    const int64_t stepsPerEpoch = std::max<int64_t>(
-        int64_t{1}, trainSplit * ubatchPerSample);
+        static_cast<int64_t>(llama_n_ctx(ctx)) /
+            static_cast<int64_t>(llama_n_ubatch(ctx)));
+    const int64_t stepsPerEpoch =
+        std::max<int64_t>(int64_t{1}, trainSplit * ubatchPerSample);
     const int64_t totalSteps = std::max<int64_t>(
         int64_t{1},
         static_cast<int64_t>(params.numberOfEpochs) * stepsPerEpoch);
@@ -1251,11 +1268,15 @@ std::string LlamaModel::finetune(
     QLOG_IF(
         Priority::INFO,
         std::string("[CancelTrace] finetune.post-loop wasPaused=") +
-            (wasPaused ? "true" : "false") +
-            " shouldExit=" +
-            (checkpointState ? (checkpointState->shouldExit.load() ? "true" : "false") : "n/a") +
+            (wasPaused ? "true" : "false") + " shouldExit=" +
+            (checkpointState
+                 ? (checkpointState->shouldExit.load() ? "true" : "false")
+                 : "n/a") +
             " pauseCheckpointSaved=" +
-            (checkpointState ? (checkpointState->pauseCheckpointSaved.load() ? "true" : "false") : "n/a"));
+            (checkpointState
+                 ? (checkpointState->pauseCheckpointSaved.load() ? "true"
+                                                                 : "false")
+                 : "n/a"));
 
     if (checkpointState) {
       checkpointState->isIdle.store(true);
@@ -1308,7 +1329,8 @@ std::string LlamaModel::finetune(
     clearCurrentCheckpointStateShared();
     try {
       reinitialize({});
-    } catch (...) {}
+    } catch (...) {
+    }
     throw;
   }
 }
@@ -1418,7 +1440,8 @@ ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
           ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
           : std::max<int64_t>(ctxSize, 8);
 
-  const int64_t datasetStride = std::max<int64_t>(sequenceLength / 2, int64_t{1});
+  const int64_t datasetStride =
+      std::max<int64_t>(sequenceLength / 2, int64_t{1});
   ggml_opt_dataset_t datasetRaw = nullptr;
 
   if (params.assistantLossOnly) {
@@ -1662,9 +1685,10 @@ void LlamaModel::configureOptimizer(
   llama_opt_cleanup(ctx);
   const auto initStart = std::chrono::steady_clock::now();
   llama_opt_init(ctx, mdl, optParams);
-  const auto initElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now() - initStart)
-                                 .count();
+  const auto initElapsedMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - initStart)
+          .count();
   QLOG_IF(
       Priority::INFO,
       "[ResumeTrace] configureOptimizer post-init elapsedMs=" +
@@ -1765,7 +1789,8 @@ void LlamaModel::executeTrainingLoop(
     }
 
     ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
-    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
+    ggml_opt_result_accuracy(
+        trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
 
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
@@ -1773,7 +1798,8 @@ void LlamaModel::executeTrainingLoop(
 
     if (hasEval) {
       ggml_opt_result_loss(evalResult.get(), &lastValLoss, &lastValLossUnc);
-      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
+      ggml_opt_result_accuracy(
+          evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
     }
 
     completedEpochs = static_cast<int32_t>(epoch + 1);
@@ -1880,8 +1906,9 @@ bool LlamaModel::isFinetuneRunning() const {
 bool LlamaModel::requestPause() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
-    QLOG_IF(Priority::INFO,
-            "[CancelTrace] requestPause: state is null, returning false");
+    QLOG_IF(
+        Priority::INFO,
+        "[CancelTrace] requestPause: state is null, returning false");
     return false;
   }
   state->pauseRequested.store(true);
@@ -1889,47 +1916,48 @@ bool LlamaModel::requestPause() {
   if (ctx != nullptr) {
     llama_opt_request_stop(ctx);
   }
-  QLOG_IF(Priority::INFO,
-           "[CancelTrace] requestPause: pauseRequested set, returning true");
+  QLOG_IF(
+      Priority::INFO,
+      "[CancelTrace] requestPause: pauseRequested set, returning true");
   return true;
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
-    QLOG_IF(Priority::INFO,
-            "[CancelTrace] waitUntilFinetuningPauseComplete: state is null, "
-            "returning immediately");
+    QLOG_IF(
+        Priority::INFO,
+        "[CancelTrace] waitUntilFinetuningPauseComplete: state is null, "
+        "returning immediately");
     return;
   }
 
-  const bool preWaitDone =
-      state->pauseWaitDone.load(std::memory_order_acquire);
+  const bool preWaitDone = state->pauseWaitDone.load(std::memory_order_acquire);
   const bool preIdle = state->isIdle.load(std::memory_order_acquire);
-  QLOG_IF(Priority::INFO,
-           "[CancelTrace] waitUntilFinetuningPauseComplete: entering wait "
-           "pauseWaitDone=" +
-               std::string(preWaitDone ? "true" : "false") +
-               " isIdle=" + std::string(preIdle ? "true" : "false"));
+  QLOG_IF(
+      Priority::INFO,
+      "[CancelTrace] waitUntilFinetuningPauseComplete: entering wait "
+      "pauseWaitDone=" +
+          std::string(preWaitDone ? "true" : "false") +
+          " isIdle=" + std::string(preIdle ? "true" : "false"));
 
   constexpr auto timeout = std::chrono::minutes(5);
   std::unique_lock lock(state->pauseDoneMutex);
-  const bool completed =
-      state->pauseDoneCv.wait_for(lock, timeout, [&state] {
-        return state->pauseWaitDone.load(std::memory_order_acquire) &&
-               state->isIdle.load(std::memory_order_acquire);
-      });
+  const bool completed = state->pauseDoneCv.wait_for(lock, timeout, [&state] {
+    return state->pauseWaitDone.load(std::memory_order_acquire) &&
+           state->isIdle.load(std::memory_order_acquire);
+  });
 
   const bool postWaitDone =
       state->pauseWaitDone.load(std::memory_order_acquire);
   const bool postIdle = state->isIdle.load(std::memory_order_acquire);
-  QLOG_IF(Priority::INFO,
-           "[CancelTrace] waitUntilFinetuningPauseComplete: wait returned "
-           "completed=" +
-               std::string(completed ? "true" : "false") +
-               " pauseWaitDone=" +
-               std::string(postWaitDone ? "true" : "false") +
-               " isIdle=" + std::string(postIdle ? "true" : "false"));
+  QLOG_IF(
+      Priority::INFO,
+      "[CancelTrace] waitUntilFinetuningPauseComplete: wait returned "
+      "completed=" +
+          std::string(completed ? "true" : "false") +
+          " pauseWaitDone=" + std::string(postWaitDone ? "true" : "false") +
+          " isIdle=" + std::string(postIdle ? "true" : "false"));
 }
 
 void LlamaModel::clearPauseRequest() {

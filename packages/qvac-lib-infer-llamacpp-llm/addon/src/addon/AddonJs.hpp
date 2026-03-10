@@ -376,8 +376,7 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[CancelTrace] enter hasModel=" +
             std::string(hasModel ? "true" : "false") +
-            " isFinetuneRunning=" +
-            std::string(ftRunning ? "true" : "false"));
+            " isFinetuneRunning=" + std::string(ftRunning ? "true" : "false"));
     if (hasModel && ftRunning && llamaModel->requestPause()) {
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
