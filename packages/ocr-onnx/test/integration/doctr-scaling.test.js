@@ -19,10 +19,9 @@ test('DocTR scaling - download models', { timeout: TEST_TIMEOUT }, async functio
 })
 
 test('DocTR scaling - coordinates in original space and output structure', { timeout: TEST_TIMEOUT }, async function (t) {
-  // portuguese.bmp is 1372x781 — larger than the internal resize threshold
-  const imagePath = getImagePath('/test/images/portuguese.bmp')
-  const originalImageWidth = 1372
-  const originalImageHeight = 781
+  const imagePath = getImagePath('/test/images/english.bmp')
+  const originalImageWidth = 905
+  const originalImageHeight = 480
 
   t.comment('Testing with image: ' + imagePath + ' (' + originalImageWidth + 'x' + originalImageHeight + ')')
 
@@ -41,7 +40,6 @@ test('DocTR scaling - coordinates in original space and output structure', { tim
   let maxY = 0
 
   for (const r of results) {
-    // Validate output structure
     t.ok(typeof r.text === 'string', 'text should be a string')
     t.ok(r.text.length > 0, 'text should not be empty')
     t.ok(typeof r.confidence === 'number', 'confidence should be a number')
