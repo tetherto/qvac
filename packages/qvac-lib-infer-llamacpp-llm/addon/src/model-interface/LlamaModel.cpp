@@ -197,7 +197,6 @@ void LlamaModel::reinitialize(
 
   common_params params;
   if (auto it = configFilemap.find("training"); it != configFilemap.end()) {
-    params.training = "true";
     configFilemap.erase(it);
   }
   initializeBackend(backendsDir);
@@ -996,7 +995,7 @@ std::string LlamaModel::finetune(
     const int64_t sequenceLength =
         params.contextLength > 0
             ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
-            : std::max<int64_t>(ctxSize / 2, 8);
+            : std::max<int64_t>(ctxSize, 8);
     const int64_t microBatchSize =
         params.microBatchSize > 0 ? params.microBatchSize : 1;
 
@@ -1085,32 +1084,22 @@ std::string LlamaModel::finetune(
       }
     }
 
-    uint32_t targetModules = resumingFromPause
-                                 ? resumeMeta.targetModules
-                                 : parseLoraModules(params.loraModules);
     llama_adapter_lora* adapter = nullptr;
     if (resumingFromPause) {
-      llama_lora_training_params loraParams{
-          targetModules,
-          static_cast<int32_t>(resumeMeta.loraRank),
-          resumeMeta.loraAlpha,
-          0.0f,
-          static_cast<float>(params.loraInitStd),
-          params.loraSeed};
-      adapter = llama_lora_training_init(ctx, mdl, &loraParams);
+      const auto adapterPath = (pausePath / "model.gguf").string();
+      adapter = llama_adapter_lora_init(mdl, adapterPath.c_str());
       if (adapter == nullptr) {
         throw std::runtime_error(
-            "LoRA training initialization failed when resuming");
+            "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-
-      const auto adapterPath = pausePath / "model.gguf";
-      if (!std::filesystem::exists(adapterPath)) {
-        std::string errorMsg =
-            "Checkpoint adapter file not found: " + adapterPath.string();
-        QLOG_IF(Priority::ERROR, errorMsg);
-        throw std::runtime_error(errorMsg);
+      llama_clear_adapter_lora(ctx);
+      if (llama_set_adapter_lora(ctx, adapter, 1.0f) < 0) {
+        llama_adapter_lora_free(adapter);
+        throw std::runtime_error(
+            "Failed to attach resumed LoRA adapter to context");
       }
     } else {
+      uint32_t targetModules = parseLoraModules(params.loraModules);
       initializeLoraAdapter(params, targetModules, adapter);
     }
     std::unique_ptr<llama_adapter_lora, decltype(&llama_adapter_lora_free)>
@@ -1358,7 +1347,7 @@ ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
   const int64_t sequenceLength =
       params.contextLength > 0
           ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
-          : std::max<int64_t>(ctxSize / 2, 8);
+          : std::max<int64_t>(ctxSize, 8);
 
   const int64_t datasetStride = std::max<int64_t>(sequenceLength / 2, int64_t{1});
   ggml_opt_dataset_t datasetRaw = nullptr;
