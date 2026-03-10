@@ -9,23 +9,6 @@ endif()
 option(SD_CUDA "Enable CUDA GPU backend" OFF)
 if(SD_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-  # On Linux, ggml-cuda.a is statically linked into the .bare. Its CUDA
-  # kernel code references libcudart/libcublas symbols that must be resolved
-  # at load time — link them explicitly and bake the path into the RPATH.
-  find_library(CUDA_RUNTIME_LIB cudart
-    PATHS
-      /usr/local/cuda/lib64
-      /usr/local/cuda/targets/x86_64-linux/lib
-      /usr/local/cuda-12.8/targets/x86_64-linux/lib
-    NO_DEFAULT_PATH
-  )
-  if(NOT CUDA_RUNTIME_LIB)
-    find_library(CUDA_RUNTIME_LIB cudart REQUIRED)
-  endif()
-  get_filename_component(CUDA_LIB_DIR "${CUDA_RUNTIME_LIB}" DIRECTORY)
-  link_directories("${CUDA_LIB_DIR}")
-  set(CMAKE_INSTALL_RPATH "${CUDA_LIB_DIR}")
-  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 endif()
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
@@ -33,20 +16,15 @@ if(SD_OPENCL)
   list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
-# Vulkan is auto-enabled in portfile.cmake via PLATFORM_OPTIONS on all
-# non-Apple, non-Android platforms — no separate feature flag needed here.
-# CUDA requires a specific build machine so it remains opt-in via SD_CUDA.
+# Vulkan and Metal are auto-enabled via default-features in the ggml and
+# stable-diffusion-cpp overlay ports.  CUDA requires a specific build machine
+# so it remains opt-in via SD_CUDA.
 #
-# GGML_BACKEND_DL is ON only on Android (set in portfile.cmake), mirroring the
-# qvac-fabric llama.cpp port. On Linux/macOS GPU backends are statically linked.
+# GGML_BACKEND_DL is ON only on Android (set in the ggml portfile), mirroring
+# qvac-fabric. On Linux/macOS/Windows GPU backends are statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-
-# stable-diffusion.cpp uses Clang-only warning flags on Linux; force clang via override triplet
-if(UNIX AND NOT APPLE AND NOT ANDROID)
-  set(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-endif()
 
 project(qvac-lib-inference-addon-sd C CXX)
 
@@ -66,11 +44,10 @@ find_package(stable-diffusion-cpp CONFIG REQUIRED)
 # stable-diffusion.a references ggml symbols externally, so we must link them.
 find_package(ggml CONFIG REQUIRED)
 
-# stb headers are installed into the same include dir by the port
 find_path(STB_IMAGE_WRITE_INCLUDE_DIR "stb_image_write.h" REQUIRED)
 
 if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI)
+  add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
 bare_target(bare_target_value)
@@ -129,39 +106,7 @@ add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_LIBS})
     ${qvac-lib-inference-addon-sd}
     PRIVATE
       stable-diffusion::stable-diffusion
-      ggml::ggml
   )
-
-  # Link CUDA shared libs needed by the statically-linked ggml-cuda backend
-  if(SD_CUDA)
-    target_link_libraries(${qvac-lib-inference-addon-sd} PRIVATE cudart cublas cublasLt)
-  endif()
-
-  # Link Metal framework on Apple platforms
-  if(APPLE)
-    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
-    find_library(METAL_LIBRARY Metal REQUIRED)
-    find_library(METALKIT_LIBRARY MetalKit REQUIRED)
-    find_library(METALPERFORMANCESHADERS_LIBRARY MetalPerformanceShaders)
-    target_link_libraries(
-      ${qvac-lib-inference-addon-sd}
-      PRIVATE
-        ${FOUNDATION_LIBRARY}
-        ${METAL_LIBRARY}
-        ${METALKIT_LIBRARY}
-    )
-    if(METALPERFORMANCESHADERS_LIBRARY)
-      target_link_libraries(${qvac-lib-inference-addon-sd} PRIVATE ${METALPERFORMANCESHADERS_LIBRARY})
-    endif()
-  endif()
-
-  # Link OpenCL on Android (if available via vcpkg)
-  if(ANDROID)
-    find_package(OpenCL QUIET)
-    if(OpenCL_FOUND)
-      target_link_libraries(${qvac-lib-inference-addon-sd} PRIVATE OpenCL::OpenCL)
-    endif()
-  endif()
 
 target_compile_features(${qvac-lib-inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${qvac-lib-inference-addon-sd} PUBLIC JS_LOGGER)

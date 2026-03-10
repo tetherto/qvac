@@ -24,6 +24,7 @@ vcpkg_from_github(
         ggml-max-name.patch
         ggml-opencl-public-header.patch
         ggml-config-include-dir.patch
+        ggml-static-core-dl-backends.patch
 )
 
 # --- GPU feature flags ---
@@ -93,9 +94,9 @@ set(PLATFORM_OPTIONS)
 
 if(VCPKG_TARGET_IS_ANDROID)
     # GGML_BACKEND_DL compiles each GPU backend as a MODULE (.so) loaded at
-    # runtime via dlopen.  Requires BUILD_SHARED_LIBS=ON so ggml-base is a
-    # shared library that MODULE backends can link against.
-    set(VCPKG_LIBRARY_LINKAGE dynamic)
+    # runtime via dlopen.  The ggml-static-core-dl-backends patch enables this
+    # with BUILD_SHARED_LIBS=OFF — core libs are static with PIC, backends
+    # are MODULE .so files that link against the static ggml-base.
     list(APPEND PLATFORM_OPTIONS
         -DGGML_BACKEND_DL=ON
         -DGGML_CPU_ALL_VARIANTS=ON
