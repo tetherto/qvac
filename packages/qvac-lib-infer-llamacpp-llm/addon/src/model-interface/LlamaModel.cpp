@@ -195,11 +195,16 @@ void LlamaModel::reinitialize(
     configFilemap.erase(it);
   }
 
+<<<<<<< HEAD
   common_params params;
   if (auto it = configFilemap.find("training"); it != configFilemap.end()) {
     configFilemap.erase(it);
   }
+=======
+
+>>>>>>> 6cf83cff5aedc3035cd3a6fcf425e9d18749f209
   initializeBackend(backendsDir);
+  common_params params;
   commonParamsParse(modelPath_, configFilemap, params);
   params.training = training;
 
