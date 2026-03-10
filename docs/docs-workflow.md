@@ -1,6 +1,6 @@
-# Contributing to the QVAC Documentation Site
+# Docs Workflow
 
-This guide covers the docs automation workflow, how to generate documentation locally, how CI triggers work, and troubleshooting steps.
+How the documentation site automation works: generating API docs locally, CI triggers, and troubleshooting.
 
 For general contribution guidelines (PR labels, changelog format), see the [root CONTRIBUTING.md](../CONTRIBUTING.md).
 
