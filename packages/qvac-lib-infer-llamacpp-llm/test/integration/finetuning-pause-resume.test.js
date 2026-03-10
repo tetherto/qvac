@@ -48,10 +48,6 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function sleep (ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 function waitForProgress (handle, minSteps = 2, timeoutMs = 300_000) {
   return new Promise((resolve, reject) => {
     let count = 0
