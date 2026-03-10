@@ -1,3 +1,9 @@
+---
+name: addon-release-notes
+description: Generate human-readable release notes for add-on packages with version bump validation
+argument-hint: "[package-name]"
+---
+
 # Generate Human-Readable Release Notes
 
 ## Step 1: Identify version **and** changes (mandatory version bump check)

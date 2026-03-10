@@ -1,3 +1,9 @@
+---
+name: addon-pr-description
+description: Generate PR descriptions for add-on packages with version bump validation
+argument-hint: "[package-name]"
+---
+
 # Generate PR Description
 
 ## Step 1: Identify base/head, collect changes, and verify version bump

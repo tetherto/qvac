@@ -1,3 +1,9 @@
+---
+name: sdk-notice-generate
+description: Generate NOTICE files with third-party attributions for packages. Covers model, JS, Python, and C++ dependencies.
+argument-hint: "[package-name|--all]"
+---
+
 # NOTICE File Generator
 
 Generate deterministic, sorted NOTICE files for individual packages or all packages at once, covering model, JS, Python, and C++ dependency attributions.
@@ -8,7 +14,7 @@ Generate deterministic, sorted NOTICE files for individual packages or all packa
 - Generating or updating NOTICE files for any package
 - Adding new third-party dependencies that need attribution
 - Preparing a release that requires up-to-date NOTICE files
-- User invokes `/notice-generate`
+- User invokes `/sdk-notice-generate`
 
 ## Prerequisites
 

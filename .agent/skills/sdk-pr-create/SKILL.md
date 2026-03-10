@@ -1,3 +1,8 @@
+---
+name: sdk-pr-create
+description: Generate PR titles and descriptions for SDK pod packages following template and format rules
+---
+
 # SDK Pod PR Creation
 
 Generate PR titles and descriptions for SDK pod packages, following the team's template and format rules.

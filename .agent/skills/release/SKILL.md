@@ -1,3 +1,10 @@
+---
+name: release
+description: Release a package to NPM. Validates version bump, changelog, creates release branch, monitors CI, verifies publish.
+argument-hint: "<package-name>"
+disable-model-invocation: true
+---
+
 # Release Package
 
 Release an add-on or SDK package to NPM. Ensures version bump, changelog, release branch, CI pipeline, and npm publish.

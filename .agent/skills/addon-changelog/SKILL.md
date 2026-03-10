@@ -1,3 +1,9 @@
+---
+name: addon-changelog
+description: Generate changelog entries for add-on packages. Use when preparing a release or generating release notes for an addon.
+argument-hint: "[package-name]"
+---
+
 # Generate Human-Readable Changelog Entries
 
 Generate changelog entries for add-on packages following the add-on release workflow.

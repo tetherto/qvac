@@ -1,3 +1,9 @@
+---
+name: sdk-changelog
+description: Generate changelogs for SDK pod packages using tag-based GitFlow. Use when preparing a release, generating changelog, or creating CHANGELOG_LLM.md.
+argument-hint: "[package-name]"
+---
+
 # SDK Changelog Generation
 
 Generate changelogs for SDK pod packages following the monorepo GitFlow.
@@ -90,7 +96,7 @@ node .agent/scripts/notice-generate/generate-notice.js <package-name>
 
 Do NOT commit — the user will review and commit.
 
-See `.agent/skills/sdk/notice-generate.md` for full details.
+See `/sdk-notice-generate` for full details.
 
 ## Quality Checklist
 
@@ -113,4 +119,4 @@ Before completing:
 - GitFlow: `/gitflow.md`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
-- NOTICE generation: `.agent/skills/sdk/notice-generate.md`
+- NOTICE generation: `/sdk-notice-generate`

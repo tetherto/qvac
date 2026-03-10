@@ -70,6 +70,7 @@
       "Bash(convert *)",
       "Bash(git *)",
       "Bash(gh *)",
+      "Bash(GIT_CONFIG_NOSYSTEM=1 gh *)",
 
       "mcp__asana__asana_get_task",
       "mcp__asana__asana_search_tasks",

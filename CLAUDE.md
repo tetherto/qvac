@@ -188,7 +188,7 @@ When a question relates to one of these topics, read the corresponding knowledge
 | vcpkg / native builds | vcpkg deps, triplets, registries, CMake integration, build failures | `.claude/knowledge/vcpkg-management.md` |
 | llama.cpp Android | Cross-compiling llama.cpp, ADB deployment, Vulkan GPU, Android inference | `.claude/knowledge/llama-cpp-android.md` |
 
-Skills: `/kb-ci <question>`, `/kb-vcpkg <question>`, `/kb-llama-android <question>`
+These topics are also handled by specialized agents (ci-validator, model-registry-updater, llama-cpp-android-runner).
 
 ## Never Commit
 

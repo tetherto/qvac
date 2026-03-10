@@ -76,30 +76,20 @@ setup_claude() {
     copy_with_header "$f" "$REPO_ROOT/.claude/knowledge/$(basename "$f")"
   done
 
-  # Top-level commands from skills/
-  for f in "$SCRIPT_DIR"/skills/*.md; do
-    [ -f "$f" ] || continue
-    copy_with_header "$f" "$REPO_ROOT/.claude/commands/$(basename "$f")"
-  done
-
-  # Commands from skills (plain markdown, no frontmatter needed)
-  for f in "$SCRIPT_DIR"/skills/addons/*.md; do
-    [ -f "$f" ] || continue
-    copy_with_header "$f" "$REPO_ROOT/.claude/commands/addons/$(basename "$f")"
-  done
-
-  for f in "$SCRIPT_DIR"/skills/sdk/*.md; do
-    [ -f "$f" ] || continue
-    copy_with_header "$f" "$REPO_ROOT/.claude/commands/sdk/$(basename "$f")"
-  done
-
-  # SDK references (subdirectories under skills/sdk/)
-  if [ -d "$SCRIPT_DIR/skills/sdk/references" ]; then
-    for f in "$SCRIPT_DIR"/skills/sdk/references/*.md; do
-      [ -f "$f" ] || continue
-      copy_with_header "$f" "$REPO_ROOT/.claude/commands/sdk/references/$(basename "$f")"
+  # Skills (directory-based: each skill is a dir with SKILL.md + optional supporting files)
+  for skill_dir in "$SCRIPT_DIR"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    # Copy SKILL.md
+    if [ -f "$skill_dir/SKILL.md" ]; then
+      copy_plain "$skill_dir/SKILL.md" "$REPO_ROOT/.claude/skills/$skill_name/SKILL.md"
+    fi
+    # Copy supporting files (everything except SKILL.md)
+    find "$skill_dir" -type f ! -name "SKILL.md" | while read -r f; do
+      rel="${f#$skill_dir}"
+      copy_plain "$f" "$REPO_ROOT/.claude/skills/$skill_name/$rel"
     done
-  fi
+  done
 
   # MCP: print instructions (Claude Code uses user-level config)
   echo ""
@@ -117,40 +107,20 @@ setup_cursor() {
   echo ""
   echo "Setting up Cursor (.cursor/)..."
 
-  # Commands (addons — all addon skills as Cursor commands)
-  for f in "$SCRIPT_DIR"/skills/addons/*.md; do
-    [ -f "$f" ] || continue
-    copy_with_header "$f" "$REPO_ROOT/.cursor/commands/addons/$(basename "$f")"
-  done
-
-  # Skills (SDK — wrap with YAML frontmatter)
-  wrap_with_frontmatter "$SCRIPT_DIR/skills/sdk/pr-create.md" \
-    "sdk-pr-create" \
-    "Generate PR descriptions for SDK pod packages following template and format rules." \
-    "$REPO_ROOT/.cursor/skills/sdk-pr-create/SKILL.md"
-
-  wrap_with_frontmatter "$SCRIPT_DIR/skills/sdk/changelog.md" \
-    "sdk-changelog" \
-    "Generate changelogs for SDK pod packages using tag-based GitFlow. Use when preparing a release, generating changelog, or creating CHANGELOG_LLM.md." \
-    "$REPO_ROOT/.cursor/skills/sdk-changelog/SKILL.md"
-
-  wrap_with_frontmatter "$SCRIPT_DIR/skills/sdk/notice-generate.md" \
-    "notice-generate" \
-    "Generate NOTICE files with third-party attributions for all packages in the monorepo." \
-    "$REPO_ROOT/.cursor/skills/notice-generate/SKILL.md"
-
-  wrap_with_frontmatter "$SCRIPT_DIR/skills/addons/addon-changelog.md" \
-    "addon-changelog" \
-    "Generate changelog entries for a target add-on package. Use when preparing a new release." \
-    "$REPO_ROOT/.cursor/skills/addon-changelog/SKILL.md"
-
-  # SDK references for changelog skill
-  if [ -d "$SCRIPT_DIR/skills/sdk/references" ]; then
-    for f in "$SCRIPT_DIR"/skills/sdk/references/*.md; do
-      [ -f "$f" ] || continue
-      copy_with_header "$f" "$REPO_ROOT/.cursor/skills/sdk-changelog/references/$(basename "$f")"
+  # Skills (directory-based: copy all skills to Cursor)
+  for skill_dir in "$SCRIPT_DIR"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    # Copy SKILL.md
+    if [ -f "$skill_dir/SKILL.md" ]; then
+      copy_plain "$skill_dir/SKILL.md" "$REPO_ROOT/.cursor/skills/$skill_name/SKILL.md"
+    fi
+    # Copy supporting files (everything except SKILL.md)
+    find "$skill_dir" -type f ! -name "SKILL.md" | while read -r f; do
+      rel="${f#$skill_dir}"
+      copy_plain "$f" "$REPO_ROOT/.cursor/skills/$skill_name/$rel"
     done
-  fi
+  done
 
   # MCP: generate .cursor/mcp.json from .agent/mcp.json
   # Cursor uses mcpServers at the top level (not nested under "servers")

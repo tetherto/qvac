@@ -1,3 +1,10 @@
+---
+name: ci-validate
+description: Trigger a CI workflow for a package, wait for completion, and report results
+argument-hint: "<package-short-name>"
+disable-model-invocation: true
+---
+
 # CI Validate — Cross-Platform Workflow Runner
 
 Trigger a CI workflow for a package, wait for it to complete, and report results.
