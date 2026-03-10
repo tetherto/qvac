@@ -1151,6 +1151,9 @@ std::string LlamaModel::finetune(
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       checkpointState->progressCallback = progressCallback;
+      if (progressCallback) {
+        checkpointState->suppressProgressBar = true;
+      }
       setCurrentCheckpointStateShared(checkpointState);
       setCurrentCheckpointState(checkpointState.get());
     }

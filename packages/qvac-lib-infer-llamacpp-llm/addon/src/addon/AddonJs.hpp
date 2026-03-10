@@ -52,12 +52,24 @@ struct JsFinetuneProgressOutputHandler
               js::Object statsObj = js::Object::create(this->env_);
               statsObj.setProperty(
                   this->env_,
+                  "is_train",
+                  js::Boolean::create(this->env_, stats.isTrain));
+              statsObj.setProperty(
+                  this->env_,
                   "loss",
                   js::Number::create(this->env_, stats.loss));
               statsObj.setProperty(
                   this->env_,
+                  "loss_uncertainty",
+                  js::Number::create(this->env_, stats.lossUncertainty));
+              statsObj.setProperty(
+                  this->env_,
                   "accuracy",
                   js::Number::create(this->env_, stats.accuracy));
+              statsObj.setProperty(
+                  this->env_,
+                  "accuracy_uncertainty",
+                  js::Number::create(this->env_, stats.accuracyUncertainty));
               statsObj.setProperty(
                   this->env_,
                   "global_steps",
@@ -78,6 +90,16 @@ struct JsFinetuneProgressOutputHandler
                   "total_batches",
                   js::Number::create(
                       this->env_, static_cast<double>(stats.totalBatches)));
+              statsObj.setProperty(
+                  this->env_,
+                  "elapsed_ms",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.elapsedMs)));
+              statsObj.setProperty(
+                  this->env_,
+                  "eta_ms",
+                  js::Number::create(
+                      this->env_, static_cast<double>(stats.etaMs)));
               payload.setProperty(this->env_, "stats", statsObj);
               return payload;
             }) {}
