@@ -343,6 +343,11 @@ std::any SdModel::process(const std::any& input) {
 
   // If cancelled, propagate as an exception so JobRunner emits
   // queueException (error path), not queueResult + queueJobEnded.
+  //
+  // This intentionally differs from the LLM addon, which returns normally
+  // on cancel (partial text output is still useful).  Diffusion produces no
+  // partial images, so a "successful" completion with output_count=0 would
+  // be misleading — throwing gives the JS caller an explicit cancel signal.
   if (wasCancelled) {
     throw std::runtime_error("Job cancelled");
   }
