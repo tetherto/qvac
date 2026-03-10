@@ -21,7 +21,7 @@ async function createDoctrOcr (opts = {}) {
       langList: ['en'],
       useGPU: false,
       pipelineMode: 'doctr',
-      decodingMethod: 'attention',
+      decodingMethod: 'ctc',
       ...opts
     },
     opts: { stats: true }
@@ -31,11 +31,12 @@ async function createDoctrOcr (opts = {}) {
 }
 
 test('DocTR lifecycle - download models', { timeout: TEST_TIMEOUT }, async function (t) {
-  const models = await ensureDoctrModels(['db_resnet50.onnx', 'parseq.onnx'])
-  DOCTR_DETECTOR = models.db_resnet50
-  DOCTR_RECOGNIZER = models.parseq
-  t.ok(DOCTR_DETECTOR, 'db_resnet50 model available')
-  t.ok(DOCTR_RECOGNIZER, 'parseq model available')
+  // Use lighter mobilenet models to reduce memory pressure across many load/unload cycles
+  const models = await ensureDoctrModels(['db_mobilenet_v3_large.onnx', 'crnn_mobilenet_v3_small.onnx'])
+  DOCTR_DETECTOR = models.db_mobilenet_v3_large
+  DOCTR_RECOGNIZER = models.crnn_mobilenet_v3_small
+  t.ok(DOCTR_DETECTOR, 'db_mobilenet model available')
+  t.ok(DOCTR_RECOGNIZER, 'crnn_mobilenet model available')
 })
 
 test('DocTR lifecycle - load, run, unload', { timeout: TEST_TIMEOUT }, async function (t) {

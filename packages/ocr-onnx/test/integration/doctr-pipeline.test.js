@@ -12,11 +12,12 @@ let DOCTR_DETECTOR
 let DOCTR_RECOGNIZER
 
 test('DocTR pipeline - download models', { timeout: TEST_TIMEOUT }, async function (t) {
-  const models = await ensureDoctrModels(['db_resnet50.onnx', 'parseq.onnx'])
-  DOCTR_DETECTOR = models.db_resnet50
-  DOCTR_RECOGNIZER = models.parseq
-  t.ok(DOCTR_DETECTOR, 'db_resnet50 model available')
-  t.ok(DOCTR_RECOGNIZER, 'parseq model available')
+  // Use lighter mobilenet models to reduce memory pressure on Windows CI
+  const models = await ensureDoctrModels(['db_mobilenet_v3_large.onnx', 'crnn_mobilenet_v3_small.onnx'])
+  DOCTR_DETECTOR = models.db_mobilenet_v3_large
+  DOCTR_RECOGNIZER = models.crnn_mobilenet_v3_small
+  t.ok(DOCTR_DETECTOR, 'db_mobilenet model available')
+  t.ok(DOCTR_RECOGNIZER, 'crnn_mobilenet model available')
 })
 
 test('DocTR pipeline - unrecognizable text completes without hanging', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -30,7 +31,7 @@ test('DocTR pipeline - unrecognizable text completes without hanging', { timeout
       langList: ['en'],
       useGPU: false,
       pipelineMode: 'doctr',
-      decodingMethod: 'attention'
+      decodingMethod: 'ctc'
     },
     opts: { stats: true }
   })
@@ -83,7 +84,7 @@ test('DocTR pipeline - handles multiple sequential runs on same instance', { tim
       langList: ['en'],
       useGPU: false,
       pipelineMode: 'doctr',
-      decodingMethod: 'attention'
+      decodingMethod: 'ctc'
     },
     opts: { stats: true }
   })
