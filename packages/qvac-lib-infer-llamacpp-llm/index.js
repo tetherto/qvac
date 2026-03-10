@@ -288,8 +288,11 @@ class LlmLlamacpp extends BaseInference {
    * cancel inference job if it is running
    */
   async pause () {
+    this.logger?.info?.('[CancelTrace][JS] pause() called, addon.cancel exists=' + !!(this.addon?.cancel))
     if (this.addon?.cancel) {
+      this.logger?.info?.('[CancelTrace][JS] pause() calling addon.cancel()')
       await this.addon.cancel()
+      this.logger?.info?.('[CancelTrace][JS] pause() addon.cancel() resolved')
     }
   }
 
@@ -299,8 +302,11 @@ class LlmLlamacpp extends BaseInference {
    * cancel inference job if it is running
    */
   async cancel () {
+    this.logger?.info?.('[CancelTrace][JS] cancel() called, addon.cancel exists=' + !!(this.addon?.cancel))
     if (this.addon?.cancel) {
+      this.logger?.info?.('[CancelTrace][JS] cancel() calling addon.cancel()')
       await this.addon.cancel()
+      this.logger?.info?.('[CancelTrace][JS] cancel() addon.cancel() resolved')
     }
     this._clearPauseCheckpoints()
   }
@@ -325,17 +331,22 @@ class LlmLlamacpp extends BaseInference {
    * @returns {Promise<void>}
    */
   async unload () {
+    this.logger?.info?.('[CancelTrace][JS] unload() called')
     return await this._withExclusiveRun(async () => {
+      this.logger?.info?.('[CancelTrace][JS] unload() inside exclusiveRun, calling pause()')
       try {
         await this.pause()
       } catch (_) {}
+      this.logger?.info?.('[CancelTrace][JS] unload() pause() done, cleaning up')
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {
         currentJobResponse.failed(new Error('Model was unloaded'))
         this._deleteJobMapping('OnlyOneJob')
       }
       this._hasActiveResponse = false
+      this.logger?.info?.('[CancelTrace][JS] unload() calling super.unload()')
       await super.unload()
+      this.logger?.info?.('[CancelTrace][JS] unload() complete')
     })
   }
 

@@ -358,6 +358,17 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   LlamaModel* llamaModel = getLlamaModel(instance);
   auto* addonCpp = instance.addonCpp.get();
 
+  const bool preCheckFtRunning =
+      llamaModel != nullptr && llamaModel->isFinetuneRunning();
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "[CancelTrace] cancel() called on JS thread, "
+      "llamaModel=" +
+          std::string(llamaModel != nullptr ? "valid" : "null") +
+          " isFinetuneRunning=" +
+          std::string(preCheckFtRunning ? "true" : "false") +
+          " spawning async task");
+
   return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
     const bool hasModel = llamaModel != nullptr;
     const bool ftRunning = hasModel && llamaModel->isFinetuneRunning();
