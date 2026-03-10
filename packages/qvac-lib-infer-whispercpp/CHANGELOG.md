@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Changed
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon and jobs-handler path
+- Updated the JS/native execution path to `createInstance` + `runJob` with parity-focused cancel/output lifecycle handling
+
+### Added
+- Expanded C++/JS parity coverage for addon-cpp runtime behavior, including dedicated `AddonCpp` tests
+
 ## [0.4.2]
 
 ### Changed
