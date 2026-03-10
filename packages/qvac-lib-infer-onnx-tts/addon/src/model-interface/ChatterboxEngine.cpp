@@ -398,6 +398,17 @@ ChatterboxEngine::convertToAudioResult(const std::vector<float> &wav) {
 }
 
 AudioResult ChatterboxEngine::synthesize(const std::string &text) {
+  ensureSession(embedTokensSession_, config_.embedTokensPath);
+  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
+  ensureSession(languageModelSession_, config_.languageModelPath);
+
+  if (!isEnglish_ &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    QLOG(Priority::INFO, "Model is monolingual, falling back to English mode");
+    isEnglish_ = true;
+    keyValueOffset_ = OFFSET;
+  }
+
   std::vector<int64_t> inputIds = tokenize(text);
   TensorData<int64_t> positionIds;
   TensorData<float> speakerEmbeddings;
@@ -407,10 +418,6 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
     sanitizeTokenIds(inputIds);
     positionIds = buildInitialPositionIds(inputIds);
   }
-
-  ensureSession(embedTokensSession_, config_.embedTokensPath);
-  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
-  ensureSession(languageModelSession_, config_.languageModelPath);
 
   QLOG(Priority::INFO, "Sampling ... " + text);
 
