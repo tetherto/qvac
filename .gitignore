@@ -18,6 +18,7 @@ NOTICE_FULL_REPORT.txt
 .claude/knowledge/
 .claude/commands/*
 !.claude/commands/setup.md
+!.claude/commands/release.md
 .cursor/skills/sdk-pr-create/SKILL.md
 .cursor/skills/sdk-changelog/SKILL.md
 .cursor/skills/notice-generate/SKILL.md
