@@ -62,22 +62,7 @@ bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building qvac-lib-inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# Bundle the OpenCL ICD loader on Android so the addon can load even on
-# devices without a system-installed libOpenCL.so.  The ICD loader gracefully
-# handles "no vendor implementation found" at runtime (ggml falls back to CPU).
-set(EXTRA_EXPORTS "")
-if(ANDROID)
-  find_library(_OPENCL_LIB OpenCL QUIET)
-  if(_OPENCL_LIB)
-    add_library(opencl_icd_loader SHARED IMPORTED)
-    set_target_properties(opencl_icd_loader PROPERTIES
-      IMPORTED_LOCATION "${_OPENCL_LIB}"
-      IMPORTED_NO_SONAME TRUE)
-    list(APPEND EXTRA_EXPORTS INSTALL TARGET opencl_icd_loader)
-  endif()
-endif()
-
-add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${EXTRA_EXPORTS})
+add_bare_module(qvac-lib-inference-addon-sd)
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -125,4 +110,18 @@ if(WIN32)
     PRIVATE
       msvcrt.lib
   )
+endif()
+
+# Bundle the OpenCL ICD loader next to the addon on Android so it loads even
+# on devices without a system libOpenCL.so.  The ICD loader gracefully returns
+# "no vendor implementation" at runtime and ggml falls back to CPU.
+if(ANDROID)
+  bare_platform(PREBUILD_PLATFORM)
+  bare_arch(PREBUILD_ARCH)
+  set(PREBUILD_DIR "${CMAKE_SOURCE_DIR}/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
+
+  find_library(_OPENCL_LIB OpenCL QUIET)
+  if(_OPENCL_LIB)
+    install(FILES "${_OPENCL_LIB}" DESTINATION "${PREBUILD_DIR}")
+  endif()
 endif()
