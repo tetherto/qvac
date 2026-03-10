@@ -102,7 +102,7 @@ test('run | cancel: cancels current job', { timeout: 600000, skip: isMobile }, a
   // Cancel inside onUpdate after first progress tick — ensures native generation
   // is actually active (matches LLM addon's runAndCancelAfterFirstToken pattern)
   let cancelFired = false
-  let chain = response.onUpdate(async data => {
+  const chain = response.onUpdate(async data => {
     if (cancelFired) return
     if (typeof data === 'string') {
       cancelFired = true
