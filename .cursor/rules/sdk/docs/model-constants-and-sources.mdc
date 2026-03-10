@@ -1,7 +1,7 @@
 ---
 description: Model Constants and Model Source Union Type
 globs:
-  - packages/qvac-sdk/**
+  - packages/sdk/**
 alwaysApply: false
 ---
 
@@ -321,7 +321,7 @@ await loadModel({
 To use the new object-based constants:
 
 ```typescript
-import { WHISPER_TINY } from "qvac-sdk";
+import { WHISPER_TINY } from "sdk";
 
 // Use constant directly
 await loadModel({

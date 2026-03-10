@@ -9,9 +9,11 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
+#include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
+#include "ModelMetadata.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -28,6 +30,22 @@ public:
   LlamaModel& operator=(const LlamaModel&) = delete;
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
+
+  /// @brief Resolves shard basenames in-place to absolute paths relative to
+  /// the parent directory of @p modelPath.
+  static void
+  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
+
+  /// @brief Apply specific parameter defaults based on model metadata
+  /// and detected Adreno GPU version by inserting entries into configFilemap.
+  /// Must be called before commonParamsParse so inserted entries are processed.
+  ///
+  /// @param configFilemap The user-supplied config map (will be written to).
+  /// @param metadata Model metadata (architecture, quantization info).
+  /// @param adrenoVersion Detected Adreno GPU version, if any.
+  static void tuneConfigMap(
+      std::unordered_map<std::string, std::string>& configFilemap,
+      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion);
 
   /**
    * The Constructor for llama model.
@@ -134,7 +152,7 @@ private:
   void commonParamsParse(
       const std::string& modelPath,
       std::unordered_map<std::string, std::string>& configFilemap,
-      common_params& params);
+      common_params& params, std::optional<int>& outAdrenoVersion);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -175,14 +193,13 @@ private:
       std::unordered_map<std::string, std::string>&& configFilemap);
 
   const std::string loadingContext_;
-  const GGUFShards shards_;
+  GGUFShards shards_;
   friend class InitLoader;
   InitLoader initLoader_;
+  ModelMetaData metadata_;
+  AsyncWeightsLoader asyncWeightsLoader_;
 
   bool isTextLlm_ = false;
-  bool isStreaming_ = false;
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
-      singleGgufStreamedFiles_;
 
   // Backend handle must be declared before llmContext_ to ensure
   // llmContext_ is destroyed first (members destroyed in reverse order)
@@ -195,4 +212,5 @@ private:
   // configuration values parsed from configFilemap
   llama_pos configuredNDiscarded_ = 0;
   std::optional<CacheManager> cacheManager_;
+  bool lastRunWasPrefill_ = false;
 };

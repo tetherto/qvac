@@ -8,12 +8,12 @@ on:
       - synchronize
       - reopened
     paths:
-      - "packages/qvac-sdk/**"
-      - "packages/qvac-cli/**"
+      - "packages/sdk/**"
+      - "packages/cli/**"
       - "packages/docs/**"
-      - "packages/qvac-lib-rag/**"
-      - "packages/qvac-lib-logging/**"
-      - "packages/qvac-lib-error-base/**"
+      - "packages/rag/**"
+      - "packages/logging/**"
+      - "packages/error/**"
     branches:
       - main
       - release-*

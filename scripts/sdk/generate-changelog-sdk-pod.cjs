@@ -8,8 +8,8 @@
  * Shared across all SDK pod packages.
  *
  * Usage:
- *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-sdk
- *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=qvac-lib-rag --base-commit=abc123 --base-version=0.5.0
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk
+ *   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=rag --base-commit=abc123 --base-version=0.5.0
  */
 
 const fs = require("fs");
@@ -440,22 +440,28 @@ function rebuildRootChangelog(packageName) {
   let combined = "";
 
   for (const version of versions) {
-    const versionFile = path.join(
-      changelogRoot,
-      version,
-      "CHANGELOG.md"
-    );
+    let versionFile = path.join(changelogRoot, version, "CHANGELOG_LLM.md");
+
+    if (!fs.existsSync(versionFile)) {
+      versionFile = path.join(changelogRoot, version, "CHANGELOG.md");
+    }
 
     if (!fs.existsSync(versionFile)) {
       console.warn(
-        `⚠️ Skipping ${version} (missing CHANGELOG.md)`
+        `⚠️ Skipping ${version} (no CHANGELOG_LLM.md or CHANGELOG.md)`
       );
       continue;
     }
 
     let content = fs.readFileSync(versionFile, "utf8").trim();
-    // Transform "# Changelog vX.Y.Z" to "## vX.Y.Z" for aggregated file
-    content = content.replace(/^# Changelog (v\d+\.\d+\.\d+)/, "## $1");
+    // Transform version headers to "## [X.Y.Z]" for aggregated file
+    content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
+    content = content.replace(/^# QVAC SDK v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
+    // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
+    content = content.replace(
+      /\(\.\/([^)]+\.md)\)/g,
+      `(./changelog/${version}/$1)`
+    );
     combined += content + "\n\n";
   }
 
@@ -492,7 +498,7 @@ async function main() {
     );
     console.error("");
     console.error("Options:");
-    console.error("  --package        Package name (e.g., qvac-sdk)");
+    console.error("  --package        Package name (e.g., sdk)");
     console.error(
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );

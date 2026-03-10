@@ -14,7 +14,14 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
 project(qvac-lib-infer-whispercpp CXX C)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -26,7 +33,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.valgrind.supp
 configure_file(${VCPKG_INSTALLED_PATH}/tools/qvac-lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/Addon.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp")
 find_package(whisper CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -50,13 +57,14 @@ endif()
 
 add_bare_module(qvac-lib-infer-whispercpp EXPORTS)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
 target_sources(
   ${qvac-lib-infer-whispercpp}
   PRIVATE
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/WhisperModelJobsHandler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-infer-whispercpp.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperConfig.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/WhisperModel.cpp
@@ -67,7 +75,9 @@ target_sources(
 target_include_directories(
   ${qvac-lib-infer-whispercpp}
   PRIVATE
+    ${PROJECT_SOURCE_DIR}/addon
     ${PROJECT_SOURCE_DIR}/addon/src
+    ${CMAKE_BINARY_DIR}/_bare/node_modules/bare-headers/include
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
@@ -105,24 +115,26 @@ if(BUILD_TESTING)
   )
 
   target_include_directories(whisper-core PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/
       ${PROJECT_SOURCE_DIR}/addon/src/
+      ${CMAKE_BINARY_DIR}/_bare/node_modules/bare-headers/include
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
 
-  # Only define JS_LOGGER for tests if coverage is not enabled
-  # (Coverage tests need pure C++ without JavaScript/libuv dependencies)
-  if(NOT ENABLE_COVERAGE)
-    target_compile_definitions(whisper-core PUBLIC JS_LOGGER)
-  endif()
-
   # Create test executable
-  add_executable(test-whisper-core ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp)
+  add_executable(
+      test-whisper-core
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/AddonCppTest.cpp
+  )
 
   target_include_directories(test-whisper-core PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/whisper.cpp/
       ${PROJECT_SOURCE_DIR}/addon/src/
       ${PROJECT_SOURCE_DIR}/addon/tests/
+      ${CMAKE_BINARY_DIR}/_bare/node_modules/bare-headers/include
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
 

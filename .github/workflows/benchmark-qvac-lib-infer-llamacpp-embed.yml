@@ -16,7 +16,7 @@ on:
       datasets:
         description: 'Datasets to benchmark (comma-separated or "all"). Available: SciFact, NFCorpus, ArguAna, SCIDOCS, TRECCOVID, FiQA2018'
         required: false
-        default: "all"
+        default: "ArguAna,NFCorpus,SciFact,SCIDOCS"
         type: string
       ctx_size:
         description: 'Context window size (default: 512) - Max tokens per input'
@@ -84,7 +84,7 @@ on:
         type: string
       datasets:
         required: false
-        default: "all"
+        default: "ArguAna,NFCorpus,SciFact,SCIDOCS"
         type: string
       ctx_size:
         required: false
@@ -422,11 +422,12 @@ jobs:
       - name: Display results summary
         if: always()
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
         run: |
-          LATEST_MD=$(ls -t benchmarks/results/*.md 2>/dev/null | head -n 1 || true)
-          if [[ -n "${LATEST_MD:-}" ]]; then
-            cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d "$WORKDIR/benchmarks/results" ]; then
+            LATEST_MD=$(find "$WORKDIR/benchmarks/results" -type f -name "*.md" -exec ls -t {} + 2>/dev/null | head -n 1)
+            if [[ -n "$LATEST_MD" ]]; then
+              cat "$LATEST_MD" >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
       - name: Upload benchmark results

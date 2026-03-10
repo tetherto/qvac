@@ -5,8 +5,6 @@ const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 const { BertInterface } = require('./addon')
 
-/** Max ms to wait for the previous job to finish before throwing. */
-const PREVIOUS_JOB_WAIT_MS = 30
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 /**
@@ -31,7 +29,7 @@ class GGMLBert extends BaseInference {
     // _shards will be null if the modelName is not a sharded file.
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._lastJobResult = Promise.resolve()
+    this._hasActiveResponse = false
   }
 
   async _load (closeLoader = false, reportProgressCallback) {
@@ -105,12 +103,17 @@ class GGMLBert extends BaseInference {
         currentJobResponse.failed(new Error('Model was unloaded'))
         this._deleteJobMapping('OnlyOneJob')
       }
+      this._hasActiveResponse = false
       await super.unload()
     })
   }
 
   async _runInternal (text) {
     return this._withExclusiveRun(async () => {
+      if (this._hasActiveResponse) {
+        throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      }
+
       this.logger.info('Starting inference embeddings for text:', text)
 
       // Detect arrays and set type: 'sequences' for direct vector passing
@@ -119,25 +122,6 @@ class GGMLBert extends BaseInference {
         ? { type: 'sequences', input: text }
         : { type: 'text', input: text }
 
-      // Make sure all events from previous one are done and will not
-      // affect our new job. addon-cpp C++ guarantees every accepted job will
-      // end with output or exception after finishing processing.
-      // - If timeout is hit, exception should surface to avoid infinite await.
-      // - It is expected that we briefly wait for the previous job to settle
-      //   before throwing a busy error.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(new Error(RUN_BUSY_ERROR_MESSAGE))
-        }, PREVIOUS_JOB_WAIT_MS)
-        this._lastJobResult
-          .then(() => { clearTimeout(timer); resolve() })
-          .catch(() => { clearTimeout(timer); resolve() })
-      })
-
-      // At this point, previous job is not using 'OnlyOneJob'
-      // slot anymore, so we can safely overwrite it with new response.
-      // Create response before running the job so any events right after
-      // successful runJob are not lost.
       const response = this._createResponse('OnlyOneJob')
 
       // addon-cpp C++ guarantees no events will be generated until job is
@@ -157,8 +141,10 @@ class GGMLBert extends BaseInference {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
-      // Store the finish promise so the next run can wait on it.
-      this._lastJobResult = response.await()
+      this._hasActiveResponse = true
+      const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+      finalized.catch(() => {})
+      response.await = () => finalized
 
       return response
     })

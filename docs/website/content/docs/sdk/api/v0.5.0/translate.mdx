@@ -1,0 +1,60 @@
+---
+title: "translate( )"
+titleStyle: code
+description: "Translates text from one language to another using a specified translation model.
+Supports both NMT (Neural Machine Translation) and LLM models."
+---
+
+```typescript
+function translate(params: TranslateClientParams): Object
+```
+
+## Description
+
+Translates text from one language to another using a specified translation model.
+Supports both NMT (Neural Machine Translation) and LLM models.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `TranslateClientParams` | ✓ | Translation configuration object |
+
+## Returns
+
+```typescript
+Object
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Streaming mode (default)
+const result = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+});
+
+for await (const token of result.tokenStream) {
+  console.log(token);
+}
+
+// Non-streaming mode
+const response = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+  stream: false,
+});
+
+console.log(await response.text);
+```
+```

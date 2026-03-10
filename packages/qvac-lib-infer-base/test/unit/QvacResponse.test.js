@@ -58,6 +58,36 @@ test('onFinish resolves with final outputs on ended via await()', async t => {
   )
 })
 
+test('onFinish and await resolve with custom terminal result', async t => {
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    pauseHandler: dummyPauseHandler,
+    continueHandler: dummyContinueHandler
+  })
+
+  const terminalResult = {
+    op: 'finetune',
+    status: 'DONE',
+    stats: { train_loss: 0.42 }
+  }
+  let finishCallbackResult = null
+
+  response.onFinish(result => {
+    finishCallbackResult = result
+  })
+
+  response.updateOutput('intermediate')
+  response.ended(terminalResult)
+
+  const result = await response.await()
+  t.is(result, terminalResult, 'await() resolves with custom terminal result')
+  t.is(
+    finishCallbackResult,
+    terminalResult,
+    'onFinish callback receives custom terminal result'
+  )
+})
+
 test('failed should trigger error and reject await()', async t => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler,

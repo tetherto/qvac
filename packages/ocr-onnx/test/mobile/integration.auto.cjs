@@ -6,6 +6,30 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-basic.test.js', options)
+}
+
+async function runDoctrFrenchTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-french.test.js', options)
+}
+
+async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-lab-results.test.js', options)
+}
+
+async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-models.test.js', options)
+}
+
+async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/error-handling.test.js', options)
+}
+
+async function runFullCoverageTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/full-coverage.test.js', options)
+}
+
 async function runFullOcrSuiteTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/full-ocr-suite.test.js', options)
 }
@@ -18,8 +42,16 @@ async function runLargeImagesTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/large-images.test.js', options)
 }
 
+async function runLifecycleTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/lifecycle.test.js', options)
+}
+
 async function runOcrBasicTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/ocr-basic.test.js', options)
+}
+
+async function runParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/param-validation.test.js', options)
 }
 
 async function runPipelineTest (options = {}) { // eslint-disable-line no-unused-vars

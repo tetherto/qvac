@@ -6,7 +6,7 @@ class QvacErrorAddonWhisper extends QvacErrorBase { }
 
 const { name, version } = require('../package.json')
 
-// This library has error code range from 6001 to 6009
+// This library has error code range from 6001 to 6011
 const ERR_CODES = Object.freeze({
   FAILED_TO_LOAD_WEIGHTS: 6001,
   FAILED_TO_CANCEL: 6002,
@@ -16,7 +16,9 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_ACTIVATE: 6006,
   FAILED_TO_RESET: 6007,
   FAILED_TO_PAUSE: 6008,
-  VAD_MODEL_REQUIRED: 6009
+  VAD_MODEL_REQUIRED: 6009,
+  JOB_ALREADY_RUNNING: 6010,
+  INVALID_AUDIO_INPUT: 6011
 })
 
 addCodes({
@@ -55,6 +57,14 @@ addCodes({
   [ERR_CODES.VAD_MODEL_REQUIRED]: {
     name: 'VAD_MODEL_REQUIRED',
     message: () => 'VAD model name is required for Whisper transcription'
+  },
+  [ERR_CODES.JOB_ALREADY_RUNNING]: {
+    name: 'JOB_ALREADY_RUNNING',
+    message: () => 'Cannot set new job: a job is already set or being processed'
+  },
+  [ERR_CODES.INVALID_AUDIO_INPUT]: {
+    name: 'INVALID_AUDIO_INPUT',
+    message: (message) => `Invalid audio input: ${message}`
   }
 }, {
   name,

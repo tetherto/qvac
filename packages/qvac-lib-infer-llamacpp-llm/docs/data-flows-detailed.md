@@ -24,6 +24,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 **Weight Loading:**
 - JavaScript sends model weights in chunks (streaming, zero-copy)
 - C++ creates std::streambuf over JS ArrayBuffers
+- For streamed models, the first shard is lent to `ModelMetaData` for GGUF metadata extraction before proceeding to weight loading
 - llama.cpp reads weights via stream interface
 - Supports sharded models (GGUF multi-file)
 - JS references kept alive during load, cleaned up after
@@ -39,6 +40,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 
 - [Primary Inference Flow](#primary-inference-flow)
 - [Weight Loading Flow](#weight-loading-flow)
+- [Metadata Extraction Flow](#metadata-extraction-flow)
 - [Multimodal Inference Flow](#multimodal-inference-flow)
 - [Session Cache Flow](#session-cache-flow)
 
@@ -284,6 +286,97 @@ JavaScript sends each file separately. C++ concatenates into single logical stre
 
 ---
 
+## Metadata Extraction Flow
+
+`ModelMetaData` extracts GGUF key-value metadata (e.g., quantization type, architecture) from the model file *before* weights are loaded. This allows early decisions like backend selection and quantization detection without loading gigabytes of tensor data into memory.
+
+### Disk-Based Models
+
+For models loaded from disk, metadata is read directly from the file:
+
+```mermaid
+sequenceDiagram
+    participant Init as LlamaModel::init
+    participant Meta as ModelMetaData
+    participant GGUF as llama_model_meta_from_file
+
+    Init->>Meta: parse(modelPath, shards, isStreaming=false)
+    Meta->>GGUF: llama_model_meta_from_file(path)
+    GGUF-->>Meta: metadata handle
+    Meta-->>Init: ready for queries
+
+    Init->>Meta: tryGetU32("general.file_type")
+    Meta-->>Init: e.g. 7 (Q8_0)
+```
+
+### Streamed Models (Sharded)
+
+For streamed models, the first shard must be shared between metadata parsing and weight loading. `AsyncWeightsLoader` coordinates this handoff:
+
+```mermaid
+sequenceDiagram
+    participant DL as Download Thread
+    participant AWL as AsyncWeightsLoader
+    participant Worker as firstShardWorker (async)
+    participant State as FirstFileFromGgufStreamState
+    participant Meta as ModelMetaData::parse
+    participant LC as llama.cpp
+
+    Note over DL,Meta: setWeightsForFile() receives first shard
+
+    DL->>AWL: setWeightsForFile(filename, shard)
+    AWL->>AWL: ensureLoadInBackground()
+    AWL->>Worker: launch async (lendFirstShardAndWaitForRelease)
+
+    Worker->>State: provide(lentShard)
+    Note over State: Sets firstFileFromGgufStream_,<br/>notifies CV
+
+    Note over Meta: parse() was waiting on CV
+    State-->>Meta: CV wakes, borrows streambuf
+
+    Meta->>Meta: llama_model_meta_from_streambuf()
+    Meta->>State: clear() — resets optional,<br/>notifies CV
+
+    Note over Worker: waitForRelease() wakes
+    State-->>Worker: buffer released
+
+    Worker->>LC: fulfillSplitFuture(filename, shard)
+    Note over LC: Shard proceeds to weight loading
+
+    DL->>AWL: setWeightsForFile(shard 2..N)
+    AWL->>LC: fulfillSplitFuture() directly
+```
+
+<details>
+<summary>📊 LLM-Friendly: Metadata Extraction Details</summary>
+
+**Thread Coordination:**
+
+| Thread | Role | Blocks On |
+|--------|------|-----------|
+| Download (JS) | Delivers shards via `setWeightsForFile()` | Nothing (first shard launches async worker) |
+| firstShardWorker | Lends first shard to metadata, then forwards to llama.cpp | `waitForRelease()` — metadata consumer releasing the buffer |
+| Init (background) | Calls `metadata_.parse()` which waits for streamed buffer | `waitConsumeAndClear()` — provider delivering the buffer |
+
+**Synchronization:**
+
+| Primitive | Purpose | Timeout |
+|-----------|---------|---------|
+| `condition_variable` + `wait_for` | `waitConsumeAndClear` blocks until `provide()` delivers the buffer | 15s (configurable via template parameter) |
+| `condition_variable` + `wait_for` | `waitForRelease` blocks until metadata consumer releases the buffer | 60s (configurable via template parameter) |
+
+**Available Metadata Queries:**
+
+| Method | Returns | Use Case |
+|--------|---------|----------|
+| `tryGetU32(key)` | `optional<uint32_t>` | Read any GGUF u32 key |
+| `isU32OneOf(key, values)` | `bool` | Check if a key matches expected values |
+| `hasOneBitQuantization()` | `bool` | Detect TQ1_0/TQ2_0 quantization |
+
+</details>
+
+---
+
 ## Multimodal Inference Flow
 
 For vision + text models (e.g., LLaVA, Qwen2.5-Omni):
@@ -298,7 +391,7 @@ flowchart LR
     BuildMedia --> ModifyMsg[Modify message<br/>content: empty string]
     ModifyMsg --> BuildText[Build text item<br/>type: 'text', input: JSON]
     
-    BuildText --> RunJob[addon.runJob&#40;[media..., text]&#41;]
+    BuildText --> RunJob[addon.runJob&#40;&#91;media..., text&#93;&#41;]
     RunJob --> ProcessMedia{Has media?}
     ProcessMedia -->|Yes| LoadImage[LlamaModel.LoadMedia<br/>load image via llava]
     ProcessMedia -->|No| SkipMedia
@@ -372,5 +465,5 @@ flowchart TD
 **Related Documents:**
 - [architecture.md](architecture.md) - Complete architecture documentation
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-03-02
 

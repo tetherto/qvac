@@ -55,7 +55,7 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md) for
 
 | Flag             | Required | Description                                             |
 | ---------------- | -------- | ------------------------------------------------------- |
-| `--package`      | Yes      | Package name (e.g., `qvac-sdk`)                         |
+| `--package`      | Yes      | Package name (e.g., `sdk`)                         |
 | `--base-commit`  | No       | Initial commit SHA for migration (overrides tag lookup) |
 | `--base-version` | No       | Version label for base commit (display only)            |
 | `--dry-run`      | No       | Preview output without writing files                    |
@@ -72,7 +72,7 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 
 Additionally:
 
-- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest)
+- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
 
 ## Tag Format
 
@@ -80,9 +80,9 @@ Tags follow the pattern: `<package>-v<x.y.z>`
 
 Examples:
 
-- `qvac-sdk-v1.0.0`
+- `sdk-v1.0.0`
 - `docs-v0.1.0`
-- `qvac-lib-rag-v2.0.0`
+- `rag-v2.0.0`
 
 ### Step 5: Update NOTICE file for the target package
 
