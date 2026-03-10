@@ -14,7 +14,8 @@ PivotTranslationModel::PivotTranslationModel(
         secondModelConfig)
     : firstModelPath_(firstModelPath), secondModelPath_(secondModelPath),
       firstModel_(std::make_unique<TranslationModel>(firstModelPath)),
-      secondModel_(std::make_unique<TranslationModel>(secondModelPath)) {
+      secondModel_(std::make_unique<TranslationModel>(secondModelPath)),
+      stopTranslation_(false) {
 
   firstModel_->setConfig(std::move(firstModelConfig));
   secondModel_->setConfig(std::move(secondModelConfig));
@@ -113,12 +114,21 @@ PivotTranslationModel::runtimeStats() const {
   return merged;
 }
 
+void PivotTranslationModel::cancel() const { stopTranslation_.store(true); }
+
 std::any PivotTranslationModel::translateString(const std::string& input) {
+
   if (!isLoaded()) {
     throw std::runtime_error("PivotTranslationModel models are not loaded");
   }
-  const std::any firstOutput = firstModel_->process(input);
-  return secondModel_->process(firstOutput);
+
+  if (!stopTranslation_.load()) {
+    const std::any firstOutput = firstModel_->process(input);
+
+    if (!stopTranslation_.load()) {
+      return secondModel_->process(firstOutput);
+    }
+  }
 }
 
 std::any
