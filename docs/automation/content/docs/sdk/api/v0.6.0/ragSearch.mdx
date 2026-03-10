@@ -1,0 +1,46 @@
+---
+title: "ragSearch( )"
+titleStyle: code
+description: "Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array."
+---
+
+```typescript
+function ragSearch(params: input): Promise
+```
+
+## Description
+
+Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `input` | ✓ | The parameters for searching |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+const results = await ragSearch({
+  modelId,
+  query: "AI and machine learning",
+  topK: 5,
+  workspace: "my-docs",
+});
+```
+```
