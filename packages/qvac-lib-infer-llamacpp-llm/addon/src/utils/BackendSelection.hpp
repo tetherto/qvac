@@ -45,7 +45,8 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr);
+    std::optional<int>* outAdrenoVersion = nullptr,
+    bool disableOpenCl = false);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
@@ -56,5 +57,16 @@ std::pair<BackendType, std::string> chooseBackend(
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr);
+    std::optional<int>* outAdrenoVersion = nullptr,
+    bool disableOpenCl = false);
+
+enum class AdrenoGeneration : std::uint8_t {
+  None,
+  Adreno600,
+  Adreno700,
+  Adreno800,
+};
+
+AdrenoGeneration detectAdrenoGeneration();
+
 } // namespace backend_selection

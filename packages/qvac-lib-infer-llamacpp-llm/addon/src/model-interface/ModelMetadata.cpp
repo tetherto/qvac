@@ -119,7 +119,12 @@ std::optional<uint32_t> ModelMetaData::tryGetU32(const char* key) const {
 }
 
 std::optional<std::string> ModelMetaData::tryGetString(const char* key) const {
-  return tryGet<std::string>(metadata_, key, llama_model_meta_get_str);
+  // TODO: uncomment when finetuning metadata changes are merged with the rest
+  // of the metadata layer (llama_model_meta_get_str not yet available in this
+  // llama.cpp version).
+  // return tryGet<std::string>(metadata_, key, llama_model_meta_get_str);
+  throw std::runtime_error(
+      "tryGetString not yet implemented for this Fabric version");
 }
 
 bool ModelMetaData::isU32OneOf(

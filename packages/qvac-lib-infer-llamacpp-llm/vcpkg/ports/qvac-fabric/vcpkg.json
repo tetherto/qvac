@@ -1,0 +1,26 @@
+{
+  "name": "qvac-fabric",
+  "version": "7248.1.2",
+  "description": "LLM inference in C/C++",
+  "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "force-profiler": {
+      "description": "Force vk performance logging in ggml"
+    }
+  }
+}

@@ -10,7 +10,7 @@
 #include "LlmContext.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext: public LlmContext {
+class TextLlmContext : public LlmContext {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
@@ -69,6 +69,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.
@@ -178,5 +188,3 @@ private:
 
   std::atomic<bool> stopGeneration_ = false;
 };
-
-
