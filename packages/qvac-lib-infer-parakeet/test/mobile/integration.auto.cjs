@@ -138,11 +138,15 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   } finally {
     try {
       if (parakeet) {
+        console.log('[test] Cleanup: unloadWeights...')
         await parakeet.unloadWeights()
-        await new Promise(r => setTimeout(r, 500))
+        console.log('[test] Cleanup: waiting for unload...')
+        await new Promise(r => setTimeout(r, 2000))
+        console.log('[test] Cleanup: destroyInstance...')
         await parakeet.destroyInstance()
+        console.log('[test] Cleanup: done')
       }
-    } catch (_) {}
+    } catch (e) { console.log(`[test] Cleanup error: ${e.message}`) }
     try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
@@ -213,12 +217,15 @@ async function runModelTest (opts) {
     for (const file of files) {
       const filePath = path.join(modelDir, file.name)
       if (!fs.existsSync(filePath)) continue
+      console.log(`[${tag}] Loading weights: ${file.name}`)
       const chunk = file.skipRead
         ? new Uint8Array([0])
         : new Uint8Array(fs.readFileSync(filePath))
       await parakeet.loadWeights({ filename: file.name, chunk, completed: true })
     }
+    console.log(`[${tag}] Calling activate...`)
     await parakeet.activate()
+    console.log(`[${tag}] activate() returned`)
 
     await new Promise(r => setTimeout(r, 500))
     if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
@@ -234,7 +241,9 @@ async function runModelTest (opts) {
     for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
 
     console.log(`[${tag}] ${action} ${(audio.length / 16000).toFixed(1)}s audio...`)
+    console.log(`[${tag}] Calling append (audio)...`)
     await parakeet.append({ type: 'audio', data: audio.buffer })
+    console.log(`[${tag}] Calling append (end of job)...`)
     await parakeet.append({ type: 'end of job' })
 
     for (let i = 0; i < 60 && !result; i++) {
@@ -257,11 +266,15 @@ async function runModelTest (opts) {
   } finally {
     try {
       if (parakeet) {
+        console.log(`[${tag}] Cleanup: unloadWeights...`)
         await parakeet.unloadWeights()
-        await new Promise(r => setTimeout(r, 500))
+        console.log(`[${tag}] Cleanup: waiting for unload...`)
+        await new Promise(r => setTimeout(r, 2000))
+        console.log(`[${tag}] Cleanup: destroyInstance...`)
         await parakeet.destroyInstance()
+        console.log(`[${tag}] Cleanup: done`)
       }
-    } catch (_) {}
+    } catch (e) { console.log(`[${tag}] Cleanup error: ${e.message}`) }
     try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
