@@ -32,10 +32,7 @@ class ONNXOcr extends ONNXBase {
   _getDiagnosticsJSON () {
     return JSON.stringify({
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
-      langList: this.params?.langList || [],
-      useGPU: this.params?.useGPU || false,
-      pipelineMode: this.params?.pipelineMode || 'easyocr',
-      timeout: this.params?.timeout
+      params: this.params
     })
   }
 

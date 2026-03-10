@@ -25,10 +25,7 @@ class TestOCR {
   _getDiagnosticsJSON () {
     return JSON.stringify({
       status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
-      langList: this.params?.langList || [],
-      useGPU: this.params?.useGPU || false,
-      pipelineMode: this.params?.pipelineMode || 'easyocr',
-      timeout: this.params?.timeout
+      params: this.params
     })
   }
 }
@@ -61,24 +58,20 @@ test('_getDiagnosticsJSON returns valid JSON string', t => {
 })
 
 test('_getDiagnosticsJSON includes expected fields', t => {
-  const ocr = new TestOCR({
-    params: {
-      langList: ['en', 'fr'],
-      useGPU: true,
-      pipelineMode: 'doctr',
-      timeout: 60
-    }
-  })
+  const params = {
+    langList: ['en', 'fr'],
+    useGPU: true,
+    pipelineMode: 'doctr',
+    timeout: 60
+  }
+  const ocr = new TestOCR({ params })
   const parsed = JSON.parse(ocr._getDiagnosticsJSON())
   t.ok('status' in parsed, 'should include status field')
-  t.ok('langList' in parsed, 'should include langList field')
-  t.ok('useGPU' in parsed, 'should include useGPU field')
-  t.ok('pipelineMode' in parsed, 'should include pipelineMode field')
-  t.ok('timeout' in parsed, 'should include timeout field')
-  t.alike(parsed.langList, ['en', 'fr'], 'langList should match params')
-  t.is(parsed.useGPU, true, 'useGPU should match params')
-  t.is(parsed.pipelineMode, 'doctr', 'pipelineMode should match params')
-  t.is(parsed.timeout, 60, 'timeout should match params')
+  t.ok('params' in parsed, 'should include params field')
+  t.alike(parsed.params.langList, ['en', 'fr'], 'langList should match params')
+  t.is(parsed.params.useGPU, true, 'useGPU should match params')
+  t.is(parsed.params.pipelineMode, 'doctr', 'pipelineMode should match params')
+  t.is(parsed.params.timeout, 60, 'timeout should match params')
 })
 
 test('_getDiagnosticsJSON status reflects state correctly', t => {
@@ -93,12 +86,11 @@ test('_getDiagnosticsJSON status reflects state correctly', t => {
   t.is(JSON.parse(ocr._getDiagnosticsJSON()).status, 'destroyed', 'should be destroyed when destroyed=true')
 })
 
-test('_getDiagnosticsJSON uses defaults when params fields are absent', t => {
-  const ocr = new TestOCR({ params: {} })
+test('_getDiagnosticsJSON passes through all params', t => {
+  const ocr = new TestOCR({ params: { langList: ['en'], custom: 'value' } })
   const parsed = JSON.parse(ocr._getDiagnosticsJSON())
-  t.alike(parsed.langList, [], 'langList defaults to empty array')
-  t.is(parsed.useGPU, false, 'useGPU defaults to false')
-  t.is(parsed.pipelineMode, 'easyocr', 'pipelineMode defaults to easyocr')
+  t.alike(parsed.params.langList, ['en'], 'langList passed through')
+  t.is(parsed.params.custom, 'value', 'custom params passed through')
 })
 
 test('round-trip: registerAddon with OCR callback, generateReport shows addon', { skip: !diagnostics }, t => {
@@ -128,7 +120,7 @@ test('round-trip: registerAddon with OCR callback, generateReport shows addon', 
 
   const addonDiag = JSON.parse(report.addons[0].diagnostics)
   t.ok('status' in addonDiag, 'diagnostics should include status')
-  t.ok('langList' in addonDiag, 'diagnostics should include langList')
+  t.ok('params' in addonDiag, 'diagnostics should include params')
 
   diagnostics.reset()
 })
