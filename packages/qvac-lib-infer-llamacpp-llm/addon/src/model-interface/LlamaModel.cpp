@@ -1248,6 +1248,15 @@ std::string LlamaModel::finetune(
     bool wasPaused = checkpointState && checkpointState->shouldExit.load() &&
                      checkpointState->pauseCheckpointSaved.load();
 
+    QLOG_IF(
+        Priority::INFO,
+        std::string("[CancelTrace] finetune.post-loop wasPaused=") +
+            (wasPaused ? "true" : "false") +
+            " shouldExit=" +
+            (checkpointState ? (checkpointState->shouldExit.load() ? "true" : "false") : "n/a") +
+            " pauseCheckpointSaved=" +
+            (checkpointState ? (checkpointState->pauseCheckpointSaved.load() ? "true" : "false") : "n/a"));
+
     if (checkpointState) {
       checkpointState->isIdle.store(true);
       checkpointState->isFinetuning.store(false);
@@ -1255,6 +1264,10 @@ std::string LlamaModel::finetune(
         checkpointState->isPaused.store(false);
       }
       checkpointState->pauseWaitDone.store(true);
+      QLOG_IF(
+          Priority::INFO,
+          "[CancelTrace] finetune.post-loop signaling pauseDoneCv "
+          "(pauseWaitDone=true isIdle=true)");
       checkpointState->pauseDoneCv.notify_all();
       clearCurrentCheckpointState();
       if (wasPaused) {
@@ -1263,6 +1276,9 @@ std::string LlamaModel::finetune(
         clearPausedCheckpointStateShared();
       }
       clearCurrentCheckpointStateShared();
+      QLOG_IF(
+          Priority::INFO,
+          "[CancelTrace] finetune.post-loop checkpoint state cleared");
     }
 
     if (!wasPaused) {
@@ -1864,6 +1880,8 @@ bool LlamaModel::isFinetuneRunning() const {
 bool LlamaModel::requestPause() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
+    QLOG_IF(Priority::INFO,
+            "[CancelTrace] requestPause: state is null, returning false");
     return false;
   }
   state->pauseRequested.store(true);
@@ -1871,21 +1889,47 @@ bool LlamaModel::requestPause() {
   if (ctx != nullptr) {
     llama_opt_request_stop(ctx);
   }
+  QLOG_IF(Priority::INFO,
+           "[CancelTrace] requestPause: pauseRequested set, returning true");
   return true;
 }
 
 void LlamaModel::waitUntilFinetuningPauseComplete() {
   auto state = getCurrentCheckpointStateShared();
   if (state == nullptr) {
+    QLOG_IF(Priority::INFO,
+            "[CancelTrace] waitUntilFinetuningPauseComplete: state is null, "
+            "returning immediately");
     return;
   }
 
+  const bool preWaitDone =
+      state->pauseWaitDone.load(std::memory_order_acquire);
+  const bool preIdle = state->isIdle.load(std::memory_order_acquire);
+  QLOG_IF(Priority::INFO,
+           "[CancelTrace] waitUntilFinetuningPauseComplete: entering wait "
+           "pauseWaitDone=" +
+               std::string(preWaitDone ? "true" : "false") +
+               " isIdle=" + std::string(preIdle ? "true" : "false"));
+
   constexpr auto timeout = std::chrono::minutes(5);
   std::unique_lock lock(state->pauseDoneMutex);
-  state->pauseDoneCv.wait_for(lock, timeout, [&state] {
-    return state->pauseWaitDone.load(std::memory_order_acquire) &&
-           state->isIdle.load(std::memory_order_acquire);
-  });
+  const bool completed =
+      state->pauseDoneCv.wait_for(lock, timeout, [&state] {
+        return state->pauseWaitDone.load(std::memory_order_acquire) &&
+               state->isIdle.load(std::memory_order_acquire);
+      });
+
+  const bool postWaitDone =
+      state->pauseWaitDone.load(std::memory_order_acquire);
+  const bool postIdle = state->isIdle.load(std::memory_order_acquire);
+  QLOG_IF(Priority::INFO,
+           "[CancelTrace] waitUntilFinetuningPauseComplete: wait returned "
+           "completed=" +
+               std::string(completed ? "true" : "false") +
+               " pauseWaitDone=" +
+               std::string(postWaitDone ? "true" : "false") +
+               " isIdle=" + std::string(postIdle ? "true" : "false"));
 }
 
 void LlamaModel::clearPauseRequest() {
