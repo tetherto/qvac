@@ -62,29 +62,22 @@ bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building qvac-lib-inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-# On Linux/Android, install ggml dynamic backend libraries alongside the addon
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  if(GGML_BACKEND_DL)
-    # When GGML_BACKEND_DL is ON, ggml builds backends as MODULE libraries
-    # loaded at runtime. ggml's cmake config does not export them as imported
-    # targets — find the installed .so files and create targets ourselves.
-    foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-      find_library(_${_backend}_LIB "${_backend}" REQUIRED)
-      add_library(ggml::${_backend} SHARED IMPORTED)
-      set_target_properties(ggml::${_backend} PROPERTIES
-        IMPORTED_LOCATION "${_${_backend}_LIB}"
-        IMPORTED_NO_SONAME TRUE)
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endforeach()
-  else()
-    foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-    endforeach()
+# Bundle the OpenCL ICD loader on Android so the addon can load even on
+# devices without a system-installed libOpenCL.so.  The ICD loader gracefully
+# handles "no vendor implementation found" at runtime (ggml falls back to CPU).
+set(EXTRA_EXPORTS "")
+if(ANDROID)
+  find_library(_OPENCL_LIB OpenCL QUIET)
+  if(_OPENCL_LIB)
+    add_library(opencl_icd_loader SHARED IMPORTED)
+    set_target_properties(opencl_icd_loader PROPERTIES
+      IMPORTED_LOCATION "${_OPENCL_LIB}"
+      IMPORTED_NO_SONAME TRUE)
+    list(APPEND EXTRA_EXPORTS INSTALL TARGET opencl_icd_loader)
   endif()
 endif()
 
-add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${EXTRA_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
