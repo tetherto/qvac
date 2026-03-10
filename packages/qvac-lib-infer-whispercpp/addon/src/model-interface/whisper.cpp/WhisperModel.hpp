@@ -35,8 +35,8 @@ public:
     OutputCallback outputCallback = nullptr;
   };
 
-  explicit WhisperModel(const WhisperConfig& config);
-  ~WhisperModel();
+  explicit WhisperModel(WhisperConfig config);
+  ~WhisperModel() noexcept;
 
   // ModelApiTest required methods
   void initializeBackend() {
@@ -61,7 +61,7 @@ public:
     }
   }
 
-  auto formatCaptionOutput(Transcript& transcript) -> void;
+  static auto formatCaptionOutput(Transcript& transcript) -> void;
 
   // Process methods
   std::string getName() const override { return "WhisperModel"; }
@@ -69,8 +69,8 @@ public:
   void cancel() const override;
 
   void process(const Input& input);
-  Output
-  process(const Input& input, std::function<void(const Output&)> callback);
+  Output process(
+      const Input& input, const std::function<void(const Output&)>& callback);
 
   void load();
   void unload();

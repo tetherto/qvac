@@ -4,6 +4,7 @@
 #include <any>
 #include <chrono>
 #include <filesystem>
+#include <ranges>
 #include <string>
 #include <thread>
 #include <vector>
@@ -11,6 +12,11 @@
 #include <gtest/gtest.h>
 
 namespace {
+constexpr int K_STATS_TIMEOUT_SECONDS = 30;
+constexpr int K_CANCEL_TIMEOUT_SECONDS = 10;
+constexpr int K_CANCEL_SETTLE_DELAY_MS = 10;
+constexpr std::size_t K_SHORT_AUDIO_SECONDS = 1;
+constexpr std::size_t K_LONG_AUDIO_SECONDS = 20;
 
 auto makeConfig(bool useGpu = false)
     -> qvac_lib_inference_addon_whisper::WhisperConfig {
@@ -19,7 +25,7 @@ auto makeConfig(bool useGpu = false)
       std::string("../../../examples/models/ggml-tiny.bin");
   config.whisperContextCfg["use_gpu"] = useGpu;
   config.whisperMainCfg["language"] = std::string("en");
-  config.whisperMainCfg["temperature"] = 0.0;
+  config.whisperMainCfg["temperature"] = 0.0F;
   config.miscConfig["caption_enabled"] = false;
   return config;
 }
@@ -30,19 +36,20 @@ auto hasModelFile() -> bool {
 
 auto makeInputSamples(size_t seconds) -> std::vector<float> {
   static constexpr size_t kSampleRate = 16000;
-  return std::vector<float>(kSampleRate * seconds, 0.0f);
+  // NOLINTNEXTLINE(modernize-return-braced-init-list)
+  return std::vector<float>(kSampleRate * seconds, 0.0F);
 }
 
 auto hasStatKey(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
     const std::string& key) -> bool {
-  return std::any_of(stats.begin(), stats.end(), [&](const auto& entry) {
-    return entry.first == key;
-  });
+  return std::ranges::any_of(
+      stats, [&](const auto& entry) { return entry.first == key; });
 }
 
 } // namespace
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TEST(WhisperAddonCppTest, RunJobEmitsRuntimeStats) {
   ASSERT_TRUE(hasModelFile())
       << "whisper model file is required for parity test";
@@ -50,16 +57,21 @@ TEST(WhisperAddonCppTest, RunJobEmitsRuntimeStats) {
       qvac_lib_inference_addon_whisper::createInstance(makeConfig());
   instance.addon->activate();
 
-  auto input = makeInputSamples(1);
+  auto input = makeInputSamples(K_SHORT_AUDIO_SECONDS);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(input))));
 
-  auto maybeStats = instance.statsOutput->tryPop(std::chrono::seconds(30));
+  auto maybeStats = instance.statsOutput->tryPop(
+      std::chrono::seconds(K_STATS_TIMEOUT_SECONDS));
   ASSERT_TRUE(maybeStats.has_value())
       << "runtime stats were not emitted within timeout";
-  EXPECT_FALSE(maybeStats->empty());
-  EXPECT_TRUE(hasStatKey(*maybeStats, "totalTime"));
-  EXPECT_TRUE(hasStatKey(*maybeStats, "audioDurationMs"));
-  EXPECT_TRUE(hasStatKey(*maybeStats, "totalSamples"));
+  if (!maybeStats.has_value()) {
+    FAIL() << "runtime stats were not emitted within timeout";
+  }
+  const auto& stats = *maybeStats;
+  EXPECT_FALSE(stats.empty());
+  EXPECT_TRUE(hasStatKey(stats, "totalTime"));
+  EXPECT_TRUE(hasStatKey(stats, "audioDurationMs"));
+  EXPECT_TRUE(hasStatKey(stats, "totalSamples"));
 }
 
 TEST(WhisperAddonCppTest, RunJobWithGpuEnabledConfigCompletes) {
@@ -69,13 +81,18 @@ TEST(WhisperAddonCppTest, RunJobWithGpuEnabledConfigCompletes) {
       qvac_lib_inference_addon_whisper::createInstance(makeConfig(true));
   instance.addon->activate();
 
-  auto input = makeInputSamples(1);
+  auto input = makeInputSamples(K_SHORT_AUDIO_SECONDS);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(input))));
 
-  auto maybeStats = instance.statsOutput->tryPop(std::chrono::seconds(30));
+  auto maybeStats = instance.statsOutput->tryPop(
+      std::chrono::seconds(K_STATS_TIMEOUT_SECONDS));
   ASSERT_TRUE(maybeStats.has_value())
       << "runtime stats were not emitted for use_gpu=true";
-  EXPECT_TRUE(hasStatKey(*maybeStats, "totalTime"));
+  if (!maybeStats.has_value()) {
+    FAIL() << "runtime stats were not emitted for use_gpu=true";
+  }
+  const auto& stats = *maybeStats;
+  EXPECT_TRUE(hasStatKey(stats, "totalTime"));
 }
 
 TEST(WhisperAddonCppTest, RejectsSecondRunWhileBusy) {
@@ -85,10 +102,10 @@ TEST(WhisperAddonCppTest, RejectsSecondRunWhileBusy) {
       qvac_lib_inference_addon_whisper::createInstance(makeConfig());
   instance.addon->activate();
 
-  auto firstInput = makeInputSamples(20);
+  auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(firstInput))));
 
-  auto secondInput = makeInputSamples(1);
+  auto secondInput = makeInputSamples(K_SHORT_AUDIO_SECONDS);
   EXPECT_FALSE(instance.addon->runJob(std::any(std::move(secondInput))));
 }
 
@@ -99,20 +116,27 @@ TEST(WhisperAddonCppTest, CancelAllowsNextRun) {
       qvac_lib_inference_addon_whisper::createInstance(makeConfig());
   instance.addon->activate();
 
-  auto firstInput = makeInputSamples(20);
+  auto firstInput = makeInputSamples(K_LONG_AUDIO_SECONDS);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(firstInput))));
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  std::this_thread::sleep_for(
+      std::chrono::milliseconds(K_CANCEL_SETTLE_DELAY_MS));
   instance.addon->cancelJob();
 
-  auto cancelledError = instance.errorOutput->tryPop(std::chrono::seconds(10));
+  auto cancelledError = instance.errorOutput->tryPop(
+      std::chrono::seconds(K_CANCEL_TIMEOUT_SECONDS));
   ASSERT_TRUE(cancelledError.has_value())
       << "cancel signal did not emit an error within timeout";
 
-  auto secondInput = makeInputSamples(1);
+  auto secondInput = makeInputSamples(K_SHORT_AUDIO_SECONDS);
   ASSERT_TRUE(instance.addon->runJob(std::any(std::move(secondInput))));
-  auto stats = instance.statsOutput->tryPop(std::chrono::seconds(30));
-  ASSERT_TRUE(stats.has_value())
+  auto maybeStats = instance.statsOutput->tryPop(
+      std::chrono::seconds(K_STATS_TIMEOUT_SECONDS));
+  ASSERT_TRUE(maybeStats.has_value())
       << "second run did not emit runtime stats within timeout";
-  EXPECT_TRUE(hasStatKey(*stats, "totalTime"));
+  if (!maybeStats.has_value()) {
+    FAIL() << "second run did not emit runtime stats within timeout";
+  }
+  const auto& stats = *maybeStats;
+  EXPECT_TRUE(hasStatKey(stats, "totalTime"));
 }
