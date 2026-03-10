@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Run the full implement → CI → review pipeline for a task. Coordinates implementer, ci-validator, and code-reviewer agents.
+description: Run the full implement → test → CI → review pipeline for a task. Coordinates implementer, test-writer, ci-validator, and code-reviewer agents.
 argument-hint: "<asana-task-id>"
 disable-model-invocation: true
 ---
@@ -25,9 +25,9 @@ Implement Asana task $ARGUMENTS. Read the task, understand requirements, write c
 
 Wait for completion. If the implementer reports failure (e.g., ambiguous requirements, build failures after 3 retries), stop the pipeline and report to the user.
 
-### Phase 1.5: Determine CI requirements
+### Phase 1.5: Determine test and CI requirements
 
-After implementation, analyze the changed files to decide if cross-platform CI validation is needed.
+After implementation, analyze the changed files and the Asana task to decide what's needed next.
 
 Run `git diff --name-only main...HEAD` and apply these rules:
 
@@ -50,6 +50,32 @@ Run `git diff --name-only main...HEAD` and apply these rules:
 If multiple native addon packages changed, run CI for each affected package.
 
 If CI is needed, inform the user which packages will be validated and why.
+
+**Determine if new tests are needed** by checking:
+
+| Signal | Tests needed? |
+|---|---|
+| New public API / exported functions added | Yes |
+| New feature with user-facing behavior | Yes |
+| Bug fix (regression test) | Yes |
+| Asana task acceptance criteria mention testable behavior | Yes |
+| Refactoring with no behavior change | No |
+| Documentation / config / CI workflow only | No |
+| Changes already have corresponding test updates from implementer | No — skip |
+
+Read the Asana task acceptance criteria. If they describe specific behaviors or scenarios, those should become tests.
+
+### Phase 1.75: Write Tests
+
+If Phase 1.5 determined tests are needed, launch the **test-writer** agent:
+
+```
+Write automated tests for the changes on the current branch. Task ID: $ARGUMENTS. Focus on new public APIs, new behavior, and edge cases. Match existing test patterns.
+```
+
+Wait for completion. If the test-writer discovers code bugs, launch the implementer again with the bug details before proceeding.
+
+If tests are not needed, skip to Phase 2.
 
 ### Phase 2: CI Validation
 
@@ -91,6 +117,11 @@ Pipeline complete for task $ARGUMENTS:
 Implementation:
   - [summary from implementer]
   - Files changed: [list]
+
+Tests:
+  - [added/skipped, with reason]
+  - Tests added: [count and brief descriptions]
+  - Code bugs found by tests: [count or none]
 
 CI Validation:
   - [pass/fail/skipped]
