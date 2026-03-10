@@ -11,11 +11,12 @@ let DOCTR_DETECTOR
 let DOCTR_RECOGNIZER
 
 test('DocTR large images - download models', { timeout: TEST_TIMEOUT }, async function (t) {
-  const models = await ensureDoctrModels(['db_resnet50.onnx', 'parseq.onnx'])
-  DOCTR_DETECTOR = models.db_resnet50
-  DOCTR_RECOGNIZER = models.parseq
-  t.ok(DOCTR_DETECTOR, 'db_resnet50 model available')
-  t.ok(DOCTR_RECOGNIZER, 'parseq model available')
+  // Use lighter mobilenet models — these tests validate coordinate scaling, not accuracy
+  const models = await ensureDoctrModels(['db_mobilenet_v3_large.onnx', 'crnn_mobilenet_v3_small.onnx'])
+  DOCTR_DETECTOR = models.db_mobilenet_v3_large
+  DOCTR_RECOGNIZER = models.crnn_mobilenet_v3_small
+  t.ok(DOCTR_DETECTOR, 'db_mobilenet model available')
+  t.ok(DOCTR_RECOGNIZER, 'crnn_mobilenet model available')
 })
 
 test('DocTR large images - coordinates are in original image space', { timeout: TEST_TIMEOUT }, async function (t) {
@@ -29,7 +30,7 @@ test('DocTR large images - coordinates are in original image space', { timeout: 
   const params = {
     pathDetector: DOCTR_DETECTOR,
     pathRecognizer: DOCTR_RECOGNIZER,
-    decodingMethod: 'attention'
+    decodingMethod: 'ctc'
   }
 
   const { results, stats } = await runDoctrOCR(t, params, imagePath)
@@ -67,7 +68,7 @@ test('DocTR large images - output structure matches contract', { timeout: TEST_T
   const params = {
     pathDetector: DOCTR_DETECTOR,
     pathRecognizer: DOCTR_RECOGNIZER,
-    decodingMethod: 'attention'
+    decodingMethod: 'ctc'
   }
 
   const { results } = await runDoctrOCR(t, params, imagePath)

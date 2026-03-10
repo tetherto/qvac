@@ -31,6 +31,7 @@ test('DocTR basic - BMP image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `BMP: should detect text regions, got ${results.length}`)
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'BMP should detect "normal"')
   t.comment('BMP detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR BMP]', stats, outputTexts))
 })
@@ -48,6 +49,7 @@ test('DocTR basic - JPEG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `JPEG: should detect text regions, got ${results.length}`)
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'JPEG should detect "normal"')
   t.comment('JPEG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR JPEG]', stats, outputTexts))
 })
@@ -65,43 +67,9 @@ test('DocTR basic - PNG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `PNG: should detect text regions, got ${results.length}`)
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'PNG should detect "normal"')
   t.comment('PNG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR PNG]', stats, outputTexts))
-})
-
-test('DocTR basic - cross-format consistency (BMP vs JPEG vs PNG)', { timeout: TEST_TIMEOUT * 3 }, async function (t) {
-  const params = {
-    pathDetector: DOCTR_DETECTOR,
-    pathRecognizer: DOCTR_RECOGNIZER,
-    decodingMethod: 'attention'
-  }
-
-  const bmpPath = getImagePath('/test/images/basic_test.bmp')
-  const jpegPath = getImagePath('/test/images/basic_test.jpg')
-  const pngPath = getImagePath('/test/images/basic_test.png')
-
-  const { results: bmpResults } = await runDoctrOCR(t, params, bmpPath)
-  const { results: jpegResults } = await runDoctrOCR(t, params, jpegPath)
-  const { results: pngResults } = await runDoctrOCR(t, params, pngPath)
-
-  const bmpTexts = bmpResults.map(r => r.text.toLowerCase())
-  const jpegTexts = jpegResults.map(r => r.text.toLowerCase())
-  const pngTexts = pngResults.map(r => r.text.toLowerCase())
-
-  t.comment('BMP texts: ' + JSON.stringify(bmpTexts))
-  t.comment('JPEG texts: ' + JSON.stringify(jpegTexts))
-  t.comment('PNG texts: ' + JSON.stringify(pngTexts))
-
-  t.ok(bmpResults.length > 0, 'BMP should detect text')
-  t.ok(jpegResults.length > 0, 'JPEG should detect text')
-  t.ok(pngResults.length > 0, 'PNG should detect text')
-
-  // All formats should detect "normal" (the horizontal text in basic_test)
-  t.ok(bmpTexts.some(w => w.includes('normal')), 'BMP should detect "normal"')
-  t.ok(jpegTexts.some(w => w.includes('normal')), 'JPEG should detect "normal"')
-  t.ok(pngTexts.some(w => w.includes('normal')), 'PNG should detect "normal"')
-
-  t.pass('Cross-format consistency verified')
 })
 
 test('DocTR basic - English image', { timeout: TEST_TIMEOUT }, async function (t) {
