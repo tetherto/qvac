@@ -35,6 +35,49 @@ function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+function chatterboxPathForVariant (modelDir, baseName, variant, isMultilingual = false) {
+  const suffix = variant === 'fp32' ? '' : `_${variant}`
+  const nonLmSuffix = isMultilingual ? '' : suffix
+  return path.join(modelDir, `${baseName}${nonLmSuffix}.onnx`)
+}
+
+function chatterboxLmPathForVariant (modelDir, variant) {
+  const suffix = variant === 'fp32' ? '' : `_${variant}`
+  return path.join(modelDir, `language_model${suffix}.onnx`)
+}
+
+async function runChatterboxBasicSynthesisForVariant (t, variant) {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox')
+  console.log(`\n=== Ensuring Chatterbox models (variant: ${variant}) ===`)
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, variant })
+  t.ok(downloadResult.success, `Chatterbox ${variant} models should be downloaded`)
+  if (!downloadResult.success) {
+    console.log(`Failed to download Chatterbox ${variant} models, skipping test`)
+    return
+  }
+  const modelParams = {
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPathForVariant(modelDir, 'speech_encoder', variant),
+    embedTokensPath: chatterboxPathForVariant(modelDir, 'embed_tokens', variant),
+    conditionalDecoderPath: chatterboxPathForVariant(modelDir, 'conditional_decoder', variant),
+    languageModelPath: chatterboxLmPathForVariant(modelDir, variant),
+    language: 'en'
+  }
+  console.log('\n=== Loading Chatterbox TTS model ===')
+  const model = await loadChatterboxTTS(modelParams)
+  t.ok(model, 'Chatterbox TTS model should be loaded')
+  t.ok(model.addon, 'Addon should be created')
+  const text = 'Hello world.'
+  const expectation = { minSamples: 1000, maxSamples: 500000, minDurationMs: 100, maxDurationMs: 20000 }
+  const result = await runChatterboxTTS(model, { text, saveWav: false }, expectation)
+  t.ok(result.passed, 'Chatterbox TTS synthesis should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Chatterbox TTS should produce audio samples')
+  t.is(result.data.sampleRate, 24000, 'Sample rate should be 24kHz')
+  await model.unload()
+  t.pass('Model unloaded successfully')
+}
+
 test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const modelDir = path.join(baseDir, 'models', 'chatterbox')
@@ -102,6 +145,14 @@ test('Chatterbox TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
     console.log(`Tokens/sec: ${result.data.stats.tokensPerSecond}`)
   }
   console.log('='.repeat(60))
+})
+
+test('Chatterbox TTS (q4): Basic synthesis test', { timeout: 1800000 }, async (t) => {
+  await runChatterboxBasicSynthesisForVariant(t, 'q4')
+})
+
+test('Chatterbox TTS (q4f16): Basic synthesis test', { timeout: 1800000 }, async (t) => {
+  await runChatterboxBasicSynthesisForVariant(t, 'q4f16')
 })
 
 test('Chatterbox TTS: Multiple sentences synthesis with WER verification', { timeout: 1800000 }, async (t) => {
