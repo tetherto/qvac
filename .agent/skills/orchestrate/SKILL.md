@@ -30,8 +30,8 @@ Accepts either:
    - Task description and acceptance criteria
    - Any tags or custom fields (e.g., package name, ticket number)
 
-3. **Create a feature branch** from main:
-   - Pull latest main: `git checkout main && git pull origin main`
+3. **Create a feature branch** from `temp-agent-first`:
+   - Pull latest: `git checkout temp-agent-first && git pull origin temp-agent-first`
    - Generate branch name from task: `feat/<ticket>-<slug>`
      - Extract ticket number from task name or custom field (e.g., `QVAC-123`)
      - Slugify the task title (lowercase, hyphens, max 50 chars)
