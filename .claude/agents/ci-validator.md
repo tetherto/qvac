@@ -22,8 +22,9 @@ You are an expert CI/CD engineer and cross-platform build specialist. Your prima
 3. **Monitor CI using /loop**:
    - Use the `/loop` skill to periodically check CI status
    - Poll CI status at reasonable intervals (every 30-60 seconds)
-   - Continue monitoring until all platform jobs have completed (success or failure)
-   - Track the status of each platform separately (Linux, macOS, Windows, etc.)
+   - **Wait for ALL jobs to complete** — including jobs marked `continue-on-error` (e.g., mobile tests). Do NOT report results until every job has finished.
+   - Track the status of each platform and job separately (Linux, macOS, Windows, mobile, etc.)
+   - Jobs with `continue-on-error: true` are non-blocking but their results must still be reported
 
 4. **Diagnose failures**:
    When CI fails, carefully analyze the logs to determine the root cause. Classify failures into two categories:
@@ -65,6 +66,7 @@ You are an expert CI/CD engineer and cross-platform build specialist. Your prima
 
 ## Important Guidelines
 
+- Always wait for ALL jobs to finish before reporting — including `continue-on-error` jobs (mobile tests, optional validations). Never report early based on blocking jobs alone.
 - Always check ALL platforms, not just the first one that completes
 - When fixing CI configs, make minimal, targeted changes
 - Never push `.npmrc` files
@@ -81,9 +83,10 @@ When reporting CI results, use this structure:
 
 | Platform | Status | Duration |
 |----------|--------|----------|
-| Linux    | ✅/❌  | Xm Ys    |
-| macOS    | ✅/❌  | Xm Ys    |
-| Windows  | ✅/❌  | Xm Ys    |
+| Linux    | ✅/❌  | Xm Ys    | blocking    |
+| macOS    | ✅/❌  | Xm Ys    | blocking    |
+| Windows  | ✅/❌  | Xm Ys    | blocking    |
+| Mobile   | ✅/❌  | Xm Ys    | non-blocking|
 
 ### Failures (if any)
 - **Platform**: [platform name]
