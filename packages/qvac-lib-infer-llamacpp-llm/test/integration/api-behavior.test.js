@@ -71,6 +71,8 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
+const toNumber = value => typeof value === 'number' ? value : Number(value || 0)
+
 test('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(BASE_PROMPT)
@@ -79,6 +81,33 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600_000 }, async t 
   t.ok(typeof response.await === 'function', 'response has await')
   const output = await collectResponse(response)
   t.ok(output.length > 0, 'inference produces output')
+})
+
+test('idle | run with prefill: evaluates prompt without token generation', { timeout: 600_000 }, async t => {
+  const { model } = await setupModel(t)
+
+  const prefillResponse = await model.run(BASE_PROMPT, { prefill: true })
+  const prefillOutput = await collectResponse(prefillResponse)
+
+  t.is(prefillOutput, '', 'prefill emits no generated output')
+  t.is(
+    toNumber(prefillResponse?.stats?.generatedTokens),
+    0,
+    'prefill reports zero generated tokens'
+  )
+  t.is(
+    toNumber(prefillResponse?.stats?.promptTokens),
+    0,
+    'prefill reports zero prompt tokens'
+  )
+  t.ok(
+    toNumber(prefillResponse?.stats?.CacheTokens) > 0,
+    'prefill stores prompt in model context'
+  )
+
+  const normalResponse = await model.run(BASE_PROMPT)
+  const normalOutput = await collectResponse(normalResponse)
+  t.ok(normalOutput.length > 0, 'normal run still generates output after prefill')
 })
 
 test('idle | cancel: allowed, no-op', { timeout: 600_000 }, async t => {

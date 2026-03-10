@@ -208,13 +208,15 @@ void MtmdLlmContext::tokenizeChat(
 }
 
 bool MtmdLlmContext::evalMessage(
-    const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded);
+    const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+    bool prefill) {
+  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
 }
 
 bool MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+    bool prefill) {
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
 
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
@@ -281,7 +283,7 @@ bool MtmdLlmContext::evalMessageWithTools(
   llama_pos nPastLocal = nPast_;
 
   for (size_t i = 0; i < nChunks; i++) {
-    bool chunkLogitsLast = (i == nChunks - 1);
+    bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
 
     if (stopGeneration_.load()) {

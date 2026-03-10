@@ -5340,6 +5340,21 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
+    "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
+    "quantization": "Q4_K_M",
+    "params": "4B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "generation",
+      "translation",
+      "african",
+      "afriquegemma"
+    ],
+    "notes": "McGill-NLP/AfriqueGemma-4B. 20 African languages: af, am, ar, ha, ig, mg, ny, om, rw, sn, so, st, sw, ti, tn, xh, yo, zu + en, fr, pt. GGUF by mradermacher."
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",

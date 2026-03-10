@@ -268,15 +268,10 @@ LlamaModel::resolveChatAndTools(const std::string& input) {
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
+  lastRunWasPrefill_ = prompt.prefill;
+
   for (const auto& media : prompt.media) {
     loadMedia(media);
-  }
-
-  if (prompt.prefill) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] processTextWithOutputCallback: Prefill is enabled but "
-        "not implemented yet.\n");
   }
 
   std::string out;
@@ -291,14 +286,22 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 
   bool evalOk =
       resolved.tools.empty()
-          ? llmContext_->evalMessage(resolved.chatMsgs, resolved.isCacheLoaded)
+          ? llmContext_->evalMessage(
+                resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
           : llmContext_->evalMessageWithTools(
-                resolved.chatMsgs, resolved.tools, resolved.isCacheLoaded);
+                resolved.chatMsgs,
+                resolved.tools,
+                resolved.isCacheLoaded,
+                prompt.prefill);
 
   if (!evalOk) {
     QLOG_IF(
         Priority::DEBUG,
         "Inference was interrupted during prompt evaluation\n");
+    return out;
+  }
+
+  if (prompt.prefill) {
     return out;
   }
 
@@ -328,14 +331,14 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
 
-  double timeToFirstToken = perfData.t_p_eval_ms;
+  double timeToFirstToken = lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
   double tokensPerSecond =
-      (perfData.t_eval_ms > 0)
+      (!lastRunWasPrefill_ && perfData.t_eval_ms > 0)
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
 
-  int32_t generatedTokens = perfData.n_eval;
-  int32_t promptTokens = perfData.n_p_eval;
+  int32_t generatedTokens = lastRunWasPrefill_ ? 0 : perfData.n_eval;
+  int32_t promptTokens = lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
   llama_perf_context_reset(llmContext_->getCtx());
 
   return {
