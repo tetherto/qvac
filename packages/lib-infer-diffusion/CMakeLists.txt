@@ -112,16 +112,3 @@ if(WIN32)
   )
 endif()
 
-# Bundle the OpenCL ICD loader next to the addon on Android so it loads even
-# on devices without a system libOpenCL.so.  The ICD loader gracefully returns
-# "no vendor implementation" at runtime and ggml falls back to CPU.
-if(ANDROID)
-  bare_platform(PREBUILD_PLATFORM)
-  bare_arch(PREBUILD_ARCH)
-  set(PREBUILD_DIR "${CMAKE_SOURCE_DIR}/prebuilds/${PREBUILD_PLATFORM}-${PREBUILD_ARCH}")
-
-  find_library(_OPENCL_LIB OpenCL QUIET)
-  if(_OPENCL_LIB)
-    install(FILES "${_OPENCL_LIB}" DESTINATION "${PREBUILD_DIR}")
-  endif()
-endif()
