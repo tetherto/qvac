@@ -104,6 +104,10 @@ struct SdCtxConfig {
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
   // ── Internal ──────────────────────────────────────────────────────────────
+  // Upstream defaults to true, which frees model weight buffers after each
+  // generate_image_internal() call. The addon reuses a single sd_ctx across
+  // multiple generations, so freeing params after the first run causes a
+  // use-after-free SIGSEGV on the second run (including cancel-then-rerun).
   bool freeParamsImmediately = false;
 };
 

@@ -7,6 +7,10 @@ index d769d45..db3f242 100644
                  control_net->free_compute_buffer();
              }
 -            diffusion_model->free_compute_buffer();
++            // Upstream bug: abort/failure path freed the wrong model's compute
++            // buffer (diffusion_model instead of work_diffusion_model).  The
++            // success path at line ~2218 frees work_diffusion_model — this must
++            // match, otherwise sd_ctx state is corrupted and reuse segfaults.
 +            work_diffusion_model->free_compute_buffer();
              return NULL;
          }
@@ -15,6 +19,9 @@ index d769d45..db3f242 100644
  
      size_t t2 = ggml_time_ms();
  
++    // When generate_image_internal() returns NULL (abort or failure),
++    // work_ctx is never freed inside that function — it only frees on
++    // the success path.  Free it here to avoid leaking the ggml context.
 +    if (result_images == nullptr) {
 +        ggml_free(work_ctx);
 +    }
