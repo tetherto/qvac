@@ -52,6 +52,24 @@ function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+function waitForProgress (handle, minSteps = 2, timeoutMs = 300_000) {
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(new Error(`waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`))
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
 function assertFiniteMetricIfPresent (t, stats, key, modelId) {
   const value = stats?.[key]
   if (value == null || (typeof value === 'number' && isNaN(value))) return
@@ -179,9 +197,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         if (!isNaN(stats.accuracy_uncertainty)) t.ok(Number.isFinite(stats.accuracy_uncertainty), `[${modelVariant.id}] progress accuracy_uncertainty should be finite (step ${stats.global_steps})`)
         t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
-      t.comment(`${tag} ${ts()} sleeping 15s before pause`)
-      await sleep(15000)
-      t.comment(`${tag} ${ts()} sleep done, responseStatus=${finetuneHandle.getStatus()} progressCount=${progressCount}`)
+      t.comment(`${tag} ${ts()} waiting for progress before pause`)
+      await waitForProgress(finetuneHandle, 2)
+      t.comment(`${tag} ${ts()} progress received, responseStatus=${finetuneHandle.getStatus()} progressCount=${progressCount}`)
 
       t.comment(`${tag} ${ts()} model.pause() START`)
       await model.pause()
@@ -335,9 +353,9 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     t.comment(`[cancel][Flow] ${ts()} model.finetune() START`)
     const finetuneHandle = await model.finetune(finetuneConfig)
     t.comment(`[cancel][Flow] ${ts()} model.finetune() returned handle, responseStatus=${finetuneHandle.getStatus()}`)
-    t.comment(`[cancel][Flow] ${ts()} sleeping 15s`)
-    await sleep(15000)
-    t.comment(`[cancel][Flow] ${ts()} sleep done, responseStatus=${finetuneHandle.getStatus()}`)
+    t.comment(`[cancel][Flow] ${ts()} waiting for progress before cancel`)
+    await waitForProgress(finetuneHandle, 2)
+    t.comment(`[cancel][Flow] ${ts()} progress received, responseStatus=${finetuneHandle.getStatus()}`)
 
     t.comment(`[cancel][Flow] ${ts()} model.cancel() START`)
     await model.cancel()
