@@ -85,6 +85,18 @@ test('DocTR basic - English image', { timeout: TEST_TIMEOUT }, async function (t
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `English: should detect text regions, got ${results.length}`)
+
+  // english.bmp is 905x480 — verify coordinates are in original image space
+  let coordsInBounds = true
+  for (const r of results) {
+    for (const point of r.bbox) {
+      if (point[0] < 0 || point[0] > 905 || point[1] < 0 || point[1] > 480) {
+        coordsInBounds = false
+      }
+    }
+  }
+  t.ok(coordsInBounds, 'All bbox coordinates within image bounds (905x480)')
+
   t.comment('English detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR English]', stats, outputTexts))
 })

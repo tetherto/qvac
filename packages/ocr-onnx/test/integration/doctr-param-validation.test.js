@@ -64,8 +64,8 @@ test('DocTR load() rejects when pathDetector is missing', { timeout: TEST_TIMEOU
 test('DocTR load() defaults langList to ["en"] when omitted', { timeout: TEST_TIMEOUT }, async function (t) {
   const onnxOcr = new ONNXOcr({
     params: {
-      pathDetector: DOCTR_DETECTOR,
-      pathRecognizer: DOCTR_RECOGNIZER,
+      pathDetector: '/nonexistent/detector.onnx',
+      pathRecognizer: '/nonexistent/recognizer.onnx',
       useGPU: false,
       pipelineMode: 'doctr'
     }
@@ -74,24 +74,20 @@ test('DocTR load() defaults langList to ["en"] when omitted', { timeout: TEST_TI
   try {
     await onnxOcr.load()
   } catch (err) {
-    // May fail at C++ layer, but JS validation already ran
+    // load() fails at C++ layer (file not found) but JS defaults are already applied
   }
 
   t.ok(Array.isArray(onnxOcr.params.langList), 'langList should be an array')
   t.is(onnxOcr.params.langList.length, 1, 'langList should have 1 element')
   t.is(onnxOcr.params.langList[0], 'en', 'langList should default to ["en"]')
   t.pass('DocTR correctly defaults langList to ["en"]')
-
-  if (onnxOcr.addon) {
-    try { await onnxOcr.unload() } catch (e) { /* ignore cleanup errors */ }
-  }
 })
 
 test('DocTR load() does not reject unsupported languages (no filtering)', { timeout: TEST_TIMEOUT }, async function (t) {
   const onnxOcr = new ONNXOcr({
     params: {
-      pathDetector: DOCTR_DETECTOR,
-      pathRecognizer: DOCTR_RECOGNIZER,
+      pathDetector: '/nonexistent/detector.onnx',
+      pathRecognizer: '/nonexistent/recognizer.onnx',
       langList: ['fr', 'klingon'],
       useGPU: false,
       pipelineMode: 'doctr'
@@ -101,17 +97,13 @@ test('DocTR load() does not reject unsupported languages (no filtering)', { time
   try {
     await onnxOcr.load()
   } catch (err) {
-    // May fail at C++ layer, but langList should be preserved as-is
+    // load() fails at C++ layer (file not found) but langList is preserved
   }
 
   t.ok(onnxOcr.params.langList.includes('fr'), 'Should keep "fr"')
   t.ok(onnxOcr.params.langList.includes('klingon'), 'Should keep "klingon" (doctr skips language filtering)')
   t.is(onnxOcr.params.langList.length, 2, 'langList should be unchanged')
   t.pass('DocTR mode does not filter unsupported languages')
-
-  if (onnxOcr.addon) {
-    try { await onnxOcr.unload() } catch (e) { /* ignore cleanup errors */ }
-  }
 })
 
 test('DocTR does not use pathRecognizerPrefix fallback', { timeout: TEST_TIMEOUT }, async function (t) {
