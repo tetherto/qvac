@@ -4,20 +4,18 @@ const state = Object.freeze({
   LOADING: 'loading',
   LISTENING: 'listening',
   PROCESSING: 'processing',
-  IDLE: 'idle',
-  PAUSED: 'paused',
-  STOPPED: 'stopped'
+  IDLE: 'idle'
 })
-
-const END_OF_INPUT = 'end of job'
-const END_OF_OUTPUT = 'end of job'
 
 class MockedBinding {
   constructor () {
     this._handle = null
     this._state = state.LOADING
-    this.jobId = 1
     this.isVadTest = false
+    this._busy = false
+    this._jobDelayMs = 0
+    this._scriptedOutputs = null
+    this._runToken = 0
     this._baseInferenceCallback = null // Store reference to BaseInference callback
   }
 
@@ -25,8 +23,17 @@ class MockedBinding {
     this.isVadTest = true
   }
 
+  setScriptedOutputs (outputs) {
+    this._scriptedOutputs = Array.isArray(outputs) ? outputs : null
+  }
+
+  setJobDelayMs (delayMs) {
+    this._jobDelayMs = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0
+  }
+
   createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
     console.log('Constructing the whisper addon')
+    this._interfaceType = interfaceType
     this.outputCb = outputCb
     this.transitionCb = transitionCb
     this._handle = { id: Date.now() } // Create a mock handle
@@ -39,15 +46,16 @@ class MockedBinding {
   }
 
   // Helper method to call both callbacks
-  _callCallbacks (event, jobId, output, error) {
+  _callCallbacks (event, output, error) {
+    const currentJobId = this._interfaceType?._activeJobId || 1
     // Call the test's onOutput function
     if (this.outputCb) {
-      this.outputCb(this, event, jobId, output, error)
+      this.outputCb(this._interfaceType, event, output, error)
     }
 
     // Call the BaseInference callback to resolve _finishPromise
     if (this._baseInferenceCallback) {
-      this._baseInferenceCallback(this, event, jobId, output, error)
+      this._baseInferenceCallback(this._interfaceType, event, currentJobId, output, error)
     }
   }
 
@@ -76,23 +84,10 @@ class MockedBinding {
     // Will be in IDLE status while waiting for next job
   }
 
-  pause (handle) {
+  reload (handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Paused the processing')
-    this._state = state.PAUSED
-    // Interrupt the processing as soon as possible, but allow resuming.
-    // When activate() is called, processing will resume from where it left off.
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-  }
-
-  stop (handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Stopped the processing')
-    this._state = state.STOPPED
-    // Discards the current job and stops processing. When activate() is called
-    // again, it will start from the next job in the queue.
+    this._configurationParams = configurationParams
+    this._state = state.LOADING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
     }
@@ -101,13 +96,12 @@ class MockedBinding {
   cancel (handle, jobId) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log(`Cancel job id: ${jobId}`)
-    this._state = state.STOPPED
+    this._runToken += 1
+    this._busy = false
+    this._state = state.LISTENING
     if (this.transitionCb) {
       this.transitionCb(this, this._state)
     }
-    // Cancels a specific job by ID. If the job is currently being processed,
-    // it will be stopped. If the job is in the queue, it will be removed.
-    // No effect if a finished job or non-existent id is passed.
   }
 
   status (handle) {
@@ -117,106 +111,57 @@ class MockedBinding {
     // STOPPED, or PAUSED
   }
 
-  append (handle, data) {
+  runJob (handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
-    const currentJob = this.jobId
-
-    // Only process if in a receptive state.
-    if (this._state !== state.LISTENING && this._state !== state.PROCESSING && this._state !== state.IDLE) {
-      process.nextTick(() => {
-        this._callCallbacks('Error', currentJob, { error: 'Invalid state for appending data' }, null)
-      })
-      return currentJob
+    if (this._busy) {
+      return false
     }
+    const runToken = ++this._runToken
+    this._busy = true
+    this._state = state.PROCESSING
+    if (this.transitionCb) this.transitionCb(this, this._state)
 
-    // If in IDLE state, transition to LISTENING when receiving new data
-    if (this._state === state.IDLE) {
+    const emitResults = () => {
+      if (!this._busy || runToken !== this._runToken) {
+        return
+      }
+
+      if (this._scriptedOutputs && this._scriptedOutputs.length > 0) {
+        for (const output of this._scriptedOutputs) {
+          this._callCallbacks('Output', output, null)
+        }
+      } else if (this.isVadTest) {
+        const mockTranscription = data.input.length > 0
+          ? { text: `Mock transcription for ${data.input.length} bytes of audio`, toAppend: false, start: 0, end: 1, id: 0 }
+          : { text: 'Silent audio detected', toAppend: false, start: 0, end: 1, id: 0 }
+        this._callCallbacks('Output', mockTranscription, null)
+      } else {
+        this._callCallbacks('Output', { data: data.input.length }, null)
+      }
+
+      if (!this._busy || runToken !== this._runToken) {
+        return
+      }
+      this._callCallbacks('JobEnded', { totalTime: 0.01, audioDurationMs: data.input.length, totalSamples: data.input.length }, null)
+      this._busy = false
       this._state = state.LISTENING
       if (this.transitionCb) this.transitionCb(this, this._state)
     }
 
-    if (data.type === END_OF_INPUT) {
-      // End-of-job: emit a JobEnded event and increment job id.
-      // Use process.nextTick to ensure this happens in the same tick as the append call
-      process.nextTick(() => {
-        this._callCallbacks('JobEnded', currentJob, { type: END_OF_OUTPUT }, null)
-      })
-      this.jobId++
-      return currentJob
-    } else if (data.type === 'audio') {
-      if (!data.input || typeof data.input.length === 'undefined') {
-        process.nextTick(() => {
-          this._callCallbacks('Error', currentJob, { error: 'Invalid audio input: must be array-like with length property' }, null)
-        })
-        return currentJob
-      }
-
-      if (typeof data.input === 'string' || typeof data.input === 'number' || typeof data.input === 'boolean') {
-        process.nextTick(() => {
-          this._callCallbacks('Error', currentJob, { error: `Invalid audio input type: ${typeof data.input}. Expected array-like object.` }, null)
-        })
-        return currentJob
-      }
-
-      this._state = state.PROCESSING
-      if (this.transitionCb) this.transitionCb(this, this._state)
-
-      // Use process.nextTick to ensure proper event ordering
-      process.nextTick(() => {
-        if (this.isVadTest) {
-          const mockTranscription = data.input.length > 0
-            ? `Mock transcription for ${data.input.length} bytes of audio`
-            : 'Silent audio detected'
-          this._callCallbacks('Output', currentJob, mockTranscription, null)
-        } else {
-          this._callCallbacks('Output', currentJob, { data: data.input.length }, null)
-        }
-        // After processing, return to listening.
-        this._state = state.LISTENING
-        if (this.transitionCb) this.transitionCb(this, this._state)
-      })
-      return currentJob
+    if (this._jobDelayMs > 0) {
+      setTimeout(emitResults, this._jobDelayMs)
     } else {
-      // Unknown type: emit an error.
-      process.nextTick(() => {
-        this._callCallbacks('Error', currentJob, { error: `Unknown type: ${data.type}` }, null)
-      })
-      return currentJob
+      process.nextTick(emitResults)
     }
+    return true
   }
 
-  load (handle, configurationParams) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Loaded configuration:', configurationParams)
-    this._state = state.LOADING
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
+  append (handle, data) {
+    // Legacy API for compatibility in older tests.
+    if (data.type !== 'audio') {
+      return 1
     }
-  }
-
-  reload (handle, configurationParams) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Reloaded configuration:', configurationParams)
-    this._state = state.LOADING
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
-    // After reload completes, transition back to IDLE to match C++ behavior
-    process.nextTick(() => {
-      this._state = state.IDLE
-      if (this.transitionCb) {
-        this.transitionCb(this, this._state)
-      }
-    })
-  }
-
-  unload (handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Unloaded the addon')
-    this._state = state.IDLE
-    if (this.transitionCb) {
-      this.transitionCb(this, this._state)
-    }
+    return this.runJob(handle, data) ? 1 : 0
   }
 
   setLogger (handle, logger) {
@@ -231,14 +176,10 @@ class MockedBinding {
     // Mock implementation - just log that it was called
   }
 
-  unloadWeights (handle) {
-    if (handle !== this._handle) throw new Error('Invalid handle')
-    console.log('Unloaded weights')
-    return true
-  }
-
   destroyInstance (handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
+    this._runToken += 1
+    this._busy = false
     this._handle = null
     console.log('Destroyed the addon')
     // Clear resources on the C++ side.

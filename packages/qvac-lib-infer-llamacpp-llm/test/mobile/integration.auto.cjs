@@ -10,6 +10,10 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runBitnetTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/bitnet.test.js', options)
+}
+
 async function runCacheStateMachineTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
@@ -32,6 +36,10 @@ async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
 
 async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multi-instance.test.js', options)
+}
+
+async function runOcrLightonTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/ocr-lighton.test.js', options)
 }
 
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
