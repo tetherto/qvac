@@ -44,25 +44,7 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "test_model.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "Llama-3.2-1B-Instruct-Q4_0.gguf";
-      }
-    }
-
+    test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
 
     fs::path backendDir;
@@ -714,30 +696,19 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  fs::path basePath;
-  if (fs::exists(fs::path{"../../../models/unit-test"})) {
-    basePath = fs::path{"../../../models/unit-test"};
-  } else {
-    basePath = fs::path{"models/unit-test"};
-  }
-
-  fs::path multimodalModelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(multimodalModelPath)) {
-    multimodalModelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-  }
-
-  fs::path projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(projectionPath)) {
-    projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-  }
+  std::string multimodalModelPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  std::string projectionPath = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
     FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
-      multimodalModelPath.string(),
-      projectionPath.string(),
+      std::move(multimodalModelPath),
+      std::move(projectionPath),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
@@ -757,30 +728,19 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  fs::path basePath;
-  if (fs::exists(fs::path{"../../../models/unit-test"})) {
-    basePath = fs::path{"../../../models/unit-test"};
-  } else {
-    basePath = fs::path{"models/unit-test"};
-  }
-
-  fs::path multimodalModelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(multimodalModelPath)) {
-    multimodalModelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-  }
-
-  fs::path projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(projectionPath)) {
-    projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-  }
+  std::string multimodalModelPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  std::string projectionPath = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
     FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
-      multimodalModelPath.string(),
-      projectionPath.string(),
+      std::move(multimodalModelPath),
+      std::move(projectionPath),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 

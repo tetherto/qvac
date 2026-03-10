@@ -54,7 +54,7 @@ export interface GGMLConfig {
   batch_size?: NumericLike
   pooling?: 'none' | 'mean' | 'cls' | 'last' | 'rank'
   attention?: 'causal' | 'non-causal'
-  embed_normalize?: NumericLike
+  embd_normalize?: NumericLike
   flash_attn?: 'on' | 'off' | 'auto'
   'main-gpu'?: NumericLike | 'integrated' | 'dedicated'
   verbosity?: NumericLike

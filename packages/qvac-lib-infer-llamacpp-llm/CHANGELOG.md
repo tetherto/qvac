@@ -1,5 +1,81 @@
 # Changelog
 
+## [0.11.1] - 2026-03-09
+
+### Added
+
+#### Prefill mode for context preloading
+
+`model.run(prompt, { prefill: true })` evaluates the prompt into the KV cache without generating tokens. This enables context preloading so that subsequent runs start with a warm cache.
+
+- Prefill runs report `TTFT=0`, `TPS=0`, `generatedTokens=0`, `promptTokens=0`, while `CacheTokens` reflects actual KV cache occupancy.
+- JS `normalizeRunOptions` validates `prefill` as a boolean; a `TypeError` is thrown otherwise.
+- C++ `evalMessage`/`evalMessageWithTools` suppress logits on the last token when prefill is set; `processPrompt` returns immediately after evaluation.
+
+
+## [0.11.0] - 2026-03-05
+
+Preparation before fully supporting BitNet. Not officially supported yet, but this version already integrates logic necessary to support BitNet models.
+
+### Added
+
+#### Preparation: BitNet-aware backend selection for Adreno GPUs
+
+Backend selection now detects BitNet models (TQ1_0 / TQ2_0 quantization via `hasOneBitQuantization()` and `general.architecture == "bitnet"`) and adjusts GPU routing on Adreno devices:
+
+- **Adreno 800+** (e.g. Adreno 830): Vulkan is preferred over OpenCL, since BitNet TQ kernels are not supported on OpenCL.
+- **Adreno < 800** (e.g. Adreno 740): Falls back to CPU, as TQ kernels run faster on CPU than on older Adreno GPU backends.
+- **Non-Adreno GPUs**: No change — normal GPU selection applies.
+
+This logic only activates when no explicit `main-gpu` is configured.
+
+Adreno version detection works regardless of which backend exposes the GPU. The numeric generation (e.g. 830, 740) is parsed from the device description via `parseAdrenoVersion()` and tracked as `maxAdrenoVersion` during device enumeration for any Adreno device — whether it appears behind OpenCL, Vulkan, or another backend. This ensures the BitNet safety checks (CPU fallback on Adreno <800, Vulkan preference on Adreno 800+) are not bypassed when only Vulkan registers a device, as observed on Adreno 750.
+
+#### Preparation: BitNet-aware config tuning (`tuneConfigMap`)
+
+For BitNet models, `tuneConfigMap` injects default overrides into the config map before argument parsing:
+
+- `flash-attn=off` — disables flash attention (unless the user explicitly set `flash-attn` or `flash_attn`).
+- `ubatch-size=128` — on Adreno 800+ only (unless the user explicitly set `ubatch-size` or `ubatch_size`).
+
+These entries are written to `configFilemap` (not to `common_params` directly), so they flow through the normal llama.cpp arg parser in `commonParamsParse`. The call sits after backend selection (where the Adreno version is known) but before the config map is converted to the arg vector.
+
+#### `ModelMetaData::tryGetString()` method
+
+`ModelMetaData` now exposes `tryGetString(key)` to retrieve string-typed GGUF metadata values. This is used by the BitNet backend selection logic to read `general.architecture`. Both `tryGetString()` and `hasOneBitQuantization()` are now virtual to support test mocking.
+
+#### Unit tests for BitNet backend selection
+
+Added comprehensive unit tests covering BitNet TQ backend selection across Adreno 830/740, non-Adreno GPUs, OpenCL-only scenarios, Vulkan-only scenarios, and mixed GPU/iGPU configurations. `MockModelMetaData` is defined in `test_common.hpp` and shared across test files.
+
+### Changed
+
+- Updated qvac-fabric-llm.cpp dependency from 7248.1.3 to 7248.1.4.
+- Refactored `ModelMetaData` internal getters using a template helper, reducing duplication between `tryGetU32` and `tryGetString`.
+- Added virtual destructor to `ModelMetaData` for correct polymorphic cleanup.
+- Simplified `REQUIRE_MODEL` test macro by removing the `do {} while(false)` wrapper to suppress compiler warnings.
+
+
+## [0.10.0] - 2026-03-02
+
+### Added
+
+#### Model metadata querying via LlamaModel
+
+`LlamaModel` now exposes `ModelMetaData`, which parses GGUF key-values at init time (before weights are fully loaded) and makes them available for early decisions such as quantization detection and backend selection. Queries are available through `tryGetU32()`, `isU32OneOf()`, and `hasOneBitQuantization()`.
+
+#### ModelMetaData streaming synchronization
+
+For streaming model loads, `ModelMetaData` coordinates with `AsyncWeightsLoader` to borrow the first shard buffer. The synchronization state is encapsulated in a public nested class `ModelMetaData::FirstFileFromGgufStreamState` with `waitForRelease()` and `provide()` methods, protected by a mutex and condition variable. Both the consumer and producer waits are bounded by configurable timeouts.
+
+### Fixed
+
+#### GGUF streambuf reader fails to align data section (Fabric 1.1.3 upgrade)
+
+Fixed a bug in the GGUF buffer reader (`gguf_bytes_buffer_reader::align`) where `pubseekoff` was called without specifying a direction (`std::ios_base::in`). The default `which` parameter is `ios_base::in | ios_base::out`, and per the C++ spec, `std::stringbuf::seekoff` with `way=cur` and both directions set always returns `-1` — regardless of the streambuf's open mode. This caused `"gguf_init_from_reader_impl: failed to align data section"` when loading model metadata from an in-memory stream (e.g. during streaming model loads), while the disk-backed `FILE*` path was unaffected because `fseek` has no direction concept.
+
+The fix passes `std::ios_base::in` explicitly to `pubseekoff` in the llamacpp tether layer. This low-level alignment fix stems from the upgrade to Fabric 1.1.3.
+
 ## [0.9.2] - 2026-03-03
 
 ### Fixed
