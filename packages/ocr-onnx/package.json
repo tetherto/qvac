@@ -79,6 +79,9 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.1"
   },
+  "optionalDependencies": {
+    "@qvac/diagnostics": "^0.1.0"
+  },
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
