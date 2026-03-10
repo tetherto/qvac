@@ -21,6 +21,7 @@ vcpkg_from_github(
     HEAD_REF master
     PATCHES
         sd-cpu-only.patch
+        sd-backend-priority.patch
         abort-callback.patch
         fix-failure-path-cleanup.patch
 )

@@ -23,6 +23,7 @@ vcpkg_from_github(
     PATCHES
         ggml-max-name.patch
         ggml-opencl-public-header.patch
+        ggml-opencl-graceful-no-devices.patch
         ggml-config-include-dir.patch
         ggml-static-core-dl-backends.patch
 )
