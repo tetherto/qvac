@@ -127,8 +127,18 @@ struct JsFinetuneTerminalOutputHandler
                     js::Number::create(this->env_, result.stats->trainLoss));
                 statsObj.setProperty(
                     this->env_,
+                    "train_loss_uncertainty",
+                    js::Number::create(
+                        this->env_, result.stats->trainLossUncertainty));
+                statsObj.setProperty(
+                    this->env_,
                     "val_loss",
                     js::Number::create(this->env_, result.stats->valLoss));
+                statsObj.setProperty(
+                    this->env_,
+                    "val_loss_uncertainty",
+                    js::Number::create(
+                        this->env_, result.stats->valLossUncertainty));
                 statsObj.setProperty(
                     this->env_,
                     "train_accuracy",
@@ -136,8 +146,18 @@ struct JsFinetuneTerminalOutputHandler
                         this->env_, result.stats->trainAccuracy));
                 statsObj.setProperty(
                     this->env_,
+                    "train_accuracy_uncertainty",
+                    js::Number::create(
+                        this->env_, result.stats->trainAccuracyUncertainty));
+                statsObj.setProperty(
+                    this->env_,
                     "val_accuracy",
                     js::Number::create(this->env_, result.stats->valAccuracy));
+                statsObj.setProperty(
+                    this->env_,
+                    "val_accuracy_uncertainty",
+                    js::Number::create(
+                        this->env_, result.stats->valAccuracyUncertainty));
                 statsObj.setProperty(
                     this->env_,
                     "learning_rate",

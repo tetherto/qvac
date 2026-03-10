@@ -1621,9 +1621,13 @@ void LlamaModel::executeTrainingLoop(
                                  : ggml_opt_epoch_callback_progress_bar;
 
   double lastTrainLoss = 0.0;
+  double lastTrainLossUnc = 0.0;
   double lastValLoss = 0.0;
+  double lastValLossUnc = 0.0;
   double lastTrainAccuracy = 0.0;
+  double lastTrainAccuracyUnc = 0.0;
   double lastValAccuracy = 0.0;
+  double lastValAccuracyUnc = 0.0;
   int32_t completedEpochs = static_cast<int32_t>(startEpoch);
 
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
@@ -1678,16 +1682,16 @@ void LlamaModel::executeTrainingLoop(
       std::cout.flush();
     }
 
-    ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, nullptr);
-    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, nullptr);
+    ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
+    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
 
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
     }
 
     if (hasEval) {
-      ggml_opt_result_loss(evalResult.get(), &lastValLoss, nullptr);
-      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, nullptr);
+      ggml_opt_result_loss(evalResult.get(), &lastValLoss, &lastValLossUnc);
+      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
     }
 
     completedEpochs = static_cast<int32_t>(epoch + 1);
@@ -1707,9 +1711,13 @@ void LlamaModel::executeTrainingLoop(
 
   if (outStats) {
     outStats->trainLoss = lastTrainLoss;
+    outStats->trainLossUncertainty = lastTrainLossUnc;
     outStats->valLoss = lastValLoss;
+    outStats->valLossUncertainty = lastValLossUnc;
     outStats->trainAccuracy = lastTrainAccuracy;
+    outStats->trainAccuracyUncertainty = lastTrainAccuracyUnc;
     outStats->valAccuracy = lastValAccuracy;
+    outStats->valAccuracyUncertainty = lastValAccuracyUnc;
     outStats->learningRate = static_cast<double>(scheduler.lastLr);
     outStats->epochsCompleted = completedEpochs;
     outStats->globalSteps = checkpointState ? checkpointState->globalStep : 0;
