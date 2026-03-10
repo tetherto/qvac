@@ -74,8 +74,8 @@ protected:
   }
 
   // Helper: build a short GenerationJob (quick completion)
-  static SdModel::GenerationJob makeShortJob(
-      std::vector<std::vector<uint8_t>>& images) {
+  static SdModel::GenerationJob
+  makeShortJob(std::vector<std::vector<uint8_t>>& images) {
     SdModel::GenerationJob job;
     job.paramsJson = R"({
       "prompt": "solid white",
@@ -99,13 +99,8 @@ std::unique_ptr<SdModel> SdCancelContextTest::model = nullptr;
 // ---------------------------------------------------------------------------
 TEST_F(SdCancelContextTest, CancelWhenIdleIsNoop) {
   EXPECT_NO_THROW(model->cancel());
-  EXPECT_FALSE(model->isCancelRequested())
-      << "cancelRequested_ should be false — process() resets it on entry, "
-         "and cancel-when-idle should not leave the flag permanently set";
-
-  // Calling cancel when idle sets the flag, but the next process() resets it.
-  // Verify this by running a short job afterwards.
-  model->cancel();
+  // cancel() sets the flag even when idle — it is only cleared on process()
+  // entry.  This is safe: the flag is reset before the next generation begins.
   EXPECT_TRUE(model->isCancelRequested());
 
   std::vector<std::vector<uint8_t>> images;
@@ -142,8 +137,7 @@ TEST_F(SdCancelContextTest, CancelDuringGenerationThrowsJobCancelled) {
   cancelThread.join();
 
   // No output images should have been emitted (buffers freed, not encoded)
-  EXPECT_EQ(images.size(), 0u)
-      << "Cancelled generation should not emit images";
+  EXPECT_EQ(images.size(), 0u) << "Cancelled generation should not emit images";
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +173,7 @@ TEST_F(SdCancelContextTest, RunAfterCancelProducesValidOutput) {
 
   EXPECT_NO_THROW(model->process(std::any(shortJob)));
   ASSERT_EQ(images.size(), 1u) << "Rerun after cancel should produce 1 image";
-  EXPECT_TRUE(sd_test_helpers::isPng(images[0]))
-      << "Output must be valid PNG";
+  EXPECT_TRUE(sd_test_helpers::isPng(images[0])) << "Output must be valid PNG";
 }
 
 // ---------------------------------------------------------------------------
