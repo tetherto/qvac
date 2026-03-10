@@ -1818,7 +1818,8 @@ void LlamaModel::executeTrainingLoop(
     }
 
     ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
-    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
+    ggml_opt_result_accuracy(
+        trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
 
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
@@ -1826,7 +1827,8 @@ void LlamaModel::executeTrainingLoop(
 
     if (hasEval) {
       ggml_opt_result_loss(evalResult.get(), &lastValLoss, &lastValLossUnc);
-      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
+      ggml_opt_result_accuracy(
+          evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
     }
 
     completedEpochs = static_cast<int32_t>(epoch + 1);

@@ -279,8 +279,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   }
 
   const bool isBitnetOneBitAdreno =
-      !mainGpu.has_value() && // No explicit selection
-      metadata != nullptr && metadata->hasOneBitQuantization() &&
+      !mainGpu.has_value() && metadata != nullptr &&
+      metadata->hasOneBitQuantization() &&
       metadata->tryGetString("general.architecture") == "bitnet" &&
       maxAdrenoVersion.has_value();
 
