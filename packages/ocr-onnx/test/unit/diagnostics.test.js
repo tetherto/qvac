@@ -3,9 +3,7 @@
 const test = require('brittle')
 
 let diagnostics
-try { diagnostics = require('@qvac/diagnostics') } catch (e) {
-  try { diagnostics = require('../../../qvac-lib-diagnostics') } catch (e) { diagnostics = null }
-}
+try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
 
 // Minimal test class that replicates the ONNXOcr constructor fields and
 // _getDiagnosticsJSON method without requiring native bindings.
