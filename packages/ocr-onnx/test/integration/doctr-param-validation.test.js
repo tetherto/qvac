@@ -2,7 +2,7 @@
 
 const { ONNXOcr, QvacErrorAddonOcr, ERR_CODES } = require('../..')
 const test = require('brittle')
-const { isMobile, ensureDoctrModels } = require('./utils')
+const { isMobile, getImagePath, ensureDoctrModels } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 30 * 1000
@@ -133,6 +133,30 @@ test('DocTR does not use pathRecognizerPrefix fallback', { timeout: TEST_TIMEOUT
     t.is(err.code, ERR_CODES.MISSING_REQUIRED_PARAMETER, 'Error code should be MISSING_REQUIRED_PARAMETER')
     t.ok(err.message.includes('pathRecognizer'), 'Error should mention pathRecognizer not pathRecognizerPrefix')
     t.pass('DocTR correctly requires explicit pathRecognizer (no prefix fallback)')
+  }
+})
+
+test('DocTR run() before load() throws error', { timeout: TEST_TIMEOUT }, async function (t) {
+  const onnxOcr = new ONNXOcr({
+    params: {
+      pathDetector: DOCTR_DETECTOR,
+      pathRecognizer: DOCTR_RECOGNIZER,
+      langList: ['en'],
+      useGPU: false,
+      pipelineMode: 'doctr'
+    }
+  })
+
+  try {
+    await onnxOcr.run({
+      path: getImagePath('/test/images/basic_test.bmp'),
+      options: { paragraph: false }
+    })
+    t.fail('Should have thrown when running before load')
+  } catch (err) {
+    t.ok(err, 'Should throw an error when running before load')
+    t.comment('Error: ' + err.message)
+    t.pass('Correctly prevented run before load')
   }
 })
 
