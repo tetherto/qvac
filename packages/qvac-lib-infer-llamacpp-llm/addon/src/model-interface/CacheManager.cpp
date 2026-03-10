@@ -250,6 +250,12 @@ void CacheManager::saveCache() {
   llama_state_save_file(ctx, sessionPath_.c_str(), sessionTokens, 2);
 }
 
+void CacheManager::invalidate() {
+  sessionPath_.clear();
+  cacheDisabled_ = true;
+  cacheUsedInLastPrompt_ = false;
+}
+
 bool CacheManager::isCacheDisabled() const { return cacheDisabled_; }
 
 bool CacheManager::hasActiveCache() const {

@@ -319,30 +319,29 @@ function createTestDataset (filePath, format = 'chat') {
   return filePath
 }
 
-function createPauseResumeTestDataset (filePath) {
+function createPauseResumeTestDataset (filePath, count = 8) {
   const baseSamples = [
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
-    { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is 2+2?' }, { role: 'assistant', content: '2+2 equals 4.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What is the capital of France?' }, { role: 'assistant', content: 'The capital of France is Paris.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'Hello, how are you?' }, { role: 'assistant', content: 'Hello! I am doing well, thank you for asking.' }] },
     { messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: 'What color is the sky?' }, { role: 'assistant', content: 'The sky is typically blue on a clear day.' }] }
   ]
+  const samples = []
+  for (let i = 0; i < count; i++) {
+    samples.push(baseSamples[i % baseSamples.length])
+  }
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  const content = baseSamples.map(s => JSON.stringify(s)).join('\n')
+  const content = samples.map(s => JSON.stringify(s)).join('\n')
   fs.writeFileSync(filePath, content)
   return filePath
 }
 
 function setupParams (modelDir, overrides = {}) {
-  const testId = 'pause-resume'
+  const { testId = 'pause-resume', datasetSize, ...finetuneOverrides } = overrides
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
-
-  createPauseResumeTestDataset(trainDatasetPath)
+  createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
 
   return {
@@ -361,7 +360,7 @@ function setupParams (modelDir, overrides = {}) {
     checkpointSaveSteps: 5,
     checkpointSaveDir: checkpointDir,
     validation: { type: 'split', fraction: 0.05 },
-    ...overrides
+    ...finetuneOverrides
   }
 }
 
@@ -462,12 +461,18 @@ function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
 }
 
 async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, message = 'Finetuning completed too quickly') {
-  t.comment(`${message} - this is acceptable for small datasets`)
+  const ts = () => new Date().toISOString()
+  t.comment(`[handleEarlyCompletion] ${ts()} START: ${message} - this is acceptable for small datasets`)
+  t.comment(`[handleEarlyCompletion] ${ts()} finetuneHandle.await() START (re-await of resolved promise)`)
   const result = await (finetuneHandle?.await ? finetuneHandle.await() : finetuneHandle)
+  t.comment(`[handleEarlyCompletion] ${ts()} finetuneHandle.await() DONE, result=${JSON.stringify(result)?.slice(0, 200)}`)
   t.ok(result && typeof result === 'object', 'Finetuning should complete with result object')
   if (checkpointDir) {
+    t.comment(`[handleEarlyCompletion] ${ts()} cleanupCheckpoints START dir=${checkpointDir}`)
     cleanupCheckpoints(checkpointDir)
+    t.comment(`[handleEarlyCompletion] ${ts()} cleanupCheckpoints DONE`)
   }
+  t.comment(`[handleEarlyCompletion] ${ts()} END`)
   return result
 }
 

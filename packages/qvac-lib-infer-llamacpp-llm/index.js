@@ -96,6 +96,9 @@ class LlmLlamacpp extends BaseInference {
     this._defaultFinetuneParams = finetuningParams ?? null
     this._hasActiveResponse = false
     this._resumeTraceCounter = 0
+    this._skipNextRuntimeStats = false
+    this._originalLogger = this.logger
+    this._baseOutputCallback = this._outputCallback.bind(this)
   }
 
   /**
@@ -109,14 +112,6 @@ class LlmLlamacpp extends BaseInference {
 
     try {
       const configForLoad = { ...this._config }
-      const shouldDisableFlashAttn = this._defaultFinetuneParams !== null
-      if (shouldDisableFlashAttn) {
-        const hasFlashSetting = Object.prototype.hasOwnProperty.call(configForLoad, 'flash_attn')
-        const requestedValue = hasFlashSetting ? configForLoad.flash_attn : undefined
-        if (requestedValue !== 'off') {
-          configForLoad.flash_attn = 'off'
-        }
-      }
 
       const configurationParams = {
         path: path.join(this._diskPath, this._modelName),
@@ -232,16 +227,12 @@ class LlmLlamacpp extends BaseInference {
     )
     const binding = require('./binding')
 
-    const originalLogger = this.logger
-    const filteredLogger = this._createFilteredLogger(originalLogger)
-    const originalLoggerRef = this.logger
-    this.logger = filteredLogger
+    this.logger = this._createFilteredLogger(this._originalLogger)
 
-    const originalOutputCb = this._outputCallback?.bind(this)
     this._outputCallback = (instance, eventType, jobId, data, extra) => {
       return this._handleAddonOutputEvent(
-        originalOutputCb,
-        originalLoggerRef,
+        this._baseOutputCallback,
+        this._originalLogger,
         instance,
         eventType,
         jobId,
@@ -259,6 +250,10 @@ class LlmLlamacpp extends BaseInference {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
+      if (this._skipNextRuntimeStats) {
+        this._skipNextRuntimeStats = false
+        return
+      }
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
     if (
@@ -267,6 +262,7 @@ class LlmLlamacpp extends BaseInference {
       data.op === 'finetune' &&
       typeof data.status === 'string'
     ) {
+      this._skipNextRuntimeStats = true
       return this._outputCallback(addon, 'JobEnded', 'OnlyOneJob', data, null)
     }
     if (
@@ -289,6 +285,7 @@ class LlmLlamacpp extends BaseInference {
 
   /**
    * Pause finetuning, saving a checkpoint so training can resume later.
+   * cancel inference job if it is running
    */
   async pause () {
     if (this.addon?.cancel) {
@@ -299,6 +296,7 @@ class LlmLlamacpp extends BaseInference {
   /**
    * Cancel finetuning and remove the pause checkpoint so the next
    * finetune() call starts fresh instead of resuming.
+   * cancel inference job if it is running
    */
   async cancel () {
     if (this.addon?.cancel) {
@@ -317,7 +315,9 @@ class LlmLlamacpp extends BaseInference {
           fs.rmSync(path.join(checkpointDir, entry.name), { recursive: true, force: true })
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      this.logger.error('Failed to clear pause checkpoints:', err)
+    }
   }
 
   /**
@@ -327,7 +327,7 @@ class LlmLlamacpp extends BaseInference {
   async unload () {
     return await this._withExclusiveRun(async () => {
       try {
-        await this.cancel()
+        await this.pause()
       } catch (_) {}
       const currentJobResponse = this._jobToResponse.get('OnlyOneJob')
       if (currentJobResponse) {

@@ -3,10 +3,21 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { BarePackNotInstalledError, BarePackError } from '../errors.js'
+import type { Logger } from '../logger.js'
 
 const require = createRequire(import.meta.url)
 
-function resolveBarePackBin () {
+interface RunBarePackOptions {
+  entryPath: string
+  outputPath: string
+  hosts: string[]
+  importsMapPath: string
+  deferModules: string[]
+  logLevel: string
+  logger: Logger
+}
+
+function resolveBarePackBin (): string | null {
   try {
     const barePackPkgPath = require.resolve('bare-pack/package')
     const barePackDir = path.dirname(barePackPkgPath)
@@ -16,7 +27,7 @@ function resolveBarePackBin () {
   }
 }
 
-export async function runBarePack (options) {
+export async function runBarePack (options: RunBarePackOptions): Promise<void> {
   const {
     entryPath,
     outputPath,

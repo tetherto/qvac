@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -42,15 +41,23 @@ struct CheckpointMetadata {
   uint32_t targetModules = 0;
   int64_t globalStep = 0;
   int64_t currentStep = 0; // Scheduler step
+  int32_t resumeEpoch = -1;
+  int64_t resumeBatch = -1; // idata batch index for llama_opt_epoch_resume
+  bool pausedDuringValidation = false;
 };
 
 struct FinetuneProgressStats {
+  bool isTrain = true;
   double loss = 0.0;
+  double lossUncertainty = 0.0;
   double accuracy = 0.0;
+  double accuracyUncertainty = 0.0;
   int64_t globalSteps = 0;
   int32_t currentEpoch = 0;
   int64_t currentBatch = 0;
   int64_t totalBatches = 0;
+  int64_t elapsedMs = 0;
+  int64_t etaMs = 0;
 };
 
 struct TrainingCheckpointState {
@@ -72,12 +79,11 @@ struct TrainingCheckpointState {
   std::atomic<bool> isIdle{true};
   std::atomic<bool> isFinetuning{false};
   std::atomic<bool> isPaused{false};
-  std::atomic<uint64_t> pauseAttemptId{0};
   int64_t expectedFirstBatchAfterResume = -1;
   bool firstBatchAfterResumeLogged = false;
   int64_t batchOffsetWithinEpoch = -1;
-  bool skippingBatches = false;
   bool finetuningStartedEmitted = false;
+  bool suppressProgressBar = false;
   std::function<void(const FinetuneProgressStats&)> progressCallback;
 
   std::mutex pauseDoneMutex;
@@ -119,7 +125,7 @@ std::filesystem::path
 findLatestPauseCheckpoint(const std::filesystem::path& checkpointDir);
 void savePauseCheckpoint(
     ggml_opt_context_t optCtx, TrainingCheckpointState& state,
-    bool pausedDuringValidation = false);
+    bool pausedDuringValidation = false, int64_t ibatch = -1);
 bool tryHandlePauseRequest(
     ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
     int64_t ibatch, int64_t ibatchMax);

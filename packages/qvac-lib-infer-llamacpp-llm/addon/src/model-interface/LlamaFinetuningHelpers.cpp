@@ -284,7 +284,11 @@ static void writeCheckpointMetadata(
       << '\n'
       << "target_modules=" << meta.targetModules << '\n'
       << "global_step=" << meta.globalStep << '\n'
-      << "current_step=" << meta.currentStep << '\n';
+      << "current_step=" << meta.currentStep << '\n'
+      << "resume_epoch=" << meta.resumeEpoch << '\n'
+      << "resume_batch=" << meta.resumeBatch << '\n'
+      << "paused_during_validation="
+      << (meta.pausedDuringValidation ? 1 : 0) << '\n';
   if (!out) {
     throw std::runtime_error(
         "Failed to write checkpoint metadata: " + path.string());
@@ -365,6 +369,12 @@ bool parseCheckpointMetadata(
       meta.globalStep = std::stoll(value);
     } else if (key == "current_step") {
       meta.currentStep = std::stoll(value);
+    } else if (key == "resume_epoch") {
+      meta.resumeEpoch = std::stoi(value);
+    } else if (key == "resume_batch") {
+      meta.resumeBatch = std::stoll(value);
+    } else if (key == "paused_during_validation") {
+      meta.pausedDuringValidation = (value == "1" || value == "true");
     }
   }
 
@@ -373,7 +383,7 @@ bool parseCheckpointMetadata(
 
 void savePauseCheckpoint(
     ggml_opt_context_t optCtx, TrainingCheckpointState& state,
-    bool pausedDuringValidation) {
+    bool pausedDuringValidation, int64_t ibatch) {
   if (state.adapter == nullptr || state.ctx == nullptr ||
       state.model == nullptr) {
     throw std::runtime_error(
@@ -412,6 +422,21 @@ void savePauseCheckpoint(
   meta.globalStep =
       pausedDuringValidation ? state.globalStep + 1 : state.globalStep;
   meta.currentStep = state.scheduler ? state.scheduler->currentStep : 0;
+  meta.pausedDuringValidation = pausedDuringValidation;
+  meta.resumeEpoch = pausedDuringValidation
+                         ? (state.currentEpoch + 1)
+                         : state.currentEpoch;
+  if (pausedDuringValidation) {
+    meta.resumeBatch = -1;
+  } else {
+    const int64_t nCtx = static_cast<int64_t>(llama_n_ctx(state.ctx));
+    const int64_t nUbatch =
+        std::max<int64_t>(int64_t{1}, static_cast<int64_t>(llama_n_ubatch(state.ctx)));
+    const int64_t ubatchPerCtx = std::max<int64_t>(int64_t{1}, nCtx / nUbatch);
+    // Backend resume cursor is idata batch index (0-based), while callback
+    // ibatch is 1-based ubatch progress.
+    meta.resumeBatch = std::max<int64_t>(int64_t{0}, (ibatch - 1) / ubatchPerCtx);
+  }
   writeCheckpointMetadata(pauseDir / "metadata.json", meta);
 
   state.pauseCheckpointPath = pauseDir;
@@ -423,59 +448,17 @@ void savePauseCheckpoint(
 bool tryHandlePauseRequest(
     ggml_opt_context_t optCtx, TrainingCheckpointState* state, bool train,
     int64_t ibatch, int64_t ibatchMax) {
-  if (state == nullptr) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=0] tryHandlePauseRequest: state=nullptr "
-        "early-return");
+  if (state == nullptr || !state->pauseRequested.load()) {
     return false;
   }
-  const auto attemptId = state->pauseAttemptId.load();
-  const bool pauseRequested = state->pauseRequested.load();
-  const bool pauseSaved = state->pauseCheckpointSaved.load();
-  const int64_t displayBatch =
-      (state->batchOffsetWithinEpoch > 0) ? (ibatch + 1) : ibatch;
-  std::ostringstream entryMsg;
-  entryMsg << "[PauseDebug][attempt=" << attemptId
-           << "] tryHandlePauseRequest: entry"
-           << " train=" << (train ? "true" : "false")
-           << " ibatch=" << displayBatch << "/" << ibatchMax
-           << " pauseRequested=" << (pauseRequested ? "true" : "false")
-           << " pauseCheckpointSaved=" << (pauseSaved ? "true" : "false")
-           << " shouldExit=" << (state->shouldExit.load() ? "true" : "false")
-           << " isFinetuning="
-           << (state->isFinetuning.load() ? "true" : "false");
-  QLOG_IF(Priority::INFO, entryMsg.str());
-
-  if (!pauseRequested) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=" + std::to_string(attemptId) +
-            "] tryHandlePauseRequest: pauseRequested=false early-return");
-    return false;
-  }
-  if (pauseSaved) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=" + std::to_string(attemptId) +
-            "] tryHandlePauseRequest: pauseCheckpointSaved=true early-return");
+  if (state->pauseCheckpointSaved.load()) {
     return true;
   }
   if (state->ctx != nullptr) {
     llama_opt_request_stop(state->ctx);
   }
   const bool pausedDuringValidation = !train;
-  try {
-    savePauseCheckpoint(optCtx, *state, pausedDuringValidation);
-  } catch (...) {
-    QLOG_IF(
-        Priority::INFO,
-        "[PauseDebug][attempt=" + std::to_string(attemptId) +
-            "] SIGNAL_FROM_TRY_HANDLE_PAUSE_EXCEPTION");
-    state->pauseWaitDone.store(true);
-    state->pauseDoneCv.notify_all();
-    throw;
-  }
+  savePauseCheckpoint(optCtx, *state, pausedDuringValidation, ibatch);
   state->pauseCheckpointSaved.store(true);
   state->shouldExit.store(true);
   state->isFinetuning.store(false);
@@ -485,17 +468,11 @@ bool tryHandlePauseRequest(
   if (pausedDuringValidation) {
     pauseMsg << " during validation";
   }
-  pauseMsg << " at batch " << displayBatch << "/" << ibatchMax << " | epoch "
+  pauseMsg << " at batch " << ibatch << "/" << ibatchMax << " | epoch "
            << (state->currentEpoch + 1)
-           << " | Checkpoint saved at: " << state->pauseCheckpointPath.string()
-           << " | [PauseDebug][attempt=" << attemptId << "]";
-  QLOG_IF(Priority::INFO, pauseMsg.str());
-  QLOG_IF(
-      Priority::INFO,
-      "[PauseDebug][attempt=" + std::to_string(attemptId) +
-          "] SIGNAL_FROM_TRY_HANDLE_PAUSE_SUCCESS");
-  state->pauseWaitDone.store(true);
-  state->pauseDoneCv.notify_all();
+           << " | Checkpoint saved at: "
+           << state->pauseCheckpointPath.string();
+  QLOG_IF(Priority::DEBUG, pauseMsg.str());
   return true;
 }
 
@@ -533,27 +510,20 @@ void optEpochCallback(
     bool train, ggml_opt_context_t optCtx, ggml_opt_dataset_t dataset,
     ggml_opt_result_t result, int64_t ibatch, int64_t ibatchMax,
     int64_t tStartUs, TrainingCheckpointState* checkpointState) {
-  const bool isFinalBatch = (ibatch == ibatchMax - 1);
-  // Add +1 only when backend sent 0-indexed ibatch. That happens if we resumed
-  // mid-epoch and epoch==startEpoch (executeTrainingLoop passes resumeFromBatch
-  // only then), so batchOffsetWithinEpoch>0 exactly when we are in that resumed
-  // epoch.
-  const int64_t displayBatch =
-      (checkpointState && checkpointState->batchOffsetWithinEpoch > 0)
-          ? (ibatch + 1)
-          : ibatch;
+  const bool isFinalBatch = (ibatch == ibatchMax);
+  const int64_t displayBatch = ibatch;
 
-  ggml_opt_epoch_callback_progress_bar(
-      train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
-  std::fflush(stdout);
+  bool suppress = checkpointState != nullptr &&
+                  checkpointState->suppressProgressBar;
+  if (!suppress) {
+    ggml_opt_epoch_callback_progress_bar(
+        train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
+    std::fflush(stdout);
+  }
 
   if (checkpointState != nullptr &&
       tryHandlePauseRequest(
           optCtx, checkpointState, train, ibatch, ibatchMax)) {
-    return;
-  }
-
-  if (!train) {
     return;
   }
 
@@ -562,51 +532,46 @@ void optEpochCallback(
     return;
   }
 
-  bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
-  bool shouldExitAlreadySet = state->shouldExit.load();
-  if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
-    return;
-  }
-
-  if (state->skippingBatches && state->batchOffsetWithinEpoch >= 0) {
-    if (ibatch == state->batchOffsetWithinEpoch) {
-      state->skippingBatches = false;
-      std::ostringstream resumeMsg;
-      resumeMsg << "Resumed from batch " << (ibatch + 1) << "/" << ibatchMax
-                << " (globalStep will be " << (state->globalStep + 1) << ")";
-      QLOG_IF(Priority::DEBUG, resumeMsg.str());
-    } else if (ibatch < state->batchOffsetWithinEpoch) {
-      std::ostringstream warnMsg;
-      warnMsg << "Processing batch " << (ibatch + 1)
-              << " but expected to resume from batch "
-              << (state->batchOffsetWithinEpoch + 1);
-      QLOG_IF(Priority::WARNING, warnMsg.str());
+  if (train) {
+    bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
+    bool shouldExitAlreadySet = state->shouldExit.load();
+    if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
       return;
     }
+    state->globalStep += 1;
   }
-
-  // After last batch of resumed epoch, clear so next epoch uses raw (1-indexed)
-  // ibatch
-  if (state->batchOffsetWithinEpoch > 0 && isFinalBatch) {
-    state->batchOffsetWithinEpoch = -1;
-  }
-
-  state->globalStep += 1;
 
   if (state->progressCallback) {
     double loss = 0.0;
+    double lossUnc = 0.0;
     double accuracy = 0.0;
-    ggml_opt_result_loss(result, &loss, nullptr);
-    ggml_opt_result_accuracy(result, &accuracy, nullptr);
+    double accUnc = 0.0;
+    ggml_opt_result_loss(result, &loss, &lossUnc);
+    ggml_opt_result_accuracy(result, &accuracy, &accUnc);
+
+    const int64_t elapsedUs = ggml_time_us() - tStartUs;
+    int64_t etaUs = 0;
+    if (ibatch > 0) {
+      etaUs = elapsedUs * (ibatchMax - ibatch) / ibatch;
+    }
 
     FinetuneProgressStats progress;
+    progress.isTrain = train;
     progress.loss = loss;
+    progress.lossUncertainty = lossUnc;
     progress.accuracy = accuracy;
+    progress.accuracyUncertainty = accUnc;
     progress.globalSteps = state->globalStep;
     progress.currentEpoch = state->currentEpoch;
     progress.currentBatch = displayBatch;
     progress.totalBatches = ibatchMax;
+    progress.elapsedMs = elapsedUs / 1000;
+    progress.etaMs = etaUs / 1000;
     state->progressCallback(progress);
+  }
+
+  if (!train) {
+    return;
   }
 
   if (!state->finetuningStartedEmitted) {

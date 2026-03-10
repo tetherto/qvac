@@ -34,9 +34,13 @@ using namespace qvac_lib_inference_addon_cpp::model;
 struct FinetuneTerminalResult {
   struct Stats {
     double trainLoss = 0.0;
+    double trainLossUncertainty = 0.0;
     double valLoss = 0.0;
+    double valLossUncertainty = 0.0;
     double trainAccuracy = 0.0;
+    double trainAccuracyUncertainty = 0.0;
     double valAccuracy = 0.0;
+    double valAccuracyUncertainty = 0.0;
     double learningRate = 0.0;
     int64_t globalSteps = 0;
     int32_t epochsCompleted = 0;
@@ -114,7 +118,6 @@ public:
   bool isFinetuneRunning() const;
   bool requestPause();
   void clearPauseRequest();
-  uint64_t getCurrentPauseAttemptIdForDebug() const;
 
   /** Block until the training thread has completed the finetuning pause path.
    */
@@ -143,6 +146,9 @@ private:
   void init(
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
+  void reinitialize(
+      const std::unordered_map<std::string, std::string>& configOverrides,
+      bool training = false);
 
   const std::string loadingContext_;
   GGUFShards shards_;
@@ -150,6 +156,10 @@ private:
   InitLoader initLoader_;
   ModelMetaData metadata_;
   AsyncWeightsLoader asyncWeightsLoader_;
+
+  std::string modelPath_;
+  std::string projectionPath_;
+  std::unordered_map<std::string, std::string> baseConfigFilemap_;
 
   bool isTextLlm_ = false;
 
@@ -160,6 +170,9 @@ private:
   llama_pos configuredNDiscarded_ = 0;
   std::optional<CacheManager> cacheManager_;
 
+  bool isBitnetModel() const;
+  void validateBitnetQuantization();
+  void validateModelForFinetuning();
   void validateFinetuningParams(
       const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
   ggml_opt_dataset_t prepareTrainingDataset(
@@ -216,5 +229,4 @@ private:
       currentCheckpointState_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
       pausedCheckpointState_;
-  bool optimizerInitialized_ = false;
 };
