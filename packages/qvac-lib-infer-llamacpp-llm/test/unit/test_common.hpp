@@ -4,10 +4,12 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <gtest/gtest.h>
 
+#include "model-interface/ModelMetadata.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
 
 namespace test_common {
@@ -179,6 +181,25 @@ inline fs::path getTestBackendsDir() {
 #endif
 }
 
+class MockModelMetaData : public ModelMetaData {
+public:
+  MockModelMetaData(bool oneBitQuant, std::string arch)
+      : oneBitQuant_(oneBitQuant), arch_(std::move(arch)) {}
+
+  [[nodiscard]] bool hasOneBitQuantization() const override {
+    return oneBitQuant_;
+  }
+  std::optional<std::string> tryGetString(const char* key) const override {
+    if (std::string(key) == "general.architecture")
+      return arch_;
+    return std::nullopt;
+  }
+
+private:
+  bool oneBitQuant_;
+  std::string arch_;
+};
+
 inline std::unique_ptr<std::basic_streambuf<char>>
 readFileToStreambufBinary(const std::string& path) {
   auto buf = std::make_unique<std::filebuf>();
@@ -198,11 +219,9 @@ readFileToStreambufBinary(const std::string& path) {
  * so that GTEST_SKIP / FAIL return from the correct stack frame.
  */
 #define REQUIRE_MODEL(m)                                                       \
-  do {                                                                         \
-    if (!(m).found()) {                                                        \
-      if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)      \
-        GTEST_SKIP() << (m).missingMessage();                                  \
-      else                                                                     \
-        FAIL() << (m).missingMessage();                                        \
-    }                                                                          \
-  } while (false)
+  if (!(m).found()) {                                                          \
+    if ((m).onMissing == ::test_common::TestModelPath::OnMissing::Skip)        \
+      GTEST_SKIP() << (m).missingMessage();                                    \
+    FAIL() << (m).missingMessage();                                            \
+  }                                                                            \
+  static_assert(true, "")

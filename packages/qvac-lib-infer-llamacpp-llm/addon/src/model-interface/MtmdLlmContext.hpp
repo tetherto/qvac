@@ -34,11 +34,12 @@ public:
    *
    * @param chatMsgs - chat messages.
    * @param is_cache_loaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
       const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded) override;
+      bool isCacheLoaded, bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -47,11 +48,13 @@ public:
    * @param chatMsgs - chat messages.
    * @param tools - tools.
    * @param isCacheLoaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, bool isCacheLoaded) override;
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The generate response method. It generates the response.

@@ -32,6 +32,7 @@ class ModelMetaData {
 
 public:
   ModelMetaData() = default;
+  virtual ~ModelMetaData() = default;
 
   /// @param modelPath Model to load (single .gguf)
   /// @param shards Containing sharded files, if any
@@ -49,7 +50,12 @@ public:
   [[nodiscard]] bool
   isU32OneOf(const char* key, std::initializer_list<uint32_t> values) const;
 
-  [[nodiscard]] bool hasOneBitQuantization() const;
+  /// @brief Returns the string value at @p key, or nullopt if
+  /// absent/uninitialized or not a string type.
+  [[nodiscard]] virtual std::optional<std::string>
+  tryGetString(const char* key) const;
+
+  [[nodiscard]] virtual bool hasOneBitQuantization() const;
 
   // Code below for streaming support
 
