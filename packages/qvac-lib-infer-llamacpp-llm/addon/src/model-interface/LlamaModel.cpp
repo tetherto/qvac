@@ -95,12 +95,16 @@ void LlamaModel::tuneConfigMap(
       metadata.hasOneBitQuantization() &&
       metadata.tryGetString("general.architecture") == "bitnet";
 
-  if (isBitnet && configFilemap.find("flash-attn") == configFilemap.end() &&
+  const bool needsFlashAttnOff = isBitnet || isFinetuning;
+  if (needsFlashAttnOff &&
+      configFilemap.find("flash-attn") == configFilemap.end() &&
       configFilemap.find("flash_attn") == configFilemap.end()) {
     configFilemap["flash-attn"] = "off";
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] BitNet model detected: disabling flash attention\n");
+    const char* flashAttnMsg =
+        isFinetuning
+            ? "[LlamaModel] Finetuning: disabling flash attention\n"
+            : "[LlamaModel] BitNet model detected: disabling flash attention\n";
+    QLOG_IF(Priority::INFO, flashAttnMsg);
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -594,18 +598,18 @@ void LlamaModel::commonParamsParse(
 
   {
     using namespace backend_selection;
-    selectedBackend_.preferredBackendType_ =
+    const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
-    selectedBackend_.mainGpu_ = tryMainGpuFromMap(configFilemap);
+
+    const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
-        selectedBackend_.preferredBackendType_,
+        preferredBackend,
         LlamaModel::llamaLogCallback,
-        selectedBackend_.mainGpu_,
+        mainGpu,
         &metadata_,
         &outAdrenoVersion,
         isFinetuning_);
-    selectedBackend_.currentBackend_ = chosenBackend;
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -1042,23 +1046,17 @@ std::string LlamaModel::finetune(
   }
 
   isFinetuning_ = true;
-  const bool needsBackendReload =
-      !selectedBackend_.mainGpu_.has_value() &&
-      backend_selection::chooseBackend(
-          selectedBackend_.preferredBackendType_,
-          LlamaModel::llamaLogCallback,
-          selectedBackend_.mainGpu_,
-          &metadata_,
-          nullptr,
-          /*isFinetuning=*/true) != selectedBackend_.currentBackend_;
-  if (needsBackendReload) {
-    reload();
-  }
+  // Always reload: ensures tuneConfigMap applies finetuning-specific config
+  // (e.g. flash-attn off, ubatch sizing) and gives a clean llama_context.
+  // TODO: investigate recreating the context without a full weights reload
+  // to reduce latency when the backend itself does not change.
+  reload();
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
-    throw std::runtime_error("Finetune error: model/context not available.");
+    throw std::runtime_error(
+        "Finetune error: model/context not available after reload.");
   }
 
   try {
@@ -1322,9 +1320,7 @@ std::string LlamaModel::finetune(
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
     isFinetuning_ = false;
-    if (needsBackendReload) {
-      reload();
-    }
+    reload();
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1340,13 +1336,10 @@ std::string LlamaModel::finetune(
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
     isFinetuning_ = false;
-    if (needsBackendReload) {
-      try {
-        reload();
-      } catch (...) {
-        QLOG_IF(
-            Priority::ERROR, "Failed to reload model after finetuning error");
-      }
+    try {
+      reload();
+    } catch (...) {
+      QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
     }
     throw;
   }

@@ -160,6 +160,26 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
 
+// ---- Finetuning: flash-attn disabled for any architecture ----
+
+TEST_F(TuneConfigMapTest, Finetuning_Gemma3_FlashAttnDisabled) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+
+  ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
+  EXPECT_EQ(configFilemap_["flash-attn"], "off");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["flash-attn"] = "on";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+
+  EXPECT_EQ(configFilemap_["flash-attn"], "on");
+}
+
 // ---- Finetuning on Adreno 800+: ubatch=128 regardless of arch ----
 
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {

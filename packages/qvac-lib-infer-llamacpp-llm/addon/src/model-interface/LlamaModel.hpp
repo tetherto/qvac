@@ -22,7 +22,6 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
-#include "utils/BackendSelection.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
