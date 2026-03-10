@@ -594,17 +594,18 @@ void LlamaModel::commonParamsParse(
 
   {
     using namespace backend_selection;
-    const BackendType preferredBackend =
+    selectedBackend_.preferredBackendType_ =
         preferredBackendTypeFromString(deviceIt->second);
-
-    const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
+    selectedBackend_.mainGpu_ = tryMainGpuFromMap(configFilemap);
 
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
-        preferredBackendTypeFromString(deviceIt->second),
+        selectedBackend_.preferredBackendType_,
         LlamaModel::llamaLogCallback,
-        mainGpu,
+        selectedBackend_.mainGpu_,
         &metadata_,
-        &outAdrenoVersion);
+        &outAdrenoVersion,
+        isFinetuning_);
+    selectedBackend_.currentBackend_ = chosenBackend;
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -1041,13 +1042,23 @@ std::string LlamaModel::finetune(
   }
 
   isFinetuning_ = true;
-  reload();
+  const bool needsBackendReload =
+      !selectedBackend_.mainGpu_.has_value() &&
+      backend_selection::chooseBackend(
+          selectedBackend_.preferredBackendType_,
+          LlamaModel::llamaLogCallback,
+          selectedBackend_.mainGpu_,
+          &metadata_,
+          nullptr,
+          /*isFinetuning=*/true) != selectedBackend_.currentBackend_;
+  if (needsBackendReload) {
+    reload();
+  }
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
   if (ctx == nullptr || mdl == nullptr) {
-    throw std::runtime_error(
-        "Finetune error: model/context not available after reload.");
+    throw std::runtime_error("Finetune error: model/context not available.");
   }
 
   try {
@@ -1311,7 +1322,9 @@ std::string LlamaModel::finetune(
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
     isFinetuning_ = false;
-    reload();
+    if (needsBackendReload) {
+      reload();
+    }
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1327,10 +1340,13 @@ std::string LlamaModel::finetune(
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
     isFinetuning_ = false;
-    try {
-      reload();
-    } catch (...) {
-      QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
+    if (needsBackendReload) {
+      try {
+        reload();
+      } catch (...) {
+        QLOG_IF(
+            Priority::ERROR, "Failed to reload model after finetuning error");
+      }
     }
     throw;
   }

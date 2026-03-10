@@ -22,6 +22,7 @@
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
 #include "ModelMetadata.hpp"
+#include "utils/BackendSelection.hpp"
 #include "common/chat.h"
 #include "qvac-lib-inference-addon-cpp/BlobsStream.hpp"
 #include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
@@ -248,6 +249,14 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
+
+  struct SelectedBackend {
+    backend_selection::BackendType preferredBackendType_{
+        backend_selection::BackendType::CPU};
+    std::optional<backend_selection::MainGpu> mainGpu_;
+    std::pair<backend_selection::BackendType, std::string> currentBackend_{
+        backend_selection::BackendType::CPU, "none"};
+  } selectedBackend_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();
