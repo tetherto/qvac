@@ -5,6 +5,7 @@
     "fmt",
     {
       "name": "onnxruntime",
+      "version>=": "1.24.2",
       "features": [
         "nnapi-ep"
       ],
@@ -12,6 +13,7 @@
     },
     {
       "name": "onnxruntime",
+      "version>=": "1.24.2",
       "features": [
         "dml-ep"
       ],
@@ -19,6 +21,7 @@
     },
     {
       "name": "onnxruntime",
+      "version>=": "1.24.2",
       "features": [
         "coreml-ep"
       ],
@@ -26,6 +29,7 @@
     },
     {
       "name": "onnxruntime",
+      "version>=": "1.24.2",
       "platform": "!(android | ios | osx | windows)"
     },
     {
