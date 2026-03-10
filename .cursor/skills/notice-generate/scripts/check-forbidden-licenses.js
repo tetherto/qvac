@@ -43,7 +43,7 @@ Environment variables (source .env first):
 Examples:
   source .env && node check-forbidden-licenses.js --all --dry-run
   source .env && node check-forbidden-licenses.js --all
-  source .env && node check-forbidden-licenses.js qvac-sdk
+  source .env && node check-forbidden-licenses.js sdk
 `)
 }
 

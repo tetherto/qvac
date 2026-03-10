@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-onnx",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Text to Speech (TTS) addon for qvac",
   "addon": true,
   "engines": {
@@ -20,11 +20,12 @@
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
     "test:cpp:run": "./build/addon/test/unit/qvac-lib-inference-tts-unit-test",
+    "models:ensure": "brittle-bare scripts/ensure-models.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build",
     "coverage:cpp:run": "cd build/addon/test/unit && LLVM_PROFILE_FILE=default.profraw ./qvac-lib-inference-tts-unit-test --gtest_output=xml:cpp-test-results.xml",
-    "coverage:cpp:summary": "cd build/addon/test/unit && llvm-cov-19 report ./qvac-lib-inference-tts-unit-test  --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
-    "coverage:cpp:report": "cd build/addon/test/unit && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp:summary": "cd build/addon/test/unit && llvm-cov-19 report ./qvac-lib-inference-tts-unit-test  --instr-profile=coverage.profdata -ignore-filename-regex='(test/unit|tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/addon/test/unit && llvm-profdata-19 merge -sparse default.profraw -o coverage.profdata && llvm-cov-19 show ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(test/unit|tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov-19 export ./qvac-lib-inference-tts-unit-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(test/unit|tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report"
   },
   "files": [

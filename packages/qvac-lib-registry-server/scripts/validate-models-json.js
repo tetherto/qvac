@@ -7,6 +7,7 @@ const { z } = require('zod')
 const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const ENGINE_PATTERN = /^@qvac\/[a-z][a-z0-9-]*$/
+const S3_DATE_FOLDER_PATTERN = /\/\d{4}-\d{2}-\d{2}\//
 
 const SOURCE_REFINE = (val) => {
   try {
@@ -23,11 +24,27 @@ const S3_NO_BUCKET = (val) => {
   return parsed.bucket === null
 }
 
+let _s3LegacyPaths = null
+function loadS3LegacyPaths () {
+  if (!_s3LegacyPaths) {
+    const legacyPathsFile = path.resolve(__dirname, '../data/s3-legacy-paths.json')
+    _s3LegacyPaths = new Set(JSON.parse(require('fs').readFileSync(legacyPathsFile, 'utf8')))
+  }
+  return _s3LegacyPaths
+}
+
+const S3_DATE_FOLDER = (val) => {
+  if (!val.startsWith('s3://')) return true
+  if (loadS3LegacyPaths().has(val)) return true
+  return S3_DATE_FOLDER_PATTERN.test(val)
+}
+
 const baseFields = {
   source: z.string()
     .min(1, 'source is required')
     .refine(SOURCE_REFINE, { message: 'Invalid source URL (must be s3:// or https://huggingface.co/)' })
-    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' }),
+    .refine(S3_NO_BUCKET, { message: 'S3 URLs must not contain a bucket name. Use s3:///key format; bucket is resolved from QVAC_S3_BUCKET env var.' })
+    .refine(S3_DATE_FOLDER, { message: 'S3 URLs must include a date folder (YYYY-MM-DD) in the path. Upload artifacts to a dated directory to ensure registry consistency when models are updated.' }),
 
   engine: z.string()
     .min(1, 'engine is required')
