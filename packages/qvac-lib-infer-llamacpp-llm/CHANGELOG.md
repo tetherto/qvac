@@ -1,4 +1,61 @@
 # Changelog
+
+## [0.11.1] - 2026-03-09
+
+### Added
+
+#### Prefill mode for context preloading
+
+`model.run(prompt, { prefill: true })` evaluates the prompt into the KV cache without generating tokens. This enables context preloading so that subsequent runs start with a warm cache.
+
+- Prefill runs report `TTFT=0`, `TPS=0`, `generatedTokens=0`, `promptTokens=0`, while `CacheTokens` reflects actual KV cache occupancy.
+- JS `normalizeRunOptions` validates `prefill` as a boolean; a `TypeError` is thrown otherwise.
+- C++ `evalMessage`/`evalMessageWithTools` suppress logits on the last token when prefill is set; `processPrompt` returns immediately after evaluation.
+
+
+## [0.11.0] - 2026-03-05
+
+Preparation before fully supporting BitNet. Not officially supported yet, but this version already integrates logic necessary to support BitNet models.
+
+### Added
+
+#### Preparation: BitNet-aware backend selection for Adreno GPUs
+
+Backend selection now detects BitNet models (TQ1_0 / TQ2_0 quantization via `hasOneBitQuantization()` and `general.architecture == "bitnet"`) and adjusts GPU routing on Adreno devices:
+
+- **Adreno 800+** (e.g. Adreno 830): Vulkan is preferred over OpenCL, since BitNet TQ kernels are not supported on OpenCL.
+- **Adreno < 800** (e.g. Adreno 740): Falls back to CPU, as TQ kernels run faster on CPU than on older Adreno GPU backends.
+- **Non-Adreno GPUs**: No change — normal GPU selection applies.
+
+This logic only activates when no explicit `main-gpu` is configured.
+
+Adreno version detection works regardless of which backend exposes the GPU. The numeric generation (e.g. 830, 740) is parsed from the device description via `parseAdrenoVersion()` and tracked as `maxAdrenoVersion` during device enumeration for any Adreno device — whether it appears behind OpenCL, Vulkan, or another backend. This ensures the BitNet safety checks (CPU fallback on Adreno <800, Vulkan preference on Adreno 800+) are not bypassed when only Vulkan registers a device, as observed on Adreno 750.
+
+#### Preparation: BitNet-aware config tuning (`tuneConfigMap`)
+
+For BitNet models, `tuneConfigMap` injects default overrides into the config map before argument parsing:
+
+- `flash-attn=off` — disables flash attention (unless the user explicitly set `flash-attn` or `flash_attn`).
+- `ubatch-size=128` — on Adreno 800+ only (unless the user explicitly set `ubatch-size` or `ubatch_size`).
+
+These entries are written to `configFilemap` (not to `common_params` directly), so they flow through the normal llama.cpp arg parser in `commonParamsParse`. The call sits after backend selection (where the Adreno version is known) but before the config map is converted to the arg vector.
+
+#### `ModelMetaData::tryGetString()` method
+
+`ModelMetaData` now exposes `tryGetString(key)` to retrieve string-typed GGUF metadata values. This is used by the BitNet backend selection logic to read `general.architecture`. Both `tryGetString()` and `hasOneBitQuantization()` are now virtual to support test mocking.
+
+#### Unit tests for BitNet backend selection
+
+Added comprehensive unit tests covering BitNet TQ backend selection across Adreno 830/740, non-Adreno GPUs, OpenCL-only scenarios, Vulkan-only scenarios, and mixed GPU/iGPU configurations. `MockModelMetaData` is defined in `test_common.hpp` and shared across test files.
+
+### Changed
+
+- Updated qvac-fabric-llm.cpp dependency from 7248.1.3 to 7248.1.4.
+- Refactored `ModelMetaData` internal getters using a template helper, reducing duplication between `tryGetU32` and `tryGetString`.
+- Added virtual destructor to `ModelMetaData` for correct polymorphic cleanup.
+- Simplified `REQUIRE_MODEL` test macro by removing the `do {} while(false)` wrapper to suppress compiler warnings.
+
+
 ## [0.10.0] - 2026-03-02
 
 ### Added
