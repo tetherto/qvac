@@ -114,11 +114,11 @@ async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapt
     t.comment(`[${modelVariant.id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`)
     t.comment(`[${modelVariant.id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
   } finally {
-    t.comment(`${tag} ${ts()} unloading inferModel`)
+    console.log(`${tag} ${ts()} unloading inferModel`)
     await inferModel.unload().catch(() => {})
-    t.comment(`${tag} ${ts()} closing inferLoader`)
+    console.log(`${tag} ${ts()} closing inferLoader`)
     await inferLoader.close().catch(() => {})
-    t.comment(`${tag} ${ts()} END`)
+    console.log(`${tag} ${ts()} END`)
   }
 }
 
@@ -281,16 +281,16 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       t.comment(`${tag} ${ts()} runLoraInference DONE`)
       t.pass(`[${modelVariant.id}] finetuning + LoRA inference completed`)
     } finally {
-      t.comment(`${tag} ${ts()} FINALLY block entered`)
+      console.log(`${tag} ${ts()} FINALLY block entered`)
       loggerHandle.release()
-      t.comment(`${tag} ${ts()} model.unload() START (finally)`)
+      console.log(`${tag} ${ts()} model.unload() START (finally)`)
       await model.unload().catch(() => {})
-      t.comment(`${tag} ${ts()} model.unload() DONE (finally)`)
-      t.comment(`${tag} ${ts()} loader.close() START (finally)`)
+      console.log(`${tag} ${ts()} model.unload() DONE (finally)`)
+      console.log(`${tag} ${ts()} loader.close() START (finally)`)
       await loader.close().catch(() => {})
-      t.comment(`${tag} ${ts()} loader.close() DONE (finally)`)
+      console.log(`${tag} ${ts()} loader.close() DONE (finally)`)
       cleanupCheckpoints(checkpointDir)
-      t.comment(`${tag} ${ts()} FINALLY block done`)
+      console.log(`${tag} ${ts()} FINALLY block done`)
     }
   }
 })
@@ -359,12 +359,12 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
 
     t.pass('cancel() stops finetuning and clears checkpoint')
   } finally {
-    t.comment(`[cancel][Flow] ${ts()} FINALLY block entered`)
+    console.log(`[cancel][Flow] ${ts()} FINALLY block entered`)
     loggerHandle.release()
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
-    t.comment(`[cancel][Flow] ${ts()} FINALLY block done`)
+    console.log(`[cancel][Flow] ${ts()} FINALLY block done`)
   }
 })
 
@@ -448,13 +448,13 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
 
     t.pass('Inference with session cache works after finetuning')
   } finally {
-    t.comment(`[session][Flow] ${ts()} FINALLY block entered`)
+    console.log(`[session][Flow] ${ts()} FINALLY block entered`)
     loggerHandle.release()
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
     try { fs.unlinkSync(sessionFile) } catch (_) {}
-    t.comment(`[session][Flow] ${ts()} FINALLY block done`)
+    console.log(`[session][Flow] ${ts()} FINALLY block done`)
   }
 })
 
