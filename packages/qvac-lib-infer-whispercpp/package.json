@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
