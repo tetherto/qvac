@@ -65,11 +65,10 @@ test('cancel() during inference causes response to settle within timeout', { tim
     // The response must settle (either complete or error) within the timeout.
     // If cancel() were still a no-op the full inference would run instead, but
     // we accept either outcome as long as it does not hang.
-    let settled = false
     try {
       await Promise.race([
-        response.await().then(() => { settled = true }),
-        new Promise(function (_, reject) {
+        response.await(),
+        new Promise(function (resolve, reject) {
           setTimeout(function () {
             reject(new Error('cancel: response did not settle within ' + CANCEL_SETTLE_MS + 'ms'))
           }, CANCEL_SETTLE_MS)

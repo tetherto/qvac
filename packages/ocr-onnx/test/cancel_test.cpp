@@ -143,13 +143,15 @@ TEST(CancelFlagReset, FlagIsResetBeforeEachJob) {
 
   std::atomic<bool> flag{true}; // simulate a previous cancel
 
-  auto runJob = [&](const std::atomic<bool>* cancelFlag, size_t iterations) {
+  // The reset is performed on the non-const atomic (production: cancelFlag_.store(false,...))
+  // then the read-only pointer is used for the cancellation checks inside the step functions.
+  auto runJob = [&](std::atomic<bool>* cancelFlag, size_t iterations) {
     // Simulates the reset at start of Pipeline::process
-    const_cast<std::atomic<bool>*>(cancelFlag)->store(
-        false, std::memory_order_relaxed);
+    cancelFlag->store(false, std::memory_order_relaxed);
 
+    const std::atomic<bool>* readOnlyFlag = cancelFlag;
     for (size_t i = 0; i < iterations; i += 1) {
-      if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+      if (readOnlyFlag != nullptr && readOnlyFlag->load(std::memory_order_relaxed)) {
         throw CancelledException{};
       }
     }
