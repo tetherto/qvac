@@ -1,14 +1,8 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-<<<<<<< HEAD
-  REPO dev-nid/qvac-ext-lib-llama.cpp
-  REF 48422770662adeb35524bc86c16059bc66c933ae
-  SHA512 89b7faad7a2d761cab4d6d50f50e01f647c5e05e3b97b32f1db689b2de8196a996d5f25acb6f229b6ef5a87eaac0dace569802b100917aedcab65cc5a597f3f9
-=======
   REPO tetherto/qvac-fabric-llm.cpp
-  REF ec8c19d8adb7bc7ad27260611ecc0f50ba9eead6
-  SHA512 480945e0b2ba7c848f0f83c95d8b96f96205ce73e1be566f4ffa4ae0ad30f7f2ea1f207e41c6117a8b9abc2b0c6c11d1bbeb84d73a030da695b3dd94e2f900cf
->>>>>>> 6cf83cff5aedc3035cd3a6fcf425e9d18749f209
+  REF fdc594cdac358e71a785c5898e4aed67e0460aba
+  SHA512 077be21c2b5731ea5498e9ab5c460b963f3ba84227b4989f38e04d3352591c4c0ac23edc95520ebe8a2693dcd81eb991b7dd446e8c4ae112d439eb9d5899a806
 )
 
 vcpkg_check_features(
