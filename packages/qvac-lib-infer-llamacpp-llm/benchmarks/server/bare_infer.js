@@ -54,6 +54,7 @@ async function main () {
     repeat_penalty: '1',
     seed: '42',
     tools: 'true',
+    'reverse-prompt': '\n',
     verbosity: '1'
   })
 
@@ -69,22 +70,14 @@ async function main () {
     const messages = [{ role: 'user', content: prompt }]
     const response = await model.run(messages)
 
-    let text = ''
-    let stopped = false
+    const chunks = []
     await response
-      .onUpdate(data => {
-        if (stopped) return
-        text += data
-        if (text.includes('\n')) {
-          text = text.split('\n')[0]
-          stopped = true
-          model.cancel()
-        }
-      })
+      .onUpdate(data => { chunks.push(data) })
       .await()
 
-    outputs.push(text.trim())
-    console.log(`  Output: ${text.trim()}`)
+    const output = chunks.join('').split('\n')[0].trim()
+    outputs.push(output)
+    console.log(`  Output: ${output}`)
   }
 
   fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2))

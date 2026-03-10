@@ -31,6 +31,7 @@ const AFRIQUEGEMMA_CONFIG = {
   repeat_penalty: '1',
   seed: '42',
   tools: 'true',
+  'reverse-prompt': '\n',
   verbosity: '2'
 }
 
@@ -61,21 +62,12 @@ const TRANSLATION_PROMPTS = {
   }
 }
 
-async function collectTranslation (response, model) {
-  let text = ''
-  let stopped = false
+async function collectTranslation (response) {
+  const chunks = []
   await response
-    .onUpdate(async data => {
-      if (stopped) return
-      text += data
-      if (text.includes('\n')) {
-        text = text.split('\n')[0]
-        stopped = true
-        await model.cancel()
-      }
-    })
+    .onUpdate(data => { chunks.push(data) })
     .await()
-  return text.trim()
+  return chunks.join('').split('\n')[0].trim()
 }
 
 async function collectResponse (response) {
@@ -140,7 +132,7 @@ test('AfriqueGemma: end-to-end African language translation', { timeout: 1_800_0
     const results = {}
     for (const [key, { prompt, langPair }] of Object.entries(TRANSLATION_PROMPTS)) {
       const response = await addon.run([{ role: 'user', content: prompt }])
-      const translation = await collectTranslation(response, addon)
+      const translation = await collectTranslation(response)
       results[key] = translation
 
       t.ok(translation.length > 0, `${langPair}: produced translation (${translation.length} chars)`)
@@ -163,9 +155,9 @@ test('AfriqueGemma: end-to-end African language translation', { timeout: 1_800_0
     console.log('\n--- Deterministic check ---')
     const { prompt: detPrompt } = TRANSLATION_PROMPTS['en-sw']
     const r1 = await addon.run([{ role: 'user', content: detPrompt }])
-    const out1 = await collectTranslation(r1, addon)
+    const out1 = await collectTranslation(r1)
     const r2 = await addon.run([{ role: 'user', content: detPrompt }])
-    const out2 = await collectTranslation(r2, addon)
+    const out2 = await collectTranslation(r2)
     t.is(out1, out2, `deterministic: "${out1}"`)
   } finally {
     await addon.unload().catch(() => {})
