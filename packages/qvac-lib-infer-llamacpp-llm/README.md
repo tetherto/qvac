@@ -34,9 +34,16 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
+
+**Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
+BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
+- **Adreno 800+** (e.g. Adreno 830): Vulkan is used instead of OpenCL.
+- **Adreno < 800** (e.g. Adreno 740): Falls back to CPU, as TQ kernels are not yet optimized for older Adreno OpenCL/Vulkan.
+- **Non-Adreno GPUs**: Normal GPU selection applies (no special behavior).
+
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
-- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- qvac-fabric-llm.cpp (≥7248.1.4): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
 

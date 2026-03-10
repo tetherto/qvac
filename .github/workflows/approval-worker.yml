@@ -27,7 +27,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const prNumber = context.payload.issue.number;
+            const prNumber = context.payload.issue?.number ?? context.payload.pull_request?.number;
+            if (!prNumber) {
+              core.setFailed('Could not determine pull request number from event payload');
+              return;
+            }
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,

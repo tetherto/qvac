@@ -21,8 +21,16 @@ const { modelPath, vadModelPath, audioPath } = getTestPaths()
 test('[low level] Real C++ addon bindings work correctly', async (t) => {
   await ensureWhisperModel(modelPath)
 
+  let resolveJobEnded
+  const jobEndedPromise = new Promise((resolve) => {
+    resolveJobEnded = resolve
+  })
+
   const onOutput = (addon, event, jobId, output, error) => {
     console.log(`Event: ${event}, JobId: ${jobId}, Output:`, output, 'Error:', error)
+    if (event === 'JobEnded') {
+      resolveJobEnded()
+    }
   }
 
   const config = {
@@ -82,10 +90,14 @@ test('[low level] Real C++ addon bindings work correctly', async (t) => {
     t.ok(newStatus, 'Should get updated status')
     console.log('Updated status:', newStatus)
 
-    // Test 6: Can destroy model
-    console.log('Destroying model...')
-    await model.destroyInstance()
-    t.pass('Model should be destroyed')
+    const sawJobEnded = await Promise.race([
+      jobEndedPromise.then(() => true),
+      new Promise(resolve => setTimeout(() => resolve(false), 5000))
+    ])
+    t.ok(sawJobEnded, 'JobEnded should be emitted for low-level run')
+
+    // destroyInstance() performs native cancellation/cleanup internally.
+    try { await model.destroyInstance() } catch {}
 
     console.log('All tests passed!')
   } catch (error) {
@@ -123,34 +135,38 @@ test('[low level] Real addon state transitions work correctly', async (t) => {
   try {
     model = new WhisperInterface(binding, config, onOutput)
 
-    // Test initial state
     let status = await model.status()
     t.ok(status, 'Should have initial status')
 
-    // Test activation
     await model.activate()
     status = await model.status()
-    t.ok(status, 'Should have status after activation')
+    t.ok(status === 'listening', 'Should be listening after activation')
 
-    // Test pause (if supported)
     try {
       await model.pause()
-      status = await model.status()
-      t.ok(status, 'Should have status after pause')
-    } catch (e) {
-      console.log('Pause not supported or failed:', e.message)
+      t.fail('Pause should be rejected in runJob mode')
+    } catch (error) {
+      t.ok(
+        error.message.includes('pause is not supported in runJob mode'),
+        'Pause should be explicitly unsupported'
+      )
     }
 
-    // Test stop
-    await model.stop()
+    try {
+      await model.stop()
+      t.fail('Stop should be rejected in runJob mode')
+    } catch (error) {
+      t.ok(
+        error.message.includes('stop is not supported in runJob mode'),
+        'Stop should be explicitly unsupported'
+      )
+    }
+
     status = await model.status()
-    t.ok(status, 'Should have status after stop')
+    t.ok(status === 'listening', 'Status should remain listening after unsupported stop')
 
     await model.destroyInstance()
     t.pass('State transitions test completed')
-  } catch (error) {
-    console.log('Expected error:', error.message)
-    t.pass('State transitions test works with expected errors')
   } finally {
     try { if (model) await model.destroyInstance() } catch {}
   }
