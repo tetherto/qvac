@@ -32,7 +32,7 @@ public:
 
   /**
    * @param input : detection output with polygons to recognize
-   * @param cancelFlag : optional pointer to an atomic cancel flag; throws CancelledException between batches
+   * @param cancelFlag : optional pointer to an atomic cancel flag; breaks early between batches and returns partial results
    */
   Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 

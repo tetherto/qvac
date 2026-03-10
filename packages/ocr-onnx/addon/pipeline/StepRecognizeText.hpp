@@ -57,7 +57,7 @@ public:
    *
    * @param input : bounding box output
    * @param cancelFlag : optional pointer to an atomic cancel flag; if set and flag becomes true,
-   *                     throws CancelledException between recognition batches
+   *                     breaks early between recognition batches and returns partial results
    * @return StepRecognizeText::Output
    */
   Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
@@ -130,7 +130,7 @@ private:
    *
    * For each sublist, selects the best result and extracts InferredText
    *
-   * @param cancelFlag : optional pointer to an atomic cancel flag; throws CancelledException between batches
+   * @param cancelFlag : optional pointer to an atomic cancel flag; breaks early between batches
    * @return std::vector<InferredText> : the extracted results
    */
   std::vector<InferredText> processImgList(const std::atomic<bool>* cancelFlag);

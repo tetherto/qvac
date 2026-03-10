@@ -344,11 +344,11 @@ StepDoctrRecognition::Output StepDoctrRecognition::process(Input input,
   // Process in batches
   for (size_t batchStart = 0; batchStart < input.polygons.size();
        batchStart += static_cast<size_t>(batchSize_)) {
-    // Check for cancellation between batches (granular check per text region group)
+    // Check for cancellation between batches — break and return partial results
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
            "[DoctrRecognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
-      throw CancelledException{};
+      break;
     }
 
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize_),

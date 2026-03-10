@@ -215,10 +215,10 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete in " + std::to_string(detectionTimeSec) + "s");
   ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
-  // Check for cancellation after detection
+  // Check for cancellation after detection — return empty results like LLM addon
   if (cancelFlag_.load(std::memory_order_relaxed)) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] Cancelled after detection step");
-    throw CancelledException{};
+    return {};
   }
 
   // Step 2: Bounding Box extraction
@@ -233,7 +233,7 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   // Check for cancellation before recognition (most time-consuming step)
   if (cancelFlag_.load(std::memory_order_relaxed)) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] Cancelled before recognition step");
-    throw CancelledException{};
+    return {};
   }
 
   // Step 3: Text recognition
@@ -409,7 +409,7 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
   // Check for cancellation after detection and before recognition
   if (cancelFlag_.load(std::memory_order_relaxed)) {
     QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] DocTR cancelled after detection step");
-    throw CancelledException{};
+    return {};
   }
 
   // Step 2: DocTR Recognition

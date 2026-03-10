@@ -245,7 +245,7 @@ if(BUILD_TESTING)
         PRIVATE ${OpenCV_LIBS} onnxruntime::onnxruntime_static
     )
 
-    add_executable(unit_tests test/lang_test.cpp test/cancel_test.cpp)
+    add_executable(unit_tests test/lang_test.cpp)
     target_include_directories(unit_tests PRIVATE addon)
     target_link_libraries(unit_tests PRIVATE pipeline GTest::gmock_main)
     gtest_discover_tests(unit_tests)

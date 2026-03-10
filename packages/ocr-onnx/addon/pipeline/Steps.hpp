@@ -11,7 +11,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <stdexcept>
 #include <variant>
 #include <tuple>
 
@@ -19,15 +18,6 @@
 #define CONSTRUCT_FROM_TUPLE(Class)                          template <class... Ts>                                   explicit Class(std::tuple<Ts...>&& tup)                      : Class(std::move(tup), std::index_sequence_for<Ts...>{})       { } /* NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved) */                                                                                                               template <class Tuple, size_t... Is>                     Class(Tuple&& tup, std::index_sequence<Is...>)               : Class(std::forward<decltype(std::get<Is>(tup))>(std::get<Is>(tup))...)     { } /* NOLINT(cppcoreguidelines-missing-std-forward,cppcoreguidelines-rvalue-reference-param-not-moved) */
 /* NOLINTEND(cppcoreguidelines-macro-usage) */
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
-
-/**
- * Thrown when pipeline processing is interrupted by a cancel() call.
- * Callers should treat this as a normal cancellation, not an error.
- */
-class CancelledException : public std::runtime_error {
-public:
-  CancelledException() : std::runtime_error("OCR pipeline cancelled") {}
-};
 
 struct PipelineContext {
   cv::Mat origImg;

@@ -915,11 +915,11 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
   ALOG_INFO(batchInfoMsg);
 
   for (size_t batchStart = 0; batchStart < allIndices.size(); batchStart += batchSize) {
-    // Check for cancellation between batches (granular check per text region group)
+    // Check for cancellation between batches — break and return partial results
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
            "[Recognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
-      throw CancelledException{};
+      break;
     }
 
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
@@ -986,7 +986,7 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
         if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
           QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
                "[Recognition] Cancelled during contrast retry at batch offset " + std::to_string(batchStart));
-          throw CancelledException{};
+          break;
         }
 
         size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
