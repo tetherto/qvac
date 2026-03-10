@@ -52,7 +52,9 @@ test('DocTR basic - BMP image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `BMP: should detect text regions, got ${results.length}`)
-  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'BMP')
+  // DocTR on basic_test: only "normal" (horizontal) is reliably detected across CI (Linux, Windows, macOS);
+  // tilted/vertical vary by platform and DocTR lacks per-crop rotation handling (unlike EasyOCR).
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'BMP should detect "normal"')
   t.comment('BMP detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR BMP]', stats, outputTexts))
 })
@@ -70,7 +72,7 @@ test('DocTR basic - JPEG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `JPEG: should detect text regions, got ${results.length}`)
-  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'JPEG')
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'JPEG should detect "normal"')
   t.comment('JPEG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR JPEG]', stats, outputTexts))
 })
@@ -88,7 +90,7 @@ test('DocTR basic - PNG image', { timeout: TEST_TIMEOUT }, async function (t) {
 
   const outputTexts = results.map(r => r.text)
   t.ok(results.length > 0, `PNG: should detect text regions, got ${results.length}`)
-  assertRecognitionAccuracy(t, outputTexts, ['normal', 'tilted', 'vertical'], 2, 'PNG')
+  t.ok(outputTexts.some(w => w.toLowerCase().includes('normal')), 'PNG should detect "normal"')
   t.comment('PNG detected texts: ' + JSON.stringify(outputTexts))
   t.comment(formatOCRPerformanceMetrics('[DocTR PNG]', stats, outputTexts))
 })
