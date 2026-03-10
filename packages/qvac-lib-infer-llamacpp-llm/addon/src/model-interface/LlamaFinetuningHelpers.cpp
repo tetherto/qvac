@@ -513,17 +513,17 @@ void optEpochCallback(
   const bool isFinalBatch = (ibatch == ibatchMax);
   const int64_t displayBatch = ibatch;
 
-  ggml_opt_epoch_callback_progress_bar(
-      train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
-  std::fflush(stdout);
+  bool suppress = checkpointState != nullptr &&
+                  checkpointState->suppressProgressBar;
+  if (!suppress) {
+    ggml_opt_epoch_callback_progress_bar(
+        train, optCtx, dataset, result, displayBatch, ibatchMax, tStartUs);
+    std::fflush(stdout);
+  }
 
   if (checkpointState != nullptr &&
       tryHandlePauseRequest(
           optCtx, checkpointState, train, ibatch, ibatchMax)) {
-    return;
-  }
-
-  if (!train) {
     return;
   }
 
@@ -532,28 +532,46 @@ void optEpochCallback(
     return;
   }
 
-  bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
-  bool shouldExitAlreadySet = state->shouldExit.load();
-  if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
-    return;
+  if (train) {
+    bool pauseCheckpointAlreadySaved = state->pauseCheckpointSaved.load();
+    bool shouldExitAlreadySet = state->shouldExit.load();
+    if (pauseCheckpointAlreadySaved && shouldExitAlreadySet) {
+      return;
+    }
+    state->globalStep += 1;
   }
-
-  state->globalStep += 1;
 
   if (state->progressCallback) {
     double loss = 0.0;
+    double lossUnc = 0.0;
     double accuracy = 0.0;
-    ggml_opt_result_loss(result, &loss, nullptr);
-    ggml_opt_result_accuracy(result, &accuracy, nullptr);
+    double accUnc = 0.0;
+    ggml_opt_result_loss(result, &loss, &lossUnc);
+    ggml_opt_result_accuracy(result, &accuracy, &accUnc);
+
+    const int64_t elapsedUs = ggml_time_us() - tStartUs;
+    int64_t etaUs = 0;
+    if (ibatch > 0) {
+      etaUs = elapsedUs * (ibatchMax - ibatch) / ibatch;
+    }
 
     FinetuneProgressStats progress;
+    progress.isTrain = train;
     progress.loss = loss;
+    progress.lossUncertainty = lossUnc;
     progress.accuracy = accuracy;
+    progress.accuracyUncertainty = accUnc;
     progress.globalSteps = state->globalStep;
     progress.currentEpoch = state->currentEpoch;
     progress.currentBatch = displayBatch;
     progress.totalBatches = ibatchMax;
+    progress.elapsedMs = elapsedUs / 1000;
+    progress.etaMs = etaUs / 1000;
     state->progressCallback(progress);
+  }
+
+  if (!train) {
+    return;
   }
 
   if (!state->finetuningStartedEmitted) {

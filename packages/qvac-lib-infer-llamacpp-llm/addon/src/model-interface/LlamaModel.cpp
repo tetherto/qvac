@@ -1127,7 +1127,7 @@ std::string LlamaModel::finetune(
     const int64_t sequenceLength =
         params.contextLength > 0
             ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
-            : std::max<int64_t>(ctxSize / 2, 8);
+            : std::max<int64_t>(ctxSize, 8);
     const int64_t microBatchSize =
         params.microBatchSize > 0 ? params.microBatchSize : 1;
 
@@ -1217,32 +1217,22 @@ std::string LlamaModel::finetune(
       }
     }
 
-    uint32_t targetModules = resumingFromPause
-                                 ? resumeMeta.targetModules
-                                 : parseLoraModules(params.loraModules);
     llama_adapter_lora* adapter = nullptr;
     if (resumingFromPause) {
-      llama_lora_training_params loraParams{
-          targetModules,
-          static_cast<int32_t>(resumeMeta.loraRank),
-          resumeMeta.loraAlpha,
-          0.0f,
-          static_cast<float>(params.loraInitStd),
-          params.loraSeed};
-      adapter = llama_lora_training_init(ctx, mdl, &loraParams);
+      const auto adapterPath = (pausePath / "model.gguf").string();
+      adapter = llama_adapter_lora_init(mdl, adapterPath.c_str());
       if (adapter == nullptr) {
         throw std::runtime_error(
-            "LoRA training initialization failed when resuming");
+            "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-
-      const auto adapterPath = pausePath / "model.gguf";
-      if (!std::filesystem::exists(adapterPath)) {
-        std::string errorMsg =
-            "Checkpoint adapter file not found: " + adapterPath.string();
-        QLOG_IF(Priority::ERROR, errorMsg);
-        throw std::runtime_error(errorMsg);
+      llama_clear_adapter_lora(ctx);
+      if (llama_set_adapter_lora(ctx, adapter, 1.0f) < 0) {
+        llama_adapter_lora_free(adapter);
+        throw std::runtime_error(
+            "Failed to attach resumed LoRA adapter to context");
       }
     } else {
+      uint32_t targetModules = parseLoraModules(params.loraModules);
       initializeLoraAdapter(params, targetModules, adapter);
     }
     std::unique_ptr<llama_adapter_lora, decltype(&llama_adapter_lora_free)>
@@ -1294,6 +1284,9 @@ std::string LlamaModel::finetune(
     if (checkpointState) {
       checkpointState->pauseWaitDone.store(false);
       checkpointState->progressCallback = progressCallback;
+      if (progressCallback) {
+        checkpointState->suppressProgressBar = true;
+      }
       setCurrentCheckpointStateShared(checkpointState);
       setCurrentCheckpointState(checkpointState.get());
     }
@@ -1491,7 +1484,7 @@ ggml_opt_dataset_t LlamaModel::prepareDatasetFromPath(
   const int64_t sequenceLength =
       params.contextLength > 0
           ? std::clamp<int64_t>(params.contextLength, int64_t{8}, ctxSize)
-          : std::max<int64_t>(ctxSize / 2, 8);
+          : std::max<int64_t>(ctxSize, 8);
 
   const int64_t datasetStride =
       std::max<int64_t>(sequenceLength / 2, int64_t{1});
@@ -1763,9 +1756,13 @@ void LlamaModel::executeTrainingLoop(
                                  : ggml_opt_epoch_callback_progress_bar;
 
   double lastTrainLoss = 0.0;
+  double lastTrainLossUnc = 0.0;
   double lastValLoss = 0.0;
+  double lastValLossUnc = 0.0;
   double lastTrainAccuracy = 0.0;
+  double lastTrainAccuracyUnc = 0.0;
   double lastValAccuracy = 0.0;
+  double lastValAccuracyUnc = 0.0;
   int32_t completedEpochs = static_cast<int32_t>(startEpoch);
 
   for (uint32_t epoch = startEpoch; epoch < params.numberOfEpochs; ++epoch) {
@@ -1820,16 +1817,16 @@ void LlamaModel::executeTrainingLoop(
       std::cout.flush();
     }
 
-    ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, nullptr);
-    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, nullptr);
+    ggml_opt_result_loss(trainResult.get(), &lastTrainLoss, &lastTrainLossUnc);
+    ggml_opt_result_accuracy(trainResult.get(), &lastTrainAccuracy, &lastTrainAccuracyUnc);
 
     if (checkpointState && checkpointState->shouldExit.load()) {
       break;
     }
 
     if (hasEval) {
-      ggml_opt_result_loss(evalResult.get(), &lastValLoss, nullptr);
-      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, nullptr);
+      ggml_opt_result_loss(evalResult.get(), &lastValLoss, &lastValLossUnc);
+      ggml_opt_result_accuracy(evalResult.get(), &lastValAccuracy, &lastValAccuracyUnc);
     }
 
     completedEpochs = static_cast<int32_t>(epoch + 1);
@@ -1849,9 +1846,13 @@ void LlamaModel::executeTrainingLoop(
 
   if (outStats) {
     outStats->trainLoss = lastTrainLoss;
+    outStats->trainLossUncertainty = lastTrainLossUnc;
     outStats->valLoss = lastValLoss;
+    outStats->valLossUncertainty = lastValLossUnc;
     outStats->trainAccuracy = lastTrainAccuracy;
+    outStats->trainAccuracyUncertainty = lastTrainAccuracyUnc;
     outStats->valAccuracy = lastValAccuracy;
+    outStats->valAccuracyUncertainty = lastValAccuracyUnc;
     outStats->learningRate = static_cast<double>(scheduler.lastLr);
     outStats->epochsCompleted = completedEpochs;
     outStats->globalSteps = checkpointState ? checkpointState->globalStep : 0;

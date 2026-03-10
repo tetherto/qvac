@@ -54,18 +54,22 @@ function sleep (ms) {
 
 function assertFiniteMetricIfPresent (t, stats, key, modelId) {
   const value = stats?.[key]
-  if (value === undefined) return
+  if (value == null || (typeof value === 'number' && isNaN(value))) return
   t.is(typeof value, 'number', `[${modelId}] ${key} should be a number when present`)
-  t.ok(Number.isFinite(value), `[${modelId}] ${key} should be finite (not NaN/Inf), got: ${value}`)
+  t.ok(Number.isFinite(value), `[${modelId}] ${key} should be finite (not Inf), got: ${value}`)
 }
 
 function assertLossAndAccuracyAreFinite (t, result, modelId) {
   const stats = result?.stats
   if (!stats || typeof stats !== 'object') return
   assertFiniteMetricIfPresent(t, stats, 'train_loss', modelId)
+  assertFiniteMetricIfPresent(t, stats, 'train_loss_uncertainty', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_loss', modelId)
+  assertFiniteMetricIfPresent(t, stats, 'val_loss_uncertainty', modelId)
   assertFiniteMetricIfPresent(t, stats, 'train_accuracy', modelId)
+  assertFiniteMetricIfPresent(t, stats, 'train_accuracy_uncertainty', modelId)
   assertFiniteMetricIfPresent(t, stats, 'val_accuracy', modelId)
+  assertFiniteMetricIfPresent(t, stats, 'val_accuracy_uncertainty', modelId)
 }
 
 async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapterPath) {
@@ -156,7 +160,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         progressCount++
         t.ok(!isNaN(stats.loss), `[${modelVariant.id}] progress loss must not be NaN (step ${stats.global_steps})`)
         t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] progress accuracy must not be NaN (step ${stats.global_steps})`)
-        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
+        if (!isNaN(stats.loss_uncertainty)) t.ok(Number.isFinite(stats.loss_uncertainty), `[${modelVariant.id}] progress loss_uncertainty should be finite (step ${stats.global_steps})`)
+        if (!isNaN(stats.accuracy_uncertainty)) t.ok(Number.isFinite(stats.accuracy_uncertainty), `[${modelVariant.id}] progress accuracy_uncertainty should be finite (step ${stats.global_steps})`)
+        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
       await sleep(15000)
 
@@ -189,7 +195,9 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         progressCount++
         t.ok(!isNaN(stats.loss), `[${modelVariant.id}] resume progress loss must not be NaN (step ${stats.global_steps})`)
         t.ok(!isNaN(stats.accuracy), `[${modelVariant.id}] resume progress accuracy must not be NaN (step ${stats.global_steps})`)
-        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
+        if (!isNaN(stats.loss_uncertainty)) t.ok(Number.isFinite(stats.loss_uncertainty), `[${modelVariant.id}] resume progress loss_uncertainty should be finite (step ${stats.global_steps})`)
+        if (!isNaN(stats.accuracy_uncertainty)) t.ok(Number.isFinite(stats.accuracy_uncertainty), `[${modelVariant.id}] resume progress accuracy_uncertainty should be finite (step ${stats.global_steps})`)
+        t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
       const result = await resumeHandle.await()
 

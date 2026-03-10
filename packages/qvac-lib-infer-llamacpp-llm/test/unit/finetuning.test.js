@@ -516,9 +516,13 @@ test('finetune() returns terminal stats when provided', async (t) => {
   const model = createModelWithMockAddon(opts)
   const stats = {
     train_loss: 1.25,
+    train_loss_uncertainty: 0.05,
     val_loss: 1.1,
+    val_loss_uncertainty: 0.08,
     train_accuracy: 0.78,
+    train_accuracy_uncertainty: 0.03,
     val_accuracy: 0.74,
+    val_accuracy_uncertainty: 0.04,
     learning_rate: 0.00001,
     global_steps: 320,
     epochs_completed: 2
