@@ -25,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile integration tests hardened with explicit `unloadWeights()` and `destroyInstance()` cleanup in `finally` blocks
 
 ### Fixed
-- Sortformer diarization output now slices audio by speaker timestamps instead of guessing word assignment
 - Tokenizer vocabulary validation rejects empty vocab after parsing
 - JobEnded/Output race condition in C++ job tracker
 
