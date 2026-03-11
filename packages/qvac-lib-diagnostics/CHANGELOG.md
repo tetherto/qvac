@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Initial release of `@qvac/diagnostics`
 - `DiagnosticReport` schema defining the structure of a diagnostic report
 - Contributor pattern API: `registerAddon` function accepting a `getDiagnostics` callback for per-addon diagnostic contributions
 - Environment and hardware auto-detection via `bare-os` (platform, architecture, OS release)
