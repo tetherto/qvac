@@ -549,7 +549,7 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 Diffusion models consist of multiple large files (diffusion model, text encoders, VAE). The addon needs these files to create the native `sd_ctx_t` context.
 
-Unlike the LLM addon which historically used WeightsProvider for streaming from Hyperdrive, diffusion loads files directly from disk paths — no loader abstraction is involved.
+Unlike the LLM addon which historically used WeightsProvider for streaming weights, diffusion loads files directly from disk paths — no loader abstraction is involved.
 
 ### Decision
 
