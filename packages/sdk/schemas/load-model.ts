@@ -8,15 +8,14 @@ import {
 import {
   whisperConfigSchema,
   parakeetConfigSchema,
-  parakeetModelTypeEnumSchema,
+  type WhisperConfig,
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import {
   ttsConfigSchema,
-  ttsChatterboxRequestConfigSchema,
-  ttsSupertonicRequestConfigSchema,
-  ttsRequestConfigSchema,
+  ttsChatterboxConfigSchema,
+  ttsSupertonicConfigSchema,
 } from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
@@ -44,72 +43,75 @@ const builtInModelTypes = new Set([
 import type { Logger } from "@/logging";
 import { reloadConfigRequestSchema } from "./reload-config";
 
-const loadModelOptionsBaseSchema = z.union([
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: llmModelTypeSchema,
-    modelConfig: llmConfigBaseSchema.strict().optional(),
-    seed: z.boolean().optional(),
-    projectionModelSrc: modelSrcInputSchema.optional(),
-    delegate: delegateSchema,
-    toolFormat: z.enum(["json", "xml"]).default("json"),
-  }),
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: whisperModelTypeSchema,
-    modelConfig: whisperConfigSchema.partial().strict().optional(),
-    seed: z.boolean().optional(),
-    vadModelSrc: modelSrcInputSchema.optional(),
-    delegate: delegateSchema,
-  }),
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: parakeetModelTypeSchema,
-    modelConfig: parakeetConfigSchema,
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
-  }),
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: embeddingsModelTypeSchema,
-    modelConfig: embedConfigBaseSchema.strict().optional(),
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
-  }),
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: nmtModelTypeSchema,
-    modelConfig: nmtConfigSchema,
-    srcVocabSrc: modelSrcInputSchema.optional(),
-    dstVocabSrc: modelSrcInputSchema.optional(),
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
-  }),
-  // TTS (supports both Chatterbox and Supertonic via ttsEngine discriminator)
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: ttsModelTypeSchema,
-    modelConfig: ttsConfigSchema,
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
-  }),
-  z.object({
-    modelSrc: modelSrcInputSchema,
-    modelType: ocrModelTypeSchema,
-    modelConfig: ocrConfigSchema.partial().strict().optional(),
-    detectorModelSrc: modelSrcInputSchema.optional(),
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
-  }),
+const loadModelCommonFields = {
+  modelSrc: modelSrcInputSchema,
+  seed: z.boolean().optional(),
+  delegate: delegateSchema,
+};
+
+const loadModelRequestCommonFields = {
+  ...loadModelCommonFields,
+  onProgress: z.unknown().optional(),
+  withProgress: z.boolean().optional(),
+};
+
+export const loadModelOptionsBaseSchema = z.union([
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: llmModelTypeSchema,
+      modelConfig: llmConfigBaseSchema.strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: whisperModelTypeSchema,
+      modelConfig: whisperConfigSchema.partial().strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: parakeetModelTypeSchema,
+      modelConfig: parakeetConfigSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: embeddingsModelTypeSchema,
+      modelConfig: embedConfigBaseSchema.strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: nmtModelTypeSchema,
+      modelConfig: nmtConfigSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: ttsModelTypeSchema,
+      modelConfig: ttsConfigSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: ocrModelTypeSchema,
+      modelConfig: ocrConfigSchema.partial().strict().optional(),
+    })
+    .strict(),
   // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
   z.object({
-    modelSrc: modelSrcInputSchema,
+    ...loadModelCommonFields,
     modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
       message: "Built-in model types must use their specific schema",
     }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
-    seed: z.boolean().optional(),
-    delegate: delegateSchema,
   }),
 ]);
 
@@ -120,19 +122,14 @@ export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform(
   }),
 );
 
-export const loadModelOptionsToRequestSchema = z.union([
+const loadModelOptionsToRequestBaseSchema = z.union([
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: llmModelTypeSchema,
       modelConfig: llmConfigBaseSchema.strict().optional(),
-      seed: z.boolean().optional(),
-      projectionModelSrc: modelSrcInputSchema.optional(),
-      delegate: delegateSchema,
-      toolFormat: z.enum(["json", "xml"]).default("json"),
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.llamacppCompletion,
@@ -142,86 +139,48 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      projectionModelSrc: data.projectionModelSrc
-        ? modelInputToSrcSchema.parse(data.projectionModelSrc)
-        : undefined,
     })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: whisperModelTypeSchema,
       modelConfig: whisperConfigSchema.partial().strict().optional(),
-      seed: z.boolean().optional(),
-      vadModelSrc: modelSrcInputSchema.optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.whispercppTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<
-        typeof whisperConfigSchema
-      >,
+      modelConfig: (data.modelConfig ?? {}) as WhisperConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      vadModelSrc: data.vadModelSrc
-        ? modelInputToSrcSchema.parse(data.vadModelSrc)
-        : undefined,
     })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: parakeetModelTypeSchema,
       modelConfig: parakeetConfigSchema,
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.parakeetTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: {
-        modelType: data.modelConfig.modelType,
-        maxThreads: data.modelConfig.maxThreads,
-        useGPU: data.modelConfig.useGPU,
-        sampleRate: data.modelConfig.sampleRate,
-        channels: data.modelConfig.channels,
-        captionEnabled: data.modelConfig.captionEnabled,
-        timestampsEnabled: data.modelConfig.timestampsEnabled,
-        parakeetEncoderDataSrc: data.modelConfig.parakeetEncoderDataSrc
-          ? modelInputToSrcSchema.parse(data.modelConfig.parakeetEncoderDataSrc)
-          : undefined,
-        parakeetDecoderSrc: modelInputToSrcSchema.parse(
-          data.modelConfig.parakeetDecoderSrc,
-        ),
-        parakeetVocabSrc: modelInputToSrcSchema.parse(
-          data.modelConfig.parakeetVocabSrc,
-        ),
-        parakeetPreprocessorSrc: modelInputToSrcSchema.parse(
-          data.modelConfig.parakeetPreprocessorSrc,
-        ),
-      },
+      modelConfig: data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
     })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: embeddingsModelTypeSchema,
       modelConfig: embedConfigBaseSchema.strict().optional(),
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.llamacppEmbedding,
@@ -234,120 +193,45 @@ export const loadModelOptionsToRequestSchema = z.union([
     })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: nmtModelTypeSchema,
       modelConfig: nmtConfigSchema,
-      srcVocabSrc: modelSrcInputSchema.optional(),
-      dstVocabSrc: modelSrcInputSchema.optional(),
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: data.modelConfig,
-      srcVocabSrc: data.srcVocabSrc
-        ? modelInputToSrcSchema.parse(data.srcVocabSrc)
-        : undefined,
-      dstVocabSrc: data.dstVocabSrc
-        ? modelInputToSrcSchema.parse(data.dstVocabSrc)
-        : undefined,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
     })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: ttsModelTypeSchema,
       modelConfig: ttsConfigSchema,
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
-    .transform((data) => {
-      // Keep modelConfig intact, just convert ModelSrcInput values to strings
-      if (data.modelConfig.ttsEngine === "chatterbox") {
-        return {
-          type: "loadModel" as const,
-          modelType: ModelType.onnxTts,
-          modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
-          modelName: modelInputToNameSchema.parse(data.modelSrc),
-          modelConfig: {
-            ttsEngine: "chatterbox" as const,
-            language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsTokenizerSrc,
-            ),
-            ttsSpeechEncoderSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsSpeechEncoderSrc,
-            ),
-            ttsEmbedTokensSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsEmbedTokensSrc,
-            ),
-            ttsConditionalDecoderSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsConditionalDecoderSrc,
-            ),
-            ttsLanguageModelSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsLanguageModelSrc,
-            ),
-            referenceAudioSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.referenceAudioSrc,
-            ),
-          },
-          seed: data.seed ?? false,
-          withProgress: data.withProgress ?? !!data.onProgress,
-          delegate: data.delegate,
-        };
-      } else {
-        return {
-          type: "loadModel" as const,
-          modelType: ModelType.onnxTts,
-          modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
-          modelName: modelInputToNameSchema.parse(data.modelSrc),
-          modelConfig: {
-            ttsEngine: "supertonic" as const,
-            language: data.modelConfig.language,
-            ttsTokenizerSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsTokenizerSrc,
-            ),
-            ttsTextEncoderSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsTextEncoderSrc,
-            ),
-            ttsLatentDenoiserSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsLatentDenoiserSrc,
-            ),
-            ttsVoiceDecoderSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsVoiceDecoderSrc,
-            ),
-            ttsVoiceSrc: modelInputToSrcSchema.parse(
-              data.modelConfig.ttsVoiceSrc,
-            ),
-            ttsSpeed: data.modelConfig.ttsSpeed,
-            ttsNumInferenceSteps: data.modelConfig.ttsNumInferenceSteps,
-          },
-          seed: data.seed ?? false,
-          withProgress: data.withProgress ?? !!data.onProgress,
-          delegate: data.delegate,
-        };
-      }
-    }),
+    .strict()
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.onnxTts,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+    })),
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: ocrModelTypeSchema,
       modelConfig: ocrConfigSchema.partial().strict().optional(),
-      detectorModelSrc: modelSrcInputSchema.optional(),
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
+    .strict()
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.onnxOcr,
@@ -357,22 +241,14 @@ export const loadModelOptionsToRequestSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
-      detectorModelSrc: data.detectorModelSrc
-        ? modelInputToSrcSchema.parse(data.detectorModelSrc)
-        : undefined,
     })),
-  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
   z
     .object({
-      modelSrc: modelSrcInputSchema,
+      ...loadModelRequestCommonFields,
       modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
         message: "Built-in model types must use their specific schema",
       }),
       modelConfig: z.record(z.string(), z.unknown()).optional(),
-      seed: z.boolean().optional(),
-      delegate: delegateSchema,
-      onProgress: z.unknown().optional(),
-      withProgress: z.boolean().optional(),
     })
     .transform((data) => ({
       type: "loadModel" as const,
@@ -386,13 +262,13 @@ export const loadModelOptionsToRequestSchema = z.union([
     })),
 ]);
 
+export const loadModelOptionsToRequestSchema =
+  loadModelOptionsToRequestBaseSchema;
+
 const commonModelConfigSchema = z.object({
   type: z.literal("loadModel"),
   modelSrc: z.string(),
   modelName: z.string().optional(),
-  projectionModelSrc: z.string().optional(),
-  vadModelSrc: z.string().optional(),
-  detectorModelSrc: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
   delegate: delegateSchema,
@@ -401,65 +277,78 @@ const commonModelConfigSchema = z.object({
 // Request schemas for each model type (use canonical types since transforms normalize)
 // Use base schemas (no defaults) for client-side validation.
 // Server applies device defaults, then full schema defaults.
-export const loadLlmModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.llamacppCompletion),
-  modelConfig: llmConfigBaseSchema,
-});
+export const loadLlmModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppCompletion),
+    modelConfig: llmConfigBaseSchema,
+  })
+  .strict();
 
-export const loadWhisperModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.whispercppTranscription),
-  modelConfig: whisperConfigSchema, // whisper has no defaults
-});
+export const loadWhisperModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.whispercppTranscription),
+    modelConfig: whisperConfigSchema,
+  })
+  .strict();
 
-export const loadParakeetModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.parakeetTranscription),
-  modelConfig: z
-    .object({ modelType: parakeetModelTypeEnumSchema })
-    .passthrough(),
-});
+export const loadParakeetModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.parakeetTranscription),
+    modelConfig: parakeetConfigSchema,
+  })
+  .strict();
 
-export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.llamacppEmbedding),
-  modelConfig: embedConfigBaseSchema,
-});
+export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppEmbedding),
+    modelConfig: embedConfigBaseSchema,
+  })
+  .strict();
 
-export const loadNmtModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.nmtcppTranslation),
-  modelConfig: nmtConfigSchema, // nmt has no defaults
-  srcVocabSrc: z.string().optional(),
-  dstVocabSrc: z.string().optional(),
-});
+export const loadNmtModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.nmtcppTranslation),
+    modelConfig: nmtConfigSchema,
+  })
+  .strict();
 
-export const loadTtsChatterboxModelRequestSchema =
-  commonModelConfigSchema.extend({
+export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema
+  .extend({
     modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsChatterboxRequestConfigSchema,
-  });
+    modelConfig: ttsChatterboxConfigSchema,
+  })
+  .strict();
 
-export const loadTtsSupertonicModelRequestSchema =
-  commonModelConfigSchema.extend({
+export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema
+  .extend({
     modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsSupertonicRequestConfigSchema,
-  });
+    modelConfig: ttsSupertonicConfigSchema,
+  })
+  .strict();
 
-export const loadTtsModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxTts),
-  modelConfig: ttsRequestConfigSchema,
-});
+export const loadTtsModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.onnxTts),
+    modelConfig: ttsConfigSchema,
+  })
+  .strict();
 
-export const loadOcrModelRequestSchema = commonModelConfigSchema.extend({
-  modelType: z.literal(ModelType.onnxOcr),
-  modelConfig: ocrConfigSchema, // ocr has no defaults
-});
+export const loadOcrModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.onnxOcr),
+    modelConfig: ocrConfigSchema,
+  })
+  .strict();
 
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
-export const loadCustomPluginModelRequestSchema =
-  commonModelConfigSchema.extend({
+export const loadCustomPluginModelRequestSchema = commonModelConfigSchema.extend(
+  {
     modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
       message: "Built-in model types must use their specific schema",
     }),
     modelConfig: z.record(z.string(), z.unknown()).optional(),
-  });
+  },
+);
 
 // Union of all load model request types (using z.union since each modelType accepts multiple values)
 export const loadModelSrcRequestSchema = z
@@ -553,9 +442,7 @@ export const loadModelServerParamsSchema = z.object({
   modelId: z.string(),
   modelPath: z.string(),
   options: loadModelSrcRequestSchema,
-  projectionModelPath: z.string().optional(),
-  vadModelPath: z.string().optional(),
-  detectorModelPath: z.string().optional(),
+  artifacts: z.record(z.string(), z.string()).optional(),
   modelName: z.string().optional(),
 });
 

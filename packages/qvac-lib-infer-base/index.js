@@ -1,5 +1,8 @@
 'use strict'
 
+let diagnostics
+try { diagnostics = require('@qvac/diagnostics') } catch (e) { diagnostics = null }
+
 const QvacLogger = require('@qvac/logging')
 const { platform } = require('bare-os')
 const path = require('bare-path')
@@ -63,6 +66,14 @@ class BaseInference {
 
     await this._load(...args)
     this.state.configLoaded = true
+
+    if (diagnostics && this._packageName) {
+      diagnostics.registerAddon({
+        name: this._packageName,
+        version: this._packageVersion || 'unknown',
+        getDiagnostics: () => this._getDiagnosticsJSON ? this._getDiagnosticsJSON() : '{}'
+      })
+    }
   }
 
   async _load () {
@@ -296,6 +307,10 @@ class BaseInference {
     this.state.configLoaded = false
     this.state.weightsLoaded = false
     this.state.destroyed = true
+
+    if (diagnostics && this._packageName) {
+      diagnostics.unregisterAddon(this._packageName)
+    }
   }
 
   /**

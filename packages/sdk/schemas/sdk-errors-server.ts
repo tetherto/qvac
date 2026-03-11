@@ -99,6 +99,8 @@ export const SDK_SERVER_ERROR_CODES = {
   PLUGIN_HANDLER_TYPE_MISMATCH: 53855,
   PLUGIN_LOGGING_INVALID: 53856,
   PLUGIN_DEFINITION_INVALID: 53857,
+  PLUGIN_MODEL_TYPE_RESERVED: 53858,
+  PLUGIN_LOAD_CONFIG_VALIDATION_FAILED: 53859,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -492,6 +494,16 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "PLUGIN_DEFINITION_INVALID",
     message: (modelType: string, details: string) =>
       `Plugin definition invalid for "${modelType}": ${details}`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED]: {
+    name: "PLUGIN_MODEL_TYPE_RESERVED",
+    message: (modelType: string) =>
+      `modelType "${modelType}" is reserved for built-in plugins`,
+  },
+  [SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED]: {
+    name: "PLUGIN_LOAD_CONFIG_VALIDATION_FAILED",
+    message: (modelType: string, details: string) =>
+      `modelConfig validation failed for "${modelType}": ${details}`,
   },
 
   // Security (53,900-53,949)
