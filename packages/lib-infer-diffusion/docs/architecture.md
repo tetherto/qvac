@@ -428,7 +428,7 @@ sequenceDiagram
 
 **Thread Safety Rules:**
 
-1. ✅ Call addon methods from any thread (runJob, cancel, activate, loadWeights, destroyInstance)
+1. ✅ Call addon methods from any thread (runJob, cancel, activate, destroyInstance)
 2. ✅ Processing thread calls model methods
 3. ❌ Don't call JS functions from C++ thread (use uv_async_send)
 4. ❌ Don't call model methods from JS thread
