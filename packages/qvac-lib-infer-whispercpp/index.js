@@ -7,6 +7,7 @@ const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvide
 
 const { WhisperInterface } = require('./whisper')
 const { checkConfig } = require('./configChecker')
+const { QvacErrorAddonWhisper, ERR_CODES } = require('./lib/error')
 
 const END_OF_INPUT = 'end of job'
 
@@ -34,6 +35,7 @@ class TranscriptionWhispercpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
 
     this.params = config.whisperConfig
+    this._hasActiveResponse = false
 
     this.logger.debug('TranscriptionWhispercpp constructor called', {
       params: this.params,
@@ -112,14 +114,28 @@ class TranscriptionWhispercpp extends BaseInference {
   }
 
   async _runInternal (audioStream) {
+    if (this.exclusiveRun && this._hasActiveResponse) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.JOB_ALREADY_RUNNING
+      })
+    }
+
     const jobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
     })
 
     const response = this._createResponse(jobId)
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch(() => {})
+    response.await = () => finalized
 
-    this._handleAudioStream(audioStream).catch(response.failed.bind(response))
+    const normalizedAudioStream = this._normalizeAudioStream(audioStream)
+    this._handleAudioStream(normalizedAudioStream).catch((error) => {
+      response.failed(error)
+      this._deleteJobMapping(jobId)
+    })
     return response
   }
 
@@ -136,6 +152,36 @@ class TranscriptionWhispercpp extends BaseInference {
     await this.addon.append({ type: END_OF_INPUT })
   }
 
+  _normalizeAudioStream (audioStream) {
+    if (!audioStream) {
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.INVALID_AUDIO_INPUT,
+        adds: 'audioStream is required'
+      })
+    }
+
+    if (typeof audioStream[Symbol.asyncIterator] === 'function') {
+      return audioStream
+    }
+
+    if (audioStream instanceof Uint8Array) {
+      return [audioStream]
+    }
+
+    if (Array.isArray(audioStream)) {
+      return audioStream
+    }
+
+    if (typeof audioStream[Symbol.iterator] === 'function') {
+      return [Uint8Array.from(audioStream)]
+    }
+
+    throw new QvacErrorAddonWhisper({
+      code: ERR_CODES.INVALID_AUDIO_INPUT,
+      adds: 'Unsupported audio input. Expected stream, Uint8Array, or chunk array.'
+    })
+  }
+
   /**
    * Reload the model with new configuration parameters.
    * Useful for changing settings like language without destroying the instance.
@@ -145,52 +191,56 @@ class TranscriptionWhispercpp extends BaseInference {
    * @param {string} [newConfig.audio_format] - Audio format (defaults to 's16le')
    */
   async reload (newConfig = {}) {
-    this.logger.debug('Reloading addon with new configuration', newConfig)
+    return await this._withExclusiveRun(async () => {
+      this.logger.debug('Reloading addon with new configuration', newConfig)
 
-    // Merge new config with existing params
-    if (newConfig.whisperConfig) {
-      this.params = { ...this.params, ...newConfig.whisperConfig }
-    }
+      // Merge new config with existing params
+      if (newConfig.whisperConfig) {
+        this.params = { ...this.params, ...newConfig.whisperConfig }
+      }
 
-    const whisperConfig = {
-      ...this.params,
-      ...newConfig.whisperConfig,
-      language: newConfig.whisperConfig?.language || this.params.language || 'en',
-      duration_ms: newConfig.whisperConfig?.duration_ms ?? (this.params.max_seconds ? this.params.max_seconds * 1000 : 0),
-      temperature: newConfig.whisperConfig?.temperature ?? this.params.temperature ?? 0.0,
-      suppress_nst: newConfig.whisperConfig?.suppress_nst ?? this.params.suppress_nst ?? true,
-      n_threads: newConfig.whisperConfig?.n_threads ?? this.params.n_threads ?? 0
-    }
+      const whisperConfig = {
+        ...this.params,
+        ...newConfig.whisperConfig,
+        language: newConfig.whisperConfig?.language || this.params.language || 'en',
+        duration_ms: newConfig.whisperConfig?.duration_ms ?? (this.params.max_seconds ? this.params.max_seconds * 1000 : 0),
+        temperature: newConfig.whisperConfig?.temperature ?? this.params.temperature ?? 0.0,
+        suppress_nst: newConfig.whisperConfig?.suppress_nst ?? this.params.suppress_nst ?? true,
+        n_threads: newConfig.whisperConfig?.n_threads ?? this.params.n_threads ?? 0
+      }
 
-    // Remove SDK-level params that aren't valid for C++ addon
-    delete whisperConfig.audio_format
-    delete whisperConfig.contextParams
-    delete whisperConfig.miscConfig
-    delete whisperConfig.vadModelPath
-    delete whisperConfig.vad_params
+      // Remove SDK-level params that aren't valid for C++ addon
+      delete whisperConfig.audio_format
+      delete whisperConfig.contextParams
+      delete whisperConfig.miscConfig
+      delete whisperConfig.vadModelPath
+      delete whisperConfig.vad_params
 
-    // VAD model configuration
-    const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
-    if (vadModelPath) {
-      whisperConfig.vad_model_path = vadModelPath
-      whisperConfig.vadParams = newConfig.whisperConfig?.vad_params || this.params.vad_params || { threshold: 0.6 }
-    }
+      // VAD model configuration
+      const vadModelPath = this._config.vadModelPath || this._getVadModelFilePath()
+      if (vadModelPath) {
+        whisperConfig.vad_model_path = vadModelPath
+        whisperConfig.vadParams = newConfig.whisperConfig?.vad_params || this.params.vad_params || { threshold: 0.6 }
+      }
 
-    const configurationParams = {
-      contextParams: {
-        model: this._config.path || this._getModelFilePath()
-      },
-      whisperConfig,
-      miscConfig: newConfig.miscConfig || {
-        caption_enabled: false
-      },
-      audio_format: newConfig.audio_format || this.params.audio_format || 's16le'
-    }
+      const configurationParams = {
+        contextParams: {
+          model: this._config.path || this._getModelFilePath()
+        },
+        whisperConfig,
+        miscConfig: newConfig.miscConfig || {
+          caption_enabled: false
+        },
+        audio_format: newConfig.audio_format || this.params.audio_format || 's16le'
+      }
 
-    _checkParamsExists(configurationParams)
-    await this.addon.reload(configurationParams)
-    await this.addon.activate()
-    this.logger.debug('Addon reloaded and activated successfully')
+      _checkParamsExists(configurationParams)
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was reloaded')
+      await this.addon.reload(configurationParams)
+      await this.addon.activate()
+      this.logger.debug('Addon reloaded and activated successfully')
+    })
   }
 
   async _downloadWeights (reportProgressCallback, opts) {
@@ -239,10 +289,42 @@ class TranscriptionWhispercpp extends BaseInference {
    * This ensures the process can exit cleanly by closing the uv_async handle
    */
   async unload () {
-    await super.unload()
-    if (this.addon) {
-      await this.addon.destroyInstance()
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was unloaded')
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.state.configLoaded = false
+      this.state.weightsLoaded = false
+    })
+  }
+
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
     }
+  }
+
+  async destroy () {
+    return await this._withExclusiveRun(async () => {
+      await this.cancel()
+      this._failAndClearActiveResponse('Model was destroyed')
+      if (this.addon) {
+        await this.addon.destroyInstance()
+      }
+      this.state.configLoaded = false
+      this.state.weightsLoaded = false
+      this.state.destroyed = true
+    })
+  }
+
+  _failAndClearActiveResponse (reason) {
+    for (const [jobId, response] of this._jobToResponse.entries()) {
+      response.failed(new Error(reason))
+      this._deleteJobMapping(jobId)
+    }
+    this._hasActiveResponse = false
   }
 
   validateModelFiles () {

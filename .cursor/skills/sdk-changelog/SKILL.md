@@ -72,7 +72,7 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 
 Additionally:
 
-- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest)
+- `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
 
 ## Tag Format
 
