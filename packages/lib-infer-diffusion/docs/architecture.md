@@ -540,7 +540,7 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 <summary>⚡ TL;DR</summary>
 
 **Chose:** Require model files to already exist on disk at `diskPath`
-**Why:** Simplicity — diffusion uses FilesystemDL which serves pre-downloaded files, no streaming/download layer needed
+**Why:** Simplicity — the addon loads files directly from disk, no streaming/download layer needed
 **Cost:** Caller must ensure files are present before calling `load()`
 
 </details>
@@ -549,7 +549,7 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 Diffusion models consist of multiple large files (diffusion model, text encoders, VAE). The addon needs these files to create the native `sd_ctx_t` context.
 
-Unlike the LLM addon which historically used WeightsProvider for streaming from Hyperdrive, diffusion uses `@qvac/dl-filesystem` (FilesystemDL) which only serves files already present on disk.
+Unlike the LLM addon which historically used WeightsProvider for streaming from Hyperdrive, diffusion loads files directly from disk paths — no loader abstraction is involved.
 
 ### Decision
 
