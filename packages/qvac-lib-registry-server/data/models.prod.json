@@ -5340,6 +5340,152 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
+    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B (graph)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.onnx.data",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B (weights)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/model.int8.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "Parakeet CTC 0.6B (graph+weights INT8)",
+    "quantization": "int8",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en",
+      "int8"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/vocab.txt",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
+    "description": "Parakeet CTC 0.6B vocabulary",
+    "quantization": "",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "vocab",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/config.json",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
+    "description": "Parakeet CTC 0.6B config",
+    "quantization": "",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "config",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/decoder_joint.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Decoder",
+    "quantization": "fp32",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "decoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/encoder.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Encoder",
+    "quantization": "fp32",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "encoder",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/tokenizer.json",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet EOU 120M Tokenizer",
+    "quantization": "",
+    "params": "120M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "tokenizer",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/altunenes/parakeet-rs",
+    "description": "Parakeet Sortformer 4SPK v2",
+    "quantization": "fp32",
+    "params": "123M",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "OCR-specialized vision-language model for document understanding",

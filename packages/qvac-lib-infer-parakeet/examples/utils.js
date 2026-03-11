@@ -5,6 +5,10 @@ const path = require('bare-path')
 
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
 
+// Grace period (ms) after JobEnded fires to wait for a late Output event.
+// Increase on slow devices where inference may lag behind the event loop.
+const JOB_TRACKER_GRACE_MS = 5000
+
 /**
  * TDT model files to load (order matters)
  */
@@ -13,6 +17,31 @@ const TDT_MODEL_FILES = [
   'decoder_joint-model.onnx',
   'preprocessor.onnx',
   'vocab.txt'
+]
+
+/**
+ * CTC model files to load
+ */
+const CTC_MODEL_FILES = [
+  'model.onnx',
+  'model.onnx_data',
+  'tokenizer.json'
+]
+
+/**
+ * EOU model files to load
+ */
+const EOU_MODEL_FILES = [
+  'encoder.onnx',
+  'decoder_joint.onnx',
+  'tokenizer.json'
+]
+
+/**
+ * Sortformer model files to load
+ */
+const SORTFORMER_MODEL_FILES = [
+  'sortformer.onnx'
 ]
 
 /**
@@ -66,7 +95,7 @@ function parseWavFile (wavPath) {
       }
       return samples
     }
-    pos += 8 + chunkSize
+    pos += 8 + chunkSize + (chunkSize % 2)
   }
   throw new Error('No data chunk found in WAV file')
 }
@@ -126,14 +155,46 @@ function validatePaths (paths) {
 }
 
 /**
- * Create a promise that resolves when job ends
+ * Create a promise that resolves when job ends and output is received.
+ *
+ * Handles a race condition where the addon's JobEnded event can fire before
+ * the Output event on fast models. The promise resolves when both conditions
+ * are met, or after a grace period following whichever fires first.
+ *
  * @returns {{ promise: Promise, resolve: Function, transcriptions: Array }}
  */
 function createJobTracker () {
   const transcriptions = []
   let resolveJob = null
+  let hasOutput = false
+  let jobEnded = false
+  let graceTimeout = null
+
   const promise = new Promise(resolve => { resolveJob = resolve })
-  return { promise, resolve: resolveJob, transcriptions }
+
+  const tryResolve = () => {
+    if (hasOutput && jobEnded) {
+      if (graceTimeout) clearTimeout(graceTimeout)
+      resolveJob()
+    }
+  }
+
+  return {
+    promise,
+    resolve: () => resolveJob(),
+    transcriptions,
+    markOutput () {
+      hasOutput = true
+      tryResolve()
+    },
+    markJobEnded () {
+      jobEnded = true
+      tryResolve()
+      if (!hasOutput) {
+        graceTimeout = setTimeout(() => resolveJob(), JOB_TRACKER_GRACE_MS)
+      }
+    }
+  }
 }
 
 /**
@@ -159,10 +220,11 @@ function createOutputCallback (tracker, options = {}) {
           }
         }
       }
+      tracker.markOutput()
     }
 
     if (event === 'JobEnded') {
-      tracker.resolve()
+      tracker.markJobEnded()
     }
   }
 }
@@ -186,6 +248,9 @@ function printResults (transcriptions) {
 module.exports = {
   LOG_PRIORITIES,
   TDT_MODEL_FILES,
+  CTC_MODEL_FILES,
+  EOU_MODEL_FILES,
+  SORTFORMER_MODEL_FILES,
   setupLogger,
   readFileAsStream,
   parseWavFile,
