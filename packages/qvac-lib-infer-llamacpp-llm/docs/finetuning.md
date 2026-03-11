@@ -128,11 +128,11 @@ await model.cancel()
 | `trainDatasetDir` | string | Yes | — | Path to training dataset file (e.g. `.jsonl` for SFT, `.txt` for causal) |
 | `validation` | object | Yes | — | How to run validation. When `type` is `'dataset'`, include `path` with the eval dataset file path. See [Validation](#validation) below. |
 | `outputParametersDir` | string | Yes | — | Directory (or file path) for the final LoRA adapter |
-| `numberOfEpochs` | number | Yes | — | Number of training epochs |
-| `learningRate` | number | Yes | — | Initial learning rate (e.g., 1e-5) |
-| `contextLength` | number | No | ctx_size/2 | Training sequence length |
-| `batchSize` | number | No | 0 (use default) | Sets the backend `n_batch` (number of tokens processed per batch). Must be >= `microBatchSize` and divisible by it when both are set. |
-| `microBatchSize` | number | No | 1 | Sets the backend `n_ubatch` (micro-batch size). Controls how many tokens are processed per optimizer step. Adjusted to gcd(datasetSampleCount, requested) if needed. Must be <= `batchSize` when both are set. |
+| `numberOfEpochs` | number | No | 1 | Number of training epochs |
+| `learningRate` | number | No | 1e-4 | Initial learning rate |
+| `contextLength` | number | No | 128 | Training sequence length |
+| `batchSize` | number | No | 128 | Sets the backend `n_batch` (number of tokens processed per batch). Must be >= `microBatchSize` and divisible by it when both are set. |
+| `microBatchSize` | number | No | 128 | Sets the backend `n_ubatch` (micro-batch size). Controls how many tokens are processed per optimizer step. Adjusted to gcd(datasetSampleCount, requested) if needed. Must be <= `batchSize` when both are set. |
 | `assistantLossOnly` | boolean | No | false | Use SFT (chat) mode; if false, causal mode |
 | `loraModules` | string | No | attn_q,k,v,o | Comma-separated target modules |
 | `loraRank` | number | No | 8 | LoRA rank |
@@ -142,13 +142,13 @@ await model.cancel()
 | `checkpointSaveDir` | string | No | `./checkpoints` | Directory for checkpoints |
 | `checkpointSaveSteps` | number | No | 0 | Save checkpoint every N steps (0 = only pause) |
 | `chatTemplatePath` | string | No | `""` | Path to chat template (for SFT) |
-| `lrScheduler` | string | No | `"constant"` | `"constant"`, `"cosine"`, or `"linear"` |
+| `lrScheduler` | string | No | `"cosine"` | `"constant"`, `"cosine"`, or `"linear"` |
 | `lrMin` | number | No | 0 | Minimum learning rate (for cosine/linear) |
-| `warmupRatio` | number | No | 0 | Warmup ratio (0–1). Requires `warmupRatioSet: true` to take effect. |
+| `warmupRatio` | number | No | 0.1 | Warmup ratio (0–1). Requires `warmupRatioSet: true` to take effect. |
 | `warmupRatioSet` | boolean | No | false | When true, warmup steps = `warmupRatio × totalSteps`. |
 | `warmupStepsSet` | boolean | No | false | When true, use `warmupSteps` directly instead of ratio. |
 | `warmupSteps` | number | No | 0 | Explicit warmup steps (used when `warmupStepsSet: true`). |
-| `weightDecay` | number | No | 0 | Weight decay |
+| `weightDecay` | number | No | 0.01 | Weight decay |
 
 ### Validation
 
@@ -436,11 +436,7 @@ async function main() {
     numberOfEpochs: 8,
     learningRate: 1e-5,
     lrMin: 1e-8,
-    lrScheduler: 'cosine',
-    warmupRatio: 0.1,
     warmupRatioSet: true,
-    contextLength: 128,
-    microBatchSize: 128,
     loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down',
     assistantLossOnly: true,
     checkpointSaveSteps: 2,

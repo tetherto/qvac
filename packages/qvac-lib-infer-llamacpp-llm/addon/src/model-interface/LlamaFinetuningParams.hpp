@@ -7,12 +7,12 @@ namespace qvac_lib_inference_addon_llama {
 
 struct LlamaFinetuningParams {
   std::string outputParametersDir;
-  int numberOfEpochs{0};
-  double learningRate{0.0};
+  int numberOfEpochs{1};
+  double learningRate{1e-4};
   std::string trainDatasetDir;
   std::string evalDatasetPath;
-  int64_t contextLength{0};
-  int64_t microBatchSize{0};
+  int64_t contextLength{128};
+  int64_t microBatchSize{128};
   bool assistantLossOnly{false};
   std::string checkpointSaveDir;
   std::string loraModules;
@@ -23,10 +23,10 @@ struct LlamaFinetuningParams {
   std::string chatTemplatePath;
   int64_t checkpointSaveSteps{0};
   double lrMin{0.0};
-  std::string lrScheduler{"constant"};
-  double warmupRatio{0.0};
-  int64_t batchSize{0};
-  double weightDecay{0.0};
+  std::string lrScheduler{"cosine"};
+  double warmupRatio{0.1};
+  int64_t batchSize{128};
+  double weightDecay{0.01};
   bool warmupStepsSet{false};
   int64_t warmupSteps{0};
   bool warmupRatioSet{false};

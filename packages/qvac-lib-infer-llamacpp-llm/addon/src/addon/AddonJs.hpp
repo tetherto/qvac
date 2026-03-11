@@ -187,9 +187,11 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
       jsObj.getProperty<js::String>(env, "outputParametersDir")
           .as<std::string>(env);
   params.numberOfEpochs = static_cast<int>(
-      jsObj.getProperty<js::Uint32>(env, "numberOfEpochs").as<uint32_t>(env));
+      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "numberOfEpochs")
+          .value_or(1));
   params.learningRate =
-      jsObj.getProperty<js::Number>(env, "learningRate").as<double>(env);
+      jsObj.getOptionalPropertyAs<js::Number, double>(env, "learningRate")
+          .value_or(1e-4);
   params.trainDatasetDir = jsObj.getProperty<js::String>(env, "trainDatasetDir")
                                .as<std::string>(env);
   const std::string evalDatasetPath =
@@ -200,10 +202,10 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.evalDatasetPath = evalDatasetPath;
   params.contextLength =
       jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
-          .value_or(0);
+          .value_or(128);
   params.microBatchSize =
       jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
-          .value_or(0);
+          .value_or(128);
   params.assistantLossOnly =
       jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
           .value_or(false);
@@ -239,16 +241,16 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
                      .value_or(0.0);
   params.lrScheduler =
       jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
-          .value_or("constant");
+          .value_or("cosine");
   params.warmupRatio =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
-          .value_or(0.0);
+          .value_or(0.1);
   params.batchSize =
       jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
-          .value_or(0);
+          .value_or(128);
   params.weightDecay =
       jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
-          .value_or(0.0);
+          .value_or(0.01);
   params.warmupStepsSet =
       jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
           .value_or(false);

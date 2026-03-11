@@ -43,7 +43,6 @@ function baseFinetuneOpts (overrides = {}) {
   return {
     trainDatasetDir: '/tmp/train.jsonl',
     outputParametersDir: '/tmp/out',
-    numberOfEpochs: 1,
     learningRate: 1e-5,
     ...overrides
   }
