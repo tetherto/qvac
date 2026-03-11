@@ -21,6 +21,7 @@ NOTICE_FULL_REPORT.txt
 .claude/skills/*
 !.claude/skills/setup/
 .cursor/skills/*
+!.cursor/skills/setup/
 !.cursor/skills/my-*.md
 .cursor/commands/*
 !.cursor/commands/addons/
