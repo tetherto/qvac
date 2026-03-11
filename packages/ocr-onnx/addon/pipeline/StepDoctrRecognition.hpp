@@ -5,6 +5,7 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/imgproc.hpp>
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -29,7 +30,11 @@ public:
   ~StepDoctrRecognition() { deferWindowsSessionLeak(std::move(ortSession_)); }
 #endif
 
-  Output process(Input input);
+  /**
+   * @param input : detection output with polygons to recognize
+   * @param cancelFlag : optional pointer to an atomic cancel flag; breaks early between batches and returns partial results
+   */
+  Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 
 private:
   struct SoftmaxResult {

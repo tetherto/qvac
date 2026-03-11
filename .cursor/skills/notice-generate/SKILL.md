@@ -115,7 +115,6 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 
 ## Package coverage
 
-- **Skip**: `packages/docs` (not a package)
 - **Models (full list)**: `sdk`, `qvac-lib-registry-server/client`
 - **Models (by engine)**: All addon packages, mapped by engine name
 - **JS**: Every package with dependencies in `package.json`

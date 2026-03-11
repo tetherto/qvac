@@ -1,0 +1,45 @@
+---
+title: "ocr( )"
+titleStyle: code
+description: "Performs Optical Character Recognition (OCR) on an image to extract text."
+---
+
+```typescript
+function ocr(params: OCRClientParams): Object
+```
+
+## Description
+
+Performs Optical Character Recognition (OCR) on an image to extract text.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `OCRClientParams` | ✓ | The OCR parameters |
+
+## Returns
+
+```typescript
+Object
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Non-streaming mode (default) - get all blocks at once
+const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
+for (const block of await blocks) {
+  console.log(block.text, block.bbox, block.confidence);
+}
+
+// Streaming mode - process blocks as they arrive
+const { blockStream } = ocr({ modelId, image: imageBuffer, stream: true });
+for await (const blocks of blockStream) {
+  console.log("Detected:", blocks);
+}
+```
+```
