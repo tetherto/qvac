@@ -48,8 +48,22 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function sleep (ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function waitForProgress (handle, minSteps = 2, timeoutMs = 300_000) {
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(new Error(`waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`))
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
 }
 
 function assertFiniteMetricIfPresent (t, stats, key, modelId) {
@@ -164,7 +178,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         if (!isNaN(stats.accuracy_uncertainty)) t.ok(Number.isFinite(stats.accuracy_uncertainty), `[${modelVariant.id}] progress accuracy_uncertainty should be finite (step ${stats.global_steps})`)
         t.comment(`[${modelVariant.id}] progress: epoch=${stats.current_epoch + 1} step=${stats.global_steps} loss=${stats.loss?.toFixed(4)}±${stats.loss_uncertainty?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}±${(stats.accuracy_uncertainty * 100)?.toFixed(1)}% backend_batch=${stats.current_batch}/${stats.total_batches}`)
       })
-      await sleep(15000)
+      await waitForProgress(finetuneHandle, 2)
 
       await model.pause()
 
@@ -188,7 +202,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         continue
       }
 
-      await verifyPauseCheckpoint(t, checkpointDir, 2000)
+      verifyPauseCheckpoint(t, checkpointDir)
 
       const resumeHandle = await model.finetune()
       resumeHandle.on('stats', stats => {
@@ -281,7 +295,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     await model.load()
 
     const finetuneHandle = await model.finetune(finetuneConfig)
-    await sleep(15000)
+    await waitForProgress(finetuneHandle, 2)
 
     await model.cancel()
     const result = await finetuneHandle.await()
