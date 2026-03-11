@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 // Marian/Opus model languages
 export const MARIAN_LANGUAGES = ["en", "de", "es", "it", "ru", "ja"] as const;
@@ -97,8 +98,8 @@ const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   engine: z.literal("Bergamot"),
   from: z.enum(BERGAMOT_LANGUAGES),
   to: z.enum(BERGAMOT_LANGUAGES),
-  srcVocabPath: z.string().optional(),
-  dstVocabPath: z.string().optional(),
+  srcVocabSrc: modelSrcInputSchema.optional(),
+  dstVocabSrc: modelSrcInputSchema.optional(),
   normalize: z.number().optional(),
 });
 

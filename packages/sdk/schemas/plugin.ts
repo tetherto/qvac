@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ModelSrcInput } from "./model-src-utils";
 
 /**
  * Definition for a plugin handler with explicit Zod schemas.
@@ -69,24 +70,53 @@ export interface PluginLogging {
  * Function to resolve a model source (URL or path) to a local file path.
  * Passed to resolveConfig hook to allow plugins to resolve their artifacts.
  */
-export type ResolveModelPath = (src: string) => Promise<string>;
+export type ResolveModelPath = (src: ModelSrcInput) => Promise<string>;
 
-export interface QvacPlugin {
+/**
+ * Context passed to plugin resolveConfig hook.
+ * Provides resolution utilities and request metadata.
+ */
+export interface ResolveContext {
+  resolveModelPath: ResolveModelPath;
+  modelSrc: string;
+  modelType: string;
+  modelName?: string;
+}
+
+/**
+ * Result from plugin resolveConfig hook.
+ * Contains transformed config and optional resolved artifacts.
+ */
+export interface ResolveResult<
+  TConfig = Record<string, unknown>,
+  K extends string = string,
+> {
+  config: TConfig;
+  artifacts?: Partial<Record<K, string>>;
+}
+
+export interface QvacPlugin<
+  TConfig = Record<string, unknown>,
+  TArtifactKeys extends string = string,
+> {
   modelType: string;
   displayName: string;
   addonPackage: string;
+  loadConfigSchema: z.ZodType;
   createModel: (params: CreateModelParams) => PluginModelResult;
   handlers: Record<string, PluginHandlerDefinition>;
   logging?: PluginLogging | undefined;
+  /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */
+  skipPrimaryModelPathValidation?: boolean;
   /**
    * Optional hook to resolve model sources in modelConfig to local paths.
    * Called before createModel if the plugin needs to download/resolve artifacts.
-   * Receives the raw modelConfig and a resolve function, returns transformed config.
+   * Returns transformed config and optional artifact paths.
    */
   resolveConfig?: (
-    modelConfig: Record<string, unknown>,
-    resolve: ResolveModelPath,
-  ) => Promise<Record<string, unknown>>;
+    modelConfig: TConfig,
+    ctx: ResolveContext,
+  ) => Promise<ResolveResult<TConfig, TArtifactKeys>>;
 }
 
 // Non-streaming plugin invoke
@@ -184,6 +214,7 @@ export const pluginDefinitionRuntimeSchema = z
     addonPackage: z
       .string({ error: "addonPackage must be a string" })
       .min(1, "addonPackage must be a non-empty string"),
+    loadConfigSchema: zodSchemaLikeRuntimeSchema,
     createModel: functionRuntimeSchema,
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
     logging: z
@@ -193,6 +224,8 @@ export const pluginDefinitionRuntimeSchema = z
       })
       .catchall(z.unknown())
       .optional(),
+    resolveConfig: functionRuntimeSchema.optional(),
+    skipPrimaryModelPathValidation: z.boolean().optional(),
   })
   .catchall(z.unknown());
 
@@ -264,3 +297,28 @@ export const SDK_DEFAULT_PLUGINS = [
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
+
+// ============================================
+// Addon Packages
+// ============================================
+
+/** Native addon package for LLM completion (llama.cpp) */
+export const ADDON_LLM = "@qvac/llm-llamacpp" as const;
+
+/** Native addon package for text embeddings (llama.cpp) */
+export const ADDON_EMBEDDING = "@qvac/embed-llamacpp" as const;
+
+/** Native addon package for Whisper transcription (whisper.cpp) */
+export const ADDON_WHISPER = "@qvac/transcription-whispercpp" as const;
+
+/** Native addon package for Parakeet transcription (ONNX) */
+export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
+
+/** Native addon package for NMT translation (nmt.cpp) */
+export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
+
+/** Native addon package for TTS (ONNX) */
+export const ADDON_TTS = "@qvac/tts-onnx" as const;
+
+/** Native addon package for OCR (ONNX) */
+export const ADDON_OCR = "@qvac/ocr-onnx" as const;

@@ -880,6 +880,30 @@ export class PluginAlreadyRegisteredError extends QvacErrorBase {
   }
 }
 
+export class PluginModelTypeReservedError extends QvacErrorBase {
+  constructor(modelType: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED,
+        [modelType],
+        cause,
+      ),
+    );
+  }
+}
+
+export class PluginLoadConfigValidationFailedError extends QvacErrorBase {
+  constructor(modelType: string, details: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED,
+        [modelType, details],
+        cause,
+      ),
+    );
+  }
+}
+
 export class PluginHandlerTypeMismatchError extends QvacErrorBase {
   constructor(
     handlerName: string,

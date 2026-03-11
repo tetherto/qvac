@@ -111,10 +111,12 @@ async function main () {
     await response
       .onUpdate(data => {
         process.stdout.write(data)
+      }).onFinish(() => {
+        console.log('\n\nFinished pivot translation...')
       })
       .await()
   } finally {
-    console.log('Unloading models...')
+    console.log('\n\nUnloading models...')
     await model.unload()
   }
 }
