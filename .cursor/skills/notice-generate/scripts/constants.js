@@ -37,7 +37,6 @@ const ALLOWED_LICENSES = [
   'gemma',
   'health-ai-developer-foundations',
   'openrail',
-  'openrail++',
 ]
 
 // ---------------------------------------------------------------------------
@@ -173,9 +172,7 @@ const LICENSE_NORMALIZE_MAP = {
   gemma: 'gemma',
   'qwen-research': 'qwen-research',
   qwen: 'qwen-research',
-  'health-ai-developer-foundations': 'health-ai-developer-foundations',
-  'openrail': 'openrail',
-  'openrail++': 'openrail++'
+  'health-ai-developer-foundations': 'health-ai-developer-foundations'
 }
 
 // ---------------------------------------------------------------------------

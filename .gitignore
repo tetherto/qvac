@@ -12,17 +12,9 @@ NOTICE_LOG.txt
 NOTICE_FULL_REPORT.txt
 .claude/worktrees
 
-# Auto-generated agent config (run .agent/setup.sh to regenerate)
+# Auto-generated agent config (run /setup to regenerate)
 .claude/agent-conduct.md
 .claude/knowledge/
-.claude/commands/
 .claude/agents/
-.claude/settings.json
 .claude/skills/*
 !.claude/skills/setup/
-.cursor/skills/*
-!.cursor/skills/setup/
-!.cursor/skills/my-*.md
-.cursor/commands/*
-!.cursor/commands/addons/
-.cursor/mcp.json
