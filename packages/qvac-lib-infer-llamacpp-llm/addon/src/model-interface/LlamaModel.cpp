@@ -27,6 +27,7 @@
 #include "qvac-lib-inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -138,26 +139,39 @@ void LlamaModel::setInitLoader(
   if (loaderType.has_value()) {
     constructionArgs_.loaderType = loaderType.value();
   }
-  state_ = std::make_unique<ReloadableState>(
+  state_ = std::make_shared<ReloadableState>(
       constructionArgs_, loadingContext_, metadata_);
+  bool callerHoldsLock =
+      constructionArgs_.loaderType == InitLoader::LOADER_TYPE::IMMEDIATE;
   state_->initLoader_.init(
-      constructionArgs_.loaderType, [this]() { this->init(); });
+      constructionArgs_.loaderType,
+      [this, acquireLock = !callerHoldsLock]() { this->init(acquireLock); });
 }
 
-void LlamaModel::init() {
+void LlamaModel::init(bool acquireLock) {
+  SharedSnapshot snap(state_, stateMtx_);
+  if (!acquireLock) {
+    snap.disable();
+  }
+  snap.lockRead();
+
   const auto& modelPath = constructionArgs_.modelPath;
   auto configFilemap = constructionArgs_.configFilemap;
 
   setVerbosityLevel(configFilemap);
 
-  if (!state_->asyncWeightsLoader_.isStreaming()) {
-    resolveShardPaths(state_->shards_, modelPath);
+  if (!snap->asyncWeightsLoader_.isStreaming()) {
+    if (!snap.promoteToWrite()) {
+      return;
+    }
+    resolveShardPaths(snap->shards_, modelPath);
+    snap.demoteToRead();
   }
 
   metadata_.parse(
       modelPath,
-      state_->shards_,
-      state_->asyncWeightsLoader_.isStreaming(),
+      snap->shards_,
+      snap->asyncWeightsLoader_.isStreaming(),
       ADDON_ID);
   {
     auto fileType = metadata_.tryGetU32("general.file_type");
@@ -169,6 +183,10 @@ void LlamaModel::init() {
                                  : "unknown"));
   }
 
+  if (!snap.promoteToWrite()) {
+    return;
+  }
+
   {
     std::string backendsDir;
     if (auto backendsDirIt = configFilemap.find("backendsDir");
@@ -176,7 +194,7 @@ void LlamaModel::init() {
       backendsDir = backendsDirIt->second;
       configFilemap.erase(backendsDirIt);
     }
-    initializeBackend(backendsDir);
+    snap->backendsHandle_ = LlamaBackendsHandle(backendsDir);
   }
 
   common_params params;
@@ -185,38 +203,40 @@ void LlamaModel::init() {
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
-      state_->asyncWeightsLoader_.extractIndividualStreamedFiles();
+      snap->asyncWeightsLoader_.extractIndividualStreamedFiles();
+
+  snap.demoteToRead();
+
   common_init_result llamaInit = initFromConfig(
       params,
       modelPath,
       streamedFiles,
-      state_->shards_,
+      snap->shards_,
       loadingContext_,
-      state_->asyncWeightsLoader_.isStreaming(),
+      snap->asyncWeightsLoader_.isStreaming(),
       ADDON_ID,
       errorWhenFailed);
 
-  // Create the appropriate context based on projectionPath
-  state_->llmContext_ = createContext(
+  if (!snap.promoteToWrite()) {
+    return;
+  }
+
+  snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
+  snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit));
 
-  // Apply configured nDiscarded if provided (> 0)
-  if (state_->configuredNDiscarded_ > 0 && state_->llmContext_) {
-    state_->llmContext_->setNDiscarded(state_->configuredNDiscarded_);
+  if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
+    snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
   }
 
-  if (state_->llmContext_) {
-    state_->cacheManager_.emplace(
-        state_->llmContext_.get(),
-        state_->configuredNDiscarded_,
+  if (snap->llmContext_) {
+    snap->cacheManager_.emplace(
+        snap->llmContext_.get(),
+        snap->configuredNDiscarded_,
         [this](bool resetStats) { this->resetState(resetStats); });
   }
-}
-
-void LlamaModel::initializeBackend(const std::string& backendsDir) {
-  state_->backendsHandle_ = LlamaBackendsHandle(backendsDir);
 }
 
 void LlamaModel::setWeightsForFile(
@@ -381,7 +401,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
 
-  double timeToFirstToken = state_->lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
+  double timeToFirstToken =
+      state_->lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
   double tokensPerSecond =
       (!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
@@ -783,10 +804,8 @@ std::unique_ptr<LlmContext> LlamaModel::createContext(
     common_init_result&& llamaInit) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    state_->isTextLlm_ = false;
     return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
   }
-  state_->isTextLlm_ = true;
   return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
 }
 

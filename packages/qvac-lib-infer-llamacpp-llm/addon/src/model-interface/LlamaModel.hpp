@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -129,8 +130,12 @@ public:
    * Ensure model is initialized
    */
   void waitForLoadInitialization() final {
-    std::shared_lock lock(stateMtx_);
-    state_->initLoader_.waitForLoadInitialization();
+    std::shared_ptr<ReloadableState> localState;
+    {
+      std::shared_lock lock(stateMtx_);
+      localState = state_;
+    }
+    localState->initLoader_.waitForLoadInitialization();
   }
 
   /**
@@ -189,11 +194,6 @@ private:
   ResolvedPrompt resolveChatAndTools(const std::string& input);
 
   /**
-   * Initialize backend (llama.cpp setup).
-   */
-  void initializeBackend(const std::string& backendsDir = "");
-
-  /**
    * The Common params parse method. It parses the common params.
    *
    * @param model_path - model path.
@@ -242,7 +242,7 @@ private:
   void setInitLoader(
       std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
 
-  void init();
+  void init(bool acquireLock);
 
   const std::string loadingContext_;
   ModelMetaData metadata_;
@@ -251,5 +251,5 @@ private:
   /// Shared lock for all methods that read/use state_ members; exclusive lock
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
-  std::unique_ptr<ReloadableState> state_;
+  std::shared_ptr<ReloadableState> state_;
 };
