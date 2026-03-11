@@ -430,34 +430,30 @@ function parsePauseCheckpointMetadata (pauseCheckpointPath) {
   }
 }
 
-function verifyPauseCheckpoint (t, checkpointDir, waitMs = 3000) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const pauseCheckpointPath = findPauseCheckpoint(checkpointDir)
+function verifyPauseCheckpoint (t, checkpointDir) {
+  const pauseCheckpointPath = findPauseCheckpoint(checkpointDir)
 
-      if (!pauseCheckpointPath) {
-        t.fail('Pause checkpoint must exist after pause - required for resume')
-        return resolve(null)
-      }
+  if (!pauseCheckpointPath) {
+    t.fail('Pause checkpoint must exist after pause - required for resume')
+    return null
+  }
 
-      t.ok(verifyCheckpointExists(pauseCheckpointPath), 'Pause checkpoint should exist')
-      t.comment(`Pause checkpoint found: ${path.basename(pauseCheckpointPath)}`)
+  t.ok(verifyCheckpointExists(pauseCheckpointPath), 'Pause checkpoint should exist')
+  t.comment(`Pause checkpoint found: ${path.basename(pauseCheckpointPath)}`)
 
-      const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
-      t.ok(fs.existsSync(metadataPath), 'Pause checkpoint must contain metadata.json')
-      if (fs.existsSync(metadataPath)) {
-        const metadataContent = fs.readFileSync(metadataPath, 'utf8')
-        t.ok(metadataContent.length > 0, 'Metadata should not be empty')
-      }
+  const metadataPath = path.join(pauseCheckpointPath, 'metadata.json')
+  t.ok(fs.existsSync(metadataPath), 'Pause checkpoint must contain metadata.json')
+  if (fs.existsSync(metadataPath)) {
+    const metadataContent = fs.readFileSync(metadataPath, 'utf8')
+    t.ok(metadataContent.length > 0, 'Metadata should not be empty')
+  }
 
-      const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
-      t.ok(fs.existsSync(modelPath), 'Pause checkpoint must contain model.gguf (LoRA adapter)')
-      const optimizerPath = path.join(pauseCheckpointPath, 'optimizer.gguf')
-      t.ok(fs.existsSync(optimizerPath), 'Pause checkpoint must contain optimizer.gguf (optimizer state)')
+  const modelPath = path.join(pauseCheckpointPath, 'model.gguf')
+  t.ok(fs.existsSync(modelPath), 'Pause checkpoint must contain model.gguf (LoRA adapter)')
+  const optimizerPath = path.join(pauseCheckpointPath, 'optimizer.gguf')
+  t.ok(fs.existsSync(optimizerPath), 'Pause checkpoint must contain optimizer.gguf (optimizer state)')
 
-      resolve(pauseCheckpointPath)
-    }, waitMs)
-  })
+  return pauseCheckpointPath
 }
 
 async function handleEarlyCompletion (t, finetuneHandle, checkpointDir = null, message = 'Finetuning completed too quickly') {

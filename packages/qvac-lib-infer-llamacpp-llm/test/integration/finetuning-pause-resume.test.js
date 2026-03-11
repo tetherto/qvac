@@ -233,7 +233,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
 
       t.comment(`${tag} ${ts()} PAUSE-RESUME branch`)
       t.comment(`${tag} ${ts()} verifyPauseCheckpoint START`)
-      await verifyPauseCheckpoint(t, checkpointDir, 2000)
+      verifyPauseCheckpoint(t, checkpointDir)
       t.comment(`${tag} ${ts()} verifyPauseCheckpoint DONE`)
 
       t.comment(`${tag} ${ts()} model.finetune() resume START`)
