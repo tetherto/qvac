@@ -36,10 +36,13 @@ export interface TranslationNmtcppModelTypes {
   readonly Bergamot: "Bergamot"
 }
 
+export type BergamotPivotModel = Omit<TranslationNmtcppConfig, 'modelType' | 'bergamotPivotModel'> & { loader: Loader,  modelName: string, diskPath: string }
+
 export interface TranslationNmtcppConfig {
   modelType: TranslationNmtcppModelTypes[keyof TranslationNmtcppModelTypes]
   srcVocabPath?: string
   dstVocabPath?: string
+  bergamotPivotModel?: BergamotPivotModel
   [key: string]: unknown
 }
 
