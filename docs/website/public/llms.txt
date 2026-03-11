@@ -1,0 +1,9 @@
+# QVAC Documentation (llms.txt)
+
+Agent index for the official QVAC documentation.
+
+- Full documentation dump: /llms-full.txt
+
+Guidance:
+- Use /llms-full.txt as the primary context.
+- When answering, reference the most relevant doc page URL(s) from this website.
