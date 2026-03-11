@@ -1,0 +1,57 @@
+---
+title: "@qvac/sdk"
+titleStyle: code
+description: API reference — latest (v0.7)
+---
+
+## Overview
+
+`@qvac/sdk` npm package exposes a function-centric, typed JS API.
+
+## Functions
+
+| Function | Summary | Signature |
+| --- | --- | --- |
+| [`cancel()`](/references/api/cancel) | Cancels an ongoing operation. | `cancel(params): Promise<void>` |
+| [`close()`](/references/api/close) | Closes the RPC connection to the QVAC server. | `close(): Promise<void>` |
+| [`completion()`](/references/api/completion) | Generates completion from a language model based on conversation history. | `completion(params): { tokenStream, toolCallStream, text, toolCalls, stats }` |
+| [`defineHandler()`](/references/api/defineHandler) | Helper function to define a handler with full type inference. | `defineHandler<TRequest, TResponse>(definition): PluginHandlerDefinition` |
+| [`definePlugin()`](/references/api/definePlugin) | Helper function to define a plugin with full type inference. | `definePlugin<T>(plugin): T` |
+| [`deleteCache()`](/references/api/deleteCache) | Deletes KV cache files. | `deleteCache(params): Promise<{ success: boolean }>` |
+| [`downloadAsset()`](/references/api/downloadAsset) | Downloads an asset (model file) without loading it into memory. | `downloadAsset(options): Promise<string>` |
+| [`embed()`](/references/api/embed) | Generates embeddings for a single text using a specified model. | `embed(params): Promise<number[]>` |
+| [`getLogger()`](/references/api/getLogger) | Creates or retrieves a cached logger instance for the given namespace. | `getLogger(namespace, options?): Logger` |
+| [`getModelByName()`](/references/api/getModelByName) | Retrieves a model constant from the built-in registry by its human-readable name. | `getModelByName(name): RegistryItem \| undefined` |
+| [`getModelBySrc()`](/references/api/getModelBySrc) | Retrieves a model constant from the built-in registry by its model ID and blob core key. | `getModelBySrc(modelId, blobCoreKey): RegistryItem \| undefined` |
+| [`getModelInfo()`](/references/api/getModelInfo) | Retrieves detailed information about a model, including cache status and loaded instances. | `getModelInfo(params): Promise<ModelInfo>` |
+| [`invokePlugin()`](/references/api/invokePlugin) | Invoke a non-streaming plugin handler. | `invokePlugin<TResponse, TParams>(options): Promise<TResponse>` |
+| [`invokePluginStream()`](/references/api/invokePluginStream) | Invoke a streaming plugin handler. | `invokePluginStream<TResponse, TParams>(options): AsyncGenerator<TResponse>` |
+| [`loadModel()`](/references/api/loadModel) | Loads a machine learning model from a local path, remote URL, or Hyperdrive key. | `loadModel(options): Promise<string>` |
+| [`loggingStream()`](/references/api/loggingStream) | Opens a logging stream to receive real-time logs. | `loggingStream(params): AsyncGenerator<LoggingStreamResponse>` |
+| [`modelRegistryGetModel()`](/references/api/modelRegistryGetModel) | Retrieves a single model entry from the QVAC model registry by path and source. | `modelRegistryGetModel(registryPath, registrySource): Promise<ModelRegistryEntry>` |
+| [`modelRegistryList()`](/references/api/modelRegistryList) | Lists all available models from the QVAC model registry. | `modelRegistryList(): Promise<ModelRegistryEntry[]>` |
+| [`modelRegistrySearch()`](/references/api/modelRegistrySearch) | Searches the QVAC model registry with optional filters. | `modelRegistrySearch(params?): Promise<ModelRegistryEntry[]>` |
+| [`ocr()`](/references/api/ocr) | Performs Optical Character Recognition (OCR) on an image to extract text. | `ocr(params): { blockStream, blocks, stats }` |
+| [`ping()`](/references/api/ping) | Sends a ping request to the server and returns the pong response. | `ping(): Promise<{ type: "pong", number: number }>` |
+| [`ragChunk()`](/references/api/ragChunk) | Chunks documents into smaller pieces for embedding. | `ragChunk(params): Promise<RagDoc[]>` |
+| [`ragCloseWorkspace()`](/references/api/ragCloseWorkspace) | Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance). | `ragCloseWorkspace(params?): Promise<void>` |
+| [`ragDeleteEmbeddings()`](/references/api/ragDeleteEmbeddings) | Deletes document embeddings from the RAG vector database. | `ragDeleteEmbeddings(params): Promise<void>` |
+| [`ragDeleteWorkspace()`](/references/api/ragDeleteWorkspace) | Deletes a RAG workspace and all its data. | `ragDeleteWorkspace(params): Promise<void>` |
+| [`ragIngest()`](/references/api/ragIngest) | Ingests documents into the RAG vector database. | `ragIngest(params): Promise<{ processed, droppedIndices }>` |
+| [`ragListWorkspaces()`](/references/api/ragListWorkspaces) | Lists all RAG workspaces with their open status. | `ragListWorkspaces(): Promise<RagWorkspaceInfo[]>` |
+| [`ragReindex()`](/references/api/ragReindex) | Reindexes the RAG database to optimize search performance. | `ragReindex(params): Promise<RagReindexResult>` |
+| [`ragSaveEmbeddings()`](/references/api/ragSaveEmbeddings) | Saves pre-embedded documents to the RAG vector database. | `ragSaveEmbeddings(params): Promise<RagSaveEmbeddingsResult[]>` |
+| [`ragSearch()`](/references/api/ragSearch) | Searches for similar documents in the RAG vector database. | `ragSearch(params): Promise<RagSearchResult[]>` |
+| [`startQVACProvider()`](/references/api/startQVACProvider) | Starts a provider service that offers QVAC capabilities to remote peers. | `startQVACProvider(params): Promise<{ success, publicKey? }>` |
+| [`stopQVACProvider()`](/references/api/stopQVACProvider) | Stops a running provider service and leaves the specified topic. | `stopQVACProvider(params): Promise<{ success }>` |
+| [`textToSpeech()`](/references/api/textToSpeech) | Converts text to speech audio. | `textToSpeech(params): { bufferStream, buffer, done }` |
+| [`transcribe()`](/references/api/transcribe) | Provides a simple interface for transcribing audio by collecting all streaming results into a single string response. | `transcribe(params): Promise<string>` |
+| [`transcribeStream()`](/references/api/transcribeStream) | Streams audio transcription results in real-time, yielding text chunks as they become available from the model. | `transcribeStream(params): AsyncGenerator<string>` |
+| [`translate()`](/references/api/translate) | Translates text from one language to another using a specified translation model. | `translate(params): { tokenStream, text, stats }` |
+| [`unloadModel()`](/references/api/unloadModel) | Unloads a previously loaded model from the server. | `unloadModel(params): Promise<void>` |
+
+## Errors
+
+<Card href="/references/api/errors" title="Error codes">
+  All errors thrown by the SDK and how to handle them via `SDK_CLIENT_ERROR_CODES` and `SDK_SERVER_ERROR_CODES`.
+</Card>

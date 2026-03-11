@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "AndroidLog.hpp"
 #include "IOnnxSession.hpp"
 #include "OnnxConfig.hpp"
 #include "OnnxRuntime.hpp"
@@ -67,34 +68,62 @@ class OnnxSession : public IOnnxSession {
   Ort::AllocatorWithDefaultOptions allocator_;
   std::vector<std::string> inputNames_;
   std::vector<std::string> outputNames_;
+
+  // Platform-aware session construction (Windows needs wide strings)
+  static inline std::unique_ptr<Ort::Session> createOrtSession(
+      Ort::Env& env, const std::string& path,
+      const Ort::SessionOptions& options);
 };
 
 // ---------------------------------------------------------------------------
 // Inline implementation
 // ---------------------------------------------------------------------------
 
+inline std::unique_ptr<Ort::Session> OnnxSession::createOrtSession(
+    Ort::Env& env, const std::string& path,
+    const Ort::SessionOptions& options) {
+#if defined(_WIN32) || defined(_WIN64)
+  std::wstring widePath(path.begin(), path.end());
+  return std::make_unique<Ort::Session>(env, widePath.c_str(), options);
+#else
+  return std::make_unique<Ort::Session>(env, path.c_str(), options);
+#endif
+}
+
 inline OnnxSession::OnnxSession(const std::string& modelPath,
                                 const SessionConfig& config)
     : modelPath_(modelPath) {
   QLOG(logger::Priority::INFO,
        std::string("[OnnxSession] Loading model: ") + modelPath);
-
-  Ort::SessionOptions sessionOptions = buildSessionOptions(config);
+  ONNX_ALOG("[OnnxSession] Loading model: %s", modelPath.c_str());
 
   auto& env = OnnxRuntime::instance().env();
+  Ort::SessionOptions sessionOptions = buildSessionOptions(config);
 
-  // Create session
-#if defined(_WIN32) || defined(_WIN64)
-  // Windows uses wide strings for paths
-  std::wstring wideModelPath(modelPath.begin(), modelPath.end());
-  session_ =
-      std::make_unique<Ort::Session>(env, wideModelPath.c_str(), sessionOptions);
-#else
-  session_ =
-      std::make_unique<Ort::Session>(env, modelPath.c_str(), sessionOptions);
-#endif
+  // Create the session. If XNNPACK is enabled and session creation fails
+  // (e.g. due to com.ms.internal.nhwc schema issues in certain models),
+  // retry without XNNPACK as a plain CPU fallback.
+  try {
+    session_ = createOrtSession(env, modelPath, sessionOptions);
+  } catch (const Ort::Exception& e) {
+    if (!config.enableXnnpack) {
+      throw;
+    }
+    QLOG(logger::Priority::WARNING,
+         std::string("[OnnxSession] XNNPACK session failed: ") + e.what() +
+         ", retrying without XNNPACK");
+    ONNX_ALOG("[OnnxSession] XNNPACK session failed: %s, retrying without XNNPACK", e.what());
 
-  // Cache input names
+    SessionConfig fallbackConfig = config;
+    fallbackConfig.enableXnnpack = false;
+    session_ = createOrtSession(
+        env, modelPath, buildSessionOptions(fallbackConfig));
+
+    QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback (no XNNPACK)");
+    ONNX_ALOG("[OnnxSession] Session created with CPU fallback (no XNNPACK)");
+  }
+
+  // Cache input/output names
   const size_t numInputs = session_->GetInputCount();
   inputNames_.reserve(numInputs);
   for (size_t i = 0; i < numInputs; ++i) {
@@ -102,7 +131,6 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     inputNames_.emplace_back(namePtr.get());
   }
 
-  // Cache output names
   const size_t numOutputs = session_->GetOutputCount();
   outputNames_.reserve(numOutputs);
   for (size_t i = 0; i < numOutputs; ++i) {
@@ -111,9 +139,11 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   }
 
   QLOG(logger::Priority::INFO,
-       std::string("[OnnxSession] Session created with ") +
-           std::to_string(numInputs) + " input(s) and " +
+       std::string("[OnnxSession] Session ready, ") +
+           std::to_string(numInputs) + " input(s), " +
            std::to_string(numOutputs) + " output(s)");
+  ONNX_ALOG("[OnnxSession] Session ready, %zu input(s), %zu output(s)",
+            numInputs, numOutputs);
 }
 
 inline std::vector<TensorInfo> OnnxSession::getInputInfo() const {

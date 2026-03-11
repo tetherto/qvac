@@ -18,6 +18,8 @@ async function run () {
     const chatterboxSets = [
       { language: 'en', variant: 'fp32' },
       { language: 'en', variant: 'fp16' },
+      { language: 'en', variant: 'q4' },
+      { language: 'en', variant: 'q4f16' },
       { language: 'multilingual', variant: 'fp32' }
     ]
     for (const opts of chatterboxSets) {

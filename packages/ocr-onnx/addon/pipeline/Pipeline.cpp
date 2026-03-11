@@ -120,6 +120,10 @@ bool Pipeline::isLoaded() const {
 }
 
 Pipeline::Output Pipeline::process(Pipeline::Input input) {
+  // Reset cancel flag at the start of each job so a previous cancel does not
+  // block the next request
+  cancelFlag_.store(false, std::memory_order_relaxed);
+
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Sequential process() starting");
   ALOG_DEBUG(std::string("[Pipeline] Sequential process() starting"));
   auto timeStart = std::chrono::high_resolution_clock::now();
@@ -211,6 +215,12 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 1: Detection complete in " + std::to_string(detectionTimeSec) + "s");
   ALOG_INFO(std::string("[Pipeline] Step 1: Detection complete"));
 
+  // Check for cancellation after detection — return empty results like LLM addon
+  if (cancelFlag_.load(std::memory_order_relaxed)) {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] Cancelled after detection step");
+    return {};
+  }
+
   // Step 2: Bounding Box extraction
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 2: Running bounding box extraction...");
   ALOG_INFO(std::string("[Pipeline] Step 2: Running bounding box extraction..."));
@@ -220,11 +230,17 @@ Pipeline::Output Pipeline::processEasyOCR(const cv::Mat& image, Input& input, fl
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, step2Msg);
   ALOG_INFO(step2Msg);
 
+  // Check for cancellation before recognition (most time-consuming step)
+  if (cancelFlag_.load(std::memory_order_relaxed)) {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] Cancelled before recognition step");
+    return {};
+  }
+
   // Step 3: Text recognition
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] Step 3: Running text recognition...");
   ALOG_INFO(std::string("[Pipeline] Step 3: Running text recognition..."));
   auto recognitionStart = std::chrono::high_resolution_clock::now();
-  StepRecognizeText::Output recognitionOutput = stepRecognition_->process(std::move(boundingBoxOutput));
+  StepRecognizeText::Output recognitionOutput = stepRecognition_->process(std::move(boundingBoxOutput), &cancelFlag_);
   auto recognitionEnd = std::chrono::high_resolution_clock::now();
   double recognitionTimeSec =
       static_cast<double>((recognitionEnd - recognitionStart).count()) /
@@ -390,11 +406,17 @@ Pipeline::Output Pipeline::processDocTR(const cv::Mat& image, Input& input, floa
        "[Pipeline] DocTR Step 1: Detection complete (" + std::to_string(detOutput.polygons.size()) +
        " regions) in " + std::to_string(detectionTimeSec) + "s");
 
+  // Check for cancellation after detection and before recognition
+  if (cancelFlag_.load(std::memory_order_relaxed)) {
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Pipeline] DocTR cancelled after detection step");
+    return {};
+  }
+
   // Step 2: DocTR Recognition
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Pipeline] DocTR Step 2: Running recognition...");
   ALOG_INFO(std::string("[Pipeline] DocTR Step 2: Running recognition..."));
   auto recognitionStart = std::chrono::high_resolution_clock::now();
-  StepDoctrRecognition::Output recognitionOutput = stepDoctrRecognition_->process(std::move(detOutput));
+  StepDoctrRecognition::Output recognitionOutput = stepDoctrRecognition_->process(std::move(detOutput), &cancelFlag_);
   auto recognitionEnd = std::chrono::high_resolution_clock::now();
   double recognitionTimeSec =
       static_cast<double>((recognitionEnd - recognitionStart).count()) /

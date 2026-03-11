@@ -21,9 +21,9 @@ try {
   const modelId = await loadModel({
     modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
     modelType: "llm",
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
     modelConfig: {
       ctx_size: 1024,
+      projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
     },
     onProgress: (progress) => {
       console.log(`Loading: ${progress.percentage.toFixed(1)}%`);

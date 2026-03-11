@@ -1,75 +1,64 @@
-# QVAC Documentation Site
+# QVAC docs
 
-Next.js documentation site using [Fumadocs](https://www.fumadocs.dev), aligned with **API-DOCS-AUTOMATION-COMPLETE-GUIDE.md**.
+Official documentation and single source of truth for QVAC:
+- Source code and content of the docs website.
+- Automation scripts for the integration between the codebase and the documentation.
 
-## Structure (from api-docs guide)
+QVAC docs website is a static website generated via SSG functionality from a Next.js+[Fumadocs](https://fumadocs.dev) application.
 
+## Installation
+
+Prerequisites:
+- Node.js >= 22.17.0
+- `npm` >= 10.9.2
+
+Install dependencies:
 ```
-docs/
-├── content/
-│   └── docs/
-│       ├── overview/           # No versioning
-│       ├── sdk/
-│       │   └── api/
-│       │       ├── latest/    # Copy of newest version
-│       │       ├── v0.7.0/    # Versioned API docs (vX.Y.Z)
-│       │       └── ...
-│       ├── workbench/
-│       ├── health/
-│       └── contributors/
-├── scripts/
-│   ├── generate-api-docs.ts   # TypeDoc → MDX (see guide Appendix E)
-│   └── update-versions-list.ts
-├── src/
-│   ├── app/
-│   ├── components/            # e.g. version-switcher
-│   └── lib/                  # source, versions
-├── source.config.ts          # Fumadocs MDX config
-└── package.json
+npm install
 ```
 
-## Quick start (fresh clone)
+## Development
 
-After cloning, the baseline docs pages (Overview, Health, Workbench, Contributors) are committed and will render immediately. The SDK API reference pages are **generated** and not committed. To get them:
+Check broken links in dev env:
+```bash
+npm run check-links
+```
+
+Run dev env server:
 
 ```bash
-cd docs/website
-npm install
-cp .env.example .env          # then set SDK_PATH to your sdk location
-bun run scripts/generate-api-docs.ts 0.7.0
 npm run dev
 ```
 
-Without running the generation step, `/docs` will load but SDK API links will 404.
+## Build
 
-## Commands
+Create a `.env.*` following `env.example`.
 
-- **Development**: `npm run dev` → http://localhost:3000
-- **Build**: `npm run build`
-- **Generate API docs**: `bun run scripts/generate-api-docs.ts <version>` (requires `SDK_PATH` in `.env`)
-- **Update versions list**: `npm run docs:update-versions`
+Generate static website:
 
-## API doc generation (SDK path)
+```
+npm run build:static
+```
 
-The generator reads the **sdk** package (TypeScript entry and JSDoc). Set **`SDK_PATH`** in a `.env` file (copy from `.env.example` and set your path). Bun loads `.env` automatically when running the scripts. The SDK folder must contain `index.ts` and `tsconfig.json`.
+It generates static content into the `dist` directory and can be served using any static content hosting service.
 
-**Generated API docs** (`content/docs/sdk/api/latest/`, `content/docs/sdk/api/v*/`, `content/docs/sdk/api/.latest-backup/`) are in `.gitignore`; generate them locally with `bun run scripts/generate-api-docs.ts <version>` or in CI. Baseline content (index, overview, health, workbench, contributors) is committed.
+Check in your local machine the static website:
+```
+npm run serve
+```
 
-## CI: Generate API docs (Phase 3)
+## Deployment
 
-The workflow **Generate API Documentation** (`.github/workflows/docs-generate-api.yml`) runs on manual trigger or `repository_dispatch`. It clones the SDK repo, generates MDX, and opens a PR.
+TBD with DevOps team.
 
-**Setup:** In the docs repo, add a **repository variable**:
-- **`SDK_REPOSITORY`**: `owner/repo` of the SDK (e.g. `myorg/qvac` if the SDK is at `packages/sdk`).
+Planned address for release: [http://docs.qvac.tether.dev](http://docs.qvac.tether.io)
 
-Optional **repository variable**:
-- **`SDK_SUBPATH`**: Path to the SDK inside the repo (default `packages/sdk`). Set to empty if the SDK is at repo root.
+## Repository layout
 
-**Run:** Actions → Generate API Documentation → Run workflow, enter version (e.g. `0.7.0`). The workflow clones the branch `release-qvac-sdk-<version>` (or tag `v<version>` or `main`), generates docs, and opens a PR on branch `docs/api-v<version>`.
+- `src`: source code of docs website.
+- `content/docs`: docs website content.
+- `examples`: runnable QVAC code samples to be used as code snippets on content via code injection tools.
+- `scripts`: integration and automation between the codebase and automatic documentation generation.
 
-## Path format (critical)
-
-- API docs: `content/docs/sdk/api/vX.Y.Z/` (full semver, e.g. `v0.7.0`)
-- Latest: `content/docs/sdk/api/latest/`
-
-See **API-DOCS-AUTOMATION-COMPLETE-GUIDE.md** for automation, CI, and production script details.
+>[!NOTE]
+> Temporary structure: it will be improved soon with the maturation of automation and better organization of the source code and the docs website content.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <any>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -7,6 +9,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 #include "src/model-interface/IChatterboxEngine.hpp"
 #include "src/model-interface/ISupertonicEngine.hpp"
@@ -15,11 +18,17 @@ namespace qvac::ttslib::addon_model {
 
 enum class EngineType { Chatterbox, Supertonic };
 
-class TTSModel {
+class TTSModel : public qvac_lib_inference_addon_cpp::model::IModel,
+                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
   using Input = std::string;
   using InputView = std::string_view;
   using Output = std::vector<int16_t>;
+  using JobConfig = std::unordered_map<std::string, std::string>;
+  struct AnyInput {
+    std::string text;
+    JobConfig config;
+  };
 
   TTSModel(const std::unordered_map<std::string, std::string> &configMap,
            const std::vector<float> &referenceAudio = {},
@@ -42,7 +51,10 @@ public:
   Output process(const Input &text);
   Output process(const Input &text,
                  const std::function<void(const Output &)> &consumer);
-  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const;
+  std::any process(const std::any &input) override;
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+  std::string getName() const override;
+  void cancel() const override;
 
   // Set reference audio for Chatterbox voice cloning
   void setReferenceAudio(const std::vector<float> &referenceAudio);
@@ -62,6 +74,7 @@ private:
   int64_t totalSamples_ = 0;
   size_t textLength_ = 0;
   bool loaded_ = false;
+  mutable std::atomic_bool cancelRequested_ = false;
 
   EngineType detectEngineType(
       const std::unordered_map<std::string, std::string> &configMap) const;

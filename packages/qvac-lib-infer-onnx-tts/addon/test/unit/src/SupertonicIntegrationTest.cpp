@@ -185,7 +185,7 @@ TEST_F(SupertonicIntegrationTest, loadAndSynthesize) {
 
   ASSERT_TRUE(model.isLoaded()) << "Model should be loaded after construction";
 
-  TTSModel::Output output = model.process("Hello.");
+  TTSModel::Output output = model.process(TTSModel::Input{"Hello."});
   EXPECT_FALSE(output.empty()) << "Synthesis should produce non-empty PCM";
   EXPECT_GT(output.size(), 1000u)
       << "Short phrase should yield at least ~1k samples at 44.1kHz";
@@ -205,7 +205,7 @@ TEST_F(SupertonicIntegrationTest, unloadAfterSynthesize) {
   TTSModel model(config, {});
   ASSERT_TRUE(model.isLoaded());
 
-  TTSModel::Output output = model.process("Hi");
+  TTSModel::Output output = model.process(TTSModel::Input{"Hi"});
   EXPECT_FALSE(output.empty());
 
   model.unload();
