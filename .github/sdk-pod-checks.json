@@ -19,9 +19,5 @@
   {
     "package": "error",
     "path": "packages/error"
-  },
-  {
-    "package": "docs",
-    "path": "packages/docs"
   }
 ]

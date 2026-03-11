@@ -2,7 +2,6 @@
 description: Commit message and PR title format requirements
 globs:
   - packages/sdk/**
-  - packages/docs/**
   - packages/rag/**
   - packages/logging/**
   - packages/error/**
