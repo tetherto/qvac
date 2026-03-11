@@ -5338,5 +5338,223 @@
       "en"
     ],
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
+  },
+  {
+    "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "OCR-specialized vision-language model for document understanding",
+    "quantization": "q4_k_m",
+    "params": "0.6B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "ocr",
+      "lighton-ocr-2"
+    ],
+    "notes": "Qwen3 LLM (0.6B) + SigLIP vision encoder. Full-page OCR, 11 languages. Use --jinja for chat template.",
+    "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector for LightON OCR-2 1B",
+    "quantization": "f16",
+    "params": "0.6B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "ocr",
+      "lighton-ocr-2"
+    ],
+    "notes": "F16 recommended — half the size of F32, negligible quality difference",
+    "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
+    "quantization": "Q4_K_M",
+    "params": "4B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "generation",
+      "translation",
+      "african",
+      "afriquegemma"
+    ],
+    "notes": "McGill-NLP/AfriqueGemma-4B. 20 African languages: af, am, ar, ha, ig, mg, ny, om, rw, sn, so, st, sw, ti, tn, xh, yo, zu + en, fr, pt. GGUF by mradermacher."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-3B-TQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
+    "description": "Bitnet 3B model",
+    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
+    "license": "MIT",
+    "quantization": "TQ2_0",
+    "params": "3B",
+    "tags": [
+      "generation",
+      "instruct",
+      "bitnet"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-large-TQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
+    "description": "Bitnet 0.7B model",
+    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-large",
+    "license": "MIT",
+    "quantization": "TQ2_0",
+    "params": "0.7B",
+    "tags": [
+      "generation",
+      "instruct",
+      "bitnet"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-06/bitnet_b1_58-xl-TQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
+    "description": "Bitnet 1B model",
+    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
+    "license": "MIT",
+    "quantization": "TQ2_0",
+    "params": "1B",
+    "tags": [
+      "generation",
+      "instruct",
+      "bitnet"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q4_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "FLUX.2 Klein 4B model",
+    "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
+    "license": "Apache-2.0",
+    "quantization": "Q4_0",
+    "params": "4B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "FLUX.2 Klein 4B model",
+    "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
+    "license": "Apache-2.0",
+    "quantization": "Q8_0",
+    "params": "4B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q6_K.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "FLUX.2 Klein 4B model",
+    "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
+    "license": "Apache-2.0",
+    "quantization": "Q6_K",
+    "params": "4B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "FLUX.2 Klein 4B model",
+    "notes": "Quantized version of https://huggingface.co/black-forest-labs/FLUX.2-klein-4B",
+    "license": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "4B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Qwen3 4B model",
+    "license": "Apache-2.0",
+    "quantization": "Q4_K_M",
+    "params": "4B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/5e67da950fce4a097bc150c22958a05716994cea/vae/diffusion_pytorch_model.safetensors",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "FLUX.2 Klein Variational Autoencoder model",
+    "license": "Apache-2.0",
+    "tags": [
+      "vae"
+    ]
+  },
+
+  {
+    "source": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1 model",
+    "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-2-1",
+    "license": "openrail++",
+    "quantization": "Q8_0",
+    "params": "1B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q4_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion 2.1 model",
+    "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-2-1",
+    "license": "openrail++",
+    "quantization": "Q4_0",
+    "params": "1B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/5f58340891db3ef66a79758c2dcddad92b1de169/stable-diffusion-xl-base-1.0-Q4_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL model",
+    "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+    "license": "openrail++",
+    "quantization": "Q4_0",
+    "params": "3B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
+  },
+  {
+    "source": "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/5f58340891db3ef66a79758c2dcddad92b1de169/stable-diffusion-xl-base-1.0-Q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "description": "Stable Diffusion XL model",
+    "notes": "Quantized version of https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+    "license": "openrail++",
+    "quantization": "Q8_0",
+    "params": "3B",
+    "tags": [
+      "generation",
+      "diffusion"
+    ]
   }
 ]

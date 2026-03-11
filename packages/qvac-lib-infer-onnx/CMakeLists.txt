@@ -16,7 +16,10 @@ endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx C CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
+string(JSON _pkg_version GET "${_pkg_json}" "version")
+
+project(qvac-onnx VERSION ${_pkg_version} LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 

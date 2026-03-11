@@ -1,0 +1,40 @@
+---
+title: "ragListWorkspaces( )"
+titleStyle: code
+description: "Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance)."
+---
+
+```typescript
+function ragListWorkspaces(): Promise
+```
+
+## Description
+
+Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance).
+
+
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+const workspaces = await ragListWorkspaces();
+// [{ name: "default", open: true }, { name: "my-docs", open: false }]
+```
+```

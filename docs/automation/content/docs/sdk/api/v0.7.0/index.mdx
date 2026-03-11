@@ -1,0 +1,99 @@
+---
+title: "API Reference"
+description: Complete API reference for QVAC SDK v0.7.0
+---
+
+## Overview
+
+Complete API reference for **QVAC SDK v0.7.0** with 38 functions.
+
+## Available Functions
+
+- [`cancel()`](./cancel) - Cancels an ongoing operation.
+- [`close()`](./close) - No description available
+- [`completion()`](./completion) - Generates completion from a language model based on conversation history.
+- [`defineHandler()`](./defineHandler) - Helper function to define a handler with full type inference.
+This is an identity function that provides type checking.
+- [`definePlugin()`](./definePlugin) - Helper function to define a plugin with full type inference.
+This is an identity function that provides type checking.
+- [`deleteCache()`](./deleteCache) - Deletes KV cache files.
+- [`downloadAsset()`](./downloadAsset) - Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity.
+- [`embed()`](./embed) - Generates embeddings for a single text using a specified model.
+- [`getLogger()`](./getLogger) - No description available
+- [`getModelByName()`](./getModelByName) - No description available
+- [`getModelByPath()`](./getModelByPath) - No description available
+- [`getModelBySrc()`](./getModelBySrc) - No description available
+- [`getModelInfo()`](./getModelInfo) - No description available
+- [`invokePlugin()`](./invokePlugin) - Invoke a non-streaming plugin handler.
+- [`invokePluginStream()`](./invokePluginStream) - Invoke a streaming plugin handler.
+- [`loadModel()`](./loadModel) - Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution.
+- [`loggingStream()`](./loggingStream) - Opens a logging stream to receive real-time logs.
+- [`modelRegistryGetModel()`](./modelRegistryGetModel) - No description available
+- [`modelRegistryList()`](./modelRegistryList) - No description available
+- [`modelRegistrySearch()`](./modelRegistrySearch) - No description available
+- [`ocr()`](./ocr) - Performs Optical Character Recognition (OCR) on an image to extract text.
+- [`ping()`](./ping) - Sends a ping request to the server and returns the pong response.
+- [`ragChunk()`](./ragChunk) - Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
+- [`ragCloseWorkspace()`](./ragCloseWorkspace) - Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
+
+**Workspace lifecycle:** Workspaces are implicitly opened.
+This function explicitly closes them, releasing memory and file locks. The workspace data
+remains on disk unless `deleteOnClose` is set to true.
+- [`ragDeleteEmbeddings()`](./ragDeleteEmbeddings) - Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+- [`ragDeleteWorkspace()`](./ragDeleteWorkspace) - Deletes a RAG workspace and all its data.
+The workspace must not be currently loaded/in-use.
+- [`ragIngest()`](./ragIngest) - Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+- [`ragListWorkspaces()`](./ragListWorkspaces) - Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance).
+- [`ragReindex()`](./ragReindex) - Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason.
+- [`ragSaveEmbeddings()`](./ragSaveEmbeddings) - Saves pre-embedded documents to the RAG vector database.
+Part of the segregated flow: chunk() → embed() → saveEmbeddings()
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+- [`ragSearch()`](./ragSearch) - Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array.
+- [`startQVACProvider()`](./startQVACProvider) - Starts a provider service that offers QVAC capabilities to remote peers.
+The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
+- [`stopQVACProvider()`](./stopQVACProvider) - Stops a running provider service and leaves the specified topic.
+- [`textToSpeech()`](./textToSpeech) - No description available
+- [`transcribe()`](./transcribe) - This function provides a simple interface for transcribing audio by
+collecting all streaming results into a single string response.
+- [`transcribeStream()`](./transcribeStream) - This function streams audio transcription results in real-time, yielding
+text chunks as they become available from the model.
+- [`translate()`](./translate) - Translates text from one language to another using a specified translation model.
+Supports both NMT (Neural Machine Translation) and LLM models.
+- [`unloadModel()`](./unloadModel) - Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup.

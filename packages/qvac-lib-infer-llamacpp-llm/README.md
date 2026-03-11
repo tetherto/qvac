@@ -292,6 +292,80 @@ npm run quickstart
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
 
+## OCR with Vision-Language Models
+
+In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
+
+### Supported OCR Models
+
+| Model | Params | Quantization | Description |
+|-------|--------|-------------|-------------|
+| LightON OCR-2 1B | 0.6B (LLM) + ~550M (vision) | Q4_K_M | OCR-specialized, full-page transcription, 11 languages |
+| SmolVLM2-500M | 500M | Q8_0 | General vision-language, can follow targeted extraction prompts |
+
+### LightON OCR-2
+
+[LightON OCR-2](https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF) is an OCR-specialized vision-language model (Apache 2.0) that produces detailed markdown/HTML output with tables. It supports 11 languages: English, French, German, Spanish, Italian, Dutch, Portuguese, Polish, Romanian, Czech, and Swedish.
+
+**Characteristics:**
+- Always does full-page transcription regardless of prompt
+- Produces detailed structured output (markdown tables, HTML)
+- Requires `--jinja` flag / jinja chat template in llama.cpp
+- Requires both LLM model and F16 mmproj (vision projector)
+
+**Performance (Pixel 10 Pro, CPU-only, Q4_K_M + F16 mmproj):**
+- Image encode: ~30s (768x1024 image)
+- Prompt eval: 26.6 t/s
+- Generation: 4.14 t/s
+
+**Usage Example:**
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const FilesystemDL = require('@qvac/dl-filesystem')
+const fs = require('bare-fs')
+
+const dirPath = './models'
+const loader = new FilesystemDL({ dirPath })
+
+const model = new LlmLlamacpp({
+  modelName: 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf',
+  loader,
+  logger: console,
+  diskPath: dirPath,
+  projectionModel: 'mmproj-F16.gguf'
+}, {
+  device: 'cpu',
+  gpu_layers: '0',
+  ctx_size: '4096',
+  temp: '0.1',
+  predict: '2048'
+})
+
+await model.load()
+
+const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
+
+const messages = [
+  { role: 'user', type: 'media', content: imageBytes },
+  { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+]
+
+const response = await model.run(messages)
+const output = []
+
+response.onUpdate(token => {
+  output.push(token)
+})
+
+await response.await()
+
+console.log(output.join(''))
+
+await model.unload()
+await loader.close()
+```
+
 ## Architecture
 
 See [docs/](./docs) for a detailed explanation of the architecture and data flow logic.
