@@ -276,6 +276,11 @@ jobs:
         continue-on-error: true
         run: npm run --if-present test:unit
 
+      - name: Run e2e tests
+        id: run_e2e_tests
+        continue-on-error: true
+        run: npm run --if-present test:e2e
+
       - name: Check for errors
         shell: bash
         run: |
@@ -294,6 +299,10 @@ jobs:
           fi
           if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
             echo "::error::Unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_e2e_tests.outcome }}" = "failure" ]; then
+            echo "::error::E2E tests failed"
             count=$((count + 1))
           fi
           if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then

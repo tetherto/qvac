@@ -57,6 +57,47 @@ function setupCli (): void {
       }
     })
 
+  const serveCmd = program
+    .command('serve')
+    .description('Start an API server backed by QVAC')
+
+  serveCmd
+    .command('openai')
+    .description('Start an OpenAI-compatible REST API server')
+    .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
+    .option('-p, --port <number>', 'Port to listen on', '11434')
+    .option('-H, --host <address>', 'Host to bind to', '127.0.0.1')
+    .option('--model <alias>', 'Model alias to preload (repeatable, must be in config)', collect, [])
+    .option('--api-key <key>', 'Require Bearer token authentication')
+    .option('--cors', 'Enable CORS headers')
+    .option('-v, --verbose', 'Detailed output')
+    .action(async (options: {
+      config?: string
+      port: string
+      host: string
+      model: string[]
+      apiKey?: string
+      cors?: boolean
+      verbose?: boolean
+    }) => {
+      try {
+        const { startServer } = await import('./serve/index.js')
+        await startServer({
+          projectRoot: process.cwd(),
+          config: options.config,
+          port: parseInt(options.port, 10),
+          host: options.host,
+          model: options.model.length > 0 ? options.model : undefined,
+          apiKey: options.apiKey,
+          cors: options.cors,
+          verbose: options.verbose
+        })
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   program.parse()
 }
 
