@@ -512,12 +512,12 @@ class TranslationNmtcpp extends BaseInference {
     // Check if this is a stats object by looking for stats-related keys
     // Stats objects contain runtime statistics like TPS, totalTime, decodeTime, etc.
     const isStatsObject = typeof data === 'object' && data !== null && !Array.isArray(data) &&
-                         (('TPS' in data) || 
-                          ('BERGAMOT : ->TPS' in data) || 
+                         (('TPS' in data) ||
+                          ('BERGAMOT : ->TPS' in data) ||
                           ('firstModel_TPS' in data) ||
                           ('totalTime' in data) ||
                           ('decodeTime' in data))
-    
+
     if (isStatsObject) {
       // Stats object received - this signals job completion
       // Pass stats with JobEnded event (base class expects stats in JobEnded data)

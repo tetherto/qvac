@@ -113,7 +113,7 @@ async function main () {
         process.stdout.write(data)
       }).onFinish(() => {
         console.log('\n\nFinished pivot translation...')
-        })
+      })
       .await()
   } finally {
     console.log('\n\nUnloading models...')
