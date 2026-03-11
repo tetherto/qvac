@@ -20,8 +20,12 @@
       "platform": "osx | ios"
     },
     {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
       "name": "vulkan",
-      "platform": "windows | linux"
+      "platform": "windows | linux | android"
     }
   ],
   "features": {

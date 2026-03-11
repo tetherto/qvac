@@ -62,7 +62,25 @@ bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building qvac-lib-inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-add_bare_module(qvac-lib-inference-addon-sd)
+# On Android with GGML_BACKEND_DL, install GPU backend .so modules alongside
+# the addon so ggml can dlopen them at runtime.  CPU backends are statically
+# linked (GGML_CPU_STATIC) and excluded from this loop.
+set(BACKEND_DL_EXPORTS "")
+if(ANDROID AND GGML_BACKEND_DL)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    if("${_backend}" MATCHES "^ggml-cpu")
+      continue()
+    endif()
+    find_library(_${_backend}_LIB "${_backend}" REQUIRED)
+    add_library(ggml::${_backend} SHARED IMPORTED)
+    set_target_properties(ggml::${_backend} PROPERTIES
+      IMPORTED_LOCATION "${_${_backend}_LIB}"
+      IMPORTED_NO_SONAME TRUE)
+    list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp

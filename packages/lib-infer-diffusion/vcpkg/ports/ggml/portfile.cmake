@@ -26,6 +26,7 @@ vcpkg_from_github(
         ggml-opencl-graceful-no-devices.patch
         ggml-config-include-dir.patch
         ggml-static-core-dl-backends.patch
+        ggml-cpu-static-hybrid.patch
 )
 
 # --- GPU feature flags ---
@@ -93,12 +94,14 @@ endif()
 # --- Platform options ---
 set(PLATFORM_OPTIONS)
 
-# stable-diffusion.cpp calls ggml_backend_cpu_init() and ggml_backend_is_cpu()
-# directly, so the CPU backend must be statically linked.  GGML_BACKEND_DL is
-# therefore OFF — all backends (CPU, Vulkan, OpenCL) are static libraries
-# linked into the consumer binary.
+# Hybrid backend mode for Android: GPU backends (Vulkan, OpenCL) are MODULE
+# .so files loaded at runtime via dlopen — no libOpenCL.so NEEDED dependency.
+# The CPU backend is statically linked (GGML_CPU_STATIC) so that SD can call
+# ggml_set_f32, ggml_backend_cpu_init, etc. directly at link time.
 if(VCPKG_TARGET_IS_ANDROID)
     list(APPEND PLATFORM_OPTIONS
+        -DGGML_BACKEND_DL=ON
+        -DGGML_CPU_STATIC=ON
         -DGGML_VULKAN_DISABLE_COOPMAT=ON
         -DGGML_VULKAN_DISABLE_COOPMAT2=ON
     )
@@ -125,6 +128,15 @@ vcpkg_cmake_configure(
 )
 
 vcpkg_cmake_install()
+
+# Install DL backend .so files for Android.  ggml builds each backend as a
+# MODULE target but does NOT install them via cmake install().
+if(VCPKG_TARGET_IS_ANDROID)
+    file(GLOB _backend_sos "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libggml-*.so")
+    if(_backend_sos)
+        file(INSTALL ${_backend_sos} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
+    endif()
+endif()
 
 # Fix up the CMake package config installed by ggml's own build system.
 vcpkg_cmake_config_fixup(PACKAGE_NAME ggml CONFIG_PATH lib/cmake/ggml)
