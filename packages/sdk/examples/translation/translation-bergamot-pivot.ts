@@ -11,7 +11,7 @@ import {BERGAMOT_ES_EN, BERGAMOT_EN_IT, loadModel, translate, unloadModel} from 
  * The API structure follows the standard Bergamot model pattern:
  * - modelSrc: Primary translation model
  * - modelConfig: Configuration with Bergamot-specific settings
- * - pivotModel: Configuration for the secondary model
+ * - modelConfig.pivotModel: Configuration for the secondary model
  */
 
 // Spanish to Italian via English pivot example

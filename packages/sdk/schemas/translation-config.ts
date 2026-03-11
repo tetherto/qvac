@@ -95,7 +95,7 @@ const opusConfigSchema = nmtGenerationParamsSchema.extend({
 
 // Pivot model configuration for Bergamot (for translation via intermediate language)
 // Follows the same pattern as the main Bergamot model: modelSrc + Bergamot config
-const bergamotPivotModelSchema = z.object({
+const bergamotPivotModelSchema = nmtGenerationParamsSchema.extend({
   modelSrc: modelSrcInputSchema,
   srcVocabPath: z.string().optional(),
   dstVocabPath: z.string().optional(),

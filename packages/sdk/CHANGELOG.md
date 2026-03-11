@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.8.0
+
+This release adds support for pivot translations in the Bergamot engine, enabling translation between language pairs that don't have direct models by using an intermediate language (typically English).
+
+---
+
+### ✨ What's New
+
+**Pivot Translation Support**
+
+The SDK now supports **pivot translations** for the Bergamot translation engine. This powerful feature allows you to translate between language pairs even when a direct translation model isn't available, by automatically routing through an intermediate language.
+
+**Enhanced Logging for Pivot Models**
+
+Model registration now provides clearer logging when pivot models are loaded, showing both the primary and pivot model names.
+
+---
+
 ## [0.7.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.7.0
