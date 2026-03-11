@@ -199,6 +199,38 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
     })
   })
 
+  async function submitJobWhenReady (audioBuffer, timeoutMs = 180000, retryDelayMs = 1000) {
+    const deadline = Date.now() + timeoutMs
+    let buffered = false
+    let lastBusyError = null
+
+    while (Date.now() < deadline) {
+      if (!buffered) {
+        await parakeet.append({ type: 'audio', data: audioBuffer })
+        buffered = true
+      }
+
+      try {
+        return await parakeet.append({ type: 'end of job' })
+      } catch (error) {
+        const message = error?.message || ''
+        const causeMessage = error?.cause?.message || ''
+        const isBusy =
+          message.includes('Cannot set new job: a job is already set or being processed') ||
+          causeMessage.includes('Cannot set new job: a job is already set or being processed')
+
+        if (!isBusy) {
+          throw error
+        }
+
+        lastBusyError = error
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+      }
+    }
+
+    throw lastBusyError || new Error('Timed out waiting for the model to accept the next job')
+  }
+
   function toFloat32Audio (rawBuffer) {
     const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
     const audioData = new Float32Array(pcmData.length)
@@ -260,12 +292,9 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
     t.ok(statusAfterCancel === 'listening', `Status should return to listening after cancel (got ${statusAfterCancel})`)
 
     // Ensure model still accepts and completes the next job.
-    // Cancellation is cooperative, and `ParakeetInterface.cancel()` clears the
-    // active JS-side job id before native completion callbacks arrive.
-    // Give the native worker a short window to settle before submitting next work.
-    await new Promise(resolve => setTimeout(resolve, 15000))
-    await parakeet.append({ type: 'audio', data: shortAudio.buffer })
-    const secondJobId = await parakeet.append({ type: 'end of job' })
+    // Cancellation is cooperative, and some slower runners can briefly keep the
+    // native worker busy even after JS-side state returns to listening.
+    const secondJobId = await submitJobWhenReady(shortAudio.buffer)
 
     const secondJobResult = await waitForJob(secondJobId)
 
