@@ -9,26 +9,13 @@
 #include <utility>
 #include <vector>
 
+#include "AndroidLog.hpp"
 #include "IOnnxSession.hpp"
 #include "OnnxConfig.hpp"
 #include "OnnxRuntime.hpp"
 #include "OnnxSessionOptionsBuilder.hpp"
 #include "OnnxTensor.hpp"
 #include "OnnxTypeConversions.hpp"
-
-#ifdef __ANDROID__
-#include <android/log.h>
-#ifndef ONNX_ALOG_TAG
-#define ONNX_ALOG_TAG "QVAC_ONNX"
-#endif
-#ifndef ONNX_ALOG
-#define ONNX_ALOG(fmt, ...) __android_log_print(ANDROID_LOG_INFO, ONNX_ALOG_TAG, fmt, ##__VA_ARGS__)
-#endif
-#else
-#ifndef ONNX_ALOG
-#define ONNX_ALOG(fmt, ...) ((void)0)
-#endif
-#endif
 
 namespace onnx_addon {
 
@@ -81,11 +68,27 @@ class OnnxSession : public IOnnxSession {
   Ort::AllocatorWithDefaultOptions allocator_;
   std::vector<std::string> inputNames_;
   std::vector<std::string> outputNames_;
+
+  // Platform-aware session construction (Windows needs wide strings)
+  static inline std::unique_ptr<Ort::Session> createOrtSession(
+      Ort::Env& env, const std::string& path,
+      const Ort::SessionOptions& options);
 };
 
 // ---------------------------------------------------------------------------
 // Inline implementation
 // ---------------------------------------------------------------------------
+
+inline std::unique_ptr<Ort::Session> OnnxSession::createOrtSession(
+    Ort::Env& env, const std::string& path,
+    const Ort::SessionOptions& options) {
+#if defined(_WIN32) || defined(_WIN64)
+  std::wstring widePath(path.begin(), path.end());
+  return std::make_unique<Ort::Session>(env, widePath.c_str(), options);
+#else
+  return std::make_unique<Ort::Session>(env, path.c_str(), options);
+#endif
+}
 
 inline OnnxSession::OnnxSession(const std::string& modelPath,
                                 const SessionConfig& config)
@@ -95,60 +98,32 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   ONNX_ALOG("[OnnxSession] Loading model: %s", modelPath.c_str());
 
   auto& env = OnnxRuntime::instance().env();
-
-  // Build session options and attempt to create the session.
-  // If XNNPACK is enabled and session creation fails (e.g. due to
-  // com.ms.internal.nhwc schema issues in certain models), retry
-  // without XNNPACK as a plain CPU fallback.
-  ONNX_ALOG("[OnnxSession] Building session options...");
   Ort::SessionOptions sessionOptions = buildSessionOptions(config);
-  ONNX_ALOG("[OnnxSession] Session options built successfully");
 
-  ONNX_ALOG("[OnnxSession] Creating Ort::Session...");
+  // Create the session. If XNNPACK is enabled and session creation fails
+  // (e.g. due to com.ms.internal.nhwc schema issues in certain models),
+  // retry without XNNPACK as a plain CPU fallback.
   try {
-#if defined(_WIN32) || defined(_WIN64)
-    std::wstring wideModelPath(modelPath.begin(), modelPath.end());
-    session_ = std::make_unique<Ort::Session>(
-        env, wideModelPath.c_str(), sessionOptions);
-#else
-    session_ = std::make_unique<Ort::Session>(
-        env, modelPath.c_str(), sessionOptions);
-#endif
-    ONNX_ALOG("[OnnxSession] Ort::Session created successfully");
+    session_ = createOrtSession(env, modelPath, sessionOptions);
   } catch (const Ort::Exception& e) {
-    // XNNPACK EP creates fused nodes in the com.ms.internal.nhwc domain.
-    // At BASIC optimization level, the NHWC schemas are not registered,
-    // so certain models fail with "Schema was not found for fused node".
-    // At EXTENDED level, the NhwcTransformer conflicts with XNNPACK fusion.
-    // Fallback: retry without XNNPACK using plain CPU EP.
     if (!config.enableXnnpack) {
-      throw;  // XNNPACK wasn't enabled, so this is a different error
+      throw;
     }
-    std::string errMsg = e.what();
     QLOG(logger::Priority::WARNING,
-         std::string("[OnnxSession] Session creation failed with XNNPACK: ") +
-         errMsg + " — retrying without XNNPACK");
-    ONNX_ALOG("[OnnxSession] Session creation FAILED with XNNPACK: %s", errMsg.c_str());
-    ONNX_ALOG("[OnnxSession] Retrying without XNNPACK (plain CPU)...");
+         std::string("[OnnxSession] XNNPACK session failed: ") + e.what() +
+         ", retrying without XNNPACK");
+    ONNX_ALOG("[OnnxSession] XNNPACK session failed: %s, retrying without XNNPACK", e.what());
 
     SessionConfig fallbackConfig = config;
     fallbackConfig.enableXnnpack = false;
-    Ort::SessionOptions fallbackOptions = buildSessionOptions(fallbackConfig);
+    session_ = createOrtSession(
+        env, modelPath, buildSessionOptions(fallbackConfig));
 
-#if defined(_WIN32) || defined(_WIN64)
-    std::wstring wideModelPath(modelPath.begin(), modelPath.end());
-    session_ = std::make_unique<Ort::Session>(
-        env, wideModelPath.c_str(), fallbackOptions);
-#else
-    session_ = std::make_unique<Ort::Session>(
-        env, modelPath.c_str(), fallbackOptions);
-#endif
-    QLOG(logger::Priority::INFO,
-         "[OnnxSession] Session created successfully with CPU fallback (no XNNPACK)");
-    ONNX_ALOG("[OnnxSession] Session created successfully with CPU fallback (no XNNPACK)");
+    QLOG(logger::Priority::INFO, "[OnnxSession] Session created with CPU fallback (no XNNPACK)");
+    ONNX_ALOG("[OnnxSession] Session created with CPU fallback (no XNNPACK)");
   }
 
-  // Cache input names
+  // Cache input/output names
   const size_t numInputs = session_->GetInputCount();
   inputNames_.reserve(numInputs);
   for (size_t i = 0; i < numInputs; ++i) {
@@ -156,7 +131,6 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
     inputNames_.emplace_back(namePtr.get());
   }
 
-  // Cache output names
   const size_t numOutputs = session_->GetOutputCount();
   outputNames_.reserve(numOutputs);
   for (size_t i = 0; i < numOutputs; ++i) {
@@ -165,10 +139,10 @@ inline OnnxSession::OnnxSession(const std::string& modelPath,
   }
 
   QLOG(logger::Priority::INFO,
-       std::string("[OnnxSession] Session created with ") +
-           std::to_string(numInputs) + " input(s) and " +
+       std::string("[OnnxSession] Session ready, ") +
+           std::to_string(numInputs) + " input(s), " +
            std::to_string(numOutputs) + " output(s)");
-  ONNX_ALOG("[OnnxSession] Session created with %zu input(s) and %zu output(s)",
+  ONNX_ALOG("[OnnxSession] Session ready, %zu input(s), %zu output(s)",
             numInputs, numOutputs);
 }
 
