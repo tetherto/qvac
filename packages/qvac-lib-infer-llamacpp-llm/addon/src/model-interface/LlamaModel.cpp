@@ -454,6 +454,9 @@ void LlamaModel::commonParamsParse(
       for (const auto& item : list) {
         params.antiprompt.push_back(item);
       }
+      if (list.empty() && !listString.empty()) {
+        params.antiprompt.push_back(listString);
+      }
       configFilemap.erase(iter);
     }
   }
