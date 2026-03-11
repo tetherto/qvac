@@ -1,24 +1,34 @@
+import './global.css';
+import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
-import { RootProvider } from 'fumadocs-ui/provider';
-import type { ReactNode } from 'react';
-import './globals.css';
+import { InkeepScript } from "@/components/inkeep-script"; 
+import { Provider } from "./provider";
+import 'katex/dist/katex.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+});
 
 export const metadata: Metadata = {
-  title: 'QVAC Documentation',
-  description: 'QVAC SDK and API Documentation',
+  title: {
+    default: 'QVAC by Tether',
+    template: '%s | QVAC',
+  },
+  description: 'Official documentation and single source of truth for QVAC.',
+  icons: {
+    icon: '/qvac-favicon.svg',
+  },
 };
 
-export default function Layout({ children }: { children: ReactNode }) {
+export default function Layout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col">
-        <RootProvider
-          search={{
-            enabled: false, // Fumadocs search dialog lacks DialogTitle; disable until fixed to avoid a11y console error
-          }}
-        >
-          {children}
-        </RootProvider>
+    <html 
+      lang="en" 
+      suppressHydrationWarning
+      className={inter.className}>
+      <body className="flex flex-col min-h-screen">
+        <InkeepScript />
+          <Provider>{children}</Provider>
       </body>
     </html>
   );
