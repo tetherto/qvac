@@ -29,9 +29,7 @@ const logger = getClientLogger();
  * @param options - An object that defines all configuration parameters required for loading the model, including:
  *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
  *   - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
- *   - modelConfig: Model-specific configuration options
- *   - projectionModelSrc: (LLM only) Projection model source for multimodal models
- *   - vadModelSrc: (Whisper only) VAD model source for voice activity detection
+ *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
  *
@@ -76,8 +74,10 @@ const logger = getClientLogger();
  * const multimodalId = await loadModel({
  *   modelSrc: "https://huggingface.co/.../main-model.gguf",
  *   modelType: "llm",
- *   projectionModelSrc: "https://huggingface.co/.../projection-model.gguf",
- *   modelConfig: { ctx_size: 512 },
+ *   modelConfig: {
+ *     ctx_size: 512,
+ *     projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
+ *   },
  *   onProgress: (progress) => {
  *     console.log(`Loading: ${progress.percentage}%`);
  *   }
@@ -87,12 +87,12 @@ const logger = getClientLogger();
  * const whisperId = await loadModel({
  *   modelSrc: "https://huggingface.co/.../whisper-model.gguf",
  *   modelType: "whisper",
- *   vadModelSrc: "https://huggingface.co/.../vad-model.bin",
  *   modelConfig: {
  *     mode: "caption",
  *     output_format: "plaintext",
  *     min_seconds: 2,
- *     max_seconds: 6
+ *     max_seconds: 6,
+ *     vadModelSrc: "https://huggingface.co/.../vad-model.bin"
  *   }
  * });
  *

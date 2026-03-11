@@ -1,6 +1,6 @@
 {
   "name": "@qvac/onnx",
-  "version": "0.12.1",
+  "version": "0.12.8",
   "description": "Bare addon for ONNX Runtime session management",
   "addon": true,
   "engines": {

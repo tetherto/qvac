@@ -14,10 +14,13 @@ import {
 } from "@/server/rpc/handlers/plugin-invoke";
 import {
   ModelIsDelegatedError,
+  PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
+  PluginModelTypeReservedError,
   PluginResponseValidationFailedError,
 } from "@/utils/errors-server";
 import { SDK_SERVER_ERROR_CODES, ModelType } from "@/schemas";
+import { getPlugin, hasPlugin } from "@/server/plugins";
 
 let idCounter = 0;
 function makeId(prefix: string) {
@@ -73,6 +76,7 @@ test("pluginInvokeStream: validates streamed chunks against responseSchema", asy
     modelType: ModelType.llamacppCompletion,
     displayName: "Test Plugin",
     addonPackage: "@qvac/test-addon",
+    loadConfigSchema: z.object({}),
     createModel: function () {
       return {
         model: { load: async function () {} },
@@ -147,5 +151,124 @@ test("pluginInvoke: delegated models throw ModelIsDelegatedError", async functio
     );
   } finally {
     unregisterModel(modelId);
+  }
+});
+
+test("registerPlugin: accepts valid plugin and retrieves it", function (t) {
+  clearPlugins();
+
+  const validPlugin = {
+    modelType: "test-valid-plugin",
+    displayName: "Valid Test Plugin",
+    addonPackage: "@qvac/test-addon",
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} },
+        loader: {},
+      };
+    },
+    handlers: {
+      ping: {
+        requestSchema: z.object({}),
+        responseSchema: z.object({ ok: z.boolean() }),
+        streaming: false,
+        handler: async function () {
+          return { ok: true };
+        },
+      },
+    },
+  };
+
+  try {
+    registerPlugin(validPlugin);
+
+    t.ok(hasPlugin("test-valid-plugin"), "hasPlugin returns true");
+
+    const retrieved = getPlugin("test-valid-plugin");
+    t.ok(retrieved, "getPlugin returns the plugin");
+    t.is(retrieved?.modelType, "test-valid-plugin");
+    t.is(retrieved?.displayName, "Valid Test Plugin");
+  } finally {
+    clearPlugins();
+  }
+});
+
+test("registerPlugin: rejects duplicate modelType registration", function (t) {
+  clearPlugins();
+
+  const plugin = {
+    modelType: "test-duplicate-plugin",
+    displayName: "First Plugin",
+    addonPackage: "@qvac/test-addon",
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} },
+        loader: {},
+      };
+    },
+    handlers: {},
+  };
+
+  try {
+    registerPlugin(plugin);
+    t.ok(hasPlugin("test-duplicate-plugin"), "first registration succeeds");
+
+    const duplicatePlugin = {
+      ...plugin,
+      displayName: "Duplicate Plugin",
+    };
+
+    try {
+      registerPlugin(duplicatePlugin);
+      t.fail("Expected registerPlugin to throw on duplicate");
+    } catch (error) {
+      t.ok(error instanceof PluginAlreadyRegisteredError);
+      t.is(
+        (error as PluginAlreadyRegisteredError).code,
+        SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED,
+      );
+    }
+
+    const retrieved = getPlugin("test-duplicate-plugin");
+    t.is(
+      retrieved?.displayName,
+      "First Plugin",
+      "original plugin is unchanged",
+    );
+  } finally {
+    clearPlugins();
+  }
+});
+
+test("registerPlugin: rejects alias as modelType", function (t) {
+  clearPlugins();
+
+  const plugin = {
+    modelType: "llm",
+    displayName: "Custom LLM Plugin",
+    addonPackage: "@custom/llm",
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} },
+        loader: {},
+      };
+    },
+    handlers: {},
+  };
+
+  try {
+    registerPlugin(plugin);
+    t.fail("Expected registerPlugin to throw for alias modelType");
+  } catch (error) {
+    t.ok(error instanceof PluginModelTypeReservedError);
+    t.is(
+      (error as PluginModelTypeReservedError).code,
+      SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED,
+    );
+  } finally {
+    clearPlugins();
   }
 });

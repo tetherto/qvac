@@ -3,10 +3,12 @@ import {
   type QvacPlugin,
   type PluginHandlerDefinition,
 } from "@/schemas/plugin";
+import { isModelTypeAlias } from "@/schemas";
 import {
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginLoggingInvalidError,
+  PluginModelTypeReservedError,
 } from "@/utils/errors-server";
 import { createAddonLoggerCallback } from "@/logging/addon";
 
@@ -34,6 +36,10 @@ function validatePluginDefinition(plugin: QvacPlugin): void {
 
 export function registerPlugin(plugin: QvacPlugin): void {
   validatePluginDefinition(plugin);
+
+  if (isModelTypeAlias(plugin.modelType)) {
+    throw new PluginModelTypeReservedError(plugin.modelType);
+  }
 
   if (plugins.has(plugin.modelType)) {
     throw new PluginAlreadyRegisteredError(plugin.modelType);
