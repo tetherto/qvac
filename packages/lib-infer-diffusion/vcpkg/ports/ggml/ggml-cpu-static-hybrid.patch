@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 752bd67..a93669b 100644
+index b0b8e578..576d6a04 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -177,6 +177,7 @@ option(GGML_XTHEADVECTOR     "ggml: enable xtheadvector"     OFF)
@@ -11,7 +11,7 @@ index 752bd67..a93669b 100644
  set(GGML_CPU_POWERPC_CPUTYPE "" CACHE STRING "ggml: CPU type for PowerPC")
  
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 609f524..4eda64b 100644
+index d577f809..ef3a1308 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -187,6 +187,10 @@ endif()
@@ -25,7 +25,7 @@ index 609f524..4eda64b 100644
  add_library(ggml-base
              ../include/ggml.h
              ../include/ggml-alloc.h
-@@ -247,7 +251,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+@@ -243,7 +247,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
  endif()
  
  function(ggml_add_backend_library backend)
@@ -34,7 +34,7 @@ index 609f524..4eda64b 100644
          add_library(${backend} MODULE ${ARGN})
          # write the shared library to the output directory
          set_target_properties(${backend} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-@@ -303,6 +307,9 @@ function(ggml_add_backend backend)
+@@ -299,6 +303,9 @@ function(ggml_add_backend backend)
              string(TOUPPER "GGML_USE_${backend}" backend_use)
              target_compile_definitions(ggml PUBLIC ${backend_use})
          endif()
@@ -43,4 +43,22 @@ index 609f524..4eda64b 100644
 +        endif()
      endif()
  endfunction()
+ 
+diff --git a/cmake/ggml-config.cmake.in b/cmake/ggml-config.cmake.in
+index 91c9d5cd..0c7a92c8 100644
+--- a/cmake/ggml-config.cmake.in
++++ b/cmake/ggml-config.cmake.in
+@@ -128,6 +128,12 @@ if(NOT TARGET ggml::ggml)
+     set(_ggml_all_targets "")
+-    if (NOT GGML_BACKEND_DL)
++    # In hybrid mode (GGML_BACKEND_DL + GGML_CPU_STATIC), only the CPU backend
++    # is static and must still be exported to downstream consumers.
++    if (NOT GGML_BACKEND_DL OR GGML_CPU_STATIC)
+         foreach(_ggml_backend ${GGML_AVAILABLE_BACKENDS})
++            string(REGEX MATCH "^ggml-cpu" is_cpu_variant "${_ggml_backend}")
++            if (GGML_BACKEND_DL AND GGML_CPU_STATIC AND NOT is_cpu_variant)
++                continue()
++            endif()
+             string(REPLACE "-" "_" _ggml_backend_pfx "${_ggml_backend}")
+             string(TOUPPER "${_ggml_backend_pfx}" _ggml_backend_pfx)
  

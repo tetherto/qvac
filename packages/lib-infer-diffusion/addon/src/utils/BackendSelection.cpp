@@ -36,6 +36,13 @@ int parseAdrenoModel(const std::string& description) {
   return 0;
 }
 
+std::string toLowerCopy(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+    return std::tolower(c);
+  });
+  return s;
+}
+
 } // namespace
 
 namespace sd_backend_selection {
@@ -116,6 +123,50 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
 
   QLOG_IF(Priority::INFO, "Backend selection: non-Adreno -> GPU (Vulkan)");
   return BackendDevice::GPU;
+}
+
+bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
+  if (preferred == BackendDevice::CPU) {
+    return false;
+  }
+
+  const size_t nDevices = ggml_backend_dev_count();
+  bool hasAdreno800Plus = false;
+  bool hasOpenClGpu = false;
+
+  for (size_t i = 0; i < nDevices; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    enum ggml_backend_dev_type devType = ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+
+    const std::string desc =
+        ggml_backend_dev_description(dev) ? ggml_backend_dev_description(dev) : "";
+    const std::string backendName =
+        ggml_backend_dev_name(dev) ? ggml_backend_dev_name(dev) : "";
+
+    const int model = parseAdrenoModel(desc);
+    if (model >= 800) {
+      hasAdreno800Plus = true;
+    }
+
+    if (toLowerCopy(backendName).find("opencl") != std::string::npos) {
+      hasOpenClGpu = true;
+    }
+  }
+
+  const bool preferOpenCl = hasAdreno800Plus && hasOpenClGpu;
+  if (preferOpenCl) {
+    QLOG_IF(
+        Priority::INFO,
+        "Backend selection: Adreno 800+ with OpenCL backend available -> "
+        "prefer OpenCL");
+  }
+  return preferOpenCl;
 }
 
 } // namespace sd_backend_selection

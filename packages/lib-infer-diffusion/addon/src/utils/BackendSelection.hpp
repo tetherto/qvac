@@ -35,4 +35,12 @@ int threadsFromMap(
  */
 BackendDevice resolveBackendForDevice(BackendDevice preferred);
 
+/**
+ * Returns true when runtime device probing indicates that OpenCL should be
+ * preferred for Adreno 800+ GPUs.
+ *
+ * This only applies when preferred is GPU. CPU preference always returns false.
+ */
+bool shouldPreferOpenClForAdreno(BackendDevice preferred);
+
 } // namespace sd_backend_selection
