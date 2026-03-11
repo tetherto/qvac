@@ -7,7 +7,7 @@
 > <a href="https://qvacbytether.featurebase.app" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
-**QVAC** is an open-source, cross-platform ecosystem for building local-first, peer-to-peer **AI** applications and systems.
+**QVAC** is an open-source, cross-platform ecosystem for building local-first, peer-to-peer **AI** applications and systems. With QVAC, you can run AI tasks like LLMs, speech, RAG, and more locally across Linux, macOS, Windows, Android, and iOS — or delegate inference to peers using its built-in P2P capabilities.
 
 ### Key features
 
@@ -79,7 +79,7 @@ node quickstart.js
 
 ### Functionalities
 
-#### AI tasks
+#### AI capabilities
 
 * **Completion:** LLM inference for text generation and chat via [`llama.cpp`](https://github.com/ggml-org/llama.cpp).
 * **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `llama.cpp`.
@@ -124,33 +124,31 @@ Legend:
 | Package | Description | Category |
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
+| lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) within QVAC runtime applications | Addon |
 | lib-infer-nmtcpp | Library for running various translation models supporting OPUS, Bergamot, and IndicTrans backends | Addon |
+| lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
-| lib-infer-onnx-vad | Voice activity detection (VAD) addon using Silero VAD model via ONNX Runtime | Addon |
 | lib-infer-parakeet | High-performance speech-to-text inference addon using NVIDIA Parakeet models via ONNX Runtime | Addon |
 | lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via whisper.cpp | Addon |
 | lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
-| lib-inference-addon-onnx-ocr-fasttext | Optical Character Recognition (OCR) library using detector and recognizer models via ONNX Runtime | Addon |
-| lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
-| lib-rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
+| lib-langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
+| ocr-onnx | Optical Character Recognition (OCR) addon using ONNX Runtime | Addon |
+| rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
 | lib-dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
 | lib-dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
 | lib-dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
-| lib-error-base | Standardized error handling capabilities for all QVAC libraries | Core |
+| error | Standardized error handling capabilities for all QVAC libraries | Core |
 | lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
-| lib-logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
+| logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
+| cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
-| cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 
 ### Development
 
-- For the standard development workflow used in this monorepo, see [`gitflow.md`](gitflow.md).
+- For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](gitflow.md).
 - For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+- For the QVAC architecture as a whole, see `/docs/architecture`.

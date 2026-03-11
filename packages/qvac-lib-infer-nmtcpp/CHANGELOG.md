@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-03-11
+
+This release fixes a critical issue where pivot translation would hang indefinitely after completing the translation. The fix ensures proper job completion signaling for pivot translation workflows in Bergamot models.
+
+## Bug Fixes
+
+### Pivot Translation Hanging Fix
+
+Fixed an issue where pivot translation through Bergamot models would hang after successfully completing the translation. The problem occurred because the C++ pivot translation model was sending statistics in a different format than expected by the JavaScript interface. The stats object from pivot models contained keys prefixed with model names (like `BERGAMOT : ->TPS`) instead of the plain `TPS` field that the JavaScript code was checking for. The fix improves the stats detection logic to recognize statistics objects by checking for multiple possible stats-related keys, making it more robust and future-proof against changes in the C++ layer's stats format.
+
 ## [0.6.0] - 2026-03-06
 
 This release enhances the JavaScript interface for pivot translation support in Bergamot models. The improvements make it easier to configure pivot translation workflows through a dedicated configuration object, with better separation of concerns between primary and pivot model resources.

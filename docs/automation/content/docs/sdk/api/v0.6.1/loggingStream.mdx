@@ -1,0 +1,43 @@
+---
+title: "loggingStream( )"
+titleStyle: code
+description: "Opens a logging stream to receive real-time logs."
+---
+
+```typescript
+function loggingStream(params: infer): AsyncGenerator
+```
+
+## Description
+
+Opens a logging stream to receive real-time logs.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `infer` | ✓ | The arguments for the logging stream |
+
+## Returns
+
+```typescript
+AsyncGenerator
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Open a logging stream for a model
+const logStream = loggingStream({ id: 'my-model-id' });
+
+// Or stream SDK server logs
+const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+
+for await (const logMessage of logStream) {
+  console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
+}
+```
+```
