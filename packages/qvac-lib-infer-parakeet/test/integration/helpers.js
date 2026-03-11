@@ -492,6 +492,69 @@ async function runTranscription (params, expectation = {}) {
   }
 }
 
+const MODEL_CONFIGS = {
+  ctc: {
+    dirName: 'parakeet-ctc-0.6b-onnx',
+    files: [
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx' },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data' },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json' }
+    ]
+  },
+  eou: {
+    dirName: 'parakeet-eou-120m-v1-onnx',
+    files: [
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx' },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx' },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json' }
+    ]
+  },
+  sortformer: {
+    dirName: 'sortformer-4spk-v2-onnx',
+    files: [
+      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx' }
+    ]
+  }
+}
+
+/**
+ * Ensures a non-TDT model is downloaded and available.
+ * @param {string} modelType - 'ctc', 'eou', or 'sortformer'
+ * @returns {Promise<string|null>} Path to model directory, or null if type unknown
+ */
+async function ensureModelForType (modelType) {
+  const cfg = MODEL_CONFIGS[modelType]
+  if (!cfg) return null
+
+  const { modelsDir } = getTestPaths()
+  const targetPath = path.join(modelsDir, cfg.dirName)
+
+  const allFilesExist = cfg.files.every(f =>
+    fs.existsSync(path.join(targetPath, f.file))
+  )
+
+  if (allFilesExist) {
+    console.log(`${modelType.toUpperCase()} model already downloaded`)
+    return targetPath
+  }
+
+  console.log(`Downloading ${modelType.toUpperCase()} model from HuggingFace...`)
+  if (!fs.existsSync(targetPath)) {
+    fs.mkdirSync(targetPath, { recursive: true })
+  }
+
+  for (const { url, file } of cfg.files) {
+    const destPath = path.join(targetPath, file)
+    if (!fs.existsSync(destPath)) {
+      console.log(`  Downloading ${file}...`)
+      await downloadFile(url, destPath)
+    }
+  }
+
+  console.log(`${modelType.toUpperCase()} model download complete`)
+  return targetPath
+}
+
 module.exports = {
   detectPlatform,
   waitUntilIdle,
@@ -505,8 +568,10 @@ module.exports = {
   wordErrorRate,
   validateAccuracy,
   ensureModel,
+  ensureModelForType,
   readFileChunked,
   isMobile,
   platform,
-  arch
+  arch,
+  MODEL_CONFIGS
 }

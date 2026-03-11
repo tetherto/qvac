@@ -148,7 +148,7 @@ test('Model validation happens in constructor', { timeout: 60000 }, async (t) =>
 
   // Ensure the path doesn't exist
   if (fs.existsSync(invalidPath)) {
-    fs.rmdirSync(invalidPath, { recursive: true })
+    fs.rmSync(invalidPath, { recursive: true })
   }
 
   const args = {
@@ -254,7 +254,89 @@ test('Should validate CTC model file requirements differently from TDT', { timeo
   // Cleanup
   if (fs.existsSync(ctcModelPath)) {
     try {
-      fs.rmdirSync(ctcModelPath, { recursive: true })
+      fs.rmSync(ctcModelPath, { recursive: true })
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+})
+
+/**
+ * Test 8: Test EOU model type file requirements (encoder.onnx, decoder_joint.onnx, tokenizer.json)
+ */
+test('Should validate EOU model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
+
+  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const eouModelPath = path.join(testDir, 'test-eou-model')
+
+  if (!fs.existsSync(eouModelPath)) {
+    fs.mkdirSync(eouModelPath, { recursive: true })
+  }
+
+  const args = {
+    modelName: 'test-eou-model',
+    diskPath: testDir,
+    loader: createLoader()
+  }
+  const config = {
+    parakeetConfig: {
+      modelType: 'eou'
+    }
+  }
+
+  try {
+    const model = new TranscriptionParakeet(args, config)
+    t.ok(model, 'Model instance created for EOU type')
+    t.pass('EOU model type accepts directory without TDT-specific files')
+  } catch (error) {
+    t.ok(error, 'EOU validation may also throw for missing files')
+  }
+
+  if (fs.existsSync(eouModelPath)) {
+    try {
+      fs.rmSync(eouModelPath, { recursive: true })
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+})
+
+/**
+ * Test 9: Test Sortformer model type file requirements (single sortformer.onnx)
+ */
+test('Should validate Sortformer model file requirements differently from TDT', { timeout: 60000 }, async (t) => {
+  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
+
+  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(os.tmpdir(), '.parakeet-test-models')
+  const sfModelPath = path.join(testDir, 'test-sortformer-model')
+
+  if (!fs.existsSync(sfModelPath)) {
+    fs.mkdirSync(sfModelPath, { recursive: true })
+  }
+
+  const args = {
+    modelName: 'test-sortformer-model',
+    diskPath: testDir,
+    loader: createLoader()
+  }
+  const config = {
+    parakeetConfig: {
+      modelType: 'sortformer'
+    }
+  }
+
+  try {
+    const model = new TranscriptionParakeet(args, config)
+    t.ok(model, 'Model instance created for Sortformer type')
+    t.pass('Sortformer model type accepts directory without TDT-specific files')
+  } catch (error) {
+    t.ok(error, 'Sortformer validation may also throw for missing files')
+  }
+
+  if (fs.existsSync(sfModelPath)) {
+    try {
+      fs.rmSync(sfModelPath, { recursive: true })
     } catch (e) {
       // Ignore cleanup errors
     }

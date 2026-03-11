@@ -114,6 +114,38 @@ bare examples/transcribe.js -f examples/samples/croatian.raw -m models/parakeet-
 bare examples/transcribe.js --file examples/samples/sample-16k.wav
 ```
 
+### CTC Transcription (English-only)
+
+**[quickstart-ctc.js](./examples/quickstart-ctc.js)** - Fast English-only transcription using the CTC model. Includes punctuation and capitalization. Best for single-language, high-throughput use cases.
+
+```bash
+bare examples/quickstart-ctc.js
+```
+
+### Streaming with End-of-Utterance Detection
+
+**[quickstart-eou.js](./examples/quickstart-eou.js)** - Real-time streaming transcription using the EOU model (120M params). Automatically detects utterance boundaries for turn-by-turn output. Note: the EOU model is optimized for low latency over accuracy — expect lower transcription quality compared to TDT/CTC.
+
+```bash
+bare examples/quickstart-eou.js
+```
+
+### Speaker Diarization
+
+**[quickstart-sortformer.js](./examples/quickstart-sortformer.js)** - Identifies who is speaking when using the Sortformer model (up to 4 speakers). Outputs speaker-labeled time segments.
+
+```bash
+bare examples/quickstart-sortformer.js
+```
+
+### Diarized Transcription
+
+**[quickstart-diarized.js](./examples/quickstart-diarized.js)** - Combines TDT transcription with Sortformer diarization to produce speaker-attributed text. Runs both models in parallel and merges the results. Diarization accuracy depends on audio quality and speaker overlap — some boundary imprecision is expected.
+
+```bash
+bare examples/quickstart-diarized.js
+```
+
 ### Audio Decoding
 
 **[example.decoder.js](./examples/example.decoder.js)** - Demonstrates using `@qvac/decoder-audio` to decode audio files before transcription. Useful when working with compressed audio formats.
