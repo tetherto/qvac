@@ -22,6 +22,10 @@ async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/doctr-models.test.js', options)
 }
 
+async function runDoctrParamValidationTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-param-validation.test.js', options)
+}
+
 async function runErrorHandlingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/error-handling.test.js', options)
 }

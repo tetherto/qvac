@@ -5340,6 +5340,38 @@
     "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
   },
   {
+    "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "OCR-specialized vision-language model for document understanding",
+    "quantization": "q4_k_m",
+    "params": "0.6B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "ocr",
+      "lighton-ocr-2"
+    ],
+    "notes": "Qwen3 LLM (0.6B) + SigLIP vision encoder. Full-page OCR, 11 languages. Use --jinja for chat template.",
+    "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector for LightON OCR-2 1B",
+    "quantization": "f16",
+    "params": "0.6B",
+    "license": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "ocr",
+      "lighton-ocr-2"
+    ],
+    "notes": "F16 recommended — half the size of F32, negligible quality difference",
+    "link": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF"
+  },
+  {
     "source": "https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "AfriqueGemma 4B - African language model (20 languages + EN/FR/PT/AR)",
