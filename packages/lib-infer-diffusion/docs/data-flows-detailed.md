@@ -15,7 +15,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 - Cross-thread flow: JS → submit job via `runJob(params)` → wake C++ → process diffusion steps → output → uv_async_send → JS callback
 
 **Generation Path:**
-- JS calls `txt2img(params)` → returns QvacImageResponse immediately (non-blocking)
+- JS calls `model.run(params)` → returns QvacResponse immediately (non-blocking)
 - JS serializes params to JSON, calls `addon.runJob(paramsJson)` once; returns boolean (accepted or job already active)
 - C++ single-job runner takes the job, executes diffusion loop → generates image
 - Queues progress/output events → triggers JS callback asynchronously
@@ -35,11 +35,11 @@ This document contains detailed diagrams showing how data moves through the `@qv
 
 ```mermaid
 flowchart TD
-    Start([JS: model.txt2img]) --> ParseParams[Parse generation params]
+    Start([JS: model.run]) --> ParseParams[Parse generation params]
     ParseParams --> SerializeJSON[Serialize to JSON]
     
     SerializeJSON --> RunJob[addon.runJob(paramsJson)]
-    RunJob --> CreateResp[Create QvacImageResponse]
+    RunJob --> CreateResp[Create QvacResponse]
     CreateResp --> ReturnJS([Return to JavaScript])
     
     RunJob -.->|Enters native| LockMutex[Lock mutex]
@@ -91,7 +91,7 @@ flowchart TD
     UnlockCB --> ForEach[For each output event]
     
     ForEach --> InvokeJS[Call JavaScript outputCb]
-    InvokeJS --> UpdateResponse[QvacImageResponse emits]
+    InvokeJS --> UpdateResponse[QvacResponse emits]
     UpdateResponse --> ProgressYield([onStep callback / await])
 ```
 
@@ -164,4 +164,4 @@ flowchart TD
 **Related Documents:**
 - [architecture.md](architecture.md) - Complete architecture documentation
 
-**Last Updated:** 2026-02-23
+**Last Updated:** 2026-03-11
