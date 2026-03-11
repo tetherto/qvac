@@ -47,6 +47,25 @@ const REQUIRED_ATTRIBUTIONS = {
     '  relevant authority (Section 3.1.3).',
     '  Use is subject to the HAI-DEF Prohibited Use Policy at',
     '  developers.google.com/health-ai-developer-foundations/prohibited-use-policy'
+  ],
+  'openrail++': [
+    '# Model Use Restrictions (Open RAIL++-M)',
+    '',
+    'As a user of the QVAC SDK and its associated model registry, you agree not to use the Model or its Derivatives:',
+    '',
+    '1. **Illegal Acts:** In any way that violates any applicable national, federal, state, local or international law or regulation.',
+    '2. **Harm to Minors:** For the purpose of exploiting, harming or attempting to exploit or harm minors in any way.',
+    '3. **Malicious Content:** To generate or disseminate verifiably false information and/or content with the purpose of harming others.',
+    '4. **Personal Data:** To generate or disseminate personal identifiable information that can be used to harm an individual.',
+    '5. **Defamation & Harassment:** To defame, disparage or otherwise harass others.',
+    '6. **Automated Decisions:** For fully automated decision making that adversely impacts an individual\'s legal rights or otherwise creates or modifies a binding, enforceable obligation.',
+    '7. **Discrimination:** For any use intended to or which has the effect of discriminating against or harming individuals or groups based on online or offline social behavior or known or predicted personal or personality characteristics.',
+    '8. **Exploitation:** To exploit any of the vulnerabilities of a specific group of persons based on their age, social, physical or mental characteristics, in order to materially distort the behavior of a person pertaining to such group in a manner that causes or is likely to cause that person or another person physical or psychological harm.',
+    '9. **Medical Advice:** To provide medical advice and medical results interpretation.',
+    '10. **Justice & Law Enforcement:** To generate or disseminate information for use by administration of justice, law enforcement, immigration or asylum processes, such as predicting an individual will commit fraud/crime commitment (e.g. by text profiling, drawing causal relationships between assertions made in documents, indiscriminate and untargeted scraping).',
+    '',
+    '---',
+    '*Note: These restrictions must be included in any distribution of the Model or Derivatives thereof to your end-users.*',    
   ]
 }
 
