@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_XNNPACK "Enable XNNPack execution provider" ON)
+option(QVAC_ONNX_ANDROID_LOG "Enable Android logcat debug logging" OFF)
 
 if(ENABLE_XNNPACK)
   list(APPEND VCPKG_MANIFEST_FEATURES "xnnpack")
@@ -16,7 +17,10 @@ endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx C CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
+string(JSON _pkg_version GET "${_pkg_json}" "version")
+
+project(qvac-onnx VERSION ${_pkg_version} LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 
@@ -55,6 +59,10 @@ target_sources(${qvac-onnx} PRIVATE addon/binding.cpp)
 target_include_directories(${qvac-onnx} PRIVATE src)
 target_link_libraries(${qvac-onnx} PRIVATE onnxruntime::onnxruntime_static)
 
+if(QVAC_ONNX_ANDROID_LOG)
+  target_compile_definitions(${qvac-onnx} PRIVATE QVAC_ONNX_ENABLE_ANDROID_LOG)
+endif()
+
 # Version script
 if(UNIX AND NOT APPLE)
   target_link_options(${qvac-onnx}_module PRIVATE
@@ -84,6 +92,10 @@ target_include_directories(qvac-onnx-headers INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
   $<INSTALL_INTERFACE:include/onnxruntime>)
+
+if(QVAC_ONNX_ANDROID_LOG)
+  target_compile_definitions(qvac-onnx-headers INTERFACE QVAC_ONNX_ENABLE_ANDROID_LOG)
+endif()
 
 # --- Installs ---
 install(DIRECTORY src/qvac-onnx DESTINATION include FILES_MATCHING PATTERN "*.hpp")

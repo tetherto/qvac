@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 export const VERBOSITY = {
   ERROR: 0,
@@ -40,6 +41,7 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   tools: z.boolean().optional(),
+  projectionModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>;
@@ -63,14 +65,14 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>;
 // Base schema - validates types, all fields optional (for client-side validation)
 export const embedConfigBaseSchema = z.object({
   gpuLayers: z.number().int().optional(),
-  device: z.string().optional(),
+  device: z.enum(["gpu", "cpu"]).optional(),
   batchSize: z.number().int().min(1).optional(),
-  ctxSize: z.number().int().min(1).optional(),
-  flashAttention: z.enum(["on", "off"]).optional(),
-  // Raw CLI override (advanced, takes precedence if set)
-  // Format: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024"
-  // See: https://github.com/tetherto/qvac-lib-infer-llamacpp-embed/tree/main?tab=readme-ov-file#4-create-config
-  rawConfig: z.string().optional(),
+  pooling: z.enum(["none", "mean", "cls", "last", "rank"]).optional(),
+  attention: z.enum(["causal", "non-causal"]).optional(),
+  embdNormalize: z.number().int().optional(),
+  flashAttention: z.enum(["on", "off", "auto"]).optional(),
+  mainGpu: z.union([z.number().int().min(0), z.enum(["integrated", "dedicated"])]).optional(),
+  verbosity: verbositySchema.optional(),
 });
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>;

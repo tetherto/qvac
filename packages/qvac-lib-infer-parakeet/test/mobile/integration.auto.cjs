@@ -44,14 +44,15 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
 
   console.log('[test] Starting Parakeet transcription test')
 
+  let binding = null
+  let parakeet = null
+
   try {
-    // Load native addon
-    const binding = require('@qvac/transcription-parakeet/binding.js')
+    binding = require('@qvac/transcription-parakeet/binding.js')
     const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
     binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
     console.log('[test] ✓ Addon loaded')
 
-    // Download model files
     if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
 
     for (const name of MODEL_FILES) {
@@ -63,9 +64,9 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
       await downloadFile(`${HF_BASE}/${name}`, dest, name)
     }
 
-    // Initialize Parakeet
     let result = null
-    const parakeet = new ParakeetInterface(binding, {
+    let addonError = null
+    parakeet = new ParakeetInterface(binding, {
       modelPath: modelDir,
       modelType: 'tdt',
       language: 'en',
@@ -80,23 +81,31 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
           if (seg?.text) result = seg.text
         }
       }
-      if (error) console.error('[test] Error:', error)
+      if (error) {
+        console.error('[test] Error:', error)
+        addonError = error
+      }
     })
 
-    // Load weights
+    // ONNX external data files (e.g. encoder-model.onnx.data) are too large to
+    // load into JS memory (~2.4 GB). Send a 1-byte dummy so the C++ side
+    // registers the filename, then it resolves the actual data from disk via
+    // the model path when creating the ONNX Runtime session.
     for (const filename of MODEL_FILES) {
       const filePath = path.join(modelDir, filename)
       if (!fs.existsSync(filePath)) continue
-      // Don't read 2.4GB .data file into memory - C++ loads from disk
       const chunk = filename.endsWith('.data')
         ? new Uint8Array([0])
         : new Uint8Array(fs.readFileSync(filePath))
       await parakeet.loadWeights({ filename, chunk, completed: true })
     }
     await parakeet.activate()
+
+    await new Promise(r => setTimeout(r, 500))
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+
     console.log('[test] ✓ Model loaded')
 
-    // Transcribe
     const audioPath = getAssetPath('sample.raw')
     if (!audioPath) throw new Error('sample.raw not found')
 
@@ -109,13 +118,12 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
     await parakeet.append({ type: 'audio', data: audio.buffer })
     await parakeet.append({ type: 'end of job' })
 
-    // Wait for result
     for (let i = 0; i < 60 && !result; i++) {
       await new Promise(r => setTimeout(r, 2000))
     }
 
-    await parakeet.destroyInstance()
-    binding.releaseLogger()
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+    if (!result || result.startsWith('[')) throw new Error(`No valid transcription result: "${result}"`)
 
     console.log(`[test] Result: "${result}"`)
     console.log(`[test] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
@@ -127,5 +135,184 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   } catch (error) {
     console.error(`[test] ❌ FAILED: ${error.message}`)
     return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  } finally {
+    try {
+      if (parakeet) {
+        await parakeet.unloadWeights()
+        await new Promise(r => setTimeout(r, 1000))
+        await parakeet.destroyInstance()
+      }
+    } catch (_) {}
+    try { if (binding) binding.releaseLogger() } catch (_) {}
   }
+}
+
+/**
+ * Shared helper for model integration tests.
+ *
+ * @param {Object}   opts
+ * @param {string}   opts.tag            - Log prefix, e.g. "test-ctc"
+ * @param {string}   opts.dirPath        - Writable directory for cached models
+ * @param {Function} opts.getAssetPath   - Resolves bundled test asset paths
+ * @param {string}   opts.modelType      - "tdt" | "ctc" | "eou" | "sortformer"
+ * @param {string}   opts.modelDirName   - Sub-directory name under dirPath
+ * @param {Array}    opts.files          - Files to download: { name, url } or { name, url, skipRead }
+ * @param {string}   [opts.action]       - Log description, defaults to "Transcribing"
+ */
+async function runModelTest (opts) {
+  const { tag, dirPath, getAssetPath, modelType, modelDirName, files, action = 'Transcribing' } = opts
+  const startTime = Date.now()
+  const modelDir = path.join(dirPath, modelDirName)
+
+  console.log(`[${tag}] Starting Parakeet ${modelType.toUpperCase()} test`)
+
+  let binding = null
+  let parakeet = null
+
+  try {
+    binding = require('@qvac/transcription-parakeet/binding.js')
+    const { ParakeetInterface } = require('@qvac/transcription-parakeet/parakeet.js')
+    binding.setLogger((p, m) => console.log(`[onnx:${p}] ${m}`))
+    console.log(`[${tag}] ✓ Addon loaded`)
+
+    if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
+
+    for (const file of files) {
+      const dest = path.join(modelDir, file.name)
+      if (fs.existsSync(dest)) {
+        console.log(`[${tag}] ${file.name}: cached`)
+        continue
+      }
+      await downloadFile(file.url, dest, file.name)
+    }
+
+    let result = null
+    let addonError = null
+    parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType,
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) result = seg.text
+        }
+      }
+      if (error) {
+        console.error(`[${tag}] Error:`, error)
+        addonError = error
+      }
+    })
+
+    // ONNX external data files are loaded from disk by the C++ side;
+    // send a 1-byte dummy so the filename is registered.
+    for (const file of files) {
+      const filePath = path.join(modelDir, file.name)
+      if (!fs.existsSync(filePath)) continue
+      const chunk = file.skipRead
+        ? new Uint8Array([0])
+        : new Uint8Array(fs.readFileSync(filePath))
+      await parakeet.loadWeights({ filename: file.name, chunk, completed: true })
+    }
+    await parakeet.activate()
+
+    await new Promise(r => setTimeout(r, 500))
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+
+    console.log(`[${tag}] ✓ Model loaded`)
+
+    const audioPath = getAssetPath('sample.raw')
+    if (!audioPath) throw new Error('sample.raw not found')
+
+    const rawBuffer = fs.readFileSync(audioPath.replace('file://', ''))
+    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+    const audio = new Float32Array(pcm.length)
+    for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
+
+    console.log(`[${tag}] ${action} ${(audio.length / 16000).toFixed(1)}s audio...`)
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    for (let i = 0; i < 60 && !result; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+
+    if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
+    if (!result || result.startsWith('[')) throw new Error(`No valid result: "${result}"`)
+
+    console.log(`[${tag}] Result: "${result}"`)
+    console.log(`[${tag}] ✅ PASSED in ${((Date.now() - startTime) / 1000).toFixed(0)}s`)
+
+    return {
+      summary: { total: 1, passed: 1, failed: 0 },
+      result: { fullText: result }
+    }
+  } catch (error) {
+    console.error(`[${tag}] ❌ FAILED: ${error.message}`)
+    return { summary: { total: 1, passed: 0, failed: 1 }, output: error.message }
+  } finally {
+    try {
+      if (parakeet) {
+        await parakeet.unloadWeights()
+        await new Promise(r => setTimeout(r, 1000))
+        await parakeet.destroyInstance()
+      }
+    } catch (_) {}
+    try { if (binding) binding.releaseLogger() } catch (_) {}
+  }
+}
+
+const CTC_HF_REPO = 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main'
+
+async function _disabled_runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+  return runModelTest({
+    tag: 'test-ctc',
+    dirPath,
+    getAssetPath,
+    modelType: 'ctc',
+    modelDirName: 'parakeet-ctc-model',
+    files: [
+      { name: 'model.onnx', url: `${CTC_HF_REPO}/onnx/model.onnx` },
+      { name: 'model.onnx_data', url: `${CTC_HF_REPO}/onnx/model.onnx_data`, skipRead: true },
+      { name: 'tokenizer.json', url: `${CTC_HF_REPO}/tokenizer.json` }
+    ]
+  })
+}
+
+const EOU_HF_BASE = 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx'
+
+async function _disabled_runEOUStreamingTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+  return runModelTest({
+    tag: 'test-eou',
+    dirPath,
+    getAssetPath,
+    modelType: 'eou',
+    modelDirName: 'parakeet-eou-model',
+    action: 'Transcribing (streaming)',
+    files: [
+      { name: 'encoder.onnx', url: `${EOU_HF_BASE}/encoder.onnx` },
+      { name: 'decoder_joint.onnx', url: `${EOU_HF_BASE}/decoder_joint.onnx` },
+      { name: 'tokenizer.json', url: `${EOU_HF_BASE}/tokenizer.json` }
+    ]
+  })
+}
+
+const SF_HF_BASE = 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main'
+
+async function runSortformerDiarizationTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+  return runModelTest({
+    tag: 'test-sf',
+    dirPath,
+    getAssetPath,
+    modelType: 'sortformer',
+    modelDirName: 'sortformer-model',
+    action: 'Running diarization on',
+    files: [
+      { name: 'sortformer.onnx', url: `${SF_HF_BASE}/diar_streaming_sortformer_4spk-v2.onnx` }
+    ]
+  })
 }

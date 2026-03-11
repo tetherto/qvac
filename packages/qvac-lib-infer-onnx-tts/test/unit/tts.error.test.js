@@ -4,54 +4,28 @@ const test = require('brittle')
 const { TTSInterface } = require('../../tts.js')
 const { QvacErrorAddonTTS, ERR_CODES } = require('../../lib/error.js')
 
-const process = require('process')
-global.process = process
-
-/**
- * Creates a mock binding that throws errors for specified methods
- * @param {Object} errorMethods - Object with method names as keys and error messages as values
- */
 function createErrorBinding (errorMethods = {}) {
   return {
     createInstance: () => ({ id: 1 }),
     activate: (handle) => {
       if (errorMethods.activate) throw new Error(errorMethods.activate)
     },
-    append: (handle, data) => {
-      if (errorMethods.append) throw new Error(errorMethods.append)
-      return 1
+    runJob: (handle, data) => {
+      if (errorMethods.runJob) throw new Error(errorMethods.runJob)
+      return true
     },
-    status: (handle) => {
-      if (errorMethods.status) throw new Error(errorMethods.status)
-      return 'listening'
-    },
-    pause: (handle) => {
-      if (errorMethods.pause) throw new Error(errorMethods.pause)
-    },
-    stop: (handle) => {
-      if (errorMethods.stop) throw new Error(errorMethods.stop)
-    },
-    cancel: (handle, jobId) => {
+    cancel: (handle) => {
       if (errorMethods.cancel) throw new Error(errorMethods.cancel)
     },
     destroyInstance: (handle) => {
       if (errorMethods.destroyInstance) throw new Error(errorMethods.destroyInstance)
     },
-    unload: (handle) => {
-      if (errorMethods.unload) throw new Error(errorMethods.unload)
-    },
-    load: (handle, config) => {
-      if (errorMethods.load) throw new Error(errorMethods.load)
-    },
-    reload: (handle, config) => {
-      if (errorMethods.reload) throw new Error(errorMethods.reload)
+    loadWeights: (handle, weightsData) => {
+      if (errorMethods.loadWeights) throw new Error(errorMethods.loadWeights)
     }
   }
 }
 
-/**
- * Test that activate() throws QvacErrorAddonTTS with FAILED_TO_ACTIVATE code
- */
 test('activate() throws QvacErrorAddonTTS with FAILED_TO_ACTIVATE code', async (t) => {
   const errorMessage = 'Activation failed due to invalid state'
   const binding = createErrorBinding({ activate: errorMessage })
@@ -67,16 +41,13 @@ test('activate() throws QvacErrorAddonTTS with FAILED_TO_ACTIVATE code', async (
   }
 })
 
-/**
- * Test that append() throws QvacErrorAddonTTS with FAILED_TO_APPEND code
- */
-test('append() throws QvacErrorAddonTTS with FAILED_TO_APPEND code', async (t) => {
-  const errorMessage = 'Append failed due to queue overflow'
-  const binding = createErrorBinding({ append: errorMessage })
+test('runJob() throws QvacErrorAddonTTS with FAILED_TO_APPEND code', async (t) => {
+  const errorMessage = 'runJob failed'
+  const binding = createErrorBinding({ runJob: errorMessage })
   const tts = new TTSInterface(binding, {})
 
   try {
-    await tts.append({ type: 'text', input: 'Hello' })
+    await tts.runJob({ type: 'text', input: 'Hello' })
     t.fail('Should have thrown an error')
   } catch (error) {
     t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
@@ -85,63 +56,21 @@ test('append() throws QvacErrorAddonTTS with FAILED_TO_APPEND code', async (t) =
   }
 })
 
-/**
- * Test that status() throws QvacErrorAddonTTS with FAILED_TO_GET_STATUS code
- */
-test('status() throws QvacErrorAddonTTS with FAILED_TO_GET_STATUS code', async (t) => {
-  const errorMessage = 'Status unavailable'
-  const binding = createErrorBinding({ status: errorMessage })
+test('loadWeights() throws QvacErrorAddonTTS with FAILED_TO_LOAD code', async (t) => {
+  const errorMessage = 'Load weights failed'
+  const binding = createErrorBinding({ loadWeights: errorMessage })
   const tts = new TTSInterface(binding, {})
 
   try {
-    await tts.status()
+    await tts.loadWeights({ filename: 'foo', contents: new Uint8Array(0) })
     t.fail('Should have thrown an error')
   } catch (error) {
     t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_GET_STATUS, 'Error code should be FAILED_TO_GET_STATUS')
+    t.is(error.code, ERR_CODES.FAILED_TO_LOAD, 'Error code should be FAILED_TO_LOAD')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
 })
 
-/**
- * Test that pause() throws QvacErrorAddonTTS with FAILED_TO_PAUSE code
- */
-test('pause() throws QvacErrorAddonTTS with FAILED_TO_PAUSE code', async (t) => {
-  const errorMessage = 'Cannot pause in current state'
-  const binding = createErrorBinding({ pause: errorMessage })
-  const tts = new TTSInterface(binding, {})
-
-  try {
-    await tts.pause()
-    t.fail('Should have thrown an error')
-  } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_PAUSE, 'Error code should be FAILED_TO_PAUSE')
-    t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
-  }
-})
-
-/**
- * Test that stop() throws QvacErrorAddonTTS with FAILED_TO_STOP code
- */
-test('stop() throws QvacErrorAddonTTS with FAILED_TO_STOP code', async (t) => {
-  const errorMessage = 'Stop operation failed'
-  const binding = createErrorBinding({ stop: errorMessage })
-  const tts = new TTSInterface(binding, {})
-
-  try {
-    await tts.stop()
-    t.fail('Should have thrown an error')
-  } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_STOP, 'Error code should be FAILED_TO_STOP')
-    t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
-  }
-})
-
-/**
- * Test that cancel() throws QvacErrorAddonTTS with FAILED_TO_CANCEL code
- */
 test('cancel() throws QvacErrorAddonTTS with FAILED_TO_CANCEL code', async (t) => {
   const errorMessage = 'Cancel operation failed'
   const binding = createErrorBinding({ cancel: errorMessage })
@@ -157,9 +86,6 @@ test('cancel() throws QvacErrorAddonTTS with FAILED_TO_CANCEL code', async (t) =
   }
 })
 
-/**
- * Test that destroyInstance() throws QvacErrorAddonTTS with FAILED_TO_DESTROY code
- */
 test('destroyInstance() throws QvacErrorAddonTTS with FAILED_TO_DESTROY code', async (t) => {
   const errorMessage = 'Failed to destroy instance'
   const binding = createErrorBinding({ destroyInstance: errorMessage })
@@ -175,9 +101,6 @@ test('destroyInstance() throws QvacErrorAddonTTS with FAILED_TO_DESTROY code', a
   }
 })
 
-/**
- * Test that destroyInstance() returns early if already destroyed
- */
 test('destroyInstance() returns early if handle is null', async (t) => {
   const binding = createErrorBinding({ destroyInstance: 'Should not be called' })
   const tts = new TTSInterface(binding, {})
@@ -190,12 +113,9 @@ test('destroyInstance() returns early if handle is null', async (t) => {
   t.pass('destroyInstance should return early without error when handle is null')
 })
 
-/**
- * Test that unload() throws QvacErrorAddonTTS with FAILED_TO_UNLOAD code
- */
-test('unload() throws QvacErrorAddonTTS with FAILED_TO_UNLOAD code', async (t) => {
-  const errorMessage = 'Unload operation failed'
-  const binding = createErrorBinding({ unload: errorMessage })
+test('unload() delegates to destroyInstance and preserves errors', async (t) => {
+  const errorMessage = 'Destroy failed during unload'
+  const binding = createErrorBinding({ destroyInstance: errorMessage })
   const tts = new TTSInterface(binding, {})
 
   try {
@@ -203,50 +123,11 @@ test('unload() throws QvacErrorAddonTTS with FAILED_TO_UNLOAD code', async (t) =
     t.fail('Should have thrown an error')
   } catch (error) {
     t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_UNLOAD, 'Error code should be FAILED_TO_UNLOAD')
+    t.is(error.code, ERR_CODES.FAILED_TO_DESTROY, 'Error code should be FAILED_TO_DESTROY')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
 })
 
-/**
- * Test that load() throws QvacErrorAddonTTS with FAILED_TO_LOAD code
- */
-test('load() throws QvacErrorAddonTTS with FAILED_TO_LOAD code', async (t) => {
-  const errorMessage = 'Load operation failed'
-  const binding = createErrorBinding({ load: errorMessage })
-  const tts = new TTSInterface(binding, {})
-
-  try {
-    await tts.load({ modelPath: './model.onnx' })
-    t.fail('Should have thrown an error')
-  } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_LOAD, 'Error code should be FAILED_TO_LOAD')
-    t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
-  }
-})
-
-/**
- * Test that reload() throws QvacErrorAddonTTS with FAILED_TO_RELOAD code
- */
-test('reload() throws QvacErrorAddonTTS with FAILED_TO_RELOAD code', async (t) => {
-  const errorMessage = 'Reload operation failed'
-  const binding = createErrorBinding({ reload: errorMessage })
-  const tts = new TTSInterface(binding, {})
-
-  try {
-    await tts.reload({ modelPath: './model.onnx' })
-    t.fail('Should have thrown an error')
-  } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTS, 'Error should be instance of QvacErrorAddonTTS')
-    t.is(error.code, ERR_CODES.FAILED_TO_RELOAD, 'Error code should be FAILED_TO_RELOAD')
-    t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
-  }
-})
-
-/**
- * Test that error cause is preserved
- */
 test('Error cause is preserved in QvacErrorAddonTTS', async (t) => {
   const errorMessage = 'Original error message'
   const binding = createErrorBinding({ activate: errorMessage })
@@ -262,14 +143,11 @@ test('Error cause is preserved in QvacErrorAddonTTS', async (t) => {
   }
 })
 
-/**
- * Test all ERR_CODES are defined and unique
- */
 test('All ERR_CODES are defined and unique', async (t) => {
   const codes = Object.values(ERR_CODES)
   const uniqueCodes = new Set(codes)
 
-  t.is(codes.length, 10, 'Should have 10 error codes')
+  t.is(codes.length, 11, 'Should have 11 error codes')
   t.is(uniqueCodes.size, codes.length, 'All error codes should be unique')
 
   // Verify code range
@@ -283,4 +161,5 @@ test('All ERR_CODES are defined and unique', async (t) => {
   t.is(ERR_CODES.FAILED_TO_LOAD, 7008, 'FAILED_TO_LOAD should be 7008')
   t.is(ERR_CODES.FAILED_TO_RELOAD, 7009, 'FAILED_TO_RELOAD should be 7009')
   t.is(ERR_CODES.FAILED_TO_STOP, 7010, 'FAILED_TO_STOP should be 7010')
+  t.is(ERR_CODES.JOB_ALREADY_RUNNING, 7011, 'JOB_ALREADY_RUNNING should be 7011')
 })

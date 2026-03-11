@@ -96,33 +96,39 @@ void ModelMetaData::checkInitialized() const {
   }
 }
 
-std::optional<uint32_t> ModelMetaData::tryGetU32(const char* key) const {
-  if (metadata_ == nullptr) {
+template <typename T, typename F>
+static std::optional<T>
+tryGet(const metadata_handle_ptr& metadata, const char* key, F&& getter) {
+  if (metadata == nullptr) {
     return std::nullopt;
   }
-  uint32_t value = 0;
-  MetaResultStatus status = llama_model_meta_get_u32(metadata_, key, &value);
+  T value{};
+  MetaResultStatus status = getter(metadata, key, &value);
   if (status != MetaResultStatus::SUCCESS) {
     return std::nullopt;
   }
   return value;
 }
 
+std::optional<uint32_t> ModelMetaData::tryGetU32(const char* key) const {
+  return tryGet<uint32_t>(metadata_, key, llama_model_meta_get_u32);
+}
+
+std::optional<std::string> ModelMetaData::tryGetString(const char* key) const {
+  return tryGet<std::string>(metadata_, key, llama_model_meta_get_str);
+}
+
 bool ModelMetaData::isU32OneOf(
     const char* key, std::initializer_list<uint32_t> values) const {
   checkInitialized();
-  uint32_t value = 0;
-  MetaResultStatus status = llama_model_meta_get_u32(metadata_, key, &value);
-  if (status != MetaResultStatus::SUCCESS) {
-    LOG_WRN(
-        "ModelMetaData::isU32OneOf: failed to read key '%s', "
-        "llama_model_meta_get_u32 returned %s\n",
-        key,
-        std::to_string(static_cast<int>(status)).c_str());
+  auto value = tryGetU32(key);
+  if (!value.has_value()) {
+    LOG_WRN("ModelMetaData::isU32OneOf: failed to read key '%s'\n", key);
     return false;
   }
-  return std::ranges::any_of(
-      values, [value](uint32_t queryValue) { return value == queryValue; });
+  return std::ranges::any_of(values, [v = value.value()](uint32_t queryValue) {
+    return v == queryValue;
+  });
 }
 
 bool ModelMetaData::hasOneBitQuantization() const {

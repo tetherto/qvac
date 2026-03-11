@@ -1,4 +1,5 @@
 #include "ChatterboxEngine.hpp"
+#include "ChatterboxLanguageMode.hpp"
 #include "FileUtils.hpp"
 #include "Fp16Utils.hpp"
 #include "OnnxInferSession.hpp"
@@ -59,12 +60,6 @@ void penalizeRepetitionLogits(std::vector<float> &logits,
   }
 }
 
-std::string prepareText(const std::string &text, const std::string &language) {
-  if (language == "en") {
-    return text;
-  }
-  return "[" + language + "]" + text;
-}
 
 template <typename T>
 void insertFromOrtTensorToVector(
@@ -127,6 +122,12 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   }
 
   isEnglish_ = language_ == "en";
+  if (!isEnglish_ && embedTokensSession_ != nullptr &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    QLOG(Priority::INFO, "Requested language '" + language_ +
+                             "' but model appears monolingual. Falling back to English mode.");
+    isEnglish_ = true;
+  }
   loaded_ = true;
   QLOG(Priority::INFO, "Language: " + language_);
 
@@ -396,6 +397,17 @@ ChatterboxEngine::convertToAudioResult(const std::vector<float> &wav) {
 }
 
 AudioResult ChatterboxEngine::synthesize(const std::string &text) {
+  ensureSession(embedTokensSession_, config_.embedTokensPath);
+  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
+  ensureSession(languageModelSession_, config_.languageModelPath);
+
+  if (!isEnglish_ &&
+      lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
+    QLOG(Priority::INFO, "Model is monolingual, falling back to English mode");
+    isEnglish_ = true;
+    keyValueOffset_ = OFFSET;
+  }
+
   std::vector<int64_t> inputIds = tokenize(text);
   TensorData<int64_t> positionIds;
   TensorData<float> speakerEmbeddings;
@@ -405,10 +417,6 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
     sanitizeTokenIds(inputIds);
     positionIds = buildInitialPositionIds(inputIds);
   }
-
-  ensureSession(embedTokensSession_, config_.embedTokensPath);
-  ensureSession(speechEncoderSession_, config_.speechEncoderPath);
-  ensureSession(languageModelSession_, config_.languageModelPath);
 
   QLOG(Priority::INFO, "Sampling ... " + text);
 
@@ -422,7 +430,8 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  const std::string preparedText = prepareText(text, language_);
+  const std::string preparedText =
+      lang_mode::prepareTextForTokenization(text, language_, isEnglish_);
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
 
   TokenizerEncodeResult result;

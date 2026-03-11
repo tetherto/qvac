@@ -212,7 +212,47 @@ test('DocTR straightenPages - should not crash and produce valid output', { time
 })
 
 // -------------------------------------------------------------------
-// 7. Default decoding method — should use CTC when unspecified
+// 7. recognizerBatchSize — different batch sizes produce valid output
+// -------------------------------------------------------------------
+test('DocTR recognizerBatchSize - batch=1 vs batch=16 both produce valid output', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
+  const imagePath = getImagePath('/test/images/english.bmp')
+  t.comment('Testing recognizerBatchSize=1 vs recognizerBatchSize=16')
+
+  const { results: resultsBatch1 } = await runDoctrOCR(t, {
+    pathDetector: DB_MOBILENET,
+    pathRecognizer: CRNN_MOBILENET,
+    decodingMethod: 'ctc',
+    recognizerBatchSize: 1
+  }, imagePath)
+
+  const { results: resultsBatch16 } = await runDoctrOCR(t, {
+    pathDetector: DB_MOBILENET,
+    pathRecognizer: CRNN_MOBILENET,
+    decodingMethod: 'ctc',
+    recognizerBatchSize: 16
+  }, imagePath)
+
+  const textsBatch1 = resultsBatch1.map(r => r.text)
+  const textsBatch16 = resultsBatch16.map(r => r.text)
+  t.comment('Batch=1 texts (' + textsBatch1.length + '): ' + JSON.stringify(textsBatch1))
+  t.comment('Batch=16 texts (' + textsBatch16.length + '): ' + JSON.stringify(textsBatch16))
+
+  t.ok(resultsBatch1.length > 0, 'Batch=1 should detect text')
+  t.ok(resultsBatch16.length > 0, 'Batch=16 should detect text')
+  t.is(resultsBatch1.length, resultsBatch16.length, 'Both batch sizes should detect same number of regions')
+
+  // Texts should be identical regardless of batch size
+  for (let i = 0; i < Math.min(resultsBatch1.length, resultsBatch16.length); i++) {
+    t.is(resultsBatch1[i].text, resultsBatch16[i].text, 'Text at index ' + i + ' should match across batch sizes')
+  }
+
+  assertExpectedWords(t, textsBatch1, ENGLISH_EXPECTED_WORDS, '[batch=1]')
+  assertExpectedWords(t, textsBatch16, ENGLISH_EXPECTED_WORDS, '[batch=16]')
+  t.pass('recognizerBatchSize does not affect output accuracy')
+})
+
+// -------------------------------------------------------------------
+// 8. Default decoding method — should use CTC when unspecified
 // -------------------------------------------------------------------
 test('DocTR default decoding - should use CTC when unspecified', { timeout: TEST_TIMEOUT }, async function (t) {
   const imagePath = getImagePath('/test/images/english.bmp')
