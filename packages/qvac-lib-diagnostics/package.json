@@ -1,0 +1,41 @@
+{
+  "name": "@qvac/diagnostics",
+  "version": "0.1.0",
+  "description": "Diagnostic report generation library for QVAC",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "build:types": "tsc",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test": "npm run test:unit"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "diagnostics",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "devDependencies": {
+    "bare-os": "^3.4.0",
+    "bare-process": "^4.2.1",
+    "brittle": "^3.10.1",
+    "standard": "17.1.0",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
+  ]
+}

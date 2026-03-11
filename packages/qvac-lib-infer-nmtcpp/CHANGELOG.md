@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-06
+
+This release enhances the JavaScript interface for pivot translation support in Bergamot models. The improvements make it easier to configure pivot translation workflows through a dedicated configuration object, with better separation of concerns between primary and pivot model resources.
+
+## Features
+
+### Enhanced Pivot Translation Configuration
+
+The JavaScript interface now supports a dedicated `bergamotPivotModel` configuration object that encapsulates all pivot-specific settings. This allows users to specify separate loaders, disk paths, model names, vocabulary files, and configurations for the pivot model independently from the primary model. The pivot model's vocabulary paths are now correctly passed under the `config` object, following Bergamot's expected structure for proper initialization. Each model in the pivot chain can use its own resource loader, enabling more flexible deployment scenarios where models might be stored in different locations or retrieved through different mechanisms.
+
+## Bug Fixes
+
+### Pivot Model Example Corrections
+
+Fixed incorrect model names in the pivot translation example that prevented the example from running successfully. The example now uses the correct model file names for the translation pipeline.
+
+## Other
+
+Minor improvements to code organization include fixing a typo in log messages ("supplued" → "supplied") and consolidating pivot vocabulary configuration logic for better maintainability.
+
 ## [0.5.0] - 2026-03-05
 
 ### Added
