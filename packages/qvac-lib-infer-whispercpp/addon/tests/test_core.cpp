@@ -9,7 +9,6 @@
 
 #include "WhisperTypes.hpp"
 #include "addon/WhisperErrors.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
 #include "whisper.cpp/WhisperConfig.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
 
@@ -19,6 +18,10 @@ using namespace qvac_lib_inference_addon_whisper;
 std::string getValidModelPath() {
   // Models are always available in examples/models/
   return "../../../examples/models/ggml-tiny.bin";
+}
+
+bool hasValidModelPath() {
+  return std::filesystem::exists(getValidModelPath());
 }
 
 class WhisperCoreSimpleTest : public ::testing::Test {};
@@ -847,6 +850,9 @@ TEST_F(WhisperModelTest, ModelConstruction) {
 }
 
 TEST_F(WhisperModelTest, ModelLoadAndUnload) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP() << "Skipping: whisper model file not available for load test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -869,6 +875,10 @@ TEST_F(WhisperModelTest, ModelReset) {
 }
 
 TEST_F(WhisperModelTest, ModelProcessEmptyInput) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for process test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -883,6 +893,10 @@ TEST_F(WhisperModelTest, ModelProcessEmptyInput) {
 }
 
 TEST_F(WhisperModelTest, ModelProcessWithCallback) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for process test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -934,6 +948,10 @@ TEST_F(WhisperModelTest, ModelInputViewType) {
 }
 
 TEST_F(WhisperModelTest, ModelWarmup) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for warmup test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -955,6 +973,10 @@ TEST_F(WhisperModelTest, ModelInitializeBackend) {
 }
 
 TEST_F(WhisperModelTest, ModelUnloadWeights) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for unload test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -967,6 +989,10 @@ TEST_F(WhisperModelTest, ModelUnloadWeights) {
 }
 
 TEST_F(WhisperModelTest, SetOnSegmentCallbackAndVerifyExecution) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for callback test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -993,6 +1019,10 @@ TEST_F(WhisperModelTest, SetOnSegmentCallbackAndVerifyExecution) {
 }
 
 TEST_F(WhisperModelTest, AddTranscriptionWorks) {
+  if (!hasValidModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper model file not available for transcription test";
+  }
   auto config = createTestConfig();
   WhisperModel model(config);
 
@@ -1170,47 +1200,3 @@ TEST_F(WhisperModelTest, PreprocessAudioDataUnsupportedFormatThrows) {
         testing::HasSubstr("Unsupported audio_format: mp3"));
   }
 }
-
-// ============================================================================
-// Model API Tests (using vcpkg framework with Shared Adapter Pattern)
-// ============================================================================
-
-using TestModel = WhisperModel;
-
-WhisperConfig createValidConfig() {
-  WhisperConfig config;
-  // Model path goes in whisperContextCfg (used by load())
-  config.whisperContextCfg["model"] = getValidModelPath();
-  // Other whisper parameters go in whisperMainCfg (use correct handler names
-  // and types)
-  config.whisperMainCfg["beam_search_beam_size"] =
-      2.0; // Must be > 1, handler expects double
-  config.whisperMainCfg["temperature"] = 0.5; // Between 0 and 1
-  // Caption mode flag required by isCaptionModeEnabled()
-  config.miscConfig["caption_enabled"] = false;
-  return config;
-}
-
-WhisperConfig createInvalidConfig() {
-  WhisperConfig config;
-  // Invalid model path in whisperContextCfg
-  config.whisperContextCfg["model"] = std::string("invalid/path/model.bin");
-  // Still need the caption flag
-  config.miscConfig["caption_enabled"] = false;
-  return config;
-}
-
-// Factory functions required by ModelApiTest.hpp
-TestModel make_valid_model() { return WhisperModel(createValidConfig()); }
-
-TestModel make_invalid_model() { return WhisperModel(createInvalidConfig()); }
-
-std::vector<float> make_valid_input() {
-  // 1 second of silence at 16kHz
-  return std::vector<float>(16000, 0.0f);
-}
-
-std::vector<float> make_empty_input() { return std::vector<float>(); }
-
-// Instantiate the enhanced model API tests using adapter
-MODEL_API_INSTANTIATE_TESTS(TestModel)

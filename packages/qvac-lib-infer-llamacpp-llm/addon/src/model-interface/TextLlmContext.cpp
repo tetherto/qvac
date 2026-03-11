@@ -254,13 +254,15 @@ void TextLlmContext::tokenizeChat(
 };
 
 bool TextLlmContext::evalMessage(
-    const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded) {
-  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded);
+    const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+    bool prefill) {
+  return evalMessageWithTools(chatMsgs, {}, isCacheLoaded, prefill);
 }
 
 bool TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, bool isCacheLoaded) {
+    const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+    bool prefill) {
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
@@ -269,7 +271,7 @@ bool TextLlmContext::evalMessageWithTools(
 
   if (nTokens >= llama_n_ctx(lctx_)) {
     std::string errorMsg = string_format(
-        "[TextLlm] context overflow at prefill step (%ld tokens, max %d)\n",
+        "[TextLlm] context overflow at prefill step: prompt tokens %ld, max context tokens %d\n",
         nTokens,
         llama_n_ctx(lctx_));
     throw qvac_errors::StatusError(
@@ -340,7 +342,7 @@ bool TextLlmContext::evalMessageWithTools(
       textBatch->n_tokens++;
     }
     bool isLastToken = (tokenIndex == nTokens);
-    if (isLastToken) {
+    if (isLastToken && !prefill) {
       textBatch->logits[textBatch->n_tokens - 1] = static_cast<int8_t>(true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)

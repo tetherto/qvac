@@ -1,9 +1,12 @@
 #pragma once
 
+#include <any>
+#include <atomic>
 #include <functional>
 #include <list>
 #include <memory>
 #include <span>
+#include <streambuf>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -12,20 +15,28 @@
 
 #include "WhisperConfig.hpp"
 #include "model-interface/WhisperTypes.hpp"
+#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
 
-class WhisperModel {
+class WhisperModel
+    : public qvac_lib_inference_addon_cpp::model::IModel,
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
   using InputView = std::span<const ValueType>;
   using Output = std::vector<Transcript>;
+  struct AnyInput {
+    Input input;
+    OutputCallback outputCallback = nullptr;
+  };
 
-  explicit WhisperModel(const WhisperConfig& config);
-  ~WhisperModel();
+  explicit WhisperModel(WhisperConfig config);
+  ~WhisperModel() noexcept;
 
   // ModelApiTest required methods
   void initializeBackend() {
@@ -41,13 +52,25 @@ public:
   auto addTranscription(const Transcript& transcript) -> void {
     output_.push_back(transcript);
   }
+  auto hasSegmentCallback() const -> bool {
+    return static_cast<bool>(on_segment_);
+  }
+  auto emitSegment(const Transcript& transcript) -> void {
+    if (on_segment_) {
+      on_segment_(transcript);
+    }
+  }
 
-  auto formatCaptionOutput(Transcript& transcript) -> void;
+  static auto formatCaptionOutput(Transcript& transcript) -> void;
 
-  // Process methods - ModelInterface compatible
+  // Process methods
+  std::string getName() const override { return "WhisperModel"; }
+  std::any process(const std::any& input) override;
+  void cancel() const override;
+
   void process(const Input& input);
-  Output
-  process(const Input& input, std::function<void(const Output&)> callback);
+  Output process(
+      const Input& input, const std::function<void(const Output&)>& callback);
 
   void load();
   void unload();
@@ -58,11 +81,17 @@ public:
   void reload();
   void reset();
   void endOfStream();
-  void waitForLoadInitialization() { load(); }
+  void waitForLoadInitialization() override { load(); }
+  void setWeightsForFile(
+      const std::string& /*filename*/,
+      std::unique_ptr<std::basic_streambuf<char>>&& /*streambuf*/) override {}
+  void set_weights_for_file(
+      const std::string& /*filename*/,
+      const std::span<const uint8_t>& /*contents*/, bool /*completed*/) {}
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
   bool isCaptionModeEnabled() const;
-  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats();
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
   void warmup();
   void recordSegmentStats(int nTokens) {
     totalSegments_ += 1;
@@ -85,22 +114,6 @@ public:
       !std::is_same<typename std::decay<T>::type, WhisperConfig>::value,
       void>::type
   saveLoadParams(T&&, Args&&...) {}
-
-  void set_weights_for_file(
-      const std::string& /*filename*/,
-      const std::span<const uint8_t>& /*contents*/, bool /*completed*/) {}
-
-  // Two-parameter overload for qvac-lib-inference-addon-cpp compatibility
-  template <typename T>
-  void set_weights_for_file(const std::string& filename, T&& contents) {
-    // Convert to span if needed and call the three-parameter version
-    if constexpr (std::is_same_v<std::decay_t<T>, std::span<const uint8_t>>) {
-      set_weights_for_file(filename, contents, true);
-    } else {
-      // For other types (like streambuf), assume completed = true
-      set_weights_for_file(filename, std::span<const uint8_t>{}, true);
-    }
-  }
 
 private:
   static constexpr size_t MAX_CONTEXT_TOKENS = 256;
@@ -137,6 +150,7 @@ private:
   double whisperDecodeMs_ = 0.0;
   double whisperBatchdMs_ = 0.0;
   double whisperPromptMs_ = 0.0;
+  mutable std::atomic_bool cancelRequested_{false};
 };
 
 } // namespace qvac_lib_inference_addon_whisper

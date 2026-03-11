@@ -75,6 +75,34 @@ void LlamaModel::resolveShardPaths(
   shards.tensors_file = (baseDir / shards.tensors_file).string();
 }
 
+void LlamaModel::tuneConfigMap(
+    std::unordered_map<std::string, std::string>& configFilemap,
+    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion) {
+
+  const bool isBitnet =
+      metadata.hasOneBitQuantization() &&
+      metadata.tryGetString("general.architecture") == "bitnet";
+
+  if (isBitnet && configFilemap.find("flash-attn") == configFilemap.end() &&
+      configFilemap.find("flash_attn") == configFilemap.end()) {
+    configFilemap["flash-attn"] = "off";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] BitNet model detected: disabling flash attention\n");
+  }
+
+  constexpr int kAdrenoUbatchThreshold = 800;
+  if (isBitnet && adrenoVersion.has_value() &&
+      adrenoVersion.value() >= kAdrenoUbatchThreshold &&
+      configFilemap.find("ubatch-size") == configFilemap.end() &&
+      configFilemap.find("ubatch_size") == configFilemap.end()) {
+    configFilemap["ubatch-size"] = "128";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] BitNet on Adreno 800+: defaulting ubatch-size=128\n");
+  }
+}
+
 LlamaModel::LlamaModel(
     std::string&& modelPath, std::string&& projectionPath,
     std::unordered_map<std::string, std::string>&& configFilemap)
@@ -129,7 +157,8 @@ void LlamaModel::init(
   }
 
   common_params params;
-  commonParamsParse(modelPath, configFilemap, params);
+  std::optional<int> adrenoVersion;
+  commonParamsParse(modelPath, configFilemap, params, adrenoVersion);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
@@ -239,15 +268,10 @@ LlamaModel::resolveChatAndTools(const std::string& input) {
 }
 
 std::string LlamaModel::processPrompt(const Prompt& prompt) {
+  lastRunWasPrefill_ = prompt.prefill;
+
   for (const auto& media : prompt.media) {
     loadMedia(media);
-  }
-
-  if (prompt.prefill) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] processTextWithOutputCallback: Prefill is enabled but "
-        "not implemented yet.\n");
   }
 
   std::string out;
@@ -262,14 +286,22 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 
   bool evalOk =
       resolved.tools.empty()
-          ? llmContext_->evalMessage(resolved.chatMsgs, resolved.isCacheLoaded)
+          ? llmContext_->evalMessage(
+                resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
           : llmContext_->evalMessageWithTools(
-                resolved.chatMsgs, resolved.tools, resolved.isCacheLoaded);
+                resolved.chatMsgs,
+                resolved.tools,
+                resolved.isCacheLoaded,
+                prompt.prefill);
 
   if (!evalOk) {
     QLOG_IF(
         Priority::DEBUG,
         "Inference was interrupted during prompt evaluation\n");
+    return out;
+  }
+
+  if (prompt.prefill) {
     return out;
   }
 
@@ -299,14 +331,14 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
 
-  double timeToFirstToken = perfData.t_p_eval_ms;
+  double timeToFirstToken = lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
   double tokensPerSecond =
-      (perfData.t_eval_ms > 0)
+      (!lastRunWasPrefill_ && perfData.t_eval_ms > 0)
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
 
-  int32_t generatedTokens = perfData.n_eval;
-  int32_t promptTokens = perfData.n_p_eval;
+  int32_t generatedTokens = lastRunWasPrefill_ ? 0 : perfData.n_eval;
+  int32_t promptTokens = lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
   llama_perf_context_reset(llmContext_->getCtx());
 
   return {
@@ -321,7 +353,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params) {
+    common_params& params, std::optional<int>& outAdrenoVersion) {
 
   std::vector<std::string> configVector;
 
@@ -379,8 +411,12 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    const std::pair<BackendType, std::string> chosenBackend =
-        chooseBackend(preferredBackend, LlamaModel::llamaLogCallback, mainGpu);
+    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
+        preferredBackend,
+        LlamaModel::llamaLogCallback,
+        mainGpu,
+        &metadata_,
+        &outAdrenoVersion);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -402,6 +438,8 @@ void LlamaModel::commonParamsParse(
     configVector.emplace_back(chosenBackend.second);
     configFilemap.erase(deviceIt);
   }
+
+  tuneConfigMap(configFilemap, metadata_, outAdrenoVersion);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
