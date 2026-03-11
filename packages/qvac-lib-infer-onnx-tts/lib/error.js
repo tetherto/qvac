@@ -5,6 +5,13 @@ const { QvacErrorBase, addCodes } = require('@qvac/error')
 class QvacErrorAddonTTS extends QvacErrorBase { }
 
 const { name, version } = require('../package.json')
+const JOB_IDS = Object.freeze({
+  ONLY_ONE_JOB_ID: 'OnlyOneJob'
+})
+
+const ERROR_MESSAGES = Object.freeze({
+  RUN_BUSY: 'Cannot set new job: a job is already set or being processed'
+})
 
 // This library has error code range from 7001 to 7010
 const ERR_CODES = Object.freeze({
@@ -67,7 +74,9 @@ addCodes({
 })
 
 module.exports = {
+  ERROR_MESSAGES,
   ERR_CODES,
+  JOB_IDS,
   QvacErrorAddonTTS
 }
 

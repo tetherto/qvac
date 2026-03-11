@@ -124,9 +124,8 @@ void ChatterboxEngine::load(const ChatterboxConfig &cfg) {
   isEnglish_ = language_ == "en";
   if (!isEnglish_ && embedTokensSession_ != nullptr &&
       lang_mode::shouldUseEnglishMode(language_, embedTokensSession_->getInputNames())) {
-    std::cout << "[Chatterbox] Requested language '" << language_
-              << "' but model appears monolingual. Falling back to English mode."
-              << std::endl;
+    QLOG(Priority::INFO, "Requested language '" + language_ +
+                             "' but model appears monolingual. Falling back to English mode.");
     isEnglish_ = true;
   }
   loaded_ = true;

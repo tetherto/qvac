@@ -3,14 +3,13 @@
 const { platform } = require('bare-os')
 const path = require('bare-path')
 const { TTSInterface } = require('./tts')
+const { ERROR_MESSAGES, JOB_IDS } = require('./lib/error')
 const InferBase = require('@qvac/infer-base/WeightsProvider/BaseInference')
 const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
-const ONLY_ONE_JOB_ID = 'OnlyOneJob'
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 class ONNXTTS extends InferBase {
   constructor ({
@@ -43,7 +42,7 @@ class ONNXTTS extends InferBase {
 
     this._lazySessionLoading = lazySessionLoading != null
       ? lazySessionLoading
-      : platform() === 'ios'
+      : (platform() === 'ios' || platform() === 'android')
 
     const hasSupertonicPaths = (textEncoderPath != null && textEncoderPath !== '') ||
       (modelDir != null && modelDir !== '' && voiceName != null && voiceName !== '')
@@ -205,10 +204,10 @@ class ONNXTTS extends InferBase {
 
   async _runInternal (input) {
     if (this._hasActiveResponse) {
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      throw new Error(ERROR_MESSAGES.RUN_BUSY)
     }
 
-    const response = this._createResponse(ONLY_ONE_JOB_ID)
+    const response = this._createResponse(JOB_IDS.ONLY_ONE_JOB_ID)
     let accepted
     try {
       accepted = await this.addon.runJob({
@@ -216,15 +215,15 @@ class ONNXTTS extends InferBase {
         input: input.input
       })
     } catch (error) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      this._deleteJobMapping(JOB_IDS.ONLY_ONE_JOB_ID)
       response.failed(error)
       throw error
     }
 
     if (!accepted) {
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
-      response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+      this._deleteJobMapping(JOB_IDS.ONLY_ONE_JOB_ID)
+      response.failed(new Error(ERROR_MESSAGES.RUN_BUSY))
+      throw new Error(ERROR_MESSAGES.RUN_BUSY)
     }
 
     this._hasActiveResponse = true
@@ -236,11 +235,11 @@ class ONNXTTS extends InferBase {
 
   _addonOutputCallback (addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      return this._outputCallback(addon, 'Error', ONLY_ONE_JOB_ID, data, error)
+      return this._outputCallback(addon, 'Error', JOB_IDS.ONLY_ONE_JOB_ID, data, error)
     }
 
     if (data && typeof data === 'object' && data.outputArray) {
-      return this._outputCallback(addon, 'Output', ONLY_ONE_JOB_ID, data, null)
+      return this._outputCallback(addon, 'Output', JOB_IDS.ONLY_ONE_JOB_ID, data, null)
     }
 
     if (
@@ -248,10 +247,10 @@ class ONNXTTS extends InferBase {
       typeof data === 'object' &&
       ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
     ) {
-      return this._outputCallback(addon, 'JobEnded', ONLY_ONE_JOB_ID, data, null)
+      return this._outputCallback(addon, 'JobEnded', JOB_IDS.ONLY_ONE_JOB_ID, data, null)
     }
 
-    return this._outputCallback(addon, event, ONLY_ONE_JOB_ID, data, error)
+    return this._outputCallback(addon, event, JOB_IDS.ONLY_ONE_JOB_ID, data, error)
   }
 
   async cancel () {
@@ -261,10 +260,10 @@ class ONNXTTS extends InferBase {
   }
 
   _failAndClearActiveResponse (reason) {
-    const currentJobResponse = this._jobToResponse.get(ONLY_ONE_JOB_ID)
+    const currentJobResponse = this._jobToResponse.get(JOB_IDS.ONLY_ONE_JOB_ID)
     if (currentJobResponse) {
       currentJobResponse.failed(new Error(reason))
-      this._deleteJobMapping(ONLY_ONE_JOB_ID)
+      this._deleteJobMapping(JOB_IDS.ONLY_ONE_JOB_ID)
     }
     this._hasActiveResponse = false
   }
