@@ -21,7 +21,7 @@ The `<task>` argument accepts an Asana task ID or full URL:
 .agent/
 ├── README.md               # This file
 ├── conduct.md              # Behavioral rules for all agents
-├── mcp.json                # Shared MCP server definitions (Asana, GitHub)
+├── mcp.json                # Shared MCP server definitions (Asana)
 ├── settings.json           # Canonical settings (permission allowlist)
 ├── setup.sh                # Copies .agent/ config into .claude/ or .cursor/
 ├── agents/                 # Agent definitions
