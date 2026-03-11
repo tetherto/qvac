@@ -219,12 +219,13 @@ const args = {
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `loader` | ✅ | Data loader that provides model file access |
-| `diskPath` | ✅ | Local directory where model files are stored |
+| `loader` | — | Data loader instance (e.g. FilesystemDL). Not used internally — retained for type compatibility with BaseInference |
+| `diskPath` | ✅ | Local directory where model files are already stored |
 | `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
 | `logger` | — | Logger instance (e.g. `console`) |
-| `clipLModel` | — | Separate CLIP-L text encoder (SD1.x / SDXL) |
-| `clipGModel` | — | Separate CLIP-G text encoder (SDXL) |
+| `clipLModel` | — | Separate CLIP-L text encoder (FLUX.1 / SD3) |
+| `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
+| `t5XxlModel` | — | Separate T5-XXL text encoder (FLUX.1 / SD3) |
 | `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
 | `vaeModel` | — | Separate VAE file |
 
@@ -261,15 +262,7 @@ The constructor stores configuration only — no memory is allocated yet.
 await model.load()
 ```
 
-This downloads any missing files via the loader, creates the native `sd_ctx_t`, and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size.
-
-Optionally track download progress:
-
-```js
-await model.load(true, progress => {
-  process.stdout.write(`\rLoading: ${progress.overallProgress}%`)
-})
-```
+This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
 
 ### 7. Run Inference
 
@@ -325,12 +318,12 @@ require('bare-fs').writeFileSync('output.png', images[0])
 
 > **Sampler note:** Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
 
-#### Image-to-image (`model.img2img`)
+#### Image-to-image (via `model.run` with `init_image`)
 
 ```js
 const inputPng = require('bare-fs').readFileSync('input.png')
 
-const response = await model.img2img({
+const response = await model.run({
   prompt: 'a photo of a cat in a snowy landscape',
   init_image: inputPng,
   strength: 0.75,  // 0.0 = no change, 1.0 = full redraw

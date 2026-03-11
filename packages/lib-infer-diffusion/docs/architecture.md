@@ -23,8 +23,8 @@
 ### Architecture Decisions
 - [Decision 1: stable-diffusion.cpp as Inference Backend](#decision-1-stable-diffusioncpp-as-inference-backend)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
-- [Decision 3: Pluggable Data Loader Architecture](#decision-3-pluggable-data-loader-architecture)
-- [Decision 4: Incremental Buffer-Based Weight Loading](#decision-4-incremental-buffer-based-weight-loading)
+- [Decision 3: Disk-Local Model Files](#decision-3-disk-local-model-files)
+- [Decision 4: Direct File Path Loading](#decision-4-direct-file-path-loading)
 - [Decision 5: Generation Parameters Format](#decision-5-generation-parameters-format-json-serialization)
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue-indexjs)
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
@@ -42,21 +42,19 @@
 
 **Core value:**
 - High-level JavaScript API for diffusion model inference
-- Peer-to-peer model distribution via Hyperdrive
 - Progress callback during generation steps
-- Text-to-image, image-to-image, and video generation
-- Pluggable model weight loaders
+- Text-to-image and image-to-image generation via single `run()` API
+- Disk-local model files (no download/streaming layer)
 
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Multiple loaders**: Hyperdrive (P2P), filesystem, custom
+- **Disk-local models**: Files must be present on disk at `diskPath`
 - **Progress tracking**: Step-by-step generation progress callbacks
 - **GPU acceleration**: Metal, Vulkan, CUDA, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
-- **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX, Wan (video), Qwen Image, Z-Image
-- **Advanced features**: LoRA, ControlNet, ESRGAN upscaling, TAESD decoding
-- **Generation modes**: txt2img, img2img, inpainting, video generation
+- **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
+- **Generation modes**: txt2img, img2img (auto-detected via `init_image` parameter)
 
 ## Target Platforms
 
@@ -69,7 +67,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan, CUDA |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
+- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
 - stable-diffusion.cpp: Diffusion inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
@@ -97,7 +95,6 @@ graph TB
     
     subgraph "core libs"
         BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
     end
     
     subgraph "Native Framework"
@@ -111,7 +108,6 @@ graph TB
     
     APP --> IMG
     IMG --> BASE
-    IMG --> DL
     IMG --> ADDON
     ADDON --> BARE
     ADDON --> SDCPP
@@ -126,8 +122,7 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Peer | ^0.1.1 | P2P model loading |
+| @qvac/infer-base | Framework | ^0.2.0 | Base classes (BaseInference, QvacResponse) |
 | qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework (single-job runner) |
 | stable-diffusion.cpp | Native | latest | Diffusion inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
@@ -140,7 +135,6 @@ graph TB
 | ImgStableDiffusion | BaseInference | Inheritance | Template method pattern |
 | ImgStableDiffusion | SdInterface | Composition | Method calls |
 | SdInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | Stream protocol |
 
 </details>
 
@@ -154,44 +148,29 @@ graph TB
 classDiagram
     class ImgStableDiffusion {
         +constructor(args, config)
-        +load(closeLoader, onProgress) Promise~void~
-        +txt2img(params) Promise~QvacImageResponse~
-        +img2img(params) Promise~QvacImageResponse~
-        +txt2vid(params) Promise~QvacVideoResponse~
+        +load() Promise~void~
+        +run(params: GenerationParams) Promise~QvacResponse~
+        +cancel() Promise~void~
         +unload() Promise~void~
-        +downloadWeights(onProgress, opts) Promise~string~
     }
-    
+
     class BaseInference {
         <<abstract>>
         +load() Promise~void~
         +run() Promise~QvacResponse~
         +unload() Promise~void~
+        #_runInternal() Promise~QvacResponse~
+        #_withExclusiveRun(fn) Promise~any~
     }
-    
-    class QvacImageResponse {
-        +onStep(callback) QvacImageResponse
-        +await() Promise~ImageResult~
+
+    class QvacResponse {
+        +onUpdate(callback) QvacResponse
+        +await() Promise~void~
         +cancel() Promise~void~
-        +stats object
     }
-    
-    class QvacVideoResponse {
-        +onFrame(callback) QvacVideoResponse
-        +await() Promise~VideoResult~
-        +cancel() Promise~void~
-        +stats object
-    }
-    
-    class WeightsProvider {
-        +downloadFiles(files, path, opts) Promise~void~
-        +streamFiles(shards, onChunk, onProgress) Promise~void~
-    }
-    
+
     ImgStableDiffusion --|> BaseInference
-    ImgStableDiffusion *-- WeightsProvider
-    ImgStableDiffusion ..> QvacImageResponse : creates
-    ImgStableDiffusion ..> QvacVideoResponse : creates
+    ImgStableDiffusion ..> QvacResponse : creates
 ```
 
 <details>
@@ -201,20 +180,16 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| ImgStableDiffusion | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, SdInterface |
-| BaseInference | Define standard inference API | Abstract base class | None |
-| QvacImageResponse | Handle image generation progress and result | Created per txt2img/img2img call | None |
-| QvacVideoResponse | Handle video generation progress and result | Created per txt2vid call | None |
-| WeightsProvider | Abstract model weight loading | Created by ImgStableDiffusion | DataLoader |
+| ImgStableDiffusion | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | SdInterface |
+| BaseInference | Define standard inference API (template method pattern) | Abstract base class | None |
+| QvacResponse | Handle generation progress and result | Created per `run()` call | None |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
 | ImgStableDiffusion | BaseInference | Inheritance | Standard QVAC inference API |
-| ImgStableDiffusion | WeightsProvider | Composition | Model weight acquisition |
-| ImgStableDiffusion | QvacImageResponse | Creates | Progress/result per image generation |
-| ImgStableDiffusion | QvacVideoResponse | Creates | Progress/result per video generation |
+| ImgStableDiffusion | QvacResponse | Creates | Progress/result per generation |
 
 </details>
 
@@ -232,8 +207,7 @@ graph TB
         APP["Application Code"]
         IMGCLASS["ImgStableDiffusion<br/>(index.js)"]
         BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
-        RESPONSE["QvacImageResponse<br/>QvacVideoResponse"]
+        RESPONSE["QvacResponse"]
     end
     
     subgraph "Layer 2: Bridge"
@@ -244,7 +218,6 @@ graph TB
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(addon-cpp JsInterface)"]
         ADDONCPP["AddonCpp / AddonJs<br/>(addon-cpp + addon/AddonJs.hpp)"]
-        WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
     
     subgraph "Layer 4: Model"
@@ -262,16 +235,13 @@ graph TB
     
     APP --> IMGCLASS
     IMGCLASS --> BASEINF
-    IMGCLASS --> WEIGHTSPR
     IMGCLASS --> SDIF
     IMGCLASS -.-> RESPONSE
-    
+
     SDIF --> BINDING
     BINDING --> JSINTERFACE
-    WEIGHTSPR --> WEIGHTSLOAD
-    
+
     JSINTERFACE --> ADDONCPP
-    ADDONCPP --> WEIGHTSLOAD
     ADDONCPP --> SDMODEL
     
     SDMODEL --> TXT2IMG
@@ -297,7 +267,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | ImgStableDiffusion, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | ImgStableDiffusion, BaseInference, QvacResponse | High-level API, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | SdInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | SdModel, Contexts | Diffusion logic, sampling | C++ | Direct stable-diffusion.cpp integration |
@@ -325,7 +295,7 @@ graph TB
 
 #### **ImgStableDiffusion (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle, manages data loaders
+**Responsibility:** Main API class, orchestrates model lifecycle and inference
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
@@ -365,16 +335,6 @@ graph TB
 - Output dispatching via uv_async
 
 **IMG specialization:** createInstance builds SdModel with config; runJob parses generation params (prompt, negative_prompt, cfg_scale, steps, etc.)
-
-#### **WeightsProvider (@qvac/infer-base)**
-
-**Responsibility:** Abstracts model weight acquisition
-
-**Why JavaScript:**
-- Integrates with data loaders (Hyperdrive, filesystem)
-- Progress tracking and reporting
-- Handles multi-file models (UNet, VAE, CLIP, etc.)
-- Streaming chunk delivery
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 
@@ -417,13 +377,13 @@ sequenceDiagram
     participant Model as SdModel
     participant SD as stable-diffusion.cpp
     
-    JS->>IF: txt2img(params)
+    JS->>IF: run(params)
     IF->>Bind: runJob(handle, paramsJson)
     Bind->>Addon: runJob(params) [lock mutex]
     Addon->>Addon: Set job input
     Addon->>Addon: cv.notify_one()
     Bind-->>IF: accepted (boolean)
-    IF-->>JS: QvacImageResponse
+    IF-->>JS: QvacResponse
     
     Note over Addon: Processing Thread
     Addon->>Addon: Take job
@@ -574,94 +534,82 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 ---
 
-## Decision 3: Pluggable Data Loader Architecture
+## Decision 3: Disk-Local Model Files
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Abstract data loading via WeightsProvider interface  
-**Why:** Support multiple distribution methods (P2P, HTTP, local files, S3)  
-**Cost:** Additional abstraction layer, must implement loader interface
+**Chose:** Require model files to already exist on disk at `diskPath`
+**Why:** Simplicity — diffusion uses FilesystemDL which serves pre-downloaded files, no streaming/download layer needed
+**Cost:** Caller must ensure files are present before calling `load()`
 
 </details>
 
 ### Context
 
-Need to load multi-GB model files from various sources:
-- Local filesystem (for offline/development)
-- P2P networks (for privacy/decentralization)
-- HTTP/CDN (for enterprise deployments)
-- Cloud storage (S3, Azure Blob, etc.)
+Diffusion models consist of multiple large files (diffusion model, text encoders, VAE). The addon needs these files to create the native `sd_ctx_t` context.
 
-Diffusion models typically consist of multiple components (UNet, VAE, CLIP text encoders, safety checker) that may be distributed separately.
+Unlike the LLM addon which historically used WeightsProvider for streaming from Hyperdrive, diffusion uses `@qvac/dl-filesystem` (FilesystemDL) which only serves files already present on disk.
 
 ### Decision
 
-Create a pluggable data loader abstraction (WeightsProvider interface) that decouples model loading from the inference engine, allowing applications to choose their distribution strategy.
+Require all model files to be present on disk at `diskPath` before `load()` is called. The addon constructs file paths by joining `diskPath` with each model filename and passes them directly to stable-diffusion.cpp.
 
 ### Rationale
 
-**Flexibility:**
-- Different users have different distribution needs
-- Enterprise may require HTTP/CDN, privacy users may prefer P2P
-- Development/testing needs local filesystem access
+**Simplicity:**
+- No download/streaming abstraction layer needed
+- No WeightsProvider, no progress tracking for downloads
+- Direct file paths to stable-diffusion.cpp
 
-**Multi-Component Models:**
-- Diffusion models have multiple weight files (UNet, VAE, text encoder)
-- LoRA weights loaded separately
-- ControlNet models as add-ons
-- Loader abstraction handles all components uniformly
-
-**Extensibility:**
-- Applications can implement custom loaders
-- Future-proof: new distribution methods don't require engine changes
+**Split-model support:**
+- Diffusion models may have multiple components (diffusion GGUF, CLIP-L, CLIP-G, T5-XXL, LLM encoder, VAE)
+- All resolved as `path.join(diskPath, filename)` in `_load()`
+- Split vs all-in-one layout detected via heuristic (`isSplitLayout = !!llmModel || !!t5XxlModel`)
 
 ### Trade-offs
-- ✅ Can mock loaders for unit testing
-- ❌ Additional abstraction complexity
-- ❌ Applications must choose/implement their loader
+- ✅ Simple, no abstraction overhead
+- ✅ No streaming/buffering complexity
+- ❌ Caller responsible for ensuring files exist on disk
 
 ---
 
-## Decision 4: Incremental Buffer-Based Weight Loading
+## Decision 4: Direct File Path Loading
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Buffer-based weight loader using custom std::streambuf over JavaScript ArrayBuffers  
-**Why:** Avoid storage duplication, zero-copy, supports loading from P2P sources  
-**Cost:** Complex streambuf implementation, JavaScript reference lifecycle management
+**Chose:** Pass file paths directly to stable-diffusion.cpp via `sd_ctx_params_t`
+**Why:** stable-diffusion.cpp natively loads from file paths; no need for buffer intermediary
+**Cost:** Files must exist on disk (no streaming from P2P sources)
 
 </details>
 
 ### Context
 
-Diffusion models are large (2-10+ GB). stable-diffusion.cpp expects weight data as files or buffers. Loading directly from Hyperdrive (P2P) without duplicating to disk is essential for mobile devices with limited storage.
+stable-diffusion.cpp accepts model files via file paths in its context parameters (`model_path`, `diffusion_model_path`, `clip_l_path`, `vae_path`, etc.). The addon constructs these paths from `diskPath` + filenames.
 
 ### Decision
 
-Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental chunk loading, as provided by `qvac-lib-inference-addon-cpp` framework.
+Pass absolute file paths directly to stable-diffusion.cpp rather than using buffer-based loading. The `_load()` method constructs a `configurationParams` object with resolved paths and passes it to the native addon.
 
 ### Rationale
 
-**Avoid Storage Duplication:**
-- Load directly from Hyperdrive streams without saving to disk
-- No temporary files consuming additional storage
-- Critical for mobile devices with limited storage
+**Simplicity:**
+- stable-diffusion.cpp handles file I/O internally
+- No custom streambuf or buffer management needed
+- No JavaScript reference lifecycle concerns
 
-**Zero-Copy:**
-- C++ reads directly from JavaScript ArrayBuffer memory
-- No memcpy of multi-GB model files
-
-**Component Loading:**
-- Load UNet, VAE, CLIP sequentially
-- Report progress per component
-- Handle optional components (LoRA, ControlNet) dynamically
+**Split-model routing:**
+- All-in-one checkpoints (SD1.x, SD2.x, SDXL) → `model_path`
+- Standalone diffusion GGUFs (FLUX.2, SD3 split) → `diffusion_model_path`
+- Separate encoders → `clipLPath`, `clipGPath`, `t5XxlPath`, `llmPath`
+- VAE → `vaePath`
 
 ### Trade-offs
-- ✅ Can report loading progress per component
-- ❌ Complex streambuf implementation
-- ❌ Must keep JS buffers alive during load
+- ✅ No buffer management complexity
+- ✅ stable-diffusion.cpp handles memory-mapped I/O efficiently
+- ❌ Cannot stream from P2P sources directly (files must be on disk first)
 
 ---
 
@@ -708,37 +656,26 @@ Serialize generation parameters to JSON string before passing to C++.
 ### Parameter Schema
 
 ```typescript
-interface Txt2ImgParams {
+interface GenerationParams {
   prompt: string;
   negative_prompt?: string;
-  width?: number;           // default: 512
-  height?: number;          // default: 512
-  steps?: number;           // default: 20
-  cfg_scale?: number;       // default: 7.0
-  sampler?: string;         // 'euler_a' | 'euler' | 'dpm++_2m' | etc.
-  seed?: number;            // -1 for random
-  batch_count?: number;     // default: 1
-  loras?: LoraConfig[];
-  controlnet?: ControlNetConfig;
-}
-
-interface Img2ImgParams extends Txt2ImgParams {
-  init_image: Uint8Array;   // PNG/JPEG bytes
-  strength?: number;        // 0.0-1.0, default: 0.75
-}
-
-interface Txt2VidParams {
-  prompt: string;
-  negative_prompt?: string;
-  width?: number;
-  height?: number;
-  frames?: number;
-  fps?: number;
-  steps?: number;
-  cfg_scale?: number;
-  seed?: number;
+  width?: number;             // default: 512
+  height?: number;            // default: 512
+  steps?: number;             // default: 20
+  cfg_scale?: number;         // CFG scale (SD1/SD2/SDXL/SD3)
+  guidance?: number;          // Distilled guidance (FLUX.2)
+  sampling_method?: string;   // 'euler' | 'euler_a' | 'dpm++_2m' | etc.
+  scheduler?: string;         // 'default' | 'karras' | 'exponential' | etc.
+  seed?: number;              // -1 for random
+  batch_count?: number;       // default: 1
+  vae_tiling?: boolean;       // Enable VAE tiling (for large images)
+  cache_preset?: string;      // 'slow' | 'medium' | 'fast' | 'ultra'
+  init_image?: Uint8Array;    // PNG/JPEG bytes — if provided, runs img2img
+  strength?: number;          // img2img: 0.0 = keep source, 1.0 = full redraw
 }
 ```
+
+Mode is determined automatically: if `init_image` is provided, runs img2img; otherwise txt2img.
 
 ---
 
@@ -828,4 +765,4 @@ Provide hand-written TypeScript definitions in `index.d.ts`.
 
 ---
 
-**Last Updated:** 2026-02-23
+**Last Updated:** 2026-03-11

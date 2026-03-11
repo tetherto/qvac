@@ -121,6 +121,10 @@ test('run | cancel: cancels current job', { timeout: 600000, skip: isMobile }, a
 test('run | run: second run() throws busy error', { timeout: 600000, skip: isMobile }, async t => {
   const { model } = await setupModel(t)
   const firstResponse = await model.run(LONG_PARAMS)
+  let firstError = null
+  if (typeof firstResponse.onError === 'function') {
+    firstResponse.onError(err => { firstError = err })
+  }
 
   const result = await Promise.race([
     model.run(SHORT_PARAMS)
@@ -143,8 +147,12 @@ test('run | run: second run() throws busy error', { timeout: 600000, skip: isMob
     t.fail('second run() should have thrown busy error while first job was still active')
   }
 
-  // Cancel to clean up the long job if still running
-  await model.cancel().catch(() => {})
+  const images = []
+  await firstResponse.onUpdate(data => {
+    if (data instanceof Uint8Array) images.push(data)
+  }).await()
+  t.ok(images.length > 0, 'first response completes with output')
+  t.ok(!firstError, 'first response did not fail')
 })
 
 test('cancel | run: can run again after cancel', { timeout: 600000, skip: isMobile }, async t => {

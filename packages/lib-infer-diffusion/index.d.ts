@@ -19,7 +19,7 @@ export interface Loader {
 
 export interface Addon {
   activate(): Promise<void>
-  runJob(params: GenerationParams): Promise<boolean>
+  runJob(params: GenerationParams & { mode: 'txt2img' | 'img2img' }): Promise<boolean>
   cancel(): Promise<void>
   unload(): Promise<void>
 }
@@ -76,7 +76,7 @@ export interface SdConfig {
   [key: string]: string | number | boolean | undefined
 }
 
-export interface Txt2ImgParams {
+export interface GenerationParams {
   prompt: string
   negative_prompt?: string
   width?: number
@@ -96,22 +96,10 @@ export interface Txt2ImgParams {
   vae_tiling?: boolean
   /** Cache preset: slow/medium/fast/ultra */
   cache_preset?: string
-}
-
-export interface Img2ImgParams extends Txt2ImgParams {
-  /** Input image as PNG/JPEG bytes */
-  init_image: Uint8Array
-  /** Denoising strength (0.0–1.0) */
-  strength?: number
-}
-
-/** Internal union sent to the native addon (includes mode). */
-export interface GenerationParams extends Txt2ImgParams {
-  mode: 'txt2img' | 'img2img' | 'txt2vid'
+  /** Input image as PNG/JPEG bytes — if provided, runs img2img instead of txt2img */
   init_image?: Uint8Array
+  /** img2img denoising strength (0.0–1.0). 0 = keep source, 1 = ignore source */
   strength?: number
-  frames?: number
-  fps?: number
 }
 
 export interface ImgStableDiffusionArgs {
@@ -131,39 +119,16 @@ export interface ImgStableDiffusionArgs {
   vaeModel?: string
 }
 
-export interface DownloadWeightsOptions {
-  closeLoader?: boolean
-}
-
-export interface DownloadResult {
-  filePath: string | null
-  error: boolean
-  completed: boolean
-}
-
 export default class ImgStableDiffusion extends BaseInference {
   protected addon: Addon
 
   constructor(args: ImgStableDiffusionArgs, config: SdConfig)
 
-  _load(
-    closeLoader?: boolean,
-    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
-  ): Promise<void>
+  _load(): Promise<void>
 
-  load(
-    closeLoader?: boolean,
-    onDownloadProgress?: ReportProgressCallback | ((bytes: number) => void)
-  ): Promise<void>
+  load(): Promise<void>
 
-  downloadWeights(
-    onDownloadProgress?: (progress: Record<string, any>) => any,
-    opts?: DownloadWeightsOptions
-  ): Promise<Record<string, DownloadResult>>
-
-  run(params: Txt2ImgParams): Promise<QvacResponse>
-
-  img2img(params: Img2ImgParams): Promise<QvacResponse>
+  run(params: GenerationParams): Promise<QvacResponse>
 
   unload(): Promise<void>
 
