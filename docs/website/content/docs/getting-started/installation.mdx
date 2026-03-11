@@ -89,28 +89,33 @@ vulkaninfo --summary
 Install peer dependencies:
 
 ```bash
-npm i react-native-bare-kit@^0.11.5
-npm i -D bare-pack@^1.5.1
+npm i 'react-native-bare-kit@^0.11.5'
+npm i -D 'bare-pack@^1.5.1'
 npx expo install expo-file-system expo-build-properties expo-device
 ```
 
 <Callout type="success">
 **Tip:** use `npx expo install` for all `expo-*` packages to ensure compatibility with your project's Expo SDK version.
 </Callout>
+
 </Step>
 
 <Step>
-Add the QVAC-Expo plugin to `app.json`:
+Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
 
 ```json title="app.json"
 {
   "expo": {
     "plugins": [
-      "@qvac/sdk/expo-plugin"
+      ["expo-build-properties", { // [!code ++]
+        "android": { "minSdkVersion": 29 } // [!code ++]
+      }], // [!code ++]
+      "@qvac/sdk/expo-plugin" // [!code ++]
     ]
   }
 }
 ```
+
 </Step>
 
 <Step>

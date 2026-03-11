@@ -58,7 +58,7 @@ export const customTree: Node[] = [
       },
       {
         name: 'Installation',
-        url: '/getting-started/install',
+        url: '/getting-started/installation',
         type: 'page',
         icon: resolveIcon('Wrench'),
       },
