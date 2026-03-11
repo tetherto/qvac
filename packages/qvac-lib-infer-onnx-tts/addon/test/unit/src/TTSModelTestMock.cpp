@@ -1,5 +1,6 @@
 #include "mocks/ChatterboxEngineMock.hpp"
 #include "src/model-interface/TTSModel.hpp"
+#include <any>
 #include <gtest/gtest.h>
 
 using namespace qvac::ttslib::chatterbox::testing;
@@ -97,7 +98,7 @@ TEST_F(TTSModelTestMock, positiveProcess) {
       .WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, referenceAudio_, engineMock_);
-  const std::vector<int16_t> result = model.process("dummy");
+  const std::vector<int16_t> result = model.process(TTSModel::Input{"dummy"});
   EXPECT_EQ(result, std::vector<int16_t>({1, 2, 3, 4, 5}));
 }
 
@@ -139,6 +140,48 @@ TEST_F(TTSModelTestMock, positiveSaveLoadParams) {
   EXPECT_NO_THROW(model.saveLoadParams(config_));
 }
 
+TEST_F(TTSModelTestMock, positiveGetName) {
+  EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  TTSModel model(config_, referenceAudio_, engineMock_);
+  EXPECT_EQ(model.getName(), "TTSModel");
+}
+
+TEST_F(TTSModelTestMock, positiveProcessAnyInput) {
+  EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  qvac::ttslib::AudioResult mockResult;
+  mockResult.pcm16 = {1, 2, 3, 4, 5};
+  mockResult.sampleRate = 24000;
+  mockResult.channels = 1;
+  mockResult.samples = 5;
+  mockResult.durationMs = 100.0;
+
+  EXPECT_CALL(*engineMock_, synthesize(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::Return(mockResult));
+
+  TTSModel model(config_, referenceAudio_, engineMock_);
+  std::any output = model.process(std::any(TTSModel::AnyInput{
+      .text = "dummy", .config = {{"language", "en"}}}));
+  ASSERT_EQ(output.type(), typeid(TTSModel::Output));
+  EXPECT_EQ(std::any_cast<TTSModel::Output>(output).size(), 5);
+}
+
+TEST_F(TTSModelTestMock, positiveCancelBeforeProcessThrows) {
+  EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+  EXPECT_CALL(*engineMock_, synthesize(::testing::_)).Times(0);
+
+  TTSModel model(config_, referenceAudio_, engineMock_);
+  model.cancel();
+  EXPECT_THROW(
+      model.process(std::any(TTSModel::AnyInput{.text = "dummy", .config = {}})),
+      std::runtime_error);
+}
+
 TEST_F(TTSModelTestMock, negativeUnloadedProcess) {
   EXPECT_CALL(*engineMock_, load(::testing::_)).Times(1);
   EXPECT_CALL(*engineMock_, unload()).Times(1);
@@ -147,7 +190,7 @@ TEST_F(TTSModelTestMock, negativeUnloadedProcess) {
   TTSModel model(config_, referenceAudio_, engineMock_);
   model.unload();
   EXPECT_FALSE(model.isLoaded());
-  EXPECT_THROW(model.process("dummy"), std::runtime_error);
+  EXPECT_THROW(model.process(TTSModel::Input{"dummy"}), std::runtime_error);
 }
 
 TEST_F(TTSModelTestMock, positiveDoubleLoad) {

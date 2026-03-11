@@ -8,9 +8,13 @@ import {
   translateRequestSchema,
   translateResponseSchema,
   ModelType,
+  llmConfigBaseSchema,
+  ADDON_LLM,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveContext,
   type LlmConfig,
+  type LlmConfigInput,
   type CompletionStats,
   type ToolCall,
   type TranslationStats,
@@ -86,7 +90,22 @@ function createLlmModel(
 export const llmPlugin = definePlugin({
   modelType: ModelType.llamacppCompletion,
   displayName: "LLM (llama.cpp)",
-  addonPackage: "@qvac/llm-llamacpp",
+  addonPackage: ADDON_LLM,
+  loadConfigSchema: llmConfigBaseSchema,
+
+  async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
+    const { projectionModelSrc, ...llmConfig } = cfg;
+
+    if (!projectionModelSrc) {
+      return { config: llmConfig };
+    }
+
+    const projectionModelPath = await ctx.resolveModelPath(projectionModelSrc);
+    return {
+      config: llmConfig,
+      artifacts: { projectionModelPath },
+    };
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const llmConfig = (params.modelConfig ?? {}) as LlmConfig;

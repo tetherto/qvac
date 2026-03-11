@@ -11,6 +11,50 @@ export function generateShortHash(input: string): string {
   return hash.substring(0, 16);
 }
 
+function isModelDescriptor(value: unknown): value is { src: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "src" in value &&
+    typeof (value as { src: unknown }).src === "string"
+  );
+}
+
+function normalizeValue(value: unknown): unknown {
+  if (isModelDescriptor(value)) {
+    return value.src;
+  }
+  if (Array.isArray(value)) {
+    return value.map(normalizeValue);
+  }
+  if (typeof value === "object" && value !== null) {
+    return normalizeConfig(value as Record<string, unknown>);
+  }
+  return value;
+}
+
+function normalizeConfig(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(config).sort()) {
+    result[key] = normalizeValue(config[key]);
+  }
+  return result;
+}
+
+/**
+ * Create a stable, deterministic string representation of a config object.
+ * - Recursively sorts all object keys
+ * - Normalizes ModelDescriptor objects to their src string
+ */
+export function canonicalConfigString(
+  config: Record<string, unknown> | undefined,
+): string {
+  if (!config) return "{}";
+  return JSON.stringify(normalizeConfig(config));
+}
+
 /**
  * Calculate progress percentage with bounds checking and consistent formatting
  * @param current - Current progress value

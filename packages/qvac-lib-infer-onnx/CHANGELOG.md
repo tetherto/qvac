@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.8] - 2026-03-11
+
+### Added
+
+- Android logger
+
+### Fixed
+
+- Added exception handler for com.ms.internal.nhwc schemas issue
+
+
 ## [0.12.1] - 2026-03-05
 
 ### Fixed
