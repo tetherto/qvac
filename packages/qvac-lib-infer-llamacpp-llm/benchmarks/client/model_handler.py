@@ -358,7 +358,7 @@ class QvacModelHandler:
             finally:
                 self.server_process = None
 
-    def _wait_for_server(self, max_retries=5, retry_delay=2):
+    def _wait_for_server(self, max_retries=15, retry_delay=3):
         """Wait for server to be ready by checking health endpoint"""
         base_url = self.url.split("/run")[0]  # Get base URL without /run
         for i in range(max_retries):
@@ -368,8 +368,9 @@ class QvacModelHandler:
                     return True
             except:
                 pass
+            logger.info(f"Waiting for server... attempt {i+1}/{max_retries}")
             time.sleep(retry_delay)
-        raise Exception("Server failed to start within timeout")
+        raise Exception(f"Server failed to start after {max_retries * retry_delay}s")
     
     def _check_server_health(self):
         """Check if server is healthy"""

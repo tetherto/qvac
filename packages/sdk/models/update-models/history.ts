@@ -73,6 +73,27 @@ export function assignNames(
   }));
 }
 
+export function separateUpdates(
+  added: (ProcessedModel & { name: string })[],
+  removed: CurrentModel[],
+): {
+  added: (ProcessedModel & { name: string })[];
+  updated: (ProcessedModel & { name: string })[];
+  removed: CurrentModel[];
+} {
+  const removedNames = new Set(removed.map((m) => m.name));
+  const addedNames = new Set(added.map((m) => m.name));
+  const updatedNames = new Set(
+    [...addedNames].filter((name) => removedNames.has(name)),
+  );
+
+  return {
+    added: added.filter((m) => !updatedNames.has(m.name)),
+    updated: added.filter((m) => updatedNames.has(m.name)),
+    removed: removed.filter((m) => !updatedNames.has(m.name)),
+  };
+}
+
 export function createHistoryFile(
   added: (ProcessedModel & { name: string })[],
   removed: CurrentModel[],
@@ -82,6 +103,12 @@ export function createHistoryFile(
   if (added.length === 0 && removed.length === 0) {
     return null;
   }
+
+  const {
+    added: trulyAdded,
+    updated,
+    removed: trulyRemoved,
+  } = separateUpdates(added, removed);
 
   if (!fs.existsSync(historyDir)) {
     fs.mkdirSync(historyDir, { recursive: true });
@@ -96,22 +123,31 @@ export function createHistoryFile(
   let content = `commit=${fullHash}\n`;
   content += `timestamp=${timestamp}\n`;
   content += `previous_count=${currentModels.length}\n`;
-  content += `new_count=${currentModels.length + added.length - removed.length}\n`;
+  content += `new_count=${currentModels.length + trulyAdded.length - trulyRemoved.length}\n`;
   content += `\n`;
 
-  if (added.length > 0) {
+  if (trulyAdded.length > 0) {
     content += `[added]\n`;
-    added.forEach((m) => {
+    trulyAdded.forEach((m) => {
       content += `${m.name}\n`;
     });
     content += `\n`;
   }
 
-  if (removed.length > 0) {
-    content += `[removed]\n`;
-    removed.forEach((m) => {
+  if (updated.length > 0) {
+    content += `[updated]\n`;
+    updated.forEach((m) => {
       content += `${m.name}\n`;
     });
+    content += `\n`;
+  }
+
+  if (trulyRemoved.length > 0) {
+    content += `[removed]\n`;
+    trulyRemoved.forEach((m) => {
+      content += `${m.name}\n`;
+    });
+    content += `\n`;
   }
 
   fs.writeFileSync(filepath, content);

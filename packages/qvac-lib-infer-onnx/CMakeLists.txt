@@ -16,7 +16,10 @@ endif()
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
-project(qvac-onnx VERSION 0.11.5 LANGUAGES C CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/package.json" _pkg_json)
+string(JSON _pkg_version GET "${_pkg_json}" "version")
+
+project(qvac-onnx VERSION ${_pkg_version} LANGUAGES C CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 
@@ -27,17 +30,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Patch LINK_ONLY out of cmake config files for cmake 4.x compatibility
+# Patch cmake config files for cmake 4.x compatibility
 foreach(_cmake4_fix_file
     "${VCPKG_INSTALLED_PATH}/share/onnxruntime/onnxruntimeTargets.cmake"
     "${VCPKG_INSTALLED_PATH}/share/protobuf/protobuf-targets.cmake")
   if(EXISTS "${_cmake4_fix_file}")
     file(READ "${_cmake4_fix_file}" _cmake4_fix_content)
+    # Strip LINK_ONLY generator expressions.
+    # Use [^";] to exclude " (property value boundary) and ; (entry separator)
+    # while still allowing nested genexes like $<$<CONFIG:DEBUG>:Dbghelp>.
+    # Build pattern with string(CONCAT) to prevent cmake genex evaluation.
     if(_cmake4_fix_content MATCHES "LINK_ONLY:")
-      string(REGEX REPLACE "\\\\?\\$<LINK_ONLY:([^>]+)>" "\\1"
+      string(CONCAT _lo_re "\\\\?" "\\$" [=[<LINK_ONLY:([^";]+)>]=])
+      string(REGEX REPLACE "${_lo_re}" "\\1"
         _cmake4_fix_content "${_cmake4_fix_content}")
-      file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
     endif()
+    file(WRITE "${_cmake4_fix_file}" "${_cmake4_fix_content}")
   endif()
 endforeach()
 
@@ -211,7 +219,7 @@ if(ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
         "${CMAKE_INSTALL_PREFIX}/share/protobuf/protobuf-targets.cmake")
       if(EXISTS "${_lo_file}")
         file(READ "${_lo_file}" _c)
-        string(CONCAT _lo_re "\\\\?" "\\$" "<LINK_ONLY:([^>]+)>")
+        string(CONCAT _lo_re "\\\\?" "\\$" [==[<LINK_ONLY:([^";]+)>]==])
         string(REGEX REPLACE "${_lo_re}" "\\1" _c "${_c}")
         file(WRITE "${_lo_file}" "${_c}")
       endif()

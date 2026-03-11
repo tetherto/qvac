@@ -1,0 +1,65 @@
+---
+title: "ragReindex( )"
+titleStyle: code
+description: "Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason."
+---
+
+```typescript
+function ragReindex(params: RagReindexParams): Promise
+```
+
+## Description
+
+Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason.
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `RagReindexParams` | ✓ | The parameters for reindexing |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+// Simple reindex
+const result = await ragReindex({
+  workspace: "my-docs",
+});
+
+// Check result
+if (!result.reindexed) {
+  console.log("Reindex skipped:", result.details?.reason);
+}
+
+// With progress tracking
+const result = await ragReindex({
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
+```
+```

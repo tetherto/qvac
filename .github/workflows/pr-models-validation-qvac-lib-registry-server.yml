@@ -1,11 +1,7 @@
-# PR Validation and Staging Sync
+# PR Validation and Post-Merge Staging Sync
 #
-# Validates models.prod.json changes and syncs to staging registry.
-# Runs tests only if non-model files are changed.
-#
-# TODO: Add production sync workflow (.github/workflows/prod-sync.yml) when ready
-# - Trigger: push to main with paths: ['data/models.prod.json']
-# - Secrets: QVAC_AUTOBASE_KEY_PROD, QVAC_REGISTRY_CORE_KEY_PROD, separate writer keys
+# On PR: validates models.prod.json and runs tests (with 'verify' label).
+# On merge to main: syncs models to staging registry and runs smoke test.
 
 name: PR Validation and Staging Sync (Registry-server)
 
@@ -13,6 +9,10 @@ on:
   pull_request_target:
     branches: [main, release-*, feature-*, tmp-*]
     types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "packages/qvac-lib-registry-server/**"
+  push:
+    branches: [main]
     paths:
       - "packages/qvac-lib-registry-server/**"
   workflow_dispatch:
@@ -24,7 +24,10 @@ env:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'verify') || github.event_name == 'workflow_dispatch'
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'verify') ||
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
     outputs:
       models_changed: ${{ steps.filter.outputs.models }}
       models_only: ${{ steps.filter.outputs.models == 'true' && steps.filter.outputs.other == 'false' }}
@@ -102,6 +105,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.models_changed == 'true' &&
       (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
@@ -140,6 +144,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.other_changed == 'true' &&
       (contains(github.event.pull_request.labels.*.name, 'verify') ||
+       github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
@@ -194,8 +199,7 @@ jobs:
     needs: [detect-changes, validate-json, test]
     if: |
       always() &&
-      contains(github.event.pull_request.labels.*.name, 'staging') &&
-      contains(github.event.pull_request.labels.*.name, 'verify') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.detect-changes.outputs.models_changed == 'true' &&
       needs.validate-json.result == 'success' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
@@ -207,8 +211,6 @@ jobs:
       QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate required secrets
         working-directory: ${{ env.PKG_DIR }}
@@ -264,8 +266,6 @@ jobs:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Validate required secrets
         shell: bash

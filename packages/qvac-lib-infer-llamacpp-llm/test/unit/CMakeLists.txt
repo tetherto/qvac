@@ -15,6 +15,7 @@ add_executable(
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_backend_selection.cpp
+  test_tune_config_map.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
