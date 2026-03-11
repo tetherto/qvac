@@ -147,7 +147,7 @@ test('All ERR_CODES are defined and unique', async (t) => {
   const codes = Object.values(ERR_CODES)
   const uniqueCodes = new Set(codes)
 
-  t.is(codes.length, 10, 'Should have 10 error codes')
+  t.is(codes.length, 11, 'Should have 11 error codes')
   t.is(uniqueCodes.size, codes.length, 'All error codes should be unique')
 
   // Verify code range
@@ -161,4 +161,5 @@ test('All ERR_CODES are defined and unique', async (t) => {
   t.is(ERR_CODES.FAILED_TO_LOAD, 7008, 'FAILED_TO_LOAD should be 7008')
   t.is(ERR_CODES.FAILED_TO_RELOAD, 7009, 'FAILED_TO_RELOAD should be 7009')
   t.is(ERR_CODES.FAILED_TO_STOP, 7010, 'FAILED_TO_STOP should be 7010')
+  t.is(ERR_CODES.JOB_ALREADY_RUNNING, 7011, 'JOB_ALREADY_RUNNING should be 7011')
 })

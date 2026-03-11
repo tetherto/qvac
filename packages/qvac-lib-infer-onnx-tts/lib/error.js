@@ -5,15 +5,8 @@ const { QvacErrorBase, addCodes } = require('@qvac/error')
 class QvacErrorAddonTTS extends QvacErrorBase { }
 
 const { name, version } = require('../package.json')
-const JOB_IDS = Object.freeze({
-  ONLY_ONE_JOB_ID: 'OnlyOneJob'
-})
 
-const ERROR_MESSAGES = Object.freeze({
-  RUN_BUSY: 'Cannot set new job: a job is already set or being processed'
-})
-
-// This library has error code range from 7001 to 7010
+// This library has error code range from 7001 to 7011
 const ERR_CODES = Object.freeze({
   FAILED_TO_ACTIVATE: 7001,
   FAILED_TO_APPEND: 7002,
@@ -24,7 +17,8 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_UNLOAD: 7007,
   FAILED_TO_LOAD: 7008,
   FAILED_TO_RELOAD: 7009,
-  FAILED_TO_STOP: 7010
+  FAILED_TO_STOP: 7010,
+  JOB_ALREADY_RUNNING: 7011
 })
 
 addCodes({
@@ -67,6 +61,10 @@ addCodes({
   [ERR_CODES.FAILED_TO_STOP]: {
     name: 'FAILED_TO_STOP',
     message: (message) => `Failed to stop inference, error: ${message}`
+  },
+  [ERR_CODES.JOB_ALREADY_RUNNING]: {
+    name: 'JOB_ALREADY_RUNNING',
+    message: () => 'Cannot set new job: a job is already set or being processed'
   }
 }, {
   name,
@@ -74,9 +72,7 @@ addCodes({
 })
 
 module.exports = {
-  ERROR_MESSAGES,
   ERR_CODES,
-  JOB_IDS,
   QvacErrorAddonTTS
 }
 
