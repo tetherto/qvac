@@ -18,6 +18,7 @@
     "includedInChangelog": [300],
     "hasModelsMd": true,
     "modelsAdded": ["WHISPER_LARGE_V3", "WHISPER_MEDIUM"],
+    "modelsUpdated": [],
     "modelsRemoved": []
   }
 }

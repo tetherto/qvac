@@ -29,6 +29,7 @@ interface ApiFunction {
   }>;
   returns: { type: string; description: string };
   examples?: string[];
+  deprecated?: string;
 }
 
 interface GenerateOptions {
@@ -212,6 +213,12 @@ function extractApiFunctions(project: any): ApiFunction[] {
       examples: blockTags
         .filter((tag: any) => tag.tag === "@example")
         .map((tag: any) => extractComment(tag.content)) || [],
+      deprecated: (() => {
+        const depTag = blockTags.find((tag: any) => tag.tag === "@deprecated");
+        if (depTag) return extractComment(depTag.content) || "This function is deprecated.";
+        if (comment?.isDeprecated) return "This function is deprecated.";
+        return undefined;
+      })(),
     });
   }
   return functions.sort((a, b) => a.name.localeCompare(b.name));
@@ -278,13 +285,18 @@ ${ex}
   const desc = String(fn.description ?? "No description available").replace(/"/g, '\\"').replace(/\bundefined\b/g, "—");
   const returnsDesc = String(fn.returns?.description ?? "No description available").replace(/\bundefined\b/g, "—");
   const bodyDesc = String(fn.description ?? "No description available").replace(/\bundefined\b/g, "—");
+
+  const deprecationCallout = fn.deprecated
+    ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
+    : "";
+
   return `---
 title: "${fn.name}( )"
 titleStyle: code
 description: "${desc}"
 ---
 
-\`\`\`typescript
+${deprecationCallout}\`\`\`typescript
 ${fn.signature}
 \`\`\`
 
@@ -319,7 +331,10 @@ Complete API reference for **QVAC SDK v${version}** with ${functions.length} fun
 ## Available Functions
 
 ${functions
-  .map((fn) => `- [\`${fn.name}()\`](./${fn.name}) - ${fn.description}`)
+  .map((fn) => {
+    const badge = fn.deprecated ? " *(deprecated)*" : "";
+    return `- [\`${fn.name}()\`](./${fn.name})${badge} - ${fn.description}`;
+  })
   .join("\n")}
 `;
 }

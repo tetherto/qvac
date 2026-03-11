@@ -100,7 +100,7 @@ function extractModelNames(codeBlock) {
 /**
  * Extract models section from PR body
  * @param {string} body
- * @returns {{ added: string[], removed: string[] } | null}
+ * @returns {{ added: string[], updated: string[], removed: string[] } | null}
  */
 function extractModelsSection(body) {
   if (!body) return null;
@@ -118,15 +118,21 @@ function extractModelsSection(body) {
     /###\s*Added\s*(?:models)?\s*\n[\s\S]*?(```[\s\S]*?```)/i,
   );
 
+  // Extract Updated models subsection
+  const updatedMatch = modelsSection.match(
+    /###\s*Updated\s*(?:models)?\s*\n[\s\S]*?(```[\s\S]*?```)/i,
+  );
+
   // Extract Removed models subsection
   const removedMatch = modelsSection.match(
     /###\s*Removed\s*(?:models)?\s*\n[\s\S]*?(```[\s\S]*?```)/i,
   );
 
   const added = addedMatch ? extractModelNames(addedMatch[1]) : [];
+  const updated = updatedMatch ? extractModelNames(updatedMatch[1]) : [];
   const removed = removedMatch ? extractModelNames(removedMatch[1]) : [];
 
-  return { added, removed };
+  return { added, updated, removed };
 }
 
 /**
@@ -300,26 +306,30 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
   if (modelChanges.length > 0) {
     // Aggregate model changes across all PRs
     const allAdded = new Set();
+    const allUpdated = new Set();
     const allRemoved = new Set();
 
     for (const pr of modelChanges) {
       const models = extractModelsSection(pr.body);
       if (models) {
         models.added.forEach((m) => allAdded.add(m));
+        models.updated.forEach((m) => allUpdated.add(m));
         models.removed.forEach((m) => allRemoved.add(m));
       }
     }
 
-    // Cancel out: if a model is both added and removed, remove from both sets
+    // Cancel out: if a model is both added and removed, treat as updated
     for (const model of allAdded) {
       if (allRemoved.has(model)) {
         allAdded.delete(model);
         allRemoved.delete(model);
+        allUpdated.add(model);
       }
     }
 
     // Sort alphabetically
     const addedList = [...allAdded].sort();
+    const updatedList = [...allUpdated].sort();
     const removedList = [...allRemoved].sort();
 
     let modelsMd = `# 📦 Model Changes v${version}\n\n`;
@@ -331,6 +341,13 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
       modelsMd += "```\n\n";
     }
 
+    if (updatedList.length > 0) {
+      modelsMd += `## Updated Models\n\n`;
+      modelsMd += "```\n";
+      modelsMd += updatedList.join("\n") + "\n";
+      modelsMd += "```\n\n";
+    }
+
     if (removedList.length > 0) {
       modelsMd += `## Removed Models\n\n`;
       modelsMd += "```\n";
@@ -338,7 +355,7 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
       modelsMd += "```\n\n";
     }
 
-    if (addedList.length === 0 && removedList.length === 0) {
+    if (addedList.length === 0 && updatedList.length === 0 && removedList.length === 0) {
       modelsMd += "_No net model changes in this release._\n";
     }
 
@@ -440,22 +457,23 @@ function rebuildRootChangelog(packageName) {
   let combined = "";
 
   for (const version of versions) {
-    const versionFile = path.join(
-      changelogRoot,
-      version,
-      "CHANGELOG.md"
-    );
+    let versionFile = path.join(changelogRoot, version, "CHANGELOG_LLM.md");
+
+    if (!fs.existsSync(versionFile)) {
+      versionFile = path.join(changelogRoot, version, "CHANGELOG.md");
+    }
 
     if (!fs.existsSync(versionFile)) {
       console.warn(
-        `⚠️ Skipping ${version} (missing CHANGELOG.md)`
+        `⚠️ Skipping ${version} (no CHANGELOG_LLM.md or CHANGELOG.md)`
       );
       continue;
     }
 
     let content = fs.readFileSync(versionFile, "utf8").trim();
-    // Transform "# Changelog vX.Y.Z" to "## [X.Y.Z]" for aggregated file
+    // Transform version headers to "## [X.Y.Z]" for aggregated file
     content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
+    content = content.replace(/^# QVAC SDK v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
     // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
     content = content.replace(
       /\(\.\/([^)]+\.md)\)/g,
