@@ -211,6 +211,7 @@ private:
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
+
     bool lastRunWasPrefill_ = false;
   };
 
@@ -245,9 +246,6 @@ private:
       std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
 
   void init(bool acquireLock);
-  void reinitialize(
-      const std::unordered_map<std::string, std::string>& configOverrides,
-      bool training = false);
 
   const std::string loadingContext_;
   ModelMetaData metadata_;
@@ -257,14 +255,6 @@ private:
   /// only in reload()
   mutable std::shared_mutex stateMtx_;
   std::shared_ptr<ReloadableState> state_;
-
-  struct SelectedBackend {
-    backend_selection::BackendType preferredBackendType_{
-        backend_selection::BackendType::CPU};
-    std::optional<backend_selection::MainGpu> mainGpu_;
-    std::pair<backend_selection::BackendType, std::string> currentBackend_{
-        backend_selection::BackendType::CPU, "none"};
-  } selectedBackend_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();
@@ -320,7 +310,6 @@ private:
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
 
-  bool isFinetuning_ = false;
   std::optional<FinetuneConfigOverrides> pendingFinetuneOverrides_;
 
   mutable std::mutex checkpointStateMutex_;

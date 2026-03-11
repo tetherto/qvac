@@ -636,7 +636,7 @@ TEST_F(
 
 // -- Adreno 829 (800+) with known arch: always Vulkan --
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno830_ChoosesVulkan) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Adreno830_ChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
@@ -644,15 +644,7 @@ TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno830_ChoosesVulkan) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q8_0_Adreno830_ChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "gemma3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno830_ChoosesVulkan) {
+TEST_F(BackendSelectionTest, Finetuning_Qwen3_Adreno830_ChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "qwen3");
@@ -660,31 +652,7 @@ TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno830_ChoosesVulkan) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp32_Adreno830_ChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "qwen3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_fp16_Adreno830_ChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "gemma3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ2_0_Adreno830_ChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(true, "bitnet");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ1_0_Adreno830_ChoosesVulkan) {
+TEST_F(BackendSelectionTest, Finetuning_Bitnet_Adreno830_ChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
   MockModelMetaData meta(true, "bitnet");
@@ -694,7 +662,7 @@ TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ1_0_Adreno830_ChoosesVulkan) {
 
 // -- Adreno 740 (<800) with known arch: always CPU --
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno740_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Adreno740_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
@@ -702,15 +670,7 @@ TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno740_ChoosesCPU) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q8_0_Adreno740_ChoosesCPU) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "gemma3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno740_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Qwen3_Adreno740_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "qwen3");
@@ -718,15 +678,7 @@ TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno740_ChoosesCPU) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ2_0_Adreno740_ChoosesCPU) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(true, "bitnet");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ1_0_Adreno740_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Bitnet_Adreno740_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   MockModelMetaData meta(true, "bitnet");
@@ -736,7 +688,7 @@ TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ1_0_Adreno740_ChoosesCPU) {
 
 // -- Adreno 650 (600+) with known arch: always CPU --
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno650_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Adreno650_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
@@ -744,15 +696,7 @@ TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q4_0_Adreno650_ChoosesCPU) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Q8_0_Adreno650_ChoosesCPU) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "gemma3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno650_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Qwen3_Adreno650_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "qwen3");
@@ -760,23 +704,7 @@ TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp16_Adreno650_ChoosesCPU) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
 }
 
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_fp32_Adreno650_ChoosesCPU) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "qwen3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ2_0_Adreno650_ChoosesCPU) {
-  mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(true, "bitnet");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_TQ1_0_Adreno650_ChoosesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Bitnet_Adreno650_ChoosesCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_650_DESC, OPENCL_BACK));
   mockBackend.addDevice(createIGPUDevice(ADRENO_650_DESC, VULKAN0_BACK));
   MockModelMetaData meta(true, "bitnet");

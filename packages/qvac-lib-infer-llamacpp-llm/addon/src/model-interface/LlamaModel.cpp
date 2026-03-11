@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cinttypes>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -110,8 +111,8 @@ void LlamaModel::tuneConfigMap(
       QLOG_IF(
           Priority::DEBUG,
           string_format(
-              "[LlamaModel] Finetuning: ctx-size=%lld\n",
-              static_cast<long long>(finetuneOverrides->contextLength)));
+              "[LlamaModel] Finetuning: ctx-size=%" PRId64 "\n",
+              finetuneOverrides->contextLength));
     }
     if (finetuneOverrides->batchSize > 0 &&
         notUserSet("batch-size", "batch_size")) {
@@ -120,8 +121,8 @@ void LlamaModel::tuneConfigMap(
       QLOG_IF(
           Priority::DEBUG,
           string_format(
-              "[LlamaModel] Finetuning: batch-size=%lld\n",
-              static_cast<long long>(finetuneOverrides->batchSize)));
+              "[LlamaModel] Finetuning: batch-size=%" PRId64 "\n",
+              finetuneOverrides->batchSize));
     }
     if (finetuneOverrides->microBatchSize > 0 &&
         notUserSet("ubatch-size", "ubatch_size")) {
@@ -130,8 +131,8 @@ void LlamaModel::tuneConfigMap(
       QLOG_IF(
           Priority::DEBUG,
           string_format(
-              "[LlamaModel] Finetuning: ubatch-size=%lld\n",
-              static_cast<long long>(finetuneOverrides->microBatchSize)));
+              "[LlamaModel] Finetuning: ubatch-size=%" PRId64 "\n",
+              finetuneOverrides->microBatchSize));
     }
   }
 
@@ -159,14 +160,18 @@ void LlamaModel::tuneConfigMap(
   if (isFinetuning && !finetuneOverrides->gpuSupportsF16OutProd) {
     if (notUserSet("cache-type-k", "cache_type_k")) {
       configFilemap["cache-type-k"] = "f32";
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 K for KV "
+          "cache\n");
     }
     if (notUserSet("cache-type-v", "cache_type_v")) {
       configFilemap["cache-type-v"] = "f32";
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 V for KV "
+          "cache\n");
     }
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 KV "
-        "cache\n");
   }
 }
 
@@ -308,61 +313,6 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
         snap->configuredNDiscarded_,
-        [this](bool resetStats) { this->resetState(resetStats); });
-  }
-}
-
-void LlamaModel::reinitialize(
-    const std::unordered_map<std::string, std::string>& configOverrides,
-    bool training) {
-  state_->cacheManager_.reset();
-  state_->llmContext_.reset();
-  state_->backendsHandle_.reset();
-
-  std::unordered_map<std::string, std::string> configFilemap =
-      constructionArgs_.configFilemap;
-  for (const auto& [key, value] : configOverrides) {
-    configFilemap[key] = value;
-  }
-
-  std::string backendsDir;
-  if (auto it = configFilemap.find("backendsDir"); it != configFilemap.end()) {
-    backendsDir = it->second;
-    configFilemap.erase(it);
-  }
-
-  state_->backendsHandle_ = LlamaBackendsHandle(backendsDir);
-
-  common_params params;
-  std::optional<int> adrenoVersion;
-  commonParamsParse(
-      constructionArgs_.modelPath, configFilemap, params, adrenoVersion);
-  params.training = training;
-
-  const std::string errorWhenFailed = toString(UnableToLoadModel);
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>> noStreams;
-  common_init_result llamaInit = initFromConfig(
-      params,
-      constructionArgs_.modelPath,
-      noStreams,
-      state_->shards_,
-      loadingContext_,
-      false,
-      ADDON_ID,
-      errorWhenFailed);
-
-  std::string projPath = constructionArgs_.projectionPath;
-  state_->llmContext_ =
-      createContext(std::move(projPath), params, std::move(llamaInit));
-
-  if (state_->configuredNDiscarded_ > 0 && state_->llmContext_) {
-    state_->llmContext_->setNDiscarded(state_->configuredNDiscarded_);
-  }
-
-  if (state_->llmContext_) {
-    state_->cacheManager_.emplace(
-        state_->llmContext_.get(),
-        state_->configuredNDiscarded_,
         [this](bool resetStats) { this->resetState(resetStats); });
   }
 }
@@ -713,6 +663,7 @@ void LlamaModel::commonParamsParse(
 
   // disable warmup run
   params.warmup = false;
+  params.training = pendingFinetuneOverrides_.has_value();
   // add model path to  model parameters
   params.model.path = modelPath;
 
