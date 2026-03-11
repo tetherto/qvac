@@ -261,6 +261,12 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.forceSDXLVaeConvScale = parseBool(v, "force_sdxl_vae_conv_scale");
      }},
 
+    // ── Backend loading
+    // ────────────────────────────────────────────────────────────
+
+    {"backendsDir",
+     [](SdCtxConfig& c, const std::string& v) { c.backendsDir = v; }},
+
     // ── Logging
     // ────────────────────────────────────────────────────────────────
 
