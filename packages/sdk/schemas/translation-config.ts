@@ -1,4 +1,5 @@
 import { z } from "zod";
+import {modelSrcInputSchema} from "@/schemas/model-src-utils";
 
 // Marian/Opus model languages
 export const MARIAN_LANGUAGES = ["en", "de", "es", "it", "ru", "ja"] as const;
@@ -92,6 +93,15 @@ const opusConfigSchema = nmtGenerationParamsSchema.extend({
   to: z.enum(MARIAN_LANGUAGES),
 });
 
+// Pivot model configuration for Bergamot (for translation via intermediate language)
+// Follows the same pattern as the main Bergamot model: modelSrc + Bergamot config
+const bergamotPivotModelSchema = z.object({
+  modelSrc: modelSrcInputSchema,
+  srcVocabPath: z.string().optional(),
+  dstVocabPath: z.string().optional(),
+  normalize: z.number().optional(),
+}).optional();
+
 // Bergamot engine config - supports BERGAMOT_LANGUAGES
 const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   engine: z.literal("Bergamot"),
@@ -100,6 +110,7 @@ const bergamotConfigSchema = nmtGenerationParamsSchema.extend({
   srcVocabPath: z.string().optional(),
   dstVocabPath: z.string().optional(),
   normalize: z.number().optional(),
+  pivotModel: bergamotPivotModelSchema,
 });
 
 // IndicTrans engine config - supports INDICTRANS_LANGUAGES

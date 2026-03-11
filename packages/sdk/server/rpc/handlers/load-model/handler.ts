@@ -54,9 +54,20 @@ function getNmtCompanionSources(
   srcVocabSrc?: string,
   dstVocabSrc?: string,
 ): Record<string, string> {
-  const config = modelConfig as { engine?: string } | undefined;
+  const config = modelConfig as { 
+    engine?: string; 
+    pivotModel?: { 
+      modelSrc?: string; 
+      srcVocabPath?: string; 
+      dstVocabPath?: string; 
+    } 
+  } | undefined;
+  
   if (config?.engine !== "Bergamot") return {};
 
+  const result: Record<string, string> = {};
+
+  // Handle primary model vocab sources
   let src = srcVocabSrc;
   let dst = dstVocabSrc;
 
@@ -72,9 +83,41 @@ function getNmtCompanionSources(
     }
   }
 
-  const result: Record<string, string> = {};
   if (src) result["srcVocabPath"] = src;
   if (dst) result["dstVocabPath"] = dst;
+
+  // Handle pivot model sources
+  if (config.pivotModel?.modelSrc) {
+    result["pivotModelPath"] = config.pivotModel.modelSrc;
+    
+    // Handle pivot model vocab sources
+    if (config.pivotModel.srcVocabPath) {
+      result["pivotSrcVocabPath"] = config.pivotModel.srcVocabPath;
+    }
+    if (config.pivotModel.dstVocabPath) {
+      result["pivotDstVocabPath"] = config.pivotModel.dstVocabPath;
+    }
+    
+    // If pivot vocab paths not specified, derive them from the pivot model source
+    if (!config.pivotModel.srcVocabPath || !config.pivotModel.dstVocabPath) {
+      const pivotModelSrc = config.pivotModel.modelSrc;
+      const pivotDerived = pivotModelSrc.startsWith("pear://")
+        ? deriveBergamotVocabSources(pivotModelSrc)
+        : pivotModelSrc.startsWith("registry://")
+          ? deriveBergamotRegistryVocabSources(pivotModelSrc)
+          : null;
+      
+      if (pivotDerived) {
+        if (!config.pivotModel.srcVocabPath) {
+          result["pivotSrcVocabPath"] = pivotDerived.srcVocabSrc;
+        }
+        if (!config.pivotModel.dstVocabPath) {
+          result["pivotDstVocabPath"] = pivotDerived.dstVocabSrc;
+        }
+      }
+    }
+  }
+
   return result;
 }
 
@@ -147,13 +190,36 @@ export async function handleLoadModel(
     });
 
     // Apply NMT vocab paths back to config
-    if (resolved["srcVocabPath"] || resolved["dstVocabPath"]) {
+    if (resolved["srcVocabPath"] || resolved["dstVocabPath"] || resolved["pivotModelPath"]) {
       const nmtConfig = request.modelConfig as {
         srcVocabPath?: string;
         dstVocabPath?: string;
+        pivotModel?: {
+          modelSrc?: string;
+          srcVocabPath?: string;
+          dstVocabPath?: string;
+        };
       };
+      
+      // Apply primary model vocab paths
       if (resolved["srcVocabPath"]) nmtConfig.srcVocabPath = resolved["srcVocabPath"];
       if (resolved["dstVocabPath"]) nmtConfig.dstVocabPath = resolved["dstVocabPath"];
+      
+      // Apply pivot model paths
+      if (resolved["pivotModelPath"]) {
+        if (!nmtConfig.pivotModel) {
+          nmtConfig.pivotModel = {};
+        }
+        nmtConfig.pivotModel.modelSrc = resolved["pivotModelPath"];
+        
+        // Apply pivot model vocab paths
+        if (resolved["pivotSrcVocabPath"]) {
+          nmtConfig.pivotModel.srcVocabPath = resolved["pivotSrcVocabPath"];
+        }
+        if (resolved["pivotDstVocabPath"]) {
+          nmtConfig.pivotModel.dstVocabPath = resolved["pivotDstVocabPath"];
+        }
+      }
     }
 
     // Use plugin's resolveConfig hook if available (e.g. TTS, Parakeet)

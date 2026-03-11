@@ -1,6 +1,7 @@
 import nmtAddonLogging from "@qvac/translation-nmtcpp/addonLogging";
 import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
+  type BergamotPivotModel,
   type Loader,
 } from "@qvac/translation-nmtcpp";
 import {
@@ -75,6 +76,35 @@ function createNmtModel(
       ...(nmtConfig.dstVocabPath && { dstVocabPath: nmtConfig.dstVocabPath }),
       ...(nmtConfig.normalize !== undefined && {
         normalize: nmtConfig.normalize,
+      }),
+      // Add pivot model configuration if present
+      ...(nmtConfig.pivotModel?.modelSrc && {
+        bergamotPivotModel: (() => {
+          // modelSrc should be a string at this point after resolution
+          const pivotModelPath = typeof nmtConfig.pivotModel.modelSrc === 'string' 
+            ? nmtConfig.pivotModel.modelSrc 
+            : nmtConfig.pivotModel.modelSrc;
+          const pivotPath = parseModelPath(pivotModelPath as string);
+          const pivotModel = nmtConfig.pivotModel;
+          
+          return {
+            loader: asLoader<Loader>(new FilesystemDL({ dirPath: pivotPath.dirPath })),
+            modelName: pivotPath.basePath,
+            diskPath: pivotPath.dirPath,
+            // Pivot model generation parameters
+            config: {
+              ...(pivotModel.srcVocabPath && {
+                srcVocabPath: pivotModel.srcVocabPath
+              }),
+              ...(pivotModel.dstVocabPath && {
+                dstVocabPath: pivotModel.dstVocabPath
+              }),
+              ...('normalize' in pivotModel && pivotModel.normalize !== undefined && { 
+                normalize: pivotModel.normalize 
+              }),
+            }
+          } as BergamotPivotModel;
+        })(),
       }),
     }),
   };

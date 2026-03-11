@@ -249,7 +249,18 @@ export const loadModelOptionsToRequestSchema = z.union([
       modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
+      modelConfig: (() => {
+        if (data.modelConfig.engine === "Bergamot" && "pivotModel" in data.modelConfig && data.modelConfig.pivotModel) {
+          return {
+            ...data.modelConfig,
+            pivotModel: {
+              ...data.modelConfig.pivotModel,
+              modelSrc: modelInputToSrcSchema.parse(data.modelConfig.pivotModel.modelSrc),
+            },
+          };
+        }
+        return data.modelConfig;
+      })(),
       srcVocabSrc: data.srcVocabSrc
         ? modelInputToSrcSchema.parse(data.srcVocabSrc)
         : undefined,
