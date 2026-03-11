@@ -2,7 +2,7 @@
 
 #include "Steps.hpp"
 
-#include <onnxruntime_cxx_api.h>
+#include <qvac-onnx/OnnxSession.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <atomic>
@@ -21,7 +21,7 @@ public:
   static constexpr int RECOG_HEIGHT = 32;
   static constexpr int RECOG_WIDTH = 128;
 
-  StepDoctrRecognition(const ORTCHAR_T* pathRecognizer, bool useGPU = true,
+  StepDoctrRecognition(const std::string& pathRecognizer, bool useGPU = false,
                        int batchSize = 32,
                        DecodingMethod decoding = DecodingMethod::CTC);
 
@@ -42,7 +42,7 @@ private:
     float bestProb;
   };
 
-  Ort::Session ortSession_{nullptr};
+  onnx_addon::OnnxSession session_;
   int batchSize_;
   DecodingMethod decodingMethod_;
 

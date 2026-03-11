@@ -1,21 +1,10 @@
 #include "Steps.hpp"
 
-#include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
 
 #include <opencv2/opencv.hpp>
-
-#include "AndroidLog.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
-
-#if defined(_WIN32) || defined(_WIN64)
-#include <dml_provider_factory.h>
-#endif
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
