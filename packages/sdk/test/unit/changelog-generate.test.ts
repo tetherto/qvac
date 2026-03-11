@@ -305,6 +305,7 @@ test("extractModelsSection: extracts added models from PR body", (t) => {
 
   t.ok(result);
   t.alike(result.added, modelsMock.expected.modelsAdded);
+  t.alike(result.updated, modelsMock.expected.modelsUpdated);
   t.alike(result.removed, modelsMock.expected.modelsRemoved);
 });
 
@@ -323,7 +324,28 @@ test("extractModelsSection: handles both added and removed", (t) => {
   const result = extractModelsSection(body);
   t.ok(result);
   t.alike(result.added, ["MODEL_A"]);
+  t.alike(result.updated, []);
   t.alike(result.removed, ["MODEL_B"]);
+});
+
+test("extractModelsSection: extracts updated models subsection", (t) => {
+  const body =
+    "## 📦 Models\n\n### Updated models\n\n```\nMODEL_X\nMODEL_Y\n```";
+  const result = extractModelsSection(body);
+  t.ok(result);
+  t.alike(result.added, []);
+  t.alike(result.updated, ["MODEL_X", "MODEL_Y"]);
+  t.alike(result.removed, []);
+});
+
+test("extractModelsSection: handles added, updated, and removed together", (t) => {
+  const body =
+    "## 📦 Models\n\n### Added models\n\n```\nMODEL_A\n```\n\n### Updated models\n\n```\nMODEL_B\n```\n\n### Removed models\n\n```\nMODEL_C\n```";
+  const result = extractModelsSection(body);
+  t.ok(result);
+  t.alike(result.added, ["MODEL_A"]);
+  t.alike(result.updated, ["MODEL_B"]);
+  t.alike(result.removed, ["MODEL_C"]);
 });
 
 // ============================================================
@@ -505,6 +527,28 @@ test("generateChangelogFiles: generates models.md for [mod] PRs", (t) => {
   t.ok(modelsMd.includes("📦 Model Changes v3.0.0"));
   t.ok(modelsMd.includes("WHISPER_LARGE_V3"));
   t.ok(modelsMd.includes("WHISPER_MEDIUM"));
+});
+
+test("generateChangelogFiles: generates Updated Models section in models.md", (t) => {
+  const prs = processSDKPRs([
+    {
+      number: 400,
+      title: "QVAC-400 feat[mod]: update registry paths for whisper models",
+      body: "## 📦 Models\n\n### Updated models\n\n```\nWHISPER_LARGE_V3\n```\n\n### Added models\n\n```\nWHISPER_TINY\n```",
+      url: "https://github.com/tetherto/qvac/pull/400",
+    },
+  ]);
+  const outDir = path.join(tmpDir, "updated-models");
+
+  generateChangelogFiles("sdk", "4.0.0", prs, outDir);
+
+  t.ok(fs.existsSync(path.join(outDir, "models.md")));
+  const modelsMd = fs.readFileSync(path.join(outDir, "models.md"), "utf-8");
+  t.ok(modelsMd.includes("📦 Model Changes v4.0.0"));
+  t.ok(modelsMd.includes("## Updated Models"));
+  t.ok(modelsMd.includes("WHISPER_LARGE_V3"));
+  t.ok(modelsMd.includes("## Added Models"));
+  t.ok(modelsMd.includes("WHISPER_TINY"));
 });
 
 test("generateChangelogFiles: does not generate detail files when not needed", (t) => {

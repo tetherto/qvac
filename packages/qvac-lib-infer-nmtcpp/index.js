@@ -91,6 +91,15 @@ class TranslationNmtcpp extends BaseInference {
    * @param {string} [config.dstVocabPath] - Path to destination vocabulary file (Bergamot only)
    * @param {string} [config.srcVocabName] - Name of source vocab file to download (Bergamot only)
    * @param {string} [config.dstVocabName] - Name of destination vocab file to download (Bergamot only)
+   * @param {Object} [config.bergamotPivotModel] - Pivot model configuration for Bergamot (enables pivot translation through English)
+   * @param {Object} config.bergamotPivotModel.loader - Loader for pivot model files
+   * @param {string} config.bergamotPivotModel.modelName - Name of the pivot model file (e.g., 'en-fr.bin')
+   * @param {string} [config.bergamotPivotModel.diskPath] - Disk path for pivot model (defaults to primary diskPath)
+   * @param {string} [config.bergamotPivotModel.config] - pivot model specific configuration
+   * @param {string} [config.bergamotPivotModel.config.srcVocabPath] - Path to pivot source vocab file
+   * @param {string} [config.bergamotPivotModel.config.dstVocabPath] - Path to pivot destination vocab file
+   * @param {string} [config.bergamotPivotModel.config.srcVocabName] - Name of pivot source vocab file to download
+   * @param {string} [config.bergamotPivotModel.config.dstVocabName] - Name of pivot destination vocab file to download
    */
   constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
     super({ logger, exclusiveRun, ...args })
@@ -98,7 +107,7 @@ class TranslationNmtcpp extends BaseInference {
     this.weightsProvider = new WeightsProvider(loader, this.logger)
 
     // Extract and organize configuration
-    const { modelType, srcVocabPath, dstVocabPath, srcVocabName, dstVocabName, ...additionalConfig } = config
+    const { modelType, srcVocabPath, dstVocabPath, srcVocabName, dstVocabName, bergamotPivotModel, ...additionalConfig } = config
 
     this._modelType = modelType
     this._config = additionalConfig
@@ -112,6 +121,24 @@ class TranslationNmtcpp extends BaseInference {
       dstPath: dstVocabPath,
       srcName: srcVocabName,
       dstName: dstVocabName
+    }
+
+    // Store Bergamot pivot model configuration if provided (Bergamot only)
+    this._bergamotPivotModel = null
+    if (this._modelType === TranslationNmtcpp.ModelTypes.Bergamot && bergamotPivotModel) {
+      this._bergamotPivotModel = {
+        loader: bergamotPivotModel.loader,
+        diskPath: bergamotPivotModel.diskPath || diskPath,
+        modelName: bergamotPivotModel.modelName,
+        weightsProvider: new WeightsProvider(bergamotPivotModel.loader, this.logger),
+        vocabConfig: {
+          srcPath: bergamotPivotModel.config.srcVocabPath || null,
+          dstPath: bergamotPivotModel.config.dstVocabPath || null,
+          srcName: bergamotPivotModel.config.srcVocabName || null,
+          dstName: bergamotPivotModel.config.dstVocabName || null
+        },
+        config: bergamotPivotModel.config
+      }
     }
   }
 
@@ -161,6 +188,33 @@ class TranslationNmtcpp extends BaseInference {
       if (this._vocabConfig.dstName && !this._vocabConfig.dstPath) {
         files.push(this._vocabConfig.dstName)
       }
+      // Note: Pivot model files are NOT included here - they use their own loader
+    }
+
+    return files
+  }
+
+  /**
+   * Gets the list of pivot model files to download
+   * @private
+   * @returns {string[]}
+   */
+  _getPivotFilesToDownload () {
+    const files = []
+    if (!this._bergamotPivotModel) {
+      return files
+    }
+
+    if (this._bergamotPivotModel.modelName) {
+      files.push(this._bergamotPivotModel.modelName)
+    }
+
+    const pivotVocabConfig = this._bergamotPivotModel.vocabConfig
+    if (pivotVocabConfig.srcName && !pivotVocabConfig.srcPath) {
+      files.push(pivotVocabConfig.srcName)
+    }
+    if (pivotVocabConfig.dstName && !pivotVocabConfig.dstPath) {
+      files.push(pivotVocabConfig.dstName)
     }
 
     return files
@@ -192,14 +246,62 @@ class TranslationNmtcpp extends BaseInference {
         ...vocabConfig
       }
     }
+
+    // Add pivot model configuration if present
+    if (this._bergamotPivotModel) {
+      const pivotModelPath = path.join(
+        this._bergamotPivotModel.diskPath,
+        this._bergamotPivotModel.modelName
+      )
+
+      const pivotVocabConfig = this._bergamotPivotModel.vocabConfig
+      const pivotConfig = {
+        path: pivotModelPath
+      }
+
+      // Add pivot vocab paths if they exist
+      const pivotSrcVocab = pivotVocabConfig.srcPath ||
+        (pivotVocabConfig.srcName ? path.join(this._bergamotPivotModel.diskPath, pivotVocabConfig.srcName) : null)
+      const pivotDstVocab = pivotVocabConfig.dstPath ||
+        (pivotVocabConfig.dstName ? path.join(this._bergamotPivotModel.diskPath, pivotVocabConfig.dstName) : null)
+
+      pivotConfig.config = this._bergamotPivotModel.config || {}
+
+      if (pivotSrcVocab) {
+        pivotConfig.config.src_vocab = pivotSrcVocab
+      }
+      if (pivotDstVocab) {
+        pivotConfig.config.dst_vocab = pivotDstVocab
+      }
+
+      // Add pivot model to config
+      configurationParams.config = {
+        ...configurationParams.config,
+        pivotModel: pivotConfig
+      }
+      console.log(configurationParams)
+    }
   }
 
   async _load (close = false, reportProgressCallback) {
+    // Ready primary loader
     if (this.loader) {
       await this.loader.ready()
     }
+
+    // Ready pivot model loader if present
+    if (this._bergamotPivotModel?.loader) {
+      await this._bergamotPivotModel.loader.ready()
+    }
+
     try {
+      // Download primary model weights
       await this.downloadWeights(reportProgressCallback)
+
+      // Download pivot model weights if configured
+      if (this._bergamotPivotModel) {
+        await this._downloadPivotWeights(reportProgressCallback)
+      }
 
       // Extract use_gpu from config (if present) to pass at top level
       const { use_gpu: useGpu, ...otherConfig } = this._config
@@ -214,15 +316,20 @@ class TranslationNmtcpp extends BaseInference {
         configurationParams.use_gpu = useGpu
       }
 
-      // Configure Bergamot-specific parameters if needed
+      // Configure Bergamot-specific parameters if needed (including pivot model)
       this._configureBergamotModel(configurationParams)
 
       this.addon = this.createAddon(configurationParams)
       await this.addon.activate()
       this.state.configLoaded = true
     } finally {
+      // Close primary loader if requested
       if (close && this.loader) {
         await this.loader.close()
+      }
+      // Close pivot loader if requested
+      if (close && this._bergamotPivotModel?.loader) {
+        await this._bergamotPivotModel.loader.close()
       }
     }
   }
@@ -426,7 +533,7 @@ class TranslationNmtcpp extends BaseInference {
   async _downloadWeights (reportProgressCallback) {
     const models = this._getFilesToDownload()
     if (!models.length) {
-      this.logger.info('No model files supplued to be downlaoded')
+      this.logger.info('No model files supplied to be downloaded')
       return
     }
 
@@ -437,6 +544,37 @@ class TranslationNmtcpp extends BaseInference {
       onDownloadProgress: reportProgressCallback
     })
     this.logger.info('Weight files downloaded successfully', { models })
+    return result
+  }
+
+  /**
+   * Downloads pivot model weights using its own loader
+   * @private
+   * @param {Function} reportProgressCallback - Progress callback
+   * @returns {Promise}
+   */
+  async _downloadPivotWeights (reportProgressCallback) {
+    if (!this._bergamotPivotModel) {
+      return
+    }
+
+    const pivotFiles = this._getPivotFilesToDownload()
+    if (!pivotFiles.length) {
+      this.logger.info('No pivot model files to download')
+      return
+    }
+
+    this.logger.info('Loading pivot model weight files:', pivotFiles)
+
+    const result = await this._bergamotPivotModel.weightsProvider.downloadFiles(
+      pivotFiles,
+      this._bergamotPivotModel.diskPath,
+      {
+        closeLoader: true,
+        onDownloadProgress: reportProgressCallback
+      }
+    )
+    this.logger.info('Pivot model weight files downloaded successfully', { pivotFiles })
     return result
   }
 }

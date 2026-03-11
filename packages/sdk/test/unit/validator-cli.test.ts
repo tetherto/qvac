@@ -49,6 +49,14 @@ const validMessages = [
   { msg: "fix[bc]: change return type", desc: "fix with bc tag" },
   { msg: "feat[mod]: add new models", desc: "feat with mod tag" },
   { msg: "chore[skiplog]: internal cleanup", desc: "chore with skiplog tag" },
+  {
+    msg: "feat[mod|notask]: update models",
+    desc: "feat with multiple pipe-separated tags",
+  },
+  {
+    msg: "fix[api|skiplog]: internal api change",
+    desc: "fix with two tags",
+  },
 ];
 
 for (const { msg, desc } of validMessages) {
@@ -151,6 +159,16 @@ const validTitles = [
     title: "QVAC-123 chore[skiplog]: internal change",
     desc: "skiplog tag",
     body: "pr-body-simple.md",
+  },
+  {
+    title: "feat[mod|notask]: update SDK constant models",
+    desc: "multiple tags with pipe separator (notask + mod)",
+    body: "pr-body-mod-valid-added.md",
+  },
+  {
+    title: "QVAC-123 feat[api|skiplog]: internal api change",
+    desc: "multiple tags with ticket",
+    body: "pr-body-api-valid.md",
   },
 ];
 
@@ -273,6 +291,33 @@ test("PR [mod]: accepts both Added and Removed sections", (t) => {
   t.ok(result.output.includes("✅ Valid PR"));
 });
 
+test("PR [mod]: accepts only Updated models section", (t) => {
+  const body = loadMock("pr-body-mod-valid-updated.md");
+  const result = runValidator(
+    `--type=pr --title="QVAC-123 feat[mod]: refresh model metadata" --body=${escapeShellArg(body)}`,
+  );
+  t.is(result.exitCode, 0);
+  t.ok(result.output.includes("✅ Valid PR"));
+});
+
+test("PR [mod]: accepts Added, Updated, and Removed sections together", (t) => {
+  const body = loadMock("pr-body-mod-valid-all.md");
+  const result = runValidator(
+    `--type=pr --title="QVAC-123 feat[mod]: full model update" --body=${escapeShellArg(body)}`,
+  );
+  t.is(result.exitCode, 0);
+  t.ok(result.output.includes("✅ Valid PR"));
+});
+
+test("PR [mod|notask]: accepts multiple tags with models body", (t) => {
+  const body = loadMock("pr-body-mod-valid-all.md");
+  const result = runValidator(
+    `--type=pr --title="feat[mod|notask]: update SDK constant models" --body=${escapeShellArg(body)}`,
+  );
+  t.is(result.exitCode, 0);
+  t.ok(result.output.includes("✅ Valid PR"));
+});
+
 test("PR [mod]: rejects without Models section", (t) => {
   const body = loadMock("pr-body-mod-invalid-no-section.md");
   const result = runValidator(
@@ -383,4 +428,13 @@ test("parsed: PR with [notask] returns null ticket", (t) => {
   );
   t.is(result.exitCode, 0);
   t.ok(result.output.includes('"ticket": null'));
+});
+
+test("parsed: commit with multiple tags returns all tags", (t) => {
+  const result = runValidator(
+    `--type=commit --msg="feat[mod|notask]: update models"`,
+  );
+  t.is(result.exitCode, 0);
+  t.ok(result.output.includes('"mod"'));
+  t.ok(result.output.includes('"notask"'));
 });
