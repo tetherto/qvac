@@ -230,3 +230,68 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 
   t.end()
 })
+
+test('ParakeetInterface runJob preserves active job when native rejects new job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 42
+  addon._nextJobId = 43
+  addon._setState('processing')
+  binding.runJob = () => false
+
+  const accepted = await addon.runJob({
+    type: 'audio',
+    input: new Float32Array([0.1, 0.2, 0.3])
+  })
+
+  t.is(accepted, false, 'runJob should report rejected when native side is busy')
+  t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
+  t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
+  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+})
+
+test('ParakeetInterface cancel clears active job only after cancel resolves', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 7
+  addon._setState('processing')
+  let sawActiveJobDuringCancel = false
+
+  binding.cancel = async (handle, jobId) => {
+    t.is(handle, addon._handle, 'cancel should be called with current handle')
+    t.is(jobId, 7, 'cancel should target the provided job ID')
+    sawActiveJobDuringCancel = addon._activeJobId === 7
+    await wait(5)
+  }
+
+  await addon.cancel(7)
+
+  t.ok(sawActiveJobDuringCancel, 'Active job should still be set while cancel is in-flight')
+  t.is(addon._activeJobId, null, 'Active job should be cleared after cancel resolves')
+  t.is(await addon.status(), 'listening', 'State should return to listening after cancel resolves')
+})
+
+test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
+  const addon = new ParakeetInterface(new MockedBinding(), {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  let threw = false
+  try {
+    await addon.unloadWeights()
+  } catch (error) {
+    threw = true
+    t.is(error.code, 24007, 'unloadWeights should map to FAILED_TO_RESET')
+    t.ok(String(error.message).includes('unloadWeights is not supported'), 'Error should explain supported alternatives')
+  }
+  t.ok(threw, 'unloadWeights should throw')
+})

@@ -186,7 +186,8 @@ class ParakeetInterface {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
         const input = this._concatBufferedAudio()
-        this._activeJobId = currentJobId
+        const previousJobId = this._activeJobId
+        const previousState = this._state
         let accepted = false
         try {
           accepted = this._binding.runJob(this._handle, {
@@ -194,16 +195,17 @@ class ParakeetInterface {
             input
           })
         } catch (error) {
-          this._activeJobId = null
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw error
         }
         if (!accepted) {
-          this._activeJobId = null
-          this._setState(state.LISTENING)
+          this._activeJobId = previousJobId
+          this._setState(previousState)
           throw new Error('Cannot set new job: a job is already set or being processed')
         }
 
+        this._activeJobId = currentJobId
         this._nextJobId += 1
         this._bufferedAudio = []
         this._setState(state.PROCESSING)
@@ -269,7 +271,7 @@ class ParakeetInterface {
    */
   async cancel (jobId) {
     try {
-      this._binding.cancel(this._handle, jobId)
+      await this._binding.cancel(this._handle, jobId)
       this._bufferedAudio = []
       this._activeJobId = null
       this._setState(state.LISTENING)
@@ -305,11 +307,10 @@ class ParakeetInterface {
    * @returns {Promise<void>}
    */
   async unloadWeights () {
-    try {
-      return true
-    } catch (error) {
-      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
-    }
+    throw createParakeetError(
+      ERR_CODES.FAILED_TO_RESET,
+      'unloadWeights is not supported by this package. Use unload() or destroyInstance().'
+    )
   }
 
   async load (configurationParams) {
@@ -355,19 +356,23 @@ class ParakeetInterface {
   }
 
   async runJob (data) {
+    const currentJobId = this._nextJobId
+    const previousJobId = this._activeJobId
+    const previousState = this._state
     try {
-      this._activeJobId = this._nextJobId
-      this._nextJobId += 1
-      this._setState(state.PROCESSING)
       const accepted = this._binding.runJob(this._handle, data)
       if (!accepted) {
-        this._activeJobId = null
-        this._setState(state.LISTENING)
+        this._activeJobId = previousJobId
+        this._setState(previousState)
+        return false
       }
+      this._activeJobId = currentJobId
+      this._nextJobId += 1
+      this._setState(state.PROCESSING)
       return accepted
     } catch (error) {
-      this._activeJobId = null
-      this._setState(state.LISTENING)
+      this._activeJobId = previousJobId
+      this._setState(previousState)
       throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
     }
   }
