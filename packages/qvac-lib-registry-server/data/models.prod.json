@@ -5473,8 +5473,8 @@
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/altunenes/parakeet-rs",
     "description": "Parakeet Sortformer 4SPK v2",
-    "quantization": "",
-    "params": "",
+    "quantization": "fp32",
+    "params": "123M",
     "license": "CC-BY-4.0",
     "tags": [
       "transcription",
