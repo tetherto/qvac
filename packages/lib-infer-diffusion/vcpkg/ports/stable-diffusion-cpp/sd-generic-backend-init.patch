@@ -25,10 +25,10 @@ index 51b2b329..7bfd6816 100644
  
  typedef struct {
 diff --git a/src/stable-diffusion.cpp b/src/stable-diffusion.cpp
-index d769d45c..0bb90604 100644
+index d769d45c..004ddabf 100644
 --- a/src/stable-diffusion.cpp
 +++ b/src/stable-diffusion.cpp
-@@ -164,60 +164,49 @@ public:
+@@ -164,60 +164,81 @@ public:
          ggml_backend_free(backend);
      }
  
@@ -58,14 +58,32 @@ index d769d45c..0bb90604 100644
 -                    LOG_WARN("SD_VK_DEVICE environment variable value is out of range for `unsigned long long` type (%s). Falling back to device 0.", SD_VK_DEVICE);
 -                    device = 0;
 +    void init_backend(enum sd_backend_preference_t preferred_backend) {
++        const char* pref_name = "auto";
++        if (preferred_backend == SD_BACKEND_PREF_CPU) {
++            pref_name = "cpu";
++        } else if (preferred_backend == SD_BACKEND_PREF_GPU) {
++            pref_name = "gpu";
++        } else if (preferred_backend == SD_BACKEND_PREF_OPENCL) {
++            pref_name = "opencl";
++        }
++        LOG_INFO("Backend preference requested: %s", pref_name);
++
 +        if (getenv("SD_CPU_ONLY")) {
 +            LOG_INFO("SD_CPU_ONLY set - using CPU backend");
 +            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (!backend) {
++                LOG_ERROR("SD_CPU_ONLY set but CPU backend failed to initialize");
++            }
 +            return;
 +        }
 +
 +        if (preferred_backend == SD_BACKEND_PREF_CPU) {
 +            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (backend) {
++                LOG_INFO("Initialized CPU backend from explicit preference");
++            } else {
++                LOG_WARN("CPU backend preference requested but CPU backend initialization failed");
++            }
 +            return;
 +        }
 +
@@ -93,6 +111,7 @@ index d769d45c..0bb90604 100644
 +                backend = ggml_backend_dev_init(dev, NULL);
 +                if (backend) {
 +                    LOG_INFO("Using OpenCL backend '%s'", name);
++                    LOG_INFO("Backend initialized successfully (OpenCL preference)");
 +                    return;
                  }
              }
@@ -101,15 +120,24 @@ index d769d45c..0bb90604 100644
 -        }
 -        if (!backend) {
 -            LOG_WARN("Failed to initialize Vulkan backend");
--        }
++            LOG_WARN("OpenCL preference requested but no OpenCL backend could be initialized; falling back to generic GPU selection");
+         }
 -#endif
 -#ifdef SD_USE_OPENCL
 -        LOG_DEBUG("Using OpenCL backend");
 -        // ggml_log_set(ggml_log_callback_default, nullptr); // Optional ggml logs
 -        backend = ggml_backend_opencl_init();
--        if (!backend) {
++
++        backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
+         if (!backend) {
 -            LOG_WARN("Failed to initialize OpenCL backend");
-+            LOG_WARN("OpenCL preference requested but no OpenCL backend could be initialized; falling back to generic GPU selection");
++            LOG_WARN("GPU backend initialization failed; falling back to CPU backend");
++            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (!backend) {
++                LOG_ERROR("CPU fallback backend initialization failed");
++            }
++        } else {
++            LOG_INFO("Initialized generic GPU backend");
          }
 -#endif
 -#ifdef SD_USE_SYCL
@@ -117,15 +145,19 @@ index d769d45c..0bb90604 100644
 -        backend = ggml_backend_sycl_init(0);
 -#endif
  
-+        backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
-         if (!backend) {
-             LOG_DEBUG("Using CPU backend");
+-        if (!backend) {
+-            LOG_DEBUG("Using CPU backend");
 -            backend = ggml_backend_cpu_init();
-+            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++        if (backend) {
++            if (ggml_backend_is_cpu(backend)) {
++                LOG_INFO("Final backend type: CPU");
++            } else {
++                LOG_INFO("Final backend type: non-CPU");
++            }
          }
      }
  
-@@ -248,7 +237,7 @@ public:
+@@ -248,7 +269,7 @@ public:
  
          ggml_log_set(ggml_log_callback_default, nullptr);
  
@@ -134,7 +166,7 @@ index d769d45c..0bb90604 100644
  
          ModelLoader model_loader;
  
-@@ -2953,6 +2942,7 @@ void sd_ctx_params_init(sd_ctx_params_t* sd_ctx_params) {
+@@ -2953,6 +2974,7 @@ void sd_ctx_params_init(sd_ctx_params_t* sd_ctx_params) {
      sd_ctx_params->chroma_use_dit_mask     = true;
      sd_ctx_params->chroma_use_t5_mask      = false;
      sd_ctx_params->chroma_t5_mask_pad      = 1;
@@ -142,4 +174,3 @@ index d769d45c..0bb90604 100644
  }
  
  char* sd_ctx_params_to_str(const sd_ctx_params_t* sd_ctx_params) {
- 
