@@ -255,7 +255,7 @@ class ParakeetInterface {
     try {
       this._bufferedAudio = []
       if (this._activeJobId !== null) {
-        this._binding.cancel(this._handle, this._activeJobId)
+        await this._binding.cancel(this._handle, this._activeJobId)
         this._activeJobId = null
       }
       this._setState(state.STOPPED)
@@ -342,9 +342,11 @@ class ParakeetInterface {
       if (this._handle === null) {
         return
       }
-      try {
-        this._binding.cancel(this._handle)
-      } catch {}
+      if (this._activeJobId !== null) {
+        try {
+          await this._binding.cancel(this._handle, this._activeJobId)
+        } catch {}
+      }
       this._binding.destroyInstance(this._handle)
       this._handle = null
       this._activeJobId = null

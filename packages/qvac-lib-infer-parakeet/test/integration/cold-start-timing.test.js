@@ -240,7 +240,7 @@ test('Cold start timing: first vs subsequent transcription times', { timeout: 60
     // Cleanup
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -361,7 +361,7 @@ test('Fresh instance timing: new model per transcription (app restart simulation
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore
         }

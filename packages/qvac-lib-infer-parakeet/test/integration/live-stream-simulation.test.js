@@ -211,7 +211,7 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -330,7 +330,7 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -439,7 +439,7 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore
         }

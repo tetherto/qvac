@@ -150,7 +150,7 @@ test('English transcription and WER verification', { timeout: 300000 }, async (t
     if (parakeet) {
       try {
         await waitUntilIdle(parakeet, 60000)
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed')
       } catch (e) {
         console.log('   Instance destroy error:', e.message)
@@ -280,7 +280,7 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
     if (parakeet) {
       try {
         await waitUntilIdle(parakeet, 60000)
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch {}
     }
     try {

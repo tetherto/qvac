@@ -82,7 +82,7 @@ test('CTC desktop integration — English transcription', { timeout: 600000 }, a
     t.ok(transcriptions.length > 0, `CTC produced ${transcriptions.length} segments`)
     t.ok(fullText.length > 10, `CTC produced text (${fullText.length} chars)`)
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
@@ -145,7 +145,7 @@ test('EOU desktop integration — streaming transcription', { timeout: 600000 },
     t.ok(transcriptions.length > 0, `EOU produced ${transcriptions.length} segments`)
     t.ok(fullText.length > 0, `EOU produced text (${fullText.length} chars)`)
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
@@ -208,7 +208,7 @@ test('Sortformer desktop integration — speaker diarization', { timeout: 600000
     t.ok(transcriptions.length > 0, `Sortformer produced ${transcriptions.length} segments`)
     t.ok(fullText.includes('Speaker'), 'Sortformer output contains speaker labels')
   } finally {
-    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    if (parakeet) try { await parakeet.destroyInstance() } catch (e) {}
     try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })

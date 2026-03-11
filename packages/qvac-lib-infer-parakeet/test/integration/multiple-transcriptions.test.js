@@ -172,7 +172,7 @@ test('Multiple consecutive transcriptions should work without errors', { timeout
     console.log('=== Cleanup ===')
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed')
       } catch (e) {
         console.log('   Instance destroy error:', e.message)
@@ -293,7 +293,7 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore cleanup errors
         }

@@ -135,7 +135,7 @@ test('Directory and individual file path loading both produce correct transcript
     console.log(`   WER: ${werResult.werPercent}`)
     t.ok(werResult.wer <= 0.3, `Directory: WER should be <= 30% (got ${werResult.werPercent})`)
 
-    try { parakeet.destroyInstance() } catch (e) {}
+    try { await parakeet.destroyInstance() } catch (e) {}
     console.log('   Instance destroyed\n')
   }
 
@@ -202,7 +202,7 @@ test('Directory and individual file path loading both produce correct transcript
     console.log(`   WER: ${werResult.werPercent}`)
     t.ok(werResult.wer <= 0.3, `File paths: WER should be <= 30% (got ${werResult.werPercent})`)
 
-    try { parakeet.destroyInstance() } catch (e) {}
+    try { await parakeet.destroyInstance() } catch (e) {}
     console.log('   Instance destroyed\n')
   }
 

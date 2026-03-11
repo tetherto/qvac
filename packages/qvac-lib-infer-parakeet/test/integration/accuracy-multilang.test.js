@@ -202,7 +202,7 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore cleanup errors
       }

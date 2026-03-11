@@ -120,7 +120,7 @@ test('Corrupted model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -231,7 +231,7 @@ test('Empty model files should emit Error event to JavaScript', { timeout: 60000
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -330,7 +330,7 @@ test('Truncated model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)

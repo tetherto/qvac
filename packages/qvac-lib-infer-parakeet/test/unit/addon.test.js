@@ -295,3 +295,53 @@ test('ParakeetInterface unloadWeights throws unsupported operation error', async
   }
   t.ok(threw, 'unloadWeights should throw')
 })
+
+test('ParakeetInterface destroyInstance awaits active cancel before teardown', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  addon._activeJobId = 9
+  addon._setState('processing')
+
+  let cancelResolved = false
+  let destroySawResolvedCancel = false
+
+  const originalDestroy = binding.destroyInstance.bind(binding)
+  binding.cancel = async (handle, jobId) => {
+    t.is(handle, addon._handle, 'cancel should receive current handle')
+    t.is(jobId, 9, 'cancel should target the active job')
+    await wait(5)
+    cancelResolved = true
+  }
+  binding.destroyInstance = (handle) => {
+    destroySawResolvedCancel = cancelResolved
+    originalDestroy(handle)
+  }
+
+  await addon.destroyInstance()
+
+  t.ok(destroySawResolvedCancel, 'destroy should run only after cancel promise resolves')
+  t.is(addon._handle, null, 'handle should be cleared after destroy')
+  t.is(addon._activeJobId, null, 'active job should be cleared after destroy')
+  t.is(await addon.status(), 'idle', 'state should transition to idle after destroy')
+})
+
+test('ParakeetInterface destroyInstance skips cancel with no active job', async (t) => {
+  const binding = new MockedBinding()
+  const addon = new ParakeetInterface(binding, {
+    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
+    modelType: 'tdt'
+  }, () => {})
+
+  let cancelCalls = 0
+  binding.cancel = async () => {
+    cancelCalls += 1
+  }
+
+  await addon.destroyInstance()
+
+  t.is(cancelCalls, 0, 'destroy should not call cancel when there is no active job')
+})
