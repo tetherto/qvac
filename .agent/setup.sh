@@ -91,6 +91,17 @@ setup_claude() {
     done
   done
 
+  # Agents
+  for f in "$SCRIPT_DIR"/agents/*.md; do
+    [ -f "$f" ] || continue
+    copy_plain "$f" "$REPO_ROOT/.claude/agents/$(basename "$f")"
+  done
+
+  # Settings
+  if [ -f "$SCRIPT_DIR/settings.json" ]; then
+    copy_plain "$SCRIPT_DIR/settings.json" "$REPO_ROOT/.claude/settings.json"
+  fi
+
   # MCP: print instructions (Claude Code uses user-level config)
   echo ""
   echo "  MCP servers are defined in .agent/mcp.json."

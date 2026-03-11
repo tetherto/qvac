@@ -16,6 +16,8 @@ NOTICE_FULL_REPORT.txt
 .claude/agent-conduct.md
 .claude/knowledge/
 .claude/commands/
+.claude/agents/
+.claude/settings.json
 .claude/skills/*
 !.claude/skills/setup/
 .cursor/skills/*
