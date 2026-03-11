@@ -4,7 +4,6 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
@@ -65,11 +64,8 @@ test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000,
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
-
   const model = new ImgStableDiffusion(
     {
-      loader,
       logger: console,
       diskPath: modelDir,
       modelName: downloadedModelName,
@@ -153,7 +149,6 @@ test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000,
   } finally {
     console.log('\n=== Cleanup ===')
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     try {
       binding.releaseLogger()
     } catch (_) {}

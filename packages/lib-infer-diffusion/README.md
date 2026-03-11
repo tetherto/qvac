@@ -13,13 +13,12 @@ Native C++ addon for text-to-image and image-to-image generation using [stable-d
 - [Running the Examples](#running-the-examples)
 - [Usage](#usage)
   - [1. Import the Model Class](#1-import-the-model-class)
-  - [2. Create a Data Loader](#2-create-a-data-loader)
-  - [3. Create the `args` object](#3-create-the-args-object)
-  - [4. Create the `config` object](#4-create-the-config-object)
-  - [5. Create a Model Instance](#5-create-a-model-instance)
-  - [6. Load the Model](#6-load-the-model)
-  - [7. Run Inference](#7-run-inference)
-  - [8. Release Resources](#8-release-resources)
+  - [2. Create the `args` object](#2-create-the-args-object)
+  - [3. Create the `config` object](#3-create-the-config-object)
+  - [4. Create a Model Instance](#4-create-a-model-instance)
+  - [5. Load the Model](#5-load-the-model)
+  - [6. Run Inference](#6-run-inference)
+  - [7. Release Resources](#7-release-resources)
 - [Model File Reference](#model-file-reference)
 - [FLUX.2 Implementation Notes](#flux2-implementation-notes)
 - [License](#license)
@@ -192,23 +191,13 @@ Source: [`examples/generate-image.js`](./examples/generate-image.js)
 const ImgStableDiffusion = require('@qvac/img-stable-diffusion-cpp')
 ```
 
-### 2. Create a Data Loader
-
-Use `@qvac/dl-filesystem` to serve pre-downloaded model files from disk:
+### 2. Create the `args` object
 
 ```js
-const FilesystemDL = require('@qvac/dl-filesystem')
 const path = require('bare-path')
 
 const MODELS_DIR = path.resolve(__dirname, './models')
-const loader = new FilesystemDL({ dirPath: MODELS_DIR })
-```
-
-### 3. Create the `args` object
-
-```js
 const args = {
-  loader,
   logger: console,
   diskPath: MODELS_DIR,
   modelName:  'flux-2-klein-4b-Q8_0.gguf',
@@ -219,7 +208,6 @@ const args = {
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `loader` | — | Data loader instance (e.g. FilesystemDL). Not used internally — retained for type compatibility with BaseInference |
 | `diskPath` | ✅ | Local directory where model files are already stored |
 | `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
 | `logger` | — | Logger instance (e.g. `console`) |
@@ -229,7 +217,7 @@ const args = {
 | `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
 | `vaeModel` | — | Separate VAE file |
 
-### 4. Create the `config` object
+### 3. Create the `config` object
 
 ```js
 const config = {
@@ -248,7 +236,7 @@ All config values are coerced to strings internally before being passed to the n
 | `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
 | `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
 
-### 5. Create a Model Instance
+### 4. Create a Model Instance
 
 ```js
 const model = new ImgStableDiffusion(args, config)
@@ -256,7 +244,7 @@ const model = new ImgStableDiffusion(args, config)
 
 The constructor stores configuration only — no memory is allocated yet.
 
-### 6. Load the Model
+### 5. Load the Model
 
 ```js
 await model.load()
@@ -264,7 +252,7 @@ await model.load()
 
 This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
 
-### 7. Run Inference
+### 6. Run Inference
 
 #### Text-to-image (`model.run`)
 
@@ -331,11 +319,10 @@ const response = await model.run({
 })
 ```
 
-### 8. Release Resources
+### 7. Release Resources
 
 ```js
 await model.unload()
-await loader.close()
 ```
 
 `unload()` calls `free_sd_ctx` which releases all GPU and CPU memory. The JS object can be safely garbage collected afterwards.

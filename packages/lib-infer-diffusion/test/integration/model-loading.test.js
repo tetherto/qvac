@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const os = require('bare-os')
 
 const ImgStableDiffusion = require('../../index.js')
@@ -24,7 +23,6 @@ test('model loading - load and unload', { timeout: 600_000 }, async t => {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
   const config = {
     threads: '4',
     device: useCpu ? 'cpu' : 'gpu',
@@ -32,24 +30,19 @@ test('model loading - load and unload', { timeout: 600_000 }, async t => {
   }
 
   const addon = new ImgStableDiffusion({
-    loader,
     modelName: downloadedModelName,
     diskPath: modelDir,
     logger: console
   }, config)
 
-  try {
-    await addon.load()
-    t.pass('model loaded successfully')
+  await addon.load()
+  t.pass('model loaded successfully')
 
-    await addon.unload()
-    t.pass('model unloaded successfully')
+  await addon.unload()
+  t.pass('model unloaded successfully')
 
-    await addon.unload().catch(() => {})
-    t.pass('second unload is idempotent')
-  } finally {
-    await loader.close().catch(() => {})
-  }
+  await addon.unload().catch(() => {})
+  t.pass('second unload is idempotent')
 })
 
 // Keep event loop alive briefly to let pending async operations complete

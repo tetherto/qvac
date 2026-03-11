@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
@@ -38,11 +37,8 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
   const modelPath = path.join(modelDir, downloadedModelName)
   t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
-
   const model = new ImgStableDiffusion(
     {
-      loader,
       logger: console,
       diskPath: modelDir,
       modelName: downloadedModelName
@@ -127,7 +123,6 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000 }, async
   } finally {
     console.log('\n=== Cleanup ===')
     await model.unload()
-    await loader.close()
     try {
       binding.releaseLogger()
     } catch (_) {}

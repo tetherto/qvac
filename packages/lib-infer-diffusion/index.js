@@ -16,8 +16,6 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 class ImgStableDiffusion extends BaseInference {
   /**
    * @param {object} args
-   * @param {object} [args.loader] - Data loader (FilesystemDL). Not used internally — weight
-   *                                  files must already be present on disk at diskPath.
    * @param {object} [args.logger] - Structured logger
    * @param {object} [args.opts] - Optional inference options
    * @param {string} [args.diskPath='.'] - Local directory containing model weight files
@@ -32,7 +30,6 @@ class ImgStableDiffusion extends BaseInference {
   constructor (
     {
       opts = {},
-      loader,
       logger = null,
       diskPath = '.',
       modelName,

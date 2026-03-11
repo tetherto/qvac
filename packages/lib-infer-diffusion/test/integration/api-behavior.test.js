@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
@@ -48,10 +47,8 @@ async function setupModel (t) {
     downloadUrl: MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
   const model = new ImgStableDiffusion(
     {
-      loader,
       logger: console,
       diskPath: modelDir,
       modelName
@@ -67,7 +64,6 @@ async function setupModel (t) {
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
     try { binding.releaseLogger() } catch (_) {}
   })
 

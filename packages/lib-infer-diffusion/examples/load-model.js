@@ -2,7 +2,6 @@
 
 const path = require('bare-path')
 const process = require('bare-process')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const ImgStableDiffusion = require('../index')
 
 // ---------------------------------------------------------------------------
@@ -24,13 +23,9 @@ async function main () {
   console.log('VAE        :', VAE_MODEL)
   console.log()
 
-  // ── 1. Filesystem loader (serves pre-downloaded weights from disk) ─────────
-  const loader = new FilesystemDL({ dirPath: MODELS_DIR })
-
-  // ── 2. Construct — stores config, allocates nothing ───────────────────────
+  // ── 1. Construct — stores config, allocates nothing ────────────────────────
   const model = new ImgStableDiffusion(
     {
-      loader,
       logger: console,
       diskPath: MODELS_DIR,
       modelName: MODEL_NAME,
@@ -43,21 +38,20 @@ async function main () {
   )
 
   try {
-    // ── 3. Load — reads weights into memory via activate() → new_sd_ctx() ───
+    // ── 2. Load — reads weights into memory via activate() → new_sd_ctx() ───
     console.log('Loading model weights (this takes a moment)...')
     const t0 = Date.now()
     await model.load()
     console.log(`Model loaded in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
     console.log()
 
-    // ── 4. Model is live — add inference calls here ───────────────────────
+    // ── 3. Model is live — add inference calls here ───────────────────────
     console.log('Model is ready. (No inference in this example.)')
     console.log()
   } finally {
-    // ── 5. Unload — calls free_sd_ctx, releases all GPU/CPU memory ─────────
+    // ── 4. Unload — calls free_sd_ctx, releases all GPU/CPU memory ─────────
     console.log('Unloading model...')
     await model.unload()
-    await loader.close()
     console.log('Done — all resources released.')
   }
 }

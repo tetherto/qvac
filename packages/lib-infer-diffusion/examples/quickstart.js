@@ -13,7 +13,6 @@ const path = require('bare-path')
 const process = require('bare-process')
 const fs = require('bare-fs')
 const binding = require('../binding')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const ImgStableDiffusion = require('../index')
 
 const MODELS_DIR = path.resolve(__dirname, '../models')
@@ -47,11 +46,8 @@ async function main () {
   console.log(`Model : ${MODEL_NAME}`)
   console.log(`Prompt: ${PROMPT}\n`)
 
-  const loader = new FilesystemDL({ dirPath: MODELS_DIR })
-
   const model = new ImgStableDiffusion(
     {
-      loader,
       logger: console,
       diskPath: MODELS_DIR,
       modelName: MODEL_NAME,
@@ -131,7 +127,6 @@ async function main () {
     // 7. Cleanup
     console.log('\n5. Cleaning up...')
     await model.unload()
-    await loader.close()
     binding.releaseLogger()
     console.log('\nDone!')
   }

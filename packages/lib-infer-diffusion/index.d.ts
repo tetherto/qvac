@@ -1,21 +1,8 @@
-import BaseInference, {
-  ReportProgressCallback
-} from '@qvac/infer-base/WeightsProvider/BaseInference'
+import BaseInference from '@qvac/infer-base/WeightsProvider/BaseInference'
 import type { QvacResponse } from '@qvac/infer-base'
 import type QvacLogger from '@qvac/logging'
 
 export type NumericLike = number | `${number}`
-
-export interface Loader {
-  ready(): Promise<void>
-  close(): Promise<void>
-  getStream(path: string): Promise<AsyncIterable<Uint8Array>>
-  download(
-    path: string,
-    opts: { diskPath: string; progressReporter?: unknown }
-  ): Promise<{ await(): Promise<void> }>
-  getFileSize?(path: string): Promise<number>
-}
 
 export interface Addon {
   activate(): Promise<void>
@@ -103,7 +90,6 @@ export interface GenerationParams {
 }
 
 export interface ImgStableDiffusionArgs {
-  loader: Loader
   logger?: QvacLogger | Console | null
   opts?: { stats?: boolean }
   diskPath?: string
@@ -135,4 +121,4 @@ export default class ImgStableDiffusion extends BaseInference {
   cancel(): Promise<void>
 }
 
-export { ReportProgressCallback, QvacResponse }
+export { QvacResponse }
