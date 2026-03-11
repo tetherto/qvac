@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-03-11
+
+This release fixes CMake configuration errors that were preventing the TTS addon from building correctly with updated onnxruntime dependencies, and pins onnxruntime to a minimum version constraint to avoid future compatibility issues.
+
+## Bug Fixes
+
+### CMake Configuration Errors in onnxruntime Integration
+
+Fixed build failures caused by incorrect onnxruntime target configuration in `CMakeLists.txt`. Three issues were resolved:
+
+- A duplicate `find_package(onnxruntime CONFIG REQUIRED)` call was removed, which was causing the `safeint_interface` target to be defined twice and result in a build conflict.
+- An `add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)` statement was removed — the `onnxruntime::onnxruntime_static` target does not exist in the package, making this ALIAS definition invalid.
+- The `target_link_libraries` reference was corrected from `onnxruntime::onnxruntime_static` to `onnxruntime::onnxruntime`, matching the actual exported target name from the onnxruntime package.
+
+### onnxruntime Version Constraint
+
+Instead of bumping the vcpkg registry baseline, a `version>=: "1.24.2"` constraint has been added to all four `onnxruntime` dependency entries in `vcpkg.json`. This ensures a known-compatible minimum version is used across all platform-specific feature variants (NNAPI, DirectML, CoreML, and the default Linux build) without unnecessarily updating unrelated dependencies.
+
 ## [0.6.0]
 
 ### Changed
