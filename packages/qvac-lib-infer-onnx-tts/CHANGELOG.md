@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+### Changed
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Updated JS/native runtime flow to `createInstance` + `runJob` semantics while preserving package-level behavior
+
+### Fixed
+- Removed nested `exclusiveRun` locking paths that could deadlock `run()`, `reload()`, or `unload()` when `exclusiveRun: true`
+
 ## [0.5.5]
 
 ### Added

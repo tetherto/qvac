@@ -100,7 +100,7 @@ TEST_F(TTSModelChatterboxTestMock, positiveProcess) {
       .WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, referenceAudio_, engineMock_);
-  const std::vector<int16_t> result = model.process("dummy");
+  const std::vector<int16_t> result = model.process(TTSModel::Input{"dummy"});
   EXPECT_EQ(result, std::vector<int16_t>({1, 2, 3, 4, 5}));
 }
 
@@ -150,7 +150,7 @@ TEST_F(TTSModelChatterboxTestMock, negativeUnloadedProcess) {
   TTSModel model(config_, referenceAudio_, engineMock_);
   model.unload();
   EXPECT_FALSE(model.isLoaded());
-  EXPECT_THROW(model.process("dummy"), std::runtime_error);
+  EXPECT_THROW(model.process(TTSModel::Input{"dummy"}), std::runtime_error);
 }
 
 TEST_F(TTSModelChatterboxTestMock, positiveDoubleLoad) {

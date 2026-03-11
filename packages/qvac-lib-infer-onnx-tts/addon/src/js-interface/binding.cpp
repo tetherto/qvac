@@ -1,7 +1,6 @@
 #include <bare.h>
-#include <js.h>
 
-#include "qvac-lib-inference-addon-tts.hpp"
+#include "src/addon/AddonJs.hpp"
 
 js_value_t *qvac_lib_inference_addon_tts_exports(js_env_t *env,
                                                  js_value_t *exports) {
@@ -18,20 +17,14 @@ js_value_t *qvac_lib_inference_addon_tts_exports(js_env_t *env,
   }
 
   V("createInstance", qvac_lib_inference_addon_tts::createInstance)
-  V("unload", qvac_lib_inference_addon_tts::unload)
-  V("load", qvac_lib_inference_addon_tts::load)
-  V("reload", qvac_lib_inference_addon_tts::reload)
-  V("loadWeights", qvac_lib_inference_addon_tts::loadWeights)
-  V("unloadWeights", qvac_lib_inference_addon_tts::unloadWeights)
-  V("activate", qvac_lib_inference_addon_tts::activate)
-  V("append", qvac_lib_inference_addon_tts::append)
-  V("status", qvac_lib_inference_addon_tts::status)
-  V("pause", qvac_lib_inference_addon_tts::pause)
-  V("stop", qvac_lib_inference_addon_tts::stop)
-  V("cancel", qvac_lib_inference_addon_tts::cancel)
-  V("destroyInstance", qvac_lib_inference_addon_tts::destroyInstance)
-  V("setLogger", qvac_lib_inference_addon_tts::setLogger)
-  V("releaseLogger", qvac_lib_inference_addon_tts::releaseLogger)
+  V("runJob", qvac_lib_inference_addon_tts::runJob)
+
+  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
+  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
+  V("destroyInstance", qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
+  V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
 
   return exports;
