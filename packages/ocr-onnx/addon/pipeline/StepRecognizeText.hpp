@@ -2,7 +2,7 @@
 
 #include "Steps.hpp"
 
-// #include <onnxruntime_cxx_api.h>
+#include <qvac-onnx/OnnxSession.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <array>
@@ -47,7 +47,7 @@ public:
   };
 
   StepRecognizeText(
-      const ORTCHAR_T* pathRecognizer, std::span<const std::string> langList,
+      const std::string& pathRecognizer, std::span<const std::string> langList,
       bool useGPU = false, const Config& config = Config{});
 
   CONSTRUCT_FROM_TUPLE(StepRecognizeText)
@@ -64,7 +64,7 @@ public:
 
 private:
   Config config_;
-  Ort::Session ortSession_{nullptr};
+  onnx_addon::OnnxSession session_;
 
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
   std::u32string_view utf32Characters_;

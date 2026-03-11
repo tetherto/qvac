@@ -73,6 +73,7 @@
     "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.1.0",
+    "@qvac/onnx": "^0.12.8",
     "@qvac/response": "^0.1.2",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",

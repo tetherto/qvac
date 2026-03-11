@@ -1,16 +1,10 @@
 #pragma once
 
-#include <onnxruntime_c_api.h>
-#include <onnxruntime_cxx_api.h>
-
-#ifdef __ANDROID__
-#include <onnxruntime/nnapi_provider_factory.h>
-#endif
-
 #include <opencv2/imgproc.hpp>
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <variant>
 #include <tuple>
 
@@ -74,20 +68,6 @@ struct StepDoctrDetectionOutput {
   int padTop{0};    // Top padding offset (symmetric padding)
 };
 
-Ort::SessionOptions getOrtSessionOptions(bool useGPU = false);
-
-// Shared ONNX Runtime environment (one per process, as recommended by ONNX Runtime).
-Ort::Env& getSharedOrtEnv();
-
 cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect);
-
-#if defined(_WIN32) || defined(_WIN64)
-// On Windows, ~Ort::Session() corrupts global ORT state after the 1st call — a known
-// ORT bug — causing SIGSEGV on all subsequent session destructions.  Work around it by
-// moving the session into a heap-allocated object via a raw (non-owning) pointer that is
-// intentionally never deleted.  The OS reclaims the memory when the process exits.
-// Call this from step destructors instead of letting Ort::Session be destroyed normally.
-void deferWindowsSessionLeak(Ort::Session session);
-#endif
 
 }
