@@ -1,6 +1,5 @@
 import {
   loadModelServerParamsSchema,
-  ModelType,
   normalizeModelType,
   type LoadModelServerParams,
   type CanonicalModelType,
@@ -20,7 +19,6 @@ import {
   validateShardedModelCache,
 } from "@/server/utils";
 import {
-  ModelLoadFailedError,
   PluginNotFoundError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
@@ -35,15 +33,8 @@ import { getServerLogger } from "@/logging";
 const logger = getServerLogger();
 
 export async function loadModel(params: LoadModelServerParams) {
-  const {
-    modelId,
-    modelPath,
-    options,
-    projectionModelPath,
-    vadModelPath,
-    detectorModelPath,
-    modelName,
-  } = loadModelServerParamsSchema.parse(params);
+  const { modelId, modelPath, options, artifacts, modelName } =
+    loadModelServerParamsSchema.parse(params);
   const { modelConfig, modelType: rawModelType } = options;
 
   // Normalize modelType to canonical form (handles aliases and custom types)
@@ -60,6 +51,10 @@ export async function loadModel(params: LoadModelServerParams) {
   const shardInfo = detectShardedModel(modelFileName);
   const isShardedModel = shardInfo.isSharded;
 
+  const plugin = getPlugin(modelType);
+  if (!plugin) {
+    throw new PluginNotFoundError(modelType);
+  }
   if (isShardedModel) {
     // For sharded models, validate all shards and tensors.txt exist
     const shardDir = path.dirname(modelPath);
@@ -71,12 +66,8 @@ export async function loadModel(params: LoadModelServerParams) {
         `Missing shards or ${shardInfo.baseFilename}.tensors.txt. Expected ${numberedShards.length} shard files + tensors.txt in ${shardDir}`,
       );
     }
-  } else if (
-    modelType !== ModelType.onnxTts &&
-    modelType !== ModelType.parakeetTranscription
-  ) {
+  } else if (!plugin.skipPrimaryModelPathValidation) {
     // For non-sharded models, validate single file exists
-    // Skip for TTS and Parakeet - they use multiple paths from modelConfig
     try {
       const modelDir = path.dirname(modelPath);
       const modelFile = path.basename(modelPath);
@@ -95,31 +86,12 @@ export async function loadModel(params: LoadModelServerParams) {
     }
   }
 
-  if (modelType === ModelType.onnxOcr && !detectorModelPath) {
-    throw new ModelLoadFailedError(
-      "Detector model required for OCR. Use a hyperdrive source or provide detectorModelSrc",
-    );
-  }
-
-  const plugin = getPlugin(modelType);
-  if (!plugin) {
-    throw new PluginNotFoundError(modelType);
-  }
-
-  // Build artifacts map for plugin
-  // Note: TTS and Parakeet paths are in modelConfig (resolved by plugin.resolveConfig), not artifacts
-  const artifacts: Record<string, string> = {};
-  if (projectionModelPath)
-    artifacts["projectionModelPath"] = projectionModelPath;
-  if (vadModelPath) artifacts["vadModelPath"] = vadModelPath;
-  if (detectorModelPath) artifacts["detectorModelPath"] = detectorModelPath;
-
   const result = plugin.createModel({
     modelId,
     modelPath,
     modelConfig: modelConfig as Record<string, unknown>,
     modelName,
-    artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
+    artifacts,
   }) as { model: AnyModel; loader: FilesystemDL };
 
   logger.info(`${modelType}: Loading model ${modelId}...`);

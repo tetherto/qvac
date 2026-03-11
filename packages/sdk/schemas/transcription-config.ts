@@ -70,11 +70,11 @@ export const whisperConfigSchema = z.object({
   logprob_thold: z.number().optional(),
   greedy_best_of: z.number().int().optional(),
   beam_search_beam_size: z.number().int().optional(),
-  vad_model_path: z.string().optional(),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema.optional(),
   contextParams: contextParamsSchema,
   miscConfig: miscConfigSchema,
+  vadModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
@@ -97,6 +97,7 @@ export const parakeetRuntimeConfigSchema = z.object({
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
+  parakeetEncoderSrc: modelSrcInputSchema,
   parakeetEncoderDataSrc: modelSrcInputSchema.optional(),
   parakeetDecoderSrc: modelSrcInputSchema,
   parakeetVocabSrc: modelSrcInputSchema,

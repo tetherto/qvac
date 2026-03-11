@@ -1,5 +1,14 @@
 import { ModelType } from "./model-types";
 import {
+  ADDON_EMBEDDING,
+  ADDON_LLM,
+  ADDON_NMT,
+  ADDON_OCR,
+  ADDON_PARAKEET,
+  ADDON_TTS,
+  ADDON_WHISPER,
+} from "./plugin";
+import {
   modelRegistryEngineSchema,
   type ModelRegistryEngine,
   type ModelRegistryEntryAddon,
@@ -24,16 +33,16 @@ export const ENGINE_TO_ADDON: Record<
 // Legacy engine names → canonical engine.
 // Used for backward compatibility with old registry data that uses @qvac/* package names.
 const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
-  "@qvac/llm-llamacpp": ModelType.llamacppCompletion,
-  "@qvac/transcription-whispercpp": ModelType.whispercppTranscription,
-  "@qvac/embed-llamacpp": ModelType.llamacppEmbedding,
-  "@qvac/translation-nmtcpp": ModelType.nmtcppTranslation,
+  [ADDON_LLM]: ModelType.llamacppCompletion,
+  [ADDON_WHISPER]: ModelType.whispercppTranscription,
+  [ADDON_EMBEDDING]: ModelType.llamacppEmbedding,
+  [ADDON_NMT]: ModelType.nmtcppTranslation,
+  [ADDON_TTS]: ModelType.onnxTts,
+  [ADDON_OCR]: ModelType.onnxOcr,
+  [ADDON_PARAKEET]: ModelType.parakeetTranscription,
   "@qvac/translation-llamacpp": ModelType.nmtcppTranslation,
   "@qvac/vad-silero": "onnx-vad",
-  "@qvac/tts-onnx": ModelType.onnxTts,
   "@qvac/tts": ModelType.onnxTts,
-  "@qvac/ocr-onnx": ModelType.onnxOcr,
-  "@qvac/transcription-parakeet": ModelType.parakeetTranscription,
   // Tag-style names (used by some older registry entries)
   generation: ModelType.llamacppCompletion,
   transcription: ModelType.whispercppTranscription,

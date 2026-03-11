@@ -25,7 +25,7 @@ if (!args[0]) {
 
 const audioFilePath = args[0];
 
-const modelSrc = args[1] || PARAKEET_ENCODER_FP32;
+const parakeetEncoderSrc = args[1] || PARAKEET_ENCODER_FP32;
 const parakeetEncoderDataSrc = args[2] || PARAKEET_ENCODER_DATA_FP32;
 const parakeetDecoderSrc = args[3] || PARAKEET_DECODER_FP32;
 const parakeetVocabSrc = args[4] || PARAKEET_VOCAB;
@@ -36,9 +36,10 @@ try {
 
   console.log("Loading Parakeet model...");
   const modelId = await loadModel({
-    modelSrc,
+    modelSrc: parakeetEncoderSrc,
     modelType: "parakeet",
     modelConfig: {
+      parakeetEncoderSrc,
       parakeetEncoderDataSrc,
       parakeetDecoderSrc,
       parakeetVocabSrc,
