@@ -215,9 +215,7 @@ ParakeetModel::ParakeetModel(const ParakeetConfig& config) : cfg_(config) {
   reset();
 }
 
-ParakeetModel::~ParakeetModel() {
-  unload();
-}
+ParakeetModel::~ParakeetModel() { unload(); }
 
 void ParakeetModel::initializeBackend() {}
 
@@ -248,8 +246,9 @@ void ParakeetModel::set_weights_for_file(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>> streambuf) {
   std::istream stream(streambuf.get());
-  std::vector<uint8_t> data((std::istreambuf_iterator<char>(stream)),
-                            std::istreambuf_iterator<char>());
+  std::vector<uint8_t> data(
+      (std::istreambuf_iterator<char>(stream)),
+      std::istreambuf_iterator<char>());
 
   model_weights_[filename] = std::move(data);
   dispatchWeightFile(filename);
@@ -274,8 +273,9 @@ void ParakeetModel::loadVocabulary(const std::vector<uint8_t>& vocabData) {
     }
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Loaded vocabulary with " + std::to_string(vocab_.size()) + " tokens");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Loaded vocabulary with " + std::to_string(vocab_.size()) + " tokens");
 }
 
 void ParakeetModel::loadTokenizerJson(const std::vector<uint8_t>& data) {
@@ -401,10 +401,12 @@ void ParakeetModel::reset() {
 }
 
 void ParakeetModel::load() {
-  if (is_loaded_) return;
+  if (is_loaded_)
+    return;
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Loading Parakeet models from: " + cfg_.modelPath);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Loading Parakeet models from: " + cfg_.modelPath);
 
   auto loadStart = std::chrono::high_resolution_clock::now();
 
@@ -454,17 +456,20 @@ void ParakeetModel::load() {
             std::to_string(modelLoadMs_) + "ms");
 
     if (!is_warmed_up_) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-           "Warming up Parakeet model");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "Warming up Parakeet model");
       warmup();
       is_warmed_up_ = true;
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-           "Parakeet model warmup completed");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "Parakeet model warmup completed");
     }
 
   } catch (const Ort::Exception& e) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-         std::string("ONNX Runtime error: ") + e.what());
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        std::string("ONNX Runtime error: ") + e.what());
     throw;
   }
 }
@@ -472,8 +477,9 @@ void ParakeetModel::load() {
 void ParakeetModel::reload() {}
 
 void ParakeetModel::unload() {
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Unloading Parakeet model");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Unloading Parakeet model");
 
   preprocessor_session_.reset();
   encoder_session_.reset();
@@ -484,14 +490,16 @@ void ParakeetModel::unload() {
   is_loaded_ = false;
   is_warmed_up_ = false;
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Parakeet model unloaded successfully");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Parakeet model unloaded successfully");
 }
 
 void ParakeetModel::warmup() {
   if (!is_loaded_) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "Cannot warmup - model not loaded");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "Cannot warmup - model not loaded");
     return;
   }
 
@@ -506,8 +514,9 @@ void ParakeetModel::warmup() {
       return;
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Starting model warmup");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Starting model warmup");
 
   auto warmupStart = std::chrono::high_resolution_clock::now();
 
@@ -523,8 +532,9 @@ void ParakeetModel::warmup() {
     auto warmupMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::high_resolution_clock::now() - warmupStart)
                         .count();
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "Model warmup completed in " + std::to_string(warmupMs) + "ms");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "Model warmup completed in " + std::to_string(warmupMs) + "ms");
   } catch (const std::exception& e) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -2135,13 +2145,15 @@ std::string ParakeetModel::processSortformer(const Input& input) {
 
 void ParakeetModel::process(const Input& input) {
   if (input.empty()) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "Empty audio input received");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "Empty audio input received");
     return;
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Processing audio: " + std::to_string(input.size()) + " samples");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "Processing audio: " + std::to_string(input.size()) + " samples");
 
   auto processStart = std::chrono::high_resolution_clock::now();
 
@@ -2166,13 +2178,15 @@ void ParakeetModel::process(const Input& input) {
     try {
       text = runInferencePipeline(input);
     } catch (const std::exception& e) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-           std::string("Inference error: ") + e.what());
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+          std::string("Inference error: ") + e.what());
       text = ERR_INFERENCE;
     }
   } else {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "Cannot process: model not loaded");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "Cannot process: model not loaded");
     text = ERR_MODEL_NOT_LOADED;
   }
 

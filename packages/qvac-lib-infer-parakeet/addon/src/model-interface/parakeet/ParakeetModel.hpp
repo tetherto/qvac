@@ -18,7 +18,7 @@ class Env;
 class Session;
 class SessionOptions;
 class MemoryInfo;
-}  // namespace Ort
+} // namespace Ort
 
 namespace qvac_lib_infer_parakeet {
 

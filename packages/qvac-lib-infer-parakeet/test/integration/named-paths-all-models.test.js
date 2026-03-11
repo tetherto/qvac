@@ -3,13 +3,51 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
+const binding = require('../../binding')
+const { ParakeetInterface } = require('../../parakeet')
 const TranscriptionParakeet = require('../../index.js')
 const FakeDL = require('../mocks/loader.fake.js')
-const { getTestPaths, ensureModel, ensureModelForType } = require('./helpers.js')
+const {
+  setupJsLogger,
+  getTestPaths,
+  ensureModel,
+  ensureModelForType,
+  readFileChunked
+} = require('./helpers.js')
 
 function createLoader () {
   return new FakeDL({})
 }
+
+const { samplesDir } = getTestPaths()
+
+function loadAudioSample () {
+  const samplePath = path.join(samplesDir, 'sample.raw')
+  if (!fs.existsSync(samplePath)) return null
+  const rawBuffer = fs.readFileSync(samplePath)
+  const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+  const audio = new Float32Array(pcm.length)
+  for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
+  return audio
+}
+
+function loadWeightsFromDir (parakeet, modelDir, files) {
+  const promises = []
+  for (const file of files) {
+    const filePath = path.join(modelDir, file)
+    if (!fs.existsSync(filePath)) continue
+    const chunks = []
+    for (const buffer of readFileChunked(filePath)) {
+      chunks.push(buffer)
+    }
+    const fullBuffer = Buffer.concat(chunks)
+    const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
+    promises.push(parakeet.loadWeights({ filename: file, chunk, completed: true }))
+  }
+  return Promise.all(promises)
+}
+
+// ── Constructor / validation tests ──────────────────────────────────────────
 
 test('CTC with named file paths — constructor accepts and validates', { timeout: 60000 }, async (t) => {
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
@@ -46,55 +84,59 @@ test('CTC with named file paths — constructor accepts and validates', { timeou
 })
 
 test('CTC with named file paths — full load and transcription', { timeout: 600000 }, async (t) => {
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-
-  const modelDir = await ensureModelForType('ctc')
-  if (!modelDir) { t.pass('CTC model not available — skipping'); return }
-
-  const { samplesDir } = getTestPaths()
-  const samplePath = path.join(samplesDir, 'sample.raw')
-  if (!fs.existsSync(samplePath)) { t.pass('sample.raw not found — skipping'); return }
-
-  const args = {
-    modelName: 'ctc-named-test',
-    loader: createLoader()
-  }
-  const config = {
-    path: modelDir,
-    ctcModelPath: path.join(modelDir, 'model.onnx'),
-    ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
-    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    parakeetConfig: { modelType: 'ctc', maxThreads: 4, useGPU: false }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const loggerBinding = setupJsLogger(binding)
+  let parakeet = null
 
   try {
-    await model._load()
+    const modelDir = await ensureModelForType('ctc')
+    if (!modelDir) { t.pass('CTC model not available — skipping'); return }
 
-    const rawBuffer = fs.readFileSync(samplePath)
-    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-    const audioData = new Float32Array(pcm.length)
-    for (let i = 0; i < pcm.length; i++) audioData[i] = pcm[i] / 32768.0
+    const audio = loadAudioSample()
+    if (!audio) { t.pass('sample.raw not found — skipping'); return }
 
-    const audioStream = (async function * () {
-      yield audioData
-    })()
+    const transcriptions = []
+    let outputResolve = null
+    const outputPromise = new Promise(resolve => { outputResolve = resolve })
 
-    const response = await model.run(audioStream)
-    const segments = []
-    await response.onUpdate((output) => {
-      const items = Array.isArray(output) ? output : [output]
-      segments.push(...items)
-    }).await()
+    parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType: 'ctc',
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) transcriptions.push(seg)
+        }
+        if (transcriptions.length > 0 && outputResolve) {
+          outputResolve()
+          outputResolve = null
+        }
+      }
+      if (error) console.error('[ctc-named] Error:', error)
+    })
 
-    const fullText = segments.map(s => s?.text || '').join(' ').trim()
-    console.log(`[ctc-named] Result: "${fullText.substring(0, 100)}..."`)
+    await loadWeightsFromDir(parakeet, modelDir, ['model.onnx', 'model.onnx_data', 'tokenizer.json'])
+    await parakeet.activate()
+
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 300000)
+    await outputPromise
+    clearTimeout(timeout)
+
+    const fullText = transcriptions.map(s => s.text).join(' ').trim()
+    console.log(`[ctc-named] Result: "${fullText.substring(0, 120)}..."`)
 
     t.ok(fullText.length > 10, `CTC named paths produced text (${fullText.length} chars)`)
     t.ok(fullText.toLowerCase().includes('alice'), 'CTC transcription includes expected content')
   } finally {
-    try { await model.unload() } catch (e) {}
+    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
 
@@ -133,54 +175,59 @@ test('EOU with named file paths — constructor accepts and validates', { timeou
 })
 
 test('EOU with named file paths — full load and transcription', { timeout: 600000 }, async (t) => {
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-
-  const modelDir = await ensureModelForType('eou')
-  if (!modelDir) { t.pass('EOU model not available — skipping'); return }
-
-  const { samplesDir } = getTestPaths()
-  const samplePath = path.join(samplesDir, 'sample.raw')
-  if (!fs.existsSync(samplePath)) { t.pass('sample.raw not found — skipping'); return }
-
-  const args = {
-    modelName: 'eou-named-test',
-    loader: createLoader()
-  }
-  const config = {
-    path: modelDir,
-    eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
-    eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
-    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
-    parakeetConfig: { modelType: 'eou', maxThreads: 4, useGPU: false }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const loggerBinding = setupJsLogger(binding)
+  let parakeet = null
 
   try {
-    await model._load()
+    const modelDir = await ensureModelForType('eou')
+    if (!modelDir) { t.pass('EOU model not available — skipping'); return }
 
-    const rawBuffer = fs.readFileSync(samplePath)
-    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-    const audioData = new Float32Array(pcm.length)
-    for (let i = 0; i < pcm.length; i++) audioData[i] = pcm[i] / 32768.0
+    const audio = loadAudioSample()
+    if (!audio) { t.pass('sample.raw not found — skipping'); return }
 
-    const audioStream = (async function * () {
-      yield audioData
-    })()
+    const transcriptions = []
+    let outputResolve = null
+    const outputPromise = new Promise(resolve => { outputResolve = resolve })
 
-    const response = await model.run(audioStream)
-    const segments = []
-    await response.onUpdate((output) => {
-      const items = Array.isArray(output) ? output : [output]
-      segments.push(...items)
-    }).await()
+    parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType: 'eou',
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) transcriptions.push(seg)
+        }
+        if (transcriptions.length > 0 && outputResolve) {
+          outputResolve()
+          outputResolve = null
+        }
+      }
+      if (error) console.error('[eou-named] Error:', error)
+    })
 
-    const fullText = segments.map(s => s?.text || '').join(' ').trim()
-    console.log(`[eou-named] Result: "${fullText.substring(0, 100)}..."`)
+    await loadWeightsFromDir(parakeet, modelDir, ['encoder.onnx', 'decoder_joint.onnx', 'tokenizer.json'])
+    await parakeet.activate()
 
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 300000)
+    await outputPromise
+    clearTimeout(timeout)
+
+    const fullText = transcriptions.map(s => s.text).join(' ').trim()
+    console.log(`[eou-named] Result: "${fullText.substring(0, 120)}..."`)
+
+    t.ok(transcriptions.length > 0, `EOU produced ${transcriptions.length} segments`)
     t.ok(fullText.length > 0, `EOU named paths produced text (${fullText.length} chars)`)
   } finally {
-    try { await model.unload() } catch (e) {}
+    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
 
@@ -212,55 +259,63 @@ test('Sortformer with named file paths — constructor accepts and validates', {
 })
 
 test('Sortformer with named file paths — full load and diarization', { timeout: 600000 }, async (t) => {
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-
-  const modelDir = await ensureModelForType('sortformer')
-  if (!modelDir) { t.pass('Sortformer model not available — skipping'); return }
-
-  const { samplesDir } = getTestPaths()
-  const samplePath = path.join(samplesDir, 'sample.raw')
-  if (!fs.existsSync(samplePath)) { t.pass('sample.raw not found — skipping'); return }
-
-  const args = {
-    modelName: 'sf-named-test',
-    loader: createLoader()
-  }
-  const config = {
-    path: modelDir,
-    sortformerPath: path.join(modelDir, 'sortformer.onnx'),
-    parakeetConfig: { modelType: 'sortformer', maxThreads: 4, useGPU: false }
-  }
-
-  const model = new TranscriptionParakeet(args, config)
+  const loggerBinding = setupJsLogger(binding)
+  let parakeet = null
 
   try {
-    await model._load()
+    const modelDir = await ensureModelForType('sortformer')
+    if (!modelDir) { t.pass('Sortformer model not available — skipping'); return }
 
-    const rawBuffer = fs.readFileSync(samplePath)
-    const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-    const audioData = new Float32Array(pcm.length)
-    for (let i = 0; i < pcm.length; i++) audioData[i] = pcm[i] / 32768.0
+    const audio = loadAudioSample()
+    if (!audio) { t.pass('sample.raw not found — skipping'); return }
 
-    const audioStream = (async function * () {
-      yield audioData
-    })()
+    const transcriptions = []
+    let outputResolve = null
+    const outputPromise = new Promise(resolve => { outputResolve = resolve })
 
-    const response = await model.run(audioStream)
-    const segments = []
-    await response.onUpdate((output) => {
-      const items = Array.isArray(output) ? output : [output]
-      segments.push(...items)
-    }).await()
+    parakeet = new ParakeetInterface(binding, {
+      modelPath: modelDir,
+      modelType: 'sortformer',
+      maxThreads: 4,
+      useGPU: false,
+      sampleRate: 16000,
+      channels: 1
+    }, (_, event, __, output, error) => {
+      if (event === 'Output' && output) {
+        const segments = Array.isArray(output) ? output : [output]
+        for (const seg of segments) {
+          if (seg?.text) transcriptions.push(seg)
+        }
+        if (transcriptions.length > 0 && outputResolve) {
+          outputResolve()
+          outputResolve = null
+        }
+      }
+      if (error) console.error('[sf-named] Error:', error)
+    })
 
-    const fullText = segments.map(s => s?.text || '').join('\n').trim()
-    console.log(`[sf-named] Result: "${fullText.substring(0, 100)}"`)
+    await loadWeightsFromDir(parakeet, modelDir, ['sortformer.onnx'])
+    await parakeet.activate()
 
-    t.ok(fullText.length > 0, `Sortformer named paths produced text (${fullText.length} chars)`)
+    await parakeet.append({ type: 'audio', data: audio.buffer })
+    await parakeet.append({ type: 'end of job' })
+
+    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 300000)
+    await outputPromise
+    clearTimeout(timeout)
+
+    const fullText = transcriptions.map(s => s.text).join('\n').trim()
+    console.log(`[sf-named] Result:\n${fullText.substring(0, 200)}`)
+
+    t.ok(transcriptions.length > 0, `Sortformer produced ${transcriptions.length} segments`)
     t.ok(fullText.includes('Speaker'), 'Sortformer output contains speaker labels')
   } finally {
-    try { await model.unload() } catch (e) {}
+    if (parakeet) try { parakeet.destroyInstance() } catch (e) {}
+    try { loggerBinding.releaseLogger() } catch (e) {}
   }
 })
+
+// ── TDT constructor validation ──────────────────────────────────────────────
 
 test('TDT with named file paths — verify existing flow still works', { timeout: 60000 }, async (t) => {
   TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
