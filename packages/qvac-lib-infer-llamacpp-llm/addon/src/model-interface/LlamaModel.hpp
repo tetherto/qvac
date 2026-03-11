@@ -52,6 +52,13 @@ struct FinetuneTerminalResult {
   std::optional<Stats> stats;
 };
 
+struct FinetuneConfigOverrides {
+  int64_t batchSize{0};
+  int64_t microBatchSize{0};
+  int64_t contextLength{0};
+  bool gpuSupportsF16OutProd{true};
+};
+
 class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
 public:
   LlamaModel(const LlamaModel&) = delete;
@@ -71,11 +78,13 @@ public:
   /// @param configFilemap The user-supplied config map (will be written to).
   /// @param metadata Model metadata (architecture, quantization info).
   /// @param adrenoVersion Detected Adreno GPU version, if any.
-  /// @param isFinetuning Whether finetuning mode is active.
+  /// @param finetuneOverrides If set, finetuning mode is active with these
+  /// context/batch params and GPU caps.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      bool isFinetuning = false);
+      const std::optional<FinetuneConfigOverrides>& finetuneOverrides =
+          std::nullopt);
 
   /**
    * The Constructor for llama model.
@@ -312,6 +321,7 @@ private:
   void clearPausedCheckpointStateShared();
 
   bool isFinetuning_ = false;
+  std::optional<FinetuneConfigOverrides> pendingFinetuneOverrides_;
 
   mutable std::mutex checkpointStateMutex_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>

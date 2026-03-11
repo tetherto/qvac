@@ -59,8 +59,7 @@ std::pair<BackendType, std::string> chooseBackend(
 /// model architecture is not in the supported list. For supported archs on
 /// Adreno:
 ///   - Adreno 800+: prefer Vulkan
-///   - Adreno 700+: CPU for bitnet+TQ, otherwise OpenCL
-///   - Adreno 600+: CPU
+///   - Adreno <800: CPU
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,

@@ -301,7 +301,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   };
 
   constexpr int kAdreno800Threshold = 800;
-  constexpr int kAdreno700Threshold = 700;
 
   const bool noMainGpuOverride = !mainGpu.has_value();
   const bool isAdreno = maxAdrenoVersion.has_value();
@@ -324,22 +323,9 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           "Finetuning on Adreno 800+: preferring Vulkan",
           nullptr);
       openClBackends.clear();
-    } else if (maxAdrenoVersion.value() >= kAdreno700Threshold) {
-      if (isBitnetOneBit) {
-        bckI.llamaLogCallback(
-            GGML_LOG_LEVEL_INFO,
-            "Finetuning BitNet TQ on Adreno 700-799: CPU only",
-            nullptr);
-        clearAllGpuBackends();
-      } else {
-        bckI.llamaLogCallback(
-            GGML_LOG_LEVEL_INFO,
-            "Finetuning on Adreno 700-799: preferring OpenCL",
-            nullptr);
-      }
     } else {
       bckI.llamaLogCallback(
-          GGML_LOG_LEVEL_INFO, "Finetuning on Adreno <700: CPU only", nullptr);
+          GGML_LOG_LEVEL_INFO, "Finetuning on Adreno <800: CPU only", nullptr);
       clearAllGpuBackends();
     }
   } else if (noMainGpuOverride && isAdreno) {

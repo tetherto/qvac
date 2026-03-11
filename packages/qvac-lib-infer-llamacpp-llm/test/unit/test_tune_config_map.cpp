@@ -8,6 +8,7 @@
 #include "test_common.hpp"
 
 using test_common::MockModelMetaData;
+using FtOverrides = FinetuneConfigOverrides;
 
 class TuneConfigMapTest : public ::testing::Test {
 protected:
@@ -165,7 +166,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_FlashAttnDisabled) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, FtOverrides{});
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -175,7 +176,7 @@ TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_Respected) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["flash-attn"] = "on";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, FtOverrides{});
 
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }
@@ -185,7 +186,7 @@ TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_Respected) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, FtOverrides{});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -194,7 +195,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno800_UbatchSetTo128) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 800, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 800, FtOverrides{});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -203,7 +204,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno800_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Qwen3_Adreno830_UbatchSetTo128) {
   MockModelMetaData meta(false, "qwen3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, FtOverrides{});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -214,7 +215,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Qwen3_Adreno830_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno740_UbatchUnchanged) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 740, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 740, FtOverrides{});
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -222,7 +223,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno740_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno799_UbatchUnchanged) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 799, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 799, FtOverrides{});
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -232,7 +233,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno799_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_NoAdreno_UbatchUnchanged) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, FtOverrides{});
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -243,7 +244,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Adreno830_UserSetUbatchHyphen_Respected) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["ubatch-size"] = "256";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, FtOverrides{});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "256");
 }
@@ -253,8 +254,215 @@ TEST_F(
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["ubatch_size"] = "64";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, true);
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, FtOverrides{});
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
   EXPECT_EQ(configFilemap_["ubatch_size"], "64");
+}
+
+// ---- Finetuning context/batch param injection ----
+
+TEST_F(TuneConfigMapTest, Finetuning_ContextLengthInjected) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.contextLength = 256};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  ASSERT_EQ(configFilemap_.count("ctx-size"), 1);
+  EXPECT_EQ(configFilemap_["ctx-size"], "256");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_BatchSizeInjected) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.batchSize = 64};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  ASSERT_EQ(configFilemap_.count("batch-size"), 1);
+  EXPECT_EQ(configFilemap_["batch-size"], "64");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_MicroBatchSizeInjected) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.microBatchSize = 16};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "16");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_AllParamsInjected) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.batchSize = 64, .microBatchSize = 16, .contextLength = 256};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_["ctx-size"], "256");
+  EXPECT_EQ(configFilemap_["batch-size"], "64");
+  EXPECT_EQ(configFilemap_["ubatch-size"], "16");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_ZeroParamsNotInjected) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_.count("ctx-size"), 0);
+  EXPECT_EQ(configFilemap_.count("batch-size"), 0);
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserCtxSizeHyphen_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["ctx-size"] = "512";
+  FtOverrides ov{.contextLength = 256};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_["ctx-size"], "512");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserCtxSizeUnderscore_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["ctx_size"] = "512";
+  FtOverrides ov{.contextLength = 256};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_.count("ctx-size"), 0);
+  EXPECT_EQ(configFilemap_["ctx_size"], "512");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserBatchSizeHyphen_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["batch-size"] = "128";
+  FtOverrides ov{.batchSize = 64};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_["batch-size"], "128");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserBatchSizeUnderscore_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["batch_size"] = "128";
+  FtOverrides ov{.batchSize = 64};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_.count("batch-size"), 0);
+  EXPECT_EQ(configFilemap_["batch_size"], "128");
+}
+
+// Finetuning microBatchSize takes precedence over Adreno 800+ default
+TEST_F(TuneConfigMapTest, Finetuning_MicroBatchOverridesAdrenoDefault) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.microBatchSize = 32};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, ov);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "32");
+}
+
+// When no finetuning microBatchSize, Adreno 800+ default of 128 still applies
+TEST_F(TuneConfigMapTest, Finetuning_NoMicroBatch_Adreno830_DefaultApplies) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, ov);
+
+  ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
+// Not finetuning (nullopt): no overrides applied
+TEST_F(TuneConfigMapTest, NotFinetuning_NoOverridesApplied) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+
+  EXPECT_EQ(configFilemap_.count("ctx-size"), 0);
+  EXPECT_EQ(configFilemap_.count("batch-size"), 0);
+  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
+}
+
+// ---- Finetuning KV cache quantization ----
+
+TEST_F(TuneConfigMapTest, Finetuning_NoF16OutProd_CacheTypesSetToF32) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.gpuSupportsF16OutProd = false};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  ASSERT_EQ(configFilemap_.count("cache-type-k"), 1);
+  EXPECT_EQ(configFilemap_["cache-type-k"], "f32");
+  ASSERT_EQ(configFilemap_.count("cache-type-v"), 1);
+  EXPECT_EQ(configFilemap_["cache-type-v"], "f32");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_SupportsF16OutProd_CacheTypesUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+  FtOverrides ov{.gpuSupportsF16OutProd = true};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_DefaultOverrides_CacheTypesUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, FtOverrides{});
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_NoF16_UserSetCacheTypeK_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["cache-type-k"] = "q8_0";
+  FtOverrides ov{.gpuSupportsF16OutProd = false};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
+  ASSERT_EQ(configFilemap_.count("cache-type-v"), 1);
+  EXPECT_EQ(configFilemap_["cache-type-v"], "f32");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_NoF16_UserSetCacheTypeV_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["cache-type-v"] = "q8_0";
+  FtOverrides ov{.gpuSupportsF16OutProd = false};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  ASSERT_EQ(configFilemap_.count("cache-type-k"), 1);
+  EXPECT_EQ(configFilemap_["cache-type-k"], "f32");
+  EXPECT_EQ(configFilemap_["cache-type-v"], "q8_0");
+}
+
+TEST_F(
+    TuneConfigMapTest, Finetuning_NoF16_UserSetCacheTypeKUnderscore_Respected) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["cache_type_k"] = "q8_0";
+  FtOverrides ov{.gpuSupportsF16OutProd = false};
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_["cache_type_k"], "q8_0");
+}
+
+TEST_F(TuneConfigMapTest, NotFinetuning_CacheTypesUnchanged) {
+  MockModelMetaData meta(false, "gemma3");
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+
+  EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
+  EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
 }
