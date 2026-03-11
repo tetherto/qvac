@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10]
+
+### Added
+- CTC model support (`parakeet-ctc-0.6b`) with tokenizer.json-based vocabulary decoding
+- End-of-Utterance (EOU) streaming model support (`parakeet-eou-120m-v1`) for real-time transcription
+- Sortformer speaker diarization model support (`sortformer-4spk-v2`) with per-speaker labelled output
+- Named file path parameters for CTC (`ctcModelPath`, `ctcModelDataPath`), EOU (`eouEncoderPath`, `eouDecoderPath`), and Sortformer (`sortformerPath`) models
+- Shared `tokenizerPath` config for CTC and EOU tokenizer.json loading
+- `modelType` configuration parameter (`'tdt'`, `'ctc'`, `'eou'`, `'sortformer'`) to select inference pipeline
+- Integration tests for all model types (desktop and mobile)
+- `nlohmann-json` vcpkg dependency for tokenizer.json parsing
+
+### Changed
+- C++ `ParakeetModel` refactored to support multiple model architectures with shared mel-spectrogram and encoder pipeline
+- `_resolveFilePath` extended to map CTC/EOU/Sortformer file names to named config paths
+- `_hasAnyNamedPaths()` added to detect any named path override (TDT or non-TDT)
+- `_loadModelWeights` routes weight files by model type using `getRequiredModelFiles()`
+- Mobile integration tests hardened with explicit `unloadWeights()` and `destroyInstance()` cleanup in `finally` blocks
+
+### Fixed
+- Tokenizer vocabulary validation rejects empty vocab after parsing
+- JobEnded/Output race condition in C++ job tracker
+
 ## [0.1.9]
 
 ### Changed

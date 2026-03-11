@@ -27,6 +27,9 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cp
 # Find ONNX Runtime
 find_package(onnxruntime CONFIG REQUIRED)
 
+# Find nlohmann_json (for tokenizer.json parsing in CTC models)
+find_package(nlohmann_json CONFIG REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -61,9 +64,9 @@ target_include_directories(${LIB_NAME} PUBLIC
 
 # Use static linking for mobile platforms (ONNX runtime must be bundled in the binary)
 if(ANDROID OR IOS)
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime_static)
+  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime_static nlohmann_json::nlohmann_json)
 else()
-  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime)
+  target_link_libraries(${LIB_NAME} PRIVATE onnxruntime::onnxruntime nlohmann_json::nlohmann_json)
 endif()
 
 # Create the Bare addon module using bare-make's helper
@@ -299,6 +302,7 @@ if(BUILD_TESTING)
       PRIVATE 
         GTest::gmock_main
         onnxruntime::onnxruntime
+        nlohmann_json::nlohmann_json
     )
     
     # Coverage configuration
