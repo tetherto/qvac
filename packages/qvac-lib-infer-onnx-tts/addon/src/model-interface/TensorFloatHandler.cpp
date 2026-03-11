@@ -33,7 +33,7 @@ public:
     std::memcpy(dest, src, count * sizeof(float));
   }
   void writeFromFloat(const chatterbox::OrtTensor &tensor, const float *src,
-                     size_t numElements) const override {
+                      size_t numElements) const override {
     std::memcpy(tensor.data, src, numElements * sizeof(float));
   }
 };
@@ -59,7 +59,7 @@ public:
     }
   }
   void writeFromFloat(const chatterbox::OrtTensor &tensor, const float *src,
-                     size_t numElements) const override {
+                      size_t numElements) const override {
     auto *out = static_cast<uint16_t *>(tensor.data);
     for (size_t i = 0; i < numElements; i++) {
       out[i] = qvac::ttslib::fp16::fromFp32(src[i]);
@@ -75,8 +75,10 @@ float int4NibbleToFp32(uint8_t packed, bool highNibble) {
 
 uint8_t fp32ToInt4Nibble(float f) {
   int v = static_cast<int>(f);
-  if (v > 7) v = 7;
-  if (v < -8) v = -8;
+  if (v > 7)
+    v = 7;
+  if (v < -8)
+    v = -8;
   return static_cast<uint8_t>(v & 0x0Fu);
 }
 
@@ -87,8 +89,10 @@ float uint4NibbleToFp32(uint8_t packed, bool highNibble) {
 
 uint8_t fp32ToUInt4Nibble(float f) {
   int v = static_cast<int>(f);
-  if (v > 15) v = 15;
-  if (v < 0) v = 0;
+  if (v > 15)
+    v = 15;
+  if (v < 0)
+    v = 0;
   return static_cast<uint8_t>(v & 0x0Fu);
 }
 
@@ -117,7 +121,7 @@ public:
     }
   }
   void writeFromFloat(const chatterbox::OrtTensor &tensor, const float *src,
-                     size_t numElements) const override {
+                      size_t numElements) const override {
     auto *out = static_cast<uint8_t *>(tensor.data);
     for (size_t i = 0; i < numElements; i++) {
       size_t byteIdx = i / 2;
@@ -156,7 +160,7 @@ public:
     }
   }
   void writeFromFloat(const chatterbox::OrtTensor &tensor, const float *src,
-                     size_t numElements) const override {
+                      size_t numElements) const override {
     auto *out = static_cast<uint8_t *>(tensor.data);
     for (size_t i = 0; i < numElements; i++) {
       size_t byteIdx = i / 2;
@@ -177,19 +181,19 @@ const UInt4Handler s_uint4;
 
 } // namespace
 
-const ITensorFloatHandler &TensorFloatHandlerFactory::get(
-    chatterbox::OrtElementType type) {
+const ITensorFloatHandler &
+TensorFloatHandlerFactory::get(chatterbox::OrtElementType type) {
   switch (type) {
-    case chatterbox::OrtElementType::Fp32:
-      return s_fp32;
-    case chatterbox::OrtElementType::Fp16:
-      return s_fp16;
-    case chatterbox::OrtElementType::Int4:
-      return s_int4;
-    case chatterbox::OrtElementType::UInt4:
-      return s_uint4;
-    default:
-      return s_fp32;
+  case chatterbox::OrtElementType::Fp32:
+    return s_fp32;
+  case chatterbox::OrtElementType::Fp16:
+    return s_fp16;
+  case chatterbox::OrtElementType::Int4:
+    return s_int4;
+  case chatterbox::OrtElementType::UInt4:
+    return s_uint4;
+  default:
+    return s_fp32;
   }
 }
 

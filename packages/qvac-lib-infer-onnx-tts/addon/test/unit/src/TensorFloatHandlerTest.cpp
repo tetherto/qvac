@@ -1,5 +1,5 @@
-#include "src/model-interface/Fp16Utils.hpp"
 #include "src/model-interface/TensorFloatHandler.hpp"
+#include "src/model-interface/Fp16Utils.hpp"
 #include <gtest/gtest.h>
 #include <vector>
 
@@ -103,12 +103,14 @@ TEST_F(Int4HandlerTest, int4RoundtripThroughFp16Utils) {
   std::vector<float> original = {-8.0f, -4.0f, 0.0f, 4.0f, 7.0f};
   size_t numBytes = (original.size() + 1) / 2;
   std::vector<uint8_t> packed(numBytes, 0);
-  OrtTensor writeTensor{packed.data(), "t",
+  OrtTensor writeTensor{packed.data(),
+                        "t",
                         {1, static_cast<int64_t>(original.size())},
                         OrtElementType::Int4};
   fp16::writeFloatDataToTensor(writeTensor, original.data(), original.size());
 
-  OrtTensor readTensor{packed.data(), "t",
+  OrtTensor readTensor{packed.data(),
+                       "t",
                        {1, static_cast<int64_t>(original.size())},
                        OrtElementType::Int4};
   std::vector<float> restored;
@@ -147,12 +149,14 @@ TEST_F(UInt4HandlerTest, uint4RoundtripThroughFp16Utils) {
   std::vector<float> original = {0.0f, 5.0f, 10.0f, 15.0f};
   size_t numBytes = (original.size() + 1) / 2;
   std::vector<uint8_t> packed(numBytes, 0);
-  OrtTensor writeTensor{packed.data(), "t",
+  OrtTensor writeTensor{packed.data(),
+                        "t",
                         {1, static_cast<int64_t>(original.size())},
                         OrtElementType::UInt4};
   fp16::writeFloatDataToTensor(writeTensor, original.data(), original.size());
 
-  OrtTensor readTensor{packed.data(), "t",
+  OrtTensor readTensor{packed.data(),
+                       "t",
                        {1, static_cast<int64_t>(original.size())},
                        OrtElementType::UInt4};
   std::vector<float> restored;
