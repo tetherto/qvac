@@ -155,6 +155,14 @@ void LlamaModel::init(bool acquireLock) {
   }
   snap.lockRead();
 
+  // Defensive guard: not reachable under normal usage because reload() is
+  // only called after waitForLoadInitialization() returns, at which point the
+  // delayed init callback has already completed. Protects against a misuse
+  // scenario where reload() races with the initial delayed load.
+  if (snap->llmContext_) {
+    return;
+  }
+
   const auto& modelPath = constructionArgs_.modelPath;
   auto configFilemap = constructionArgs_.configFilemap;
 
