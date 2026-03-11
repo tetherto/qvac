@@ -1,0 +1,44 @@
+---
+title: "ragChunk( )"
+titleStyle: code
+description: "Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()"
+---
+
+```typescript
+function ragChunk(params: infer): Promise
+```
+
+## Description
+
+Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
+
+## Parameters
+
+| Name | Type | Required? | Description |
+| --- | --- | :---: | --- |
+| `params` | `infer` | ✓ | The parameters for chunking |
+
+## Returns
+
+```typescript
+Promise
+```
+
+
+
+## Examples
+
+```typescript
+```typescript
+const chunks = await ragChunk({
+  documents: ["Long document text here..."],
+  chunkOpts: {
+    chunkSize: 256,
+    chunkOverlap: 50,
+    chunkStrategy: "paragraph",
+  },
+});
+```
+```
