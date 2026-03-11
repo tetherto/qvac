@@ -8,8 +8,11 @@ import {
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   ModelType,
+  whisperConfigSchema,
+  ADDON_WHISPER,
   type CreateModelParams,
   type PluginModelResult,
+  type ResolveContext,
   type WhisperConfig,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
@@ -26,10 +29,8 @@ function createWhisperModel(
   const { dirPath, basePath } = parseModelPath(modelPath);
 
   let vadModelName = "";
-
-  const effectiveVadPath = vadModelPath || whisperConfig.vad_model_path;
-  if (effectiveVadPath) {
-    const vadParsed = parseModelPath(effectiveVadPath);
+  if (vadModelPath) {
+    const vadParsed = parseModelPath(vadModelPath);
     vadModelName = vadParsed.basePath;
   }
 
@@ -63,7 +64,22 @@ function createWhisperModel(
 export const whisperPlugin = definePlugin({
   modelType: ModelType.whispercppTranscription,
   displayName: "Whisper (whisper.cpp)",
-  addonPackage: "@qvac/transcription-whispercpp",
+  addonPackage: ADDON_WHISPER,
+  loadConfigSchema: whisperConfigSchema,
+
+  async resolveConfig(cfg: WhisperConfig, ctx: ResolveContext) {
+    const { vadModelSrc, ...whisperConfig } = cfg;
+
+    if (!vadModelSrc) {
+      return { config: whisperConfig };
+    }
+
+    const vadModelPath = await ctx.resolveModelPath(vadModelSrc);
+    return {
+      config: whisperConfig,
+      artifacts: { vadModelPath },
+    };
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const whisperConfig = (params.modelConfig ?? {}) as WhisperConfig;

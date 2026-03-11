@@ -1124,6 +1124,7 @@ jobs:
             --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
             --name "$RUN_NAME" \
             --test type=APPIUM_NODE,testPackageArn="${{ steps.upload_test_package.outputs.test_package_upload_arn }}",testSpecArn="${{ steps.upload_test_spec.outputs.test_spec_arn }}" \
+            --execution-configuration jobTimeoutMinutes=60 \
             --query 'run.arn' --output text)
           
           echo "run_arn=$RUN_ARN" >> $GITHUB_OUTPUT

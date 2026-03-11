@@ -1,5 +1,5 @@
 # Notify docs owner when a release branch is pushed (e.g. after merge).
-# Docs live in the monorepo at packages/docs; deploy is via PR main → docs-production.
+# Deploy is via PR main → docs-production.
 name: Docs Deploy Notify
 
 on:

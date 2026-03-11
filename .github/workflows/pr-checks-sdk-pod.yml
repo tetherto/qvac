@@ -13,7 +13,6 @@ on:
       - "packages/rag/**"
       - "packages/logging/**"
       - "packages/error/**"
-      - "packages/docs/**"
     branches:
       - main
       - release-*

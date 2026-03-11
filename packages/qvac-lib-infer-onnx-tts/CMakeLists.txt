@@ -145,8 +145,6 @@ target_sources(
   ${qvac-lib-inference-tts}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-inference-addon-tts.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
@@ -203,6 +201,40 @@ target_link_libraries(
     onnxruntime::onnxruntime_static
     tokenizers::tokenizers_cpp
 )
+
+option(BUILD_CLI "Build CLI tool example" FALSE)
+if(BUILD_CLI)
+  add_executable(
+    qvac_tts_cli
+    ${PROJECT_SOURCE_DIR}/addon/src/cli/qvac_tts_cli.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+  )
+
+  target_include_directories(
+    qvac_tts_cli
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon
+      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+  )
+
+  target_link_libraries(
+    qvac_tts_cli
+    PRIVATE
+      onnxruntime::onnxruntime_static
+      tokenizers::tokenizers_cpp
+  )
+
+  if(WIN32)
+    target_link_libraries(
+      qvac_tts_cli
+      PRIVATE
+        msvcrt.lib
+    )
+  endif()
+endif()
 
 # Ensure runtime libraries resolve relative to the addon location on macOS
 if(APPLE)

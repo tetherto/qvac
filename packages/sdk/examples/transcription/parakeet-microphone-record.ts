@@ -52,6 +52,7 @@ const modelId = await loadModel({
   modelSrc: PARAKEET_ENCODER_FP32,
   modelType: "parakeet",
   modelConfig: {
+    parakeetEncoderSrc: PARAKEET_ENCODER_FP32,
     parakeetEncoderDataSrc: PARAKEET_ENCODER_DATA_FP32,
     parakeetDecoderSrc: PARAKEET_DECODER_FP32,
     parakeetVocabSrc: PARAKEET_VOCAB,
