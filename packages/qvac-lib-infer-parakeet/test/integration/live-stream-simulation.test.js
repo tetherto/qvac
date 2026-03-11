@@ -136,7 +136,7 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
     }
     if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
       if (event === 'Error') {
-      console.log(`[error] ${error}`)
+        console.log(`[error] ${error}`)
       }
       outputResolve()
       outputResolve = null
