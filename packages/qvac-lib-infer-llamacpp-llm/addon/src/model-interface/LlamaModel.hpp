@@ -239,7 +239,8 @@ private:
    */
   bool loadMedia(const std::vector<uint8_t>& input);
 
-  void setInitLoader();
+  void setInitLoader(
+      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
 
   void init();
 

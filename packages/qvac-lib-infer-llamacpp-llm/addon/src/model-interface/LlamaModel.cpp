@@ -112,7 +112,7 @@ LlamaModel::LlamaModel(
           std::move(modelPath),
           std::move(projectionPath),
           std::move(configFilemap)} {
-  setInitLoader();
+  setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
 void LlamaModel::reload() {
@@ -127,14 +127,17 @@ void LlamaModel::reload() {
           "Cannot reload a model that was loaded via streamed shards; "
           "the streamed weights have already been consumed.");
     }
-    constructionArgs_.loaderType = InitLoader::LOADER_TYPE::IMMEDIATE;
   }
-  setInitLoader();
+  setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE);
 }
 
-void LlamaModel::setInitLoader() {
-  cancelImpl();
+void LlamaModel::setInitLoader(
+    std::optional<InitLoader::LOADER_TYPE> loaderType) {
+  cancel();
   std::unique_lock lock(stateMtx_);
+  if (loaderType.has_value()) {
+    constructionArgs_.loaderType = loaderType.value();
+  }
   state_ = std::make_unique<ReloadableState>(
       constructionArgs_, loadingContext_, metadata_);
   state_->initLoader_.init(
