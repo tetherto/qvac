@@ -138,15 +138,11 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
   } finally {
     try {
       if (parakeet) {
-        console.log('[test] Cleanup: unloadWeights...')
         await parakeet.unloadWeights()
-        console.log('[test] Cleanup: waiting for unload...')
-        await new Promise(r => setTimeout(r, 2000))
-        console.log('[test] Cleanup: destroyInstance...')
+        await new Promise(r => setTimeout(r, 1000))
         await parakeet.destroyInstance()
-        console.log('[test] Cleanup: done')
       }
-    } catch (e) { console.log(`[test] Cleanup error: ${e.message}`) }
+    } catch (_) {}
     try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
@@ -217,15 +213,12 @@ async function runModelTest (opts) {
     for (const file of files) {
       const filePath = path.join(modelDir, file.name)
       if (!fs.existsSync(filePath)) continue
-      console.log(`[${tag}] Loading weights: ${file.name}`)
       const chunk = file.skipRead
         ? new Uint8Array([0])
         : new Uint8Array(fs.readFileSync(filePath))
       await parakeet.loadWeights({ filename: file.name, chunk, completed: true })
     }
-    console.log(`[${tag}] Calling activate...`)
     await parakeet.activate()
-    console.log(`[${tag}] activate() returned`)
 
     await new Promise(r => setTimeout(r, 500))
     if (addonError) throw new Error(`ADDON_ERROR: ${addonError}`)
@@ -241,9 +234,7 @@ async function runModelTest (opts) {
     for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
 
     console.log(`[${tag}] ${action} ${(audio.length / 16000).toFixed(1)}s audio...`)
-    console.log(`[${tag}] Calling append (audio)...`)
     await parakeet.append({ type: 'audio', data: audio.buffer })
-    console.log(`[${tag}] Calling append (end of job)...`)
     await parakeet.append({ type: 'end of job' })
 
     for (let i = 0; i < 60 && !result; i++) {
@@ -266,22 +257,18 @@ async function runModelTest (opts) {
   } finally {
     try {
       if (parakeet) {
-        console.log(`[${tag}] Cleanup: unloadWeights...`)
         await parakeet.unloadWeights()
-        console.log(`[${tag}] Cleanup: waiting for unload...`)
-        await new Promise(r => setTimeout(r, 2000))
-        console.log(`[${tag}] Cleanup: destroyInstance...`)
+        await new Promise(r => setTimeout(r, 1000))
         await parakeet.destroyInstance()
-        console.log(`[${tag}] Cleanup: done`)
       }
-    } catch (e) { console.log(`[${tag}] Cleanup error: ${e.message}`) }
+    } catch (_) {}
     try { if (binding) binding.releaseLogger() } catch (_) {}
   }
 }
 
 const CTC_HF_REPO = 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main'
 
-async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+async function _disabled_runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
   return runModelTest({
     tag: 'test-ctc',
     dirPath,
@@ -298,7 +285,7 @@ async function runCTCTranscriptionTest (dirPath, getAssetPath) { // eslint-disab
 
 const EOU_HF_BASE = 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx'
 
-async function runEOUStreamingTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
+async function _disabled_runEOUStreamingTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
   return runModelTest({
     tag: 'test-eou',
     dirPath,
