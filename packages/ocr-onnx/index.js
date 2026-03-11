@@ -25,6 +25,15 @@ class ONNXOcr extends ONNXBase {
   constructor ({ params, ...args }) {
     super(args)
     this.params = params
+    this._packageName = '@qvac/ocr-onnx'
+    this._packageVersion = require('./package.json').version
+  }
+
+  _getDiagnosticsJSON () {
+    return JSON.stringify({
+      status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
+      params: this.params
+    })
   }
 
   /**
