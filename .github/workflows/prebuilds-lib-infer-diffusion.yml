@@ -68,7 +68,7 @@ jobs:
           - os: ubuntu-24.04
             platform: android
             arch: arm64
-            flags: -D ANDROID_STL=c++_shared -D SD_OPENCL=ON
+            flags: -D ANDROID_STL=c++_shared
           - os: macos-14
             platform: ios
             arch: arm64
