@@ -8,9 +8,10 @@
 #   lib/libstable-diffusion.a    (static library)
 #   share/stable-diffusion-cpp/  (CMake package config)
 #
-# GPU backend selection is controlled via vcpkg features which forward to
-# the ggml dependency.  The SD_* options below set compile-time defines
-# (e.g. -DSD_USE_CUDA) that the stable-diffusion.cpp source requires.
+# GPU backend selection is handled at runtime via ggml's backend registry.
+# The sd-generic-backend-init patch replaces SD's backend-specific init
+# with ggml_backend_init_by_type() which works with both statically linked
+# and dynamically loaded backends.
 
 # Pinned to release tag master-514-5792c66 (2026-03-01).
 vcpkg_from_github(
@@ -20,38 +21,12 @@ vcpkg_from_github(
     SHA512 9bdf945d27ea24d9ea8218a7b875b6d1346711122723453840f4648cd862de3be28e37736ce0ef46ed304cbe810593dfa4264eec969c9e0c8dafb854298280f7
     HEAD_REF master
     PATCHES
-        sd-cpu-only.patch
-        sd-backend-priority.patch
+        sd-generic-backend-init.patch
         abort-callback.patch
         fix-failure-path-cleanup.patch
 )
 
-# --- GPU feature flags ---
-# These set SD_* cache variables which the upstream CMakeLists.txt translates
-# into -DSD_USE_<backend> compile definitions.  The actual ggml backend
-# libraries are already built and installed by the ggml port.
-
-set(SD_METAL  OFF)
-set(SD_VULKAN OFF)
-set(SD_CUDA   OFF)
-set(SD_OPENCL OFF)
 set(SD_FLASH_ATTN OFF)
-
-if("metal" IN_LIST FEATURES)
-    set(SD_METAL ON)
-endif()
-
-if("vulkan" IN_LIST FEATURES)
-    set(SD_VULKAN ON)
-endif()
-
-if("cuda" IN_LIST FEATURES)
-    set(SD_CUDA ON)
-endif()
-
-if("opencl" IN_LIST FEATURES)
-    set(SD_OPENCL ON)
-endif()
 
 if("flash-attn" IN_LIST FEATURES)
     set(SD_FLASH_ATTN ON)
@@ -69,10 +44,6 @@ vcpkg_cmake_configure(
         -DSD_BUILD_EXAMPLES=OFF
         -DSD_BUILD_SHARED_LIBS=OFF
         -DSD_USE_SYSTEM_GGML=ON
-        -DSD_METAL=${SD_METAL}
-        -DSD_VULKAN=${SD_VULKAN}
-        -DSD_CUDA=${SD_CUDA}
-        -DSD_OPENCL=${SD_OPENCL}
         -DSD_FLASH_ATTN=${SD_FLASH_ATTN}
     MAYBE_UNUSED_VARIABLES
         SD_FLASH_ATTN

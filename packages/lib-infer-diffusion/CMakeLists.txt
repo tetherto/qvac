@@ -115,6 +115,10 @@ target_compile_features(${qvac-lib-inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${qvac-lib-inference-addon-sd} PUBLIC JS_LOGGER)
 target_compile_definitions(${qvac-lib-inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
+if(GGML_BACKEND_DL)
+  target_compile_definitions(${qvac-lib-inference-addon-sd} PRIVATE GGML_BACKEND_DL)
+endif()
+
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)

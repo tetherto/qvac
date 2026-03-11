@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <sstream>
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -11,6 +12,8 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <stb_image_write.h>
+
+#include <ggml-backend.h>
 
 #include "utils/BackendSelection.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -169,6 +172,32 @@ void SdModel::load() {
 
   // ── Internal ──────────────────────────────────────────────────────────────
   params.free_params_immediately = config_.freeParamsImmediately;
+
+  // Load DL GPU backend modules before creating the SD context.
+  // On platforms with GGML_BACKEND_DL, GPU backends are separate .so files
+  // discovered at runtime.  On desktop (static backends), this is skipped.
+#ifdef GGML_BACKEND_DL
+  {
+    static bool backendsLoaded = false;
+    if (!backendsLoaded) {
+      using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+      if (!config_.backendsDir.empty()) {
+        std::filesystem::path backendsDirPath(config_.backendsDir);
+#ifdef BACKENDS_SUBDIR
+        backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
+        backendsDirPath = backendsDirPath.lexically_normal();
+#endif
+        QLOG_IF(Priority::INFO,
+                 "Loading GPU backends from: " + backendsDirPath.string());
+        ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+      } else {
+        QLOG_IF(Priority::INFO, "Loading GPU backends from default path");
+        ggml_backend_load_all();
+      }
+      backendsLoaded = true;
+    }
+  }
+#endif
 
   sd_ctx_t* raw = new_sd_ctx(&params);
   if (!raw) {

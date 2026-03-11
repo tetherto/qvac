@@ -103,6 +103,9 @@ struct SdCtxConfig {
   // ── SDXL compatibility ────────────────────────────────────────────────────
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
+  // ── Backend loading ────────────────────────────────────────────────────────
+  std::string backendsDir; // directory containing DL backend .so modules
+
   // ── Internal ──────────────────────────────────────────────────────────────
   // Upstream defaults to true, which frees model weight buffers after each
   // generate_image_internal() call. The addon reuses a single sd_ctx across
