@@ -1,10 +1,11 @@
 # Changelog
 
-## [0.12.11] - 2026-03-12
+## [0.12.12] - 2026-03-12
 
 ### Fixed
 
-- Windows linker error: added `exports.def` to export `OrtGetApiBase` from the bare module on Windows, matching the existing `symbols.map` (Linux) and `exports.txt` (macOS) symbol visibility controls
+- Windows runtime loading: export `OrtGetApiBase` from the bare module using `/EXPORT` linker flag (a `.def` file overrides `WINDOWS_EXPORT_ALL_SYMBOLS`, suppressing the `bare_*`/`napi_*` auto-exports and causing DLL initialization failure)
+- macOS runtime loading: set `INSTALL_NAME_DIR` to `@rpath` so that consumer addons can resolve the companion `qvac__onnx@0.bare` via their `@loader_path` rpath entries (cmake-bare's default empty install_name caused dyld to skip rpath search entirely)
 
 
 ## [0.12.10] - 2026-03-12
