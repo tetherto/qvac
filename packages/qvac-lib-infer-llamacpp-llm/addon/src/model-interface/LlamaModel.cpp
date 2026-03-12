@@ -1,6 +1,7 @@
 #include "LlamaModel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cinttypes>
@@ -1361,7 +1362,7 @@ void LlamaModel::validateModelForFinetuning() {
   auto fileType = metadata_.tryGetU32("general.file_type");
   if (fileType.has_value()) {
     const uint32_t ft = *fileType;
-    constexpr std::array kSupportedQuants = {
+    constexpr std::array<llama_ftype, 6> kSupportedQuants = {
         LLAMA_FTYPE_ALL_F32,
         LLAMA_FTYPE_MOSTLY_F16,
         LLAMA_FTYPE_MOSTLY_Q4_0,
