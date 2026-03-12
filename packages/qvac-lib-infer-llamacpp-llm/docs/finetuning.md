@@ -82,13 +82,13 @@ handle.on('stats', stats => {
 })
 const result = await handle.await()
 
-// After pause: call finetune() with no args to use stored params; backend resumes if checkpoint exists
-const resumeHandle = await model.finetune()
+// After pause: call finetune() again with the same params; backend resumes if checkpoint exists
+const resumeHandle = await model.finetune(finetuneOptions)
 const resumeResult = await resumeHandle.await()
 ```
 
 - **Parameters**
-  - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Omit to use params from construction or a previous call (e.g. after a pause). When omitted, the backend resumes from a pause checkpoint if one exists in the stored params' `checkpointSaveDir`; otherwise you must provide params. **Resume contract:** call `finetune()` only after you have **awaited** `pause()`. There is no status API; await the previous command to know something is done.
+  - `finetuningOptions` — Object with [finetuning parameters](#finetuning-parameters). Always required. To resume after a pause, pass the same params again; the backend resumes from a pause checkpoint if one exists in `checkpointSaveDir`. **Resume contract:** call `finetune()` only after you have **awaited** `pause()`. There is no status API; await the previous command to know something is done.
 - **Returns** — `Promise<FinetuneHandle>`. The handle has `await()` — returns `Promise<{ op: 'finetune', status: 'COMPLETED' | 'PAUSED', stats?: object }>` when training completes or pauses. `stats` may include terminal metrics such as `train_loss`, `val_loss`, `learning_rate`, `global_steps`, and `epochs_completed`. Runtime failures reject `await()` (same failure path as inference) instead of resolving with an error status.
 - **Progress events** — if `opts.stats` is enabled, finetuning emits `stats` events on the handle with per-iteration metrics (`loss`, `accuracy`, `global_steps`, `current_epoch`, `current_batch`, `total_batches`). `global_steps` is the canonical monotonic step counter; `current_batch`/`total_batches` reflect backend ubatch indexing and may have non-sequential jumps depending on batch/microbatch configuration.
 
@@ -466,7 +466,7 @@ For multiple pause/resume cycles, see [examples/simple-lora-finetune-multiple-pa
 const finetuneHandle = await model.finetune(finetuneOptions)
 await sleep(90000)
 await model.pause()
-const resumeHandle = await model.finetune()
+const resumeHandle = await model.finetune(finetuneOptions)
 const result = await resumeHandle.await()
 console.log('Finetune completed:', result)
 ```

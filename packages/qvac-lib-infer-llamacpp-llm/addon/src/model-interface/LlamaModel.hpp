@@ -54,9 +54,9 @@ struct FinetuneTerminalResult {
 
 struct FinetuneConfigOverrides {
   bool active{false};
-  int64_t batchSize{0};
-  int64_t microBatchSize{0};
-  int64_t contextLength{0};
+  int64_t batchSize{128};
+  int64_t microBatchSize{128};
+  int64_t contextLength{128};
   bool gpuSupportsF16OutProd{true};
 };
 

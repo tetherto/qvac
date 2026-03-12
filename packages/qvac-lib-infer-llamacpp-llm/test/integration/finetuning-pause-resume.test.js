@@ -161,8 +161,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         logger: console,
         opts: { stats: true }
       },
-      config,
-      finetuneConfig
+      config
     )
 
     try {
@@ -222,7 +221,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
 
       verifyPauseCheckpoint(t, checkpointDir)
 
-      const resumeHandle = await model.finetune()
+      const resumeHandle = await model.finetune(finetuneConfig)
       resumeHandle.on('stats', stats => {
         progressCount++
         t.ok(!isNaN(stats.loss), `[${modelVariant.id}] resume progress loss must not be NaN (step ${stats.global_steps})`)
@@ -316,8 +315,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
       ctx_size: '512',
       device: forceCpuDevice ? 'cpu' : 'gpu',
       verbosity: '2'
-    },
-    finetuneConfig
+    }
   )
 
   const fs = require('bare-fs')
@@ -390,8 +388,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
       logger: console,
       opts: { stats: true }
     },
-    config,
-    finetuneConfig
+    config
   )
 
   const fs = require('bare-fs')
@@ -437,7 +434,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
-    try { fs.unlinkSync(sessionFile) } catch (_) {}
+    try { fs.unlinkSync(sessionFile) } catch (_) { }
   }
 })
 
@@ -453,8 +450,7 @@ test('microBatchSize override changes backend batch geometry', { timeout: PAUSE_
     const loader = new FilesystemDL({ dirPath: modelDir })
     const model = new LlmLlamacpp(
       { loader, modelName, diskPath: modelDir, logger: console, opts: { stats: true } },
-      { gpu_layers: '999', ctx_size: '512', device: forceCpuDevice ? 'cpu' : 'gpu', verbosity: '0' },
-      config
+      { gpu_layers: '999', ctx_size: '512', device: forceCpuDevice ? 'cpu' : 'gpu', verbosity: '0' }
     )
     try {
       await model.load()

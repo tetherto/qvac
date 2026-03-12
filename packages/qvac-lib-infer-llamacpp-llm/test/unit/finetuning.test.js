@@ -59,7 +59,7 @@ async function assertInferenceSucceeds (t, model, token) {
   t.is(model._hasActiveResponse, false, 'busy state must clear after inference ends')
 }
 
-const createModelWithMockAddon = (finetuningParams = null, opts = {}) => {
+const createModelWithMockAddon = (opts = {}) => {
   const loader = { close: () => Promise.resolve() }
   const model = new LlmLlamacpp(
     {
@@ -69,15 +69,14 @@ const createModelWithMockAddon = (finetuningParams = null, opts = {}) => {
       diskPath: '.',
       modelName: 'test.gguf'
     },
-    { device: 'cpu', ctx_size: '256' },
-    finetuningParams
+    { device: 'cpu', ctx_size: '256' }
   )
   model.addon = createMockAddon()
   return model
 }
 
-test('finetune() throws when no params and no stored params', async (t) => {
-  const model = createModelWithMockAddon(null)
+test('finetune() throws when no params provided', async (t) => {
+  const model = createModelWithMockAddon()
   await t.exception(
     () => model.finetune(),
     /Finetuning parameters are required/
@@ -86,7 +85,7 @@ test('finetune() throws when no params and no stored params', async (t) => {
 })
 
 test('finetune(opts) throws when validation object is missing', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts()
   await t.exception(
     () => model.finetune(opts),
@@ -96,7 +95,7 @@ test('finetune(opts) throws when validation object is missing', async (t) => {
 })
 
 test('finetune(opts) with validation.type dataset requires validation.path', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'dataset' } })
   await t.exception(
     () => model.finetune(opts),
@@ -106,7 +105,7 @@ test('finetune(opts) with validation.type dataset requires validation.path', asy
 })
 
 test('finetune(opts) with validation.type dataset throws when path same as trainDatasetDir', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/train.jsonl' } })
   await t.exception(
     () => model.finetune(opts),
@@ -116,7 +115,7 @@ test('finetune(opts) with validation.type dataset throws when path same as train
 })
 
 test('finetune(opts) with validation.type dataset and validation.path passes evalDatasetPath to addon', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/eval.jsonl' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
   const handle = await model.finetune(opts)
@@ -131,7 +130,7 @@ test('finetune(opts) with validation.type dataset and validation.path passes eva
 })
 
 test('finetune(opts) throws when top-level evalDatasetPath is provided', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ evalDatasetPath: '/tmp/eval.jsonl', validation: { type: 'split' } })
   await t.exception(
     () => model.finetune(opts),
@@ -141,7 +140,7 @@ test('finetune(opts) throws when top-level evalDatasetPath is provided', async (
 })
 
 test('finetune(opts) stores params and calls addon.finetune', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
@@ -150,29 +149,22 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
   const expectedParams = { ...opts, validationSplit: 0.05, useEvalDatasetForValidation: false }
   delete expectedParams.validation
   t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
-  t.alike(model._defaultFinetuneParams, opts)
   t.ok(handle && typeof handle.await === 'function', 'finetune returns handle with await()')
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED' })
 })
 
-test('finetune() with no args uses stored params and calls addon.finetune', async (t) => {
-  const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  const model = createModelWithMockAddon(opts)
-
-  model.addon.finetune.callsFake(completeFinetuneWith(model))
-
-  const handle = await model.finetune()
-  t.ok(model.addon.finetune.called)
-  const expectedParams = { ...opts, validationSplit: 0.05, useEvalDatasetForValidation: false }
-  delete expectedParams.validation
-  t.alike(model.addon.finetune.lastArgs[0], expectedParams, 'addon receives normalized params')
-  const result = await handle.await()
-  t.alike(result, { op: 'finetune', status: 'COMPLETED' })
+test('finetune() with no args throws', async (t) => {
+  const model = createModelWithMockAddon()
+  await t.exception(
+    () => model.finetune(),
+    /Finetuning parameters are required/
+  )
+  t.ok(!model.addon.finetune.called)
 })
 
 test('finetune(opts with resume key) passes opts to addon.finetune', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ resume: true, validation: { type: 'split' } })
 
   model.addon.finetune.callsFake(completeFinetuneWith(model))
@@ -186,7 +178,7 @@ test('finetune(opts with resume key) passes opts to addon.finetune', async (t) =
 })
 
 test('finetune() runs inside exclusive queue wrapper', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
@@ -203,7 +195,7 @@ test('finetune() runs inside exclusive queue wrapper', async (t) => {
 })
 
 test('finetune() rejects when another active job exists', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model._hasActiveResponse = true
 
@@ -215,7 +207,7 @@ test('finetune() rejects when another active job exists', async (t) => {
 })
 
 test('finetune() marks busy and rejects second finetune while active', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -234,7 +226,7 @@ test('finetune() marks busy and rejects second finetune while active', async (t)
 })
 
 test('run rejects while finetune is active', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -250,7 +242,7 @@ test('run rejects while finetune is active', async (t) => {
 })
 
 test('inference succeeds on same model instance after finetune completes', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -266,7 +258,7 @@ test('inference succeeds on same model instance after finetune completes', async
 })
 
 test('inference succeeds after a PAUSED finetune on the same model instance', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -282,7 +274,7 @@ test('inference succeeds after a PAUSED finetune on the same model instance', as
 })
 
 test('inference succeeds after a failed finetune on the same model instance', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => {
     setImmediate(() => {
@@ -299,7 +291,7 @@ test('inference succeeds after a failed finetune on the same model instance', as
 })
 
 test('finetune() clears busy state on error and allows next finetune', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   let calls = 0
   model.addon.finetune.callsFake(() => {
@@ -326,7 +318,7 @@ test('finetune() clears busy state on error and allows next finetune', async (t)
 })
 
 test('finetune() clears busy state on terminal callback even without await', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(completeFinetuneWith(model))
 
@@ -342,21 +334,21 @@ test('finetune() clears busy state on terminal callback even without await', asy
 })
 
 test('pause() is no-op when addon not initialized', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   model.addon = null
   await t.execution(async () => { await model.pause() })
 })
 
 test('pause() calls addon.cancel to trigger checkpoint save', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   model.addon.cancel.callsFake(() => Promise.resolve())
   await model.pause()
   t.ok(model.addon.cancel.called)
 })
 
 test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
-  const opts = baseFinetuneOpts({ checkpointSaveDir: '/tmp/test-checkpoints', validation: { type: 'none' } })
-  const model = createModelWithMockAddon(opts)
+  const model = createModelWithMockAddon()
+  model._checkpointSaveDir = '/tmp/test-checkpoints'
   model.addon.cancel.callsFake(() => Promise.resolve())
 
   let clearCalled = false
@@ -368,13 +360,13 @@ test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
 })
 
 test('cancel() is no-op when addon not initialized', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   model.addon = null
   await t.execution(async () => { await model.cancel() })
 })
 
 test('cancel() does not throw when no checkpointSaveDir configured', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   model.addon.cancel.callsFake(() => Promise.resolve())
   await t.execution(async () => { await model.cancel() })
   t.ok(model.addon.cancel.called)
@@ -382,7 +374,7 @@ test('cancel() does not throw when no checkpointSaveDir configured', async (t) =
 
 test('finetune() resolves with PAUSED when paused', async (t) => {
   const opts = baseFinetuneOpts({ validation: { type: 'none' } })
-  const model = createModelWithMockAddon(opts)
+  const model = createModelWithMockAddon()
   model.addon.finetune.callsFake(completeFinetuneWith(model, 'PAUSED'))
 
   const handle = await model.finetune(opts)
@@ -392,7 +384,7 @@ test('finetune() resolves with PAUSED when paused', async (t) => {
 
 test('finetune() rejects handle.await() on runtime error (like inference)', async (t) => {
   const opts = baseFinetuneOpts({ validation: { type: 'none' } })
-  const model = createModelWithMockAddon(opts)
+  const model = createModelWithMockAddon()
   model.addon.finetune.callsFake(() => {
     setImmediate(() => {
       model._addonOutputCallback(null, 'SomeError', null, 'Training failed: out of memory')
@@ -408,7 +400,7 @@ test('finetune() rejects handle.await() on runtime error (like inference)', asyn
 })
 
 test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal result', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -426,7 +418,7 @@ test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal r
 })
 
 test('TPS stats without prior finetune are forwarded as normal JobEnded', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   model.addon.runJob.callsFake(() => true)
 
   const response = await model._runInternal([{ role: 'user', content: 'Hello' }])
@@ -443,7 +435,7 @@ test('TPS stats without prior finetune are forwarded as normal JobEnded', async 
 })
 
 test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent inference job', async (t) => {
-  const model = createModelWithMockAddon(null)
+  const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model.addon.finetune.callsFake(() => true)
 
@@ -470,10 +462,10 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
 
 test('finetune progress events emit stats on handle when opts.stats is enabled', async (t) => {
   const finetuneOpts = baseFinetuneOpts({ validation: { type: 'split' } })
-  const model = createModelWithMockAddon(finetuneOpts, { stats: true })
+  const model = createModelWithMockAddon({ stats: true })
   model.addon.finetune.callsFake(() => true)
 
-  const handle = await model.finetune()
+  const handle = await model.finetune(finetuneOpts)
   const received = []
   handle.on('stats', (stats) => { received.push(stats) })
 
@@ -492,10 +484,10 @@ test('finetune progress events emit stats on handle when opts.stats is enabled',
 
 test('finetune progress events are suppressed when opts.stats is not enabled', async (t) => {
   const finetuneOpts = baseFinetuneOpts({ validation: { type: 'split' } })
-  const model = createModelWithMockAddon(finetuneOpts)
+  const model = createModelWithMockAddon()
   model.addon.finetune.callsFake(() => true)
 
-  const handle = await model.finetune()
+  const handle = await model.finetune(finetuneOpts)
   const received = []
   handle.on('stats', (stats) => { received.push(stats) })
 
@@ -512,7 +504,7 @@ test('finetune progress events are suppressed when opts.stats is not enabled', a
 
 test('finetune() returns terminal stats when provided', async (t) => {
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  const model = createModelWithMockAddon(opts)
+  const model = createModelWithMockAddon()
   const stats = {
     train_loss: 1.25,
     train_loss_uncertainty: 0.05,
@@ -528,7 +520,7 @@ test('finetune() returns terminal stats when provided', async (t) => {
   }
   model.addon.finetune.callsFake(completeFinetuneWith(model, 'COMPLETED', stats))
 
-  const handle = await model.finetune()
+  const handle = await model.finetune(opts)
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED', stats })
 })

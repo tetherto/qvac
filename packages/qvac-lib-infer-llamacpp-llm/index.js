@@ -102,8 +102,7 @@ class LlmLlamacpp extends BaseInference {
    */
   constructor (
     { opts = {}, loader, logger = null, diskPath = '.', modelName, projectionModel },
-    config,
-    finetuningParams = null
+    config
   ) {
     super({ logger, opts })
     this._config = config
@@ -112,7 +111,7 @@ class LlmLlamacpp extends BaseInference {
     this._projectionModel = projectionModel
     this._shards = WeightsProvider.expandGGUFIntoShards(this._modelName)
     this.weightsProvider = new WeightsProvider(loader, this.logger)
-    this._defaultFinetuneParams = finetuningParams ?? null
+    this._checkpointSaveDir = null
     this._hasActiveResponse = false
     this._skipNextRuntimeStats = false
     this._originalLogger = this.logger
@@ -334,7 +333,7 @@ class LlmLlamacpp extends BaseInference {
   }
 
   _clearPauseCheckpoints () {
-    const checkpointDir = this._defaultFinetuneParams?.checkpointSaveDir
+    const checkpointDir = this._checkpointSaveDir
     if (!checkpointDir) return
     try {
       const entries = fs.readdirSync(checkpointDir, { withFileTypes: true })
@@ -458,18 +457,17 @@ class LlmLlamacpp extends BaseInference {
       )
     }
 
-    const params = finetuningOptions ?? this._defaultFinetuneParams
-    if (!params) {
+    if (!finetuningOptions) {
       throw new Error(
-        'Finetuning parameters are required but not provided. Call finetune(opts) first; use finetune() with no args to resume from a pause.'
+        'Finetuning parameters are required.'
       )
     }
-    if (finetuningOptions != null) {
-      this._defaultFinetuneParams = params
+    if (finetuningOptions.checkpointSaveDir) {
+      this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
     }
-    const paramsToSend = normalizeFinetuneParams(params)
+    const paramsToSend = normalizeFinetuneParams(finetuningOptions)
     this.logger?.info?.('finetune() called')
-    this.logger?.info?.('Finetuning parameters:', params)
+    this.logger?.info?.('Finetuning parameters:', finetuningOptions)
 
     return this._withExclusiveRun(async () => {
       if (this._hasActiveResponse) {

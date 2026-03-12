@@ -105,35 +105,18 @@ void LlamaModel::tuneConfigMap(
       metadata.tryGetString("general.architecture") == "bitnet";
 
   if (isFinetuning) {
-    if (finetuneOverrides.contextLength > 0 &&
-        notUserSet("ctx-size", "ctx_size")) {
-      configFilemap["ctx-size"] =
-          std::to_string(finetuneOverrides.contextLength);
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[LlamaModel] Finetuning: ctx-size=%" PRId64 "\n",
-              finetuneOverrides.contextLength));
-    }
-    if (finetuneOverrides.batchSize > 0 &&
-        notUserSet("batch-size", "batch_size")) {
-      configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[LlamaModel] Finetuning: batch-size=%" PRId64 "\n",
-              finetuneOverrides.batchSize));
-    }
-    if (finetuneOverrides.microBatchSize > 0 &&
-        notUserSet("ubatch-size", "ubatch_size")) {
-      configFilemap["ubatch-size"] =
-          std::to_string(finetuneOverrides.microBatchSize);
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[LlamaModel] Finetuning: ubatch-size=%" PRId64 "\n",
-              finetuneOverrides.microBatchSize));
-    }
+    configFilemap["ctx-size"] = std::to_string(finetuneOverrides.contextLength);
+    configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
+    configFilemap["ubatch-size"] =
+        std::to_string(finetuneOverrides.microBatchSize);
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[LlamaModel] Finetuning: ctx-size=%" PRId64 " batch-size=%" PRId64
+            " ubatch-size=%" PRId64 "\n",
+            finetuneOverrides.contextLength,
+            finetuneOverrides.batchSize,
+            finetuneOverrides.microBatchSize));
   }
 
   const bool needsFlashAttnOff = isBitnet || isFinetuning;
