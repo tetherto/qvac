@@ -7,9 +7,12 @@ import {
   ttsRequestSchema,
   ttsResponseSchema,
   ModelType,
+  ttsConfigSchema,
+  ADDON_TTS,
   type CreateModelParams,
   type PluginModelResult,
-  type ResolveModelPath,
+  type ResolveContext,
+  type ResolveResult,
 } from "@/schemas";
 import { ADDON_NAMESPACES, createStreamLogger } from "@/logging";
 import {
@@ -40,7 +43,7 @@ type TtsModelConfig = {
 
 async function resolveChatterboxConfig(
   config: TtsModelConfig,
-  resolve: ResolveModelPath,
+  ctx: ResolveContext,
 ): Promise<TtsModelConfig> {
   const {
     ttsTokenizerSrc,
@@ -65,6 +68,7 @@ async function resolveChatterboxConfig(
     throw new TtsReferenceAudioRequiredError();
   }
 
+  const resolve = ctx.resolveModelPath;
   const [
     resolvedTokenizer,
     resolvedSpeechEncoder,
@@ -96,7 +100,7 @@ async function resolveChatterboxConfig(
 
 async function resolveSupertonicConfig(
   config: TtsModelConfig,
-  resolve: ResolveModelPath,
+  ctx: ResolveContext,
 ): Promise<TtsModelConfig> {
   const {
     ttsTokenizerSrc,
@@ -119,6 +123,7 @@ async function resolveSupertonicConfig(
     throw new TtsArtifactsRequiredError();
   }
 
+  const resolve = ctx.resolveModelPath;
   const [
     resolvedTokenizer,
     resolvedTextEncoder,
@@ -240,19 +245,21 @@ function createSupertonicModel(
 export const ttsPlugin = definePlugin({
   modelType: ModelType.onnxTts,
   displayName: "TTS (ONNX)",
-  addonPackage: "@qvac/tts-onnx",
+  addonPackage: ADDON_TTS,
+  loadConfigSchema: ttsConfigSchema,
+  skipPrimaryModelPathValidation: true,
 
   async resolveConfig(
-    modelConfig: Record<string, unknown>,
-    resolve: ResolveModelPath,
-  ): Promise<Record<string, unknown>> {
-    const config = modelConfig as TtsModelConfig;
-
-    if (config.ttsEngine === "supertonic") {
-      return resolveSupertonicConfig(config, resolve);
+    cfg: TtsModelConfig,
+    ctx: ResolveContext,
+  ): Promise<ResolveResult<TtsModelConfig>> {
+    if (cfg.ttsEngine === "supertonic") {
+      const config = await resolveSupertonicConfig(cfg, ctx);
+      return { config };
     }
 
-    return resolveChatterboxConfig(config, resolve);
+    const config = await resolveChatterboxConfig(cfg, ctx);
+    return { config };
   },
 
   createModel(params: CreateModelParams): PluginModelResult {

@@ -71,8 +71,14 @@ Ort::SessionOptions getOrtSessionOptions(bool useGPU) {
         // creating its own pthreadpool.  Without this, XNNPACK's pool is not
         // tied to the session lifetime and can cause hangs on destruction.
         // See: https://onnxruntime.ai/docs/execution-providers/Xnnpack-ExecutionProvider.html
+        // XNNPACK's NHWC layout transformer creates fused nodes in the
+        // com.ms.internal.nhwc domain whose schemas are not registered.
+        // ORT_ENABLE_EXTENDED triggers the NhwcTransformer which produces
+        // these nodes, so we must drop to BASIC when XNNPACK is active.
+        sessionOptions.SetGraphOptimizationLevel(
+            GraphOptimizationLevel::ORT_ENABLE_BASIC);
         sessionOptions.AppendExecutionProvider("XNNPACK", {});
-        cpuMsg.append("XNNPack EP appended.");
+        cpuMsg.append("XNNPack EP appended (graph opt lowered to BASIC).");
       } else {
         cpuMsg.append("XNNPack EP not available.");
       }

@@ -504,11 +504,12 @@ StepRecognizeText::StepRecognizeText(
   ALOG_INFO(std::string("[Recognition] Constructor: completed successfully"));
 }
 
-StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input) {
+StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input,
+                                                     const std::atomic<bool>* cancelFlag) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] process() called - starting recognition");
   populateImageList(input);
   expandImgListWithRotatedImgs(input.context.rotationAngles);
-  std::vector<InferredText> inferenceResult = processImgList();
+  std::vector<InferredText> inferenceResult = processImgList(cancelFlag);
   imgListOfLists_.clear();
 
   if (input.context.paragraph) {
@@ -881,7 +882,7 @@ void StepRecognizeText::processImg(SubImage &subImage) {
   }
 }
 
-std::vector<InferredText> StepRecognizeText::processImgList() {
+std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[Recognition] processImgList: starting with " + std::to_string(imgListOfLists_.size()) + " image lists");
   auto t0 = std::chrono::high_resolution_clock::now();
@@ -914,6 +915,13 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
   ALOG_INFO(batchInfoMsg);
 
   for (size_t batchStart = 0; batchStart < allIndices.size(); batchStart += batchSize) {
+    // Check for cancellation between batches — break and return partial results
+    if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+           "[Recognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
+      break;
+    }
+
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
     size_t currentBatchSize = batchEnd - batchStart;
 
@@ -974,6 +982,13 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
 
       // Process contrast retries in batches too
       for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size(); batchStart += batchSize) {
+        // Check for cancellation between contrast retry batches
+        if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+               "[Recognition] Cancelled during contrast retry at batch offset " + std::to_string(batchStart));
+          break;
+        }
+
         size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
 
         // Calculate max proportional width for contrast batch

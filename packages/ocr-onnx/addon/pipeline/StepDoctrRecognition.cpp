@@ -328,7 +328,8 @@ std::pair<std::string, float> StepDoctrRecognition::decodeCTC(
   return {decodedText, confidence};
 }
 
-StepDoctrRecognition::Output StepDoctrRecognition::process(Input input) {
+StepDoctrRecognition::Output StepDoctrRecognition::process(Input input,
+                                                          const std::atomic<bool>* cancelFlag) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[DoctrRecognition] Processing " + std::to_string(input.polygons.size()) + " text regions");
 
@@ -343,6 +344,13 @@ StepDoctrRecognition::Output StepDoctrRecognition::process(Input input) {
   // Process in batches
   for (size_t batchStart = 0; batchStart < input.polygons.size();
        batchStart += static_cast<size_t>(batchSize_)) {
+    // Check for cancellation between batches — break and return partial results
+    if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+           "[DoctrRecognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
+      break;
+    }
+
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize_),
                                input.polygons.size());
     size_t currentBatchSize = batchEnd - batchStart;

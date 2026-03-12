@@ -131,8 +131,6 @@ endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
 
-add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)
-
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
 add_bare_module(qvac-lib-inference-tts EXPORTS)
@@ -145,8 +143,6 @@ target_sources(
   ${qvac-lib-inference-tts}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-inference-addon-tts.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
@@ -155,7 +151,6 @@ target_sources(
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
-find_package(onnxruntime CONFIG REQUIRED)
 find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(
@@ -200,9 +195,43 @@ endif()
 target_link_libraries(
   ${qvac-lib-inference-tts}
   PRIVATE
-    onnxruntime::onnxruntime_static
+    onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
 )
+
+option(BUILD_CLI "Build CLI tool example" FALSE)
+if(BUILD_CLI)
+  add_executable(
+    qvac_tts_cli
+    ${PROJECT_SOURCE_DIR}/addon/src/cli/qvac_tts_cli.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+  )
+
+  target_include_directories(
+    qvac_tts_cli
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon
+      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+  )
+
+  target_link_libraries(
+    qvac_tts_cli
+    PRIVATE
+      onnxruntime::onnxruntime_static
+      tokenizers::tokenizers_cpp
+  )
+
+  if(WIN32)
+    target_link_libraries(
+      qvac_tts_cli
+      PRIVATE
+        msvcrt.lib
+    )
+  endif()
+endif()
 
 # Ensure runtime libraries resolve relative to the addon location on macOS
 if(APPLE)

@@ -48,4 +48,25 @@ struct SessionConfig {
   ExecutionMode executionMode = ExecutionMode::SEQUENTIAL;
 };
 
+inline std::string providerToString(ExecutionProvider provider) {
+  switch (provider) {
+    case ExecutionProvider::CPU:      return "CPU";
+    case ExecutionProvider::AUTO_GPU: return "AUTO_GPU";
+    case ExecutionProvider::NNAPI:    return "NNAPI";
+    case ExecutionProvider::CoreML:   return "CoreML";
+    case ExecutionProvider::DirectML: return "DirectML";
+  }
+  return "UNKNOWN";
+}
+
+inline std::string optimizationToString(GraphOptimizationLevel level) {
+  switch (level) {
+    case GraphOptimizationLevel::DISABLE:  return "DISABLE";
+    case GraphOptimizationLevel::BASIC:    return "BASIC";
+    case GraphOptimizationLevel::EXTENDED: return "EXTENDED";
+    case GraphOptimizationLevel::ALL:      return "ALL";
+  }
+  return "UNKNOWN";
+}
+
 }  // namespace onnx_addon

@@ -2,12 +2,12 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
 import { generateModelsFileContent } from "./codegen";
-import { generateExportName } from "./naming";
 import {
   assignNames,
   compareModels,
   createHistoryFile,
   loadCurrentModels,
+  separateUpdates,
 } from "./history";
 import { collectModels } from "./registry";
 import { formatSize } from "./utils";
@@ -55,12 +55,22 @@ async function checkOnly(
     }
 
     const { remoteModels, currentModels } = result;
-    const { added, removed } = compareModels(remoteModels, currentModels);
+    const { added: rawAdded, removed: rawRemoved } = compareModels(
+      remoteModels,
+      currentModels,
+    );
 
-    if (added.length === 0 && removed.length === 0) {
+    if (rawAdded.length === 0 && rawRemoved.length === 0) {
       console.log(`✅ Models are up to date (${remoteModels.length} models)`);
       process.exit(0);
     }
+
+    const addedWithNames = assignNames(rawAdded);
+    const {
+      added,
+      updated,
+      removed,
+    } = separateUpdates(addedWithNames, rawRemoved);
 
     console.log("");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -69,23 +79,27 @@ async function checkOnly(
       console.log(
         `✨ ${added.length} new model${added.length === 1 ? "" : "s"} available:`,
       );
-      const usedNames = new Set<string>();
       added.slice(0, 10).forEach((m) => {
-        const exportName = generateExportName({
-          path: m.registryPath,
-          engine: m.engine,
-          name: m.modelName,
-          quantization: m.quantization,
-          params: m.params,
-          tags: m.tags,
-          usedNames,
-        });
         console.log(
-          `  + ${exportName} (${m.addon}, ${formatSize(m.expectedSize)})`,
+          `  + ${m.name} (${m.addon}, ${formatSize(m.expectedSize)})`,
         );
       });
       if (added.length > 10) {
         console.log(`  ... and ${added.length - 10} more`);
+      }
+    }
+
+    if (updated.length > 0) {
+      console.log(
+        `\n🔄 ${updated.length} model${updated.length === 1 ? "" : "s"} updated:`,
+      );
+      updated.slice(0, 10).forEach((m) => {
+        console.log(
+          `  ~ ${m.name} (${m.addon}, ${formatSize(m.expectedSize)})`,
+        );
+      });
+      if (updated.length > 10) {
+        console.log(`  ... and ${updated.length - 10} more`);
       }
     }
 
@@ -154,8 +168,12 @@ async function updateModels(
       HISTORY_DIR,
     );
     if (historyFile) {
+      const { added: trulyAdded, updated, removed: trulyRemoved } =
+        separateUpdates(addedWithNames, removed);
       console.log(`📜 Created history file → ${historyFile}`);
-      console.log(`   Added: ${added.length}, Removed: ${removed.length}`);
+      console.log(
+        `   Added: ${trulyAdded.length}, Updated: ${updated.length}, Removed: ${trulyRemoved.length}`,
+      );
     }
   }
 }

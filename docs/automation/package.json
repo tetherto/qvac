@@ -1,0 +1,38 @@
+{
+  "name": "qvac-docs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "docs:generate": "node scripts/run-docs-generate.cjs",
+    "docs:generate-api": "node scripts/generate-api-docs.cjs",
+    "docs:update-versions": "node scripts/update-versions-list.cjs"
+  },
+  "dependencies": {
+    "fumadocs-core": "^13.2.1",
+    "fumadocs-mdx": "^10.0.0",
+    "fumadocs-ui": "^13.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "rehype-katex": "^7.0.0",
+    "remark-math": "^6.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typedoc": "^0.26.0",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.0.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.6.0"
+  }
+}
