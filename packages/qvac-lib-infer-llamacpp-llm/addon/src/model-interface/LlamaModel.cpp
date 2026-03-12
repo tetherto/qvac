@@ -363,7 +363,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   auto restore =
-      llmContext_->applyGenerationParams(prompt.generationParams);
+      state_->llmContext_->applyGenerationParams(prompt.generationParams);
   ScopeGuard paramsGuard([&] { restore(); });
 
   bool evalOk =

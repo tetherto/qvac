@@ -119,4 +119,5 @@ test('generationParams | load-time defaults restored after override', { timeout:
 
   t.ok(overrideTokens <= 5, `override predict=5 respected (got ${overrideTokens})`)
   t.ok(defaultTokens > overrideTokens, `default run (${defaultTokens} tokens) exceeds overridden run (${overrideTokens} tokens)`)
+  t.is(defaultTokens, 32, `default run tokens (${defaultTokens}) should be 32`)
 })
