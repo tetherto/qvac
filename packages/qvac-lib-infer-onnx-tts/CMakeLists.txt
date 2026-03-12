@@ -131,8 +131,6 @@ endif()
 
 find_package(onnxruntime CONFIG REQUIRED)
 
-add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)
-
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
 
 add_bare_module(qvac-lib-inference-tts EXPORTS)
@@ -153,7 +151,6 @@ target_sources(
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
-find_package(onnxruntime CONFIG REQUIRED)
 find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(
@@ -198,7 +195,7 @@ endif()
 target_link_libraries(
   ${qvac-lib-inference-tts}
   PRIVATE
-    onnxruntime::onnxruntime_static
+    onnxruntime::onnxruntime
     tokenizers::tokenizers_cpp
 )
 
