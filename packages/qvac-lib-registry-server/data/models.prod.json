@@ -5402,6 +5402,55 @@
     "notes": ""
   },
   {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (graph)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "notes": "onnx-community export, uses model.onnx_data naming"
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B onnx-community (weights)",
+    "quantization": "fp32",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "en"
+    ],
+    "notes": "onnx-community export, external data for model.onnx"
+  },
+  {
+    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
+    "description": "Parakeet CTC 0.6B tokenizer",
+    "quantization": "",
+    "params": "0.6B",
+    "license": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "tokenizer",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx/resolve/658f956396c5a6e41f23ed50838bdb7d1d1b6056/config.json",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/istupakov/parakeet-ctc-0.6b-onnx",
