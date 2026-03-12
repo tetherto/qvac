@@ -188,14 +188,37 @@ test('Cancel active job keeps model usable for next job', { timeout: 600000 }, a
 
   const outputsByJob = new Map()
   const resolvers = new Map()
-  const waitForJob = (jobId, timeoutMs = 180000) => new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      resolvers.delete(jobId)
-      resolve({ event: 'Timeout', error: null })
-    }, timeoutMs)
-    resolvers.set(jobId, (event, error) => {
+  const waitForJob = (jobId, timeoutMs = 180000, errorGraceMs = 5000) => new Promise((resolve) => {
+    let pendingError = null
+    let errorGraceTimeout = null
+
+    const finish = (event, error) => {
       clearTimeout(timeout)
+      if (errorGraceTimeout) clearTimeout(errorGraceTimeout)
+      resolvers.delete(jobId)
       resolve({ event, error: error || null })
+    }
+
+    const timeout = setTimeout(() => {
+      finish('Timeout', null)
+    }, timeoutMs)
+
+    resolvers.set(jobId, (event, error) => {
+      // Cancellation is cooperative, and the shared addon-cpp queue can emit a
+      // late terminal Error for the cancelled job shortly after the next job is
+      // accepted. Give that transient Error a short grace window before
+      // treating it as terminal so a subsequent JobEnded can win.
+      if (event === 'Error') {
+        pendingError = error || null
+        if (!errorGraceTimeout) {
+          errorGraceTimeout = setTimeout(() => {
+            finish('Error', pendingError)
+          }, errorGraceMs)
+        }
+        return
+      }
+
+      finish(event, error)
     })
   })
 
