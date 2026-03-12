@@ -29,6 +29,7 @@ enum LlmErrorCode : uint32_t {
   MediaRequestNotProvided = 21,
   UnableToDeleteThreadPool = 22,
   UnableToLoadMetadata = 23,
+  ReloadNotSupportedForStreamedModel = 24,
   // mode llm spesific errors here
 };
 
@@ -78,6 +79,8 @@ inline std::string toString(LlmErrorCode code) {
     return "MediaRequestNotProvided";
   case UnableToLoadMetadata:
     return "UnableToLoadMetadata";
+  case ReloadNotSupportedForStreamedModel:
+    return "ReloadNotSupportedForStreamedModel";
   default:
     return "UnknownLLMError";
   }

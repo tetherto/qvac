@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Steps.hpp"
-
-#include <onnxruntime_cxx_api.h>
 #include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -13,7 +13,13 @@ public:
   using Output = StepDetectionInferenceOutput;
 
   explicit StepDetectionInference(
-      const ORTCHAR_T* pathDetector, bool useGPU = false, float magRatio = 1.5F);
+      const std::string& pathDetector, bool useGPU = false,
+      float magRatio = 1.5F);
+
+#if defined(_WIN32) || defined(_WIN64)
+  // On Windows, defer session destruction to avoid the ORT global-state crash.
+  ~StepDetectionInference() { deferWindowsSessionLeak(std::move(session_)); }
+#endif
 
   CONSTRUCT_FROM_TUPLE(StepDetectionInference)
 
@@ -33,15 +39,15 @@ public:
 
 private:
   float magRatio_;
-  Ort::Session ortSession_{nullptr};
+  onnx_addon::OnnxSession session_;
 
   /**
    * @brief runs ONNX inference on an image
    *
    * @param inputBlob : detector input
-   * @return std::vector<Ort::Value> : ONNX inference results
+   * @return std::vector<onnx_addon::OutputTensor> : ONNX inference results
    */
-  std::vector<Ort::Value> runInference(cv::Mat inputBlob);
+  std::vector<onnx_addon::OutputTensor> runInference(cv::Mat inputBlob);
 };
 
 } // namespace qvac_lib_inference_addon_onnx_ocr_fasttext

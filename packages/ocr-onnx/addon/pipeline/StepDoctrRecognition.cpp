@@ -82,12 +82,19 @@ std::vector<std::string> parseVocabToChars(const std::string& vocab) {
 
 } // namespace
 
-StepDoctrRecognition::StepDoctrRecognition(const ORTCHAR_T* pathRecognizer,
-                                           bool useGPU, int batchSize,
-                                           DecodingMethod decoding)
-    : ortSession_(getSharedOrtEnv(), pathRecognizer, getOrtSessionOptions(useGPU)),
-      batchSize_(batchSize),
-      decodingMethod_(decoding),
+StepDoctrRecognition::StepDoctrRecognition(
+    const std::string& pathRecognizer, bool useGPU, int batchSize,
+    DecodingMethod decoding)
+    : session_(
+          pathRecognizer,
+          [&] {
+            onnx_addon::SessionConfig cfg;
+            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                  : onnx_addon::ExecutionProvider::CPU;
+            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+            return cfg;
+          }()),
+      batchSize_(batchSize), decodingMethod_(decoding),
       vocabChars_(parseVocabToChars(VOCAB)) {
   std::string decodingStr = (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -166,33 +173,19 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
   }
 
   std::vector<int64_t> inputShape = {batchSz, numChannels, height, width};
-  size_t inputTensorSize = batchData.size();
 
-  Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      memInfo, batchData.data(), inputTensorSize, inputShape.data(), inputShape.size());
+  onnx_addon::InputTensor inputTensor;
+  inputTensor.name = session_.getInputInfo()[0].name;
+  inputTensor.shape = inputShape;
+  inputTensor.type = onnx_addon::TensorType::FLOAT32;
+  inputTensor.data = batchData.data();
+  inputTensor.dataSize = batchData.size() * sizeof(float);
 
-  // Get input/output names from the model dynamically
-  Ort::AllocatorWithDefaultOptions allocator;
-  auto inputName = ortSession_.GetInputNameAllocated(0, allocator);
-  auto outputName = ortSession_.GetOutputNameAllocated(0, allocator);
-
-  const char* inputNames[] = {inputName.get()};
-  const char* outputNames[] = {outputName.get()};
-
-  std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
-
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames, inputTensors.data(), 1,
-      outputNames, 1);
+  auto outputTensors = session_.run(inputTensor);
 
   // Extract predictions
-  Ort::Value& predsTensor = outputTensors[0];
-  auto* predsData = predsTensor.GetTensorMutableData<float>();
-  auto typeInfo = predsTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> predsShape = tensorInfo.GetShape();
+  const auto& predsTensor = outputTensors[0];
+  const auto& predsShape = predsTensor.shape;
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -216,7 +209,11 @@ cv::Mat StepDoctrRecognition::runBatchInference(const std::vector<cv::Mat>& imag
                              std::to_string(predsDims) + " dimensions");
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(predsTensor.as<float>()));
   return preds.clone();
 }
 
