@@ -70,6 +70,9 @@ if(UNIX AND NOT APPLE)
 elseif(APPLE)
   target_link_options(${qvac-onnx}_module PRIVATE
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)
+elseif(WIN32)
+  target_sources(${qvac-onnx}_module PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/exports.def)
 endif()
 
 # Strip .bare module

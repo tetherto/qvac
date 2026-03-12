@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.11] - 2026-03-12
+
+### Fixed
+
+- Windows linker error: added `exports.def` to export `OrtGetApiBase` from the bare module on Windows, matching the existing `symbols.map` (Linux) and `exports.txt` (macOS) symbol visibility controls
+
+
 ## [0.12.10] - 2026-03-12
 
 ### Fixed
