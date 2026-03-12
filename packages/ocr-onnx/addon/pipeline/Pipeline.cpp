@@ -46,7 +46,7 @@ cv::Mat decodeEncodedImage(const std::vector<uint8_t>& data) {
 } // namespace
 
 Pipeline::Pipeline(
-    const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
+    const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU, int timeout,
     const PipelineConfig& config)
     : config_(config),
