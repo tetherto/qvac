@@ -6,14 +6,8 @@ import {
   type TranslateParams,
   type TranslationStats,
 } from "@/schemas";
-import { getLangName } from "@qvac/langdetect-text";
 import type TranslationNmtcpp from "@qvac/translation-nmtcpp";
-
-function getLanguage(code: string | undefined): string {
-  if (!code) return "";
-  const fullName = getLangName(code);
-  return fullName ?? code.toUpperCase();
-}
+import { getLanguage, isAfrican } from "./translate-llm-utils";
 
 export async function* translate(
   params: TranslateParams,
@@ -24,6 +18,7 @@ export async function* translate(
   const from = isLlm ? (params as { from?: string }).from : undefined;
   const to = isLlm ? (params as { to: string }).to : undefined;
   const context = isLlm ? (params as { context?: string }).context : undefined;
+  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
   translateServerParamsSchema.parse(params);
 
   const model = getModel(modelId);
@@ -70,8 +65,10 @@ export async function* translate(
       ? singleText
       : [
           {
-            role: "system",
-            content: `${context ? `${context}. ` : ""}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`,
+            role: afriquePrompt ? "user" : "system",
+            content: afriquePrompt
+              ? `Translate ${fromLanguage} to ${toLanguage}.\n${fromLanguage}: ${singleText}\n${toLanguage}:`
+              : `${context ? `${context}. ` : ""}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`,
           },
         ];
 
