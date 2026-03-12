@@ -19,6 +19,7 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
+import { handleGenerationStream } from "@/server/rpc/handlers/generation-stream";
 import { handlePing } from "@/server/rpc/handlers/ping";
 import {
   handlePluginInvoke,
@@ -71,6 +72,7 @@ export const registry: Record<string, HandlerEntry> = {
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
   ocrStream: { type: "stream", handler: handleOCRStream },
+  generationStream: { type: "stream", handler: handleGenerationStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

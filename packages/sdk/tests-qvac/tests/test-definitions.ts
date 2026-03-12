@@ -20,6 +20,7 @@ import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
 import { visionTests } from "./vision-tests.js";
+import { generationTests } from "./generation-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -188,6 +189,9 @@ export const tests = [
 
   // TTS tests
   ...ttsTests,
+
+  // Generation (diffusion) tests
+  ...generationTests,
 
   // Config reload tests
   ...configReloadTests,

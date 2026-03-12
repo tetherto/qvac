@@ -4,9 +4,8 @@ import {
   definePlugin,
   defineHandler,
   sdcppConfigSchema,
-  generateImageRequestSchema,
-  generateImageStreamResponseSchema,
-  img2imgRequestSchema,
+  generationRequestSchema,
+  generationStreamResponseSchema,
   ModelType,
   ADDON_DIFFUSION,
   type CreateModelParams,
@@ -17,8 +16,7 @@ import {
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import { parseModelPath } from "@/server/utils";
-import { generateImage } from "./ops/generate-image";
-import { img2img } from "./ops/img2img";
+import { generation } from "./ops/generation";
 
 type DiffusionArtifactKey =
   | "clipLModelPath"
@@ -66,7 +64,7 @@ export const diffusionPlugin = definePlugin({
 
     const artifacts: Partial<Record<DiffusionArtifactKey, string>> = {};
     for (let i = 0; i < srcEntries.length; i++) {
-      artifacts[srcEntries[i]![1]] = resolved[i];
+      artifacts[srcEntries[i]![1]] = resolved[i]!;
     }
 
     return { config, artifacts };
@@ -79,19 +77,20 @@ export const diffusionPlugin = definePlugin({
     const logger = createStreamLogger(modelId, ModelType.sdcppGeneration);
     registerAddonLogger(modelId, ModelType.sdcppGeneration, logger);
 
-    const model = new ImgStableDiffusion(
-      {
-        diskPath: dirPath,
-        modelName: basePath,
-        logger,
-        opts: { stats: true },
-        clipLModel: artifacts?.["clipLModelPath"],
-        clipGModel: artifacts?.["clipGModelPath"],
-        t5XxlModel: artifacts?.["t5XxlModelPath"],
-        llmModel: artifacts?.["llmModelPath"],
-        vaeModel: artifacts?.["vaeModelPath"],
-      },
-      {
+    const addonArgs = {
+      diskPath: dirPath,
+      modelName: basePath,
+      logger,
+      opts: { stats: true },
+      ...(artifacts?.["clipLModelPath"] && { clipLModel: artifacts["clipLModelPath"] }),
+      ...(artifacts?.["clipGModelPath"] && { clipGModel: artifacts["clipGModelPath"] }),
+      ...(artifacts?.["t5XxlModelPath"] && { t5XxlModel: artifacts["t5XxlModelPath"] }),
+      ...(artifacts?.["llmModelPath"] && { llmModel: artifacts["llmModelPath"] }),
+      ...(artifacts?.["vaeModelPath"] && { vaeModel: artifacts["vaeModelPath"] }),
+    };
+
+    const addonConfig = Object.fromEntries(
+      Object.entries({
         threads: config.threads,
         device: config.device,
         prediction: config.prediction,
@@ -103,24 +102,21 @@ export const diffusionPlugin = definePlugin({
         vae_tiling: config.vae_tiling,
         flash_attn: config.flash_attn,
         verbosity: config.verbosity,
-      },
+      }).filter(([, v]) => v !== undefined),
     );
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = new ImgStableDiffusion(addonArgs as any, addonConfig);
 
     return { model, loader: undefined };
   },
 
   handlers: {
-    generateImageStream: defineHandler({
-      requestSchema: generateImageRequestSchema,
-      responseSchema: generateImageStreamResponseSchema,
+    generationStream: defineHandler({
+      requestSchema: generationRequestSchema,
+      responseSchema: generationStreamResponseSchema,
       streaming: true,
-      handler: generateImage,
-    }),
-    img2imgStream: defineHandler({
-      requestSchema: img2imgRequestSchema,
-      responseSchema: generateImageStreamResponseSchema,
-      streaming: true,
-      handler: img2img,
+      handler: generation,
     }),
   },
 
