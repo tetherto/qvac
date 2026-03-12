@@ -50,6 +50,11 @@ public:
       const std::string& pathRecognizer, std::span<const std::string> langList,
       bool useGPU = false, const Config& config = Config{});
 
+#if defined(_WIN32) || defined(_WIN64)
+  // On Windows, defer session destruction to avoid the ORT global-state crash.
+  ~StepRecognizeText() { deferWindowsSessionLeak(std::move(session_)); }
+#endif
+
   CONSTRUCT_FROM_TUPLE(StepRecognizeText)
 
   /**

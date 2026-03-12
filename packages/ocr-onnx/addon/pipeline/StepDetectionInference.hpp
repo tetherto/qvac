@@ -15,6 +15,11 @@ public:
   explicit StepDetectionInference(
       const std::string& pathDetector, bool useGPU = false, float magRatio = 1.5F);
 
+#if defined(_WIN32) || defined(_WIN64)
+  // On Windows, defer session destruction to avoid the ORT global-state crash.
+  ~StepDetectionInference() { deferWindowsSessionLeak(std::move(session_)); }
+#endif
+
   CONSTRUCT_FROM_TUPLE(StepDetectionInference)
 
   /**

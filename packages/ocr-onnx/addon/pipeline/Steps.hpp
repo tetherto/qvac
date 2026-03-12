@@ -8,6 +8,8 @@
 #include <variant>
 #include <tuple>
 
+#include <qvac-onnx/OnnxSession.hpp>
+
 /* NOLINTBEGIN(cppcoreguidelines-macro-usage) */
 #define CONSTRUCT_FROM_TUPLE(Class)                          template <class... Ts>                                   explicit Class(std::tuple<Ts...>&& tup)                      : Class(std::move(tup), std::index_sequence_for<Ts...>{})       { } /* NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved) */                                                                                                               template <class Tuple, size_t... Is>                     Class(Tuple&& tup, std::index_sequence<Is...>)               : Class(std::forward<decltype(std::get<Is>(tup))>(std::get<Is>(tup))...)     { } /* NOLINT(cppcoreguidelines-missing-std-forward,cppcoreguidelines-rvalue-reference-param-not-moved) */
 /* NOLINTEND(cppcoreguidelines-macro-usage) */
@@ -69,5 +71,14 @@ struct StepDoctrDetectionOutput {
 };
 
 cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect);
+
+#if defined(_WIN32) || defined(_WIN64)
+// On Windows, ~Ort::Session() corrupts global ORT state after the 1st call, a known
+// ORT bug, causing SIGSEGV on all subsequent session destructions.  Work around it by
+// moving the session into a heap-allocated object via a raw (non-owning) pointer that is
+// intentionally never deleted. The OS reclaims the memory when the process exits.
+// Call this from step destructors instead of letting OnnxSession be destroyed normally.
+void deferWindowsSessionLeak(onnx_addon::OnnxSession session);
+#endif
 
 }

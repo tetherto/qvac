@@ -27,7 +27,7 @@ public:
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.
-  ~StepDoctrRecognition() { deferWindowsSessionLeak(std::move(ortSession_)); }
+  ~StepDoctrRecognition() { deferWindowsSessionLeak(std::move(session_)); }
 #endif
 
   /**
