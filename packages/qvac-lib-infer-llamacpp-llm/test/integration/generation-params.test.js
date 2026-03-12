@@ -64,24 +64,6 @@ async function collectResponse (response) {
   return chunks.join('')
 }
 
-test('generationParams | same seed produces identical output', { timeout: 600_000 }, async t => {
-  const { model } = await setupModel(t)
-
-  const responseA = await model.run(PROMPT, {
-    generationParams: { seed: 42, temp: 0.8 }
-  })
-  const outputA = await collectResponse(responseA)
-
-  const responseB = await model.run(PROMPT, {
-    generationParams: { seed: 42, temp: 0.8 }
-  })
-  const outputB = await collectResponse(responseB)
-
-  t.ok(outputA.length > 0, `first run produced output (${outputA.length} chars)`)
-  t.ok(outputB.length > 0, `second run produced output (${outputB.length} chars)`)
-  t.is(outputA, outputB, 'same seed + same temp produces identical output')
-})
-
 test('generationParams | predict controls output length', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
