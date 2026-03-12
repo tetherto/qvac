@@ -144,7 +144,14 @@ public:
   /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
   /// any in-flight operation that access the state finishes, then safely swaps
   /// the state.
-  void reload();
+  /// @param newFinetuneOverrides  When the outer optional has a value,
+  ///   pendingFinetuneOverrides_ is atomically replaced under the exclusive
+  ///   lock before the reload proceeds. The inner optional carries the actual
+  ///   overrides (or std::nullopt to clear them). Leave the outer as
+  ///   std::nullopt (default) to leave pendingFinetuneOverrides_ unchanged.
+  void reload(
+      std::optional<std::optional<FinetuneConfigOverrides>>
+          newFinetuneOverrides = std::nullopt);
 
   /**
    * Check if model is loaded.
@@ -243,7 +250,9 @@ private:
   bool loadMedia(const std::vector<uint8_t>& input);
 
   void setInitLoader(
-      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
+      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt,
+      std::optional<std::optional<FinetuneConfigOverrides>>
+          newFinetuneOverrides = std::nullopt);
 
   void init(bool acquireLock);
 
@@ -310,6 +319,10 @@ private:
       std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
   void clearPausedCheckpointStateShared();
 
+  // Guarded by stateMtx_: written and read exclusively inside
+  // setInitLoader() / init() → commonParamsParse(), both of which run
+  // under the stateMtx_ unique_lock. Callers set it via reload()'s
+  // newFinetuneOverrides parameter to avoid any unsynchronised window.
   std::optional<FinetuneConfigOverrides> pendingFinetuneOverrides_;
 
   mutable std::mutex checkpointStateMutex_;

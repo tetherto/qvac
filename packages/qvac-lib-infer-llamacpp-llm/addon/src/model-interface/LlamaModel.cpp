@@ -186,7 +186,9 @@ LlamaModel::LlamaModel(
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
-void LlamaModel::reload() {
+void LlamaModel::reload(
+    std::optional<std::optional<FinetuneConfigOverrides>>
+        newFinetuneOverrides) {
   {
     std::shared_lock lock(stateMtx_);
     if (state_->asyncWeightsLoader_.isStreaming()) {
@@ -199,13 +201,18 @@ void LlamaModel::reload() {
           "the streamed weights have already been consumed.");
     }
   }
-  setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE);
+  setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE, newFinetuneOverrides);
 }
 
 void LlamaModel::setInitLoader(
-    std::optional<InitLoader::LOADER_TYPE> loaderType) {
+    std::optional<InitLoader::LOADER_TYPE> loaderType,
+    std::optional<std::optional<FinetuneConfigOverrides>>
+        newFinetuneOverrides) {
   cancel();
   std::unique_lock lock(stateMtx_);
+  if (newFinetuneOverrides.has_value()) {
+    pendingFinetuneOverrides_ = *newFinetuneOverrides;
+  }
   if (loaderType.has_value()) {
     constructionArgs_.loaderType = loaderType.value();
   }
@@ -409,6 +416,9 @@ std::any LlamaModel::process(const std::any& input) {
 #ifndef STANDALONE_TEST_BUILD
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
+    // Release the shared lock before finetune() because reload() inside it
+    // acquires an exclusive lock on stateMtx_; safe since JobRunner serialises
+    // all jobs onto a single worker thread.
     lock.unlock();
     std::string status =
         finetune(*prompt.finetuningParams, &stats, prompt.progressCallback);
@@ -1047,16 +1057,16 @@ std::string LlamaModel::finetune(
     }
   }
 
-  pendingFinetuneOverrides_ = FinetuneConfigOverrides{
-      .batchSize = params.batchSize,
-      .microBatchSize = params.microBatchSize,
-      .contextLength = params.contextLength,
-      .gpuSupportsF16OutProd = gpuSupportsOutProdF16()};
   // Always reload: ensures tuneConfigMap applies finetuning-specific config
   // (e.g. flash-attn off, ubatch sizing) and gives a clean llama_context.
   // TODO: investigate recreating the context without a full weights reload
   // to reduce latency when the backend itself does not change.
-  reload();
+  reload(
+      FinetuneConfigOverrides{
+          .batchSize = params.batchSize,
+          .microBatchSize = params.microBatchSize,
+          .contextLength = params.contextLength,
+          .gpuSupportsF16OutProd = gpuSupportsOutProdF16()});
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
@@ -1325,8 +1335,7 @@ std::string LlamaModel::finetune(
     }
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
-    pendingFinetuneOverrides_ = std::nullopt;
-    reload();
+    reload(std::optional<FinetuneConfigOverrides>{});
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1341,9 +1350,8 @@ std::string LlamaModel::finetune(
     }
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
-    pendingFinetuneOverrides_ = std::nullopt;
     try {
-      reload();
+      reload(std::optional<FinetuneConfigOverrides>{});
     } catch (...) {
       QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
     }
