@@ -1,7 +1,9 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -58,6 +60,13 @@ public:
       std::string&& modelPath, std::string&& projectionPath,
       std::unordered_map<std::string, std::string>&& configFilemap);
 
+  struct ConstructionArgs {
+    std::string modelPath;
+    std::string projectionPath;
+    std::unordered_map<std::string, std::string> configFilemap;
+    InitLoader::LOADER_TYPE loaderType = InitLoader::LOADER_TYPE::DELAYED;
+  };
+
   /**
    * The Destructor for llama model.
    * Members are destroyed in reverse order of declaration, ensuring
@@ -101,12 +110,16 @@ public:
   /**
    * The Reset method.
    */
-  void reset() { resetState(); }
+  void reset() {
+    std::shared_lock lock(stateMtx_);
+    resetState();
+  }
 
-  /**
-   * Initialize backend (llama.cpp setup).
-   */
-  void initializeBackend(const std::string& backendsDir = "");
+  /// @brief Rebuilds reloadable model state using stored construction args.
+  /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
+  /// any in-flight operation that access the state finishes, then safely swaps
+  /// the state.
+  void reload();
 
   /**
    * Check if model is loaded.
@@ -117,7 +130,12 @@ public:
    * Ensure model is initialized
    */
   void waitForLoadInitialization() final {
-    initLoader_.waitForLoadInitialization();
+    std::shared_ptr<ReloadableState> localState;
+    {
+      std::shared_lock lock(stateMtx_);
+      localState = state_;
+    }
+    localState->initLoader_.waitForLoadInitialization();
   }
 
   /**
@@ -134,6 +152,39 @@ public:
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
 private:
+  // Impl without mutexes
+  std::string processPromptImpl(const Prompt& prompt);
+  void cancelImpl() const;
+
+  struct ReloadableState {
+    ReloadableState(
+        const ConstructionArgs& args, const std::string& loadingContext,
+        ModelMetaData& metadata)
+        : shards_(GGUFShards::expandGGUFIntoShards(args.modelPath)),
+          asyncWeightsLoader_(shards_, initLoader_, loadingContext, &metadata) {
+    }
+
+    GGUFShards shards_;
+    friend class InitLoader;
+    InitLoader initLoader_;
+    AsyncWeightsLoader asyncWeightsLoader_;
+
+    bool isTextLlm_ = false;
+
+    // Backend handle must be declared before llmContext_ to ensure
+    // llmContext_ is destroyed first (members destroyed in reverse order)
+    std::optional<LlamaBackendsHandle> backendsHandle_;
+
+    // Store the appropriate context (TextLlmContext or MtmdLlmContext)
+    // Destroyed before backendsHandle_ to avoid use-after-free
+    std::unique_ptr<LlmContext> llmContext_;
+
+    // configuration values parsed from configFilemap
+    llama_pos configuredNDiscarded_ = 0;
+    std::optional<CacheManager> cacheManager_;
+    bool lastRunWasPrefill_ = false;
+  };
+
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
     std::vector<common_chat_tool> tools;
@@ -188,29 +239,17 @@ private:
    */
   bool loadMedia(const std::vector<uint8_t>& input);
 
-  void init(
-      std::string&& modelPath, std::string&& projectionPath,
-      std::unordered_map<std::string, std::string>&& configFilemap);
+  void setInitLoader(
+      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt);
+
+  void init(bool acquireLock);
 
   const std::string loadingContext_;
-  GGUFShards shards_;
-  friend class InitLoader;
-  InitLoader initLoader_;
   ModelMetaData metadata_;
-  AsyncWeightsLoader asyncWeightsLoader_;
+  ConstructionArgs constructionArgs_;
 
-  bool isTextLlm_ = false;
-
-  // Backend handle must be declared before llmContext_ to ensure
-  // llmContext_ is destroyed first (members destroyed in reverse order)
-  std::optional<LlamaBackendsHandle> backendsHandle_;
-
-  // Store the appropriate context (TextLlmContext or MtmdLlmContext)
-  // Destroyed before backendsHandle_ to avoid use-after-free
-  std::unique_ptr<LlmContext> llmContext_;
-
-  // configuration values parsed from configFilemap
-  llama_pos configuredNDiscarded_ = 0;
-  std::optional<CacheManager> cacheManager_;
-  bool lastRunWasPrefill_ = false;
+  /// Shared lock for all methods that read/use state_ members; exclusive lock
+  /// only in reload()
+  mutable std::shared_mutex stateMtx_;
+  std::shared_ptr<ReloadableState> state_;
 };
