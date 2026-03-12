@@ -27,7 +27,6 @@ fi
 DOCS_WORKFLOWS=(
   "Docs Website PR Checks"
   "Docs Post-Merge Sync"
-  "Docs Deploy Staging"
 )
 
 printf "\n=== Docs CI Doctor ===\n"
