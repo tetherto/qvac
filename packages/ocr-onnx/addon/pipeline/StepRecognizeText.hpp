@@ -1,10 +1,5 @@
 #pragma once
 
-#include "Steps.hpp"
-
-#include <qvac-onnx/OnnxSession.hpp>
-#include <opencv2/imgproc.hpp>
-
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -14,6 +9,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 

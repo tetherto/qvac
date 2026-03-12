@@ -40,7 +40,8 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 
 } // namespace
 
-StepDoctrDetection::StepDoctrDetection(const std::string& pathDetector, bool useGPU)
+StepDoctrDetection::StepDoctrDetection(
+    const std::string& pathDetector, bool useGPU)
     : session_(pathDetector, [&] {
         onnx_addon::SessionConfig cfg;
         cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU

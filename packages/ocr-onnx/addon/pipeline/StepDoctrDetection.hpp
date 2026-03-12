@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Steps.hpp"
-
-#include <qvac-onnx/OnnxSession.hpp>
 #include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -18,7 +18,8 @@ public:
   static constexpr float UNCLIP_RATIO = 1.5F;
   static constexpr int MIN_SIZE_BOX = 2;
 
-  explicit StepDoctrDetection(const std::string& pathDetector, bool useGPU = false);
+  explicit StepDoctrDetection(
+      const std::string& pathDetector, bool useGPU = false);
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.
