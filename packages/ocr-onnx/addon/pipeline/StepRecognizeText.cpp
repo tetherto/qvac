@@ -494,13 +494,15 @@ StepRecognizeText::StepRecognizeText(
     const std::string& pathRecognizer, std::span<const std::string> langList,
     bool useGPU, const Config& config)
     : config_(config),
-      session_(pathRecognizer, [&] {
-        onnx_addon::SessionConfig cfg;
-        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
-                              : onnx_addon::ExecutionProvider::CPU;
-        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
-        return cfg;
-      }()),
+      session_(
+          pathRecognizer,
+          [&] {
+            onnx_addon::SessionConfig cfg;
+            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                  : onnx_addon::ExecutionProvider::CPU;
+            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+            return cfg;
+          }()),
       isLeftToRightScript_{true} {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
   ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
@@ -782,7 +784,11 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, const_cast<float*>(predsTensor.as<float>()));
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(predsTensor.as<float>()));
 
   return preds.clone();
 }
@@ -836,7 +842,11 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, const_cast<float*>(predsTensor.as<float>()));
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(predsTensor.as<float>()));
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,

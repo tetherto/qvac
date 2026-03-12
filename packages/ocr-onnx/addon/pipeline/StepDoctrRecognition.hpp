@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Steps.hpp"
-
-#include <qvac-onnx/OnnxSession.hpp>
-#include <opencv2/imgproc.hpp>
-
 #include <atomic>
 #include <string>
 #include <vector>
+
+#include <opencv2/imgproc.hpp>
+#include <qvac-onnx/OnnxSession.hpp>
+
+#include "Steps.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 
@@ -21,9 +21,9 @@ public:
   static constexpr int RECOG_HEIGHT = 32;
   static constexpr int RECOG_WIDTH = 128;
 
-  StepDoctrRecognition(const std::string& pathRecognizer, bool useGPU = false,
-                       int batchSize = 32,
-                       DecodingMethod decoding = DecodingMethod::CTC);
+  StepDoctrRecognition(
+      const std::string& pathRecognizer, bool useGPU = false,
+      int batchSize = 32, DecodingMethod decoding = DecodingMethod::CTC);
 
 #if defined(_WIN32) || defined(_WIN64)
   // On Windows, defer session destruction to avoid the ORT global-state crash.

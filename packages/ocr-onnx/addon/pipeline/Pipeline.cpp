@@ -49,8 +49,7 @@ Pipeline::Pipeline(
     const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU, int timeout,
     const PipelineConfig& config)
-    : config_(config),
-      timeout_(timeout) {
+    : config_(config), timeout_(timeout) {
 
   std::string modeStr = (config.mode == PipelineMode::DOCTR) ? "DOCTR" : "EASYOCR";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,

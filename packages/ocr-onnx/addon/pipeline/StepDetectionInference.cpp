@@ -32,8 +32,9 @@ constexpr double PIXEL_INTENSITY_MAX = 255.0;
  *
  * @throws std::runtime_error if the Detector inference results are not in expected format
  */
-std::pair<cv::Mat, cv::Mat> extractOutputFromOrtValue(onnx_addon::OutputTensor &outTensor) {
-  auto *outData = outTensor.asMutable<float>();
+std::pair<cv::Mat, cv::Mat>
+extractOutputFromOrtValue(onnx_addon::OutputTensor& outTensor) {
+  auto* outData = outTensor.asMutable<float>();
   const auto& outputShape = outTensor.shape;
 
   if (outputShape.size() != 4) {
@@ -145,8 +146,7 @@ void normalizeMeanVariance(cv::Mat &inputImage,
 
 StepDetectionInference::StepDetectionInference(
     const std::string& pathDetector, bool useGPU, float magRatio)
-    : magRatio_(magRatio),
-      session_(pathDetector, [&] {
+    : magRatio_(magRatio), session_(pathDetector, [&] {
         onnx_addon::SessionConfig cfg;
         cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
                               : onnx_addon::ExecutionProvider::CPU;
@@ -154,7 +154,8 @@ StepDetectionInference::StepDetectionInference(
         return cfg;
       }()) {}
 
-std::vector<onnx_addon::OutputTensor> StepDetectionInference::runInference(cv::Mat inputBlob) {
+std::vector<onnx_addon::OutputTensor>
+StepDetectionInference::runInference(cv::Mat inputBlob) {
   int dims = inputBlob.dims;
   std::vector<int64_t> inputShape(dims);
   for (int i = 0; i < dims; i++) {

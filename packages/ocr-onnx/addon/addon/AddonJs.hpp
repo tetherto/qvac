@@ -105,7 +105,8 @@ private:
 };
 
 namespace {
-std::string getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
+std::string
+getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 } // namespace
@@ -214,10 +215,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(std::make_shared<PipelineOutputHandler>());
-  std::unique_ptr<OutputCallBackInterface> callback = std::make_unique<OutputCallBackJs>(
-      env, args[0], args[2], std::move(outHandlers));
+  std::unique_ptr<OutputCallBackInterface> callback =
+      std::make_unique<OutputCallBackJs>(
+          env, args[0], args[2], std::move(outHandlers));
 
-  auto addon = std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
 }

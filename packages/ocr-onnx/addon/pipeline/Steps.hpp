@@ -1,13 +1,12 @@
 #pragma once
 
-#include <opencv2/imgproc.hpp>
-
 #include <cstddef>
 #include <optional>
 #include <string>
-#include <variant>
 #include <tuple>
+#include <variant>
 
+#include <opencv2/imgproc.hpp>
 #include <qvac-onnx/OnnxSession.hpp>
 
 /* NOLINTBEGIN(cppcoreguidelines-macro-usage) */
@@ -73,11 +72,12 @@ struct StepDoctrDetectionOutput {
 cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect);
 
 #if defined(_WIN32) || defined(_WIN64)
-// On Windows, ~Ort::Session() corrupts global ORT state after the 1st call, a known
-// ORT bug, causing SIGSEGV on all subsequent session destructions.  Work around it by
-// moving the session into a heap-allocated object via a raw (non-owning) pointer that is
-// intentionally never deleted. The OS reclaims the memory when the process exits.
-// Call this from step destructors instead of letting OnnxSession be destroyed normally.
+// On Windows, ~Ort::Session() corrupts global ORT state after the 1st call, a
+// known ORT bug, causing SIGSEGV on all subsequent session destructions.  Work
+// around it by moving the session into a heap-allocated object via a raw
+// (non-owning) pointer that is intentionally never deleted. The OS reclaims the
+// memory when the process exits. Call this from step destructors instead of
+// letting OnnxSession be destroyed normally.
 void deferWindowsSessionLeak(onnx_addon::OnnxSession session);
 #endif
 

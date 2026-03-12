@@ -39,7 +39,8 @@ inline AddonInstance createInstance(
   std::unique_ptr<OutputCallBackInterface> callback =
       std::make_unique<OutputCallBackCpp>(std::move(outHandlers));
 
-  auto addon = std::make_unique<AddonCpp>(std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonCpp>(std::move(callback), std::move(model));
 
   return {std::move(addon), std::move(outHandler)};
 }
