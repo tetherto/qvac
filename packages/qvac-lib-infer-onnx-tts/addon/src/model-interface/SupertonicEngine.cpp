@@ -91,7 +91,7 @@ void SupertonicEngine::load(const SupertonicConfig &cfg) {
 
   Ort::SessionOptions options;
   options.SetIntraOpNumThreads(1);
-  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+  options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
   textEncoderSession_ = qvac::ttslib::createOrtSession(textEncoderPath, options);
   {

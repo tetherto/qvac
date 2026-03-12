@@ -124,6 +124,7 @@ jobs:
     with:
       workdir: packages/qvac-lib-diagnostics
       repo_name: diagnostics
+      caller_event_name: ${{ github.event_name }}
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
