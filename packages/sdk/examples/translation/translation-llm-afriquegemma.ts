@@ -12,6 +12,7 @@ try {
     onProgress: (progress) => {
       console.log(progress);
     },
+    // IMPORTANT: these parameters are validated to be optimal
     modelConfig: {
       tools: true,
       ctx_size: 2048,
@@ -31,7 +32,7 @@ try {
     modelId,
     text: engText,
     from: "en",
-    to: "swh_Latn", 
+    to: "swh_Latn",
     modelType: "llm",
     stream: false,
   });
