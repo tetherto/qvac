@@ -9,12 +9,26 @@ import {
 
 try {
   // First just cache the model
+  let lastBytes = 0;
+  let lastTime = Date.now();
   await downloadAsset({
     assetSrc: LLAMA_3_2_1B_INST_Q4_0,
     onProgress: (progress) => {
-      console.log(progress);
+      const now = Date.now();
+      const elapsed = (now - lastTime) / 1000;
+      if (elapsed >= 1) {
+        const speed = (progress.downloaded - lastBytes) / elapsed / 1024 / 1024;
+        const totalMB = progress.total / 1024 / 1024;
+        const downloadedMB = progress.downloaded / 1024 / 1024;
+        process.stdout.write(
+          `\r${downloadedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB  ${progress.percentage}%  ${speed.toFixed(1)} MB/s   `,
+        );
+        lastBytes = progress.downloaded;
+        lastTime = now;
+      }
     },
   });
+  console.log();
 
   // Then load it in memory from cache
   const modelId = await loadModel({

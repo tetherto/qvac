@@ -247,14 +247,46 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
+      const rangeDownload = core.download({
+        start: model.blobBinding.blockOffset,
+        length: model.blobBinding.blockLength
+      })
+
       let artifact
       if (options.outputFile) {
         await this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options)
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
+        if (options.prefetch) {
+          let downloadedBytes = 0
+          const progressHandler = (index, bytes) => {
+            if (index >= model.blobBinding.blockOffset && index < model.blobBinding.blockOffset + model.blobBinding.blockLength) {
+              downloadedBytes += bytes
+              if (options.onProgress) {
+                options.onProgress({
+                  downloaded: Math.min(downloadedBytes, totalSize),
+                  total: totalSize
+                })
+              }
+            }
+          }
+
+          core.on('download', progressHandler)
+          try {
+            await rangeDownload.done()
+          } finally {
+            core.off('download', progressHandler)
+          }
+
+          this.logger.debug('Prefetch complete, all blocks in local storage', {
+            byteLength: totalSize
+          })
+        }
+
         const stream = blobs.createReadStream(model.blobBinding, {
           wait: true,
           timeout: options.timeout || 30000
@@ -262,6 +294,7 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
           if (blobs) {
             try {
               await blobs.close()
@@ -359,14 +392,46 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
+      const rangeDownload = core.download({
+        start: pointer.blockOffset,
+        length: pointer.blockLength
+      })
+
       let artifact
       if (options.outputFile) {
         await this._streamBlobToFile(blobs, core, pointer, options.outputFile, options)
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
+        if (options.prefetch) {
+          let downloadedBytes = 0
+          const progressHandler = (index, bytes) => {
+            if (index >= pointer.blockOffset && index < pointer.blockOffset + pointer.blockLength) {
+              downloadedBytes += bytes
+              if (options.onProgress) {
+                options.onProgress({
+                  downloaded: Math.min(downloadedBytes, totalSize),
+                  total: totalSize
+                })
+              }
+            }
+          }
+
+          core.on('download', progressHandler)
+          try {
+            await rangeDownload.done()
+          } finally {
+            core.off('download', progressHandler)
+          }
+
+          this.logger.debug('Prefetch complete, all blocks in local storage', {
+            byteLength: totalSize
+          })
+        }
+
         const stream = blobs.createReadStream(pointer, {
           wait: true,
           timeout: options.timeout || 30000
@@ -374,6 +439,7 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
           if (blobs) {
             try { await blobs.close() } catch (e) {
               this.logger.warn('Error closing blob instance', { error: e.message })
@@ -450,6 +516,11 @@ class QVACRegistryClient extends ReadyResource {
 
     core.on('download', progressHandler)
 
+    const rangeDownload = core.download({
+      start: blobPointer.blockOffset,
+      length: blobPointer.blockLength
+    })
+
     const stream = blobs.createReadStream(blobPointer, {
       wait: true,
       timeout: options.timeout || 30000
@@ -482,6 +553,7 @@ class QVACRegistryClient extends ReadyResource {
         }
       })
     } finally {
+      rangeDownload.destroy()
       core.off('download', progressHandler)
     }
   }

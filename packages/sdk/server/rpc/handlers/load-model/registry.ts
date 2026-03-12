@@ -125,9 +125,27 @@ async function downloadSingleFileFromRegistry(
 
   let readStream: Readable;
 
+  const onProgress = progressCallback
+    ? (progress: { downloaded: number; total: number }) => {
+        progressCallback({
+          type: "modelProgress",
+          downloaded: progress.downloaded,
+          total: expectedSize || progress.total,
+          percentage: expectedSize
+            ? calculatePercentage(progress.downloaded, expectedSize)
+            : 0,
+          downloadKey,
+        });
+      }
+    : undefined;
+
   if (blobBinding) {
     logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    const result = await client.downloadBlob(blobBinding, { timeout: REGISTRY_STREAM_TIMEOUT_MS });
+    const result = await client.downloadBlob(blobBinding, {
+      timeout: REGISTRY_STREAM_TIMEOUT_MS,
+      prefetch: true,
+      ...(onProgress && { onProgress }),
+    });
     if (!("stream" in result.artifact)) {
       throw new RegistryDownloadFailedError(
         `No stream returned for blob ${modelFileName}`,
@@ -138,6 +156,8 @@ async function downloadSingleFileFromRegistry(
     logger.info(`📥 Downloading from registry: ${registryPath}`);
     const result = await client.downloadModel(registryPath, registrySource, {
       timeout: REGISTRY_STREAM_TIMEOUT_MS,
+      prefetch: true,
+      ...(onProgress && { onProgress }),
     });
     if (!("stream" in result.artifact)) {
       throw new RegistryDownloadFailedError(
@@ -147,29 +167,14 @@ async function downloadSingleFileFromRegistry(
     readStream = result.artifact.stream as unknown as Readable;
   }
 
+  if (signal?.aborted) {
+    throw new DownloadCancelledError();
+  }
+
   const dir = path.dirname(modelPath);
   await fsPromises.mkdir(dir, { recursive: true });
 
   const writeStream = fs.createWriteStream(modelPath) as unknown as Writable;
-
-  let downloadedBytes = 0;
-
-  readStream.on("data", (chunk: unknown) => {
-    const buffer = chunk as Buffer;
-    downloadedBytes += buffer.length;
-
-    if (progressCallback) {
-      progressCallback({
-        type: "modelProgress",
-        downloaded: downloadedBytes,
-        total: expectedSize || downloadedBytes,
-        percentage: expectedSize
-          ? calculatePercentage(downloadedBytes, expectedSize)
-          : 0,
-        downloadKey,
-      });
-    }
-  });
 
   readStream.pipe(writeStream);
 
