@@ -112,7 +112,6 @@ std::string getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
   auto args = js::getArguments(env, info);
   if (args.size() != 4) {
@@ -205,7 +204,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.straightenPages = optStraighten->as<bool>(env);
   }
 
-  auto model = make_unique<Pipeline>(
+  auto model = std::make_unique<Pipeline>(
       pathDetector,
       pathRecognizer,
       std::span<const std::string>(langList),
@@ -214,11 +213,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       config);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<PipelineOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+  outHandlers.add(std::make_shared<PipelineOutputHandler>());
+  std::unique_ptr<OutputCallBackInterface> callback = std::make_unique<OutputCallBackJs>(
       env, args[0], args[2], std::move(outHandlers));
 
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  auto addon = std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
 }
@@ -226,7 +225,6 @@ JSCATCH
 
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
   auto args = js::getArguments(env, info);
   if (args.size() != 2) {

@@ -21,6 +21,21 @@ std::string InferredText::toString() const {
   return stringStream.str();
 };
 
+#if defined(_WIN32) || defined(_WIN64)
+namespace {
+// Raw owning pointers that are intentionally never deleted.
+// ~Ort::Session() on Windows corrupts global ORT state after the first call,
+// causing SIGSEGV on all subsequent session destructions (ORT bug).
+// By moving sessions here and never calling delete, we bypass the broken
+// destructor.  The OS reclaims all memory when the process exits.
+std::vector<onnx_addon::OnnxSession*> windowsLeakedSessions; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+} // namespace
+
+void deferWindowsSessionLeak(onnx_addon::OnnxSession session) {
+  windowsLeakedSessions.push_back(new onnx_addon::OnnxSession(std::move(session))); // NOLINT(cppcoreguidelines-owning-memory)
+}
+#endif
+
 cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect) {
   cv::Point2f topLeft = rect[0];
   cv::Point2f topRight = rect[1];

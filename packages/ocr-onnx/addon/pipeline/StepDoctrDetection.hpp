@@ -20,6 +20,11 @@ public:
 
   explicit StepDoctrDetection(const std::string& pathDetector, bool useGPU = false);
 
+#if defined(_WIN32) || defined(_WIN64)
+  // On Windows, defer session destruction to avoid the ORT global-state crash.
+  ~StepDoctrDetection() { deferWindowsSessionLeak(std::move(session_)); }
+#endif
+
   Output process(const Input& input);
 
 private:
