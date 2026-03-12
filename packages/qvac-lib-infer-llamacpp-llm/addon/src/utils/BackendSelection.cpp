@@ -5,6 +5,7 @@
 #include <cctype>
 #include <optional>
 #include <regex>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -18,19 +19,28 @@ using namespace backend_selection;
 
 namespace {
 
-std::optional<std::string>
-getUnknownFinetuneArchitecture(const ModelMetaData* metadata) {
-  static constexpr std::array<const char*, 3> kKnown = {
-      "gemma3", "qwen3", "bitnet"};
+constexpr std::array<std::string_view, 3> kSupportedFinetuneArchitectures = {
+    "gemma3", "qwen3", "bitnet"};
+
+bool isSupportedFinetuneArchitecture(std::string_view arch) {
+  return std::ranges::find(kSupportedFinetuneArchitectures, arch) !=
+         kSupportedFinetuneArchitectures.end();
+}
+
+} // namespace
+
+std::optional<std::string> backend_selection::getUnknownFinetuneArchitecture(
+    const ModelMetaData* metadata) {
   const auto arch = metadata != nullptr
                         ? metadata->tryGetString("general.architecture")
                         : std::nullopt;
-  if (arch.has_value() &&
-      std::ranges::find(kKnown, arch.value()) != kKnown.end()) {
+  if (arch.has_value() && isSupportedFinetuneArchitecture(arch.value())) {
     return std::nullopt;
   }
   return arch.value_or("unknown");
 }
+
+namespace {
 
 std::optional<int> parseAdrenoVersion(const std::string& gpuDescription) {
   static const std::regex adrenoRegex(R"(dreno.*?(\d+))");

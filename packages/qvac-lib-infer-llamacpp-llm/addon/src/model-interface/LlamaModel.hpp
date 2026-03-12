@@ -53,6 +53,7 @@ struct FinetuneTerminalResult {
 };
 
 struct FinetuneConfigOverrides {
+  bool active{false};
   int64_t batchSize{0};
   int64_t microBatchSize{0};
   int64_t contextLength{0};
@@ -83,8 +84,7 @@ public:
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      const std::optional<FinetuneConfigOverrides>& finetuneOverrides =
-          std::nullopt);
+      const FinetuneConfigOverrides& finetuneOverrides = {});
 
   /**
    * The Constructor for llama model.
@@ -144,14 +144,12 @@ public:
   /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
   /// any in-flight operation that access the state finishes, then safely swaps
   /// the state.
-  /// @param newFinetuneOverrides  When the outer optional has a value,
-  ///   pendingFinetuneOverrides_ is atomically replaced under the exclusive
-  ///   lock before the reload proceeds. The inner optional carries the actual
-  ///   overrides (or std::nullopt to clear them). Leave the outer as
-  ///   std::nullopt (default) to leave pendingFinetuneOverrides_ unchanged.
+  /// @param newFinetuneOverrides  When provided, pendingFinetuneOverrides_ is
+  ///   atomically replaced under the exclusive lock before the reload proceeds.
+  ///   Omit (or std::nullopt) to leave pendingFinetuneOverrides_ unchanged.
   void reload(
-      std::optional<std::optional<FinetuneConfigOverrides>>
-          newFinetuneOverrides = std::nullopt);
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
 
   /**
    * Check if model is loaded.
@@ -251,8 +249,8 @@ private:
 
   void setInitLoader(
       std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt,
-      std::optional<std::optional<FinetuneConfigOverrides>>
-          newFinetuneOverrides = std::nullopt);
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
 
   void init(bool acquireLock);
 
@@ -323,7 +321,7 @@ private:
   // setInitLoader() / init() → commonParamsParse(), both of which run
   // under the stateMtx_ unique_lock. Callers set it via reload()'s
   // newFinetuneOverrides parameter to avoid any unsynchronised window.
-  std::optional<FinetuneConfigOverrides> pendingFinetuneOverrides_;
+  FinetuneConfigOverrides pendingFinetuneOverrides_;
 
   mutable std::mutex checkpointStateMutex_;
   std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>

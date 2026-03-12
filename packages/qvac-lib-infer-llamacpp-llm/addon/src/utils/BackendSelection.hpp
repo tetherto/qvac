@@ -13,6 +13,11 @@ class ModelMetaData;
 
 namespace backend_selection {
 
+/// Returns the unsupported architecture name if the model's architecture is not
+/// in the supported finetuning list, or std::nullopt if it is supported.
+std::optional<std::string>
+getUnknownFinetuneArchitecture(const ModelMetaData* metadata);
+
 enum BackendType : std::uint8_t { CPU, GPU };
 
 enum class MainGpuType : std::uint8_t { Integrated, Dedicated };

@@ -90,9 +90,9 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const std::optional<FinetuneConfigOverrides>& finetuneOverrides) {
+    const FinetuneConfigOverrides& finetuneOverrides) {
 
-  const bool isFinetuning = finetuneOverrides.has_value();
+  const bool isFinetuning = finetuneOverrides.active;
 
   auto notUserSet = [&](const char* hyphenKey, const char* underscoreKey) {
     return configFilemap.find(hyphenKey) == configFilemap.end() &&
@@ -104,35 +104,34 @@ void LlamaModel::tuneConfigMap(
       metadata.tryGetString("general.architecture") == "bitnet";
 
   if (isFinetuning) {
-    if (finetuneOverrides->contextLength > 0 &&
+    if (finetuneOverrides.contextLength > 0 &&
         notUserSet("ctx-size", "ctx_size")) {
       configFilemap["ctx-size"] =
-          std::to_string(finetuneOverrides->contextLength);
+          std::to_string(finetuneOverrides.contextLength);
       QLOG_IF(
           Priority::DEBUG,
           string_format(
               "[LlamaModel] Finetuning: ctx-size=%" PRId64 "\n",
-              finetuneOverrides->contextLength));
+              finetuneOverrides.contextLength));
     }
-    if (finetuneOverrides->batchSize > 0 &&
+    if (finetuneOverrides.batchSize > 0 &&
         notUserSet("batch-size", "batch_size")) {
-      configFilemap["batch-size"] =
-          std::to_string(finetuneOverrides->batchSize);
+      configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
       QLOG_IF(
           Priority::DEBUG,
           string_format(
               "[LlamaModel] Finetuning: batch-size=%" PRId64 "\n",
-              finetuneOverrides->batchSize));
+              finetuneOverrides.batchSize));
     }
-    if (finetuneOverrides->microBatchSize > 0 &&
+    if (finetuneOverrides.microBatchSize > 0 &&
         notUserSet("ubatch-size", "ubatch_size")) {
       configFilemap["ubatch-size"] =
-          std::to_string(finetuneOverrides->microBatchSize);
+          std::to_string(finetuneOverrides.microBatchSize);
       QLOG_IF(
           Priority::DEBUG,
           string_format(
               "[LlamaModel] Finetuning: ubatch-size=%" PRId64 "\n",
-              finetuneOverrides->microBatchSize));
+              finetuneOverrides.microBatchSize));
     }
   }
 
@@ -157,7 +156,7 @@ void LlamaModel::tuneConfigMap(
         "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
   }
 
-  if (isFinetuning && !finetuneOverrides->gpuSupportsF16OutProd) {
+  if (isFinetuning && !finetuneOverrides.gpuSupportsF16OutProd) {
     if (notUserSet("cache-type-k", "cache_type_k")) {
       configFilemap["cache-type-k"] = "f32";
       QLOG_IF(
@@ -187,13 +186,10 @@ LlamaModel::LlamaModel(
 }
 
 void LlamaModel::reload(
-    std::optional<std::optional<FinetuneConfigOverrides>>
-        newFinetuneOverrides) {
+    std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   {
     std::shared_lock lock(stateMtx_);
     if (state_->asyncWeightsLoader_.isStreaming()) {
-      // TODO: Make Fabric support moving/streaming existing loaded tensors
-      // TODO: to a different backend.
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(ReloadNotSupportedForStreamedModel),
@@ -206,8 +202,7 @@ void LlamaModel::reload(
 
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
-    std::optional<std::optional<FinetuneConfigOverrides>>
-        newFinetuneOverrides) {
+    std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancel();
   std::unique_lock lock(stateMtx_);
   if (newFinetuneOverrides.has_value()) {
@@ -619,7 +614,7 @@ void LlamaModel::commonParamsParse(
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        pendingFinetuneOverrides_.has_value());
+        pendingFinetuneOverrides_.active);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
@@ -673,7 +668,7 @@ void LlamaModel::commonParamsParse(
 
   // disable warmup run
   params.warmup = false;
-  params.training = pendingFinetuneOverrides_.has_value();
+  params.training = pendingFinetuneOverrides_.active;
   // add model path to  model parameters
   params.model.path = modelPath;
 
@@ -1063,6 +1058,7 @@ std::string LlamaModel::finetune(
   // to reduce latency when the backend itself does not change.
   reload(
       FinetuneConfigOverrides{
+          .active = true,
           .batchSize = params.batchSize,
           .microBatchSize = params.microBatchSize,
           .contextLength = params.contextLength,
@@ -1335,7 +1331,7 @@ std::string LlamaModel::finetune(
     }
 
     const std::string status = wasPaused ? "PAUSED" : "COMPLETED";
-    reload(std::optional<FinetuneConfigOverrides>{});
+    reload(FinetuneConfigOverrides{});
     return status;
   } catch (...) {
     auto state = getCurrentCheckpointStateShared();
@@ -1351,7 +1347,7 @@ std::string LlamaModel::finetune(
     llama_finetuning_helpers::clearCurrentCheckpointState();
     clearCurrentCheckpointStateShared();
     try {
-      reload(std::optional<FinetuneConfigOverrides>{});
+      reload(FinetuneConfigOverrides{});
     } catch (...) {
       QLOG_IF(Priority::ERROR, "Failed to reload model after finetuning error");
     }
@@ -1363,10 +1359,15 @@ void LlamaModel::validateModelForFinetuning() {
   auto fileType = metadata_.tryGetU32("general.file_type");
   if (fileType.has_value()) {
     const uint32_t ft = *fileType;
+    constexpr std::array kSupportedQuants = {
+        LLAMA_FTYPE_ALL_F32,
+        LLAMA_FTYPE_MOSTLY_F16,
+        LLAMA_FTYPE_MOSTLY_Q4_0,
+        LLAMA_FTYPE_MOSTLY_Q8_0,
+        LLAMA_FTYPE_MOSTLY_TQ1_0,
+        LLAMA_FTYPE_MOSTLY_TQ2_0};
     const bool supportedQuant =
-        ft == LLAMA_FTYPE_ALL_F32 || ft == LLAMA_FTYPE_MOSTLY_F16 ||
-        ft == LLAMA_FTYPE_MOSTLY_Q4_0 || ft == LLAMA_FTYPE_MOSTLY_Q8_0 ||
-        ft == LLAMA_FTYPE_MOSTLY_TQ1_0 || ft == LLAMA_FTYPE_MOSTLY_TQ2_0;
+        std::ranges::any_of(kSupportedQuants, [ft](auto q) { return q == ft; });
     if (!supportedQuant) {
       throw std::runtime_error(
           "Finetuning is not supported for this quantization type "
@@ -1376,21 +1377,10 @@ void LlamaModel::validateModelForFinetuning() {
     }
   }
 
-  llama_model* mdl = getModel();
-  if (mdl != nullptr) {
-    char arch[64] = {0};
-    int len = llama_model_meta_val_str(
-        mdl, "general.architecture", arch, sizeof(arch));
-    if (len > 0 && len < static_cast<int>(sizeof(arch))) {
-      std::string archStr(arch, static_cast<size_t>(len));
-      const bool supportedArch =
-          archStr == "gemma3" || archStr == "qwen3" || archStr == "bitnet";
-      if (!supportedArch) {
-        throw std::runtime_error(
-            "Finetuning is not supported for architecture '" + archStr +
-            "'. Supported: gemma3, qwen3, bitnet");
-      }
-    }
+  if (auto unsupported =
+          backend_selection::getUnknownFinetuneArchitecture(&metadata_)) {
+    throw std::runtime_error(
+        "Finetuning is not supported for architecture: " + unsupported.value());
   }
 }
 
