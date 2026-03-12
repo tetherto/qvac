@@ -40,8 +40,15 @@ float boxScore(const cv::Mat& probMap, const cv::Rect& bbox) {
 
 } // namespace
 
-StepDoctrDetection::StepDoctrDetection(const ORTCHAR_T* pathDetector, bool useGPU)
-    : ortSession_(getSharedOrtEnv(), pathDetector, getOrtSessionOptions(useGPU)) {
+StepDoctrDetection::StepDoctrDetection(
+    const std::string& pathDetector, bool useGPU)
+    : session_(pathDetector, [&] {
+        onnx_addon::SessionConfig cfg;
+        cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                              : onnx_addon::ExecutionProvider::CPU;
+        cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+        return cfg;
+      }()) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
        "[DoctrDetection] ONNX session created");
   ALOG_INFO(std::string("[DoctrDetection] ONNX session created"));
@@ -105,33 +112,20 @@ cv::Mat StepDoctrDetection::runInference(const cv::Mat& preprocessed) {
   }
 
   std::vector<int64_t> inputShape = {1, numChannels, height, width};
-  size_t inputTensorSize = inputData.size();
 
-  Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      memInfo, inputData.data(), inputTensorSize, inputShape.data(), inputShape.size());
+  onnx_addon::InputTensor inputTensor;
+  inputTensor.name = session_.getInputInfo()[0].name;
+  inputTensor.shape = inputShape;
+  inputTensor.type = onnx_addon::TensorType::FLOAT32;
+  inputTensor.data = inputData.data();
+  inputTensor.dataSize = inputData.size() * sizeof(float);
 
-  // Get input/output names from the model dynamically
-  Ort::AllocatorWithDefaultOptions allocator;
-  auto inputName = ortSession_.GetInputNameAllocated(0, allocator);
-  auto outputName = ortSession_.GetOutputNameAllocated(0, allocator);
-
-  const char* inputNames[] = {inputName.get()};
-  const char* outputNames[] = {outputName.get()};
-
-  std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
-
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames, inputTensors.data(), 1,
-      outputNames, 1);
+  auto outputTensors = session_.run(inputTensor);
 
   // Extract probability map from output
-  Ort::Value& outTensor = outputTensors[0];
-  auto* outData = outTensor.GetTensorMutableData<float>();
-  auto typeInfo = outTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> outShape = tensorInfo.GetShape();
+  auto& outTensor = outputTensors[0];
+  auto* outData = outTensor.asMutable<float>();
+  const auto& outShape = outTensor.shape;
 
   {
     std::string shapeStr = "[";

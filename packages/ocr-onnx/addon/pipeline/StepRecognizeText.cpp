@@ -491,10 +491,18 @@ std::array<cv::Point2f, 4> rotateBox(const std::array<cv::Point2f, 4> &box, int 
 } // end unnamed namespace
 
 StepRecognizeText::StepRecognizeText(
-    const ORTCHAR_T* pathRecognizer, std::span<const std::string> langList,
+    const std::string& pathRecognizer, std::span<const std::string> langList,
     bool useGPU, const Config& config)
     : config_(config),
-      ortSession_(getSharedOrtEnv(), pathRecognizer, getOrtSessionOptions(useGPU)),
+      session_(
+          pathRecognizer,
+          [&] {
+            onnx_addon::SessionConfig cfg;
+            cfg.provider = useGPU ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                  : onnx_addon::ExecutionProvider::CPU;
+            cfg.optimization = onnx_addon::GraphOptimizationLevel::EXTENDED;
+            return cfg;
+          }()),
       isLeftToRightScript_{true} {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
   ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
@@ -756,30 +764,19 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
   for (int i = 0; i < dims; i++) {
     imageShape[i] = inputBlob.size[i];
   }
-  size_t imageTensorSize = inputBlob.total();
   assert(sizeof(float) == inputBlob.elemSize());
-  auto *imageData = inputBlob.ptr<float>();
-  Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value imageTensor = Ort::Value::CreateTensor<float>(memoryInfo, imageData, imageTensorSize, imageShape.data(), imageShape.size());
 
-  constexpr std::array<const char*, 1> inputNames = {"image"};
-  constexpr std::array<const char*, 1> outputNames = {"output"};
+  onnx_addon::InputTensor input;
+  input.name = "image";
+  input.shape = imageShape;
+  input.type = onnx_addon::TensorType::FLOAT32;
+  input.data = inputBlob.ptr<float>();
+  input.dataSize = inputBlob.total() * sizeof(float);
 
-  std::array<Ort::Value, 1> inputTensors = {std::move(imageTensor)};
+  auto outputTensors = session_.run(input);
 
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames.data(),
-      inputTensors.data(),
-      1,
-      outputNames.data(),
-      1);
-
-  Ort::Value &predsTensor = outputTensors[0];
-  auto *predsData = predsTensor.GetTensorMutableData<float>();
-  Ort::TypeInfo typeInfo = predsTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> predsShape = tensorInfo.GetShape();
+  const auto& predsTensor = outputTensors[0];
+  const auto& predsShape = predsTensor.shape;
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -787,7 +784,11 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(predsTensor.as<float>()));
 
   return preds.clone();
 }
@@ -822,30 +823,18 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
   }
 
   std::vector<int64_t> inputShape = {batchSize, numChannels, height, width};
-  size_t inputTensorSize = batchSize * numChannels * height * width;
 
-  Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      memoryInfo, batchData.data(), inputTensorSize, inputShape.data(), inputShape.size());
+  onnx_addon::InputTensor input;
+  input.name = "image";
+  input.shape = inputShape;
+  input.type = onnx_addon::TensorType::FLOAT32;
+  input.data = batchData.data();
+  input.dataSize = batchData.size() * sizeof(float);
 
-  constexpr std::array<const char*, 1> inputNames = {"image"};
-  constexpr std::array<const char*, 1> outputNames = {"output"};
+  auto outputTensors = session_.run(input);
 
-  std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
-
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames.data(),
-      inputTensors.data(),
-      1,
-      outputNames.data(),
-      1);
-
-  Ort::Value &predsTensor = outputTensors[0];
-  auto *predsData = predsTensor.GetTensorMutableData<float>();
-  Ort::TypeInfo typeInfo = predsTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> predsShape = tensorInfo.GetShape();
+  const auto& predsTensor = outputTensors[0];
+  const auto& predsShape = predsTensor.shape;
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -853,7 +842,11 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(predsTensor.as<float>()));
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,

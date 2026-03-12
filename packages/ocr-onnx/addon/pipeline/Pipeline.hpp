@@ -85,8 +85,8 @@ public:
   using Config = PipelineConfig;
 
   Pipeline(
-      const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
-      std::span<const std::string> langList, bool useGPU = true,
+      const std::string& pathDetector, const std::string& pathRecognizer,
+      std::span<const std::string> langList, bool useGPU = false,
       int timeout = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
       const PipelineConfig& config = PipelineConfig{});
 
