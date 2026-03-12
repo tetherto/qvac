@@ -11,7 +11,8 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     -> ParakeetConfig {
   ParakeetConfig config;
 
-  auto modelPathOpt = jsObject.getOptionalProperty<js::String>(env, "modelPath");
+  auto modelPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "modelPath");
   if (modelPathOpt.has_value()) {
     config.modelPath = modelPathOpt.value().as<std::string>(env);
   }
@@ -21,7 +22,8 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     config.modelPath = pathOpt.value().as<std::string>(env);
   }
 
-  auto modelTypeOpt = jsObject.getOptionalProperty<js::String>(env, "modelType");
+  auto modelTypeOpt =
+      jsObject.getOptionalProperty<js::String>(env, "modelType");
   if (modelTypeOpt.has_value()) {
     std::string typeStr = modelTypeOpt.value().as<std::string>(env);
     if (typeStr == "ctc") {
@@ -45,7 +47,8 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     config.useGPU = gpuOpt.value().as<bool>(env);
   }
 
-  auto sampleRateOpt = jsObject.getOptionalProperty<js::Number>(env, "sampleRate");
+  auto sampleRateOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "sampleRate");
   if (sampleRateOpt.has_value()) {
     config.sampleRate = sampleRateOpt.value().as<int32_t>(env);
   }
@@ -136,10 +139,11 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
   return config;
 }
 
-auto JSAdapter::loadModelParams(
-    js::Object modelParamsObj, js_env_t* env, ParakeetConfig& parakeetConfig)
+auto JSAdapter::loadModelParams(js::Object modelParamsObj, js_env_t *env,
+                                ParakeetConfig &parakeetConfig)
     -> ParakeetConfig {
-  auto threadsOpt = modelParamsObj.getOptionalProperty<js::Number>(env, "maxThreads");
+  auto threadsOpt =
+      modelParamsObj.getOptionalProperty<js::Number>(env, "maxThreads");
   if (threadsOpt.has_value()) {
     parakeetConfig.maxThreads = threadsOpt.value().as<int32_t>(env);
   }
@@ -152,15 +156,17 @@ auto JSAdapter::loadModelParams(
   return parakeetConfig;
 }
 
-auto JSAdapter::loadAudioParams(
-    js::Object audioParamsObj, js_env_t* env, ParakeetConfig& parakeetConfig)
+auto JSAdapter::loadAudioParams(js::Object audioParamsObj, js_env_t *env,
+                                ParakeetConfig &parakeetConfig)
     -> ParakeetConfig {
-  auto sampleRateOpt = audioParamsObj.getOptionalProperty<js::Number>(env, "sampleRate");
+  auto sampleRateOpt =
+      audioParamsObj.getOptionalProperty<js::Number>(env, "sampleRate");
   if (sampleRateOpt.has_value()) {
     parakeetConfig.sampleRate = sampleRateOpt.value().as<int32_t>(env);
   }
 
-  auto channelsOpt = audioParamsObj.getOptionalProperty<js::Number>(env, "channels");
+  auto channelsOpt =
+      audioParamsObj.getOptionalProperty<js::Number>(env, "channels");
   if (channelsOpt.has_value()) {
     parakeetConfig.channels = channelsOpt.value().as<int32_t>(env);
   }
@@ -168,9 +174,8 @@ auto JSAdapter::loadAudioParams(
   return parakeetConfig;
 }
 
-void JSAdapter::loadMap(
-    js::Object jsObject, js_env_t* env,
-    std::map<std::string, JSValueVariant>& output) {
+void JSAdapter::loadMap(js::Object jsObject, js_env_t *env,
+                        std::map<std::string, JSValueVariant> &output) {
   js_value_t* propNames = nullptr;
   JS(js_get_property_names(env, jsObject, &propNames));
 
