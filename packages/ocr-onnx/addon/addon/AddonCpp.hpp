@@ -22,25 +22,25 @@ struct AddonInstance {
 /// @brief Creates a pure C++ Addon (no Js dependencies). Can be used on CLI or
 /// C++ tests.
 inline AddonInstance createInstance(
-    const ORTCHAR_T* pathDetector, const ORTCHAR_T* pathRecognizer,
+    const std::string& pathDetector, const std::string& pathRecognizer,
     std::span<const std::string> langList, bool useGPU = false,
-    int timeout = Pipeline::DEFAULT_PIPELINE_TIMEOUT_SECONDS,
+    int timeout = DEFAULT_PIPELINE_TIMEOUT_SECONDS,
     const Pipeline::Config& config = Pipeline::Config{}) {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
-  auto model = make_unique<Pipeline>(
+  auto model = std::make_unique<Pipeline>(
       pathDetector, pathRecognizer, langList, useGPU, timeout, config);
 
   auto outHandler =
-      make_shared<out_handl::CppQueuedOutputHandler<Pipeline::Output>>();
+      std::make_shared<out_handl::CppQueuedOutputHandler<Pipeline::Output>>();
   out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>>
       outHandlers;
   outHandlers.add(outHandler);
-  unique_ptr<OutputCallBackInterface> callback =
-      make_unique<OutputCallBackCpp>(std::move(outHandlers));
+  std::unique_ptr<OutputCallBackInterface> callback =
+      std::make_unique<OutputCallBackCpp>(std::move(outHandlers));
 
-  auto addon = make_unique<AddonCpp>(std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonCpp>(std::move(callback), std::move(model));
 
   return {std::move(addon), std::move(outHandler)};
 }
