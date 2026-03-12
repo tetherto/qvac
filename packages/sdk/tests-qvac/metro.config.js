@@ -4,6 +4,13 @@ const path = require('path');
 const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
+config.resolver = config.resolver || {};
+
+
+const extraAssetExts = ['ogg', 'wma', 'aac', 'm4a', 'wav', 'mp3'];
+config.resolver.assetExts = Array.from(
+    new Set([...(config.resolver.assetExts || []), ...extraAssetExts])
+);
 
 // Find the actual sdk location by following the symlink
 const projectRoot = __dirname;
@@ -21,7 +28,6 @@ try {
         config.watchFolders = [projectRoot, qvacSdkPath];
 
         // Add SDK's node_modules to resolver paths
-        config.resolver = config.resolver || {};
         config.resolver.nodeModulesPaths = [
             path.resolve(projectRoot, 'node_modules'),
             path.resolve(qvacSdkPath, 'node_modules'),
