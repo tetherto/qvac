@@ -433,9 +433,10 @@ void savePauseCheckpoint(
     const int64_t nUbatch =
         std::max<int64_t>(int64_t{1}, static_cast<int64_t>(llama_n_ubatch(state.ctx)));
     const int64_t ubatchPerCtx = std::max<int64_t>(int64_t{1}, nCtx / nUbatch);
-    // Backend resume cursor is idata batch index (0-based), while callback
-    // ibatch is 1-based ubatch progress.
-    meta.resumeBatch = std::max<int64_t>(int64_t{0}, (ibatch - 1) / ubatchPerCtx);
+    // Store the idata index *before* the one being processed when pause fired,
+    // so that opt_epoch's `idata = resume_from_batch + 1` restarts from the
+    // same sample whose callback triggered the pause.
+    meta.resumeBatch = (ibatch - 1) / ubatchPerCtx - 1;
   }
   writeCheckpointMetadata(pauseDir / "metadata.json", meta);
 
