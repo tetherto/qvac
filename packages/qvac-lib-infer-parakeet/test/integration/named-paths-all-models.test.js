@@ -73,8 +73,7 @@ test('CTC with named file paths — constructor accepts and validates', { timeou
 
   const model = new TranscriptionParakeet(args, config)
   t.ok(model, 'CTC model created with named paths (no directory throw)')
-  t.ok(model._hasAnyNamedPaths(), '_hasAnyNamedPaths returns true for CTC paths')
-  t.ok(!model._hasNamedPaths(), '_hasNamedPaths returns false (TDT-only)')
+  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for CTC paths')
 
   const resolved = model._resolveFilePath('', 'model.onnx')
   t.is(resolved, ctcModelPath, '_resolveFilePath maps model.onnx to ctcModelPath')
@@ -164,8 +163,7 @@ test('EOU with named file paths — constructor accepts and validates', { timeou
 
   const model = new TranscriptionParakeet(args, config)
   t.ok(model, 'EOU model created with named paths (no directory throw)')
-  t.ok(model._hasAnyNamedPaths(), '_hasAnyNamedPaths returns true for EOU paths')
-  t.ok(!model._hasNamedPaths(), '_hasNamedPaths returns false (TDT-only)')
+  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for EOU paths')
 
   const resolved = model._resolveFilePath('', 'encoder.onnx')
   t.is(resolved, eouEncoderPath, '_resolveFilePath maps encoder.onnx to eouEncoderPath')
@@ -251,8 +249,7 @@ test('Sortformer with named file paths — constructor accepts and validates', {
 
   const model = new TranscriptionParakeet(args, config)
   t.ok(model, 'Sortformer model created with named paths (no directory throw)')
-  t.ok(model._hasAnyNamedPaths(), '_hasAnyNamedPaths returns true for Sortformer paths')
-  t.ok(!model._hasNamedPaths(), '_hasNamedPaths returns false (TDT-only)')
+  t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for Sortformer paths')
 
   const resolved = model._resolveFilePath('', 'sortformer.onnx')
   t.is(resolved, sortformerPath, '_resolveFilePath maps sortformer.onnx to sortformerPath')
@@ -340,7 +337,6 @@ test('TDT with named file paths — verify existing flow still works', { timeout
   const model = new TranscriptionParakeet(args, config)
   t.ok(model, 'TDT model created with named paths')
   t.ok(model._hasNamedPaths(), '_hasNamedPaths returns true for TDT paths')
-  t.ok(model._hasAnyNamedPaths(), '_hasAnyNamedPaths also returns true')
 
   const resolved = model._resolveFilePath('', 'encoder-model.onnx')
   t.is(resolved, path.join(modelPath, 'encoder-model.onnx'), '_resolveFilePath maps correctly')

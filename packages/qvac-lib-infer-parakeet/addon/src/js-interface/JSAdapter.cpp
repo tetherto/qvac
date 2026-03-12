@@ -11,19 +11,16 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     -> ParakeetConfig {
   ParakeetConfig config;
 
-  // Get modelPath (required)
   auto modelPathOpt = jsObject.getOptionalProperty<js::String>(env, "modelPath");
   if (modelPathOpt.has_value()) {
     config.modelPath = modelPathOpt.value().as<std::string>(env);
   }
 
-  // Also try "path" key for compatibility with JsInterface
   auto pathOpt = jsObject.getOptionalProperty<js::String>(env, "path");
   if (pathOpt.has_value()) {
     config.modelPath = pathOpt.value().as<std::string>(env);
   }
 
-  // Get modelType
   auto modelTypeOpt = jsObject.getOptionalProperty<js::String>(env, "modelType");
   if (modelTypeOpt.has_value()) {
     std::string typeStr = modelTypeOpt.value().as<std::string>(env);
@@ -38,51 +35,43 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     }
   }
 
-  // Get maxThreads
   auto threadsOpt = jsObject.getOptionalProperty<js::Number>(env, "maxThreads");
   if (threadsOpt.has_value()) {
     config.maxThreads = threadsOpt.value().as<int32_t>(env);
   }
 
-  // Get useGPU
   auto gpuOpt = jsObject.getOptionalProperty<js::Boolean>(env, "useGPU");
   if (gpuOpt.has_value()) {
     config.useGPU = gpuOpt.value().as<bool>(env);
   }
 
-  // Get sampleRate
   auto sampleRateOpt = jsObject.getOptionalProperty<js::Number>(env, "sampleRate");
   if (sampleRateOpt.has_value()) {
     config.sampleRate = sampleRateOpt.value().as<int32_t>(env);
   }
 
-  // Get channels
   auto channelsOpt = jsObject.getOptionalProperty<js::Number>(env, "channels");
   if (channelsOpt.has_value()) {
     config.channels = channelsOpt.value().as<int32_t>(env);
   }
 
-  // Get captionEnabled
   auto captionOpt =
       jsObject.getOptionalProperty<js::Boolean>(env, "captionEnabled");
   if (captionOpt.has_value()) {
     config.captionEnabled = captionOpt.value().as<bool>(env);
   }
 
-  // Get timestampsEnabled
   auto timestampsOpt =
       jsObject.getOptionalProperty<js::Boolean>(env, "timestampsEnabled");
   if (timestampsOpt.has_value()) {
     config.timestampsEnabled = timestampsOpt.value().as<bool>(env);
   }
 
-  // Get seed
   auto seedOpt = jsObject.getOptionalProperty<js::Number>(env, "seed");
   if (seedOpt.has_value()) {
     config.seed = seedOpt.value().as<int32_t>(env);
   }
 
-  // Get individual file paths
   auto encoderPathOpt =
       jsObject.getOptionalProperty<js::String>(env, "encoderPath");
   if (encoderPathOpt.has_value()) {
@@ -108,8 +97,37 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
   if (preprocessorPathOpt.has_value()) {
     config.preprocessorPath = preprocessorPathOpt.value().as<std::string>(env);
   }
+  auto ctcModelPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "ctcModelPath");
+  if (ctcModelPathOpt.has_value()) {
+    config.ctcModelPath = ctcModelPathOpt.value().as<std::string>(env);
+  }
+  auto ctcModelDataPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "ctcModelDataPath");
+  if (ctcModelDataPathOpt.has_value()) {
+    config.ctcModelDataPath = ctcModelDataPathOpt.value().as<std::string>(env);
+  }
+  auto tokenizerPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "tokenizerPath");
+  if (tokenizerPathOpt.has_value()) {
+    config.tokenizerPath = tokenizerPathOpt.value().as<std::string>(env);
+  }
+  auto eouEncoderPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "eouEncoderPath");
+  if (eouEncoderPathOpt.has_value()) {
+    config.eouEncoderPath = eouEncoderPathOpt.value().as<std::string>(env);
+  }
+  auto eouDecoderPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "eouDecoderPath");
+  if (eouDecoderPathOpt.has_value()) {
+    config.eouDecoderPath = eouDecoderPathOpt.value().as<std::string>(env);
+  }
+  auto sortformerPathOpt =
+      jsObject.getOptionalProperty<js::String>(env, "sortformerPath");
+  if (sortformerPathOpt.has_value()) {
+    config.sortformerPath = sortformerPathOpt.value().as<std::string>(env);
+  }
 
-  // Check for nested config object
   auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
   if (innerConfigOpt.has_value()) {
     loadModelParams(innerConfigOpt.value(), env, config);
@@ -121,13 +139,11 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
 auto JSAdapter::loadModelParams(js::Object modelParamsObj, js_env_t *env,
                                 ParakeetConfig &parakeetConfig)
     -> ParakeetConfig {
-  // Get maxThreads from nested config
   auto threadsOpt = modelParamsObj.getOptionalProperty<js::Number>(env, "maxThreads");
   if (threadsOpt.has_value()) {
     parakeetConfig.maxThreads = threadsOpt.value().as<int32_t>(env);
   }
 
-  // Get useGPU from nested config
   auto gpuOpt = modelParamsObj.getOptionalProperty<js::Boolean>(env, "useGPU");
   if (gpuOpt.has_value()) {
     parakeetConfig.useGPU = gpuOpt.value().as<bool>(env);
@@ -139,13 +155,11 @@ auto JSAdapter::loadModelParams(js::Object modelParamsObj, js_env_t *env,
 auto JSAdapter::loadAudioParams(
     js::Object audioParamsObj, js_env_t* env, ParakeetConfig& parakeetConfig)
     -> ParakeetConfig {
-  // Get sampleRate
   auto sampleRateOpt = audioParamsObj.getOptionalProperty<js::Number>(env, "sampleRate");
   if (sampleRateOpt.has_value()) {
     parakeetConfig.sampleRate = sampleRateOpt.value().as<int32_t>(env);
   }
 
-  // Get channels
   auto channelsOpt = audioParamsObj.getOptionalProperty<js::Number>(env, "channels");
   if (channelsOpt.has_value()) {
     parakeetConfig.channels = channelsOpt.value().as<int32_t>(env);
@@ -157,7 +171,6 @@ auto JSAdapter::loadAudioParams(
 void JSAdapter::loadMap(
     js::Object jsObject, js_env_t* env,
     std::map<std::string, JSValueVariant>& output) {
-  // Get property names
   js_value_t* propNames = nullptr;
   JS(js_get_property_names(env, jsObject, &propNames));
 
@@ -192,7 +205,6 @@ void JSAdapter::loadMap(
       break;
     }
     default:
-      // Skip unsupported types
       break;
     }
   }
