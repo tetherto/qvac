@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.10] - 2026-03-12
+
+### Fixed
+
+- Windows C++20 clang-cl build: replaced legacy `OrtSessionOptionsAppendExecutionProvider_DML` C API with generic `AppendExecutionProvider("DML")`, removing `#include <dml_provider_factory.h>` which pulled in the Windows SDK and caused `byte` ambiguity with `std::byte`
+
+
 ## [0.12.8] - 2026-03-11
 
 ### Added
