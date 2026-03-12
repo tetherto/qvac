@@ -84,6 +84,7 @@ export {
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
+  PLUGIN_DIFFUSION,
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,

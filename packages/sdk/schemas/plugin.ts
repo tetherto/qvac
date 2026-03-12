@@ -278,6 +278,13 @@ export const PLUGIN_TTS = "@qvac/sdk/onnx-tts/plugin" as const;
 export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
 
 /**
+ * Image generation plugin (stable-diffusion.cpp).
+ * Provides: text-to-image, image-to-image generation.
+ */
+export const PLUGIN_DIFFUSION =
+  "@qvac/sdk/sdcpp-generation/plugin" as const;
+
+/**
  * All built-in SDK plugins.
  *
  * @example
@@ -294,6 +301,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_NMT,
   PLUGIN_TTS,
   PLUGIN_OCR,
+  PLUGIN_DIFFUSION,
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
@@ -322,3 +330,6 @@ export const ADDON_TTS = "@qvac/tts-onnx" as const;
 
 /** Native addon package for OCR (ONNX) */
 export const ADDON_OCR = "@qvac/ocr-onnx" as const;
+
+/** Native addon package for image generation (stable-diffusion.cpp) */
+export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;
