@@ -6,6 +6,7 @@ const path = require('bare-path')
 const fetch = require('bare-fetch')
 
 const HF_BASE = 'https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main'
+const PREPROCESSOR_URL = 'https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx'
 const MODEL_FILES = ['vocab.txt', 'encoder-model.onnx', 'decoder_joint-model.onnx', 'encoder-model.onnx.data']
 
 async function downloadFile (url, destPath, name) {
@@ -96,6 +97,13 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
         continue
       }
       await downloadFile(`${HF_BASE}/${name}`, dest, name)
+    }
+
+    const prepDest = path.join(modelDir, 'preprocessor.onnx')
+    if (!fs.existsSync(prepDest)) {
+      await downloadFile(PREPROCESSOR_URL, prepDest, 'preprocessor.onnx')
+    } else {
+      console.log('[test] preprocessor.onnx: cached')
     }
 
     let result = null
