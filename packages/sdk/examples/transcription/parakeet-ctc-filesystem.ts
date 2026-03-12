@@ -1,7 +1,11 @@
-import { loadModel, unloadModel, transcribe } from "@qvac/sdk";
-
-const CTC_BASE =
-  "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main";
+import {
+  loadModel,
+  unloadModel,
+  transcribe,
+  PARAKEET_CTC_FP32_1,
+  PARAKEET_CTC_DATA_FP32_1,
+  PARAKEET_CTC_TOKENIZER,
+} from "@qvac/sdk";
 
 const args = process.argv.slice(2);
 
@@ -10,16 +14,14 @@ if (!args[0]) {
     "Usage: bun run examples/transcription/parakeet-ctc-filesystem.ts <wav-file> " +
       "[model.onnx] [model.onnx_data] [tokenizer.json]",
   );
-  console.error(
-    "\nIf model paths are omitted, defaults to onnx-community models.",
-  );
+  console.error("\nIf model paths are omitted, defaults to registry models.");
   process.exit(1);
 }
 
 const audioFilePath = args[0];
-const parakeetCtcModelSrc = args[1] ?? `${CTC_BASE}/onnx/model.onnx`;
-const parakeetCtcModelDataSrc = args[2] ?? `${CTC_BASE}/onnx/model.onnx_data`;
-const parakeetTokenizerSrc = args[3] ?? `${CTC_BASE}/tokenizer.json`;
+const parakeetCtcModelSrc = args[1] ?? PARAKEET_CTC_FP32_1;
+const parakeetCtcModelDataSrc = args[2] ?? PARAKEET_CTC_DATA_FP32_1;
+const parakeetTokenizerSrc = args[3] ?? PARAKEET_CTC_TOKENIZER;
 
 try {
   console.log("Loading Parakeet CTC model...");

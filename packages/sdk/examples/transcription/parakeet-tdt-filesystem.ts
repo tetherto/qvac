@@ -13,7 +13,7 @@ const args = process.argv.slice(2);
 
 if (!args[0]) {
   console.error(
-    "Usage: bun run examples/parakeet-filesystem.ts <wav-file-path> " +
+    "Usage: bun run examples/transcription/parakeet-tdt-filesystem.ts <wav-file-path> " +
       "[encoder-onnx] [encoder-data] [decoder-onnx] [vocab-txt] [preprocessor-onnx]",
   );
   console.error(
