@@ -190,6 +190,8 @@ void LlamaModel::reload(
   {
     std::shared_lock lock(stateMtx_);
     if (state_->asyncWeightsLoader_.isStreaming()) {
+      // TODO: Make Fabric support moving/streaming existing loaded tensors
+      // TODO: to a different backend.
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(ReloadNotSupportedForStreamedModel),
