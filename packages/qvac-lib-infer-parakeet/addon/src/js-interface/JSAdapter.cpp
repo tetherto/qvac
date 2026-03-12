@@ -136,8 +136,8 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
   return config;
 }
 
-auto JSAdapter::loadModelParams(js::Object modelParamsObj, js_env_t *env,
-                                ParakeetConfig &parakeetConfig)
+auto JSAdapter::loadModelParams(
+    js::Object modelParamsObj, js_env_t* env, ParakeetConfig& parakeetConfig)
     -> ParakeetConfig {
   auto threadsOpt = modelParamsObj.getOptionalProperty<js::Number>(env, "maxThreads");
   if (threadsOpt.has_value()) {

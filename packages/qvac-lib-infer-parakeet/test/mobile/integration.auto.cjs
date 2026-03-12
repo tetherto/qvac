@@ -36,6 +36,40 @@ async function downloadFile (url, destPath, name) {
 }
 
 /**
+ * Build named-paths config for a given model type and directory.
+ * C++ loads directly from these paths (no JS buffer loading needed).
+ */
+function getNamedPathsConfig (modelType, modelDir) {
+  switch (modelType) {
+    case 'ctc':
+      return {
+        ctcModelPath: path.join(modelDir, 'model.onnx'),
+        ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'eou':
+      return {
+        eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
+        eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'sortformer':
+      return {
+        sortformerPath: path.join(modelDir, 'sortformer.onnx')
+      }
+    case 'tdt':
+    default:
+      return {
+        encoderPath: path.join(modelDir, 'encoder-model.onnx'),
+        encoderDataPath: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoderPath: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocabPath: path.join(modelDir, 'vocab.txt'),
+        preprocessorPath: path.join(modelDir, 'preprocessor.onnx')
+      }
+  }
+}
+
+/**
  * Downloads model from HuggingFace and runs transcription
  */
 async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-line no-unused-vars
@@ -73,7 +107,8 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelDir)
     }, (_, event, __, output, error) => {
       if (event === 'Output' && output) {
         const segments = Array.isArray(output) ? output : [output]
@@ -87,18 +122,6 @@ async function runTranscriptionTest (dirPath, getAssetPath) { // eslint-disable-
       }
     })
 
-    // ONNX external data files (e.g. encoder-model.onnx.data) are too large to
-    // load into JS memory (~2.4 GB). Send a 1-byte dummy so the C++ side
-    // registers the filename, then it resolves the actual data from disk via
-    // the model path when creating the ONNX Runtime session.
-    for (const filename of MODEL_FILES) {
-      const filePath = path.join(modelDir, filename)
-      if (!fs.existsSync(filePath)) continue
-      const chunk = filename.endsWith('.data')
-        ? new Uint8Array([0])
-        : new Uint8Array(fs.readFileSync(filePath))
-      await parakeet.loadWeights({ filename, chunk, completed: true })
-    }
     await parakeet.activate()
 
     await new Promise(r => setTimeout(r, 500))
@@ -194,7 +217,8 @@ async function runModelTest (opts) {
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig(modelType, modelDir)
     }, (_, event, __, output, error) => {
       if (event === 'Output' && output) {
         const segments = Array.isArray(output) ? output : [output]
@@ -208,16 +232,6 @@ async function runModelTest (opts) {
       }
     })
 
-    // ONNX external data files are loaded from disk by the C++ side;
-    // send a 1-byte dummy so the filename is registered.
-    for (const file of files) {
-      const filePath = path.join(modelDir, file.name)
-      if (!fs.existsSync(filePath)) continue
-      const chunk = file.skipRead
-        ? new Uint8Array([0])
-        : new Uint8Array(fs.readFileSync(filePath))
-      await parakeet.loadWeights({ filename: file.name, chunk, completed: true })
-    }
     await parakeet.activate()
 
     await new Promise(r => setTimeout(r, 500))

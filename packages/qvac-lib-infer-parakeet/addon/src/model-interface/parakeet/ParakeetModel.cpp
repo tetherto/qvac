@@ -561,20 +561,19 @@ void ParakeetModel::loadCTCSessions(Ort::SessionOptions& session_options) {
   bool hasExternalData = !cfg_.ctcModelDataPath.empty() &&
                          std::filesystem::exists(cfg_.ctcModelDataPath);
 
-    if (hasExternalData) {
+  if (hasExternalData) {
     auto stagingDir =
         std::filesystem::temp_directory_path() /
-        ("parakeet_ctc_" +
-         std::to_string(reinterpret_cast<uintptr_t>(this)));
+        ("parakeet_ctc_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
     std::filesystem::create_directories(stagingDir);
 
     auto modelLink = stagingDir / "model.onnx";
     std::filesystem::create_symlink(cfg_.ctcModelPath, modelLink);
     // ONNX exports use either model.onnx_data or model.onnx.data — create both
-    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
-                                    stagingDir / "model.onnx_data");
-    std::filesystem::create_symlink(cfg_.ctcModelDataPath,
-                                    stagingDir / "model.onnx.data");
+    std::filesystem::create_symlink(
+        cfg_.ctcModelDataPath, stagingDir / "model.onnx_data");
+    std::filesystem::create_symlink(
+        cfg_.ctcModelDataPath, stagingDir / "model.onnx.data");
 
     try {
       ctc_session_ = std::make_unique<Ort::Session>(
@@ -663,8 +662,8 @@ void ParakeetModel::loadSortformerSessions(
       "Loading Sortformer session...");
 #ifdef _WIN32
   std::wstring wPath(cfg_.sortformerPath.begin(), cfg_.sortformerPath.end());
-  sortformer_session_ = std::make_unique<Ort::Session>(
-      *ort_env_, wPath.c_str(), session_options);
+  sortformer_session_ =
+      std::make_unique<Ort::Session>(*ort_env_, wPath.c_str(), session_options);
 #else
   sortformer_session_ = std::make_unique<Ort::Session>(
       *ort_env_, cfg_.sortformerPath.c_str(), session_options);
