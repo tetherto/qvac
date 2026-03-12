@@ -57,6 +57,29 @@ struct TranscriptionResult {
   float endTime = 0.0f;
 };
 
+/**
+ * Speaker segment from diarization (Sortformer)
+ */
+struct SpeakerSegment {
+  float start = 0.0f;
+  float end = 0.0f;
+  int speakerId = -1;
+};
+
+/**
+ * Configuration for Sortformer post-processing.
+ * Pre-tuned for CallHome dataset (NVIDIA defaults).
+ */
+struct DiarizationConfig {
+  float onset = 0.641f;
+  float offset = 0.561f;
+  float padOnset = 0.229f;
+  float padOffset = 0.079f;
+  float minDurationOn = 0.511f;
+  float minDurationOff = 0.296f;
+  int medianWindow = 11;
+};
+
 // JS value variant type for config parsing
 using JSValueVariant =
     std::variant<bool, int32_t, int64_t, float, double, std::string>;
