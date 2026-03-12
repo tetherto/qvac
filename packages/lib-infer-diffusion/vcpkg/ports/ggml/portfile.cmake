@@ -27,6 +27,7 @@ vcpkg_from_github(
         ggml-config-include-dir.patch
         ggml-static-core-dl-backends.patch
         ggml-cpu-static-hybrid.patch
+        ggml-qvac-backend-prefix.patch
 )
 
 # --- GPU feature flags ---
@@ -132,7 +133,10 @@ vcpkg_cmake_install()
 # Install DL backend .so files for Android.  ggml builds each backend as a
 # MODULE target but does NOT install them via cmake install().
 if(VCPKG_TARGET_IS_ANDROID)
-    file(GLOB _backend_sos "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libggml-*.so")
+    file(GLOB _backend_sos
+        "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libqvac-diffusion-ggml-*.so"
+        "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libggml-*.so"
+    )
     if(_backend_sos)
         file(INSTALL ${_backend_sos} DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
     endif()

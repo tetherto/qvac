@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-01-30"
+      "version>=": "2026-01-30#1"
     },
     "picojson",
     {
