@@ -434,7 +434,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     await model.unload().catch(() => {})
     await loader.close().catch(() => {})
     cleanupCheckpoints(checkpointDir)
-    try { fs.unlinkSync(sessionFile) } catch (_) { }
+    try { fs.unlinkSync(sessionFile) } catch (_) {}
   }
 })
 
