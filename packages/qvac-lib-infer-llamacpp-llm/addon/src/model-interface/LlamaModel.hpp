@@ -58,6 +58,7 @@ struct FinetuneConfigOverrides {
   int64_t microBatchSize{128};
   int64_t contextLength{128};
   bool gpuSupportsF16OutProd{true};
+  bool flashAttn{false};
 };
 
 class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {

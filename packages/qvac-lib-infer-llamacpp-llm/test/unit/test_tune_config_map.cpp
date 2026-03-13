@@ -132,13 +132,33 @@ TEST_F(TuneConfigMapTest, Bitnet_UserSetFlashAttnUnderscore_Respected) {
   EXPECT_EQ(configFilemap_["flash_attn"], "on");
 }
 
-TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchHyphen_Respected) {
+TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchHyphen_ClampedTo128) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch-size"] = "256";
 
   LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
 
-  EXPECT_EQ(configFilemap_["ubatch-size"], "256");
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+}
+
+TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchHyphen_SmallRespected) {
+  MockModelMetaData meta(true, "bitnet");
+  configFilemap_["ubatch-size"] = "64";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+
+  EXPECT_EQ(configFilemap_["ubatch-size"], "64");
+}
+
+TEST_F(
+    TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchUnderscore_ClampedTo128) {
+  MockModelMetaData meta(true, "bitnet");
+  configFilemap_["ubatch_size"] = "256";
+
+  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+
+  EXPECT_EQ(configFilemap_["ubatch-size"], "128");
+  EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
 }
 
 TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchUnderscore_Respected) {
@@ -147,8 +167,8 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchUnderscore_Respected) {
 
   LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
 
-  EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
-  EXPECT_EQ(configFilemap_["ubatch_size"], "64");
+  EXPECT_EQ(configFilemap_["ubatch-size"], "64");
+  EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
 }
 
 // ---- Edge: Adreno 799 (just below threshold) ----
@@ -173,12 +193,36 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_FlashAttnDisabled) {
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
 }
 
-TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_Respected) {
+TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_ForcedOff) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["flash-attn"] = "on";
 
   LlamaModel::tuneConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
+
+  EXPECT_EQ(configFilemap_["flash-attn"], "off");
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttnUnderscore_ForcedOff) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["flash_attn"] = "on";
+
+  LlamaModel::tuneConfigMap(
+      configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
+
+  EXPECT_EQ(configFilemap_["flash-attn"], "off");
+  EXPECT_EQ(configFilemap_.count("flash_attn"), 0);
+}
+
+TEST_F(TuneConfigMapTest, Finetuning_FlashAttnExplicitlyEnabled_ForcedOn) {
+  MockModelMetaData meta(false, "gemma3");
+  configFilemap_["flash-attn"] = "off";
+
+  LlamaModel::tuneConfigMap(
+      configFilemap_,
+      meta,
+      std::nullopt,
+      FtOverrides{.active = true, .flashAttn = true});
 
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }

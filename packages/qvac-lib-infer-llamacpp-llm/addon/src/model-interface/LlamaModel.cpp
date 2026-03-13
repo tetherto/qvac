@@ -122,25 +122,51 @@ void LlamaModel::tuneConfigMap(
             finetuneOverrides.microBatchSize));
   }
 
-  const bool needsFlashAttnOff = isBitnet || isFinetuning;
-  if (needsFlashAttnOff && notUserSet("flash-attn", "flash_attn")) {
+  if (isFinetuning) {
+    configFilemap.erase("flash_attn");
+    configFilemap["flash-attn"] = finetuneOverrides.flashAttn ? "on" : "off";
+    QLOG_IF(
+        Priority::INFO,
+        (finetuneOverrides.flashAttn
+             ? "[LlamaModel] Finetuning: enabling flash attention\n"
+             : "[LlamaModel] Finetuning: disabling flash attention\n"));
+  } else if (isBitnet && notUserSet("flash-attn", "flash_attn")) {
+    configFilemap.erase("flash_attn");
     configFilemap["flash-attn"] = "off";
-    const char* flashAttnMsg =
-        isFinetuning
-            ? "[LlamaModel] Finetuning: disabling flash attention\n"
-            : "[LlamaModel] BitNet model detected: disabling flash attention\n";
-    QLOG_IF(Priority::INFO, flashAttnMsg);
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] BitNet model detected: disabling flash attention\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
   const bool needsUbatch = (isBitnet || isFinetuning) &&
                            adrenoVersion.has_value() &&
                            adrenoVersion.value() >= kAdrenoUbatchThreshold;
-  if (needsUbatch && notUserSet("ubatch-size", "ubatch_size")) {
-    configFilemap["ubatch-size"] = "128";
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
+  if (needsUbatch) {
+    constexpr int64_t kAdrenoUbatchCap = 128;
+    if (notUserSet("ubatch-size", "ubatch_size")) {
+      configFilemap["ubatch-size"] = std::to_string(kAdrenoUbatchCap);
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
+    } else {
+      const std::string& key =
+          configFilemap.count("ubatch-size") ? "ubatch-size" : "ubatch_size";
+      const int64_t userVal = std::stoll(configFilemap[key]);
+      const int64_t clamped = std::min(userVal, kAdrenoUbatchCap);
+      if (clamped < userVal) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] Adreno 800+ (Vulkan): ubatch-size=%" PRId64
+                " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
+                userVal,
+                kAdrenoUbatchCap,
+                clamped));
+      }
+      configFilemap.erase("ubatch_size");
+      configFilemap["ubatch-size"] = std::to_string(clamped);
+    }
   }
 
   if (isFinetuning && !finetuneOverrides.gpuSupportsF16OutProd) {
@@ -1051,7 +1077,8 @@ std::string LlamaModel::finetune(
           .batchSize = params.batchSize,
           .microBatchSize = params.microBatchSize,
           .contextLength = params.contextLength,
-          .gpuSupportsF16OutProd = gpuSupportsOutProdF16()});
+          .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
+          .flashAttn = params.flashAttn});
 
   llama_context* ctx = getContext();
   llama_model* mdl = getModel();
