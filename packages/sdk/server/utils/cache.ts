@@ -6,6 +6,7 @@ import type { ShardFileMetadata } from "@/schemas";
 import { calculateFileChecksum } from "@/server/utils/checksum";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { getServerLogger } from "@/logging";
+import { nowMs } from "@/profiling";
 
 const logger = getServerLogger();
 
@@ -107,11 +108,13 @@ export function getShardPath(
 /**
  * Check if all shards exist and are valid (size + checksum check)
  * Returns array of missing/invalid shard indices (0-based)
+ * @param onChecksumTimeMs - Optional callback to report checksum validation time
  */
 export async function checkShardCompleteness(
   hyperdriveKey: string,
   shardFilenames: readonly string[],
   shardMetadata: readonly ShardFileMetadata[],
+  onChecksumTimeMs?: (ms: number) => void,
 ): Promise<number[]> {
   const invalidIndices: number[] = [];
 
@@ -135,7 +138,9 @@ export async function checkShardCompleteness(
       }
 
       if (fileMeta.sha256Checksum) {
+        const start = nowMs();
         const actualChecksum = await calculateFileChecksum(shardPath);
+        onChecksumTimeMs?.(nowMs() - start);
         if (actualChecksum !== fileMeta.sha256Checksum) {
           logger.warn(
             `File ${i + 1} checksum mismatch for ${fileMeta.filename}. Expected: ${fileMeta.sha256Checksum}. Actual: ${actualChecksum}. Will re-download.`,

@@ -45,7 +45,9 @@ export const downloadAssetResponseSchema = z.object({
   error: z.string().optional(),
 });
 
-export const downloadTypeSchema = z.enum(["hyperdrive", "http", "registry"]);
+const downloadTypes = ["hyperdrive", "http", "registry"] as const;
+export const downloadTypeSchema = z.enum(downloadTypes);
+export const sourceTypeSchema = z.enum([...downloadTypes, "filesystem"]);
 
 export const downloadMetadataSchema = z.object({
   key: z.string(),
@@ -78,6 +80,7 @@ export type DownloadAssetOptions = z.input<
 export type DownloadAssetRequest = z.infer<typeof downloadAssetRequestSchema>;
 export type DownloadAssetResponse = z.infer<typeof downloadAssetResponseSchema>;
 export type DownloadType = z.infer<typeof downloadTypeSchema>;
+export type SourceType = z.infer<typeof sourceTypeSchema>;
 export type BaseDownloadEntry = z.infer<typeof downloadMetadataSchema> & {
   promise: Promise<string>;
   abortController: AbortController;

@@ -4,6 +4,8 @@ import {
   type LoadModelServerParams,
   type CanonicalModelType,
 } from "@/schemas";
+import type { LoadTimingStats } from "@/profiling/types";
+import { nowMs } from "@/profiling/clock";
 import {
   isModelLoaded,
   registerModel,
@@ -32,10 +34,17 @@ import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-export async function loadModel(params: LoadModelServerParams) {
-  const { modelId, modelPath, options, artifacts, modelName } =
+export interface LoadModelResult {
+  timing?: LoadTimingStats;
+}
+
+export async function loadModel(
+  params: LoadModelServerParams,
+  options?: { collectTiming?: boolean },
+): Promise<LoadModelResult> {
+  const { modelId, modelPath, options: modelOptions, artifacts, modelName } =
     loadModelServerParamsSchema.parse(params);
-  const { modelConfig, modelType: rawModelType } = options;
+  const { modelConfig, modelType: rawModelType } = modelOptions;
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType);
@@ -43,7 +52,7 @@ export async function loadModel(params: LoadModelServerParams) {
   // Check if model is already loaded
   if (isModelLoaded(modelId)) {
     logger.info(`${modelType} model ${modelId} is already loaded`);
-    return;
+    return {};
   }
 
   // Detect if sharded model
@@ -86,29 +95,41 @@ export async function loadModel(params: LoadModelServerParams) {
     }
   }
 
-  const result = plugin.createModel({
-    modelId,
-    modelPath,
-    modelConfig: modelConfig as Record<string, unknown>,
-    modelName,
-    artifacts,
-  }) as { model: AnyModel; loader: FilesystemDL };
-
   logger.info(`${modelType}: Loading model ${modelId}...`);
-
   startLogBuffering(modelId);
 
-  await result.model.load(false);
-  logger.info(`${modelType} model ${modelId} loaded`);
+  try {
+    const initStart = options?.collectTiming ? nowMs() : 0;
 
-  stopLogBufferingWithTimeout(modelId);
+    const result = plugin.createModel({
+      modelId,
+      modelPath,
+      modelConfig: modelConfig as Record<string, unknown>,
+      modelName,
+      artifacts,
+    }) as { model: AnyModel; loader: FilesystemDL };
 
-  registerModel(modelId, {
-    model: result.model,
-    path: modelPath,
-    config: modelConfig,
-    modelType: modelType as CanonicalModelType,
-    name: modelName,
-    loader: result.loader,
-  });
+    await result.model.load(false);
+
+    const modelInitializationTimeMs = options?.collectTiming
+      ? nowMs() - initStart
+      : undefined;
+
+    logger.info(`${modelType} model ${modelId} loaded`);
+
+    registerModel(modelId, {
+      model: result.model,
+      path: modelPath,
+      config: modelConfig,
+      modelType: modelType as CanonicalModelType,
+      name: modelName,
+      loader: result.loader,
+    });
+
+    return modelInitializationTimeMs !== undefined
+      ? { timing: { modelInitializationTimeMs } }
+      : {};
+  } finally {
+    stopLogBufferingWithTimeout(modelId);
+  }
 }
