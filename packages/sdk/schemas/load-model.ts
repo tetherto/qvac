@@ -12,11 +12,7 @@ import {
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
-import {
-  ttsConfigSchema,
-  ttsChatterboxConfigSchema,
-  ttsSupertonicConfigSchema,
-} from "./text-to-speech";
+import { ttsConfigSchema } from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -318,20 +314,6 @@ export const loadNmtModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
-export const loadTtsChatterboxModelRequestSchema = commonModelConfigSchema
-  .extend({
-    modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsChatterboxConfigSchema,
-  })
-  .strict();
-
-export const loadTtsSupertonicModelRequestSchema = commonModelConfigSchema
-  .extend({
-    modelType: z.literal(ModelType.onnxTts),
-    modelConfig: ttsSupertonicConfigSchema,
-  })
-  .strict();
-
 export const loadTtsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.onnxTts),
@@ -444,10 +426,15 @@ export const registryUrlSchema = z
     };
   });
 
+const loadModelServerOptionsSchema = commonModelConfigSchema.extend({
+  modelType: z.string(),
+  modelConfig: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const loadModelServerParamsSchema = z.object({
   modelId: z.string(),
   modelPath: z.string(),
-  options: loadModelSrcRequestSchema,
+  options: loadModelServerOptionsSchema,
   artifacts: z.record(z.string(), z.string()).optional(),
   modelName: z.string().optional(),
 });
