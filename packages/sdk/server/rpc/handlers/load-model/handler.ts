@@ -132,7 +132,11 @@ export async function handleLoadModel(
     await loadModel({
       modelId,
       modelPath: resolvedModelPath,
-      options: { ...request, modelConfig: resolvedModelConfig },
+      options: {
+        ...request,
+        modelType: canonicalModelType,
+        modelConfig: resolvedModelConfig,
+      },
       artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
       modelName,
     });
